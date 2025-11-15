@@ -1,25 +1,44 @@
 // src/infer.rs
+use crate::gguf::GgufModel;
 use crate::cuda::CudaContext;
-use crate::gguf::{GgufModel};
 use anyhow::Result;
 use std::ffi::c_void;
 
 pub struct LoadedModel {
     pub gguf: GgufModel,
-    pub d_weights: *mut c_void, // for now: one big blob
+    /// Base device pointer corresponding to file offset `gguf.data_offset`.
+    pub d_data_base: *mut c_void,
     pub cuda: CudaContext,
 }
 
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
-        let d_weights = cuda.upload_weights(&gguf_bytes)?;
+
+        let data_off = gguf.data_offset as usize;
+        if data_off > gguf_bytes.len() {
+            anyhow::bail!(
+                "GGUF data_offset {} beyond file size {}",
+                data_off,
+                gguf_bytes.len()
+              );
+        }
+
+        // Upload only the tensor data region to GPU
+        let weights_bytes = &gguf_bytes[data_off..];
+        let d_data_base = cuda.upload_weights(weights_bytes)?;
+
         Ok(Self {
             gguf,
-            d_weights,
+            d_data_base,
             cuda,
         })
     }
+    // Later, when we want a specific tensor, we'll compute:
+    // let gg = &self.gguf.tensors[idx];
+    // let device_ptr_for_tensor = unsafe {
+    //     (self.d_data_base as *mut u8).add(gg.offset as usize) as *mut c_void
+    // };
 
     // Super toy: given a token embedding vector (f16 on device),
     // run a single linear layer using weights from GGUF and return logits.
