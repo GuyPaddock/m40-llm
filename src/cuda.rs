@@ -8,6 +8,8 @@ pub struct FastllmCudaContext {
 }
 
 extern "C" {
+    fn cudaHostAlloc(ptr: *mut *mut c_void, size: usize, flags: u32) -> i32;
+
     fn fastllm_create_context(device_id: i32) -> *mut FastllmCudaContext;
     fn fastllm_destroy_context(ctx: *mut FastllmCudaContext);
 
@@ -105,5 +107,23 @@ impl CudaContext {
 impl Drop for CudaContext {
     fn drop(&mut self) {
         unsafe { fastllm_destroy_context(self.raw) };
+    }
+}
+
+pub struct SharedRing<T> {
+    pub ptr: *mut T,
+    pub len: usize,
+}
+
+impl<T> SharedRing<T> {
+    pub fn new(count: usize) -> Result<Self> {
+        let mut ptr: *mut c_void = std::ptr::null_mut();
+        unsafe {
+            cudaHostAlloc(&mut ptr, count * std::mem::size_of::<T>(), 0)?;
+        }
+        Ok(Self {
+            ptr: ptr as *mut T,
+            len: count,
+        })
     }
 }

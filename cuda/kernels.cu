@@ -95,25 +95,110 @@ extern "C" {
         // indices to KV cache, etc.
     };
 
-    __global__ void persistent_decode_kernel(DecodeJob* jobs, int max_jobs) {
-        int warp_id = threadIdx.x / warpSize;
-        int lane_id = threadIdx.x % warpSize;
-        int block_warps = blockDim.x / warpSize;
+    __global__ void persistent_decode_kernel(
+        RingBuffer<DecodeCommand, 1024>* cmd_rb,
+        RingBuffer<DecodeResult, 1024>* res_rb,
+        KVCache* kv,
+        ModelWeights* weights
+    ) {
+        const int lane = threadIdx.x % 32;
+        const int warp = threadIdx.x / 32;
 
-        // Warp-per-sequence loop
         while (true) {
-            // TODO: fetch job index from some global queue (atomic)
-            // int job_idx = ...
-            // if (job_idx < 0) break;
+            // Warp 0 fetches command (one warp = one sequence)
+            DecodeCommand cmd;
+            if (lane == 0) {
+                cmd = ringbuffer_pop(cmd_rb);
+            }
+            // Broadcast cmd to all lanes in the warp
+            cmd.cmd      = __shfl_sync(0xffffffff, cmd.cmd, 0);
+            cmd.seq_id   = __shfl_sync(0xffffffff, cmd.seq_id, 0);
+            cmd.input_len= __shfl_sync(0xffffffff, cmd.input_len, 0);
+            cmd.max_new  = __shfl_sync(0xffffffff, cmd.max_new, 0);
 
-            // decode one token for this sequence:
-            // - load KV tile from global into shared
-            // - attention
-            // - MLP
-            // - write logits / chosen token somewhere
-            // For now, just spin.
-            __nanosleep(100);
+            if (cmd.cmd == DECODE_CMD_STOP) {
+                break;
+            }
+
+            if (cmd.cmd == DECODE_CMD_PREFILL) {
+                run_prefill_for_seq(cmd, kv, weights, warp, lane);
+            }
+
+            if (cmd.cmd == DECODE_CMD_DECODE) {
+                uint32_t tok = run_decode_for_seq(cmd, kv, weights, warp, lane);
+
+                if (lane == 0) {
+                    DecodeResult r;
+                    r.seq_id = cmd.seq_id;
+                    r.token = tok;
+                    r.done = (tok == EOS_TOKEN);
+                    ringbuffer_push(res_rb, r);
+                }
+            }
         }
+    }
+
+    __device__
+    DecodeCommand ringbuffer_pop(RingBuffer<DecodeCommand,1024>* rb) {
+        while (true) {
+            uint32_t tail = rb->tail;
+            uint32_t head = rb->head;
+
+            if (tail != head) {
+                DecodeCommand cmd = rb->buffer[tail];
+                __threadfence_system(); // ensure host sees updates
+                rb->tail = (tail + 1) % 1024;
+                return cmd;
+            }
+            __nanosleep(200);
+        }
+    }
+
+    __device__
+    void ringbuffer_push(RingBuffer<DecodeResult,1024>* rb, DecodeResult r) {
+        while (true) {
+            uint32_t head = rb->head;
+            uint32_t next = (head + 1) % 1024;
+
+            if (next != rb->tail) {
+                rb->buffer[head] = r;
+                __threadfence_system();
+                rb->head = next;
+                return;
+            }
+            __nanosleep(200);
+        }
+    }
+
+    __device__
+    void run_prefill_for_seq(const DecodeCommand& cmd,
+                             KVCache* kv,
+                             ModelWeights* w,
+                             int warp,
+                             int lane)
+    {
+        // 1) loop through tokens
+        // 2) run attention on entire prefix
+        // 3) store key/value in kv cache
+
+        // [You fill in: QKV linear layers, RoPE, softmax, MLP]
+    }
+
+    __device__
+    uint32_t run_decode_for_seq(const DecodeCommand& cmd,
+                                KVCache* kv,
+                                ModelWeights* w,
+                                int warp,
+                                int lane)
+    {
+        // 1) load last token embedding
+        // 2) compute Q
+        // 3) attention against kv cache for this seq
+        // 4) MLP
+        // 5) logits
+        // 6) sample next token
+        uint32_t next_token = 1; // TODO
+        return next_token;
     }
 
     int fastllm_start_persistent_decode(FastllmCudaContext* ctx) {
