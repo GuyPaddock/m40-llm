@@ -28,6 +28,7 @@ directories = "5"
 [features]
 default = []
 server = ["dep:axum"]
+cuda = []
 
 [dependencies.axum]
 version = "0.7"
