@@ -11,7 +11,6 @@ use crate::cli::{Cli, Commands};
 use clap::Parser;
 use anyhow::Result;
 use std::{fs, sync::Arc};
-use axum::extract::Default<axum::http::uri::Uri>;
 use tokio::net::TcpListener;
 
 #[tokio::main]

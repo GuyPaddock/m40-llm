@@ -162,6 +162,7 @@ impl GgufModel {
             data_offset: 0,
         }
     }
+}
 
 /// Public entry point: parse GGUF headers & tensor descriptors from file.
 pub fn load_gguf(path: &Path) -> Result<GgufModel> {

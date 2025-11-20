@@ -3,6 +3,14 @@ name = "m40-llm"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "m40_llm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "m40-llm"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }

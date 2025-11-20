@@ -3,6 +3,7 @@ use anyhow::{Result, Context};
 use directories::ProjectDirs;
 use std::{fs, path::PathBuf};
 use serde::{Serialize, Deserialize};
+use tokio_stream::StreamExt;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalModel {
