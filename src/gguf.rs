@@ -308,41 +308,39 @@ fn read_string<R: Read>(r: &mut R) -> Result<String> {
 }
 
 fn read_scalar<R: Read>(r: &mut R, vt: GgufValueType) -> Result<GgufScalar> {
-  use GgufScalar::*;
-  use GgufValueType::*;
   let scalar = match vt {
-    Uint8 => {
+    GgufValueType::Uint8 => {
       let mut b = [0u8; 1];
       r.read_exact(&mut b)?;
-      U8(b[0])
+      GgufScalar::U8(b[0])
     }
-    Int8 => {
+    GgufValueType::Int8 => {
       let mut b = [0u8; 1];
       r.read_exact(&mut b)?;
-      I8(b[0] as i8)
+      GgufScalar::I8(b[0] as i8)
     }
-    Uint16 => {
+    GgufValueType::Uint16 => {
       let mut buf = [0u8; 2];
       r.read_exact(&mut buf)?;
-      U16(u16::from_le_bytes(buf))
+      GgufScalar::U16(u16::from_le_bytes(buf))
     }
-    Int16 => {
+    GgufValueType::Int16 => {
       let mut buf = [0u8; 2];
       r.read_exact(&mut buf)?;
-      I16(i16::from_le_bytes(buf))
+      GgufScalar::I16(i16::from_le_bytes(buf))
     }
-    Uint32 => U32(read_u32(r)?),
-    Int32 => I32(read_i32(r)?),
-    Uint64 => U64(read_u64(r)?),
-    Int64 => I64(read_i64(r)?),
-    Float32 => F32(read_f32(r)?),
-    Float64 => F64(read_f64(r)?),
-    Bool => Bool(read_bool(r)?),
-    String => {
+    GgufValueType::Uint32 => GgufScalar::U32(read_u32(r)?),
+    GgufValueType::Int32 => GgufScalar::I32(read_i32(r)?),
+    GgufValueType::Uint64 => GgufScalar::U64(read_u64(r)?),
+    GgufValueType::Int64 => GgufScalar::I64(read_i64(r)?),
+    GgufValueType::Float32 => GgufScalar::F32(read_f32(r)?),
+    GgufValueType::Float64 => GgufScalar::F64(read_f64(r)?),
+    GgufValueType::Bool => GgufScalar::Bool(read_bool(r)?),
+    GgufValueType::String => {
       let s = read_string(r)?;
-      Str(s)
+      GgufScalar::Str(s)
     }
-    Array => {
+    GgufValueType::Array => {
       // The ARRAY case should be handled at a higher level.
       anyhow::bail!("read_scalar called with ARRAY type")
     }
