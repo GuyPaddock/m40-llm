@@ -34,24 +34,31 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Run { model, addr } => {
-            let local = model::list_models()?
-                .into_iter()
-                .find(|m| m.name == model.replace(':', "_"))
-                .ok_or_else(|| anyhow::anyhow!("Model not found locally: {model}"))?;
+            #[cfg(feature = "server")]
+            {
+                let local = model::list_models()?
+                    .into_iter()
+                    .find(|m| m.name == model.replace(':', "_"))
+                    .ok_or_else(|| anyhow::anyhow!("Model not found locally: {model}"))?;
 
-            let gguf_bytes = fs::read(&local.path)?;
-            let gguf_model = gguf::load_gguf(&local.path)?;
-            let loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
+                let gguf_bytes = fs::read(&local.path)?;
+                let gguf_model = gguf::load_gguf(&local.path)?;
+                let loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
 
-            let state = Arc::new(server::AppState { model: loaded });
-            let router = server::app_router(state);
+                let state = Arc::new(server::AppState { model: loaded });
+                let router = server::app_router(state);
 
-            let listener = TcpListener::bind(&addr).await?;
-            println!("Serving {model} on http://{addr}/generate");
+                let listener = TcpListener::bind(&addr).await?;
+                println!("Serving {model} on http://{addr}/generate");
 
-            axum::Server::from_tcp(listener)?
-                .serve(router.into_make_service())
-                .await?;
+                axum::Server::from_tcp(listener)?
+                    .serve(router.into_make_service())
+                    .await?;
+            }
+            #[cfg(not(feature = "server"))]
+            {
+                anyhow::bail!("server feature is disabled; enable with `--features server`");
+            }
         }
     }
 

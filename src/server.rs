@@ -23,6 +23,7 @@ pub struct AppState {
 }
 
 pub fn app_router(state: Arc<AppState>) -> Router {
+    // Wrap state in an extractor that is Clone + Send + Sync by using Arc
     Router::new()
         .route("/generate", post(generate))
         .with_state(state)

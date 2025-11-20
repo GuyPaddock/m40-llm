@@ -25,6 +25,14 @@ tokio-stream = "0.1"
 # For filesystem paths & dirs
 directories = "5"
 
+[features]
+default = []
+server = ["dep:axum"]
+
+[dependencies.axum]
+version = "0.7"
+optional = true
+
 [build-dependencies]
 cc = "1"
 
