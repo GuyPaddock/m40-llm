@@ -20,3 +20,7 @@ directories = "5"
 
 [build-dependencies]
 cc = "1"
+
+[[test]]
+name = "m40-llm"
+path = "tests/integration_test.rs"

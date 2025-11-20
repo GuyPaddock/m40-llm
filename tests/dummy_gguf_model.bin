@@ -1,0 +1,7 @@
+
+
+# This is a dummy GGUF model file for testing
+# In a real implementation, this would be a binary GGUF file
+# For now, we'll just create a small file with some metadata
+dummy_model_test_file
+

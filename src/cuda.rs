@@ -32,6 +32,15 @@ extern "C" {
         K: i32,
     ) -> i32;
 
+    // Allocate and initialize KV cache
+    fn fastllm_allocate_kv_cache(
+        kv: *mut KVCache,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> i32;
+
     // Placeholder for persistent decode kernel control
     fn fastllm_start_persistent_decode(ctx: *mut FastllmCudaContext) -> i32;
     fn fastllm_stop_persistent_decode(ctx: *mut FastllmCudaContext) -> i32;
@@ -107,6 +116,46 @@ impl CudaContext {
 impl Drop for CudaContext {
     fn drop(&mut self) {
         unsafe { fastllm_destroy_context(self.raw) };
+    }
+}
+
+pub struct KVCache {
+    pub d_k: *mut half,
+    pub d_v: *mut half,
+    pub d_seq_map: *mut u32,
+    pub max_seq_len: u32,
+    pub max_batch_size: u32,
+    pub num_heads: u32,
+    pub head_dim: u32,
+}
+
+impl KVCache {
+    pub fn new(device_id: i32, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<Self> {
+        let mut kv = KVCache {
+            d_k: std::ptr::null_mut(),
+            d_v: std::ptr::null_mut(),
+            d_seq_map: std::ptr::null_mut(),
+            max_seq_len,
+            max_batch_size,
+            num_heads,
+            head_dim,
+        };
+
+        let rc = unsafe {
+            fastllm_allocate_kv_cache(
+                &mut kv as *mut KVCache as *mut c_void,
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+            )
+        };
+
+        if rc != 0 {
+            anyhow::bail!("KV cache allocation failed with code {rc}");
+        }
+
+        Ok(kv)
     }
 }
 

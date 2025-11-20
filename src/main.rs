@@ -5,13 +5,13 @@ mod gguf;
 mod cuda;
 mod infer;
 mod server;
-mod tokenizer; // stub for now
+// mod tokenizer; // stub for now
 
 use crate::cli::{Cli, Commands};
 use clap::Parser;
 use anyhow::Result;
 use std::{fs, sync::Arc};
-use axum::Server;
+use axum::extract::Default<axum::http::uri::Uri>;
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -49,7 +49,7 @@ async fn main() -> Result<()> {
             let listener = TcpListener::bind(&addr).await?;
             println!("Serving {model} on http://{addr}/generate");
 
-            Server::from_tcp(listener)?
+            axum::Server::from_tcp(listener)?
                 .serve(router.into_make_service())
                 .await?;
         }

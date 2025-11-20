@@ -152,6 +152,17 @@ pub struct GgufModel {
   pub data_offset: u64,
 }
 
+impl GgufModel {
+    /// Create a new dummy GgufModel for testing
+    pub fn new(_dummy: u32) -> Self {
+        GgufModel {
+            version: 1,
+            metadata: HashMap::new(),
+            tensors: Vec::new(),
+            data_offset: 0,
+        }
+    }
+
 /// Public entry point: parse GGUF headers & tensor descriptors from file.
 pub fn load_gguf(path: &Path) -> Result<GgufModel> {
   let mut f = File::open(path)
