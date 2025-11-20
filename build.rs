@@ -24,10 +24,10 @@ fn main() {
             .flag("-O3")
             .flag("-Xcompiler").flag("-fPIC")
             .flag("-gencode=arch=compute_52,code=sm_52") // Tesla M40
-            .compile("fastllm_kernels");
+            .compile("m40llm_kernels");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
-        println!("cargo:rustc-link-lib=static=fastllm_kernels");
+        println!("cargo:rustc-link-lib=static=m40llm_kernels");
         println!("cargo:rustc-link-lib=cudart");
         println!("cargo:rustc-link-lib=cublas");
     } else {

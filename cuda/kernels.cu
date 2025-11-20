@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstdint>
 
-struct FastllmCudaContext {
+struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
@@ -12,9 +12,9 @@ struct FastllmCudaContext {
 };
 
 extern "C" {
-    FastllmCudaContext* fastllm_create_context(int device_id) {
+    M40llmCudaContext* m40llm_create_context(int device_id) {
         cudaSetDevice(device_id);
-        FastllmCudaContext* ctx = new FastllmCudaContext();
+        M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = device_id;
 
         cudaStreamCreate(&ctx->prefill_stream);
@@ -26,7 +26,7 @@ extern "C" {
         return ctx;
     }
 
-    void fastllm_destroy_context(FastllmCudaContext* ctx) {
+    void m40llm_destroy_context(M40llmCudaContext* ctx) {
         if (!ctx) return;
         cublasDestroy(ctx->cublas);
         cudaStreamDestroy(ctx->prefill_stream);
@@ -34,8 +34,8 @@ extern "C" {
         delete ctx;
     }
 
-    int fastllm_upload_weights(
-        FastllmCudaContext* ctx,
+    int m40llm_upload_weights(
+        M40llmCudaContext* ctx,
         const void* host_ptr,
         size_t num_bytes,
         void** out_device_ptr) {
@@ -58,8 +58,8 @@ extern "C" {
 
     // FP16 storage / FP32 compute GEMM
     // A: MxK (f16), B: KxN (f16), C: MxN (f16) but computed with FP32 accum
-    int fastllm_gemm_f16_storage_f32_compute(
-        FastllmCudaContext* ctx,
+    int m40llm_gemm_f16_storage_f32_compute(
+        M40llmCudaContext* ctx,
         const void* d_A,
         const void* d_B,
         void* d_C,
@@ -101,7 +101,7 @@ extern "C" {
     };
 
     // Allocate and initialize KV cache
-    int fastllm_allocate_kv_cache(KVCache* kv, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
+    int m40llm_allocate_kv_cache(KVCache* kv, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
         if (!kv) return -1;
 
         // Calculate required memory
@@ -460,7 +460,7 @@ extern "C" {
         return next_token;
     }
 
-    int fastllm_start_persistent_decode(FastllmCudaContext* ctx) {
+    int m40llm_start_persistent_decode(M40llmCudaContext* ctx) {
         if (!ctx) return -1;
         // In real code: allocate DecodeJob queue in pinned host memory, map to device.
         // Launch kernel with cooperative groups or large grid.
@@ -468,7 +468,7 @@ extern "C" {
         return 0;
     }
 
-    int fastllm_stop_persistent_decode(FastllmCudaContext* ctx) {
+    int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) {
         if (!ctx) return -1;
         // Signal kernel via some flag or destroying context
         return 0;
