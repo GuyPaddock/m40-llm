@@ -7,6 +7,8 @@ mod ffi {
     use super::*;
     #[repr(C)]
     pub struct M40llmCudaContext { _private: [u8; 0] }
+    #[repr(C)]
+    pub struct M40llmKVCache { _private: [u8; 0] }
 
     extern "C" {
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
@@ -28,6 +30,15 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+
+        pub fn m40llm_kvcache_create(
+            ctx: *mut M40llmCudaContext,
+            max_seq_len: u32,
+            max_batch_size: u32,
+            num_heads: u32,
+            head_dim: u32,
+        ) -> *mut M40llmKVCache;
+        pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
@@ -59,6 +70,13 @@ impl CudaContext {
         {
             Ok(Self { device_id })
         }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn create_kvcache(&self, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<*mut ffi::M40llmKVCache> {
+        let kv = unsafe { ffi::m40llm_kvcache_create(self.raw, max_seq_len, max_batch_size, num_heads, head_dim) };
+        if kv.is_null() { return Err(anyhow!("m40llm_kvcache_create returned null")); }
+        Ok(kv)
     }
 
     pub fn upload_weights(&self, data: &[u8]) -> Result<*mut c_void> {
@@ -133,20 +151,24 @@ pub struct KVCache {
 }
 
 impl KVCache {
-    pub fn new(device_id: i32, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<Self> {
-        let _ = device_id; // device picked via context in real code
+    pub fn new_with_context(ctx: &CudaContext, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
-            let ctx = CudaContext::new(device_id)?; // simplistic for now
-            let mut raw: *mut ffi::M40llmKVCache = std::ptr::null_mut();
-            let rc = unsafe { ffi::m40llm_alloc_kvcache(ctx.raw, 1, num_heads as i32, head_dim as i32, max_batch_size as i32, max_seq_len as i32, &mut raw as *mut _) };
-            if rc != 0 || raw.is_null() { return Err(anyhow!("m40llm_alloc_kvcache failed: {rc}")); }
+            let raw = ctx.create_kvcache(max_seq_len, max_batch_size, num_heads, head_dim)?;
             Ok(KVCache { max_seq_len, max_batch_size, num_heads, head_dim, raw })
         }
         #[cfg(not(feature = "cuda"))]
         {
+            let _ = ctx;
             Ok(KVCache { max_seq_len, max_batch_size, num_heads, head_dim })
         }
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for KVCache {
+    fn drop(&mut self) {
+        unsafe { ffi::m40llm_kvcache_destroy(self.raw) };
     }
 }
 

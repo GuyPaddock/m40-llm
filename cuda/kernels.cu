@@ -1,8 +1,10 @@
 // cuda/kernels.cu
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
+#include "common.h"
 
 struct M40llmCudaContext {
     int device_id;
@@ -89,10 +91,10 @@ extern "C" {
         return 0;
     }
 
-    // KV Cache structure
-    struct KVCache {
-        float2* d_k; // FP16 K storage
-        float2* d_v; // FP16 V storage
+    // KV Cache structure (opaque outside of this TU)
+    struct M40llmKVCache {
+        __half* d_k; // FP16 K storage
+        __half* d_v; // FP16 V storage
         uint32_t* d_seq_map; // sequence ID to start offset
         uint32_t max_seq_len;
         uint32_t max_batch_size;
@@ -100,48 +102,50 @@ extern "C" {
         uint32_t head_dim;
     };
 
-    // Allocate and initialize KV cache
-    int m40llm_allocate_kv_cache(KVCache* kv, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
-        if (!kv) return -1;
+    static size_t kv_storage_elems(uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
+        return (size_t)max_seq_len * (size_t)max_batch_size * (size_t)num_heads * (size_t)head_dim;
 
-        // Calculate required memory
-        size_t k_v_size = max_seq_len * max_batch_size * head_dim * sizeof(float2);
-        size_t seq_map_size = max_batch_size * sizeof(uint32_t);
+	    // Back-compat alias so other TU code using KVCache still compiles
+	    typedef M40llmKVCache KVCache;
 
-        // Allocate K and V storage
-        cudaError_t err = cudaSuccess;
+    }
 
-        err = cudaMalloc(&kv->d_k, k_v_size);
-        if (err != cudaSuccess) goto fail;
-        err = cudaMalloc(&kv->d_v, k_v_size);
-        if (err != cudaSuccess) goto fail;
-
-        // Allocate sequence map
-        err = cudaMalloc(&kv->d_seq_map, seq_map_size);
-        if (err != cudaSuccess) goto fail;
-
-        // Initialize parameters
+    M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx,
+                                         uint32_t max_seq_len,
+                                         uint32_t max_batch_size,
+                                         uint32_t num_heads,
+                                         uint32_t head_dim) {
+        if (!ctx) return nullptr;
+        M40llmKVCache* kv = new M40llmKVCache();
         kv->max_seq_len = max_seq_len;
         kv->max_batch_size = max_batch_size;
         kv->num_heads = num_heads;
         kv->head_dim = head_dim;
 
-        // Zero-initialize memory
-        err = cudaMemset(&kv->d_k, 0, k_v_size);
-        if (err != cudaSuccess) goto fail;
-        err = cudaMemset(&kv->d_v, 0, k_v_size);
-        if (err != cudaSuccess) goto fail;
-        err = cudaMemset(&kv->d_seq_map, 0, seq_map_size);
-        if (err != cudaSuccess) goto fail;
+        size_t elems = kv_storage_elems(max_seq_len, max_batch_size, num_heads, head_dim);
+        size_t bytes = elems * sizeof(__half);
+        size_t seq_map_size = (size_t)max_batch_size * sizeof(uint32_t);
 
-        return 0;
+        cudaError_t err;
+        err = cudaMalloc(&kv->d_k, bytes);
+        if (err != cudaSuccess) { delete kv; return nullptr; }
+        err = cudaMalloc(&kv->d_v, bytes);
+        if (err != cudaSuccess) { cudaFree(kv->d_k); delete kv; return nullptr; }
+        err = cudaMalloc(&kv->d_seq_map, seq_map_size);
+        if (err != cudaSuccess) { cudaFree(kv->d_k); cudaFree(kv->d_v); delete kv; return nullptr; }
 
-    fail:
-        // Free any allocated memory on failure
+        cudaMemset(kv->d_k, 0, bytes);
+        cudaMemset(kv->d_v, 0, bytes);
+        cudaMemset(kv->d_seq_map, 0, seq_map_size);
+        return kv;
+    }
+
+    void m40llm_kvcache_destroy(M40llmKVCache* kv) {
+        if (!kv) return;
         if (kv->d_k) cudaFree(kv->d_k);
         if (kv->d_v) cudaFree(kv->d_v);
         if (kv->d_seq_map) cudaFree(kv->d_seq_map);
-        return -2;
+        delete kv;
     }
 
     // A stub persistent decode kernel: one warp = one sequence

@@ -36,7 +36,7 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
-        let kv = KVCache::new(self.cuda.device_id, max_seq_len, max_batch_size, 8, 64)?;
+        let kv = KVCache::new_with_context(&self.cuda, max_seq_len, max_batch_size, 8, 64)?;
         self.kv_cache = Some(kv);
         Ok(())
     }
