@@ -4,6 +4,7 @@ mod model;
 mod gguf;
 mod cuda;
 mod infer;
+#[cfg(feature = "server")]
 mod server;
 // mod tokenizer; // stub for now
 

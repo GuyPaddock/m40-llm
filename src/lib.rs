@@ -3,4 +3,5 @@ pub mod model;
 pub mod gguf;
 pub mod cuda;
 pub mod infer;
+#[cfg(feature = "server")]
 pub mod server;

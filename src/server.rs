@@ -1,4 +1,5 @@
 // src/server.rs
+#![cfg(feature = "server")]
 use axum::{Router, routing::post, Json};
 use serde::Deserialize;
 use anyhow::Result;
