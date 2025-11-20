@@ -1,0 +1,9 @@
+<type>(<scope>): <subject in imperative, <=50 chars; no period>
+
+<body: what and why, wrapped at 72 columns. Use bullets if helpful.>
+
+BREAKING CHANGE: <details if applicable>
+
+Refs: <issues/PRs>
+
+Co-authored-by: openhands <openhands@all-hands.dev>
