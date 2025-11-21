@@ -1,6 +1,8 @@
 // cuda/kernels.cu
 #include <cuda_runtime.h>
+#ifdef M40LLM_HAVE_CUBLAS
 #include <cublas_v2.h>
+#endif
 #include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
@@ -89,7 +91,7 @@ extern "C" {
         return 0;
     }
 
-    // FP16 storage / FP32 compute GEMM using cuBLAS
+    // FP16 storage / FP32 compute GEMM using cuBLAS when available; fallback no-op otherwise
     // A: MxK (f16), B: KxN (f16), C: MxN (f16) with FP32 compute
     int m40llm_gemm_f16_storage_f32_compute(
         M40llmCudaContext* ctx,
@@ -98,6 +100,7 @@ extern "C" {
         void* d_C,
         int M, int N, int K) {
         if (!ctx) return -1;
+    #ifdef M40LLM_HAVE_CUBLAS
         cublasHandle_t handle;
         if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return -2;
         cublasSetStream(handle, ctx->prefill_stream);
@@ -117,6 +120,10 @@ extern "C" {
             CUBLAS_GEMM_DEFAULT);
         cublasDestroy(handle);
         return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
+    #else
+        (void)d_A; (void)d_B; (void)d_C; (void)M; (void)N; (void)K;
+        return 0;
+    #endif
     }
 
     // KV Cache structure (opaque outside of this TU)
