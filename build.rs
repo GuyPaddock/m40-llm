@@ -32,6 +32,24 @@ fn main() {
             let conda_include = conda_prefix.as_ref().map(|p| format!("{}/include", p));
             let conda_lib = conda_prefix.as_ref().map(|p| format!("{}/lib", p));
 
+            // Detect cuBLAS header availability
+            let mut have_cublas_header = false;
+            if let Some(ref inc) = conda_include {
+                let hdr = std::path::Path::new(inc).join("cublas_v2.h");
+                if hdr.exists() {
+                    have_cublas_header = true;
+                }
+            }
+            // Fallback common locations
+            for p in ["/usr/local/cuda/include", "/usr/include"] {
+                if !have_cublas_header {
+                    let hdr = std::path::Path::new(p).join("cublas_v2.h");
+                    if hdr.exists() {
+                        have_cublas_header = true;
+                    }
+                }
+            }
+
             // Compile CUDA into static lib
             let mut build = cc::Build::new();
             build
@@ -47,6 +65,9 @@ fn main() {
             if let Some(ref inc) = conda_include {
                 build.include(inc);
             }
+            if have_cublas_header {
+                build.define("M40LLM_HAVE_CUBLAS", None);
+            }
             build.compile("m40llm_kernels");
 
             println!("cargo:rustc-link-search=native={}", out_dir.display());
@@ -55,7 +76,9 @@ fn main() {
             }
             println!("cargo:rustc-link-lib=static=m40llm_kernels");
             println!("cargo:rustc-link-lib=cudart");
-            println!("cargo:rustc-link-lib=cublas");
+            if have_cublas_header {
+                println!("cargo:rustc-link-lib=cublas");
+            }
         } else {
             // Build stub library that defines all required symbols so linking succeeds
             cc::Build::new()

@@ -12,7 +12,9 @@ struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
-    // cublasHandle_t cublas;
+#ifdef M40LLM_HAVE_CUBLAS
+    cublasHandle_t cublas;
+#endif
 };
 
 extern "C" {
@@ -55,15 +57,24 @@ extern "C" {
         cudaStreamCreate(&ctx->prefill_stream);
         cudaStreamCreate(&ctx->decode_stream);
 
-        // cublasCreate(&ctx->cublas);
-        // cublasSetStream(ctx->cublas, ctx->prefill_stream); // default
+    #ifdef M40LLM_HAVE_CUBLAS
+        if (cublasCreate(&ctx->cublas) != CUBLAS_STATUS_SUCCESS) {
+            cudaStreamDestroy(ctx->prefill_stream);
+            cudaStreamDestroy(ctx->decode_stream);
+            delete ctx;
+            return nullptr;
+        }
+        cublasSetStream(ctx->cublas, ctx->prefill_stream); // default
+    #endif
 
         return ctx;
     }
 
     void m40llm_destroy_context(M40llmCudaContext* ctx) {
         if (!ctx) return;
-        // cublasDestroy(ctx->cublas);
+    #ifdef M40LLM_HAVE_CUBLAS
+        cublasDestroy(ctx->cublas);
+    #endif
         cudaStreamDestroy(ctx->prefill_stream);
         cudaStreamDestroy(ctx->decode_stream);
         delete ctx;
@@ -101,14 +112,10 @@ extern "C" {
         int M, int N, int K) {
         if (!ctx) return -1;
     #ifdef M40LLM_HAVE_CUBLAS
-        cublasHandle_t handle;
-        if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return -2;
-        cublasSetStream(handle, ctx->prefill_stream);
-
         float alpha = 1.0f;
         float beta = 0.0f;
         cublasStatus_t st = cublasGemmEx(
-            handle,
+            ctx->cublas,
             CUBLAS_OP_N, CUBLAS_OP_N,
             N, M, K,
             &alpha,
@@ -118,7 +125,6 @@ extern "C" {
             d_C, CUDA_R_16F, N,
             CUDA_R_32F,
             CUBLAS_GEMM_DEFAULT);
-        cublasDestroy(handle);
         return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
     #else
         (void)d_A; (void)d_B; (void)d_C; (void)M; (void)N; (void)K;
