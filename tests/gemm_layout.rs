@@ -32,7 +32,9 @@ fn gemm_f16_storage_f32_compute_rowmajor_shapes() -> Result<()> {
 
     let ctx = CudaContext::new(0)?;
 
-    let m = 2; let k = 2; let n = 2;
+    let m = 2;
+    let k = 2;
+    let n = 2;
     let a = [1.0f32, 2.0, 3.0, 4.0];
     let b = [5.0f32, 6.0, 7.0, 8.0];
 
@@ -59,14 +61,14 @@ fn gemm_f16_storage_f32_compute_rowmajor_shapes() -> Result<()> {
     // Convert 4 half elements to f32
     let mut got = [0f32; 4];
     for i in 0..4 {
-        let lo = hc[2*i] as u16;
-        let hi = (hc[2*i + 1] as u16) << 8;
+        let lo = hc[2 * i] as u16;
+        let hi = (hc[2 * i + 1] as u16) << 8;
         let bits = hi | lo;
         got[i] = half::f16::from_bits(bits).to_f32();
     }
 
     let expect = [19.0f32, 22.0, 43.0, 50.0];
-    for (g,e) in got.iter().zip(expect.iter()) {
+    for (g, e) in got.iter().zip(expect.iter()) {
         let diff = (g - e).abs();
         assert!(diff <= 0.75, "got {:?} expect {:?}", got, expect);
     }
