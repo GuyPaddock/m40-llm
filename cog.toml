@@ -1,0 +1,12 @@
+#:schema https://docs.cocogitto.io/cog-schema.json
+ignore_merge_commits = true
+branch_whitelist = ["main"]
+
+# Keep config minimal for commit linting only
+# We omit changelog generation and hooks for now
+
+[commit_types]
+chore = { omit_from_changelog = true }
+ci = { omit_from_changelog = true }
+docs = { omit_from_changelog = true }
+test = { omit_from_changelog = true }

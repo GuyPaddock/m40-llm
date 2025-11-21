@@ -1,0 +1,52 @@
+
+name: commitlint
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  conventional-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust (for cocogitto build)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cocogitto
+        run: cargo install cocogitto --locked
+
+      - name: Determine base ref
+        id: base
+        shell: bash
+        run: |
+          if git rev-parse --verify origin/main >/dev/null 2>&1; then
+            echo "base=$(git merge-base HEAD origin/main)" >> $GITHUB_OUTPUT
+          else
+            echo "base=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Lint commit messages with cocogitto
+        shell: bash
+        run: |
+          if [ -n "${{ steps.base.outputs.base }}" ]; then
+            echo "Checking commits from ${{ steps.base.outputs.base }} to HEAD";
+            cog check --from ${{ steps.base.outputs.base }} --to HEAD;
+          else
+            echo "No base found; checking only the last commit";
+            cog check --from HEAD~1 --to HEAD;
+          fi
