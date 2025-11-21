@@ -15,6 +15,25 @@ mod ffi {
     }
 
     extern "C" {
+        pub fn m40llm_device_malloc(
+            ctx: *mut M40llmCudaContext,
+            bytes: usize,
+            out_ptr: *mut *mut c_void,
+        ) -> i32;
+        pub fn m40llm_device_free(ctx: *mut M40llmCudaContext, ptr: *mut c_void) -> i32;
+        pub fn m40llm_memcpy_h2d(
+            ctx: *mut M40llmCudaContext,
+            dst_device: *mut c_void,
+            src_host: *const c_void,
+            bytes: usize,
+        ) -> i32;
+        pub fn m40llm_memcpy_d2h(
+            ctx: *mut M40llmCudaContext,
+            dst_host: *mut c_void,
+            src_device: *const c_void,
+            bytes: usize,
+        ) -> i32;
+
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
         pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
 
@@ -42,6 +61,14 @@ mod ffi {
             num_heads: u32,
             head_dim: u32,
         ) -> *mut M40llmKVCache;
+        pub fn m40llm_kvcache_append_token(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev: *const c_void,
+            v_dev: *const c_void,
+        ) -> i32;
+
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
@@ -73,13 +100,106 @@ impl CudaContext {
                 raw: ptr,
             })
         }
+
         #[cfg(not(feature = "cuda"))]
         {
             Ok(Self { device_id })
         }
     }
+}
 
-    #[cfg(feature = "cuda")]
+#[cfg(feature = "cuda")]
+impl CudaContext {
+    pub fn device_malloc(&self, bytes: usize) -> Result<*mut c_void> {
+        let mut out: *mut c_void = std::ptr::null_mut();
+        let rc = unsafe { ffi::m40llm_device_malloc(self.raw, bytes, &mut out as *mut _) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_device_malloc failed: {rc}"));
+        }
+        Ok(out)
+    }
+    pub fn device_free(&self, ptr: *mut c_void) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_device_free(self.raw, ptr) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_device_free failed: {rc}"));
+        }
+        Ok(())
+    }
+    pub fn memcpy_h2d(
+        &self,
+        dst_device: *mut c_void,
+        src_host: *const c_void,
+        bytes: usize,
+    ) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_memcpy_h2d(self.raw, dst_device, src_host, bytes) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
+        }
+        Ok(())
+    }
+    pub fn memcpy_d2h(
+        &self,
+        dst_host: *mut c_void,
+        src_device: *const c_void,
+        bytes: usize,
+    ) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_memcpy_d2h(self.raw, dst_host, src_device, bytes) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+impl CudaContext {
+    pub fn device_malloc(&self, _bytes: usize) -> Result<*mut c_void> {
+        Ok(std::ptr::null_mut())
+    }
+    pub fn device_free(&self, _ptr: *mut c_void) -> Result<()> {
+        Ok(())
+    }
+    pub fn memcpy_h2d(
+        &self,
+        _dst_device: *mut c_void,
+        _src_host: *const c_void,
+        _bytes: usize,
+    ) -> Result<()> {
+        Ok(())
+    }
+    pub fn memcpy_d2h(
+        &self,
+        _dst_host: *mut c_void,
+        _src_device: *const c_void,
+        _bytes: usize,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn upload_weights(&self, _data: &[u8]) -> Result<*mut c_void> {
+        Ok(std::ptr::null_mut())
+    }
+    pub fn gemm_f16_f32(
+        &self,
+        _d_a: *const c_void,
+        _d_b: *const c_void,
+        _d_c: *mut c_void,
+        _m: i32,
+        _n: i32,
+        _k: i32,
+    ) -> Result<()> {
+        Ok(())
+    }
+    pub fn start_persistent_decode(&self) -> Result<()> {
+        Ok(())
+    }
+    pub fn stop_persistent_decode(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl CudaContext {
     pub fn create_kvcache(
         &self,
         max_seq_len: u32,
@@ -213,6 +333,24 @@ impl KVCache {
                 head_dim,
             })
         }
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl KVCache {
+    pub fn append_token(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev: *const c_void,
+        v_dev: *const c_void,
+    ) -> Result<()> {
+        let rc =
+            unsafe { ffi::m40llm_kvcache_append_token(ctx.raw, self.raw, seq_id, k_dev, v_dev) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
+        }
+        Ok(())
     }
 }
 

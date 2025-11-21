@@ -14,6 +14,37 @@ struct M40llmCudaContext {
 };
 
 extern "C" {
+    int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
+        if (!ctx || !out_ptr) return -1;
+        void* d = nullptr;
+        cudaError_t err = cudaMalloc(&d, bytes);
+        if (err != cudaSuccess) return -2;
+        *out_ptr = d;
+        return 0;
+    }
+
+    int m40llm_device_free(M40llmCudaContext* ctx, void* ptr) {
+        if (!ctx) return -1;
+        if (!ptr) return 0;
+        cudaError_t err = cudaFree(ptr);
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_host, size_t bytes) {
+        if (!ctx || !dst_device || !src_host) return -1;
+        cudaError_t err = cudaMemcpy(dst_device, src_host, bytes, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
+        if (!ctx || !dst_host || !src_device) return -1;
+        cudaError_t err = cudaMemcpy(dst_host, src_device, bytes, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
     M40llmCudaContext* m40llm_create_context(int device_id) {
         cudaSetDevice(device_id);
         M40llmCudaContext* ctx = new M40llmCudaContext();
@@ -102,12 +133,11 @@ extern "C" {
         uint32_t head_dim;
     };
 
+    // Back-compat alias so other TU code using KVCache still compiles
+    typedef M40llmKVCache KVCache;
+
     static size_t kv_storage_elems(uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
         return (size_t)max_seq_len * (size_t)max_batch_size * (size_t)num_heads * (size_t)head_dim;
-
-	    // Back-compat alias so other TU code using KVCache still compiles
-	    typedef M40llmKVCache KVCache;
-
     }
 
     M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx,
@@ -139,6 +169,39 @@ extern "C" {
         cudaMemset(kv->d_seq_map, 0, seq_map_size);
         return kv;
     }
+
+    int m40llm_kvcache_append_token(M40llmCudaContext* ctx,
+                                     M40llmKVCache* kv,
+                                     uint32_t seq_id,
+                                     const void* k_dev,
+                                     const void* v_dev) {
+        if (!ctx || !kv || !k_dev || !v_dev) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+
+        // Fetch current length for this sequence
+        uint32_t cur_len = 0;
+        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -3;
+        if (cur_len >= kv->max_seq_len) return -4;
+
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t offset_elems = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)cur_len) * elems_per_token;
+
+        // Copy K and V for one token (all heads)
+        const size_t bytes = elems_per_token * sizeof(__half);
+        err = cudaMemcpy(kv->d_k + offset_elems, k_dev, bytes, cudaMemcpyDeviceToDevice);
+        if (err != cudaSuccess) return -5;
+        err = cudaMemcpy(kv->d_v + offset_elems, v_dev, bytes, cudaMemcpyDeviceToDevice);
+        if (err != cudaSuccess) return -6;
+
+        // Increment length
+        cur_len += 1;
+        err = cudaMemcpy(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice);
+        if (err != cudaSuccess) return -7;
+
+        return 0;
+    }
+
 
     void m40llm_kvcache_destroy(M40llmKVCache* kv) {
         if (!kv) return;
