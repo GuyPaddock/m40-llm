@@ -30,25 +30,18 @@ jobs:
       - name: Install cocogitto
         run: cargo install cocogitto --locked
 
-      - name: Determine base ref
-        id: base
+      - name: Lint commits since latest tag (baseline policy)
         shell: bash
         run: |
-          if git rev-parse --verify origin/main >/dev/null 2>&1; then
-            echo "base=$(git merge-base HEAD origin/main)" >> $GITHUB_OUTPUT
+          set -e
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$latest_tag" ]; then
+            echo "Found latest tag: $latest_tag"
+            cog check --from-latest-tag
+            echo "Contextual log since $latest_tag:";
+            git log --pretty=format:'%h %s' "$latest_tag"..HEAD || true
           else
-            echo "base=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Lint commit messages with cocogitto
-        shell: bash
-        run: |
-          if [ -n "${{ steps.base.outputs.base }}" ]; then
-            echo "Checking commit range from ${{ steps.base.outputs.base }} to HEAD";
-            # cocogitto does not support --from/--to; run check and report diffs for context
-            cog check;
-            git log --pretty=format:'%h %s' ${{ steps.base.outputs.base }}..HEAD || true;
-          else
-            echo "No base found; running full history check (first run or shallow).";
-            cog check;
+            echo "No tags found. Skipping Conventional Commits check until a baseline tag is created."
+            echo "To enable enforcement, create a baseline tag on main, e.g.:"
+            echo "  git tag -a cc-baseline -m 'Conventional Commits baseline' && git push origin cc-baseline"
           fi
