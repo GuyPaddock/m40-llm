@@ -7,8 +7,9 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
-    // Always declare this cfg so we can gate tests without warnings
+    // Always declare these cfgs so we can gate tests without warnings
     println!("cargo::rustc-check-cfg=cfg(nvcc)");
+    println!("cargo::rustc-check-cfg=cfg(have_cublas_header)");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
