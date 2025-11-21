@@ -77,7 +77,7 @@ mod ffi {
 }
 
 // Public-safe wrapper types usable in both CUDA and non-CUDA builds
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct CudaContext {
     pub device_id: i32,
     #[cfg(feature = "cuda")]
