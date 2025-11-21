@@ -34,17 +34,20 @@ if [ ${#subject} -gt 100 ]; then
   exit 1
 fi
 
-# 4) Best-effort cocogitto verification of recent history
+# 4) Best-effort cocogitto verification
 if command -v cog >/dev/null 2>&1; then
+  # Always verify the current commit message file
+  cog verify --file "$MSG_FILE" >/dev/null 2>&1 || {
+    echo "[commit-msg] cocogitto verify failed on the commit message file." >&2
+    exit 1
+  }
   if [ "${COG_STRICT:-0}" = "1" ]; then
-    echo "[commit-msg] Running cocogitto verify (strict) on recent history..."
-    cog verify --from HEAD~20 --to HEAD
-    if [ $? -ne 0 ]; then
-      echo "[commit-msg] cocogitto verify failed (strict mode). Fix history or set COG_STRICT=0 to make it non-blocking." >&2
+    echo "[commit-msg] Running cocogitto check (strict) on recent history..."
+    # Prefer checking from latest tag; fallback to whole history
+    cog check --from-latest-tag || cog check || {
+      echo "[commit-msg] cocogitto check failed (strict mode)." >&2
       exit 1
-    fi
-  else
-    cog verify --from HEAD~5 --to HEAD >/dev/null 2>&1 || echo "[commit-msg] warning: cocogitto verify reported issues (non-blocking)."
+    }
   fi
 fi
 

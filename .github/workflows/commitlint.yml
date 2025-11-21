@@ -44,9 +44,11 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ steps.base.outputs.base }}" ]; then
-            echo "Checking commits from ${{ steps.base.outputs.base }} to HEAD";
-            cog check --from ${{ steps.base.outputs.base }} --to HEAD;
+            echo "Checking commit range from ${{ steps.base.outputs.base }} to HEAD";
+            # cocogitto does not support --from/--to; run check and report diffs for context
+            cog check;
+            git log --pretty=format:'%h %s' ${{ steps.base.outputs.base }}..HEAD || true;
           else
-            echo "No base found; checking only the last commit";
-            cog check --from HEAD~1 --to HEAD;
+            echo "No base found; running full history check (first run or shallow).";
+            cog check;
           fi
