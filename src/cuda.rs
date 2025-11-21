@@ -6,9 +6,13 @@ use std::ffi::c_void;
 mod ffi {
     use super::*;
     #[repr(C)]
-    pub struct M40llmCudaContext { _private: [u8; 0] }
+    pub struct M40llmCudaContext {
+        _private: [u8; 0],
+    }
     #[repr(C)]
-    pub struct M40llmKVCache { _private: [u8; 0] }
+    pub struct M40llmKVCache {
+        _private: [u8; 0],
+    }
 
     extern "C" {
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
@@ -64,7 +68,10 @@ impl CudaContext {
             if ptr.is_null() {
                 return Err(anyhow!("m40llm_create_context returned null"));
             }
-            Ok(Self { device_id, raw: ptr })
+            Ok(Self {
+                device_id,
+                raw: ptr,
+            })
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -73,9 +80,19 @@ impl CudaContext {
     }
 
     #[cfg(feature = "cuda")]
-    pub fn create_kvcache(&self, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<*mut ffi::M40llmKVCache> {
-        let kv = unsafe { ffi::m40llm_kvcache_create(self.raw, max_seq_len, max_batch_size, num_heads, head_dim) };
-        if kv.is_null() { return Err(anyhow!("m40llm_kvcache_create returned null")); }
+    pub fn create_kvcache(
+        &self,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<*mut ffi::M40llmKVCache> {
+        let kv = unsafe {
+            ffi::m40llm_kvcache_create(self.raw, max_seq_len, max_batch_size, num_heads, head_dim)
+        };
+        if kv.is_null() {
+            return Err(anyhow!("m40llm_kvcache_create returned null"));
+        }
         Ok(kv)
     }
 
@@ -83,8 +100,17 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let mut d_ptr: *mut c_void = std::ptr::null_mut();
-            let rc = unsafe { ffi::m40llm_upload_weights(self.raw, data.as_ptr() as *const _, data.len(), &mut d_ptr as *mut _) };
-            if rc != 0 { return Err(anyhow!("m40llm_upload_weights failed: {rc}")); }
+            let rc = unsafe {
+                ffi::m40llm_upload_weights(
+                    self.raw,
+                    data.as_ptr() as *const _,
+                    data.len(),
+                    &mut d_ptr as *mut _,
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_upload_weights failed: {rc}"));
+            }
             Ok(d_ptr)
         }
         #[cfg(not(feature = "cuda"))]
@@ -104,8 +130,12 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let rc = unsafe { ffi::m40llm_gemm_f16_storage_f32_compute(self.raw, d_a, d_b, d_c, m, n, k) };
-            if rc != 0 { return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}")); }
+            let rc = unsafe {
+                ffi::m40llm_gemm_f16_storage_f32_compute(self.raw, d_a, d_b, d_c, m, n, k)
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}"));
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -119,7 +149,9 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let rc = unsafe { ffi::m40llm_start_persistent_decode(self.raw) };
-            if rc != 0 { return Err(anyhow!("m40llm_start_persistent_decode failed: {rc}")); }
+            if rc != 0 {
+                return Err(anyhow!("m40llm_start_persistent_decode failed: {rc}"));
+            }
         }
         Ok(())
     }
@@ -127,7 +159,9 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let rc = unsafe { ffi::m40llm_stop_persistent_decode(self.raw) };
-            if rc != 0 { return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}")); }
+            if rc != 0 {
+                return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}"));
+            }
         }
         Ok(())
     }
@@ -151,16 +185,33 @@ pub struct KVCache {
 }
 
 impl KVCache {
-    pub fn new_with_context(ctx: &CudaContext, max_seq_len: u32, max_batch_size: u32, num_heads: u32, head_dim: u32) -> Result<Self> {
+    pub fn new_with_context(
+        ctx: &CudaContext,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
             let raw = ctx.create_kvcache(max_seq_len, max_batch_size, num_heads, head_dim)?;
-            Ok(KVCache { max_seq_len, max_batch_size, num_heads, head_dim, raw })
+            Ok(KVCache {
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                raw,
+            })
         }
         #[cfg(not(feature = "cuda"))]
         {
             let _ = ctx;
-            Ok(KVCache { max_seq_len, max_batch_size, num_heads, head_dim })
+            Ok(KVCache {
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+            })
         }
     }
 }

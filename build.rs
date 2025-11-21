@@ -22,7 +22,8 @@ fn main() {
             .file("cuda/kernels.cu")
             .flag("-std=c++14")
             .flag("-O3")
-            .flag("-Xcompiler").flag("-fPIC")
+            .flag("-Xcompiler")
+            .flag("-fPIC")
             .flag("-gencode=arch=compute_52,code=sm_52") // Tesla M40
             .compile("m40llm_kernels");
 

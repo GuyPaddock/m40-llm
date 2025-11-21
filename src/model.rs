@@ -1,20 +1,20 @@
 // src/model.rs
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
-use serde::{Serialize, Deserialize};
 use tokio_stream::StreamExt;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalModel {
     pub name: String,
-    pub path: PathBuf,      // path to GGUF
+    pub path: PathBuf, // path to GGUF
     pub size_bytes: u64,
 }
 
 pub fn models_root() -> Result<PathBuf> {
-    let proj = ProjectDirs::from("dev", "guy", "m40-llm")
-        .context("Could not determine project dirs")?;
+    let proj =
+        ProjectDirs::from("dev", "guy", "m40-llm").context("Could not determine project dirs")?;
     let dir = proj.data_dir().join("models");
     fs::create_dir_all(&dir)?;
     Ok(dir)

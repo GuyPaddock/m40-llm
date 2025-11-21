@@ -1,16 +1,16 @@
 // src/main.rs
 mod cli;
-mod model;
-mod gguf;
 mod cuda;
+mod gguf;
 mod infer;
+mod model;
 #[cfg(feature = "server")]
 mod server;
 // mod tokenizer; // stub for now
 
 use crate::cli::{Cli, Commands};
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 use std::{fs, sync::Arc};
 use tokio::net::TcpListener;
 
@@ -21,7 +21,11 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Pull { model, source } => {
             let m = model::pull_model(&model, source).await?;
-            println!("Pulled model: {} ({:.2} MiB)", m.name, m.size_bytes as f64 / (1024.0 * 1024.0));
+            println!(
+                "Pulled model: {} ({:.2} MiB)",
+                m.name,
+                m.size_bytes as f64 / (1024.0 * 1024.0)
+            );
         }
         Commands::List {} => {
             let models = model::list_models()?;
@@ -29,7 +33,12 @@ async fn main() -> Result<()> {
                 println!("No models found. Use `m40-llm pull ...`.");
             } else {
                 for m in models {
-                    println!("{} \t {:.2} MiB \t {}", m.name, m.size_bytes as f64 / (1024.0*1024.0), m.path.display());
+                    println!(
+                        "{} \t {:.2} MiB \t {}",
+                        m.name,
+                        m.size_bytes as f64 / (1024.0 * 1024.0),
+                        m.path.display()
+                    );
                 }
             }
         }

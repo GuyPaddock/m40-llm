@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Pre-commit hook: fast checks before committing
+# - Enforce rustfmt formatting
+
+if command -v cargo >/dev/null 2>&1; then
+  echo "[pre-commit] Running cargo fmt --all -- --check"
+  cargo fmt --all -- --check
+  if [ $? -ne 0 ]; then
+    echo "[pre-commit] Formatting check failed. Run 'cargo fmt --all' to fix."
+    exit 1
+  fi
+else
+  echo "[pre-commit] cargo not found; skipping rustfmt check"
+fi
+
+exit 0

@@ -1,6 +1,6 @@
 // src/infer.rs
-use crate::gguf::GgufModel;
 use crate::cuda::{CudaContext, KVCache};
+use crate::gguf::GgufModel;
 use anyhow::Result;
 use std::ffi::c_void;
 
@@ -16,11 +16,20 @@ impl LoadedModel {
         let cuda = CudaContext::new(device_id)?;
         let data_off = gguf.data_offset as usize;
         if data_off > gguf_bytes.len() {
-            anyhow::bail!("GGUF data_offset {} beyond file size {}", data_off, gguf_bytes.len());
+            anyhow::bail!(
+                "GGUF data_offset {} beyond file size {}",
+                data_off,
+                gguf_bytes.len()
+            );
         }
         let weights_bytes = &gguf_bytes[data_off..];
         let d_data_base = cuda.upload_weights(weights_bytes)?;
-        Ok(Self { gguf, d_data_base, cuda, kv_cache: None })
+        Ok(Self {
+            gguf,
+            d_data_base,
+            cuda,
+            kv_cache: None,
+        })
     }
 
     pub fn run_gemm(

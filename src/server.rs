@@ -1,8 +1,8 @@
 // src/server.rs
 #![cfg(feature = "server")]
-use axum::{Router, routing::post, Json};
-use serde::Deserialize;
 use anyhow::Result;
+use axum::{routing::post, Json, Router};
+use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::infer::LoadedModel;

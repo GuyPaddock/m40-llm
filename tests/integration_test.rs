@@ -1,7 +1,7 @@
 use anyhow::Result;
-use std::ffi::c_void;
 use m40_llm::gguf::GgufModel;
 use m40_llm::infer::LoadedModel;
+use std::ffi::c_void;
 
 #[test]
 fn test_model_loading() -> Result<()> {
