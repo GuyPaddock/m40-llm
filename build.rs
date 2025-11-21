@@ -8,7 +8,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
     // Always declare this cfg so we can gate tests without warnings
-    println!("cargo::rustc-check-cfg=cfg(has_nvcc)");
+    println!("cargo::rustc-check-cfg=cfg(nvcc)");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
@@ -25,20 +25,34 @@ fn main() {
     if cuda_feature_enabled {
         if nvcc_available {
             // Expose cfg so tests/examples can detect real CUDA
-            println!("cargo:rustc-cfg=has_nvcc");
+            println!("cargo:rustc-cfg=nvcc");
+
+            // If available, use conda CUDA include/lib paths
+            let conda_prefix = env::var("CONDA_PREFIX").ok();
+            let conda_include = conda_prefix.as_ref().map(|p| format!("{}/include", p));
+            let conda_lib = conda_prefix.as_ref().map(|p| format!("{}/lib", p));
 
             // Compile CUDA into static lib
-            cc::Build::new()
+            let mut build = cc::Build::new();
+            build
                 .cuda(true)
+                .include("cuda")
                 .file("cuda/kernels.cu")
                 .flag("-std=c++14")
                 .flag("-O3")
                 .flag("-Xcompiler")
                 .flag("-fPIC")
                 .flag("-gencode=arch=compute_52,code=sm_52") // Tesla M40
-                .compile("m40llm_kernels");
+                .flag("-allow-unsupported-compiler");
+            if let Some(ref inc) = conda_include {
+                build.include(inc);
+            }
+            build.compile("m40llm_kernels");
 
             println!("cargo:rustc-link-search=native={}", out_dir.display());
+            if let Some(ref libp) = conda_lib {
+                println!("cargo:rustc-link-search=native={}", libp);
+            }
             println!("cargo:rustc-link-lib=static=m40llm_kernels");
             println!("cargo:rustc-link-lib=cudart");
             println!("cargo:rustc-link-lib=cublas");

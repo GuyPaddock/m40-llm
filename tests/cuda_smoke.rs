@@ -1,4 +1,4 @@
-#![cfg(all(feature = "cuda", has_nvcc))]
+#![cfg(all(feature = "cuda", nvcc))]
 
 use anyhow::Result;
 use m40_llm::cuda::{CudaContext, KVCache};
