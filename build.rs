@@ -67,6 +67,8 @@ fn main() {
             }
             if have_cublas_header {
                 build.define("M40LLM_HAVE_CUBLAS", None);
+                // Expose to Rust to allow tests to gate on cuBLAS availability
+                println!("cargo:rustc-cfg=have_cublas_header");
             }
             build.compile("m40llm_kernels");
 
