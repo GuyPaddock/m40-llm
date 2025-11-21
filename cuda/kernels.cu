@@ -1,6 +1,6 @@
 // cuda/kernels.cu
 #include <cuda_runtime.h>
-// #include <cublas_v2.h> // temporarily disabled: use fallback GEMM to avoid cublas headers
+#include <cublas_v2.h>
 #include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
@@ -89,8 +89,8 @@ extern "C" {
         return 0;
     }
 
-    // FP16 storage / FP32 compute GEMM
-    // A: MxK (f16), B: KxN (f16), C: MxN (f16) but computed with FP32 accum
+    // FP16 storage / FP32 compute GEMM using cuBLAS
+    // A: MxK (f16), B: KxN (f16), C: MxN (f16) with FP32 compute
     int m40llm_gemm_f16_storage_f32_compute(
         M40llmCudaContext* ctx,
         const void* d_A,
@@ -98,10 +98,25 @@ extern "C" {
         void* d_C,
         int M, int N, int K) {
         if (!ctx) return -1;
-        // Fallback no-op to keep build green when cublas headers are unavailable.
-        // Future: replace with cublasGemmEx once cublas_v2.h present.
-        (void)d_A; (void)d_B; (void)d_C; (void)M; (void)N; (void)K;
-        return 0;
+        cublasHandle_t handle;
+        if (cublasCreate(&handle) != CUBLAS_STATUS_SUCCESS) return -2;
+        cublasSetStream(handle, ctx->prefill_stream);
+
+        float alpha = 1.0f;
+        float beta = 0.0f;
+        cublasStatus_t st = cublasGemmEx(
+            handle,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            N, M, K,
+            &alpha,
+            d_B, CUDA_R_16F, N,
+            d_A, CUDA_R_16F, K,
+            &beta,
+            d_C, CUDA_R_16F, N,
+            CUDA_R_32F,
+            CUBLAS_GEMM_DEFAULT);
+        cublasDestroy(handle);
+        return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
     }
 
     // KV Cache structure (opaque outside of this TU)
