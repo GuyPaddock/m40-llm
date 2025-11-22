@@ -1,39 +1,57 @@
 # m40-llm
 
-Rust + CUDA inference runtime for Tesla M40 (sm_52). FP16 weights, FP32 compute via cuBLAS. GGUF loader and stable C FFI (`m40llm_*`). Optional tiny HTTP server behind a feature flag.
+Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute via cuBLAS. GGUF loader and stable C FFI (`m40llm_*`). Goal: be much faster than ollama on the M40.
 
-What it is
-- Target: Maxwell Tesla M40 (sm_52)
-- FP16 storage / FP32 compute (cuBLAS)
+## What it is
+- Single-GPU server for Maxwell Tesla M40 (sm_52)
+- FP16 storage / FP32 compute (cuBLAS/cuBLASLt as available)
 - GGUF loader; C FFI symbols `m40llm_*` for embedding
-- Minimal, tested paths (GEMM, KV cache) to start
+- Small, explicit codebase focused on M40 performance
 
-How it differs
-- Not ollama: no packaging/orchestration; low-level engine for M40
-- Not vLLM: no tensor-core batching focus; correctness on Maxwell first
-- Not llama.cpp: not a general runtime; narrow, sm_52-focused, small codebase
+## Who it’s for
+- M40 owners who want maximum throughput/low latency on this specific card
+- Tinkerers/researchers who want Maxwell-specific hacks, not generic portability
+- Users who find vLLM hard/unsupported on M40 and llama.cpp too slow there
+
+## How it compares
+- vs ollama: we compete head‑on for M40. Expect higher throughput/lower latency from Maxwell‑specific kernels/layouts, FP16‑storage/FP32‑compute, and decode‑path tricks (graphs, persistent kernel, warp micro‑batching).
+- vs vLLM: excellent on modern GPUs but impractical on M40 (sm_52). m40‑llm is designed to be M40‑first and actually set up/run there.
+- vs llama.cpp: very portable, but most speed paths target newer GPUs. On M40 it tends to run without its big speed tricks; m40‑llm focuses on sm_52‑specific performance instead of broad portability.
+
+## Performance strategy on M40
+- FP16 storage, FP32 compute tiles: load FP16 to shared, convert to FP32, compute in registers
+- Tuned GEMM with cuBLAS/cuBLASLt; explicit row/col layouts; layout tests included
+- CUDA Graphs + persistent decode kernel to minimize launch overhead
+- Warp-level micro-batching (e.g., one warp per sequence) for decode
+- Optimized KV cache: FP16 or INT8 per-head; contiguous per-head layout; pinned host staging
+- Streams/Hyper‑Q: high‑priority decode stream, concurrent lower‑priority prefill
+- Read‑only (`__ldg`) and texture caches for non-GEMM ops (norms, embeddings)
+
 
 ## Features
-- --features cuda enables the GPU path
-- Auto-detect NVCC; if missing, build uses a stub library (headers from conda supported)
-- Auto-gate cuBLAS: if cublas_v2.h is found, link libcublas and enable GEMM; otherwise GEMM is a safe no-op
+- `--features cuda` enables the GPU path
+- NVCC auto-detect; stub build when missing (works with conda headers/libs)
+- cuBLAS header gating; tests and GEMM enabled only when available
 
 ## Build
-- Non-CUDA: cargo build --no-default-features; cargo test --no-default-features
-- CUDA, no NVCC (conda headers/libs): cargo build --features cuda; cargo test --features cuda
-- CUDA, with NVCC: cargo build --features cuda; cargo test --features cuda
-
-Notes
-- Target GPU: sm_52 (Tesla M40) via -gencode=arch=compute_52,code=sm_52
-- NVCC and cuBLAS headers are detected by build.rs; tests that require them are skipped when unavailable
+- Non-CUDA: `cargo build --no-default-features; cargo test --no-default-features`
+- CUDA, no NVCC (conda headers/libs): `cargo build --features cuda; cargo test --features cuda`
+- CUDA, with NVCC: `cargo build --features cuda; cargo test --features cuda`
 
 ## Tests
 - Non-CUDA tests run by default
-- CUDA tests require --features cuda and will run only when NVCC/headers are present
+- CUDA tests require `--features cuda` and will run when NVCC/headers are present
 
 ## Server (feature = server)
-- Minimal Axum-based server: cargo run --no-default-features --features server -- run --model path/to.gguf --addr 0.0.0.0:58439
+```
+cargo run \
+  --no-default-features \
+  --features server \
+  -- run \
+  --model path/to.gguf \
+  --addr 0.0.0.0:58439
+```
 
 ## Contributing
-See CONTRIBUTING.md for guidelines (Conventional Commits, hooks, CI matrix).
+See `CONTRIBUTING.md` for guidelines.
 
