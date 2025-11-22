@@ -7,6 +7,7 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 - FP16 storage / FP32 compute (cuBLAS/cuBLASLt as available)
 - GGUF loader; C FFI symbols `m40llm_*` for embedding
 - Small, explicit codebase focused on M40 performance
+- Optional HTTP server (enable with `--features server`)
 
 ## Who it’s for
 - M40 owners who want maximum throughput/low latency on this specific card
@@ -27,25 +28,34 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 - Streams/Hyper‑Q: high‑priority decode stream, concurrent lower‑priority prefill
 - Read‑only (`__ldg`) and texture caches for non-GEMM ops (norms, embeddings)
 
-## Application features
-- Single‑GPU inference server optimized for Tesla M40 (sm_52)
-- GGUF loader and stable C FFI (`m40llm_*`) for embedding
-- FP16 storage / FP32 compute path; initial focus on GEMM + KV cache correctness
-- Optional HTTP server (`--features server`)
-
 ## Build features (Cargo)
-- Feature flags: `cuda` (enable GPU path), `server` (HTTP API)
-- NVCC auto‑detect; stub build when missing (works with conda headers/libs)
-- cuBLAS header gating; tests and GEMM enabled only when available
+This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
+
+- `cuda`: Enables the CUDA backend. When set:
+  - If `nvcc` is available, we compile CUDA kernels for sm_52 and link against CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found, we also link cuBLAS and enable GEMM paths and tests.
+  - If `nvcc` is not available, we build and link a stub library that provides the required symbols so the crate still compiles. This lets you develop on machines with only CUDA headers/libs (e.g., conda) or no CUDA toolchain.
+- `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
+
+Build script behavior:
+- Always exposes `cfg(have_cublas_header)` when the cuBLAS header is detected so tests can gate accordingly.
+- Always exposes `cfg(nvcc)` when `nvcc` is present so code/tests can detect a real CUDA toolchain.
 
 ## Build
-- Non-CUDA: `cargo build --no-default-features; cargo test --no-default-features`
-- CUDA, no NVCC (conda headers/libs): `cargo build --features cuda; cargo test --features cuda`
-- CUDA, with NVCC: `cargo build --features cuda; cargo test --features cuda`
+Build the project in one of these modes:
+
+- CPU only (no CUDA):
+  - Build: `cargo build --no-default-features`
+  - Test: `cargo test --no-default-features`
+- CUDA enabled, without nvcc (e.g., conda headers/libs available):
+  - Build: `cargo build --features cuda`
+  - Test: `cargo test --features cuda`
+- CUDA enabled, with nvcc installed:
+  - Build: `cargo build --features cuda`
+  - Test: `cargo test --features cuda`
 
 ## Tests
-- Non-CUDA tests run by default
-- CUDA tests require `--features cuda` and will run when NVCC/headers are present
+- CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
+- CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. If `nvcc` is present, tests will also be able to detect `cfg(nvcc)` paths.
 
 ## Server (feature = server)
 ```
