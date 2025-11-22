@@ -19,6 +19,19 @@ struct M40llmCudaContext {
 };
 
 extern "C" {
+    // KV Cache structure (visible in this TU)
+    struct M40llmKVCache {
+        __half* d_k; // FP16 K storage
+        __half* d_v; // FP16 V storage
+        uint32_t* d_seq_map; // sequence ID to current length (tokens appended)
+        uint32_t max_seq_len;
+        uint32_t max_batch_size;
+        uint32_t num_heads;
+        uint32_t head_dim;
+    };
+    // Back-compat alias so other TU code using KVCache still compiles
+    typedef M40llmKVCache KVCache;
+
     int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
         if (!ctx || !out_ptr) return -1;
         void* d = nullptr;
@@ -238,19 +251,8 @@ extern "C" {
     //   base(seq, token) = (seq * max_seq_len + token) * elems_per_token
     //   index(seq, token, head, dim) = base(seq, token) + head * head_dim + dim
 
-    // KV Cache structure (opaque outside of this TU)
-    struct M40llmKVCache {
-        __half* d_k; // FP16 K storage
-        __half* d_v; // FP16 V storage
-        uint32_t* d_seq_map; // sequence ID to current length (tokens appended)
-        uint32_t max_seq_len;
-        uint32_t max_batch_size;
-        uint32_t num_heads;
-        uint32_t head_dim;
-    };
-
-    // Back-compat alias so other TU code using KVCache still compiles
-    typedef M40llmKVCache KVCache;
+    // Duplicate definition removed; defined at top of extern "C" block.
+    // (typedef KVCache alias also defined there.)
 
     static size_t kv_storage_elems(uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
         return (size_t)max_seq_len * (size_t)max_batch_size * (size_t)num_heads * (size_t)head_dim;

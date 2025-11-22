@@ -33,7 +33,7 @@ fn main() {
             let conda_include = conda_prefix.as_ref().map(|p| format!("{}/include", p));
             let conda_lib = conda_prefix.as_ref().map(|p| format!("{}/lib", p));
 
-            // Detect cuBLAS header availability
+            // Detect cuBLAS availability: require both header and shared library
             let mut have_cublas_header = false;
             if let Some(ref inc) = conda_include {
                 let hdr = std::path::Path::new(inc).join("cublas_v2.h");
@@ -41,7 +41,7 @@ fn main() {
                     have_cublas_header = true;
                 }
             }
-            // Fallback common locations
+            // Fallback common locations for headers
             for p in ["/usr/local/cuda/include", "/usr/include"] {
                 if !have_cublas_header {
                     let hdr = std::path::Path::new(p).join("cublas_v2.h");
@@ -50,6 +50,35 @@ fn main() {
                     }
                 }
             }
+            // Detect shared library presence
+            let mut have_cublas_lib = false;
+            if let Some(ref libp) = conda_lib {
+                for name in ["libcublas.so", "libcublas.so.11"] {
+                    if std::path::Path::new(libp).join(name).exists() {
+                        have_cublas_lib = true;
+                    }
+                }
+            }
+            for p in [
+                "/usr/local/cuda/lib64",
+                "/usr/lib/x86_64-linux-gnu",
+                "/usr/lib64",
+            ] {
+                if !have_cublas_lib {
+                    for name in ["libcublas.so", "libcublas.so.11"] {
+                        if std::path::Path::new(p).join(name).exists() {
+                            have_cublas_lib = true;
+                        }
+                    }
+                }
+            }
+            let have_cublas_detected = have_cublas_header && have_cublas_lib;
+            let have_cublas = if std::env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1")
+            {
+                have_cublas_detected
+            } else {
+                false
+            };
 
             // Compile CUDA into static lib
             let mut build = cc::Build::new();
@@ -67,7 +96,7 @@ fn main() {
             if let Some(ref inc) = conda_include {
                 build.include(inc);
             }
-            if have_cublas_header {
+            if have_cublas {
                 build.define("M40LLM_HAVE_CUBLAS", None);
                 // Expose to Rust to allow tests to gate on cuBLAS availability
                 println!("cargo:rustc-cfg=have_cublas_header");
@@ -80,7 +109,7 @@ fn main() {
             }
             println!("cargo:rustc-link-lib=static=m40llm_kernels");
             println!("cargo:rustc-link-lib=cudart");
-            if have_cublas_header {
+            if have_cublas {
                 println!("cargo:rustc-link-lib=cublas");
             }
         } else {

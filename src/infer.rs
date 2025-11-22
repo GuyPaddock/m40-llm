@@ -127,7 +127,8 @@ impl LoadedModel {
                 );
             }
             // Call CUDA wrapper via safe Rust method on KVCache
-            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)?
+            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)?;
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
