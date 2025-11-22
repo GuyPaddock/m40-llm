@@ -1,5 +1,5 @@
 // src/infer.rs
-#![cfg_attr(not(feature = "server"), allow(dead_code))]
+#![allow(dead_code)]
 
 use crate::cuda::{CudaContext, KVCache};
 use crate::gguf::GgufModel;
@@ -12,6 +12,12 @@ pub struct LoadedModel {
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
 }
+
+// Safety: LoadedModel contains raw device pointers managed by CudaContext and
+// device allocations. We mark it Send+Sync to allow sharing in the server state.
+// Callers must ensure proper synchronization when mutating or freeing resources.
+unsafe impl Send for LoadedModel {}
+unsafe impl Sync for LoadedModel {}
 
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {

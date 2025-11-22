@@ -1,5 +1,5 @@
 // src/cuda.rs
-#![cfg_attr(not(feature = "server"), allow(dead_code))]
+#![allow(dead_code)]
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;

@@ -44,16 +44,17 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Run {
-            model: _model,
-            addr: _addr,
-        } => {
+        Commands::Run { model, addr } => {
+            // Silence unused variable warnings when server feature is off
+            let _ = (&model, &addr);
             #[cfg(feature = "server")]
             {
                 let local = model::list_models()?
                     .into_iter()
                     .find(|m| m.name == model.replace(':', "_"))
-                    .ok_or_else(|| anyhow::anyhow!("Model not found locally: {model}"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(format!("Model not found locally: {}", model))
+                    })?;
 
                 let gguf_bytes = fs::read(&local.path)?;
                 let gguf_model = gguf::load_gguf(&local.path)?;
@@ -63,11 +64,9 @@ async fn main() -> Result<()> {
                 let router = server::app_router(state);
 
                 let listener = TcpListener::bind(&addr).await?;
-                println!("Serving {model} on http://{addr}/generate");
+                println!("Serving {} on http://{}/generate", model, addr);
 
-                axum::Server::from_tcp(listener)?
-                    .serve(router.into_make_service())
-                    .await?;
+                axum::serve(listener, router.into_make_service()).await?;
             }
             #[cfg(not(feature = "server"))]
             {

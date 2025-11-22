@@ -1,5 +1,5 @@
 // src/server.rs
-#![cfg(feature = "server")]
+#![allow(dead_code)]
 use anyhow::Result;
 use axum::{routing::post, Json, Router};
 use serde::Deserialize;
@@ -30,7 +30,7 @@ pub fn app_router(state: Arc<AppState>) -> Router {
 }
 
 async fn generate(
-    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+    axum::extract::State(_state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Json<GenerateResponse>, axum::http::StatusCode> {
     // TODO: tokenize `req.prompt`, run decode on GPU
