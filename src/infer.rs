@@ -57,14 +57,20 @@ impl LoadedModel {
             let bytes = elems * std::mem::size_of::<f32>();
             let d_k = self.cuda.device_malloc(bytes)?;
             let d_v = self.cuda.device_malloc(bytes)?;
-            self.cuda
-                .memcpy_h2d(d_k, k_host.as_ptr() as *const c_void, bytes)?;
-            self.cuda
-                .memcpy_h2d(d_v, v_host.as_ptr() as *const c_void, bytes)?;
-            let res = self.append_kv_token_f32(seq_id, d_k as *const c_void, d_v as *const c_void);
+            unsafe {
+                self.cuda
+                    .memcpy_h2d(d_k, k_host.as_ptr() as *const c_void, bytes)?;
+                self.cuda
+                    .memcpy_h2d(d_v, v_host.as_ptr() as *const c_void, bytes)?;
+            }
+            let res = unsafe {
+                self.append_kv_token_f32(seq_id, d_k as *const c_void, d_v as *const c_void)
+            };
             // best-effort free even if append errs
-            let _ = self.cuda.device_free(d_k);
-            let _ = self.cuda.device_free(d_v);
+            unsafe {
+                let _ = self.cuda.device_free(d_k);
+                let _ = self.cuda.device_free(d_v);
+            }
             res
         }
         #[cfg(not(feature = "cuda"))]
@@ -79,7 +85,9 @@ impl LoadedModel {
         }
     }
 
-    pub fn run_gemm(
+    /// # Safety
+    /// `d_a`, `d_b`, and `d_c` must be valid pointers to device buffers sized for GEMM with (m, n, k).
+    pub unsafe fn run_gemm(
         &self,
         d_a: *const c_void,
         d_b: *const c_void,
@@ -98,7 +106,9 @@ impl LoadedModel {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn run_attention(
+    /// # Safety
+    /// `d_q` and `d_out` must be valid pointers to device buffers matching KV cache layout.
+    pub unsafe fn run_attention(
         &self,
         d_q: *const c_void,
         d_out: *mut c_void,
@@ -130,10 +140,19 @@ impl LoadedModel {
                 head_dim
             );
         }
-        kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
+        #[cfg(feature = "cuda")]
+        unsafe {
+            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
+        }
     }
 
-    pub fn append_kv_token_f32(
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers containing one token's K/V in f32 layout.
+    pub unsafe fn append_kv_token_f32(
         &self,
         seq_id: u32,
         d_k_f32: *const c_void,
@@ -145,7 +164,14 @@ impl LoadedModel {
                 .kv_cache
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
-            kv.append_token_f32(&self.cuda, seq_id, d_k_f32, d_v_f32)
+            #[cfg(feature = "cuda")]
+            unsafe {
+                kv.append_token_f32(&self.cuda, seq_id, d_k_f32, d_v_f32)
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                kv.append_token_f32(&self.cuda, seq_id, d_k_f32, d_v_f32)
+            }
         }
         #[cfg(not(feature = "cuda"))]
         {

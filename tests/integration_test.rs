@@ -35,15 +35,17 @@ fn test_attention_operation() -> Result<()> {
     let dim = 8 * 64; // must match allocate_kv_cache layout
     let q: Vec<f32> = vec![0.0; dim as usize];
     let mut out: Vec<f32> = vec![0.0; dim as usize];
-    model.run_attention(
-        q.as_ptr() as *const c_void,
-        out.as_mut_ptr() as *mut c_void,
-        0,
-        4,
-        dim as u32,
-        8,
-        64,
-    )?;
+    unsafe {
+        model.run_attention(
+            q.as_ptr() as *const c_void,
+            out.as_mut_ptr() as *mut c_void,
+            0,
+            4,
+            dim as u32,
+            8,
+            64,
+        )?;
+    }
     Ok(())
 }
 

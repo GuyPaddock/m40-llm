@@ -1,6 +1,5 @@
 // src/server.rs
 #![allow(dead_code)]
-use anyhow::Result;
 use axum::{routing::post, Json, Router};
 use serde::Deserialize;
 use std::sync::Arc;

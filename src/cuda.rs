@@ -119,7 +119,14 @@ struct CudaContextInner {
     lock: Mutex<()>,
     #[cfg(feature = "cuda")]
     raw: NonNull<ffi::M40llmCudaContext>,
+    #[cfg(feature = "cuda")]
+    weights_ptr: Mutex<Option<NonNull<c_void>>>,
 }
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for CudaContextInner {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for CudaContextInner {}
 
 impl CudaContext {
     pub fn new(device_id: i32) -> Result<Self> {
@@ -133,6 +140,7 @@ impl CudaContext {
                     device_id,
                     lock: Mutex::new(()),
                     raw,
+                    weights_ptr: Mutex::new(None),
                 }),
             })
         }
@@ -143,6 +151,10 @@ impl CudaContext {
                 inner: Arc::new(CudaContextInner {
                     device_id,
                     lock: Mutex::new(()),
+                    #[cfg(feature = "cuda")]
+                    raw: NonNull::dangling(),
+                    #[cfg(feature = "cuda")]
+                    weights_ptr: Mutex::new(None),
                 }),
             })
         }
@@ -167,7 +179,10 @@ impl CudaContext {
         }
         Ok(out)
     }
-    pub fn device_free(&self, ptr: *mut c_void) -> Result<()> {
+    /// # Safety
+    /// `ptr` must be a valid device pointer previously allocated by `device_malloc` or the CUDA runtime.
+    /// The memory must not be used after this call and must belong to this context/device.
+    pub unsafe fn device_free(&self, ptr: *mut c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         let rc = unsafe { ffi::m40llm_device_free(self.inner.raw.as_ptr(), ptr) };
         if rc != 0 {
@@ -175,7 +190,10 @@ impl CudaContext {
         }
         Ok(())
     }
-    pub fn memcpy_h2d(
+    /// # Safety
+    /// `dst_device` must be a valid, writable device pointer to at least `bytes` bytes on this context's device.
+    /// `src_host` must be a valid, readable host pointer to at least `bytes` bytes.
+    pub unsafe fn memcpy_h2d(
         &self,
         dst_device: *mut c_void,
         src_host: *const c_void,
@@ -189,7 +207,10 @@ impl CudaContext {
         }
         Ok(())
     }
-    pub fn memcpy_d2h(
+    /// # Safety
+    /// `dst_host` must be a valid, writable host pointer to at least `bytes` bytes.
+    /// `src_device` must be a valid, readable device pointer to at least `bytes` bytes on this context's device.
+    pub unsafe fn memcpy_d2h(
         &self,
         dst_host: *mut c_void,
         src_device: *const c_void,
@@ -298,6 +319,12 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
+            // Free any previously uploaded weights to avoid leaks on re-upload
+            if let Some(prev) = self.inner.weights_ptr.lock().unwrap().take() {
+                unsafe {
+                    let _ = ffi::m40llm_device_free(self.inner.raw.as_ptr(), prev.as_ptr());
+                }
+            }
             let mut d_ptr: *mut c_void = std::ptr::null_mut();
             let rc = unsafe {
                 ffi::m40llm_upload_weights(
@@ -307,9 +334,12 @@ impl CudaContext {
                     &mut d_ptr as *mut _,
                 )
             };
-            if rc != 0 {
+            if rc != 0 || d_ptr.is_null() {
                 return Err(anyhow!("m40llm_upload_weights failed: {rc}"));
             }
+            // Track ownership inside the context so it can be freed on drop
+            let mut slot = self.inner.weights_ptr.lock().unwrap();
+            *slot = NonNull::new(d_ptr);
             Ok(d_ptr)
         }
         #[cfg(not(feature = "cuda"))]
@@ -318,7 +348,10 @@ impl CudaContext {
         }
     }
 
-    pub fn gemm_f16_f32(
+    /// # Safety
+    /// `d_a`, `d_b`, and `d_c` must be valid device pointers on this context's device.
+    /// Dimensions m, n, k must match the underlying buffer shapes.
+    pub unsafe fn gemm_f16_f32(
         &self,
         d_a: *const c_void,
         d_b: *const c_void,
@@ -380,6 +413,14 @@ impl CudaContext {
 #[cfg(feature = "cuda")]
 impl Drop for CudaContextInner {
     fn drop(&mut self) {
+        // Free tracked weights if present to avoid device memory leak
+        if let Ok(inner) = self.weights_ptr.get_mut() {
+            if let Some(ptr) = inner.take() {
+                unsafe {
+                    let _ = ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr());
+                }
+            }
+        }
         // SAFETY: raw was constructed from a non-null FFI pointer and is only freed here when Arc count drops to 0
         unsafe { ffi::m40llm_destroy_context(self.raw.as_ptr()) };
     }
@@ -424,6 +465,11 @@ struct KVCacheInner {
     #[cfg(not(feature = "cuda"))]
     len_by_seq: Mutex<Vec<u32>>, // current length per sequence
 }
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for KVCacheInner {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for KVCacheInner {}
 
 impl KVCache {
     pub fn new_with_context(
@@ -524,7 +570,10 @@ impl KVCache {
 
 #[cfg(feature = "cuda")]
 impl KVCache {
-    pub fn append_token(
+    /// # Safety
+    /// `k_dev` and `v_dev` must be valid device pointers containing one token's worth of K/V in f16 layout.
+    /// `seq_id` must be in range. Context must target same device as this cache.
+    pub unsafe fn append_token(
         &self,
         ctx: &CudaContext,
         seq_id: u32,
@@ -547,7 +596,10 @@ impl KVCache {
         Ok(())
     }
 
-    pub fn append_token_f32(
+    /// # Safety
+    /// `k_dev_f32` and `v_dev_f32` must be valid device pointers containing one token's worth of K/V in f32 layout.
+    /// They will be converted to f16 in-place in the cache. Context/device must match.
+    pub unsafe fn append_token_f32(
         &self,
         ctx: &CudaContext,
         seq_id: u32,
@@ -570,7 +622,10 @@ impl KVCache {
         Ok(())
     }
 
-    pub fn attention_last_token_f32(
+    /// # Safety
+    /// `d_q_f32` and `d_out_f32` must be valid device pointers. `seq_len` must not exceed already appended tokens.
+    /// Context/device must match. Shapes must align with KV cache configuration.
+    pub unsafe fn attention_last_token_f32(
         &self,
         ctx: &CudaContext,
         seq_id: u32,
@@ -696,6 +751,9 @@ impl Drop for KVCacheInner {
 // Public test/debug helper to read back one KV token (FP16) via FFI.
 // Only available when the CUDA feature is enabled.
 #[cfg(feature = "cuda")]
+/// # Safety
+/// `out_k_f16` and `out_v_f16` must be valid pointers to write one token's K and V (num_heads*head_dim f16 each).
+/// `seq_id`/`token` must be within appended ranges; the context and cache must be on the same device.
 pub unsafe fn ffi_debug_read_kv_token(
     ctx: &CudaContext,
     kv: &KVCache,
