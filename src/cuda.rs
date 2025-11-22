@@ -296,6 +296,15 @@ impl Drop for CudaContext {
 
 #[derive(Debug, Clone)]
 pub struct KVCache {
+    // Layout: [seq][token][head][head_dim]
+    // - seq in [0, max_batch_size)
+    // - token in [0, max_seq_len)
+    // - head in [0, num_heads)
+    // - head_dim in [0, head_dim)
+    // Strides (elements):
+    //   elems_per_token = num_heads * head_dim
+    //   base(seq, token) = (seq * max_seq_len + token) * elems_per_token
+    //   index(seq, token, head, dim) = base + head * head_dim + dim
     pub max_seq_len: u32,
     pub max_batch_size: u32,
     pub num_heads: u32,
@@ -333,6 +342,23 @@ impl KVCache {
                 head_dim,
             })
         }
+    }
+
+    #[inline]
+    pub fn elems_per_token(&self) -> usize {
+        (self.num_heads as usize) * (self.head_dim as usize)
+    }
+
+    #[inline]
+    pub fn base_offset_elems(&self, seq: u32, token: u32) -> usize {
+        ((seq as usize) * (self.max_seq_len as usize) + (token as usize)) * self.elems_per_token()
+    }
+
+    #[inline]
+    pub fn index_elems(&self, seq: u32, token: u32, head: u32, dim: u32) -> usize {
+        self.base_offset_elems(seq, token)
+            + (head as usize) * (self.head_dim as usize)
+            + (dim as usize)
     }
 }
 

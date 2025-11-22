@@ -132,11 +132,21 @@ extern "C" {
     #endif
     }
 
+    // KV Cache layout: [seq][token][head][head_dim]
+    // - seq in [0, max_batch_size)
+    // - token in [0, max_seq_len)
+    // - head in [0, num_heads)
+    // - head_dim in [0, head_dim)
+    // Strides (elements):
+    //   elems_per_token = num_heads * head_dim
+    //   base(seq, token) = (seq * max_seq_len + token) * elems_per_token
+    //   index(seq, token, head, dim) = base(seq, token) + head * head_dim + dim
+
     // KV Cache structure (opaque outside of this TU)
     struct M40llmKVCache {
         __half* d_k; // FP16 K storage
         __half* d_v; // FP16 V storage
-        uint32_t* d_seq_map; // sequence ID to start offset
+        uint32_t* d_seq_map; // sequence ID to current length (tokens appended)
         uint32_t max_seq_len;
         uint32_t max_batch_size;
         uint32_t num_heads;
