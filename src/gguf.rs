@@ -1,4 +1,6 @@
 // src/gguf.rs
+#![cfg_attr(not(feature = "server"), allow(dead_code))]
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

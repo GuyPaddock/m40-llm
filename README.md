@@ -37,6 +37,7 @@ This project uses Cargo feature flags to switch between CPU‑only and GPU‑acc
 - `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
 
 Build script behavior:
+- When `nvcc` is present, compiles kernels for `sm_52` and also embeds PTX for `compute_52` so newer GPUs can JIT from PTX if needed.
 - Always exposes `cfg(have_cublas_header)` when the cuBLAS header is detected so tests can gate accordingly.
 - Always exposes `cfg(nvcc)` when `nvcc` is present so code/tests can detect a real CUDA toolchain.
 
