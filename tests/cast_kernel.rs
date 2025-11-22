@@ -31,11 +31,15 @@ fn append_token_f32_cast_matches_cpu() -> Result<()> {
     // Device buffers for f32 inputs
     let d_k_f32 = ctx.device_malloc(bytes_f32)?;
     let d_v_f32 = ctx.device_malloc(bytes_f32)?;
-    ctx.memcpy_h2d(d_k_f32, h_k_f32.as_ptr() as *const c_void, bytes_f32)?;
-    ctx.memcpy_h2d(d_v_f32, h_v_f32.as_ptr() as *const c_void, bytes_f32)?;
+    unsafe {
+        ctx.memcpy_h2d(d_k_f32, h_k_f32.as_ptr() as *const c_void, bytes_f32)?;
+        ctx.memcpy_h2d(d_v_f32, h_v_f32.as_ptr() as *const c_void, bytes_f32)?;
+    }
 
     // Append which performs device-side cast and store
-    kv.append_token_f32(&ctx, 0, d_k_f32 as *const c_void, d_v_f32 as *const c_void)?;
+    unsafe {
+        kv.append_token_f32(&ctx, 0, d_k_f32 as *const c_void, d_v_f32 as *const c_void)?;
+    }
 
     // Read back the stored token via debug API
     let mut out_k = vec![0u8; bytes_f16];
@@ -64,7 +68,9 @@ fn append_token_f32_cast_matches_cpu() -> Result<()> {
         assert_eq!(got_bits_v, cpu_bits_v, "v mismatch at {}", i);
     }
 
-    ctx.device_free(d_k_f32)?;
-    ctx.device_free(d_v_f32)?;
+    unsafe {
+        ctx.device_free(d_k_f32)?;
+        ctx.device_free(d_v_f32)?;
+    }
     Ok(())
 }

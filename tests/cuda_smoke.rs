@@ -11,17 +11,19 @@ fn cuda_context_and_memcpy() -> Result<()> {
     let dptr = ctx.device_malloc(bytes)?;
 
     let host = [1u8; 16];
-    ctx.memcpy_h2d(dptr, host.as_ptr() as *const c_void, bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(dptr, host.as_ptr() as *const c_void, bytes)?;
 
-    let mut out = [0u8; 16];
-    ctx.memcpy_d2h(
-        out.as_mut_ptr() as *mut c_void,
-        dptr as *const c_void,
-        bytes,
-    )?;
-    assert_eq!(out, host);
+        let mut out = [0u8; 16];
+        ctx.memcpy_d2h(
+            out.as_mut_ptr() as *mut c_void,
+            dptr as *const c_void,
+            bytes,
+        )?;
+        assert_eq!(out, host);
 
-    ctx.device_free(dptr)?;
+        ctx.device_free(dptr)?;
+    }
     Ok(())
 }
 
@@ -38,13 +40,15 @@ fn kvcache_create_append() -> Result<()> {
     let kd = ctx.device_malloc(bytes)?;
     let vd = ctx.device_malloc(bytes)?;
 
-    ctx.memcpy_h2d(kd, hzeros.as_ptr() as *const c_void, bytes)?;
-    ctx.memcpy_h2d(vd, hzeros.as_ptr() as *const c_void, bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(kd, hzeros.as_ptr() as *const c_void, bytes)?;
+        ctx.memcpy_h2d(vd, hzeros.as_ptr() as *const c_void, bytes)?;
 
-    kv.append_token(&ctx, 0, kd as *const c_void, vd as *const c_void)?;
+        kv.append_token(&ctx, 0, kd as *const c_void, vd as *const c_void)?;
 
-    ctx.device_free(kd)?;
-    ctx.device_free(vd)?;
+        ctx.device_free(kd)?;
+        ctx.device_free(vd)?;
+    }
     Ok(())
 }
 
@@ -70,13 +74,15 @@ fn gemm_call() -> Result<()> {
     let db = ctx.device_malloc(bytes_b)?;
     let dc = ctx.device_malloc(bytes_c)?;
 
-    ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
-    ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
+    unsafe {
+        ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
 
-    ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+        ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
 
-    ctx.device_free(da)?;
-    ctx.device_free(db)?;
-    ctx.device_free(dc)?;
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
     Ok(())
 }

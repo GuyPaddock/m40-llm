@@ -107,11 +107,13 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
         let bytes = dim * std::mem::size_of::<f32>();
         let d_k = ctx.device_malloc(bytes)?;
         let d_v = ctx.device_malloc(bytes)?;
-        ctx.memcpy_h2d(d_k, k_cast.as_ptr() as *const c_void, bytes)?;
-        ctx.memcpy_h2d(d_v, v_cast.as_ptr() as *const c_void, bytes)?;
-        kv.append_token_f32(&ctx, seq_id, d_k as *const c_void, d_v as *const c_void)?;
-        ctx.device_free(d_k)?;
-        ctx.device_free(d_v)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k_cast.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v_cast.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, seq_id, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
     }
 
     // Q for the last token (FP32)
@@ -124,14 +126,18 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
     let bytes_f32 = dim * std::mem::size_of::<f32>();
     let d_q = ctx.device_malloc(bytes_f32)?;
     let d_out = ctx.device_malloc(bytes_f32)?;
-    ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_f32)?;
-    kv.attention_last_token_f32(&ctx, seq_id, d_q as *const c_void, seq_len, d_out)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_f32)?;
+        kv.attention_last_token_f32(&ctx, seq_id, d_q as *const c_void, seq_len, d_out)?;
+    }
     let mut out_gpu = vec![0f32; dim];
-    ctx.memcpy_d2h(
-        out_gpu.as_mut_ptr() as *mut c_void,
-        d_out as *const c_void,
-        bytes_f32,
-    )?;
+    unsafe {
+        ctx.memcpy_d2h(
+            out_gpu.as_mut_ptr() as *mut c_void,
+            d_out as *const c_void,
+            bytes_f32,
+        )?;
+    }
 
     // CPU ref using the same f16-rounded K/V
     let out_cpu = cpu_last_token_attention(
@@ -157,7 +163,9 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
         );
     }
 
-    ctx.device_free(d_q)?;
-    ctx.device_free(d_out)?;
+    unsafe {
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_out)?;
+    }
     Ok(())
 }

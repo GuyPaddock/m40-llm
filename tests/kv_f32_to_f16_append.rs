@@ -31,11 +31,15 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
     // Device alloc and upload
     let k0_dev: *mut c_void = unsafe { std::mem::transmute(ctx.device_malloc(k0_host.len() * 4)?) };
     let v0_dev: *mut c_void = unsafe { std::mem::transmute(ctx.device_malloc(v0_host.len() * 4)?) };
-    ctx.memcpy_h2d(k0_dev, k0_host.as_ptr() as *const c_void, k0_host.len() * 4)?;
-    ctx.memcpy_h2d(v0_dev, v0_host.as_ptr() as *const c_void, v0_host.len() * 4)?;
+    unsafe {
+        ctx.memcpy_h2d(k0_dev, k0_host.as_ptr() as *const c_void, k0_host.len() * 4)?;
+        ctx.memcpy_h2d(v0_dev, v0_host.as_ptr() as *const c_void, v0_host.len() * 4)?;
+    }
 
     // Append seq 0, token 0
-    kv.append_token_f32(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+    unsafe {
+        kv.append_token_f32(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+    }
 
     // Read back token 0 as FP16
     let bytes = elems_per_token * 2;
@@ -68,9 +72,11 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
         .map(|i| 3.1415 + i as f32 * 0.25)
         .collect();
 
-    ctx.memcpy_h2d(k0_dev, k1_host.as_ptr() as *const c_void, k1_host.len() * 4)?;
-    ctx.memcpy_h2d(v0_dev, v1_host.as_ptr() as *const c_void, v1_host.len() * 4)?;
-    kv.append_token_f32(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+    unsafe {
+        ctx.memcpy_h2d(k0_dev, k1_host.as_ptr() as *const c_void, k1_host.len() * 4)?;
+        ctx.memcpy_h2d(v0_dev, v1_host.as_ptr() as *const c_void, v1_host.len() * 4)?;
+        kv.append_token_f32(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+    }
 
     let mut k1_back = vec![0u8; bytes];
     let mut v1_back = vec![0u8; bytes];
@@ -93,8 +99,10 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
     }
 
     // Cleanup
-    ctx.device_free(k0_dev as *mut c_void)?;
-    ctx.device_free(v0_dev as *mut c_void)?;
+    unsafe {
+        ctx.device_free(k0_dev as *mut c_void)?;
+        ctx.device_free(v0_dev as *mut c_void)?;
+    }
 
     Ok(())
 }
