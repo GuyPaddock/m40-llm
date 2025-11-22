@@ -1,20 +1,13 @@
 // src/main.rs
-mod cli;
-mod cuda;
-mod gguf;
-mod infer;
-mod model;
-#[cfg(feature = "server")]
-mod server;
-// mod tokenizer; // stub for now
-
-use crate::cli::{Cli, Commands};
+// Use the library crate instead of re-declaring modules to avoid duplicate code
+use m40_llm::cli::{Cli, Commands};
 use anyhow::Result;
 use clap::Parser;
 #[cfg(feature = "server")]
-use std::{fs, sync::Arc};
-#[cfg(feature = "server")]
-use tokio::net::TcpListener;
+use {m40_llm::{gguf, infer, model, server}, std::{fs, sync::Arc}, tokio::net::TcpListener};
+#[cfg(not(feature = "server"))]
+#[allow(unused_imports)]
+use m40_llm::{gguf, infer, model};
 
 #[tokio::main]
 async fn main() -> Result<()> {

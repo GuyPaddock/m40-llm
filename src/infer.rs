@@ -60,18 +60,31 @@ impl LoadedModel {
                 v_host.len()
             );
         }
-        let bytes = elems * std::mem::size_of::<f32>();
-        let d_k = self.cuda.device_malloc(bytes)?;
-        let d_v = self.cuda.device_malloc(bytes)?;
-        self.cuda
-            .memcpy_h2d(d_k, k_host.as_ptr() as *const c_void, bytes)?;
-        self.cuda
-            .memcpy_h2d(d_v, v_host.as_ptr() as *const c_void, bytes)?;
-        let res = self.append_kv_token_f32(seq_id, d_k as *const c_void, d_v as *const c_void);
-        // best-effort free even if append errs
-        let _ = self.cuda.device_free(d_k);
-        let _ = self.cuda.device_free(d_v);
-        res
+        #[cfg(feature = "cuda")]
+        {
+            let bytes = elems * std::mem::size_of::<f32>();
+            let d_k = self.cuda.device_malloc(bytes)?;
+            let d_v = self.cuda.device_malloc(bytes)?;
+            self.cuda
+                .memcpy_h2d(d_k, k_host.as_ptr() as *const c_void, bytes)?;
+            self.cuda
+                .memcpy_h2d(d_v, v_host.as_ptr() as *const c_void, bytes)?;
+            let res = self.append_kv_token_f32(seq_id, d_k as *const c_void, d_v as *const c_void);
+            // best-effort free even if append errs
+            let _ = self.cuda.device_free(d_k);
+            let _ = self.cuda.device_free(d_v);
+            res
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            // Directly write into host-side KVCache
+            kv.append_token_f32(
+                &self.cuda,
+                seq_id,
+                k_host.as_ptr() as *const c_void,
+                v_host.as_ptr() as *const c_void,
+            )
+        }
     }
 
     pub fn run_gemm(
@@ -111,30 +124,20 @@ impl LoadedModel {
                 head_dim
             );
         }
-        #[cfg(feature = "cuda")]
-        {
-            let kv = self
-                .kv_cache
-                .as_ref()
-                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
-            if kv.num_heads != num_heads || kv.head_dim != head_dim {
-                anyhow::bail!(
-                    "KVCache layout mismatch: kv has (heads={}, dim={}), requested ({},{})",
-                    kv.num_heads,
-                    kv.head_dim,
-                    num_heads,
-                    head_dim
-                );
-            }
-            // Call CUDA wrapper via safe Rust method on KVCache
-            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)?;
-            Ok(())
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() != num_heads || kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested ({},{})",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
         }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (d_q, d_out, seq_id, seq_len, dim, num_heads, head_dim);
-            Ok(())
-        }
+        kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
     }
 
     pub fn append_kv_token_f32(
