@@ -1,10 +1,12 @@
 // src/cuda.rs
+#![cfg_attr(not(feature = "server"), allow(dead_code))]
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
+#[allow(dead_code)]
 mod ffi {
     use super::*;
     #[repr(C)]

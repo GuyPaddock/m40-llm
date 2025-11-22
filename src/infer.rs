@@ -34,6 +34,40 @@ impl LoadedModel {
         })
     }
 
+    // Convenience: Append K/V from host FP32 slices. Copies to device then calls append.
+    pub fn append_kv_token_f32_from_host(
+        &self,
+        seq_id: u32,
+        k_host: &[f32],
+        v_host: &[f32],
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        let elems = kv.elems_per_token();
+        if k_host.len() != elems || v_host.len() != elems {
+            anyhow::bail!(
+                "append_kv_token_f32_from_host: expected {} elems per token, got k={}, v={}",
+                elems,
+                k_host.len(),
+                v_host.len()
+            );
+        }
+        let bytes = elems * std::mem::size_of::<f32>();
+        let d_k = self.cuda.device_malloc(bytes)?;
+        let d_v = self.cuda.device_malloc(bytes)?;
+        self.cuda
+            .memcpy_h2d(d_k, k_host.as_ptr() as *const c_void, bytes)?;
+        self.cuda
+            .memcpy_h2d(d_v, v_host.as_ptr() as *const c_void, bytes)?;
+        let res = self.append_kv_token_f32(seq_id, d_k as *const c_void, d_v as *const c_void);
+        // best-effort free even if append errs
+        let _ = self.cuda.device_free(d_k);
+        let _ = self.cuda.device_free(d_v);
+        res
+    }
+
     pub fn run_gemm(
         &self,
         d_a: *const c_void,
@@ -72,12 +106,12 @@ impl LoadedModel {
         d_k_f32: *const c_void,
         d_v_f32: *const c_void,
     ) -> Result<()> {
-        let kv = self
-            .kv_cache
-            .as_ref()
-            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
         #[cfg(feature = "cuda")]
         {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             kv.append_token_f32(&self.cuda, seq_id, d_k_f32, d_v_f32)
         }
         #[cfg(not(feature = "cuda"))]
