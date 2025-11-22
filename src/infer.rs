@@ -8,7 +8,6 @@ use std::ffi::c_void;
 
 pub struct LoadedModel {
     pub gguf: GgufModel,
-    pub d_data_base: *mut c_void,
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
 }
@@ -25,10 +24,9 @@ impl LoadedModel {
             );
         }
         let weights_bytes = &gguf_bytes[data_off..];
-        let d_data_base = cuda.upload_weights(weights_bytes)?;
+        let _d_data_base = cuda.upload_weights(weights_bytes)?;
         Ok(Self {
             gguf,
-            d_data_base,
             cuda,
             kv_cache: None,
         })

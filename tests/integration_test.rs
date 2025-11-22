@@ -9,8 +9,8 @@ use std::ffi::c_void;
 fn test_model_loading() -> Result<()> {
     let gguf = GgufModel::new(0);
     let gguf_bytes = vec![];
-    let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
-    assert_eq!(model.d_data_base, std::ptr::null_mut::<c_void>());
+    let _model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    // LoadedModel no longer exposes raw device pointer; construction succeeds in non-CUDA path
     Ok(())
 }
 
