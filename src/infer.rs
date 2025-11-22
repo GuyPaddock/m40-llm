@@ -3,7 +3,7 @@
 
 use crate::cuda::{CudaContext, KVCache};
 use crate::gguf::GgufModel;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 pub struct LoadedModel {
@@ -64,6 +64,27 @@ impl LoadedModel {
     ) -> Result<()> {
         // Stub: no-op
         Ok(())
+    }
+
+    pub fn append_kv_token_f32(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        #[cfg(feature = "cuda")]
+        {
+            kv.append_token_f32(&self.cuda, seq_id, d_k_f32, d_v_f32)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (seq_id, d_k_f32, d_v_f32);
+            Ok(())
+        }
     }
 
     pub fn run_mlp(
