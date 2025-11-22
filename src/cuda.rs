@@ -1,43 +1,7 @@
 // src/cuda.rs
-// Expose limited test-only FFI in cfg(test) for CUDA builds
-#[cfg(all(test, feature = "cuda"))]
-pub use ffi_test_helpers::ffi_read_kv_token;
-
-#[cfg(all(test, feature = "cuda"))]
-mod ffi_test_helpers {
-    use super::*;
-    #[link(name = "m40llm_kernels", kind = "static")]
-    extern "C" {
-        fn m40llm_kvcache_debug_read_token(
-            ctx: *mut super::ffi::M40llmCudaContext,
-            kv: *mut super::ffi::M40llmKVCache,
-            seq_id: u32,
-            token: u32,
-            out_k_f16: *mut c_void,
-            out_v_f16: *mut c_void,
-        ) -> i32;
-    }
-
-    pub unsafe fn ffi_read_kv_token(
-        ctx: &crate::cuda::CudaContext,
-        kv: &crate::cuda::KVCache,
-        seq_id: u32,
-        token: u32,
-        out_k_f16: *mut u8,
-        out_v_f16: *mut u8,
-    ) -> i32 {
-        m40llm_kvcache_debug_read_token(
-            ctx.raw,
-            kv.raw,
-            seq_id,
-            token,
-            out_k_f16 as *mut c_void,
-            out_v_f16 as *mut c_void,
-        )
-    }
-}
-
-use anyhow::{anyhow, Result};
+#[cfg(feature = "cuda")]
+use anyhow::anyhow;
+use anyhow::Result;
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]

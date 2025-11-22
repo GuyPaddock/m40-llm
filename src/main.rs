@@ -11,7 +11,9 @@ mod server;
 use crate::cli::{Cli, Commands};
 use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "server")]
 use std::{fs, sync::Arc};
+#[cfg(feature = "server")]
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -42,7 +44,10 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Run { model, addr } => {
+        Commands::Run {
+            model: _model,
+            addr: _addr,
+        } => {
             #[cfg(feature = "server")]
             {
                 let local = model::list_models()?
