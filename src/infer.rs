@@ -94,16 +94,46 @@ impl LoadedModel {
 
     pub fn run_attention(
         &self,
-        _d_q: *const c_void,
-        _d_out: *mut c_void,
-        _seq_id: u32,
-        _seq_len: u32,
-        _dim: u32,
-        _num_heads: u32,
-        _head_dim: u32,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        seq_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
     ) -> Result<()> {
-        // Stub: no-op
-        Ok(())
+        // Validate layout: dim must equal num_heads * head_dim
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            if kv.num_heads != num_heads || kv.head_dim != head_dim {
+                anyhow::bail!(
+                    "KVCache layout mismatch: kv has (heads={}, dim={}), requested ({},{})",
+                    kv.num_heads,
+                    kv.head_dim,
+                    num_heads,
+                    head_dim
+                );
+            }
+            // Call CUDA wrapper via safe Rust method on KVCache
+            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)?
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_q, d_out, seq_id, seq_len, dim, num_heads, head_dim);
+            Ok(())
+        }
     }
 
     pub fn append_kv_token_f32(

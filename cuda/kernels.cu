@@ -6,6 +6,7 @@
 #include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
+#include <math.h>
 #include "common.h"
 
 struct M40llmCudaContext {
@@ -99,6 +100,101 @@ extern "C" {
             return -3;
         }
         *out_device_ptr = d_ptr;
+        return 0;
+    }
+
+    // Last-token attention: FP32 compute, FP16 K/V storage
+    // Q: [num_heads * head_dim] (f32) for the last token of a sequence
+    // Output: [num_heads * head_dim] (f32)
+    __global__ void attention_last_token_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        const uint32_t h = blockIdx.x;
+        if (h >= num_heads) return;
+
+        const size_t elems_per_token = (size_t)num_heads * (size_t)head_dim;
+        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
+        const float* qh = Q + (size_t)h * (size_t)head_dim;
+
+        // Pass 1: find max score for numerical stability
+        float max_score = -1e30f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)h * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < head_dim; ++d) {
+                float kf = __half2float(K[base + d]);
+                dot += qh[d] * kf;
+            }
+            float score = dot * inv_sqrt;
+            if (score > max_score) max_score = score;
+        }
+
+        // Pass 2: sum of exp(scores - max)
+        float denom = 0.0f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)h * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < head_dim; ++d) {
+                float kf = __half2float(K[base + d]);
+                dot += qh[d] * kf;
+            }
+            float score = dot * inv_sqrt;
+            denom += expf(score - max_score);
+        }
+        denom = denom > 0.f ? denom : 1.f;
+
+        // Pass 3: compute output = sum_t softmax(score)*V
+        float* out_h = Out + (size_t)h * (size_t)head_dim;
+        for (uint32_t d = 0; d < head_dim; ++d) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)h * (size_t)head_dim;
+                // Recompute score
+                float dot = 0.0f;
+                for (uint32_t dd = 0; dd < head_dim; ++dd) {
+                    float kf = __half2float(K[base + dd]);
+                    dot += qh[dd] * kf;
+                }
+                float score = dot * inv_sqrt;
+                float p = expf(score - max_score) / denom;
+                float vf = __half2float(V[base + d]);
+                acc += p * vf;
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    int m40llm_attention_last_token_f32(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t seq_len,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        const int blocks = (int)kv->num_heads;
+        const int threads = 1;
+        attention_last_token_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            kv->d_k, kv->d_v, kv->max_seq_len, kv->num_heads, kv->head_dim, seq_id,
+            reinterpret_cast<const float*>(q_dev_f32), seq_len,
+            reinterpret_cast<float*>(out_dev_f32)
+        );
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -4;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -5;
         return 0;
     }
 

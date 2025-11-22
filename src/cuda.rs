@@ -90,6 +90,15 @@ mod ffi {
 
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
+        pub fn m40llm_attention_last_token_f32(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            q_dev_f32: *const c_void,
+            seq_len: u32,
+            out_dev_f32: *mut c_void,
+        ) -> i32;
+
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
     }
@@ -410,6 +419,25 @@ impl KVCache {
         };
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token_f32 failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    pub fn attention_last_token_f32(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32(
+                ctx.raw, self.raw, seq_id, d_q_f32, seq_len, d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_attention_last_token_f32 failed: {}", rc));
         }
         Ok(())
     }

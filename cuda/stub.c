@@ -50,6 +50,17 @@ int m40llm_kvcache_debug_read_token(M40llmCudaContext* ctx, M40llmKVCache* kv, u
     (void)ctx; (void)kv; (void)seq_id; (void)token; (void)out_k_host; (void)out_v_host; return -1;
 }
 
+
+int m40llm_attention_last_token_f32(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t seq_len,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)seq_len; (void)out_dev_f32; return -1;
+}
+
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 
