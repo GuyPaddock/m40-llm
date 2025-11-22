@@ -27,10 +27,15 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 - Streams/Hyper‑Q: high‑priority decode stream, concurrent lower‑priority prefill
 - Read‑only (`__ldg`) and texture caches for non-GEMM ops (norms, embeddings)
 
+## Application features
+- Single‑GPU inference server optimized for Tesla M40 (sm_52)
+- GGUF loader and stable C FFI (`m40llm_*`) for embedding
+- FP16 storage / FP32 compute path; initial focus on GEMM + KV cache correctness
+- Optional HTTP server (`--features server`)
 
-## Features
-- `--features cuda` enables the GPU path
-- NVCC auto-detect; stub build when missing (works with conda headers/libs)
+## Build features (Cargo)
+- Feature flags: `cuda` (enable GPU path), `server` (HTTP API)
+- NVCC auto‑detect; stub build when missing (works with conda headers/libs)
 - cuBLAS header gating; tests and GEMM enabled only when available
 
 ## Build
