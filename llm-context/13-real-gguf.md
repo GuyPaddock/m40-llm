@@ -2,8 +2,6 @@ User:
 Build a real GGUF loader for Mistral token shapes
 ---
 Agent:
-You’re very welcome 😊 This is a fun project.
-
 Let’s make **`gguf.rs` real** and wire it into the model loader so it can infer **Mistral / LLaMA-style shapes from actual GGUF metadata** instead of hardcoding.
 
 ---
