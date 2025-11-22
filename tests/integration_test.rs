@@ -10,7 +10,7 @@ fn test_model_loading() -> Result<()> {
     let gguf = GgufModel::new(0);
     let gguf_bytes = vec![];
     let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
-    assert!((model.d_data_base as usize) >= 0);
+    assert_eq!(model.d_data_base, std::ptr::null_mut::<c_void>());
     Ok(())
 }
 

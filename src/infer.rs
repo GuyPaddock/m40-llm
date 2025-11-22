@@ -1,4 +1,6 @@
 // src/infer.rs
+#![cfg_attr(not(feature = "server"), allow(dead_code))]
+
 use crate::cuda::{CudaContext, KVCache};
 use crate::gguf::GgufModel;
 use anyhow::Result;
