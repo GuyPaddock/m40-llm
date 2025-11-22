@@ -62,6 +62,7 @@ fn main() {
                 .flag("-Xcompiler")
                 .flag("-fPIC")
                 .flag("-gencode=arch=compute_52,code=sm_52") // Tesla M40
+                .flag("-gencode=arch=compute_52,code=compute_52") // include PTX for JIT on newer GPUs
                 .flag("-allow-unsupported-compiler");
             if let Some(ref inc) = conda_include {
                 build.include(inc);

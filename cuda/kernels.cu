@@ -190,6 +190,28 @@ extern "C" {
         return kv;
     }
 
+    __global__ void cast_store_f32_to_f16_kernel(const float* __restrict__ in,
+                                                 __half* __restrict__ out,
+                                                 size_t n) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n) {
+            out[i] = __float2half_rn(in[i]);
+        }
+    }
+
+    __global__ void cast_store_f32_to_f16_kernel_h2(const float* __restrict__ in,
+                                                    __half* __restrict__ out,
+                                                    size_t n_pairs) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n_pairs) {
+            const size_t idx = i * 2;
+            const float a = in[idx];
+            const float b = in[idx + 1];
+            __half2 h2 = __halves2half2(__float2half_rn(a), __float2half_rn(b));
+            reinterpret_cast<__half2*>(out)[i] = h2;
+        }
+    }
+
     int m40llm_kvcache_append_token(M40llmCudaContext* ctx,
                                      M40llmKVCache* kv,
                                      uint32_t seq_id,
@@ -222,6 +244,99 @@ extern "C" {
         return 0;
     }
 
+    int m40llm_kvcache_append_token_f32(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32) {
+        if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+
+        uint32_t cur_len = 0;
+        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -3;
+        if (cur_len >= kv->max_seq_len) return -4;
+
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t offset_elems = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)cur_len) * elems_per_token;
+
+        __half* k_out = kv->d_k + offset_elems;
+        __half* v_out = kv->d_v + offset_elems;
+        const float* k_in = reinterpret_cast<const float*>(k_dev_f32);
+        const float* v_in = reinterpret_cast<const float*>(v_dev_f32);
+
+        const int threads = 256;
+
+        // Handle potential 4-byte alignment for half2 stores. If the output pointer
+        // is not 4-byte aligned, do one scalar element first to align it.
+        size_t elems_remaining = elems_per_token;
+        size_t skip = 0;
+        if (((uintptr_t)k_out & 0x3) != 0) {
+            // do first element scalar for both K and V
+            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(k_in, k_out, 1);
+            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(v_in, v_out, 1);
+            skip = 1;
+            elems_remaining -= 1;
+        }
+
+        const size_t pairs = elems_remaining / 2;
+        const size_t tail = elems_remaining & 1u;
+
+        const float* k_in_h2 = k_in + skip;
+        const float* v_in_h2 = v_in + skip;
+        __half* k_out_h2 = k_out + skip;
+        __half* v_out_h2 = v_out + skip;
+
+        if (pairs > 0) {
+            const int blocks_h2 = (int)((pairs + threads - 1) / threads);
+            cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(k_in_h2, k_out_h2, pairs);
+            cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(v_in_h2, v_out_h2, pairs);
+        }
+        if (tail) {
+            const float* k_tail_in = k_in_h2 + pairs * 2;
+            const float* v_tail_in = v_in_h2 + pairs * 2;
+            __half* k_tail_out = k_out_h2 + pairs * 2;
+            __half* v_tail_out = v_out_h2 + pairs * 2;
+            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(k_tail_in, k_tail_out, 1);
+            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(v_tail_in, v_tail_out, 1);
+        }
+        err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "append_token_f32 kernel launch error: %s\n", cudaGetErrorString(err));
+            return -5;
+        }
+
+        // Increment length
+        cur_len += 1;
+        err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
+        if (err != cudaSuccess) return -6;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -7;
+
+        return 0;
+    }
+
+
+    int m40llm_kvcache_debug_read_token(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         uint32_t token,
+                                         void* out_k_host,
+                                         void* out_v_host) {
+        (void)ctx;
+        if (!kv || !out_k_host || !out_v_host) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (token >= kv->max_seq_len) return -3;
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t offset_elems = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * elems_per_token;
+        const size_t bytes = elems_per_token * sizeof(__half);
+        cudaError_t err;
+        err = cudaMemcpy(out_k_host, kv->d_k + offset_elems, bytes, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -4;
+        err = cudaMemcpy(out_v_host, kv->d_v + offset_elems, bytes, cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -5;
+        return 0;
+    }
 
     void m40llm_kvcache_destroy(M40llmKVCache* kv) {
         if (!kv) return;

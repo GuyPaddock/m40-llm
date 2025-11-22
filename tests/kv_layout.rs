@@ -2,14 +2,8 @@ use m40_llm::cuda::KVCache;
 
 #[test]
 fn test_kv_index_math() {
-    let kv = KVCache {
-        max_seq_len: 4,
-        max_batch_size: 2,
-        num_heads: 3,
-        head_dim: 5,
-        #[cfg(feature = "cuda")]
-        raw: std::ptr::null_mut(),
-    };
+    let kv = KVCache::new_with_context(&m40_llm::cuda::CudaContext::new(0).unwrap(), 4, 2, 3, 5)
+        .unwrap();
 
     // elems_per_token = 3 * 5 = 15
     assert_eq!(kv.elems_per_token(), 15);

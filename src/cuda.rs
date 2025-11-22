@@ -1,4 +1,42 @@
 // src/cuda.rs
+// Expose limited test-only FFI in cfg(test) for CUDA builds
+#[cfg(all(test, feature = "cuda"))]
+pub use ffi_test_helpers::ffi_read_kv_token;
+
+#[cfg(all(test, feature = "cuda"))]
+mod ffi_test_helpers {
+    use super::*;
+    #[link(name = "m40llm_kernels", kind = "static")]
+    extern "C" {
+        fn m40llm_kvcache_debug_read_token(
+            ctx: *mut super::ffi::M40llmCudaContext,
+            kv: *mut super::ffi::M40llmKVCache,
+            seq_id: u32,
+            token: u32,
+            out_k_f16: *mut c_void,
+            out_v_f16: *mut c_void,
+        ) -> i32;
+    }
+
+    pub unsafe fn ffi_read_kv_token(
+        ctx: &crate::cuda::CudaContext,
+        kv: &crate::cuda::KVCache,
+        seq_id: u32,
+        token: u32,
+        out_k_f16: *mut u8,
+        out_v_f16: *mut u8,
+    ) -> i32 {
+        m40llm_kvcache_debug_read_token(
+            ctx.raw,
+            kv.raw,
+            seq_id,
+            token,
+            out_k_f16 as *mut c_void,
+            out_v_f16 as *mut c_void,
+        )
+    }
+}
+
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
@@ -67,6 +105,21 @@ mod ffi {
             seq_id: u32,
             k_dev: *const c_void,
             v_dev: *const c_void,
+        ) -> i32;
+        pub fn m40llm_kvcache_append_token_f32(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev_f32: *const c_void,
+            v_dev_f32: *const c_void,
+        ) -> i32;
+        pub fn m40llm_kvcache_debug_read_token(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            token: u32,
+            out_k_f16: *mut c_void,
+            out_v_f16: *mut c_void,
         ) -> i32;
 
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
@@ -378,6 +431,22 @@ impl KVCache {
         }
         Ok(())
     }
+
+    pub fn append_token_f32(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+    ) -> Result<()> {
+        let rc = unsafe {
+            ffi::m40llm_kvcache_append_token_f32(ctx.raw, self.raw, seq_id, k_dev_f32, v_dev_f32)
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_kvcache_append_token_f32 failed: {rc}"));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -385,6 +454,27 @@ impl Drop for KVCache {
     fn drop(&mut self) {
         unsafe { ffi::m40llm_kvcache_destroy(self.raw) };
     }
+}
+
+// Public test/debug helper to read back one KV token (FP16) via FFI.
+// Only available when the CUDA feature is enabled.
+#[cfg(feature = "cuda")]
+pub unsafe fn ffi_debug_read_kv_token(
+    ctx: &CudaContext,
+    kv: &KVCache,
+    seq_id: u32,
+    token: u32,
+    out_k_f16: *mut u8,
+    out_v_f16: *mut u8,
+) -> i32 {
+    ffi::m40llm_kvcache_debug_read_token(
+        ctx.raw,
+        kv.raw,
+        seq_id,
+        token,
+        out_k_f16 as *mut c_void,
+        out_v_f16 as *mut c_void,
+    )
 }
 
 // Host-pinned ring buffer stub. In non-CUDA environments, we just heap-allocate.
