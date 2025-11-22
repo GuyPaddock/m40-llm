@@ -1,8 +1,9 @@
 <type>(<scope>): <subject in imperative, <=50 chars; no period>
 
-<body: what and why, wrapped at 72 columns. Use bullets if helpful.>
+<body: describe what changed and why. Avoid describing steps you ran
+(e.g., fmt, lint). Wrap at ~72 cols. Use bullets if helpful.>
 
-BREAKING CHANGE: <details if applicable>
+BREAKING CHANGE: <details if applicable, include migration guidance>
 
 Refs: <issues/PRs>
 

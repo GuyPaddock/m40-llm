@@ -13,11 +13,19 @@ We use Conventional Commits. Format your commit header as:
 Rules:
 - type ∈ feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 - scope: optional; use components like cuda, kvcache, gguf, server, infer, allocator, attn, mlp, rmsnorm, build, ci, docs, tests
-- subject: imperative mood, ≤ 50 chars, no period
+- subject: imperative mood, ≤ 50 chars, no period. Keep the subject crisp and specific.
 - separate subject from body with a blank line
-- wrap body at ~72 columns; explain what and why, not how
-- use "!" for breaking changes: `feat(cuda)!: drop sm_37 support`
-- alternatively, add a `BREAKING CHANGE:` footer with details
+- wrap body at ~72 columns; explain what changed and why (not the steps you ran)
+- Avoid vague subjects like "fmt" or "fixes" — say what changed and why
+- Prefer `refactor(...)` over `chore(...)` for structural/API changes that do not alter behavior
+- Use `style` for formatting-only changes (no code semantics). Prefer squashing style changes into the related code commit rather than separate noisy commits
+- Mark breaking changes with `!` after the type (e.g., `refactor(api)!: ...`) and include migration notes; or add a `BREAKING CHANGE:` footer
+
+Examples:
+- `refactor(cuda): tighten unsafe surface across FFI`
+- `test(attn): add last-token parity tests for odd head_dim`
+- `style: format Rust code with rustfmt (no functional changes)`
+- `refactor(api)!: remove deprecated d_data_base; use CudaContext handles`
 
 We provide a commit template in `.gitmessage`. Enable it locally with:
 
