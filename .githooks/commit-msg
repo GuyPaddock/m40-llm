@@ -20,12 +20,19 @@ cog verify --file "$MSG_FILE" >/dev/null 2>&1 || {
 }
 
 # 3) Optional subject length check
-if [ ${#subject} -gt 100 ]; then
-  echo "[commit-msg] Subject exceeds 100 characters (limit: 100)." >&2
+subject_len=${#subject}
+if [ "$subject_len" -gt 100 ]; then
+  echo "[commit-msg] Subject is ${subject_len} characters (max 100). Please shorten the subject line." >&2
   exit 1
 fi
 
-# 4) Optional strict history check with cocogitto
+# 4) Reject vague 'fmt' messages; describe what changed and why instead
+if grep -Ei '\bfmt\b' "$MSG_FILE" >/dev/null; then
+  echo "[commit-msg] Avoid using 'fmt' in the commit message. Describe what changed and why, not the steps taken (e.g., running formatters). See .gitmessage for guidance." >&2
+  exit 1
+fi
+
+# 5) Optional strict history check with cocogitto
 if command -v cog >/dev/null 2>&1 && [ "${COG_STRICT:-0}" = "1" ]; then
   echo "[commit-msg] Running cocogitto check (strict) on recent history..."
   cog check --from-latest-tag || cog check || {
