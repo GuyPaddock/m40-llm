@@ -1,4 +1,84 @@
 User:
+Let's assume that you are writing a server like vLLM or Ollama that can host inference of LLM models. But unlike those two you want to run as fast as machinely possible on a Tesla M40 24 GB. Can you write such a program? It should use a native language not Python.
+---
+Agent:
+I can’t realistically code “another vLLM/Ollama” end-to-end in one message, but I can give you a serious, native (C++/CUDA) skeleton that:
+* Targets a single Tesla M40 24 GB.
+* Uses CUDA + cuBLAS for the heavy math.
+* Exposes a simple HTTP `/generate` endpoint (vLLM/Ollama-style).
+* Is structured so you can plug in a real decoder-only transformer.
+
+## 1. High-level architecture for “as fast as possible on M40”
+Target: **single-GPU, single-node, low-latency, high-throughput** server.
+
+Key design points:
+
+### 1. **Language / stack**
+
+   * RUST
+   * CUDA (M40 = compute capability 5.2)
+   * cuBLAS for GEMM (you don’t want to hand-roll matmul on Kepler/Maxwell)
+   * No Python at runtime.
+
+### 2. **Model / memory**
+
+   * Assume a decoder-only transformer (LLaMA-like).
+   * Use **FP16 weights**; KV cache in FP16 (or FP16 activations, FP32 accum).
+   * Layout weights row-major / column-major to match cuBLAS expectations.
+   * **Pinned host memory** (`cudaHostAlloc`) for staging weights and KV.
+   * All weights live in device memory; streaming only KV and inputs across PCIe.
+
+### 3. **Execution**
+
+   * **Prefill** phase: run full sequence (prompt) with large GEMMs.
+   * **Decode** phase: 1 token-at-a-time (or small batches), reuse KV cache.
+   * Use a **single CUDA stream** for simplicity initially; later, experiment with:
+
+     * Multiple streams (prefill vs sampling).
+     * CUDA Graphs to capture decode step graph and replay it.
+
+### 4. **Server**
+
+   * Single process, single thread per request at first; then:
+
+     * Add a request queue and a **batcher** if you want vLLM-style batching.
+   * Basic JSON over HTTP:
+
+     * `POST /generate` with `{ "prompt": "...", "max_tokens": 64 }`.
+     * Streams tokens back as SSE or chunked JSON if desired.
+
+
+## 2. Where this becomes “real” and *fast*
+
+To turn this into a serious M40-optimized server, you’d:
+
+1. Create:
+   * Proper tokenizer (e.g. BPE) on CPU.
+   * Decoder-only transformer implemented in CUDA:
+     * Multi-head attention with packed QKV GEMMs.
+     * Rotary/ALiBi position embeddings.
+     * KV cache (dim x seq_len x layers x heads) in FP16.
+   * Output head and sampling done on GPU (temperature, top-k/top-p).
+
+2. **Optimize GPU usage**
+   * Use **CUDA Graphs** to capture the per-token decode graph.
+   * Use **optimized kv-cache layout** (contiguous in head dimension).
+   * Fuse kernels where possible (RMSNorm + matmul biases, etc.).
+   * Use `cublasLt` with tuned configs for large GEMMs.
+
+3. **Server-side batching**
+   * Maintain a list of active requests and a global “scheduler” that:
+
+     * Packs them into micro-batches per decode step.
+     * Merges prompts where possible (prefix caching).
+   * This is where vLLM gets a lot of its magic.
+
+4. **M40 specifics**
+   * Pin your working set to **24 GB**: choice of model size + KV capacity.
+   * Adjust batch size / max concurrent sessions to avoid OOM.
+   * Profile with `nvprof` / Nsight to eliminate host-device syncs.
+---
+User:
 Before we dive into code, I'm also wondering if there are unique hardware features the M40 has that we could exploit, especially features it might have over later devices like Ampere. Or, even, different ways of using the hardware that others might not have thought about
 ---
 Agent:
