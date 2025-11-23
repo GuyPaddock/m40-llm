@@ -21,6 +21,12 @@ pub struct AppState {
     pub model: LoadedModel,
 }
 
+// LoadedModel contains raw device pointers behind cfg(feature = "cuda"). For Axum state,
+// we assert Send + Sync because LoadedModel is only moved between threads and internal
+// mutability is managed by CUDA context APIs.
+unsafe impl Send for AppState {}
+unsafe impl Sync for AppState {}
+
 pub fn app_router(state: Arc<AppState>) -> Router {
     // Wrap state in an extractor that is Clone + Send + Sync by using Arc
     Router::new()

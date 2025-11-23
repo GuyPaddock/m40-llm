@@ -2,14 +2,28 @@
 #![allow(dead_code)]
 
 use crate::cuda::{CudaContext, KVCache};
-use crate::gguf::GgufModel;
-use anyhow::{anyhow, Result};
+use crate::gguf::{GgmlDType, GgufModel, GgufTensor};
+use anyhow::{anyhow, Context, Result};
+use std::collections::HashMap;
 use std::ffi::c_void;
+
+#[derive(Debug, Clone)]
+pub struct DeviceTensorView {
+    pub dtype: GgmlDType,
+    pub shape: Vec<u64>,
+    pub byte_offset: u64, // from start of tensor data region in file
+    pub nbytes: usize,    // 0 if unknown dtype sizing
+    #[cfg(feature = "cuda")]
+    pub dptr: *mut c_void, // base + byte_offset (null in non-CUDA builds)
+}
 
 pub struct LoadedModel {
     pub gguf: GgufModel,
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
+    pub device_tensors: HashMap<String, DeviceTensorView>,
+    #[cfg(feature = "cuda")]
+    pub d_weights_base: *mut c_void,
 }
 
 impl LoadedModel {
@@ -24,14 +38,70 @@ impl LoadedModel {
             );
         }
         let weights_bytes = &gguf_bytes[data_off..];
-        let _d_data_base = cuda.upload_weights(weights_bytes)?;
+        let d_base = cuda.upload_weights(weights_bytes)?;
+        // Validate that all known-sized tensors fit within weights_bytes
+        for t in &gguf.tensors {
+            if let Some(esize) = dtype_size_bytes(t.dtype) {
+                let n_elems: u64 = t.shape.iter().copied().product::<u64>();
+                let need = (n_elems as usize)
+                    .checked_mul(esize)
+                    .context("tensor size overflow")?;
+                let start = t.offset as usize;
+                let end = start.saturating_add(need);
+                if end > weights_bytes.len() {
+                    anyhow::bail!(
+                        "tensor '{}' overflows weights blob: [{}..{}) > {}",
+                        t.name,
+                        start,
+                        end,
+                        weights_bytes.len()
+                    );
+                }
+            }
+        }
+        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base);
         Ok(Self {
             gguf,
             cuda,
             kv_cache: None,
+            device_tensors,
+            #[cfg(feature = "cuda")]
+            d_weights_base: d_base,
         })
     }
+}
 
+fn dtype_size_bytes(dt: GgmlDType) -> Option<usize> {
+    match dt {
+        GgmlDType::F32 => Some(4),
+        GgmlDType::F16 => Some(2),
+        _ => None,
+    }
+}
+
+#[allow(clippy::collapsible_if)]
+fn build_device_tensor_views(
+    tensors: &[GgufTensor],
+    #[allow(unused_variables)] d_base: *mut c_void,
+) -> HashMap<String, DeviceTensorView> {
+    let mut map = HashMap::with_capacity(tensors.len());
+    for t in tensors {
+        let n_elems: u64 = t.shape.iter().copied().product::<u64>();
+        let sz_opt = dtype_size_bytes(t.dtype).map(|s| (n_elems as usize) * s);
+        let view = DeviceTensorView {
+            dtype: t.dtype,
+            shape: t.shape.clone(),
+            byte_offset: t.offset,
+            nbytes: sz_opt.unwrap_or(0),
+            #[cfg(feature = "cuda")]
+            dptr: (d_base as usize + t.offset as usize) as *mut c_void,
+        };
+        map.insert(t.name.clone(), view);
+    }
+    map
+}
+
+impl LoadedModel {
     // Convenience: Append K/V from host FP32 slices. Copies to device then calls append.
     pub fn append_kv_token_f32_from_host(
         &self,
