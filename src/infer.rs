@@ -258,8 +258,223 @@ impl LoadedModel {
         _dim: u32,
         _hidden_dim: u32,
     ) -> Result<()> {
-        // Stub: no-op
+        // Stub: no-op (activation wiring handled in forward_one_token_minimal for now)
         Ok(())
+    }
+
+    /// Minimal forward pass for one token through attention + MLP using existing primitives.
+    /// Assumptions:
+    /// - Batch size = 1
+    /// - Q/K/V and out-proj output dims equal d_model
+    /// - Activations and residual adds are performed on host as a temporary fallback
+    /// - KV cache must be pre-allocated with matching num_heads/head_dim
+    ///
+    /// Safety: All device pointers must be valid on this context's device.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn forward_one_token_minimal(
+        &self,
+        d_x_f32: *const c_void,
+        d_model: i32,
+        d_wq_f16: *const c_void,
+        d_wk_f16: *const c_void,
+        d_wv_f16: *const c_void,
+        d_wo_f16: *const c_void,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        d_w_down_f16: *const c_void,
+        hidden_dim: i32,
+        seq_id: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if d_model <= 0 || hidden_dim <= 0 {
+            anyhow::bail!("forward_one_token_minimal: invalid dims");
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            // Allocate scratch buffers
+            let bytes_d = (d_model as usize) * 4;
+            let bytes_h = (hidden_dim as usize) * 4;
+            let dq = self.cuda.device_malloc(bytes_d)?;
+            let dk = self.cuda.device_malloc(bytes_d)?;
+            let dv = self.cuda.device_malloc(bytes_d)?;
+            let datt = self.cuda.device_malloc(bytes_d)?; // attention output
+            let dy_attn = self.cuda.device_malloc(bytes_d)?; // after out-proj
+            let dgate = self.cuda.device_malloc(bytes_h)?;
+            let dup = self.cuda.device_malloc(bytes_h)?;
+            let dhid = self.cuda.device_malloc(bytes_h)?;
+            let dy_mlp = self.cuda.device_malloc(bytes_d)?;
+
+            let res = (|| -> Result<()> {
+                // Q/K/V projections (m=1, k=d_model, n=d_model)
+                self.qkv_project_f32xf16_f32(
+                    d_x_f32, 1, d_model, d_wq_f16, d_model, d_wk_f16, d_model, d_wv_f16, d_model,
+                    dq, dk, dv,
+                )?;
+
+                // Append K/V for this token, then attention over last token
+                self.append_kv_token_f32(seq_id, dk as *const c_void, dv as *const c_void)?;
+
+                // Use KV cache layout to validate/run attention
+                let kv = self.kv_cache.as_ref().ok_or_else(|| {
+                    anyhow!("kv_cache not allocated; call allocate_kv_cache first")
+                })?;
+                let num_heads = kv.num_heads();
+                let head_dim = kv.head_dim();
+                self.run_attention(
+                    dq as *const c_void,
+                    datt,
+                    seq_id,
+                    seq_len,
+                    d_model as u32,
+                    num_heads,
+                    head_dim,
+                )?;
+
+                // Output projection of attention
+                self.out_proj_f32xf16_f32(
+                    datt as *const c_void,
+                    d_wo_f16,
+                    dy_attn,
+                    1,
+                    d_model,
+                    d_model,
+                )?;
+
+                // MLP gates and up
+                self.mlp_gates_f32xf16_f32(
+                    d_x_f32,
+                    1,
+                    d_model,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    hidden_dim,
+                    dgate,
+                    dup,
+                )?;
+
+                // Host fallback for elementwise: hidden = sigmoid(gate) * up
+                let mut h_gate = vec![0u8; bytes_h];
+                let mut h_up = vec![0u8; bytes_h];
+                self.cuda.memcpy_d2h(
+                    h_gate.as_mut_ptr() as *mut c_void,
+                    dgate as *const c_void,
+                    bytes_h,
+                )?;
+                self.cuda.memcpy_d2h(
+                    h_up.as_mut_ptr() as *mut c_void,
+                    dup as *const c_void,
+                    bytes_h,
+                )?;
+                let mut gate_f = Vec::with_capacity(hidden_dim as usize);
+                let mut up_f = Vec::with_capacity(hidden_dim as usize);
+                for ch in h_gate.chunks_exact(4) {
+                    gate_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                for ch in h_up.chunks_exact(4) {
+                    up_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                fn sigmoid(v: f32) -> f32 {
+                    1.0 / (1.0 + (-v).exp())
+                }
+                let mut hid_f = Vec::with_capacity(hidden_dim as usize);
+                for i in 0..(hidden_dim as usize) {
+                    hid_f.push(sigmoid(gate_f[i]) * up_f[i]);
+                }
+                // Copy hidden back to device
+                let mut h_hid_bytes = Vec::with_capacity(bytes_h);
+                for v in &hid_f {
+                    h_hid_bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                self.cuda
+                    .memcpy_h2d(dhid, h_hid_bytes.as_ptr() as *const c_void, bytes_h)?;
+
+                // Down projection
+                self.mlp_down_proj_f32xf16_f32(
+                    dhid as *const c_void,
+                    1,
+                    hidden_dim,
+                    d_w_down_f16,
+                    d_model,
+                    dy_mlp,
+                )?;
+
+                // Residual add on host: out = x + y_attn + y_mlp
+                let mut h_x = vec![0u8; bytes_d];
+                let mut h_attn = vec![0u8; bytes_d];
+                let mut h_mlp = vec![0u8; bytes_d];
+                self.cuda
+                    .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
+                self.cuda.memcpy_d2h(
+                    h_attn.as_mut_ptr() as *mut c_void,
+                    dy_attn as *const c_void,
+                    bytes_d,
+                )?;
+                self.cuda.memcpy_d2h(
+                    h_mlp.as_mut_ptr() as *mut c_void,
+                    dy_mlp as *const c_void,
+                    bytes_d,
+                )?;
+                let mut x_f = Vec::with_capacity(d_model as usize);
+                let mut attn_f = Vec::with_capacity(d_model as usize);
+                let mut mlp_f = Vec::with_capacity(d_model as usize);
+                for ch in h_x.chunks_exact(4) {
+                    x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                for ch in h_attn.chunks_exact(4) {
+                    attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                for ch in h_mlp.chunks_exact(4) {
+                    mlp_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                let mut y_f = Vec::with_capacity(d_model as usize);
+                for i in 0..(d_model as usize) {
+                    y_f.push(x_f[i] + attn_f[i] + mlp_f[i]);
+                }
+                let mut y_bytes = Vec::with_capacity(bytes_d);
+                for v in &y_f {
+                    y_bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                self.cuda
+                    .memcpy_h2d(d_out_f32, y_bytes.as_ptr() as *const c_void, bytes_d)?;
+
+                Ok(())
+            })();
+
+            // Free scratch (best-effort)
+            let _ = self.cuda.device_free(dq);
+            let _ = self.cuda.device_free(dk);
+            let _ = self.cuda.device_free(dv);
+            let _ = self.cuda.device_free(datt);
+            let _ = self.cuda.device_free(dy_attn);
+            let _ = self.cuda.device_free(dgate);
+            let _ = self.cuda.device_free(dup);
+            let _ = self.cuda.device_free(dhid);
+            let _ = self.cuda.device_free(dy_mlp);
+
+            return res;
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x_f32,
+                d_model,
+                d_wq_f16,
+                d_wk_f16,
+                d_wv_f16,
+                d_wo_f16,
+                d_w_gate_f16,
+                d_w_up_f16,
+                d_w_down_f16,
+                hidden_dim,
+                seq_id,
+                seq_len,
+                d_out_f32,
+            );
+            Ok(())
+        }
     }
 
     /// # Safety
