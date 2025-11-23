@@ -1,7 +1,7 @@
 // src/cuda.rs
-use anyhow::Result;
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
+use anyhow::Result;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ptr::NonNull;
@@ -126,7 +126,8 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let ptr = unsafe { ffi::m40llm_create_context(device_id) };
-            let raw = NonNull::new(ptr).ok_or_else(|| anyhow!("m40llm_create_context returned null"))?;
+            let raw =
+                NonNull::new(ptr).ok_or_else(|| anyhow!("m40llm_create_context returned null"))?;
             Ok(Self {
                 inner: Arc::new(CudaContextInner {
                     device_id,
@@ -148,7 +149,9 @@ impl CudaContext {
     }
 
     #[allow(dead_code)]
-    pub fn device_id(&self) -> i32 { self.inner.device_id }
+    pub fn device_id(&self) -> i32 {
+        self.inner.device_id
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -156,7 +159,9 @@ impl CudaContext {
     pub fn device_malloc(&self, bytes: usize) -> Result<*mut c_void> {
         let _g = self.inner.lock.lock().unwrap();
         let mut out: *mut c_void = std::ptr::null_mut();
-        let rc = unsafe { ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _) };
+        let rc = unsafe {
+            ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _)
+        };
         if rc != 0 {
             return Err(anyhow!("m40llm_device_malloc failed: {rc}"));
         }
@@ -177,7 +182,8 @@ impl CudaContext {
         bytes: usize,
     ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
-        let rc = unsafe { ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes) };
+        let rc =
+            unsafe { ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes) };
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
         }
@@ -190,7 +196,8 @@ impl CudaContext {
         bytes: usize,
     ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
-        let rc = unsafe { ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes) };
+        let rc =
+            unsafe { ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes) };
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
         }
@@ -213,12 +220,22 @@ impl CudaContext {
         Ok(())
     }
     #[allow(dead_code)]
-    pub fn memcpy_h2d(&self, _dst_device: *mut c_void, _src_host: *const c_void, _bytes: usize) -> Result<()> {
+    pub fn memcpy_h2d(
+        &self,
+        _dst_device: *mut c_void,
+        _src_host: *const c_void,
+        _bytes: usize,
+    ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
     #[allow(dead_code)]
-    pub fn memcpy_d2h(&self, _dst_host: *mut c_void, _src_device: *const c_void, _bytes: usize) -> Result<()> {
+    pub fn memcpy_d2h(
+        &self,
+        _dst_host: *mut c_void,
+        _src_device: *const c_void,
+        _bytes: usize,
+    ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
@@ -228,7 +245,15 @@ impl CudaContext {
         Ok(std::ptr::null_mut())
     }
     #[allow(dead_code)]
-    pub fn gemm_f16_f32(&self, _d_a: *const c_void, _d_b: *const c_void, _d_c: *mut c_void, _m: i32, _n: i32, _k: i32) -> Result<()> {
+    pub fn gemm_f16_f32(
+        &self,
+        _d_a: *const c_void,
+        _d_b: *const c_void,
+        _d_c: *mut c_void,
+        _m: i32,
+        _n: i32,
+        _k: i32,
+    ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
@@ -255,7 +280,13 @@ impl CudaContext {
     ) -> Result<*mut ffi::M40llmKVCache> {
         let _g = self.inner.lock.lock().unwrap();
         let kv = unsafe {
-            ffi::m40llm_kvcache_create(self.inner.raw.as_ptr(), max_seq_len, max_batch_size, num_heads, head_dim)
+            ffi::m40llm_kvcache_create(
+                self.inner.raw.as_ptr(),
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+            )
         };
         if kv.is_null() {
             return Err(anyhow!("m40llm_kvcache_create returned null"));
@@ -300,7 +331,15 @@ impl CudaContext {
         {
             let _g = self.inner.lock.lock().unwrap();
             let rc = unsafe {
-                ffi::m40llm_gemm_f16_storage_f32_compute(self.inner.raw.as_ptr(), d_a, d_b, d_c, m, n, k)
+                ffi::m40llm_gemm_f16_storage_f32_compute(
+                    self.inner.raw.as_ptr(),
+                    d_a,
+                    d_b,
+                    d_c,
+                    m,
+                    n,
+                    k,
+                )
             };
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}"));
@@ -352,8 +391,12 @@ pub struct KVCache {
 }
 
 impl KVCache {
-    pub fn num_heads(&self) -> u32 { self.inner.num_heads }
-    pub fn head_dim(&self) -> u32 { self.inner.head_dim }
+    pub fn num_heads(&self) -> u32 {
+        self.inner.num_heads
+    }
+    pub fn head_dim(&self) -> u32 {
+        self.inner.head_dim
+    }
 }
 
 #[derive(Debug)]
@@ -367,7 +410,6 @@ struct KVCacheInner {
     //   elems_per_token = num_heads * head_dim
     //   base(seq, token) = (seq * max_seq_len + token) * elems_per_token
     #[allow(dead_code)]
-
     //   index(seq, token, head, dim) = base + head * head_dim + dim
     max_seq_len: u32,
     _max_batch_size: u32,
@@ -407,7 +449,7 @@ impl KVCache {
                     v: Mutex::new(Vec::new()),
                     #[cfg(not(feature = "cuda"))]
                     len_by_seq: Mutex::new(Vec::new()),
-                })
+                }),
             })
         }
         #[cfg(not(feature = "cuda"))]
@@ -427,7 +469,7 @@ impl KVCache {
                     len_by_seq: Mutex::new(vec![0u32; max_batch_size as usize]),
                     #[cfg(feature = "cuda")]
                     raw: NonNull::dangling(),
-                })
+                }),
             })
         }
     }
@@ -439,7 +481,8 @@ impl KVCache {
 
     #[inline]
     pub fn base_offset_elems(&self, seq: u32, token: u32) -> usize {
-        ((seq as usize) * (self.inner.max_seq_len as usize) + (token as usize)) * self.elems_per_token()
+        ((seq as usize) * (self.inner.max_seq_len as usize) + (token as usize))
+            * self.elems_per_token()
     }
 
     #[cfg(not(feature = "cuda"))]

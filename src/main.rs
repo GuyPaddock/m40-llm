@@ -1,13 +1,17 @@
 // src/main.rs
 // Use the library crate instead of re-declaring modules to avoid duplicate code
-use m40_llm::cli::{Cli, Commands};
 use anyhow::Result;
 use clap::Parser;
-#[cfg(feature = "server")]
-use {m40_llm::{gguf, infer, model, server}, std::{fs, sync::Arc}, tokio::net::TcpListener};
+use m40_llm::cli::{Cli, Commands};
 #[cfg(not(feature = "server"))]
 #[allow(unused_imports)]
 use m40_llm::{gguf, infer, model};
+#[cfg(feature = "server")]
+use {
+    m40_llm::{gguf, infer, model, server},
+    std::{fs, sync::Arc},
+    tokio::net::TcpListener,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
