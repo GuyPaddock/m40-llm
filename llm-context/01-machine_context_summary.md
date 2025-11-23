@@ -29,6 +29,40 @@ This section is an up-to-date snapshot meant for quick reference. Older historic
 - CPU (no-default-features): green
 - CUDA feature: builds; CUDA-gated tests compile/run depending on `nvcc`/headers; optional cuBLAS paths honored when `cublas_v2.h` is detected; PTX for compute_52 embedded
 
+
+## Priority plan to first tokens on M40 (P1–P3)
+
+P1 — Critical path to first working inference
+- t24-gguf-integration: integrate gguf-rs-lib + gguf-llms; load real tensors/metadata
+- t24a-gguf-device-mapping: single upload; typed views; device pointer mapping/validation
+- t25-rope-rmsnorm: finish/verify RMSNorm; implement RoPE (host+CUDA) with tests
+- t22-parity-check: keep last‑token attention CUDA<->CPU parity green on M40
+- t23-5a-qkv: integrate GEMM into Q/K/V projections (FP16×FP32→FP32)
+- t23-5c-out-proj: integrate GEMM into output projection
+- t23-5b-mlp: integrate GEMM into MLP projections
+- t23-5d-parity: numeric parity tests for Q/K/V, MLP, out-proj (tol ~1e-3)
+- t26-min-forward: minimal one-layer forward (prefill + decode) using above pieces
+- t28-sampling: host softmax + top‑k/top‑p (to emit tokens)
+- t27-tokenizer: tokenizer from GGUF metadata
+- t29-e2e-decode: end‑to‑end decode loop using KV cache
+
+P2 — Important but not blocking first tokens
+- t23-cublas-gemm: continue/finish wrappers; supports P1 projections
+- t23-5e-attn-green: keep attention parity grid green during integrations
+- t36-min-gguf-model: tiny GGUF model for fast integration tests
+
+P3 — Supporting environment/docs/cleanup
+- t23-6-autoselect-m40: runtime M40 auto-select + guardrails (landed; keep until docs)
+- t23-6-docs: CUDA_VISIBLE_DEVICES, M40LLM_FORCE_M40=1, and test enforcement
+- t23-6-benches-ctx: benches use cuda_env::ctx_m40()
+- t23-6-warnings: remove unused imports; warning-clean builds
+- t31b-microbench-attn: attention microbenchmarks on M40
+- t30-server: HTTP /generate wired to real decode (feature `server`)
+- t35-ci-matrix: broader CI matrix and setup docs
+- t34-robustness: error handling, logging, telemetry
+- t33-stream-sep: prefill/decode stream separation and priorities
+- t32-persistent-kernel: persistent decode kernel prototype
+
 ## Roadmap (t23–t36)
 - t23 — cuBLAS GEMM integration for Q/K/V, MLP, and output projection
   - Notes: Prefer cublasGemmEx with FP16 inputs / FP32 compute; explicit layouts; provide fallback when cuBLAS header missing; tests for row/col correctness
