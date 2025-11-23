@@ -13,12 +13,6 @@ pub struct LoadedModel {
     pub kv_cache: Option<KVCache>,
 }
 
-// Safety: LoadedModel contains raw device pointers managed by CudaContext and
-// device allocations. We mark it Send+Sync to allow sharing in the server state.
-// Callers must ensure proper synchronization when mutating or freeing resources.
-unsafe impl Send for LoadedModel {}
-unsafe impl Sync for LoadedModel {}
-
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
@@ -105,6 +99,7 @@ impl LoadedModel {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run_attention(
         &self,
         d_q: *const c_void,

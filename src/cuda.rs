@@ -650,7 +650,7 @@ impl KVCache {
             }
             let mut denom = 0.0f32;
             let mut scores = vec![0.0f32; seq_len as usize];
-            for t in 0..(seq_len as usize) {
+            for (t, score) in scores.iter_mut().enumerate().take(seq_len as usize) {
                 let base = self.base_offset_elems(seq_id, t as u32) + h * head_dim;
                 let mut dot = 0.0f32;
                 for d in 0..head_dim {
@@ -659,7 +659,7 @@ impl KVCache {
                 }
                 let s = dot * inv_sqrt;
                 let e = (s - max_s).exp();
-                scores[t] = e;
+                *score = e;
                 denom += e;
             }
             if denom == 0.0 {
@@ -667,8 +667,12 @@ impl KVCache {
             }
             for d in 0..head_dim {
                 let mut acc = 0.0f32;
-                for t in 0..(seq_len as usize) {
-                    let prob = scores[t] / denom;
+                for (t, prob) in scores
+                    .iter()
+                    .map(|s| s / denom)
+                    .enumerate()
+                    .take(seq_len as usize)
+                {
                     let vbase = self.base_offset_elems(seq_id, t as u32) + h * head_dim;
                     acc += prob * v_lock[vbase + d].to_f32();
                 }

@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 use std::path::Path;
 
 /// GGUF "value type" enum (for metadata / kv pairs)
@@ -245,7 +245,7 @@ pub fn load_gguf(path: &Path) -> Result<GgufModel> {
     }
 
     // The current file position is the start of the tensor data block.
-    let data_offset = f.seek(SeekFrom::Current(0))?;
+    let data_offset = f.stream_position()?;
 
     Ok(GgufModel {
         version,
