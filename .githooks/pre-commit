@@ -13,4 +13,11 @@ else
   echo "[pre-commit] cargo not found; skipping rustfmt check"
 fi
 
+# Preserve failed commit message file if present, but do not fail here
+STATE_FILE=".git/.failed_commit_msg"
+if [ -f "$STATE_FILE" ]; then
+  echo "[pre-commit] Note: a preserved failed commit message exists at $STATE_FILE"
+fi
+
+
 exit 0
