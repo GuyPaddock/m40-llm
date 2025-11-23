@@ -354,7 +354,7 @@ impl LoadedModel {
                     dup,
                 )?;
 
-                // Host fallback for elementwise: hidden = sigmoid(gate) * up
+                // Host fallback for elementwise: hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x)
                 let mut h_gate = vec![0u8; bytes_h];
                 let mut h_up = vec![0u8; bytes_h];
                 self.cuda.memcpy_d2h(
@@ -380,7 +380,9 @@ impl LoadedModel {
                 }
                 let mut hid_f = Vec::with_capacity(hidden_dim as usize);
                 for i in 0..(hidden_dim as usize) {
-                    hid_f.push(sigmoid(gate_f[i]) * up_f[i]);
+                    let g = gate_f[i];
+                    let silu = g * sigmoid(g);
+                    hid_f.push(silu * up_f[i]);
                 }
                 // Copy hidden back to device
                 let mut h_hid_bytes = Vec::with_capacity(bytes_h);
