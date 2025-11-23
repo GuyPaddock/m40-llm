@@ -1,12 +1,18 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use m40_llm::cuda::{CudaContext, KVCache};
 use std::ffi::c_void;
 
 #[test]
 fn cuda_context_and_memcpy() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let bytes = 16usize;
     let dptr = ctx.device_malloc(bytes)?;
 
@@ -29,7 +35,11 @@ fn cuda_context_and_memcpy() -> Result<()> {
 
 #[test]
 fn kvcache_create_append() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let kv = KVCache::new_with_context(&ctx, 4, 1, 2, 4)?;
 
     // One token worth of K/V per head
@@ -54,7 +64,11 @@ fn kvcache_create_append() -> Result<()> {
 
 #[test]
 fn gemm_call() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let m = 2;
     let n = 2;
     let k = 2;

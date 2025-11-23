@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use half::f16;
 use m40_llm::cuda::{ffi_debug_read_kv_token, CudaContext, KVCache};
@@ -17,7 +19,11 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
     let max_seq_len: u32 = 4;
     let max_batch_size: u32 = 1;
 
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let kv = KVCache::new_with_context(&ctx, max_seq_len, max_batch_size, num_heads, head_dim)?;
 
     let elems_per_token = (num_heads as usize) * (head_dim as usize);

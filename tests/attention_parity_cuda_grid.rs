@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use m40_llm::cuda::{CudaContext, KVCache};
 use std::ffi::c_void;
@@ -69,7 +71,11 @@ fn cpu_last_token_attention(
 
 #[test]
 fn attention_last_token_cuda_parity_grid() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
 
     let head_dims = [1u32, 5, 7, 8, 16, 31, 32];
     let num_heads_list = [1u32, 3, 4, 8];

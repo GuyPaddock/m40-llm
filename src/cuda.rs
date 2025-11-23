@@ -4,6 +4,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
+use std::ffi::CStr;
+
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
 
@@ -20,6 +22,13 @@ mod ffi {
     }
 
     extern "C" {
+        pub fn m40llm_current_device_props(
+            name_buf: *mut ::std::os::raw::c_char,
+            buf_len: usize,
+            major: *mut i32,
+            minor: *mut i32,
+            device_id: *mut i32,
+        ) -> i32;
         pub fn m40llm_device_malloc(
             ctx: *mut M40llmCudaContext,
             bytes: usize,
@@ -109,20 +118,28 @@ mod ffi {
             out_v_f16: *mut c_void,
         ) -> i32;
 
-        pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
-
         pub fn m40llm_attention_last_token_f32(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
             seq_id: u32,
-            q_dev_f32: *const c_void,
+            d_q_f32: *const c_void,
             seq_len: u32,
-            out_dev_f32: *mut c_void,
+            d_out_f32: *mut c_void,
         ) -> i32;
+
+        pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeviceProps {
+    pub name: String,
+    pub major: i32,
+    pub minor: i32,
+    pub device_id: i32,
 }
 
 // Public-safe wrapper types usable in both CUDA and non-CUDA builds
@@ -183,6 +200,50 @@ impl CudaContext {
     #[allow(dead_code)]
     pub fn device_id(&self) -> i32 {
         self.inner.device_id
+    }
+
+    /// Convenience: create a context that auto-selects Tesla M40 (sm_52) when available.
+    /// Equivalent to `CudaContext::new(-1)`.
+    pub fn new_m40() -> Result<Self> {
+        Self::new(-1)
+    }
+
+    pub fn current_device_props(&self) -> Result<DeviceProps> {
+        #[cfg(feature = "cuda")]
+        {
+            let mut name_buf = [0i8; 128];
+            let mut major: i32 = 0;
+            let mut minor: i32 = 0;
+            let mut device_id: i32 = -1;
+            let rc = unsafe {
+                ffi::m40llm_current_device_props(
+                    name_buf.as_mut_ptr(),
+                    name_buf.len(),
+                    &mut major as *mut _,
+                    &mut minor as *mut _,
+                    &mut device_id as *mut _,
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_current_device_props failed: {rc}"));
+            }
+            let cname = unsafe { CStr::from_ptr(name_buf.as_ptr()) };
+            Ok(DeviceProps {
+                name: cname.to_string_lossy().into_owned(),
+                major,
+                minor,
+                device_id,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Ok(DeviceProps {
+                name: "stub".into(),
+                major: 0,
+                minor: 0,
+                device_id: self.inner.device_id,
+            })
+        }
     }
 }
 

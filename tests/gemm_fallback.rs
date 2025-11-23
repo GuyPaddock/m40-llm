@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use m40_llm::cuda::CudaContext;
 use std::ffi::c_void;
@@ -42,7 +44,11 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
 
 #[test]
 fn gemm_fallback_square_2x2() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let (m, k, n) = (2i32, 2i32, 2i32);
     let a = [1.0f32, 2.0, 3.0, 4.0]; // 2x2
     let b = [5.0f32, 6.0, 7.0, 8.0]; // 2x2
@@ -86,7 +92,11 @@ fn gemm_fallback_square_2x2() -> Result<()> {
 
 #[test]
 fn gemm_fallback_rectangular_1x3x2() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let (m, k, n) = (1i32, 3i32, 2i32);
     let a = [1.0f32, 2.0, 3.0]; // 1x3
     let b = [4.0f32, 5.0, 6.0, 7.0, 8.0, 9.0]; // 3x2 row-major

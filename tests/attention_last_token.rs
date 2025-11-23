@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use m40_llm::cuda::{CudaContext, KVCache};
 use std::ffi::c_void;
@@ -74,7 +76,11 @@ fn cpu_last_token_attention(
 
 #[test]
 fn attention_last_token_matches_cpu_ref() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
 
     let max_seq_len = 8u32;
     let max_batch_size = 1u32;

@@ -2,8 +2,8 @@ use m40_llm::cuda::KVCache;
 
 #[test]
 fn test_kv_index_math() {
-    let kv = KVCache::new_with_context(&m40_llm::cuda::CudaContext::new(0).unwrap(), 4, 2, 3, 5)
-        .unwrap();
+    let kv = KVCache::new_with_context(&m40_llm::cuda::CudaContext::new(-1).unwrap(), 4, 2, 3, 5)
+        .unwrap(); // non-CUDA unit-test math only; context value irrelevant here
 
     // elems_per_token = 3 * 5 = 15
     assert_eq!(kv.elems_per_token(), 15);

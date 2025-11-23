@@ -13,7 +13,8 @@ fn bench_gemm_impl(c: &mut Criterion) {
     {
         use m40_llm::cuda::CudaContext;
 
-        let ctx = CudaContext::new(0).expect("cuda context");
+        // Auto-select M40 (sm_52) if present; otherwise CUDA will fall back to device 0
+        let ctx = CudaContext::new(-1).expect("cuda context");
         // Shapes to test
         let cases = vec![
             (64, 64, 64),

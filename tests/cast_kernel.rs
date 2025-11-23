@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+mod cuda_env;
+
 use anyhow::Result;
 use m40_llm::cuda::{CudaContext, KVCache};
 use std::ffi::c_void;
@@ -11,7 +13,11 @@ fn cpu_f32_to_f16_bits(v: f32) -> u16 {
 
 #[test]
 fn append_token_f32_cast_matches_cpu() -> Result<()> {
-    let ctx = CudaContext::new(0)?;
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
     let num_heads = 3u32;
     let head_dim = 5u32; // odd to exercise tail path
     let kv = KVCache::new_with_context(&ctx, 2, 1, num_heads, head_dim)?;

@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstdint>
 #include <math.h>
+#include <cstring>
+#include <cstdlib>
 #include "common.h"
 
 struct M40llmCudaContext {
@@ -17,6 +19,13 @@ struct M40llmCudaContext {
     cublasHandle_t cublas;
 #endif
 };
+  struct M40llmDeviceProps {
+      int device_id;
+      int major;
+      int minor;
+      char name[128];
+  };
+
 
 extern "C" {
     // KV Cache structure (visible in this TU)
@@ -64,9 +73,36 @@ extern "C" {
     }
 
     M40llmCudaContext* m40llm_create_context(int device_id) {
-        cudaSetDevice(device_id);
+        // Allow runtime auto-selection of Tesla M40 (sm_52) when:
+        // - device_id < 0, or
+        // - environment variable M40LLM_FORCE_M40=1 is set.
+        int selected = device_id;
+        const char* force_env = getenv("M40LLM_FORCE_M40");
+        bool force_m40 = (force_env && force_env[0] == '1');
+        if (device_id < 0 || force_m40) {
+            int count = 0;
+            if (cudaGetDeviceCount(&count) == cudaSuccess) {
+                for (int i = 0; i < count; ++i) {
+                    cudaDeviceProp prop;
+                    if (cudaGetDeviceProperties(&prop, i) == cudaSuccess) {
+                        if (prop.major == 5 && prop.minor == 2) {
+                            selected = i;
+                            break;
+                        }
+                    }
+                }
+                if (selected < 0) {
+                    // Fallback to device 0 if no M40 found
+                    selected = 0;
+                }
+            } else {
+                selected = 0;
+            }
+        }
+
+        cudaSetDevice(selected);
         M40llmCudaContext* ctx = new M40llmCudaContext();
-        ctx->device_id = device_id;
+        ctx->device_id = selected;
 
         cudaStreamCreate(&ctx->prefill_stream);
         cudaStreamCreate(&ctx->decode_stream);
@@ -83,6 +119,29 @@ extern "C" {
 
         return ctx;
     }
+
+    // Query the current CUDA device properties for test/CI guardrails.
+    // Returns 0 on success, negative on error.
+    int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
+        if (!name_buf || buf_len == 0 || !major || !minor || !device_id) return -1;
+        int dev = 0;
+        cudaError_t err = cudaGetDevice(&dev);
+        if (err != cudaSuccess) return -2;
+        cudaDeviceProp prop;
+        err = cudaGetDeviceProperties(&prop, dev);
+        if (err != cudaSuccess) return -3;
+        size_t nlen = strnlen(prop.name, sizeof(prop.name));
+        if (buf_len <= nlen) {
+            nlen = buf_len - 1;
+        }
+        memcpy(name_buf, prop.name, nlen);
+        name_buf[nlen] = '\0';
+        *major = prop.major;
+        *minor = prop.minor;
+        *device_id = dev;
+        return 0;
+    }
+
 
     void m40llm_destroy_context(M40llmCudaContext* ctx) {
         if (!ctx) return;
