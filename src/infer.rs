@@ -262,6 +262,44 @@ impl LoadedModel {
         Ok(())
     }
 
+    /// # Safety
+    /// MLP projections (no activation): computes gate = X·W_gate and up = X·W_up.
+    /// All matrices are row-major; X is f32 (MxK), W_* are f16 (KxH), outputs are f32 (MxH).
+    pub unsafe fn mlp_gates_f32xf16_f32(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        h: i32,
+        d_gate_out_f32: *mut c_void,
+        d_up_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || h <= 0 {
+            anyhow::bail!("mlp_gates: invalid dims");
+        }
+        self.matmul_f32xf16_f32(d_x_f32, d_w_gate_f16, d_gate_out_f32, m, h, k)?;
+        self.matmul_f32xf16_f32(d_x_f32, d_w_up_f16, d_up_out_f32, m, h, k)
+    }
+
+    /// # Safety
+    /// Down projection: Y = H · W_down, where H is hidden f32 (MxH), W_down is f16 (H x N), output f32 (MxN)
+    pub unsafe fn mlp_down_proj_f32xf16_f32(
+        &self,
+        d_hidden_f32: *const c_void,
+        m: i32,
+        h: i32,
+        d_w_down_f16: *const c_void,
+        n: i32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || h <= 0 || n <= 0 {
+            anyhow::bail!("mlp_down_proj: invalid dims");
+        }
+        self.matmul_f32xf16_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
+    }
+
     pub fn run_rms_norm(
         &self,
         _d_in: *const c_void,
