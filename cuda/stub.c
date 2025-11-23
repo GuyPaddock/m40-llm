@@ -35,6 +35,10 @@ int m40llm_gemm_f16_storage_f32_compute(M40llmCudaContext* ctx, const void* d_A,
     (void)ctx; (void)d_A; (void)d_B; (void)d_C; (void)M; (void)N; (void)K; return -1;
 }
 
+int m40llm_gemm_f32xf16_f32(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f16, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+
 M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
     (void)ctx; (void)max_seq_len; (void)max_batch_size; (void)num_heads; (void)head_dim; return (M40llmKVCache*)0x1;
 }

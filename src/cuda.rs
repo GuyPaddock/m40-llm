@@ -59,6 +59,16 @@ mod ffi {
             K: i32,
         ) -> i32;
 
+        pub fn m40llm_gemm_f32xf16_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+
         pub fn m40llm_kvcache_create(
             ctx: *mut M40llmCudaContext,
             max_seq_len: u32,
@@ -288,6 +298,19 @@ impl CudaContext {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
+    #[allow(dead_code)]
+    pub fn gemm_f32xf16_f32(
+        &self,
+        _d_a_f32: *const c_void,
+        _d_b_f16: *const c_void,
+        _d_c_f32: *mut c_void,
+        _m: i32,
+        _n: i32,
+        _k: i32,
+    ) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        Ok(())
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -345,6 +368,42 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             Ok(std::ptr::null_mut())
+        }
+    }
+
+    /// # Safety
+    /// `d_a_f32`, `d_b_f16`, and `d_c_f32` must be valid device pointers on this context's device.
+    /// Dimensions m, n, k must match the underlying buffer shapes.
+    pub unsafe fn gemm_f32xf16_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf16_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xf16_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
         }
     }
 
