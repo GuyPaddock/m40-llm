@@ -212,7 +212,7 @@ extern "C" {
     }
 
     // FP16 storage / FP32 compute GEMM using cuBLAS when available; fallback naive CUDA kernel otherwise
-    // A: MxK (f16 row-major), B: KxN (f16 row-major), C: MxN (f16 row-major) with FP32 accumulation
+    // A: MxK (f16 row-major), B: KxN (f16 row-major), C: MxN (f16 row-major) with FP32 accumulation → FP16 output
     __global__ void gemm_f16_f32_kernel(
         const __half* __restrict__ A, // MxK
         const __half* __restrict__ B, // KxN
@@ -222,13 +222,30 @@ extern "C" {
         int col = blockIdx.x * blockDim.x + threadIdx.x; // 0..N-1
         if (row >= M || col >= N) return;
         float acc = 0.0f;
-        // Row-major indexing
         for (int kk = 0; kk < K; ++kk) {
             float a = __half2float(A[row * K + kk]);
             float b = __half2float(B[kk * N + col]);
             acc += a * b;
         }
         C[row * N + col] = __float2half_rn(acc);
+    }
+
+    // Mixed GEMM: A f32 (MxK row-major) × B f16 (KxN row-major) → C f32 (MxN row-major)
+    __global__ void gemm_f32xf16_f32_kernel(
+        const float* __restrict__ A,  // MxK
+        const __half* __restrict__ B, // KxN
+        float* __restrict__ C,        // MxN
+        int M, int N, int K) {
+        int row = blockIdx.y * blockDim.y + threadIdx.y;
+        int col = blockIdx.x * blockDim.x + threadIdx.x;
+        if (row >= M || col >= N) return;
+        float acc = 0.0f;
+        for (int kk = 0; kk < K; ++kk) {
+            float a = A[row * K + kk];
+            float b = __half2float(B[kk * N + col]);
+            acc += a * b;
+        }
+        C[row * N + col] = acc;
     }
 
     int m40llm_gemm_f16_storage_f32_compute(
@@ -260,6 +277,44 @@ extern "C" {
         dim3 block(16, 16);
         dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
         gemm_f16_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
+    #endif
+    }
+
+    // Expose mixed-dtype GEMM (f32 × f16 → f32)
+    int m40llm_gemm_f32xf16_f32(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f16,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+    #ifdef M40LLM_HAVE_CUBLAS
+        float alpha = 1.0f;
+        float beta = 0.0f;
+        cublasStatus_t st = cublasGemmEx(
+            ctx->cublas,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            N, M, K,
+            &alpha,
+            d_B_f16, CUDA_R_16F, N,
+            d_A_f32, CUDA_R_32F, K,
+            &beta,
+            d_C_f32, CUDA_R_32F, N,
+            CUDA_R_32F,
+            CUBLAS_GEMM_DEFAULT);
+        return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
+    #else
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const __half* B = reinterpret_cast<const __half*>(d_B_f16);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f32xf16_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->prefill_stream);
