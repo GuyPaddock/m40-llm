@@ -13,6 +13,10 @@ use {
     tokio::net::TcpListener,
 };
 
+#[cfg(all(feature = "server", feature = "gguf_ext"))]
+#[allow(unused_imports)]
+use m40_llm::gguf_ext;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();

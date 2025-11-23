@@ -8,6 +8,8 @@ use std::fs::File;
 use std::io::{Read, Seek};
 use std::path::Path;
 
+// Optional extended GGUF support is provided in `gguf_ext` feature/module.
+
 /// GGUF "value type" enum (for metadata / kv pairs)
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]

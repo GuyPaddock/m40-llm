@@ -26,10 +26,21 @@ half = "2"
 # For filesystem paths & dirs
 directories = "5"
 
+# Optional GGUF integration crates
+# Keep optional and gated behind `gguf_ext` feature so default builds remain slim
+# Exact versions kept flexible for now; can pin after first compile/integration pass
+gguf-llms = { version = "0.0.2", optional = true }
+# gguf-rs-lib provides file reader and helpers; version as discovered via crates.io
+# If the exact name differs (e.g., gguf-rs), we will adjust after attempting build
+gguf-rs-lib = { version = "0.2", optional = true }
+
 [features]
 default = []
 server = ["dep:axum"]
 cuda = []
+# Enable extended GGUF integration via external crates
+# Off by default to keep minimal deps for non-integration builds
+gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]
 
 [dependencies.axum]
 version = "0.7"
