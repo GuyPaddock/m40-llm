@@ -215,4 +215,35 @@ impl LoadedModel {
         // Stub: no-op
         Ok(())
     }
+
+    // Start integrating GEMM matmul sites: generic wrappers usable for Q/K/V, MLP, and output projection
+    /// # Safety
+    /// f16 × f16 → f32 row-major GEMM. Device pointers must be valid on the same device as the context.
+    pub unsafe fn matmul_f16xf16_f32(
+        &self,
+        d_a_f16: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        self.cuda
+            .gemm_f16xf16_f32(d_a_f16, d_b_f16, d_c_f32, m, n, k)
+    }
+
+    /// # Safety
+    /// f32 × f16 → f32 row-major GEMM, useful when input activations are f32 and weights are f16.
+    pub unsafe fn matmul_f32xf16_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        self.cuda
+            .gemm_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
 }

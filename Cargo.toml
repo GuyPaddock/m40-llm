@@ -35,6 +35,19 @@ cuda = []
 version = "0.7"
 optional = true
 
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "gemm"
+harness = false
+
+[[bench]]
+name = "gemm_fallback"
+harness = false
+
+
 [build-dependencies]
 cc = "1"
 
