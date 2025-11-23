@@ -247,3 +247,61 @@ impl LoadedModel {
             .gemm_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
     }
 }
+
+impl LoadedModel {
+    /// # Safety
+    /// A f32 (MxK) × Wq/Wk/Wv f16 (KxNq/KxNk/KxNv) → Q/K/V f32 (MxN*)
+    pub unsafe fn qkv_project_f32xf16_f32(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_wq_f16: *const c_void,
+        n_q: i32,
+        d_wk_f16: *const c_void,
+        n_k: i32,
+        d_wv_f16: *const c_void,
+        n_v: i32,
+        d_q_out_f32: *mut c_void,
+        d_k_out_f32: *mut c_void,
+        d_v_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || n_q <= 0 || n_k <= 0 || n_v <= 0 {
+            anyhow::bail!("qkv_project: invalid dims");
+        }
+        self.matmul_f32xf16_f32(d_x_f32, d_wq_f16, d_q_out_f32, m, n_q, k)?;
+        self.matmul_f32xf16_f32(d_x_f32, d_wk_f16, d_k_out_f32, m, n_k, k)?;
+        self.matmul_f32xf16_f32(d_x_f32, d_wv_f16, d_v_out_f32, m, n_v, k)
+    }
+
+    /// # Safety
+    /// A f32 (MxK) × W f16 (KxN) → Out f32 (MxN)
+    pub unsafe fn out_proj_f32xf16_f32(
+        &self,
+        d_in_f32: *const c_void,
+        d_w_out_f16: *const c_void,
+        d_out_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        if m <= 0 || n <= 0 || k <= 0 {
+            anyhow::bail!("out_proj: invalid dims");
+        }
+        self.matmul_f32xf16_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
+    }
+
+    /// # Safety
+    /// Generic projection helper A f32 (MxK) × W f16 (KxN) → C f32 (MxN)
+    pub unsafe fn project_f32xf16_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        self.matmul_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
+}

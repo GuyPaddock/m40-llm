@@ -6,6 +6,7 @@ use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
 
+#[cfg(feature = "cuda")]
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
 
