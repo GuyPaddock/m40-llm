@@ -62,3 +62,24 @@ git config commit.template .gitmessage
 - Do not commit large binaries or secrets
 - Respect `.gitignore`
 - Use `Co-authored-by` trailers when appropriate
+
+## Git hooks (formatting and Conventional Commits)
+
+We keep Git hooks in `.githooks`. To enable them locally, run:
+
+```
+git config core.hooksPath .githooks
+```
+
+Hooks provided:
+- pre-commit: runs `cargo fmt --all -- --check` and rejects unformatted code
+- commit-msg: enforces Conventional Commits via cocogitto and some hygiene checks
+  - install cocogitto once: `cargo install cocogitto`
+  - optionally enable strict history checks with: `export COG_STRICT=1`
+
+We also provide a commit message template. Enable it with:
+
+```
+git config commit.template .gitmessage
+```
+
