@@ -6,7 +6,7 @@
 /// High-level overview extracted via gguf-llms without loading tensor data.
 #[derive(Debug)]
 pub struct LlmsOverview {
-    pub config: gguf_llms::model::ModelConfig,
+    pub config: Option<gguf_llms::model::ModelConfig>,
     pub n_tensors: u64,
     pub kv_len: usize,
 }
@@ -46,20 +46,6 @@ pub fn extract_model_config_with_gguf_llms(path: &Path) -> Result<gguf_llms::mod
     let _n_tensors = read_u64(&mut f)?;
     let n_kv = read_u64(&mut f)?;
 
-    /// Quick overview by combining gguf-llms metadata parsing and gguf-rs-lib counts.
-    pub fn overview(path: &Path) -> Result<LlmsOverview> {
-        use gguf_rs_lib::reader::file_reader::open_gguf_file;
-        let reader = open_gguf_file(path)?;
-        let n_tensors = reader.tensor_count() as u64;
-        let kv_len = reader.metadata().len();
-        let config = extract_model_config_with_gguf_llms(path)?;
-        Ok(LlmsOverview {
-            config,
-            n_tensors,
-            kv_len,
-        })
-    }
-
     // Use gguf-llms reader to parse exactly n_kv metadata entries from current position.
     let meta = gguf_llms::metadata::GgufReader::read_metadata(&mut f, n_kv)
         .map_err(|e| anyhow::anyhow!("gguf-llms: read_metadata failed: {e}"))?;
@@ -68,6 +54,20 @@ pub fn extract_model_config_with_gguf_llms(path: &Path) -> Result<gguf_llms::mod
     let cfg = gguf_llms::config::extract_model_config(&meta)
         .map_err(|e| anyhow::anyhow!("gguf-llms: extract_model_config failed: {e}"))?;
     Ok(cfg)
+}
+
+/// Quick overview by combining gguf-llms metadata parsing and gguf-rs-lib counts.
+pub fn overview(path: &Path) -> Result<LlmsOverview> {
+    use gguf_rs_lib::reader::file_reader::open_gguf_file;
+    let reader = open_gguf_file(path)?;
+    let n_tensors = reader.tensor_count() as u64;
+    let kv_len = reader.metadata().len();
+    let config = extract_model_config_with_gguf_llms(path).ok();
+    Ok(LlmsOverview {
+        config,
+        n_tensors,
+        kv_len,
+    })
 }
 
 /// Load all tensors using gguf-llms (reads tensor infos and data into memory).

@@ -57,6 +57,19 @@ async fn main() -> Result<()> {
                         anyhow::anyhow!(format!("Model not found locally: {}", model))
                     })?;
 
+                // If gguf_ext feature is enabled, inspect via gguf-llms for a quick overview
+                #[cfg(feature = "gguf_ext")]
+                {
+                    if let Ok(info) = gguf_ext::overview(&local.path) {
+                        println!(
+                            "[gguf_ext] model overview: tensors={}, kv_len={}",
+                            info.n_tensors, info.kv_len
+                        );
+                    } else {
+                        println!("[gguf_ext] overview unavailable for this file");
+                    }
+                }
+
                 let gguf_bytes = fs::read(&local.path)?;
                 let gguf_model = gguf::load_gguf(&local.path)?;
                 let loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
