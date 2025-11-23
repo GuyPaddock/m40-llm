@@ -211,8 +211,26 @@ extern "C" {
         return 0;
     }
 
-    // FP16 storage / FP32 compute GEMM using cuBLAS when available; fallback no-op otherwise
-    // A: MxK (f16), B: KxN (f16), C: MxN (f16) with FP32 compute
+    // FP16 storage / FP32 compute GEMM using cuBLAS when available; fallback naive CUDA kernel otherwise
+    // A: MxK (f16 row-major), B: KxN (f16 row-major), C: MxN (f16 row-major) with FP32 accumulation
+    __global__ void gemm_f16_f32_kernel(
+        const __half* __restrict__ A, // MxK
+        const __half* __restrict__ B, // KxN
+        __half* __restrict__ C,       // MxN
+        int M, int N, int K) {
+        int row = blockIdx.y * blockDim.y + threadIdx.y; // 0..M-1
+        int col = blockIdx.x * blockDim.x + threadIdx.x; // 0..N-1
+        if (row >= M || col >= N) return;
+        float acc = 0.0f;
+        // Row-major indexing
+        for (int kk = 0; kk < K; ++kk) {
+            float a = __half2float(A[row * K + kk]);
+            float b = __half2float(B[kk * N + col]);
+            acc += a * b;
+        }
+        C[row * N + col] = __float2half_rn(acc);
+    }
+
     int m40llm_gemm_f16_storage_f32_compute(
         M40llmCudaContext* ctx,
         const void* d_A,
@@ -236,7 +254,16 @@ extern "C" {
             CUBLAS_GEMM_DEFAULT);
         return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
     #else
-        (void)d_A; (void)d_B; (void)d_C; (void)M; (void)N; (void)K;
+        const __half* A = reinterpret_cast<const __half*>(d_A);
+        const __half* B = reinterpret_cast<const __half*>(d_B);
+        __half* C = reinterpret_cast<__half*>(d_C);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f16_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
         return 0;
     #endif
     }
