@@ -62,7 +62,11 @@ cat -- "$MSG_FILE"
 echo "=== END OF COMMIT MESSAGE ==="
 
 echo "[commit-msg] Deterministic nonce for this staged diff + message: $nonce" >&2
-echo "[commit-msg] To finalize, retry the same commit with the nonce set, for example:" >&2
+echo "[commit-msg] BEFORE FINALIZING WITH THE NONCE, answer BOTH questions with YES:" >&2
+echo "[commit-msg]  1) Does the commit message properly represent what changed AND why in the diff above?" >&2
+echo "[commit-msg]  2) Does it have the correct Conventional Commits type for what changed?" >&2
+echo "[commit-msg] If either answer is NO: revise the commit message (and/or type) and try 'git commit' again. A new nonce will be shown for the revised message." >&2
+echo "[commit-msg] Only if BOTH answers are YES, finalize the commit by re-running with the nonce, for example:" >&2
 echo "  M40LLM_COMMIT_NONCE=$nonce git commit -F $MSG_FILE --no-verify" >&2
 # Note: users using 'git commit' interactively can re-run with -m or -F and the nonce set.
 exit 1
