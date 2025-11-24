@@ -269,7 +269,8 @@ impl LoadedModel {
     /// - Activations and residual adds are performed on host as a temporary fallback
     /// - KV cache must be pre-allocated with matching num_heads/head_dim
     ///
-    /// Safety: All device pointers must be valid on this context's device.
+    /// # Safety
+    /// All device pointers must be valid on this context's device.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn forward_one_token_minimal(
         &self,
@@ -305,12 +306,18 @@ impl LoadedModel {
             let dup = self.cuda.device_malloc(bytes_h)?;
             let dhid = self.cuda.device_malloc(bytes_h)?;
             let dy_mlp = self.cuda.device_malloc(bytes_d)?;
+            let d_xn = self.cuda.device_malloc(bytes_d)?; // pre-attn norm(x)
+            let d_x1 = self.cuda.device_malloc(bytes_d)?; // x + attn(xn)
+            let d_x1n = self.cuda.device_malloc(bytes_d)?; // norm(x1)
 
             let res = (|| -> Result<()> {
+                // Pre-norm (RMSNorm) on x -> xn
+                self.run_rms_norm(d_x_f32, d_xn, 1, d_model as u32, 1e-6)?;
+
                 // Q/K/V projections (m=1, k=d_model, n=d_model)
                 self.qkv_project_f32xf16_f32(
-                    d_x_f32, 1, d_model, d_wq_f16, d_model, d_wk_f16, d_model, d_wv_f16, d_model,
-                    dq, dk, dv,
+                    d_xn, 1, d_model, d_wq_f16, d_model, d_wk_f16, d_model, d_wv_f16, d_model, dq,
+                    dk, dv,
                 )?;
 
                 // Append K/V for this token, then attention over last token
@@ -341,6 +348,40 @@ impl LoadedModel {
                     d_model,
                     d_model,
                 )?;
+
+                // Residual add y_attn: x1 = x + y_attn (host fallback)
+                {
+                    let mut h_x = vec![0u8; bytes_d];
+                    let mut h_y = vec![0u8; bytes_d];
+                    self.cuda
+                        .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
+                    self.cuda.memcpy_d2h(
+                        h_y.as_mut_ptr() as *mut c_void,
+                        dy_attn as *const c_void,
+                        bytes_d,
+                    )?;
+                    let mut x = Vec::with_capacity(d_model as usize);
+                    let mut y = Vec::with_capacity(d_model as usize);
+                    for ch in h_x.chunks_exact(4) {
+                        x.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                    }
+                    for ch in h_y.chunks_exact(4) {
+                        y.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                    }
+                    let mut out = Vec::with_capacity(d_model as usize);
+                    for i in 0..(d_model as usize) {
+                        out.push(x[i] + y[i]);
+                    }
+                    let mut out_bytes = Vec::with_capacity(bytes_d);
+                    for v in &out {
+                        out_bytes.extend_from_slice(&v.to_le_bytes());
+                    }
+                    self.cuda
+                        .memcpy_h2d(d_x1, out_bytes.as_ptr() as *const c_void, bytes_d)?;
+                }
+
+                // Post-attention norm: x1n = norm(x1)
+                self.run_rms_norm(d_x1, d_x1n, 1, d_model as u32, 1e-6)?;
 
                 // MLP gates and up
                 self.mlp_gates_f32xf16_f32(
@@ -403,6 +444,7 @@ impl LoadedModel {
                 )?;
 
                 // Residual add on host: out = x + y_attn + y_mlp
+                // Use pre-norm input x for the residual as in standard RMSNorm-pre architectures
                 let mut h_x = vec![0u8; bytes_d];
                 let mut h_attn = vec![0u8; bytes_d];
                 let mut h_mlp = vec![0u8; bytes_d];
@@ -454,6 +496,9 @@ impl LoadedModel {
             let _ = self.cuda.device_free(dup);
             let _ = self.cuda.device_free(dhid);
             let _ = self.cuda.device_free(dy_mlp);
+            let _ = self.cuda.device_free(d_xn);
+            let _ = self.cuda.device_free(d_x1);
+            let _ = self.cuda.device_free(d_x1n);
 
             return res;
         }
@@ -482,6 +527,7 @@ impl LoadedModel {
     /// # Safety
     /// MLP projections (no activation): computes gate = X·W_gate and up = X·W_up.
     /// All matrices are row-major; X is f32 (MxK), W_* are f16 (KxH), outputs are f32 (MxH).
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn mlp_gates_f32xf16_f32(
         &self,
         d_x_f32: *const c_void,
@@ -519,14 +565,56 @@ impl LoadedModel {
 
     pub fn run_rms_norm(
         &self,
-        _d_in: *const c_void,
-        _d_out: *mut c_void,
-        _seq_len: u32,
-        _dim: u32,
-        _eps: f32,
+        d_in: *const c_void,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
     ) -> Result<()> {
-        // Stub: no-op
-        Ok(())
+        #[cfg(feature = "cuda")]
+        {
+            // Host fallback operating on device buffers: copy MxD slice, normalize per-row, copy back
+            let m = seq_len as usize;
+            let d = dim as usize;
+            let bytes = m * d * std::mem::size_of::<f32>();
+            let mut host = vec![0u8; bytes];
+            unsafe {
+                self.cuda
+                    .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_in, bytes)?;
+            }
+            let mut out = vec![0f32; m * d];
+            let inp: Vec<f32> = host
+                .chunks_exact(4)
+                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+                .collect();
+            for row in 0..m {
+                let start = row * d;
+                let x = &inp[start..start + d];
+                let mut mean_sq = 0.0f32;
+                for &v in x {
+                    mean_sq += v * v;
+                }
+                mean_sq /= d as f32;
+                let scale = 1.0f32 / (mean_sq + eps).sqrt();
+                for i in 0..d {
+                    out[start + i] = x[i] * scale;
+                }
+            }
+            let mut out_bytes = Vec::with_capacity(bytes);
+            for v in &out {
+                out_bytes.extend_from_slice(&v.to_le_bytes());
+            }
+            unsafe {
+                self.cuda
+                    .memcpy_h2d(d_out, out_bytes.as_ptr() as *const c_void, bytes)?;
+            }
+            return Ok(());
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
     }
 
     pub fn forward_one_token(
@@ -576,6 +664,7 @@ impl LoadedModel {
 impl LoadedModel {
     /// # Safety
     /// A f32 (MxK) × Wq/Wk/Wv f16 (KxNq/KxNk/KxNv) → Q/K/V f32 (MxN*)
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn qkv_project_f32xf16_f32(
         &self,
         d_x_f32: *const c_void,
