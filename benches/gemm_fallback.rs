@@ -2,7 +2,11 @@
 // Bench the fallback f16-storage -> f32 compute GEMM path.
 // Run with: cargo bench --features cuda
 
+#[cfg(all(feature = "cuda", nvcc))]
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+#[cfg(not(all(feature = "cuda", nvcc)))]
+use criterion::{criterion_group, criterion_main, Criterion};
+#[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
 fn bench_gemm_fallback(c: &mut Criterion) {

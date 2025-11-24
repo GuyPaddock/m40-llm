@@ -2,7 +2,11 @@
 // Run with: cargo bench --features cuda [and ensure nvcc present].
 // If nvcc is not present, this benchmark will be compiled but will immediately return.
 
+#[cfg(all(feature = "cuda", nvcc))]
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+#[cfg(not(all(feature = "cuda", nvcc)))]
+use criterion::{criterion_group, criterion_main, Criterion};
+#[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
 fn bench_gemm_impl(c: &mut Criterion) {
