@@ -1,130 +1,80 @@
 #!/usr/bin/env bash
-# commit-msg hook: enforce Conventional Commits + preservation policy
-# Policies:
-# - Preserve the last failed commit message in .git/.failed_commit_msg
-# - Block subsequent commits if a different message is used until reused/cleared
-# - Enforce CC via cocogitto + newline hygiene + subject length + no 'fmt'
-# - Basic type/path rules
+# commit-msg hook: minimal checks + interactive diff confirmation
+# Performs only:
+#  1) Reject literal \n sequences in the message
+#  2) Validate Conventional Commits with cocogitto and capture subject
+#  3) Enforce subject length <= 100
+# If all pass, prints the staged diff and asks the user to confirm the message
+# properly represents what changed and why, and that the CC type fits.
 
 set -u
 MSG_FILE="$1"
-STATE_FILE=".git/.failed_commit_msg"
-
-preserve_and_fail() {
-  # Preserve the failed message for reuse
-  cp -f -- "$MSG_FILE" "$STATE_FILE" 2>/dev/null || cat "$MSG_FILE" > "$STATE_FILE"
-  echo "[commit-msg] The commit message was preserved to $STATE_FILE.\n" \
-       "Reuse it with: git commit -F $STATE_FILE\n" \
-       "Or clear it with: rm $STATE_FILE" >&2
-  exit 1
-}
-
-# 0) If a failed message exists, require exact reuse
-if [ -f "$STATE_FILE" ]; then
-  if ! cmp -s "$MSG_FILE" "$STATE_FILE"; then
-    echo "[commit-msg] A previous commit failed message checks. You must reuse the preserved message or clear it." >&2
-    echo " - Reuse: git commit -F $STATE_FILE" >&2
-    echo " - Clear: rm $STATE_FILE (then commit again)" >&2
-    exit 1
-  fi
-fi
 
 # 1) Reject literal \n sequences
 if grep -q '\\n' "$MSG_FILE"; then
   echo "[commit-msg] Found literal \\n in commit message. Use real newlines or multiple -m flags." >&2
-  preserve_and_fail
+  exit 1
 fi
 
 # 2) Validate with cocogitto and capture subject
 subject=$(sed -n '1{s/[ \t]*$//;p}' "$MSG_FILE")
 if ! cog verify --file "$MSG_FILE" >/dev/null 2>&1; then
   echo "[commit-msg] cocogitto verify failed on the commit message file." >&2
-  preserve_and_fail
+  exit 1
 fi
 
-# 3) Subject length check
+# 3) Subject length check (<= 100)
 subject_len=${#subject}
 if [ "$subject_len" -gt 100 ]; then
   echo "[commit-msg] Subject is ${subject_len} characters (max 100). Please shorten it." >&2
-  preserve_and_fail
+  exit 1
 fi
 
-# 4) Reject vague 'fmt' messages
-if grep -Ei '\bfmt\b' "$MSG_FILE" >/dev/null; then
-  echo "[commit-msg] Avoid using 'fmt' in the commit message. Describe what changed and why (see .gitmessage)." >&2
-  preserve_and_fail
+# All checks passed: show diff and ask for confirmation
+echo "=== START OF COMMIT DIFF (staged) ==="
+# Show staged diff without pager and color for clarity
+if ! git --no-pager diff --cached --no-color; then
+  echo "[commit-msg] Failed to obtain staged diff." >&2
 fi
+echo "=== END OF COMMIT DIFF ==="
 
-# 5) Type/path rules (lightweight)
-# Parse type from Conventional Commit subject using sed (portable)
-cc_type=$(printf '%s\n' "$subject" | sed -E 's/^([a-z]+)(\([^)]*\))?(!)?:[[:space:]]+.*/\1/; t; s/.*/_/')
-if [ "$cc_type" = "_" ] || ! printf '%s' "$cc_type" | grep -Eq '^[a-z]+$'; then
-  cc_type=""
-fi
+# Ask the question, then show the commit message with delimiters
+echo "Question: Does the commit message that follows properly represent what changed and why in the diff above?"
+echo "Additionally, does it have the correct Conventional Commits type for what changed?"
 
-# Staged files in this commit
-CHANGED=$(git diff --cached --name-only)
+echo "=== START OF COMMIT MESSAGE ==="
+cat -- "$MSG_FILE"
+echo "=== END OF COMMIT MESSAGE ==="
 
-is_doc_file() {
-  [[ "$1" =~ ^docs/ ]] || [[ "$1" =~ ^README ]] || [[ "$1" =~ ^CONTRIBUTING ]] || [[ "$1" =~ \.md$ ]] || [[ "$1" =~ \.rst$ ]] || [[ "$1" =~ \.adoc$ ]]
+# Require explicit yes/no from the user
+prompt() {
+  printf "%s" "Does the commit message properly represent what changed and why, and is the CC type correct? [yes/no]: "
 }
 
-is_test_file() {
-  [[ "$1" =~ ^tests/ ]] || [[ "$1" =~ _test\.rs$ ]] || [[ "$1" =~ test\.rs$ ]] || [[ "$1" =~ \.snap$ ]]
-}
-
-is_code_file() {
-  [[ "$1" =~ ^src/ ]] || [[ "$1" =~ ^cuda/ ]] || [[ "$1" == build.rs ]] || [[ "$1" == Cargo.toml ]] || [[ "$1" =~ ^benches/ ]] || is_test_file "$1"
-}
-
-if [ -n "$cc_type" ] && [ -n "$CHANGED" ]; then
-  case "$cc_type" in
-    docs)
-      # All changed files must be docs-like
-      while IFS= read -r f; do
-        if [ -n "$f" ] && ! is_doc_file "$f"; then
-          echo "[commit-msg] docs: commit includes non-doc files (e.g., $f). Use a more appropriate type." >&2
-          preserve_and_fail
-        fi
-      done <<< "$CHANGED"
+answer=""
+# Prefer /dev/tty when available to ensure interactivity
+while true; do
+  if [ -r /dev/tty ]; then
+    prompt >/dev/tty
+    read -r answer </dev/tty
+  elif [ -t 0 ]; then
+    prompt
+    read -r answer
+  else
+    echo "[commit-msg] Interactive confirmation required, but no TTY is available. Aborting commit." >&2
+    exit 1
+  fi
+  case "${answer,,}" in
+    yes|y)
+      exit 0
       ;;
-    test)
-      # Must include at least one test-like file
-      has_test=0
-      while IFS= read -r f; do
-        if [ -n "$f" ] && is_test_file "$f"; then has_test=1; break; fi
-      done <<< "$CHANGED"
-      if [ "$has_test" -eq 0 ]; then
-        echo "[commit-msg] test: commit does not include any test files." >&2
-        preserve_and_fail
-      fi
+    no|n)
+      echo "[commit-msg] Commit aborted. Please revise the commit message and try again." >&2
+      exit 1
       ;;
-    feat|fix|perf|refactor)
-      # Must include at least one code-like file
-      has_code=0
-      while IFS= read -r f; do
-        if [ -n "$f" ] && is_code_file "$f"; then has_code=1; break; fi
-      done <<< "$CHANGED"
-      if [ "$has_code" -eq 0 ]; then
-        echo "[commit-msg] $cc_type: commit does not include any code files (src/, cuda/, benches/, tests/, Cargo.toml, build.rs)." >&2
-        preserve_and_fail
-      fi
+    *)
+      # Loop until unambiguous answer
+      if [ -r /dev/tty ]; then echo "Please answer 'yes' or 'no'." >/dev/tty; else echo "Please answer 'yes' or 'no'." >&2; fi
       ;;
   esac
-fi
-
-# 6) Optional strict history check with cocogitto
-if command -v cog >/dev/null 2>&1 && [ "${COG_STRICT:-0}" = "1" ]; then
-  echo "[commit-msg] Running cocogitto check (strict mode) on recent history..."
-  if ! (cog check --from-latest-tag || cog check); then
-    echo "[commit-msg] cocogitto history check failed (strict mode)." >&2
-    preserve_and_fail
-  fi
-fi
-
-# Success: clear preserved message if identical
-if [ -f "$STATE_FILE" ] && cmp -s "$MSG_FILE" "$STATE_FILE"; then
-  rm -f "$STATE_FILE"
-fi
-
-exit 0
+done
