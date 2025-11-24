@@ -383,9 +383,9 @@ impl LoadedModel {
                 // Post-attention norm: x1n = norm(x1)
                 self.run_rms_norm(d_x1, d_x1n, 1, d_model as u32, 1e-6)?;
 
-                // MLP gates and up
+                // MLP gates and up (now feed post-attn normalized x1n)
                 self.mlp_gates_f32xf16_f32(
-                    d_x_f32,
+                    d_x1n,
                     1,
                     d_model,
                     d_w_gate_f16,
@@ -443,16 +443,12 @@ impl LoadedModel {
                     dy_mlp,
                 )?;
 
-                // Residual add on host: out = x + y_attn + y_mlp
-                // Use pre-norm input x for the residual as in standard RMSNorm-pre architectures
-                let mut h_x = vec![0u8; bytes_d];
-                let mut h_attn = vec![0u8; bytes_d];
+                // Final residual add on host per pre-norm layout: out = x1 + y_mlp, where x1 = x + y_attn
+                let mut h_x1 = vec![0u8; bytes_d];
                 let mut h_mlp = vec![0u8; bytes_d];
-                self.cuda
-                    .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
                 self.cuda.memcpy_d2h(
-                    h_attn.as_mut_ptr() as *mut c_void,
-                    dy_attn as *const c_void,
+                    h_x1.as_mut_ptr() as *mut c_void,
+                    d_x1 as *const c_void,
                     bytes_d,
                 )?;
                 self.cuda.memcpy_d2h(
@@ -460,21 +456,17 @@ impl LoadedModel {
                     dy_mlp as *const c_void,
                     bytes_d,
                 )?;
-                let mut x_f = Vec::with_capacity(d_model as usize);
-                let mut attn_f = Vec::with_capacity(d_model as usize);
+                let mut x1_f = Vec::with_capacity(d_model as usize);
                 let mut mlp_f = Vec::with_capacity(d_model as usize);
-                for ch in h_x.chunks_exact(4) {
-                    x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                }
-                for ch in h_attn.chunks_exact(4) {
-                    attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                for ch in h_x1.chunks_exact(4) {
+                    x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
                 }
                 for ch in h_mlp.chunks_exact(4) {
                     mlp_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
                 }
                 let mut y_f = Vec::with_capacity(d_model as usize);
                 for i in 0..(d_model as usize) {
-                    y_f.push(x_f[i] + attn_f[i] + mlp_f[i]);
+                    y_f.push(x1_f[i] + mlp_f[i]);
                 }
                 let mut y_bytes = Vec::with_capacity(bytes_d);
                 for v in &y_f {
