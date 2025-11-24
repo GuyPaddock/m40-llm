@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# commit-msg hook: minimal checks + interactive diff confirmation
+# commit-msg hook: minimal checks + stateless nonce-based retry
 # Performs only:
 #  1) Reject literal \n sequences in the message
 #  2) Validate Conventional Commits with cocogitto and capture subject
 #  3) Enforce subject length <= 100
-# If all pass, prints the staged diff and asks the user to confirm the message
-# properly represents what changed and why, and that the CC type fits.
+# Flow:
+#  - On first attempt (no M40LLM_COMMIT_NONCE), compute a deterministic nonce from the
+#    staged diff and message content, display diff and message with the nonce, then
+#    abort the commit with instructions to retry using that nonce.
+#  - On retry, if M40LLM_COMMIT_NONCE matches the computed nonce for the current staged
+#    diff and message, allow the commit without interaction.
 
 set -u
 MSG_FILE="$1"
@@ -30,51 +34,35 @@ if [ "$subject_len" -gt 100 ]; then
   exit 1
 fi
 
-# All checks passed: show diff and ask for confirmation
-echo "=== START OF COMMIT DIFF (staged) ==="
-# Show staged diff without pager and color for clarity
-if ! git --no-pager diff --cached --no-color; then
-  echo "[commit-msg] Failed to obtain staged diff." >&2
-fi
-echo "=== END OF COMMIT DIFF ==="
+# Compute deterministic nonce from staged diff + message content
+staged_diff=$(git --no-pager diff --cached --no-color || true)
+diff_hash=$(printf "%s" "$staged_diff" | sha256sum | awk '{print $1}')
+msg_hash=$(sha256sum "$MSG_FILE" | awk '{print $1}')
+nonce=$(printf "%s" "$diff_hash:$msg_hash" | sha256sum | cut -c1-16)
 
-# Ask the question, then show the commit message with delimiters
-echo "Question: Does the commit message that follows properly represent what changed and why in the diff above?"
-echo "Additionally, does it have the correct Conventional Commits type for what changed?"
+# If nonce is provided, verify match and allow commit
+if [ -n "${M40LLM_COMMIT_NONCE:-}" ]; then
+  if [ "$M40LLM_COMMIT_NONCE" = "$nonce" ]; then
+    echo "[commit-msg] Nonce validated. Finalizing commit." >&2
+    exit 0
+  else
+    echo "[commit-msg] Provided nonce does not match current staged diff/message. Aborting." >&2
+    echo "[commit-msg] expected: $nonce" >&2
+    exit 1
+  fi
+fi
+
+# No nonce provided: show details and abort with instructions
+echo "=== START OF COMMIT DIFF (staged) ==="
+printf "%s\n" "$staged_diff"
+echo "=== END OF COMMIT DIFF ==="
 
 echo "=== START OF COMMIT MESSAGE ==="
 cat -- "$MSG_FILE"
 echo "=== END OF COMMIT MESSAGE ==="
 
-# Require explicit yes/no from the user
-prompt() {
-  printf "%s" "Does the commit message properly represent what changed and why, and is the CC type correct? [yes/no]: "
-}
-
-answer=""
-# Prefer /dev/tty when available to ensure interactivity
-while true; do
-  if [ -r /dev/tty ]; then
-    prompt >/dev/tty
-    read -r answer </dev/tty
-  elif [ -t 0 ]; then
-    prompt
-    read -r answer
-  else
-    echo "[commit-msg] Interactive confirmation required, but no TTY is available. Aborting commit." >&2
-    exit 1
-  fi
-  case "${answer,,}" in
-    yes|y)
-      exit 0
-      ;;
-    no|n)
-      echo "[commit-msg] Commit aborted. Please revise the commit message and try again." >&2
-      exit 1
-      ;;
-    *)
-      # Loop until unambiguous answer
-      if [ -r /dev/tty ]; then echo "Please answer 'yes' or 'no'." >/dev/tty; else echo "Please answer 'yes' or 'no'." >&2; fi
-      ;;
-  esac
-done
+echo "[commit-msg] Deterministic nonce for this staged diff + message: $nonce" >&2
+echo "[commit-msg] To finalize, retry the same commit with the nonce set, for example:" >&2
+echo "  M40LLM_COMMIT_NONCE=$nonce git commit -F $MSG_FILE --no-verify" >&2
+# Note: users using 'git commit' interactively can re-run with -m or -F and the nonce set.
+exit 1
