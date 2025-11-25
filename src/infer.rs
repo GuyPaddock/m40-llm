@@ -76,10 +76,30 @@ impl LoadedModel {
         let tok = self
             .device_tensor(&tok_name)
             .ok_or_else(|| anyhow!("missing tensor: {}", tok_name))?;
-        let d_model =
-            d_model_meta.unwrap_or_else(|| tok.shape.get(1).copied().unwrap_or(0) as usize);
+        // Enforce embeddings dtype/shape policy: FP16 [vocab, d_model]
+        if tok.dtype != GgmlDType::F16 {
+            anyhow::bail!(
+                "tok_embeddings.weight expected F16 [vocab, d_model], got {:?}",
+                tok.dtype
+            );
+        }
+        if tok.shape.len() != 2 {
+            anyhow::bail!(
+                "tok_embeddings.weight shape invalid: expected [vocab, d_model], got {:?}",
+                tok.shape
+            );
+        }
+        let d_model_from_tok = tok.shape.get(1).copied().unwrap_or(0) as usize;
+        let d_model = d_model_meta.unwrap_or(d_model_from_tok);
         if d_model == 0 {
             anyhow::bail!("could not determine d_model")
+        }
+        if d_model_meta.is_some() && d_model_from_tok != d_model {
+            anyhow::bail!(
+                "tok_embeddings.weight second dim {} != d_model meta {}",
+                d_model_from_tok,
+                d_model
+            );
         }
         // Candidates for layer names
         let wq_names = vec![
@@ -135,15 +155,29 @@ impl LoadedModel {
             }
         }
         // Shape checks (row-major): X [1 x d_model] · W[K=d_model x N] => out [1 x N]
-        let k_q = *wq.shape.first().unwrap_or(&0) as usize;
-        let n_q = *wq.shape.get(1).unwrap_or(&0) as usize;
-        if k_q != d_model || n_q == 0 {
-            anyhow::bail!(
-                "wq shape invalid: expected [d_model, N], got {:?}",
-                wq.shape
-            );
+        for (name, t) in [("wq", &wq), ("wk", &wk), ("wv", &wv), ("wo", &wo)] {
+            let k = *t.shape.first().unwrap_or(&0) as usize;
+            let n = *t.shape.get(1).unwrap_or(&0) as usize;
+            if k != d_model || n == 0 {
+                anyhow::bail!(
+                    "{} shape invalid: expected [d_model, N], got {:?}",
+                    name,
+                    t.shape
+                );
+            }
         }
         // Infer hidden_dim from up/gate
+        for (name, t) in [("w_gate", &w_gate), ("w_up", &w_up)] {
+            let k = *t.shape.first().unwrap_or(&0) as usize;
+            let h = *t.shape.get(1).unwrap_or(&0) as usize;
+            if k != d_model || h == 0 {
+                anyhow::bail!(
+                    "{} shape invalid: expected [d_model, H], got {:?}",
+                    name,
+                    t.shape
+                );
+            }
+        }
         let k_up = *w_up.shape.first().unwrap_or(&0) as usize;
         let h_up = *w_up.shape.get(1).unwrap_or(&0) as usize;
         if k_up != d_model || h_up == 0 {
