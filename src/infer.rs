@@ -26,6 +26,8 @@ pub struct LoadedModel {
     pub device_tensors: HashMap<String, DeviceTensorView>,
     #[cfg(feature = "cuda")]
     pub d_weights_base: *mut c_void,
+    #[cfg(feature = "gguf_ext")]
+    pub typed_config: Option<gguf_llms::model::ModelConfig>,
 }
 
 #[derive(Debug, Clone)]
@@ -248,6 +250,10 @@ impl LoadedModel {
             }
         }
         let device_tensors = build_device_tensor_views(&gguf.tensors, d_base);
+        // Optionally, derive typed model config via gguf_ext from the same in-memory bytes
+        #[cfg(feature = "gguf_ext")]
+        let typed_cfg = crate::gguf_ext::extract_model_config_from_bytes(&gguf_bytes).ok();
+
         Ok(Self {
             gguf,
             cuda,
@@ -255,6 +261,8 @@ impl LoadedModel {
             device_tensors,
             #[cfg(feature = "cuda")]
             d_weights_base: d_base,
+            #[cfg(feature = "gguf_ext")]
+            typed_config: typed_cfg,
         })
     }
 }

@@ -129,6 +129,8 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         device_tensors: HashMap::new(),
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        #[cfg(feature = "gguf_ext")]
+        typed_config: None,
     };
 
     unsafe {

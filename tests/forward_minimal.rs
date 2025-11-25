@@ -50,6 +50,8 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         device_tensors: HashMap::new(),
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        #[cfg(feature = "gguf_ext")]
+        typed_config: None,
     };
 
     // Input x (1 x d_model)

@@ -56,6 +56,29 @@ pub fn extract_model_config_with_gguf_llms(path: &Path) -> Result<gguf_llms::mod
     Ok(cfg)
 }
 
+/// Extract typed model configuration directly from an in-memory GGUF file
+/// buffer. This mirrors extract_model_config_with_gguf_llms but avoids filesystem I/O.
+pub fn extract_model_config_from_bytes(bytes: &[u8]) -> Result<gguf_llms::model::ModelConfig> {
+    use std::io::Cursor;
+    let mut cur = Cursor::new(bytes);
+
+    let mut magic = [0u8; 4];
+    use std::io::Read as _;
+    cur.read_exact(&mut magic)?;
+    if &magic != b"GGUF" {
+        anyhow::bail!("Not a GGUF buffer (magic != GGUF)");
+    }
+    let _version = read_u32(&mut cur)?;
+    let _n_tensors = read_u64(&mut cur)?;
+    let n_kv = read_u64(&mut cur)?;
+
+    let meta = gguf_llms::metadata::GgufReader::read_metadata(&mut cur, n_kv)
+        .map_err(|e| anyhow::anyhow!("gguf-llms: read_metadata failed: {e}"))?;
+    let cfg = gguf_llms::config::extract_model_config(&meta)
+        .map_err(|e| anyhow::anyhow!("gguf-llms: extract_model_config failed: {e}"))?;
+    Ok(cfg)
+}
+
 /// Quick overview by combining gguf-llms metadata parsing and gguf-rs-lib counts.
 pub fn overview(path: &Path) -> Result<LlmsOverview> {
     use gguf_rs_lib::reader::file_reader::open_gguf_file;

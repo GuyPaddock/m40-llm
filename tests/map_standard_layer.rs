@@ -99,6 +99,8 @@ fn make_model_with_layer(
         device_tensors,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        #[cfg(feature = "gguf_ext")]
+        typed_config: None,
     }
 }
 
