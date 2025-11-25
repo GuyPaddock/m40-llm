@@ -91,7 +91,7 @@ pub fn load_all_tensors_with_llms(
     // Skip metadata section (we can reuse our simple parsers to advance)
     for _ in 0..n_kv {
         // key
-        let _ = read_string_len_and_skip(&mut reader)?;
+        read_string_len_and_skip(&mut reader)?;
         // value type
         let vt = read_u32(&mut reader)?;
         if vt == 9
@@ -102,10 +102,10 @@ pub fn load_all_tensors_with_llms(
             // Skip len elements according to elem type sizes by reusing read_scalar-sized skips
             // We just iterate to advance; cost negligible for metadata
             for _ in 0..len {
-                let _ = read_scalar_generic_skip(&mut reader, _elem_ty)?;
+                read_scalar_generic_skip(&mut reader, _elem_ty)?;
             }
         } else {
-            let _ = read_scalar_generic_skip(&mut reader, vt)?;
+            read_scalar_generic_skip(&mut reader, vt)?;
         }
     }
 
@@ -160,7 +160,7 @@ fn read_scalar_generic_skip<R: Read>(r: &mut R, vt_u32: u32) -> Result<()> {
             let mut b = [0u8; 2];
             r.read_exact(&mut b)?;
         }
-        4 | 5 | 6 | 7 => {
+        4..=7 => {
             // u32 / i32 / f32 / bool
             let mut b = [0u8; 4];
             r.read_exact(&mut b)?;
@@ -169,7 +169,7 @@ fn read_scalar_generic_skip<R: Read>(r: &mut R, vt_u32: u32) -> Result<()> {
             // string
             read_string_len_and_skip(r)?;
         }
-        10 | 11 | 12 => {
+        10..=12 => {
             // u64 / i64 / f64
             let mut b = [0u8; 8];
             r.read_exact(&mut b)?;
