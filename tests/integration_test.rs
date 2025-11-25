@@ -67,6 +67,8 @@ fn test_rms_norm_operation() -> Result<()> {
     let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
     let input = std::ptr::null::<c_void>();
     let output = std::ptr::null_mut::<c_void>();
-    model.run_rms_norm(input, output, 128, 512, 1e-5)?;
+    unsafe {
+        model.run_rms_norm(input, output, 128, 512, 1e-5)?;
+    }
     Ok(())
 }
