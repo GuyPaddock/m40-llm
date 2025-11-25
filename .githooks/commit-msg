@@ -32,21 +32,53 @@ if [ "$subject_len" -gt 100 ]; then
 fi
 
 # Compute deterministic nonce from staged diff + message content
+git_dir=$(git rev-parse --git-dir 2>/dev/null || echo .git)
+state_file="$git_dir/m40llm_nonce_state"
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
+index_tree=$(git write-tree 2>/dev/null || echo "")
+
 staged_diff=$(git --no-pager diff --cached --no-color || true)
 diff_hash=$(printf "%s" "$staged_diff" | sha256sum | awk '{print $1}')
 msg_hash=$(sha256sum "$MSG_FILE" | awk '{print $1}')
 nonce=$(printf "%s" "$diff_hash:$msg_hash" | sha256sum | cut -c1-16)
 
-# If nonce is provided, verify match and allow commit
+# If nonce is provided, verify state lock and allow commit
 if [ -n "${M40LLM_COMMIT_NONCE:-}" ]; then
-  if [ "$M40LLM_COMMIT_NONCE" = "$nonce" ]; then
-    echo "[commit-msg] Nonce validated. Finalizing commit." >&2
-    exit 0
-  else
-    echo "[commit-msg] Provided nonce does not match current staged diff/message. Aborting." >&2
-    echo "[commit-msg] expected: $nonce" >&2
+  if [ ! -f "$state_file" ]; then
+    echo "[commit-msg] Missing nonce state at $state_file. Re-run 'git commit' to preview and obtain a new nonce." >&2
     exit 1
   fi
+  . "$state_file"
+  err=0
+  if [ "${LOCK_BRANCH:-}" != "$branch" ]; then
+    echo "[commit-msg] Branch changed since preview. expected=$LOCK_BRANCH actual=$branch" >&2
+    err=1
+  fi
+  if [ "${LOCK_INDEX_TREE:-}" != "$index_tree" ]; then
+    echo "[commit-msg] Staged index changed since preview." >&2
+    echo "[commit-msg] expected index_tree=$LOCK_INDEX_TREE" >&2
+    echo "[commit-msg] actual   index_tree=$index_tree" >&2
+    err=1
+  fi
+  calc_msg_hash=$(sha256sum "$MSG_FILE" | awk '{print $1}')
+  if [ "${LOCK_MSG_SHA256:-}" != "$calc_msg_hash" ]; then
+    echo "[commit-msg] Commit message changed since preview." >&2
+    echo "[commit-msg] expected msg_sha256=$LOCK_MSG_SHA256" >&2
+    echo "[commit-msg] actual   msg_sha256=$calc_msg_hash" >&2
+    err=1
+  fi
+  if [ "$M40LLM_COMMIT_NONCE" != "${LOCK_NONCE:-}" ] || [ "$M40LLM_COMMIT_NONCE" != "$nonce" ]; then
+    echo "[commit-msg] Provided nonce does not match locked/computed value." >&2
+    echo "[commit-msg] expected (locked)=$LOCK_NONCE computed(now)=$nonce provided=$M40LLM_COMMIT_NONCE" >&2
+    err=1
+  fi
+  if [ "$err" -ne 0 ]; then
+    echo "[commit-msg] Aborting finalize. Re-run 'git commit' to preview and obtain a new nonce." >&2
+    exit 1
+  fi
+  rm -f -- "$state_file" || true
+  echo "[commit-msg] Nonce/state validated. Finalizing commit." >&2
+  exit 0
 fi
 
 # No nonce provided: show details and abort with instructions
