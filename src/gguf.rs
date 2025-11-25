@@ -86,7 +86,7 @@ impl GgufValue {
 }
 
 /// GGML tensor (weights) dtypes as found in GGUF
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GgmlDType {
     F32,
     F16,

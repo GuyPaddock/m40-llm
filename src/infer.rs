@@ -26,6 +26,158 @@ pub struct LoadedModel {
     pub d_weights_base: *mut c_void,
 }
 
+#[derive(Debug, Clone)]
+pub struct StandardLayerWeights {
+    pub d_model: usize,
+    pub hidden_dim: usize,
+    pub tok_embeddings: DeviceTensorView,
+    pub wq: DeviceTensorView,
+    pub wk: DeviceTensorView,
+    pub wv: DeviceTensorView,
+    pub wo: DeviceTensorView,
+    pub w_gate: DeviceTensorView,
+    pub w_up: DeviceTensorView,
+    pub w_down: DeviceTensorView,
+}
+
+impl LoadedModel {
+    fn get_u32_meta(&self, key: &str) -> Option<u32> {
+        use crate::gguf::{GgufScalar, GgufValue};
+        self.gguf.metadata.get(key).and_then(|v| match v {
+            GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
+            _ => None,
+        })
+    }
+
+    fn device_tensor(&self, name: &str) -> Option<&DeviceTensorView> {
+        self.device_tensors.get(name)
+    }
+
+    fn find_tensor_any<'a>(&'a self, candidates: &[String]) -> Result<&'a DeviceTensorView> {
+        for c in candidates {
+            if let Some(v) = self.device_tensor(c) {
+                return Ok(v);
+            }
+        }
+        anyhow::bail!("missing required tensor; tried: {}", candidates.join(", "))
+    }
+
+    /// Map standard LLaMA-style GGUF tensor names for a single layer.
+    /// Supports both layers.N.* and blk.N.* naming variants.
+    pub fn map_standard_layer(&self, layer: usize) -> Result<StandardLayerWeights> {
+        use crate::gguf::GgmlDType;
+        // Determine d_model from metadata or embeddings tensor shape
+        let d_model_meta = self
+            .get_u32_meta("llama.embedding_length")
+            .map(|x| x as usize);
+        let tok_name = "tok_embeddings.weight".to_string();
+        let tok = self
+            .device_tensor(&tok_name)
+            .ok_or_else(|| anyhow!("missing tensor: {}", tok_name))?;
+        let d_model =
+            d_model_meta.unwrap_or_else(|| tok.shape.get(1).copied().unwrap_or(0) as usize);
+        if d_model == 0 {
+            anyhow::bail!("could not determine d_model")
+        }
+        // Candidates for layer names
+        let wq_names = vec![
+            format!("layers.{layer}.attention.wq.weight"),
+            format!("blk.{layer}.attn_q.weight"),
+        ];
+        let wk_names = vec![
+            format!("layers.{layer}.attention.wk.weight"),
+            format!("blk.{layer}.attn_k.weight"),
+        ];
+        let wv_names = vec![
+            format!("layers.{layer}.attention.wv.weight"),
+            format!("blk.{layer}.attn_v.weight"),
+        ];
+        let wo_names = vec![
+            format!("layers.{layer}.attention.wo.weight"),
+            format!("blk.{layer}.attn_output.weight"),
+        ];
+        // LLaMA convention: w1=up, w3=gate, w2=down
+        let w_gate_names = vec![
+            format!("layers.{layer}.feed_forward.w3.weight"),
+            format!("blk.{layer}.ffn_gate.weight"),
+        ];
+        let w_up_names = vec![
+            format!("layers.{layer}.feed_forward.w1.weight"),
+            format!("blk.{layer}.ffn_up.weight"),
+        ];
+        let w_down_names = vec![
+            format!("layers.{layer}.feed_forward.w2.weight"),
+            format!("blk.{layer}.ffn_down.weight"),
+        ];
+
+        let wq = self.find_tensor_any(&wq_names)?.clone();
+        let wk = self.find_tensor_any(&wk_names)?.clone();
+        let wv = self.find_tensor_any(&wv_names)?.clone();
+        let wo = self.find_tensor_any(&wo_names)?.clone();
+        let w_gate = self.find_tensor_any(&w_gate_names)?.clone();
+        let w_up = self.find_tensor_any(&w_up_names)?.clone();
+        let w_down = self.find_tensor_any(&w_down_names)?.clone();
+
+        // DType checks: we currently require FP16 weights for GEMM paths
+        for (name, t) in [
+            ("wq", &wq),
+            ("wk", &wk),
+            ("wv", &wv),
+            ("wo", &wo),
+            ("w_gate", &w_gate),
+            ("w_up", &w_up),
+            ("w_down", &w_down),
+        ] {
+            if t.dtype != GgmlDType::F16 {
+                anyhow::bail!("tensor {} expected F16, got {:?}", name, t.dtype);
+            }
+        }
+        // Shape checks (row-major): X [1 x d_model] · W[K=d_model x N] => out [1 x N]
+        let k_q = *wq.shape.get(0).unwrap_or(&0) as usize;
+        let n_q = *wq.shape.get(1).unwrap_or(&0) as usize;
+        if k_q != d_model || n_q == 0 {
+            anyhow::bail!(
+                "wq shape invalid: expected [d_model, N], got {:?}",
+                wq.shape
+            );
+        }
+        // Infer hidden_dim from up/gate
+        let k_up = *w_up.shape.get(0).unwrap_or(&0) as usize;
+        let h_up = *w_up.shape.get(1).unwrap_or(&0) as usize;
+        if k_up != d_model || h_up == 0 {
+            anyhow::bail!(
+                "w_up shape invalid: expected [d_model, H], got {:?}",
+                w_up.shape
+            );
+        }
+        let hidden_dim = h_up;
+        // Down must be [hidden_dim, d_model]
+        let h_down = *w_down.shape.get(0).unwrap_or(&0) as usize;
+        let n_down = *w_down.shape.get(1).unwrap_or(&0) as usize;
+        if h_down != hidden_dim || n_down != d_model {
+            anyhow::bail!(
+                "w_down shape invalid: expected [hidden_dim, d_model]=[{}, {}], got {:?}",
+                hidden_dim,
+                d_model,
+                w_down.shape
+            );
+        }
+
+        Ok(StandardLayerWeights {
+            d_model,
+            hidden_dim,
+            tok_embeddings: tok.clone(),
+            wq,
+            wk,
+            wv,
+            wo,
+            w_gate,
+            w_up,
+            w_down,
+        })
+    }
+}
+
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
@@ -569,6 +721,7 @@ impl LoadedModel {
             let m = seq_len as usize;
             let d = dim as usize;
             let bytes = m * d * std::mem::size_of::<f32>();
+
             let mut host = vec![0u8; bytes];
             unsafe {
                 self.cuda
@@ -608,20 +761,72 @@ impl LoadedModel {
             Ok(())
         }
     }
+}
 
-    pub fn forward_one_token(
+impl LoadedModel {
+    /// Helper to run forward_one_token_minimal using mapped layer weights.
+    /// Assumes embeddings have already produced x (f32) for the token index.
+    /// # Safety: device pointers must be valid on this context.
+    pub unsafe fn forward_one_token_with_layer(
         &self,
-        _d_input_f16: *const c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-        _d_output_f16: *mut c_void,
+        d_x_f32: *const c_void,
+        layer: usize,
+        seq_id: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
     ) -> Result<()> {
-        // Stub: no-op
-        Ok(())
-    }
+        let w = self.map_standard_layer(layer)?;
+        #[cfg(feature = "cuda")]
+        let wq_ptr = (self.d_weights_base as usize + w.wq.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let wq_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let wk_ptr = (self.d_weights_base as usize + w.wk.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let wk_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let wv_ptr = (self.d_weights_base as usize + w.wv.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let wv_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let wo_ptr = (self.d_weights_base as usize + w.wo.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let wo_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let w_gate_ptr =
+            (self.d_weights_base as usize + w.w_gate.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let w_gate_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let w_up_ptr =
+            (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let w_up_ptr = std::ptr::null();
+        #[cfg(feature = "cuda")]
+        let w_down_ptr =
+            (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let w_down_ptr = std::ptr::null();
 
-    // Start integrating GEMM matmul sites: generic wrappers usable for Q/K/V, MLP, and output projection
+        self.forward_one_token_minimal(
+            d_x_f32,
+            w.d_model as i32,
+            wq_ptr,
+            wk_ptr,
+            wv_ptr,
+            wo_ptr,
+            w_gate_ptr,
+            w_up_ptr,
+            w_down_ptr,
+            w.hidden_dim as i32,
+            seq_id,
+            seq_len,
+            d_out_f32,
+        )
+    }
+}
+
+impl LoadedModel {
     /// # Safety
     /// f16 × f16 → f32 row-major GEMM. Device pointers must be valid on the same device as the context.
     pub unsafe fn matmul_f16xf16_f32(
