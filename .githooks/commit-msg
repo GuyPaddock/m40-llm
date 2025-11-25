@@ -99,7 +99,6 @@ echo "=== END OF COMMIT DIFF ==="
 echo "=== START OF COMMIT MESSAGE ==="
 cat -- "$MSG_FILE"
 echo "[commit-msg] State saved to $state_file" >&2
-
 echo "=== END OF COMMIT MESSAGE ==="
 
 echo "[commit-msg] Deterministic nonce for this staged diff + message: $nonce" >&2
@@ -107,9 +106,8 @@ echo "[commit-msg] BEFORE FINALIZING WITH THE NONCE, answer BOTH questions with 
 echo "[commit-msg]  1) Does the commit message properly represent what changed AND why in the diff above?" >&2
 echo "[commit-msg]  2) Does it have the correct Conventional Commits type for what changed?" >&2
 echo "[commit-msg] If either answer is NO: revise the commit message (and/or type) and try 'git commit' again. A new nonce will be shown for the revised message." >&2
-echo "[commit-msg] Only if BOTH answers are YES, finalize the commit by re-running with the nonce, for example:" >&2
-echo "  M40LLM_COMMIT_NONCE=$nonce git commit -F $MSG_FILE" >&2
-echo "  or: scripts/finalize-commit $nonce" >&2
+echo "[commit-msg] Only if BOTH answers are YES, finalize the commit by running the following commmand:" >&2
+echo "  ./scripts/finalize-commit $nonce" >&2
 echo
 echo "[commit-msg] Your commit message was saved to $MSG_FILE"
 # Note: users using 'git commit' interactively can re-run with -m or -F and the nonce set.
