@@ -57,6 +57,7 @@ Build the project in one of these modes:
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. If `nvcc` is present, tests will also be able to detect `cfg(nvcc)` paths.
+- Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for a CUDA‑gated toy test validating one‑layer, seq_len=1 numerics.
 
 
 ## CUDA device selection and cuBLAS
