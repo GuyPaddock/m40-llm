@@ -55,7 +55,7 @@ Likely layout:
 State of the repo (HEAD)
 - CUDA parity grid for last-token attention is green on Tesla M40 with cuBLAS off/on
 - cuBLAS GEMM wrappers integrated; runtime toggle via M40LLM_ENABLE_CUBLAS=0|1
-- Minimal forward test path wired; forward_with_layer_smoke allocates KV with explicit heads/head_dim via allocate_kv_cache_with_layout
+- Minimal forward validated: one- and two-token prefill+decode parity vs CPU; two-token tol=5e-3 due to accumulated rounding; KV allocated via allocate_kv_cache_with_layout
 - Clippy -D warnings clean for CUDA and non-CUDA builds
 - Docs added: docs/cuda_parity_and_kv_layout.md (how to run CUDA grid, cuBLAS toggling, KV layout API)
 
