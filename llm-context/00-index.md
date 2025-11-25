@@ -12,6 +12,10 @@ Files:
   - Summary: Single-file snapshot of project identity, dtype policy (FP16 storage, FP32 compute), pipeline, implemented pieces, and roadmap. Originally authored earlier; we will keep this file up-to-date and brief.
   - Why useful: Primary on-ramp; should be read first when resuming.
   - Relevance: High [Design] [Roadmap]
+- [docs/minimal_forward.md](../docs/minimal_forward.md)
+  - Summary: What the minimal forward path runs today, assumptions/limits, and next steps.
+  - Relevance: High [Docs] [Roadmap]
+
 
 - [02-scope-and-hardware-hacks.md](./02-scope-and-hardware-hacks.md)
   - Summary: Initial high-level plan to build a vLLM/Ollama-like server optimized for M40. Covers stack (Rust + CUDA + cuBLAS), FP16 storage/FP32 compute, pinned host memory, prefill/decode phases, batching, CUDA Graphs, and extensive M40-specific guidance (Hyper‑Q, streams, __ldg, cache behavior, concurrency, KV compression ideas).
