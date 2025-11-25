@@ -16,6 +16,10 @@ Files:
   - Summary: What the minimal forward path runs today, assumptions/limits, and next steps.
   - Relevance: High [Docs] [Roadmap]
 
+- [docs/device_selection.md](../docs/device_selection.md)
+  - Summary: How runtime selects CUDA device; CUDA_VISIBLE_DEVICES; M40LLM_FORCE_M40; test helpers.
+  - Relevance: High [Docs]
+
 
 - [02-scope-and-hardware-hacks.md](./02-scope-and-hardware-hacks.md)
   - Summary: Initial high-level plan to build a vLLM/Ollama-like server optimized for M40. Covers stack (Rust + CUDA + cuBLAS), FP16 storage/FP32 compute, pinned host memory, prefill/decode phases, batching, CUDA Graphs, and extensive M40-specific guidance (Hyper‑Q, streams, __ldg, cache behavior, concurrency, KV compression ideas).
