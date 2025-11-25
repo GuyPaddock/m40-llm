@@ -136,3 +136,47 @@ fn map_standard_layer_shape_guard_down() {
         "unexpected error: {msg}"
     );
 }
+
+#[test]
+fn map_standard_layer_embed_dtype_guard() {
+    // Corrupt embeddings dtype to F32; should fail early
+    let mut lm = make_model_with_layer(3, 32, 64, true);
+    let entry = lm
+        .device_tensors
+        .get_mut("tok_embeddings.weight")
+        .expect("embeddings present");
+    entry.dtype = GgmlDType::F32;
+    let err = lm.map_standard_layer(3).unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("tok_embeddings.weight expected F16"),
+        "unexpected error: {msg}"
+    );
+}
+
+#[test]
+fn map_standard_layer_wq_shape_guard() {
+    // Corrupt wq shape first dim to not equal d_model
+    let mut lm = make_model_with_layer(4, 32, 64, true);
+    let key = "layers.4.attention.wq.weight".to_string();
+    let entry = lm.device_tensors.get_mut(&key).expect("wq present");
+    entry.shape = vec![31, 32];
+    let err = lm.map_standard_layer(4).unwrap_err();
+    let msg = format!("{err}");
+    assert!(msg.contains("wq shape invalid"), "unexpected error: {msg}");
+}
+
+#[test]
+fn map_standard_layer_gate_shape_guard() {
+    // Corrupt w_gate shape second dim to 0 (invalid H)
+    let mut lm = make_model_with_layer(5, 32, 64, true);
+    let key = "layers.5.feed_forward.w3.weight".to_string();
+    let entry = lm.device_tensors.get_mut(&key).expect("w_gate present");
+    entry.shape = vec![32, 0];
+    let err = lm.map_standard_layer(5).unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("w_gate shape invalid"),
+        "unexpected error: {msg}"
+    );
+}
