@@ -82,12 +82,24 @@ if [ -n "${M40LLM_COMMIT_NONCE:-}" ]; then
 fi
 
 # No nonce provided: show details and abort with instructions
+# Persist lock state for finalize step
+{
+  echo "# m40-llm commit finalize lockfile"
+  echo "LOCK_BRANCH=$branch"
+  echo "LOCK_INDEX_TREE=$index_tree"
+  echo "LOCK_MSG_SHA256=$msg_hash"
+  echo "LOCK_NONCE=$nonce"
+  echo "LOCK_TS=$(date -u +%s)"
+} > "$state_file"
+
 echo "=== START OF COMMIT DIFF (staged) ==="
 printf "%s\n" "$staged_diff"
 echo "=== END OF COMMIT DIFF ==="
 
 echo "=== START OF COMMIT MESSAGE ==="
 cat -- "$MSG_FILE"
+echo "[commit-msg] State saved to $state_file" >&2
+
 echo "=== END OF COMMIT MESSAGE ==="
 
 echo "[commit-msg] Deterministic nonce for this staged diff + message: $nonce" >&2

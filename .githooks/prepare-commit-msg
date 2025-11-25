@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Backup the commit message as soon as it's prepared, to guard against loss.
+# Invoked by git with parameters: $1 = path to commit message file
+# See: https://git-scm.com/docs/githooks#_prepare_commit_msg
+
+set -eu
+msg_file="$1"
+if [ -z "${msg_file:-}" ] || [ ! -f "$msg_file" ]; then
+  exit 0
+fi
+backup_file="$(git rev-parse --git-dir)/COMMIT_EDITMSG.bak"
+cp -f -- "$msg_file" "$backup_file" 2>/dev/null || true
+exit 0

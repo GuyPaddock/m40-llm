@@ -72,6 +72,36 @@ git config core.hooksPath .githooks
 ```
 
 Hooks provided:
+
+## Two-phase commit flow (nonce-protected)
+
+We use a hook-centric, two-step commit process to keep messages aligned with diffs and prevent accidental commits.
+
+Enable hooks once (if not already):
+
+```
+git config core.hooksPath .githooks
+```
+
+Workflow:
+- Draft: stage changes and run `git commit` (with -m/-F or editor). The commit-msg hook will:
+  - Validate Conventional Commits via `cog verify`
+  - Print the staged diff and your commit message
+  - Compute a deterministic NONCE for the pair (staged diff, message)
+  - Save a state lock at `.git/m40llm_nonce_state` and abort
+- Finalize: if the diff and message are correct, run:
+
+```
+scripts/finalize-commit <NONCE>
+```
+
+The finalize step reuses `.git/COMMIT_EDITMSG` and validates that branch, staged index, message hash, and NONCE match the preview.
+
+Recovery / tips:
+- Your last drafted message is in `.git/COMMIT_EDITMSG`; a backup is saved by a `prepare-commit-msg` hook to `.git/COMMIT_EDITMSG.bak`.
+- If you change staged files or the message, just run `git commit` again to get a new NONCE.
+- If the state file seems stale, remove `.git/m40llm_nonce_state` and draft again.
+
 - pre-commit: runs `cargo fmt --all -- --check` and rejects unformatted code
 - commit-msg: enforces Conventional Commits via cocogitto and some hygiene checks
   - install cocogitto once: `cargo install cocogitto`
