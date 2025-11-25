@@ -324,7 +324,29 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
+        // Backward-compatible default layout
         let kv = KVCache::new_with_context(&self.cuda, max_seq_len, max_batch_size, 8, 64)?;
+        self.kv_cache = Some(kv);
+        Ok(())
+    }
+
+    pub fn allocate_kv_cache_with_layout(
+        &mut self,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        if num_heads == 0 || head_dim == 0 {
+            anyhow::bail!("allocate_kv_cache_with_layout: invalid layout");
+        }
+        let kv = KVCache::new_with_context(
+            &self.cuda,
+            max_seq_len,
+            max_batch_size,
+            num_heads,
+            head_dim,
+        )?;
         self.kv_cache = Some(kv);
         Ok(())
     }
