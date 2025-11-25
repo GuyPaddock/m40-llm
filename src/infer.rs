@@ -103,6 +103,18 @@ impl LoadedModel {
                 d_model
             );
         }
+        // If typed_config present, enforce embedding_length matches d_model
+        #[cfg(feature = "gguf_ext")]
+        if let Some(cfg) = &self.typed_config {
+            let em = cfg.embedding_length as usize;
+            if em != d_model {
+                anyhow::bail!(
+                    "typed_config.embedding_length {} != inferred d_model {}",
+                    em,
+                    d_model
+                );
+            }
+        }
         // Candidates for layer names
         let wq_names = vec![
             format!("layers.{layer}.attention.wq.weight"),
@@ -166,6 +178,46 @@ impl LoadedModel {
                     name,
                     t.shape
                 );
+            }
+        }
+        // If typed_config present, validate Q/K/V/WO N dims using head counts
+        #[cfg(feature = "gguf_ext")]
+        if let Some(cfg) = &self.typed_config {
+            let n_head = cfg.attention_head_count as usize;
+            if n_head == 0 || d_model % n_head != 0 {
+                anyhow::bail!(
+                    "typed_config invalid: d_model {} not divisible by attention_head_count {}",
+                    d_model,
+                    n_head
+                );
+            }
+            let head_dim = cfg
+                .attention_key_length
+                .map(|v| v as usize)
+                .unwrap_or(d_model / n_head);
+            let n_kv = cfg
+                .attention_head_count_kv
+                .map(|v| v as usize)
+                .unwrap_or(n_head);
+            let expect_nq = n_head * head_dim;
+            let expect_nk = n_kv * head_dim;
+            let expect_nv = n_kv * head_dim;
+            let expect_no = d_model;
+            let qn = *wq.shape.get(1).unwrap_or(&0) as usize;
+            let kn = *wk.shape.get(1).unwrap_or(&0) as usize;
+            let vn = *wv.shape.get(1).unwrap_or(&0) as usize;
+            let on = *wo.shape.get(1).unwrap_or(&0) as usize;
+            if qn != expect_nq {
+                anyhow::bail!("wq second dim {} != expected {}", qn, expect_nq);
+            }
+            if kn != expect_nk {
+                anyhow::bail!("wk second dim {} != expected {}", kn, expect_nk);
+            }
+            if vn != expect_nv {
+                anyhow::bail!("wv second dim {} != expected {}", vn, expect_nv);
+            }
+            if on != expect_no {
+                anyhow::bail!("wo second dim {} != expected {}", on, expect_no);
             }
         }
         // Infer hidden_dim from up/gate
@@ -366,8 +418,44 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
-        // Backward-compatible default layout
-        let kv = KVCache::new_with_context(&self.cuda, max_seq_len, max_batch_size, 8, 64)?;
+        // Prefer typed_config to choose layout when available; fallback to metadata-derived
+        let (num_heads, head_dim) = {
+            #[cfg(feature = "gguf_ext")]
+            {
+                if let Some(cfg) = &self.typed_config {
+                    let n_head = cfg.attention_head_count;
+                    let d_model = cfg.embedding_length;
+                    if n_head == 0 || d_model == 0 || d_model % n_head != 0 {
+                        anyhow::bail!(
+                            "typed_config invalid for KV layout: d_model {} head_count {}",
+                            d_model,
+                            n_head
+                        );
+                    }
+                    let hd = cfg.attention_key_length.unwrap_or(d_model / n_head) as u32;
+                    (n_head, hd)
+                } else {
+                    let n_head = self.get_u32_meta("llama.attention.head_count").unwrap_or(8);
+                    let d_model = self.get_u32_meta("llama.embedding_length").unwrap_or(512);
+                    let hd = (d_model / n_head.max(1)).max(1);
+                    (n_head, hd)
+                }
+            }
+            #[cfg(not(feature = "gguf_ext"))]
+            {
+                let n_head = self.get_u32_meta("llama.attention.head_count").unwrap_or(8);
+                let d_model = self.get_u32_meta("llama.embedding_length").unwrap_or(512);
+                let hd = (d_model / n_head.max(1)).max(1);
+                (n_head, hd)
+            }
+        };
+        let kv = KVCache::new_with_context(
+            &self.cuda,
+            max_seq_len,
+            max_batch_size,
+            num_heads,
+            head_dim,
+        )?;
         self.kv_cache = Some(kv);
         Ok(())
     }
