@@ -26,7 +26,7 @@ Files:
 - [03-project-skeleton.md](./03-project-skeleton.md)
   - Summary: Early multi-file scaffold for a new repo (Cargo.toml, src layout, minimal gguf, server CLI). Predates current repository structure and is superseded by real code.
   - Why useful: Historical only; not needed for current codebase.
-  - Relevance: Low (to be removed) [Historical]
+  - Relevance: Low (removed) [Historical]
 
 - [04-ring-buffer.md](./04-ring-buffer.md)
   - Summary: Persistent decode kernel + host/GPU ring buffer design using pinned memory; job/result queues; motivation (avoid per-token launches); scheduling and concurrency notes; fits Hyper‑Q; outlines GPU resident decode loop.
@@ -61,7 +61,7 @@ Files:
 - [10-rename-api.md](./10-rename-api.md)
   - Summary: Discussion about renaming API from fastllm to m40llm.
   - Why useful: Historical only; decision settled and code reflects m40llm.
-  - Relevance: Low (to be removed) [Historical]
+  - Relevance: Low (removed) [Historical]
 
 - [11-device-allocator.md](./11-device-allocator.md)
   - Summary: Proposal for a centralized DeviceAllocator in Rust with typed DevicePtr<T>, RAII frees, and future backends (cudaMallocAsync pools). API and integration notes.
