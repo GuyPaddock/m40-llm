@@ -3,7 +3,6 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::CudaContext;
 use std::ffi::c_void;
 
 // Helper to convert f32 to IEEE-754 half bits via host conversion
