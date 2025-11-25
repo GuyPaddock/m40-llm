@@ -2,11 +2,55 @@
 
 Purpose: concise, actionable snapshot to resume m40-llm development fast.
 
-Project identity
-- Name: m40-llm — Rust LLM runtime/server for NVIDIA Tesla M40 (Maxwell, sm_52)
+## 0. Project Identity
+- Project name: m40-llm — Rust LLM runtime/server for NVIDIA Tesla M40 (Maxwell, sm_52)
 - Precision: FP16 storage (weights, KV), FP32 compute (max accuracy on M40)
-- Format: GGUF (via gguf-rs-lib + gguf-llms planned)
+- Model format: GGUF (via gguf-rs-lib + gguf-llms planned)
 - Architecture: Rust host + CUDA C/C++ kernels behind stable C FFI; optional HTTP server (feature "server")
+
+## 4. KV Cache Design (reference)
+Likely layout:
+```
+[layer][sequence][head][token][head_dim]
+```
+- Storage: FP16 for K and V
+- Strides: finalize and document per-axis strides for correct indexing
+- Append path: convert FP32→FP16 before storing into KV
+- Debug: ffi_debug_read_kv_token to validate contents and layout
+
+## 5. Attention Kernel Specification (reference)
+- Inputs: Q in FP32; K/V in FP16 (from KV cache)
+- Compute: FP32; Output context: FP32
+- Initial mapping: 1 head per block (simple, correct baseline)
+- Optimizations (later): vectorized loads, warp-level reductions, shared-memory tiling
+
+## 6. Testing Strategy (reference)
+- Use Rust #[test] with CUDA-gated tests
+- Pattern:
+  1) Build deterministic inputs
+  2) CPU reference implementation
+  3) Run GPU kernel via FFI
+  4) Compare with tolerance (e.g., ~1e-3)
+- Cover: RMSNorm, MLP, attention last-token, projection shapes/layouts, FP32↔FP16 casts
+
+## 7. Future Components (planned)
+### 7.1 GEMM
+- Keep cuBLAS as baseline; consider Maxwell-tuned custom GEMM only if needed
+- Techniques: shared-memory tiling, half2 vector loads (for FP16 storage), FP32 accumulation, double-buffering
+
+### 7.2 Persistent Kernel
+- GPU-resident decode loop pulling jobs from a host-pinned ring buffer
+- Runs attention + MLP + sampling per token; writes results back
+- Complements multi-stream design and reduces launch overhead
+
+### 7.3 End-to-End
+- Minimal one-layer forward test on toy weights
+- Compare against CPU reference / known small models for sanity
+
+## 8. Research Notes
+- Not using: Strassen/Winograd, AlphaTensor-derived algorithms (impractical here)
+- Relevant references: Maxwell-tuned maxas SGEMM; Stream-K decomposition; CUDA optimization guides
+- Tuning targets: occupancy vs register pressure, SM partitioning, warp-level softmax, KV locality, prefill scheduling
 
 State of the repo (HEAD)
 - CUDA parity grid for last-token attention is green on Tesla M40 with cuBLAS off/on
@@ -83,54 +127,3 @@ Quick resume checklist
 See also
 - llm-context/00-index.md: curated summaries for all design/context notes
 - docs/cuda_parity_and_kv_layout.md: how to run CUDA parity grid and use KV layout API
-
-## 0. Project Identity
-- Project name: m40-llm
-- Purpose: Rust-based LLM inference server optimized for NVIDIA Tesla M40 (Maxwell, sm_52)
-- Architecture: Rust host + CUDA C/C++ kernels (via stable C FFI)
-- Model format: GGUF (Meta/llama.cpp family) via gguf-rs-lib + gguf-llms
-
-## 4. KV Cache Design (reference)
-Likely layout:
-```
-[layer][sequence][head][token][head_dim]
-```
-- Storage: FP16 for K and V
-- Strides: finalize and document per-axis strides for correct indexing
-- Append path: convert FP32→FP16 before storing into KV
-- Debug: ffi_debug_read_kv_token to validate contents and layout
-
-## 5. Attention Kernel Specification (reference)
-- Inputs: Q in FP32; K/V in FP16 (from KV cache)
-- Compute: FP32; Output context: FP32
-- Initial mapping: 1 head per block (simple, correct baseline)
-- Optimizations (later): vectorized loads, warp-level reductions, shared-memory tiling
-
-## 6. Testing Strategy (reference)
-- Use Rust #[test] with CUDA-gated tests
-- Pattern:
-  1) Build deterministic inputs
-  2) CPU reference implementation
-  3) Run GPU kernel via FFI
-  4) Compare with tolerance (e.g., ~1e-3)
-- Cover: RMSNorm, MLP, attention last-token, projection shapes/layouts, FP32↔FP16 casts
-
-## 7. Future Components (planned)
-### 7.1 GEMM
-- Keep cuBLAS as baseline; consider Maxwell-tuned custom GEMM only if needed
-- Techniques: shared-memory tiling, half2 vector loads (for FP16 storage), FP32 accumulation, double-buffering
-
-### 7.2 Persistent Kernel
-- GPU-resident decode loop pulling jobs from a host-pinned ring buffer
-- Runs attention + MLP + sampling per token; writes results back
-- Complements multi-stream design and reduces launch overhead
-
-### 7.3 End-to-End
-- Minimal one-layer forward test on toy weights
-- Compare against CPU reference / known small models for sanity
-
-## 8. Research Notes
-- Not using: Strassen/Winograd, AlphaTensor-derived algorithms (impractical here)
-- Relevant references: Maxwell-tuned maxas SGEMM; Stream-K decomposition; CUDA optimization guides
-- Tuning targets: occupancy vs register pressure, SM partitioning, warp-level softmax, KV locality, prefill scheduling
-
