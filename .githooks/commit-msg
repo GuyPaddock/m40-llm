@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# commit-msg hook: minimal checks + stateless nonce-based retry
-# Performs only:
+# commit-msg hook: two-stage commit with deterministic nonce and preview
+# Responsibilities:
 #  1) Reject literal \n sequences in the message
-#  2) Validate Conventional Commits with cocogitto and capture subject
+#  2) Validate Conventional Commits with cocogitto
 #  3) Enforce subject length <= 100
-# Flow:
-#  - On first attempt (no M40LLM_COMMIT_NONCE), compute a deterministic nonce from the
-#    staged diff and message content, display diff and message with the nonce, then
-#    abort the commit with instructions to retry using that nonce.
-#  - On retry, if M40LLM_COMMIT_NONCE matches the computed nonce for the current staged
-#    diff and message, allow the commit without interaction.
+#  4) Preview mode (no NONCE): show staged diff + message, compute and print NONCE, abort
+#  5) Finalize mode (with NONCE): recompute and validate NONCE; allow commit
+# Note: The hook owns preview; the finalize step simply reuses .git/COMMIT_EDITMSG with NONCE.
 
 set -uuo pipefail
 MSG_FILE="$1"
@@ -68,6 +65,7 @@ echo "[commit-msg]  2) Does it have the correct Conventional Commits type for wh
 echo "[commit-msg] If either answer is NO: revise the commit message (and/or type) and try 'git commit' again. A new nonce will be shown for the revised message." >&2
 echo "[commit-msg] Only if BOTH answers are YES, finalize the commit by re-running with the nonce, for example:" >&2
 echo "  M40LLM_COMMIT_NONCE=$nonce git commit -F $MSG_FILE" >&2
+echo "  or: scripts/finalize-commit $nonce" >&2
 echo
 echo "[commit-msg] Your commit message was saved to $MSG_FILE"
 # Note: users using 'git commit' interactively can re-run with -m or -F and the nonce set.

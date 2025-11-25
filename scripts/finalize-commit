@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Finalize a commit using the deterministic nonce-based two-step flow.
+# Usage:
+#   scripts/finalize-commit <NONCE>
+# This will reuse the saved commit message in .git/COMMIT_EDITMSG and run:
+#   M40LLM_COMMIT_NONCE=<NONCE> git commit -F .git/COMMIT_EDITMSG
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  echo "Usage: $0 <NONCE>" >&2
+  exit 2
+fi
+
+nonce="$1"
+
+if [ ! -d .git ]; then
+  echo "[finalize-commit] Not a git repository (missing .git)" >&2
+  exit 1
+fi
+
+msg_file=".git/COMMIT_EDITMSG"
+if [ ! -f "$msg_file" ]; then
+  echo "[finalize-commit] Commit message not found at $msg_file. Run 'git commit' first to draft and obtain the nonce." >&2
+  exit 1
+fi
+
+# Run the second-stage commit. The commit-msg hook will validate the nonce.
+M40LLM_COMMIT_NONCE="$nonce" git commit -F "$msg_file"
