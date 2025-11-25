@@ -30,7 +30,7 @@ Likely layout:
   1) Build deterministic inputs
   2) CPU reference implementation
   3) Run GPU kernel via FFI
-  4) Compare with tolerance (e.g., ~1e-3)
+  4) Compare with tolerance (single-token ~1e-3; two-token minimal forward 5e-3)
 - Cover: RMSNorm, MLP, attention last-token, projection shapes/layouts, FP32↔FP16 casts
 
 ## 5. Future Components (planned)
