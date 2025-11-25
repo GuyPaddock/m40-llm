@@ -356,3 +356,225 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
+    let ctx = cuda_env::ctx_m40()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let d_model = 8usize;
+    let hidden = 16usize;
+    let num_heads = 2usize;
+    let head_dim = 4usize;
+    assert_eq!(num_heads * head_dim, d_model);
+
+    // Build GGUF and weights same as one-token test
+    let mut gg = GgufModel::new(0);
+    gg.metadata.insert(
+        "llama.embedding_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    let vocab = 32u64;
+    gg.tensors.push(GgufTensor {
+        name: "tok_embeddings.weight".into(),
+        dtype: GgmlDType::F16,
+        shape: vec![vocab, d_model as u64],
+        offset: 0,
+    });
+    for (name, shape) in [
+        (
+            "layers.0.attention.wq.weight",
+            vec![d_model as u64, d_model as u64],
+        ),
+        (
+            "layers.0.attention.wk.weight",
+            vec![d_model as u64, d_model as u64],
+        ),
+        (
+            "layers.0.attention.wv.weight",
+            vec![d_model as u64, d_model as u64],
+        ),
+        (
+            "layers.0.attention.wo.weight",
+            vec![d_model as u64, d_model as u64],
+        ),
+        (
+            "layers.0.feed_forward.w3.weight",
+            vec![d_model as u64, hidden as u64],
+        ),
+        (
+            "layers.0.feed_forward.w1.weight",
+            vec![d_model as u64, hidden as u64],
+        ),
+        (
+            "layers.0.feed_forward.w2.weight",
+            vec![hidden as u64, d_model as u64],
+        ),
+    ] {
+        gg.tensors.push(GgufTensor {
+            name: name.into(),
+            dtype: GgmlDType::F16,
+            shape,
+            offset: 0,
+        });
+    }
+
+    let mut weights: Vec<u8> = Vec::new();
+    let emb_f32: Vec<f32> = (0..(vocab as usize) * d_model)
+        .map(|i| ((i as f32) * 0.001).sin())
+        .collect();
+    let mut push_tensor_halves = |tensor_name: &str, vals: &[f32]| {
+        let off = weights.len() as u64;
+        if let Some(t) = gg.tensors.iter_mut().find(|t| t.name == tensor_name) {
+            t.offset = off;
+        }
+        weights.extend_from_slice(&halves_from_f32(vals));
+    };
+    push_tensor_halves("tok_embeddings.weight", &emb_f32);
+    let sq = d_model * d_model;
+    let wq_f32: Vec<f32> = (0..sq).map(|i| ((i as f32) * 0.01).sin()).collect();
+    let wk_f32: Vec<f32> = (0..sq).map(|i| ((i as f32) * 0.02).cos()).collect();
+    let wv_f32: Vec<f32> = (0..sq).map(|i| ((i as f32) * 0.03).tan().atan()).collect();
+    let wo_f32: Vec<f32> = (0..sq).map(|i| ((i as f32) * 0.04).sin()).collect();
+    push_tensor_halves("layers.0.attention.wq.weight", &wq_f32);
+    push_tensor_halves("layers.0.attention.wk.weight", &wk_f32);
+    push_tensor_halves("layers.0.attention.wv.weight", &wv_f32);
+    push_tensor_halves("layers.0.attention.wo.weight", &wo_f32);
+    let w_gate_f32: Vec<f32> = (0..(d_model * hidden))
+        .map(|i| ((i as f32) * 0.015).sin())
+        .collect();
+    let w_up_f32: Vec<f32> = (0..(d_model * hidden))
+        .map(|i| ((i as f32) * 0.017).cos())
+        .collect();
+    let w_down_f32: Vec<f32> = (0..(hidden * d_model))
+        .map(|i| ((i as f32) * 0.019).sin())
+        .collect();
+    push_tensor_halves("layers.0.feed_forward.w3.weight", &w_gate_f32);
+    push_tensor_halves("layers.0.feed_forward.w1.weight", &w_up_f32);
+    push_tensor_halves("layers.0.feed_forward.w2.weight", &w_down_f32);
+
+    let mut lm = LoadedModel::from_gguf(gg, weights.clone(), -1)?;
+    lm.allocate_kv_cache_with_layout(8, 1, num_heads as u32, head_dim as u32)?;
+
+    let d_x0 = lm.cuda.device_malloc(d_model * 4)?;
+    unsafe {
+        lm.load_token_embedding_f16_to_f32(0, d_x0)?;
+    }
+    let d_y0 = lm.cuda.device_malloc(d_model * 4)?;
+    unsafe {
+        lm.forward_one_token_with_layer(d_x0 as *const c_void, 0, 0, 1, d_y0)?;
+    }
+    let d_x1 = lm.cuda.device_malloc(d_model * 4)?;
+    unsafe {
+        lm.load_token_embedding_f16_to_f32(1, d_x1)?;
+    }
+    let d_y1 = lm.cuda.device_malloc(d_model * 4)?;
+    unsafe {
+        lm.forward_one_token_with_layer(d_x1 as *const c_void, 0, 0, 2, d_y1)?;
+    }
+
+    let mut y1_dev_bytes = vec![0u8; d_model * 4];
+    unsafe {
+        lm.cuda
+            .memcpy_d2h(y1_dev_bytes.as_mut_ptr() as *mut c_void, d_y1, d_model * 4)?;
+    }
+    let y1_dev: Vec<f32> = y1_dev_bytes
+        .chunks_exact(4)
+        .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+        .collect();
+
+    let halves_to_f32_blob = |name: &str, rows: usize, cols: usize| -> Vec<f32> {
+        let t = lm.device_tensors.get(name).unwrap();
+        let off = t.byte_offset as usize;
+        halves_to_f32(&weights[off..off + rows * cols * 2])
+    };
+    let x0 = {
+        let t = lm.device_tensors.get("tok_embeddings.weight").unwrap();
+        let off = t.byte_offset as usize;
+        halves_to_f32(&weights[off..off + d_model * 2])
+    };
+    let x1 = {
+        let t = lm.device_tensors.get("tok_embeddings.weight").unwrap();
+        let off = t.byte_offset as usize + d_model * 2;
+        halves_to_f32(&weights[off..off + d_model * 2])
+    };
+    let x0n = rms_norm(&x0, 1e-6);
+    let x1n = rms_norm(&x1, 1e-6);
+    let wq = halves_to_f32_blob("layers.0.attention.wq.weight", d_model, d_model);
+    let wk = halves_to_f32_blob("layers.0.attention.wk.weight", d_model, d_model);
+    let wv = halves_to_f32_blob("layers.0.attention.wv.weight", d_model, d_model);
+    let wo = halves_to_f32_blob("layers.0.attention.wo.weight", d_model, d_model);
+
+    let q1 = matmul_row_major(&x1n, 1, d_model, &wq, d_model);
+    let k0 = matmul_row_major(&x0n, 1, d_model, &wk, d_model);
+    let k1 = matmul_row_major(&x1n, 1, d_model, &wk, d_model);
+    let v0 = matmul_row_major(&x0n, 1, d_model, &wv, d_model);
+    let v1 = matmul_row_major(&x1n, 1, d_model, &wv, d_model);
+
+    let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
+    let mut context = vec![0f32; d_model];
+    for h in 0..num_heads {
+        let h_off = h * head_dim;
+        let qh = &q1[h_off..h_off + head_dim];
+        let k0h = &k0[h_off..h_off + head_dim];
+        let k1h = &k1[h_off..h_off + head_dim];
+        let v0h = &v0[h_off..h_off + head_dim];
+        let v1h = &v1[h_off..h_off + head_dim];
+        let s0 = qh.iter().zip(k0h).map(|(a, b)| a * b).sum::<f32>() * inv_sqrt;
+        let s1 = qh.iter().zip(k1h).map(|(a, b)| a * b).sum::<f32>() * inv_sqrt;
+        let m = s0.max(s1);
+        let e0 = (s0 - m).exp();
+        let e1 = (s1 - m).exp();
+        let denom = e0 + e1;
+        let p0 = e0 / denom;
+        let p1 = e1 / denom;
+        for d in 0..head_dim {
+            context[h_off + d] = p0 * v0h[d] + p1 * v1h[d];
+        }
+    }
+
+    let y_attn = matmul_row_major(&context, 1, d_model, &wo, d_model);
+    let x1_residual: Vec<f32> = x1.iter().zip(y_attn.iter()).map(|(a, b)| a + b).collect();
+    let x1n2 = rms_norm(&x1_residual, 1e-6);
+
+    let w_gate = halves_to_f32_blob("layers.0.feed_forward.w3.weight", d_model, hidden);
+    let w_up = halves_to_f32_blob("layers.0.feed_forward.w1.weight", d_model, hidden);
+    let w_down = halves_to_f32_blob("layers.0.feed_forward.w2.weight", hidden, d_model);
+    let gate = matmul_row_major(&x1n2, 1, d_model, &w_gate, hidden);
+    let up = matmul_row_major(&x1n2, 1, d_model, &w_up, hidden);
+    let hidden_act: Vec<f32> = gate
+        .iter()
+        .zip(up.iter())
+        .map(|(g, u)| silu(*g) * *u)
+        .collect();
+    let y_mlp = matmul_row_major(&hidden_act, 1, hidden, &w_down, d_model);
+    let y_ref: Vec<f32> = x1_residual
+        .iter()
+        .zip(y_mlp.iter())
+        .map(|(a, b)| a + b)
+        .collect();
+
+    assert_eq!(y_ref.len(), y1_dev.len());
+    for (i, (a, b)) in y_ref.iter().zip(y1_dev.iter()).enumerate() {
+        let diff = (*a - *b).abs();
+        assert!(
+            diff <= 1e-3,
+            "mismatch at {}: got {:.6}, expect {:.6}, diff {:.6}",
+            i,
+            b,
+            a,
+            diff
+        );
+    }
+
+    unsafe {
+        lm.cuda.device_free(d_x0)?;
+        lm.cuda.device_free(d_y0)?;
+        lm.cuda.device_free(d_x1)?;
+        lm.cuda.device_free(d_y1)?;
+    }
+    Ok(())
+}
