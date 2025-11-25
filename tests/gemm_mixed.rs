@@ -3,7 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::CudaContext;
+// CudaContext not used directly in this test
 use std::ffi::c_void;
 
 fn f32s_to_bytes(vals: &[f32]) -> Vec<u8> {

@@ -3,7 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::{CudaContext, KVCache};
+use m40_llm::cuda::KVCache;
 use std::ffi::c_void;
 
 #[test]

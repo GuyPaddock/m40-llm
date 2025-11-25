@@ -48,7 +48,7 @@ fn gguf_device_views_basic_f16_size_and_shape() {
 
     let gg = load_gguf(&path).expect("parse gguf");
     assert_eq!(gg.tensors.len(), 1);
-    assert_eq!(gg.data_offset > 0, true);
+    assert!(gg.data_offset > 0);
 
     // Read all bytes and construct LoadedModel (device  -1 auto)
     let bytes = std::fs::read(&path).unwrap();

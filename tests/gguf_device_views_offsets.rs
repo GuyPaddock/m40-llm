@@ -70,7 +70,7 @@ fn gguf_device_views_nonzero_offsets_multiple_tensors_ok() {
 
         // Data region: need to cover B's end
         let data_len = (b_off as usize) + b_nbytes;
-        f.write_all(&vec![0u8; data_len]).unwrap();
+        f.write_all(&vec![0u8; data_len]).unwrap(); // zeroed payload is fine
         f.flush().unwrap();
     }
 
@@ -153,7 +153,7 @@ fn gguf_device_views_quantized_nbytes_zero() {
         write_le_u64(&mut f, 0);
 
         // Provide small data region; loader doesn't validate unknown sizes
-        f.write_all(&vec![0u8; 1]).unwrap();
+        f.write_all(&[0u8; 1]).unwrap();
         f.flush().unwrap();
     }
 

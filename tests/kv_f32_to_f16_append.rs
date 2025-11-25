@@ -4,7 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use half::f16;
-use m40_llm::cuda::{ffi_debug_read_kv_token, CudaContext, KVCache};
+use m40_llm::cuda::{ffi_debug_read_kv_token, KVCache};
 use std::ffi::c_void;
 
 fn f32s_to_f16_bits(xs: &[f32]) -> Vec<u16> {
@@ -35,8 +35,8 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
         .collect();
 
     // Device alloc and upload
-    let k0_dev: *mut c_void = unsafe { std::mem::transmute(ctx.device_malloc(k0_host.len() * 4)?) };
-    let v0_dev: *mut c_void = unsafe { std::mem::transmute(ctx.device_malloc(v0_host.len() * 4)?) };
+    let k0_dev: *mut c_void = ctx.device_malloc(k0_host.len() * 4)?;
+    let v0_dev: *mut c_void = ctx.device_malloc(v0_host.len() * 4)?;
     unsafe {
         ctx.memcpy_h2d(k0_dev, k0_host.as_ptr() as *const c_void, k0_host.len() * 4)?;
         ctx.memcpy_h2d(v0_dev, v0_host.as_ptr() as *const c_void, v0_host.len() * 4)?;
@@ -75,7 +75,7 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
         .map(|i| -10.0 + i as f32 * 0.125)
         .collect();
     let v1_host: Vec<f32> = (0..elems_per_token)
-        .map(|i| 3.1415 + i as f32 * 0.25)
+        .map(|i| std::f32::consts::PI + i as f32 * 0.25)
         .collect();
 
     unsafe {
@@ -106,8 +106,8 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
 
     // Cleanup
     unsafe {
-        ctx.device_free(k0_dev as *mut c_void)?;
-        ctx.device_free(v0_dev as *mut c_void)?;
+        ctx.device_free(k0_dev)?;
+        ctx.device_free(v0_dev)?;
     }
 
     Ok(())

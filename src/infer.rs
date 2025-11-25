@@ -644,7 +644,7 @@ impl LoadedModel {
             let _ = self.cuda.device_free(d_x1);
             let _ = self.cuda.device_free(d_x1n);
 
-            return res;
+            res
         }
 
         #[cfg(not(feature = "cuda"))]
@@ -707,7 +707,10 @@ impl LoadedModel {
         self.matmul_f32xf16_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
     }
 
-    pub fn run_rms_norm(
+    /// # Safety
+    /// d_in and d_out must be valid device pointers to buffers sized for seq_len*dim f32 values on this context's device.
+    /// The memory regions must not overlap improperly and must be accessible for the duration of the call.
+    pub unsafe fn run_rms_norm(
         &self,
         d_in: *const c_void,
         d_out: *mut c_void,
@@ -753,7 +756,7 @@ impl LoadedModel {
                 self.cuda
                     .memcpy_h2d(d_out, out_bytes.as_ptr() as *const c_void, bytes)?;
             }
-            return Ok(());
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {

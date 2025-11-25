@@ -5,17 +5,17 @@ use m40_llm::cuda::{CudaContext, KVCache};
 use std::ffi::c_void;
 
 fn cpu_last_token_attention(
-    q: &[f32],                // [num_heads*head_dim]
-    k_tokens: &Vec<Vec<f32>>, // seq_len entries, each [num_heads*head_dim]
-    v_tokens: &Vec<Vec<f32>>, // seq_len entries, each [num_heads*head_dim]
+    q: &[f32],             // [num_heads*head_dim]
+    k_tokens: &[Vec<f32>], // seq_len entries, each [num_heads*head_dim]
+    v_tokens: &[Vec<f32>], // seq_len entries, each [num_heads*head_dim]
     num_heads: usize,
     head_dim: usize,
 ) -> Vec<f32> {
     let dim = num_heads * head_dim;
     assert_eq!(q.len(), dim);
-    for t in 0..k_tokens.len() {
-        assert_eq!(k_tokens[t].len(), dim);
-        assert_eq!(v_tokens[t].len(), dim);
+    for (k_t, v_t) in k_tokens.iter().zip(v_tokens.iter()) {
+        assert_eq!(k_t.len(), dim);
+        assert_eq!(v_t.len(), dim);
     }
     let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
     let mut out = vec![0.0f32; dim];
@@ -24,8 +24,8 @@ fn cpu_last_token_attention(
         let qh = &q[h * head_dim..(h + 1) * head_dim];
         // pass 1: max
         let mut max_s = f32::NEG_INFINITY;
-        for t in 0..k_tokens.len() {
-            let k_base = &k_tokens[t][h * head_dim..(h + 1) * head_dim];
+        for k_t in k_tokens.iter() {
+            let k_base = &k_t[h * head_dim..(h + 1) * head_dim];
             let mut dot = 0.0f32;
             for d in 0..head_dim {
                 dot += qh[d] * k_base[d];
@@ -37,16 +37,16 @@ fn cpu_last_token_attention(
         }
         // pass 2: denom
         let mut denom = 0.0f32;
-        let mut scores = vec![0.0f32; k_tokens.len()];
-        for t in 0..k_tokens.len() {
-            let k_base = &k_tokens[t][h * head_dim..(h + 1) * head_dim];
+        let mut scores: Vec<f32> = Vec::with_capacity(k_tokens.len());
+        for k_t in k_tokens.iter() {
+            let k_base = &k_t[h * head_dim..(h + 1) * head_dim];
             let mut dot = 0.0f32;
             for d in 0..head_dim {
                 dot += qh[d] * k_base[d];
             }
             let s = dot * inv_sqrt;
             let e = (s - max_s).exp();
-            scores[t] = e;
+            scores.push(e);
             denom += e;
         }
         if denom == 0.0 {
@@ -55,9 +55,9 @@ fn cpu_last_token_attention(
         // pass 3: out
         for d in 0..head_dim {
             let mut acc = 0.0f32;
-            for t in 0..k_tokens.len() {
+            for (t, v_t) in v_tokens.iter().enumerate() {
                 let prob = scores[t] / denom;
-                let v_base = &v_tokens[t][h * head_dim..(h + 1) * head_dim];
+                let v_base = &v_t[h * head_dim..(h + 1) * head_dim];
                 acc += prob * v_base[d];
             }
             out[h * head_dim + d] = acc;

@@ -3,7 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::{CudaContext, KVCache};
+use m40_llm::cuda::KVCache;
 use std::ffi::c_void;
 
 // CPU reference: f32 -> f16 (round to nearest even should match __float2half_rn for normal ranges)

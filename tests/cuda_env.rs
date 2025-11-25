@@ -2,7 +2,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 use anyhow::{anyhow, Result};
-use m40_llm::cuda::{CudaContext, DeviceProps};
+use m40_llm::cuda::CudaContext;
 
 /// Create a CUDA context preferring Tesla M40 (sm_52).
 /// If env M40LLM_FORCE_M40=1 is set, kernels.cu will also auto-select M40 even if device_id >= 0.

@@ -54,8 +54,8 @@ fn test_mlp_operation() -> Result<()> {
     let gguf = GgufModel::new(0);
     let gguf_bytes = vec![];
     let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
-    let input = 0 as *const c_void;
-    let output = 0 as *mut c_void;
+    let input = std::ptr::null::<c_void>();
+    let output = std::ptr::null_mut::<c_void>();
     model.run_mlp(input, output, 8, 512, 2048)?;
     Ok(())
 }
@@ -65,8 +65,8 @@ fn test_rms_norm_operation() -> Result<()> {
     let gguf = GgufModel::new(0);
     let gguf_bytes = vec![];
     let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
-    let input = 0 as *const c_void;
-    let output = 0 as *mut c_void;
+    let input = std::ptr::null::<c_void>();
+    let output = std::ptr::null_mut::<c_void>();
     model.run_rms_norm(input, output, 128, 512, 1e-5)?;
     Ok(())
 }
