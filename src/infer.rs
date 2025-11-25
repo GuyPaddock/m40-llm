@@ -252,6 +252,18 @@ impl LoadedModel {
                 w_down.shape
             );
         }
+        // If typed_config present, enforce feed_forward_length matches hidden_dim
+        #[cfg(feature = "gguf_ext")]
+        if let Some(cfg) = &self.typed_config {
+            let h_cfg = cfg.feed_forward_length as usize;
+            if h_cfg != hidden_dim {
+                anyhow::bail!(
+                    "typed_config.feed_forward_length {} != inferred hidden_dim {}",
+                    h_cfg,
+                    hidden_dim
+                );
+            }
+        }
 
         Ok(StandardLayerWeights {
             d_model,
