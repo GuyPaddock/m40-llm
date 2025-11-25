@@ -1,0 +1,19 @@
+# llm-context index (generated)\n\nThis folder contains design notes, architecture plans, and development context for m40-llm.\n\nFiles:\n
+- [01-machine_context_summary.md](./01-machine_context_summary.md): Machine Context Summary (for continued development)
+- [02-scope-and-hardware-hacks.md](./02-scope-and-hardware-hacks.md): 
+- [02b-cuda-rust-architecture.md](./02b-cuda-rust-architecture.md): Architecture
+- [03-project-skeleton.md](./03-project-skeleton.md): 
+- [04-ring-buffer.md](./04-ring-buffer.md): 
+- [05-attention-and-kv-cache.md](./05-attention-and-kv-cache.md): 
+- [06-parallelization.md](./06-parallelization.md): 
+- [07-rust-interfaces.md](./07-rust-interfaces.md): 
+- [08-minimal-decode.md](./08-minimal-decode.md): 
+- [09-recap.md](./09-recap.md): 
+- [10-rename-api.md](./10-rename-api.md): 
+- [11-device-allocator.md](./11-device-allocator.md): 
+- [12-new-allocator.md](./12-new-allocator.md): 
+- [13-real-gguf.md](./13-real-gguf.md): 
+- [14-cuda-kernels.md](./14-cuda-kernels.md): 
+- [15-dtype-consistency.md](./15-dtype-consistency.md): 
+- [16-tests.md](./16-tests.md): 
+- [17-convert-attention-kernel.md](./17-convert-attention-kernel.md): 
