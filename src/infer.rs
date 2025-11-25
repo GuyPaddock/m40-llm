@@ -133,7 +133,7 @@ impl LoadedModel {
             }
         }
         // Shape checks (row-major): X [1 x d_model] · W[K=d_model x N] => out [1 x N]
-        let k_q = *wq.shape.get(0).unwrap_or(&0) as usize;
+        let k_q = *wq.shape.first().unwrap_or(&0) as usize;
         let n_q = *wq.shape.get(1).unwrap_or(&0) as usize;
         if k_q != d_model || n_q == 0 {
             anyhow::bail!(
@@ -142,7 +142,7 @@ impl LoadedModel {
             );
         }
         // Infer hidden_dim from up/gate
-        let k_up = *w_up.shape.get(0).unwrap_or(&0) as usize;
+        let k_up = *w_up.shape.first().unwrap_or(&0) as usize;
         let h_up = *w_up.shape.get(1).unwrap_or(&0) as usize;
         if k_up != d_model || h_up == 0 {
             anyhow::bail!(
@@ -152,7 +152,7 @@ impl LoadedModel {
         }
         let hidden_dim = h_up;
         // Down must be [hidden_dim, d_model]
-        let h_down = *w_down.shape.get(0).unwrap_or(&0) as usize;
+        let h_down = *w_down.shape.first().unwrap_or(&0) as usize;
         let n_down = *w_down.shape.get(1).unwrap_or(&0) as usize;
         if h_down != hidden_dim || n_down != d_model {
             anyhow::bail!(
@@ -766,7 +766,9 @@ impl LoadedModel {
 impl LoadedModel {
     /// Helper to run forward_one_token_minimal using mapped layer weights.
     /// Assumes embeddings have already produced x (f32) for the token index.
-    /// # Safety: device pointers must be valid on this context.
+    /// # Safety
+    /// - d_x_f32 and d_out_f32 must be valid device pointers on this model's CUDA context
+    /// - Pointers must reference buffers sized for the provided d_model and hidden dims of the mapped layer
     pub unsafe fn forward_one_token_with_layer(
         &self,
         d_x_f32: *const c_void,
