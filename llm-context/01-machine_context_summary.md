@@ -1,249 +1,85 @@
-# Machine Context Summary (for continued development)
-# Machine Context Summary — UPDATED 2025-11-20
+# Machine Context Summary — UPDATED 2025-11-23
 
-This section is an up-to-date snapshot meant for quick reference. Older historical notes remain below for context.
+Purpose: concise, actionable snapshot to resume m40-llm development fast.
 
-## Project identity
-- Name: m40-llm — Rust LLM runtime/server targeting Tesla M40 (Maxwell, sm_52)
-- Datatypes: FP16 storage (weights, KV), FP32 compute
-- Model format: GGUF via gguf-rs-lib/gguf-llms (planned); stable C FFI `m40llm_*`; optional HTTP server behind `server` feature
+Project identity
+- Name: m40-llm — Rust LLM runtime/server for NVIDIA Tesla M40 (Maxwell, sm_52)
+- Precision: FP16 storage (weights, KV), FP32 compute (max accuracy on M40)
+- Format: GGUF (via gguf-rs-lib + gguf-llms planned)
+- Architecture: Rust host + CUDA C/C++ kernels behind stable C FFI; optional HTTP server (feature "server")
 
-## Build/quality constraints
-- Keep CUDA and non-CUDA builds green under RUSTFLAGS=-D warnings
-- Ensure sm_52 SASS and compute_52 PTX are built (build.rs handles both)
-- Support CUDA-without-nvcc configurations using stub symbols (links cleanly)
-- Expose cfgs from build.rs: `nvcc` when nvcc is available; `have_cublas_header` only when `M40LLM_ENABLE_CUBLAS=1` and both cuBLAS header+library are detected
+State of the repo (HEAD)
+- CUDA parity grid for last-token attention is green on Tesla M40 with cuBLAS off/on
+- cuBLAS GEMM wrappers integrated; runtime toggle via M40LLM_ENABLE_CUBLAS=0|1
+- Minimal forward test path wired; forward_with_layer_smoke allocates KV with explicit heads/head_dim via allocate_kv_cache_with_layout
+- Clippy -D warnings clean for CUDA and non-CUDA builds
+- Docs added: docs/cuda_parity_and_kv_layout.md (how to run CUDA grid, cuBLAS toggling, KV layout API)
 
-## Current focus
-- t22-parity-check (in_progress): CUDA<->CPU parity for last-token attention (FP16 K/V, FP32 compute), across a coverage grid; run with and without cuBLAS when available
-- t26-precommit-enforcement-audit (done): enforce hooks via core.hooksPath and document setup in CONTRIBUTING
-- t27-force-push-rewritten-history (todo): pending approval to push with --force-with-lease
+How to run key tests quickly
+- Attention parity grid (fallback):
+  M40LLM_ENABLE_CUBLAS=0 cargo test --features=cuda -- --nocapture tests/attention_parity_cuda_grid.rs
+- Attention parity grid (cuBLAS):
+  M40LLM_ENABLE_CUBLAS=1 cargo test --features=cuda -- --nocapture tests/attention_parity_cuda_grid.rs
+- Projection/MLP wrappers:
+  cargo test --features=cuda -- --nocapture tests/proj_wrappers.rs tests/mlp_wrappers.rs
+- Forward smokes:
+  cargo test --features=cuda -- --nocapture tests/forward_with_layer_smoke.rs
+- Reference doc: docs/cuda_parity_and_kv_layout.md
 
-## Status snapshot (as of this update)
-- CPU reference last-token attention implemented in tests
-- CPU parity grid test added and passing: validates CPU library attention vs CPU reference across multiple (num_heads, head_dim, seq_len) with FP16-rounded K/V; fixed initial failure by re-initializing KVCache per seq_len
-- CUDA-gated GPU parity grid test added: mirrors CPU grid; casts K/V through f16 on host before upload; compares vs CPU reference at tol 1e-3; compiled and runs under the current environment’s CUDA gating; needs execution on a CUDA host with/without cuBLAS for full parity assessment
-- Stubs ensure CUDA-without-nvcc builds link and tests gate appropriately
+CUDA/cuBLAS toggles and build
+- build.rs detects NVCC, compiles sm_52 SASS and embeds compute_52 PTX
+- cuBLAS enabled only if header+lib detected and M40LLM_ENABLE_CUBLAS=1
+- Runtime device: use -1 to auto-select; tests prefer ctx_m40(); M40LLM_FORCE_M40=1 optional
 
-### Builds/tests
-- CPU (no-default-features): green
-- CUDA feature: builds; CUDA-gated tests compile/run depending on `nvcc`/headers; optional cuBLAS paths honored when `cublas_v2.h` is detected; PTX for compute_52 embedded
+Datatype policy (Maxwell-optimized)
+- Storage: FP16 weights and KV
+- Compute: FP32 everywhere (QKV GEMMs, attention, MLP, output proj)
+- Q: FP32; K/V: FP16 in cache; convert as needed at boundaries
 
+Important APIs and files
+- src/infer.rs: allocate_kv_cache_with_layout(max_seq, batch, heads, head_dim); forward_one_token_minimal/_with_layer; projection wrappers; attention helpers; guards in map_standard_layer
+- src/cuda.rs: CUDA FFI (context, GEMMs, KV ops); CPU fallbacks; ffi_debug_read_kv_token
+- build.rs: NVCC/cuBLAS detection, sm_52 + compute_52
+- tests/: attention_parity_cuda_grid.rs; proj_wrappers.rs; mlp_wrappers.rs; forward_with_layer_smoke.rs; KV cast tests
 
-## Priority plan to first tokens on M40 (P1–P3)
+Task tracker snapshot (grouped, current)
+- In progress
+  - t23-6-autoselect-m40: runtime auto-select + guardrails; tests use ctx_m40()
+  - t26-min-forward: minimal forward pass wiring; smoke path uses KV layout API
+  - t23-5e-attn-green: keep attention parity grid green during integration
+  - t26-3-guards: FP16 + shape invariants in map_standard_layer
+  - t26-5-docs: document minimal forward wiring/limits; KV layout + CUDA grid usage
+- Done
+  - t23-5a-qkv: integrate GEMM into Q/K/V projections; CUDA smoke passing
+  - t23-5b-mlp: integrate GEMM into MLP projections; parity smoke passing
+  - t23-5c-out-proj: integrate GEMM into output projection; smoke passing
+  - t23-5d-parity: numeric parity tests for Q/K/V/MLP/out-proj (~1e-3)
+  - t22-parity-check: CUDA<->CPU parity for last-token attention grid (M40) green
+  - t23-cublas-gemm: cuBLAS-enabled GEMM wrappers; tests pass with cuBLAS off/on
+  - t26-run-tests: non-CUDA and CUDA suites passing on M40 sm_52
+- Todo (near-term P1 focus)
+  - t24-gguf-integration: integrate gguf-rs-lib + gguf-llms (typed hparams/tensors)
+  - t24a-gguf-device-mapping: single upload; device pointers; dtype validation
+  - t25-rope-rmsnorm: verify RMSNorm; implement RoPE host+CUDA with tests
+  - t26-min-forward: complete 1-layer prefill+decode on toy weights; numeric checks
+  - t27-tokenizer: from GGUF metadata; tests on small vocabs
+  - t28-sampling: host softmax + top‑k/top‑p; optional CUDA later
+  - t29-e2e-decode: end‑to‑end decode loop with KV cache
+- Todo (supporting P2/P3)
+  - t31b-microbench-attn; t33 stream separation; t34 robustness/logging; t35 CI matrix; t36 minimal GGUF test model; t30 server feature; t23-6-docs/benches-ctx/warnings
 
-P1 — Critical path to first working inference
-- t24-gguf-integration: integrate gguf-rs-lib + gguf-llms; load real tensors/metadata
-- t24a-gguf-device-mapping: single upload; typed views; device pointer mapping/validation
-- t25-rope-rmsnorm: finish/verify RMSNorm; implement RoPE (host+CUDA) with tests
-- t22-parity-check: keep last‑token attention CUDA<->CPU parity green on M40
-- t23-5a-qkv: integrate GEMM into Q/K/V projections (FP16×FP32→FP32)
-- t23-5c-out-proj: integrate GEMM into output projection
-- t23-5b-mlp: integrate GEMM into MLP projections
-- t23-5d-parity: numeric parity tests for Q/K/V, MLP, out-proj (tol ~1e-3)
-- t26-min-forward: minimal one-layer forward (prefill + decode) using above pieces
-- t28-sampling: host softmax + top‑k/top‑p (to emit tokens)
-- t27-tokenizer: tokenizer from GGUF metadata
-- t29-e2e-decode: end‑to‑end decode loop using KV cache
+Roadmap (condensed)
+1) Keep parity green while finishing t26 minimal forward (prefill + decode); validate numerics
+2) Wire real GGUF (t24/t24a) and RoPE/RMSNorm (t25)
+3) Add tokenizer (t27) and host sampling (t28) to emit tokens
+4) Build e2e decode loop (t29); then expand performance (streams, microbenches, persistent decode)
 
-P2 — Important but not blocking first tokens
-- t23-cublas-gemm: continue/finish wrappers; supports P1 projections
-- t23-5e-attn-green: keep attention parity grid green during integrations
-- t36-min-gguf-model: tiny GGUF model for fast integration tests
+Quick resume checklist
+- cargo clippy --all-features -- -D warnings
+- Run attention parity grid with cuBLAS off/on; keep green
+- Use allocate_kv_cache_with_layout in tests/examples to prevent KV mismatches
+- Progress t26 minimal forward with small, verifiable increments
 
-P3 — Supporting environment/docs/cleanup
-- t23-6-autoselect-m40: runtime M40 auto-select + guardrails (landed; keep until docs)
-- t23-6-docs: CUDA_VISIBLE_DEVICES, M40LLM_FORCE_M40=1, and test enforcement
-- t23-6-benches-ctx: benches use cuda_env::ctx_m40()
-- t23-6-warnings: remove unused imports; warning-clean builds
-- t31b-microbench-attn: attention microbenchmarks on M40
-- t30-server: HTTP /generate wired to real decode (feature `server`)
-- t35-ci-matrix: broader CI matrix and setup docs
-- t34-robustness: error handling, logging, telemetry
-- t33-stream-sep: prefill/decode stream separation and priorities
-- t32-persistent-kernel: persistent decode kernel prototype
-
-## Roadmap (t23–t36)
-- t23 — cuBLAS GEMM integration for Q/K/V, MLP, and output projection
-  - Notes: Prefer cublasGemmEx with FP16 inputs / FP32 compute; explicit layouts; provide fallback when cuBLAS header missing; tests for row/col correctness
-- t24 — Integrate gguf-rs-lib + gguf-llms; replace hand-rolled GGUF parser
-  - Notes: Expose typed hparams and tensor views; keep non-CUDA builds green
-- t24a — GGUF device mapping from crate-provided tensor offsets
-  - Notes: Single upload; compute per-tensor device pointers; validate dtype
-- t25 — RoPE, RMSNorm kernels and host fallbacks
-- t26 — Minimal forward pass for one full layer (prefill + decode step)
-- t27 — Tokenizer integration from GGUF metadata
-- t28 — Sampling (softmax + top‑k/top‑p), start on host then optional CUDA
-- t29 — End‑to‑end decode loop using KV cache
-- t30 — HTTP server /generate wired to real decode and stream tokens (feature `server`)
-- t31 — Microbenchmarks: GEMM and attention on M40
-- t32 — Persistent decode kernel prototype (optional feature)
-- t33 — Prefill/Decode stream separation and priorities
-- t34 — Robust error handling, logging, telemetry
-- t35 — CI: Expand CUDA/non‑CUDA test matrix and document setup
-- t36 — Minimal GGUF test model for integration tests
-
-## Maintenance
-- Keep unsafe surfaces small and well-audited; replace unsafe Send/Sync with safer wrappers; avoid allow(dead_code)
-
-## Code state highlights
-- build.rs: compiles kernels for sm_52, embeds compute_52 PTX; links CUDA runtime; optionally links cuBLAS; defines cfg(nvcc) and cfg(have_cublas_header)
-- cuda/kernels.cu: attention_last_token_kernel with FP16 storage / FP32 compute; optional cuBLAS-backed GEMM where used
-- cuda/stub.c: stubs when no nvcc present
-- src/cuda.rs: CudaContext, KVCache FFI; CPU fallback under #[cfg(not(feature="cuda"))] for attention_last_token_f32
-- src/infer.rs: delegates to KVCache/CudaContext; shapes validated
-- tests: CPU attention parity grid; CUDA-gated smoke, GEMM layout, cast kernel, last-token attention, and CUDA parity grid
-
-## Next steps
-- Run CUDA parity grid on a CUDA host with and without cuBLAS (export M40LLM_ENABLE_CUBLAS=1 to enable); collect/report mismatches (tol ~1e-3)
-- Address any kernel/layout discrepancies revealed by the grid (odd head_dim, multiple heads, varying seq_len)
-- Proceed to t23 cuBLAS GEMM integration after t22 parity is confirmed
-
----
-
-
-## 0. Project Identity
-- Project name: **m40-llm**
-- Purpose: Build a **Rust-based LLM inference server** specifically optimized for **NVIDIA Tesla M40 (Maxwell, sm_52)**.
-- Architecture: Rust host + CUDA C++ kernels (via FFI).
-- Model format: **GGUF (Meta / llama.cpp)** loaded via `gguf-rs-lib` + `gguf-llms`.
-
-## 1. Hardware Constraints & Optimization Strategy (Maxwell/M40)
-- GPU: **Tesla M40 24GB**, Compute Capability **sm_52**, no tensor cores, ~7 TFLOP FP32, ~288 GB/s bandwidth.
-- **Optimal datatype policy:**
-    - **FP16 for weight storage & KV cache**
-    - **FP32 for all compute**
-    - Convert FP16→FP32 on load
-- **Architectural Targets:**
-    - Use large FP32 register file (255 regs/thread)
-    - Use shared memory heavily
-    - Use `__ldg`/readonly cache for weight loads
-    - Favor warp-parallelism and vectorized FP16 loads (`half2`)
-    - Avoid relying on tensor-core assumptions
-- **Concurrency:**
-    - Multi-stream design (decode, prefill, maintenance)
-    - Future: persistent decode kernel with ring buffer
-
-## 2. Model Execution Pipeline (Single Layer Forward)
-1. Input embedding (FP16 → FP32)
-2. RMSNorm (FP32 → FP32)
-3. Q/K/V projection GEMMs (FP16W × FP32 → FP32)
-4. Convert K/V: FP32 → FP16 before storing in KV
-5. Attention:
-    - Q = FP32
-    - K/V = FP16
-    - Compute in FP32
-    - Output context = FP32
-6. MLP (SwiGLLU):
-    - W_gate/W_up/W_down FP16
-    - Compute in FP32
-    - Output FP32
-7. Output projection FP16 × FP32 → FP32
-8. Logits FP32
-
-## 3. Implemented Components (as of this thread)
-### 3.1 Rust Side
-Project structure:
-```
-m40-llm/
-  Cargo.toml
-  build.rs
-  cuda/kernels.cu
-  src/
-    main.rs
-    cli.rs
-    gguf.rs
-    model.rs
-    cuda.rs
-    infer.rs
-    server.rs
-    tokenizer.rs
-```
-- DeviceAllocator abstraction implemented.
-- CudaContext wrapper implemented.
-
-### 3.2 CUDA Side
-- RMSNorm FP32→FP32 kernel done.
-- MLP (SwiGLU) FP16→FP32 kernel done.
-- FP32→FP16 cast kernel planned.
-- Basic attention kernel using FP32-Q, FP16-K/V integrated (index offsets TBD).
-
-## 4. KV Cache Design (in progress)
-Likely layout:
-```
-[layer][sequence][head][token][head_dim]
-```
-- FP16 K/V storage.
-- Needs finalized stride math for indexing.
-- Append path: FP32→FP16 cast then KV-store.
-
-## 5. Attention Kernel Specification
-- Inputs: FP32 Q, FP16 K/V
-- Output: FP32 context
-- Block = 1 head per block (initial impl)
-- Uses shared memory for scores
-- TODO: vectorized loads, warp-level reductions, fully optimized tiling.
-
-## 6. Testing Strategy
-- Rust `#[test]` framework.
-- CPU reference implementations for RMSNorm and MLP.
-- Pattern:
-    1. Deterministic input
-    2. CPU ref
-    3. GPU kernel
-    4. Compare diff
-- Ensures correctness of FFI + CUDA math.
-
-## 7. Future Components (planned)
-### 7.1 GEMM
-- Replace cuBLAS with custom Maxwell-tuned GEMM.
-- Features to add:
-    - Shared-memory tiling
-    - half2 vector loads
-    - FP32 accumulation
-    - double-buffering
-- Explore Stream-K style partitioning.
-
-### 7.2 Persistent Kernel
-- GPU loop for decode:
-    - pulls work via host-pinned ring buffer
-    - runs attention + MLP + sampling
-    - writes next token
-- Decode stream separate from prefill stream.
-
-### 7.3 End-to-End
-- Minimal 1-layer forward test with real GGUF.
-- Compare against llama.cpp/PyTorch outputs.
-
-## 8. Research Notes
-### Not Using:
-- Strassen / Winograd / modern exponent improvements (impractical).
-- AlphaTensor direct algorithms.
-
-### Relevant:
-- Maxwell-tuned `maxas` SGEMM.
-- Stream-K "work-centric" decomposition.
-- CUDA optimization tutorials.
-
-### Tuning Targets:
-- Occupancy vs register pressure.
-- SM partitioning.
-- Warp-level softmax.
-- KV locality.
-- Prefill scheduling.
-
-## 9. TODO List
-1. Final KV cache layout + stride offsets.
-2. FP32→FP16 cast kernel for KV append.
-3. Integrate GEMM backend.
-4. Attention CPU/GPU test.
-5. Finish KV indexing in CUDA kernel.
-6. Dummy GGUF mini-model for integration testing.
-7. Microbenchmarks (GEMM + attention).
-8. Persistent kernel design.
-
-## 10. Current Stability
-- Dtype policy consistent.
-- RMSNorm + MLP validated.
-- Attention kernel functional but indexing incomplete.
-- Full model execution pending GEMM + KV integration.
+See also
+- llm-context/00-index.md: curated summaries for all design/context notes
+- docs/cuda_parity_and_kv_layout.md: how to run CUDA parity grid and use KV layout API
