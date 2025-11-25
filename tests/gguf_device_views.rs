@@ -62,3 +62,53 @@ fn gguf_device_views_basic_f16_size_and_shape() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn gguf_device_views_f32_size_and_shape() {
+    // GGUF with 1 tensor F32 [3,5]
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "m40llm_gguf_tensor_f32_{}.gguf",
+        std::process::id()
+    ));
+
+    let (k, n) = (3u64, 5u64);
+    let dtype = 0u32; // F32 in our mapping
+
+    {
+        let mut f = File::create(&path).unwrap();
+        // header
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3); // version
+        write_le_u64(&mut f, 1); // n_tensors
+        write_le_u64(&mut f, 0); // n_kv
+
+        // tensor[0]
+        write_string(&mut f, "W32");
+        write_le_u32(&mut f, 2); // n_dims
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, dtype); // F32
+        write_le_u64(&mut f, 0); // offset from data region
+
+        // data region: fill with zeros of size bytes_per_elem * K * N
+        let nbytes = (k * n) as usize * 4; // f32
+        f.write_all(&vec![0u8; nbytes]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    assert_eq!(gg.tensors.len(), 1);
+    assert!(gg.data_offset > 0);
+
+    let bytes = std::fs::read(&path).unwrap();
+    let lm = LoadedModel::from_gguf(gg, bytes, -1).expect("from_gguf");
+
+    let w = lm.device_tensors.get("W32").expect("W32 view exists");
+    assert!(matches!(w.dtype, GgmlDType::F32));
+    assert_eq!(w.shape, vec![k, n]);
+    assert_eq!(w.byte_offset, 0);
+    assert_eq!(w.nbytes, (k * n) as usize * 4);
+
+    let _ = std::fs::remove_file(&path);
+}

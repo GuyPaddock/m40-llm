@@ -162,7 +162,7 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
 
     // Run one layer
     unsafe {
-        let _ = lm.forward_one_token_with_layer(d_x as *const c_void, 0, 0, 1, d_out)?;
+        lm.forward_one_token_with_layer(d_x as *const c_void, 0, 0, 1, d_out)?;
     }
 
     // Read back and assert finiteness
