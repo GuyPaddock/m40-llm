@@ -148,9 +148,8 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     let mut lm = LoadedModel::from_gguf(gg, weights, -1)?; // auto-select device
 
     // Allocate KV cache with matching heads
-    lm.allocate_kv_cache(8, 1)?; // defaults to (8 heads, 64 dim) in current stub; override not exposed here
-                                 // For attention helper validation, set KV layout directly to match our small dims
-                                 // We can't change kv layout via public API yet; tests relying solely on run_attention layout may be limited.
+    // Allocate KV cache with explicit heads and head_dim to match d_model
+    lm.allocate_kv_cache_with_layout(8, 1, num_heads, head_dim)?;
 
     // Load embedding for token 0
     let d_x = lm.cuda.device_malloc(d_model * 4)?;
