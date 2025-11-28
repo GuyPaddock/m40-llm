@@ -7,6 +7,8 @@ use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
+use axum::http::{HeaderName, HeaderValue};
+use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenerateRequest {
@@ -30,9 +32,21 @@ unsafe impl Send for AppState {}
 unsafe impl Sync for AppState {}
 
 pub fn app_router(state: Arc<AppState>) -> Router {
-    // Wrap state in an extractor that is Clone + Send + Sync by using Arc
+    let cors = CorsLayer::very_permissive();
+    let xfo = SetResponseHeaderLayer::if_not_present(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("ALLOWALL"),
+    );
+    let csp = SetResponseHeaderLayer::if_not_present(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static("frame-ancestors *"),
+    );
+
     Router::new()
         .route("/generate", post(generate))
+        .layer(csp)
+        .layer(xfo)
+        .layer(cors)
         .with_state(state)
 }
 

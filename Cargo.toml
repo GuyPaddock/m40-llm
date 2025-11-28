@@ -36,7 +36,7 @@ gguf-rs-lib = { version = "0.2", optional = true }
 
 [features]
 default = []
-server = ["dep:axum"]
+server = ["dep:axum", "dep:tower-http"]
 cuda = []
 # Enable extended GGUF integration via external crates
 # Off by default to keep minimal deps for non-integration builds
@@ -44,6 +44,11 @@ gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]
 
 [dependencies.axum]
 version = "0.7"
+optional = true
+
+[dependencies.tower-http]
+version = "0.5"
+features = ["cors", "set-header"]
 optional = true
 
 
