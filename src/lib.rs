@@ -8,3 +8,4 @@ pub mod gguf_ext;
 pub mod model;
 #[cfg(feature = "server")]
 pub mod server;
+pub mod tokenizer;
