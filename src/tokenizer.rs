@@ -14,13 +14,21 @@ pub enum TokenizerKind {
 #[derive(Debug, Clone)]
 pub struct Tokenizer {
     kind: TokenizerKind,
-    // For future use: vocab, merges, special tokens, etc.
+    // Special token IDs when provided by GGUF metadata
+    bos_id: Option<u32>,
+    eos_id: Option<u32>,
+    pad_id: Option<u32>,
+    unk_id: Option<u32>,
 }
 
 impl Tokenizer {
     pub fn byte_level() -> Self {
         Self {
             kind: TokenizerKind::ByteLevel,
+            bos_id: None,
+            eos_id: None,
+            pad_id: None,
+            unk_id: None,
         }
     }
 
@@ -61,7 +69,32 @@ impl Tokenizer {
             TokenizerKind::ByteLevel
         };
 
-        Ok(Self { kind })
+        // Special token IDs are optional; try GGUF keys commonly used by GGUF/llama.cpp
+        use crate::gguf::{GgufScalar, GgufValue};
+        let get_u32 = |k: &str| -> Option<u32> {
+            metadata.get(k).and_then(|v| match v {
+                GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
+                GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
+                _ => None,
+            })
+        };
+        // Common GGUF keys: tokenizer.ggml.* or special_tokens.*
+        let bos_id =
+            get_u32("tokenizer.ggml.bos_token_id").or_else(|| get_u32("special_tokens.bos_id"));
+        let eos_id =
+            get_u32("tokenizer.ggml.eos_token_id").or_else(|| get_u32("special_tokens.eos_id"));
+        let pad_id =
+            get_u32("tokenizer.ggml.pad_token_id").or_else(|| get_u32("special_tokens.pad_id"));
+        let unk_id =
+            get_u32("tokenizer.ggml.unknown_token_id").or_else(|| get_u32("special_tokens.unk_id"));
+
+        Ok(Self {
+            kind,
+            bos_id,
+            eos_id,
+            pad_id,
+            unk_id,
+        })
     }
 
     /// Encode a UTF-8 string into token IDs.

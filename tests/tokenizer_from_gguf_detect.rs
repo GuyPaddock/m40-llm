@@ -31,3 +31,28 @@ fn detection_sees_bpe_keys() {
     let t = Tokenizer::from_gguf_metadata(&meta).unwrap();
     assert!(matches!(t.kind(), TokenizerKind::Bpe));
 }
+
+#[test]
+fn special_tokens_extract_from_metadata() {
+    use m40_llm::gguf::{GgufScalar, GgufValue};
+    use std::collections::HashMap;
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("bpe".to_string())),
+    );
+    meta.insert(
+        "tokenizer.ggml.bos_token_id".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    meta.insert(
+        "tokenizer.ggml.eos_token_id".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(2)),
+    );
+    meta.insert(
+        "special_tokens.pad_id".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(3)),
+    );
+    let t = Tokenizer::from_gguf_metadata(&meta).unwrap();
+    assert!(matches!(t.kind(), TokenizerKind::Bpe));
+}
