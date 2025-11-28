@@ -14,8 +14,7 @@ fn detection_prefers_sp_when_sentencepiece_present() {
         GgufValue::Scalar(m40_llm::gguf::GgufScalar::Str("dummy".to_string())),
     );
     let t = Tokenizer::from_gguf_metadata(&meta).unwrap();
-    // For now we still return ByteLevel, but detection scaffolding should exist; assert access works
-    assert!(matches!(t.kind(), TokenizerKind::ByteLevel));
+    assert!(matches!(t.kind(), TokenizerKind::SentencePiece));
 }
 
 #[test]
@@ -30,5 +29,5 @@ fn detection_sees_bpe_keys() {
         GgufValue::Scalar(m40_llm::gguf::GgufScalar::Str("dummy_merges".to_string())),
     );
     let t = Tokenizer::from_gguf_metadata(&meta).unwrap();
-    assert!(matches!(t.kind(), TokenizerKind::ByteLevel));
+    assert!(matches!(t.kind(), TokenizerKind::Bpe));
 }

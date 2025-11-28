@@ -37,15 +37,31 @@ impl Tokenizer {
     pub fn from_gguf_metadata(
         metadata: &std::collections::HashMap<String, crate::gguf::GgufValue>,
     ) -> Result<Self> {
-        // placeholder detection; currently returns byte-level until SP/BPE added
-        let _maybe_kind = metadata
+        // Heuristic detection of tokenizer kind:
+        let model_str = metadata
             .get("tokenizer.ggml.model")
-            .and_then(|v| v.as_str());
-        let _maybe_sp = metadata.get("sentencepiece.model").and_then(|v| v.as_str());
-        let _maybe_bpe = metadata
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_ascii_lowercase());
+        let has_sp = metadata
+            .get("sentencepiece.model")
+            .and_then(|v| v.as_str())
+            .is_some()
+            || matches!(model_str.as_deref(), Some("spm" | "sentencepiece"));
+        let has_bpe = metadata
             .get("tokenizer.ggml.bpe_merges")
-            .and_then(|v| v.as_str());
-        Ok(Self::byte_level())
+            .and_then(|v| v.as_str())
+            .is_some()
+            || matches!(model_str.as_deref(), Some("bpe"));
+
+        let kind = if has_sp {
+            TokenizerKind::SentencePiece
+        } else if has_bpe {
+            TokenizerKind::Bpe
+        } else {
+            TokenizerKind::ByteLevel
+        };
+
+        Ok(Self { kind })
     }
 
     /// Encode a UTF-8 string into token IDs.
