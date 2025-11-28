@@ -28,5 +28,11 @@ pub enum Commands {
         model: String,
         #[arg(long, default_value = "0.0.0.0:11434")]
         addr: String,
+        /// CUDA device id to use; -1 = auto-select Tesla M40 (sm_52) if available
+        #[arg(long, default_value_t = -1)]
+        device_id: i32,
+        /// If set, abort if the active device is not sm_52 (Tesla M40)
+        #[arg(long, default_value_t = false)]
+        require_sm52: bool,
     },
 }

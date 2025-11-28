@@ -45,9 +45,14 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Run { model, addr } => {
+        Commands::Run {
+            model,
+            addr,
+            device_id,
+            require_sm52,
+        } => {
             // Silence unused variable warnings when server feature is off
-            let _ = (&model, &addr);
+            let _ = (&model, &addr, device_id, require_sm52);
             #[cfg(feature = "server")]
             {
                 let local = model::list_models()?
@@ -72,8 +77,30 @@ async fn main() -> Result<()> {
 
                 let gguf_bytes = fs::read(&local.path)?;
                 let gguf_model = gguf::load_gguf(&local.path)?;
-                let mut loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
-                                                                                            // Allocate KV cache upfront using config; use a conservative default length
+                let mut loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, device_id)?; // device selection
+
+                // Optional: enforce sm_52 guard
+                if require_sm52 {
+                    let props = loaded.cuda.current_device_props()?;
+                    if !(props.major == 5 && props.minor == 2) {
+                        anyhow::bail!(
+                            "require_sm52 set but active device is '{}' sm_{}{} (id {})",
+                            props.name,
+                            props.major,
+                            props.minor,
+                            props.device_id
+                        );
+                    }
+                } else {
+                    // Informative log of active device
+                    let props = loaded.cuda.current_device_props()?;
+                    println!(
+                        "[cuda] device: '{}' (id {}), sm_{}{}",
+                        props.name, props.device_id, props.major, props.minor
+                    );
+                }
+
+                // Allocate KV cache upfront using config; use a conservative default length
                 let max_len = 1024u32;
                 let _ = loaded.allocate_kv_cache(max_len, 1);
 
