@@ -1,14 +1,10 @@
 #![cfg(feature = "server")]
 
 use anyhow::Result;
+use half::f16;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use m40_llm::server::{app_router, AppState, GenerateRequest, GenerateResponse};
-// use axum::http::StatusCode;
-use axum::routing::post;
-use axum::{Json, Router};
-use half::f16;
-use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;

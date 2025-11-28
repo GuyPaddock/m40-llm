@@ -1,5 +1,6 @@
 // tests/helpers.rs
 #![cfg(all(feature = "cuda", nvcc))]
+#![allow(dead_code)]
 
 use anyhow::{anyhow, Result};
 use m40_llm::cuda::CudaContext;

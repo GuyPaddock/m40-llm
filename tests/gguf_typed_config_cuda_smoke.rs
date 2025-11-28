@@ -3,10 +3,10 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::gguf::{load_gguf, GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
+use m40_llm::gguf::load_gguf;
 use m40_llm::infer::LoadedModel;
 use std::fs::File;
-use std::io::{Read, Seek, Write};
+use std::io::{Read, Write};
 
 fn write_le_u32(f: &mut File, v: u32) {
     f.write_all(&v.to_le_bytes()).unwrap();
