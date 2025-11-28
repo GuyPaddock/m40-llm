@@ -72,7 +72,10 @@ async fn main() -> Result<()> {
 
                 let gguf_bytes = fs::read(&local.path)?;
                 let gguf_model = gguf::load_gguf(&local.path)?;
-                let loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
+                let mut loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, 0)?; // GPU 0
+                                                                                            // Allocate KV cache upfront using config; use a conservative default length
+                let max_len = 1024u32;
+                let _ = loaded.allocate_kv_cache(max_len, 1);
 
                 let state = Arc::new(server::AppState { model: loaded });
                 let router = server::app_router(state);
