@@ -36,6 +36,19 @@ impl Tokenizer {
         &self.kind
     }
 
+    pub fn bos_id(&self) -> Option<u32> {
+        self.bos_id
+    }
+    pub fn eos_id(&self) -> Option<u32> {
+        self.eos_id
+    }
+    pub fn pad_id(&self) -> Option<u32> {
+        self.pad_id
+    }
+    pub fn unk_id(&self) -> Option<u32> {
+        self.unk_id
+    }
+
     /// Construct from GGUF metadata when available. Fallback to byte-level.
     /// Detection heuristics (non-exhaustive):
     /// - If metadata contains a SentencePiece model (e.g., "tokenizer.ggml.model" == "spm" or
@@ -107,6 +120,45 @@ impl Tokenizer {
         }
     }
 
+    /// Encode and optionally add BOS/EOS if the IDs are known from metadata.
+    pub fn encode_with_specials(
+        &self,
+        text: &str,
+        add_bos: bool,
+        add_eos: bool,
+    ) -> Result<Vec<u32>> {
+        let mut ids = self.encode(text)?;
+        if add_bos {
+            if let Some(bos) = self.bos_id {
+                ids.insert(0, bos);
+            }
+        }
+        if add_eos {
+            if let Some(eos) = self.eos_id {
+                ids.push(eos);
+            }
+        }
+        Ok(ids)
+    }
+
+    /// Determine if an id is one of the configured special tokens.
+    pub fn is_special(&self, id: u32) -> bool {
+        self.bos_id == Some(id)
+            || self.eos_id == Some(id)
+            || self.pad_id == Some(id)
+            || self.unk_id == Some(id)
+    }
+
+    /// Filter out BOS/EOS/PAD tokens. Leaves UNK in place since it's a content-bearing token.
+    pub fn strip_non_content_specials(&self, ids: &[u32]) -> Vec<u32> {
+        ids.iter()
+            .copied()
+            .filter(|&id| {
+                Some(id) != self.bos_id && Some(id) != self.eos_id && Some(id) != self.pad_id
+            })
+            .collect()
+    }
+
     /// Decode token IDs back into a String.
     /// Invalid byte values (>255) are replaced with 0x3F ('?').
     pub fn decode(&self, ids: &[u32]) -> Result<String> {
@@ -119,5 +171,11 @@ impl Tokenizer {
                 String::from_utf8(bytes).map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"))
             }
         }
+    }
+
+    /// Decode while ignoring BOS/EOS/PAD tokens if they are configured.
+    pub fn decode_ignoring_specials(&self, ids: &[u32]) -> Result<String> {
+        let filtered = self.strip_non_content_specials(ids);
+        self.decode(&filtered)
     }
 }

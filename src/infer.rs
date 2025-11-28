@@ -57,6 +57,14 @@ impl LoadedModel {
         self.device_tensors.get(name)
     }
 
+    fn get_f32_meta(&self, key: &str) -> Option<f32> {
+        use crate::gguf::{GgufScalar, GgufValue};
+        self.gguf.metadata.get(key).and_then(|v| match v {
+            GgufValue::Scalar(GgufScalar::F32(x)) => Some(*x),
+            _ => None,
+        })
+    }
+
     fn find_tensor_any<'a>(&'a self, candidates: &[String]) -> Result<&'a DeviceTensorView> {
         for c in candidates {
             if let Some(v) = self.device_tensor(c) {
@@ -91,6 +99,7 @@ impl LoadedModel {
                 tok.shape
             );
         }
+        let vocab_rows = tok.shape.get(0).copied().unwrap_or(0) as usize;
         let d_model_from_tok = tok.shape.get(1).copied().unwrap_or(0) as usize;
         let d_model = d_model_meta.unwrap_or(d_model_from_tok);
         if d_model == 0 {
@@ -102,6 +111,23 @@ impl LoadedModel {
                 d_model_from_tok,
                 d_model
             );
+        }
+        // If metadata has vocab_size, ensure it matches tok_embeddings rows
+        if let Some(v_meta) = self.get_u32_meta("llama.vocab_size") {
+            let v_meta = v_meta as usize;
+            if v_meta != vocab_rows {
+                anyhow::bail!(
+                    "vocab_size meta {} != tok_embeddings rows {}",
+                    v_meta,
+                    vocab_rows
+                );
+            }
+        }
+        // If metadata has block_count, ensure requested layer is in-range
+        if let Some(n_layers) = self.get_u32_meta("llama.block_count") {
+            if layer as u32 >= n_layers {
+                anyhow::bail!("layer {} out of range (block_count={})", layer, n_layers);
+            }
         }
         // If typed_config present, enforce embedding_length matches d_model
         #[cfg(feature = "gguf_ext")]
@@ -256,6 +282,23 @@ impl LoadedModel {
         #[cfg(feature = "gguf_ext")]
         if let Some(cfg) = &self.typed_config {
             let h_cfg = cfg.feed_forward_length as usize;
+            // Optional: validate context_length and rope base/scale if present in metadata
+            if let Some(ctx_len) = self.get_u32_meta("llama.context_length") {
+                if ctx_len == 0 {
+                    anyhow::bail!("llama.context_length must be > 0");
+                }
+            }
+            if let Some(base) = self.get_f32_meta("llama.rope.freq_base") {
+                if !base.is_finite() || base <= 0.0 {
+                    anyhow::bail!("llama.rope.freq_base must be finite and > 0");
+                }
+            }
+            if let Some(scale) = self.get_f32_meta("llama.rope.freq_scale") {
+                if !scale.is_finite() || scale <= 0.0 {
+                    anyhow::bail!("llama.rope.freq_scale must be finite and > 0");
+                }
+            }
+
             if h_cfg != hidden_dim {
                 anyhow::bail!(
                     "typed_config.feed_forward_length {} != inferred hidden_dim {}",
