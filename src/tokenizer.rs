@@ -49,6 +49,20 @@ impl Tokenizer {
         self.unk_id
     }
 
+    // Mutable setters used in tests to simulate GGUF-provided IDs
+    pub fn set_bos_id(&mut self, id: Option<u32>) {
+        self.bos_id = id;
+    }
+    pub fn set_eos_id(&mut self, id: Option<u32>) {
+        self.eos_id = id;
+    }
+    pub fn set_pad_id(&mut self, id: Option<u32>) {
+        self.pad_id = id;
+    }
+    pub fn set_unk_id(&mut self, id: Option<u32>) {
+        self.unk_id = id;
+    }
+
     /// Construct from GGUF metadata when available. Fallback to byte-level.
     /// Detection heuristics (non-exhaustive):
     /// - If metadata contains a SentencePiece model (e.g., "tokenizer.ggml.model" == "spm" or
@@ -141,12 +155,10 @@ impl Tokenizer {
         Ok(ids)
     }
 
-    /// Determine if an id is one of the configured special tokens.
+    /// Determine if an id is a non-content special token (BOS/EOS/PAD).
+    /// UNK is treated as content-bearing and returns false here.
     pub fn is_special(&self, id: u32) -> bool {
-        self.bos_id == Some(id)
-            || self.eos_id == Some(id)
-            || self.pad_id == Some(id)
-            || self.unk_id == Some(id)
+        self.bos_id == Some(id) || self.eos_id == Some(id) || self.pad_id == Some(id)
     }
 
     /// Filter out BOS/EOS/PAD tokens. Leaves UNK in place since it's a content-bearing token.

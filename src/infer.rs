@@ -282,29 +282,29 @@ impl LoadedModel {
         #[cfg(feature = "gguf_ext")]
         if let Some(cfg) = &self.typed_config {
             let h_cfg = cfg.feed_forward_length as usize;
-            // Optional: validate context_length and rope base/scale if present in metadata
-            if let Some(ctx_len) = self.get_u32_meta("llama.context_length") {
-                if ctx_len == 0 {
-                    anyhow::bail!("llama.context_length must be > 0");
-                }
-            }
-            if let Some(base) = self.get_f32_meta("llama.rope.freq_base") {
-                if !base.is_finite() || base <= 0.0 {
-                    anyhow::bail!("llama.rope.freq_base must be finite and > 0");
-                }
-            }
-            if let Some(scale) = self.get_f32_meta("llama.rope.freq_scale") {
-                if !scale.is_finite() || scale <= 0.0 {
-                    anyhow::bail!("llama.rope.freq_scale must be finite and > 0");
-                }
-            }
-
             if h_cfg != hidden_dim {
                 anyhow::bail!(
                     "typed_config.feed_forward_length {} != inferred hidden_dim {}",
                     h_cfg,
                     hidden_dim
                 );
+            }
+        }
+
+        // Optional: validate context_length and rope base/scale if present in raw metadata
+        if let Some(ctx_len) = self.get_u32_meta("llama.context_length") {
+            if ctx_len == 0 {
+                anyhow::bail!("llama.context_length must be > 0");
+            }
+        }
+        if let Some(base) = self.get_f32_meta("llama.rope.freq_base") {
+            if !base.is_finite() || base <= 0.0 {
+                anyhow::bail!("llama.rope.freq_base must be finite and > 0");
+            }
+        }
+        if let Some(scale) = self.get_f32_meta("llama.rope.freq_scale") {
+            if !scale.is_finite() || scale <= 0.0 {
+                anyhow::bail!("llama.rope.freq_scale must be finite and > 0");
             }
         }
 
