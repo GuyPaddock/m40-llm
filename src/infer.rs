@@ -26,6 +26,8 @@ pub struct LoadedModel {
     pub device_tensors: HashMap<String, DeviceTensorView>,
     #[cfg(feature = "cuda")]
     pub d_weights_base: *mut c_void,
+    #[cfg(not(feature = "cuda"))]
+    pub host_weights: Vec<u8>,
     #[cfg(feature = "gguf_ext")]
     pub typed_config: Option<gguf_llms::model::ModelConfig>,
 }
@@ -375,6 +377,7 @@ impl LoadedModel {
             );
         }
         let weights_bytes = &gguf_bytes[data_off..];
+        #[cfg(feature = "cuda")]
         let d_base = cuda.upload_weights(weights_bytes)?;
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
@@ -396,7 +399,11 @@ impl LoadedModel {
                 }
             }
         }
+        #[cfg(feature = "cuda")]
         let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_bytes.len())?;
+        #[cfg(not(feature = "cuda"))]
+        let device_tensors =
+            build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_bytes.len())?;
         // Optionally, derive typed model config via gguf_ext from the same in-memory bytes
         #[cfg(feature = "gguf_ext")]
         let typed_cfg = crate::gguf_ext::extract_model_config_from_bytes(&gguf_bytes).ok();
@@ -408,6 +415,8 @@ impl LoadedModel {
             device_tensors,
             #[cfg(feature = "cuda")]
             d_weights_base: d_base,
+            #[cfg(not(feature = "cuda"))]
+            host_weights: weights_bytes.to_vec(),
             #[cfg(feature = "gguf_ext")]
             typed_config: typed_cfg,
         })
@@ -1318,21 +1327,59 @@ impl LoadedModel {
     pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
         if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
             #[cfg(feature = "cuda")]
-            let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
-            #[cfg(not(feature = "cuda"))]
-            let d_w: *const c_void = std::ptr::null();
-            let bytes_logits = vocab * std::mem::size_of::<f32>();
-            let d_logits = self.cuda.device_malloc(bytes_logits)?;
-            self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)?;
-            let mut host = vec![0u8; bytes_logits];
-            self.cuda
-                .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
-            let mut logits = Vec::with_capacity(vocab);
-            for ch in host.chunks_exact(4) {
-                logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            {
+                let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
+                let bytes_logits = vocab * std::mem::size_of::<f32>();
+                let d_logits = self.cuda.device_malloc(bytes_logits)?;
+                self.matmul_f32xf16_f32(
+                    d_hidden_f32,
+                    d_w,
+                    d_logits,
+                    1,
+                    vocab as i32,
+                    d_model as i32,
+                )?;
+                let mut host = vec![0u8; bytes_logits];
+                self.cuda
+                    .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
+                let mut logits = Vec::with_capacity(vocab);
+                for ch in host.chunks_exact(4) {
+                    logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                let _ = self.cuda.device_free(d_logits);
+                return Ok(logits);
             }
-            let _ = self.cuda.device_free(d_logits);
-            return Ok(logits);
+            #[cfg(not(feature = "cuda"))]
+            {
+                // Host path: compute logits = hidden (1xD f32) × W (D×V f16) on CPU using host-stored weights
+                let d = d_model as usize;
+                let v = vocab as usize;
+                // SAFETY: treat d_hidden_f32 as host pointer to D f32s in non-CUDA builds
+                let hidden_bytes =
+                    unsafe { std::slice::from_raw_parts(d_hidden_f32 as *const u8, d * 4) };
+                let mut hidden = vec![0f32; d];
+                for (i, ch) in hidden_bytes.chunks_exact(4).enumerate() {
+                    hidden[i] = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
+                }
+                // Weights are row-major [D, V] in f16
+                let off = lm.byte_offset as usize;
+                let w_bytes = &self.host_weights[off..off + d * v * 2];
+                let mut logits = vec![0f32; v];
+                for col in 0..v {
+                    let mut acc = 0f32;
+                    let mut idx = col * 2; // element (row=0,col) byte index within the 2-byte stream
+                    for row in 0..d {
+                        let lo = w_bytes[idx] as u16;
+                        let hi = w_bytes[idx + 1] as u16;
+                        let bits = lo | (hi << 8);
+                        let w = half::f16::from_bits(bits).to_f32();
+                        acc += hidden[row] * w;
+                        idx += v * 2; // move to next row at same column
+                    }
+                    logits[col] = acc;
+                }
+                return Ok(logits);
+            }
         }
         // Fallback: use tok_embeddings^T as lm_head on host
         let tok = self
@@ -1357,23 +1404,36 @@ impl LoadedModel {
         let row_bytes = d_model * 2;
         let mut logits = vec![0f32; vocab];
         for v in 0..vocab {
-            let mut row_h = vec![0u8; row_bytes as usize];
             #[cfg(feature = "cuda")]
             {
+                let mut row_h = vec![0u8; row_bytes as usize];
                 let row_dev = (self.d_weights_base as usize
                     + tok.byte_offset as usize
                     + v * row_bytes as usize) as *const c_void;
                 self.cuda
                     .memcpy_d2h(row_h.as_mut_ptr() as *mut c_void, row_dev, row_bytes)?;
+                let mut acc = 0f32;
+                for i in 0..d_model {
+                    let lo = row_h[i * 2];
+                    let hi = row_h[i * 2 + 1];
+                    let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
+                    acc += out_f[i] * val;
+                }
+                logits[v] = acc;
             }
-            let mut acc = 0f32;
-            for i in 0..d_model {
-                let lo = row_h[i * 2];
-                let hi = row_h[i * 2 + 1];
-                let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
-                acc += out_f[i] * val;
+            #[cfg(not(feature = "cuda"))]
+            {
+                let off = tok.byte_offset as usize + v * row_bytes as usize;
+                let row_slice = &self.host_weights[off..off + row_bytes as usize];
+                let mut acc = 0f32;
+                for i in 0..d_model {
+                    let lo = row_slice[i * 2];
+                    let hi = row_slice[i * 2 + 1];
+                    let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
+                    acc += out_f[i] * val;
+                }
+                logits[v] = acc;
             }
-            logits[v] = acc;
         }
         Ok(logits)
     }

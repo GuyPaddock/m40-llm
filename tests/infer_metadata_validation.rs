@@ -74,6 +74,8 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         device_tensors,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        #[cfg(not(feature = "cuda"))]
+        host_weights: Vec::new(),
         #[cfg(feature = "gguf_ext")]
         typed_config: None,
     }
