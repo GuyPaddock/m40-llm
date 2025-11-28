@@ -131,6 +131,24 @@ fn main() {
             if let Some(ref libp) = conda_targets_lib {
                 println!("cargo:rustc-link-search=native={}", libp);
             }
+            // Embed RPATH so test binaries can locate CUDA/cuBLAS without external LD_LIBRARY_PATH
+            // Prefer Conda paths when present
+            if have_cublas {
+                if let Some(ref libp) = conda_targets_lib {
+                    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", libp);
+                }
+                if let Some(ref libp) = conda_lib {
+                    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", libp);
+                }
+                // Common system locations as fallback RPATHs
+                for p in [
+                    "/usr/local/cuda/lib64",
+                    "/usr/lib/x86_64-linux-gnu",
+                    "/usr/lib64",
+                ] {
+                    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", p);
+                }
+            }
             println!("cargo:rustc-link-lib=static=m40llm_kernels");
             println!("cargo:rustc-link-lib=cudart");
             if have_cublas {
