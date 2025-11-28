@@ -54,14 +54,17 @@ fn gemm_f16_storage_f32_compute_rowmajor_shapes() -> Result<()> {
     let db = ctx.device_malloc(bytes_b)?;
     let dc = ctx.device_malloc(bytes_c)?;
 
-    ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
-    ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
-
-    ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    unsafe {
+        ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
+        ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    }
 
     // Copy back result in half, convert to f32, compare to expected
     let mut hc = vec![0u8; bytes_c];
-    ctx.memcpy_d2h(hc.as_mut_ptr() as *mut c_void, dc as *const c_void, bytes_c)?;
+    unsafe {
+        ctx.memcpy_d2h(hc.as_mut_ptr() as *mut c_void, dc as *const c_void, bytes_c)?;
+    }
 
     // Convert 4 half elements to f32
     let mut got = [0f32; 4];
@@ -78,9 +81,11 @@ fn gemm_f16_storage_f32_compute_rowmajor_shapes() -> Result<()> {
         assert!(diff <= 0.75, "got {:?} expect {:?}", got, expect);
     }
 
-    ctx.device_free(da)?;
-    ctx.device_free(db)?;
-    ctx.device_free(dc)?;
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
     Ok(())
 }
 
@@ -112,13 +117,16 @@ fn gemm_f16_storage_f32_compute_rectangular() -> Result<()> {
     let db = ctx.device_malloc(bytes_b)?;
     let dc = ctx.device_malloc(bytes_c)?;
 
-    ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
-    ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
-
-    ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    unsafe {
+        ctx.memcpy_h2d(da, ha.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, hb.as_ptr() as *const c_void, bytes_b)?;
+        ctx.gemm_f16_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    }
 
     let mut hc = vec![0u8; bytes_c];
-    ctx.memcpy_d2h(hc.as_mut_ptr() as *mut c_void, dc as *const c_void, bytes_c)?;
+    unsafe {
+        ctx.memcpy_d2h(hc.as_mut_ptr() as *mut c_void, dc as *const c_void, bytes_c)?;
+    }
 
     let mut got = vec![0f32; (m * n) as usize];
     for i in 0..got.len() {
@@ -134,8 +142,10 @@ fn gemm_f16_storage_f32_compute_rectangular() -> Result<()> {
         assert!(diff <= 0.75, "got {:?} expect {:?}", got, expect);
     }
 
-    ctx.device_free(da)?;
-    ctx.device_free(db)?;
-    ctx.device_free(dc)?;
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
     Ok(())
 }

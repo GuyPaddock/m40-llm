@@ -1,6 +1,7 @@
 // cuda/stub.c - stubbed CUDA FFI for environments without NVCC/CUDA
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -8,6 +9,20 @@ extern "C" {
 
 typedef struct M40llmCudaContext { int device_id; } M40llmCudaContext;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
+
+int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
+    if (name_buf && buf_len) {
+        const char* name = "stub";
+        size_t n = strlen(name);
+        if (n + 1 > buf_len) n = buf_len - 1;
+        memcpy(name_buf, name, n);
+        name_buf[n] = '\0';
+    }
+    if (major) *major = 0;
+    if (minor) *minor = 0;
+    if (device_id) *device_id = -1;
+    return -1; // indicate unavailable in stub
+}
 
 int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
     (void)ctx; (void)bytes; (void)out_ptr; return -1;

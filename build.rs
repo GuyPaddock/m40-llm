@@ -32,13 +32,19 @@ fn main() {
             let conda_prefix = env::var("CONDA_PREFIX").ok();
             let conda_include = conda_prefix.as_ref().map(|p| format!("{}/include", p));
             let conda_lib = conda_prefix.as_ref().map(|p| format!("{}/lib", p));
+            // Conda CUDA layout also uses targets/x86_64-linux
+            let conda_targets_include =
+                conda_prefix.as_ref().map(|p| format!("{}/targets/x86_64-linux/include", p));
+            let conda_targets_lib =
+                conda_prefix.as_ref().map(|p| format!("{}/targets/x86_64-linux/lib", p));
 
             // Detect cuBLAS availability: require both header and shared library
             let mut have_cublas_header = false;
-            if let Some(ref inc) = conda_include {
+            for inc in [conda_targets_include.as_deref(), conda_include.as_deref()].into_iter().flatten() {
                 let hdr = std::path::Path::new(inc).join("cublas_v2.h");
                 if hdr.exists() {
                     have_cublas_header = true;
+                    break;
                 }
             }
             // Fallback common locations for headers
@@ -52,12 +58,14 @@ fn main() {
             }
             // Detect shared library presence
             let mut have_cublas_lib = false;
-            if let Some(ref libp) = conda_lib {
-                for name in ["libcublas.so", "libcublas.so.11"] {
+            for libp in [conda_targets_lib.as_deref(), conda_lib.as_deref()].into_iter().flatten() {
+                for name in ["libcublas.so", "libcublas.so.12", "libcublas.so.11"] {
                     if std::path::Path::new(libp).join(name).exists() {
                         have_cublas_lib = true;
+                        break;
                     }
                 }
+                if have_cublas_lib { break; }
             }
             for p in [
                 "/usr/local/cuda/lib64",
@@ -65,7 +73,7 @@ fn main() {
                 "/usr/lib64",
             ] {
                 if !have_cublas_lib {
-                    for name in ["libcublas.so", "libcublas.so.11"] {
+                    for name in ["libcublas.so", "libcublas.so.12", "libcublas.so.11"] {
                         if std::path::Path::new(p).join(name).exists() {
                             have_cublas_lib = true;
                         }
@@ -96,6 +104,9 @@ fn main() {
             if let Some(ref inc) = conda_include {
                 build.include(inc);
             }
+            if let Some(ref inc) = conda_targets_include {
+                build.include(inc);
+            }
             if have_cublas {
                 build.define("M40LLM_HAVE_CUBLAS", None);
                 // Expose to Rust to allow tests to gate on cuBLAS availability
@@ -105,6 +116,9 @@ fn main() {
 
             println!("cargo:rustc-link-search=native={}", out_dir.display());
             if let Some(ref libp) = conda_lib {
+                println!("cargo:rustc-link-search=native={}", libp);
+            }
+            if let Some(ref libp) = conda_targets_lib {
                 println!("cargo:rustc-link-search=native={}", libp);
             }
             println!("cargo:rustc-link-lib=static=m40llm_kernels");
