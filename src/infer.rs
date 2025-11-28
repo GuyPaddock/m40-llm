@@ -184,7 +184,7 @@ impl LoadedModel {
         #[cfg(feature = "gguf_ext")]
         if let Some(cfg) = &self.typed_config {
             let n_head = cfg.attention_head_count as usize;
-            if n_head == 0 || d_model % n_head != 0 {
+            if n_head == 0 || !d_model.is_multiple_of(n_head) {
                 anyhow::bail!(
                     "typed_config invalid: d_model {} not divisible by attention_head_count {}",
                     d_model,
@@ -313,7 +313,7 @@ impl LoadedModel {
                 }
             }
         }
-        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base);
+        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_bytes.len())?;
         // Optionally, derive typed model config via gguf_ext from the same in-memory bytes
         #[cfg(feature = "gguf_ext")]
         let typed_cfg = crate::gguf_ext::extract_model_config_from_bytes(&gguf_bytes).ok();
@@ -343,22 +343,72 @@ fn dtype_size_bytes(dt: GgmlDType) -> Option<usize> {
 fn build_device_tensor_views(
     tensors: &[GgufTensor],
     #[allow(unused_variables)] d_base: *mut c_void,
-) -> HashMap<String, DeviceTensorView> {
+    weights_len: usize,
+) -> Result<HashMap<String, DeviceTensorView>> {
     let mut map = HashMap::with_capacity(tensors.len());
     for t in tensors {
-        let n_elems: u64 = t.shape.iter().copied().product::<u64>();
-        let sz_opt = dtype_size_bytes(t.dtype).map(|s| (n_elems as usize) * s);
+        // Compute size and perform bounds/alignment checks
+        let offset_usize: usize = t
+            .offset
+            .try_into()
+            .context("tensor offset does not fit in usize")?;
+        // Alignment by dtype
+        let align = match t.dtype {
+            GgmlDType::F16 => 2usize,
+            GgmlDType::F32 => 4usize,
+            _ => 1usize,
+        };
+        if align > 1 && !offset_usize.is_multiple_of(align) {
+            anyhow::bail!(
+                "tensor '{}' offset {} misaligned for {:?} (align {})",
+                t.name,
+                offset_usize,
+                t.dtype,
+                align
+            );
+        }
+        let (nbytes, end_ok) = if let Some(esize) = dtype_size_bytes(t.dtype) {
+            // Known element size: check shape product and bounds within weights_len
+            let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
+            let n_elems: usize = usize::try_from(n_elems_u64)
+                .context("tensor element count does not fit in usize")?;
+            let need = n_elems.checked_mul(esize).context("tensor size overflow")?;
+            let end = offset_usize
+                .checked_add(need)
+                .context("tensor end offset overflow")?;
+            (need, end <= weights_len)
+        } else {
+            // Unknown sizing (quantized): require offset within allocation to keep dptr valid
+            (0usize, offset_usize < weights_len)
+        };
+        if !end_ok {
+            anyhow::bail!(
+                "tensor '{}' overflows weights blob or starts beyond end (off={}, nbytes={}, total={})",
+                t.name, offset_usize, nbytes, weights_len
+            );
+        }
+        // Safe device pointer arithmetic
+        #[cfg(feature = "cuda")]
+        let dptr: *mut c_void = {
+            let base = d_base as usize;
+            let addr = base
+                .checked_add(offset_usize)
+                .context("device pointer offset overflow")?;
+            addr as *mut c_void
+        };
+        #[cfg(not(feature = "cuda"))]
+        let dptr: *mut c_void = std::ptr::null_mut();
         let view = DeviceTensorView {
             dtype: t.dtype,
             shape: t.shape.clone(),
             byte_offset: t.offset,
-            nbytes: sz_opt.unwrap_or(0),
+            nbytes,
             #[cfg(feature = "cuda")]
-            dptr: (d_base as usize + t.offset as usize) as *mut c_void,
+            dptr,
         };
         map.insert(t.name.clone(), view);
     }
-    map
+    Ok(map)
 }
 
 impl LoadedModel {
@@ -437,14 +487,14 @@ impl LoadedModel {
                 if let Some(cfg) = &self.typed_config {
                     let n_head = cfg.attention_head_count;
                     let d_model = cfg.embedding_length;
-                    if n_head == 0 || d_model == 0 || d_model % n_head != 0 {
+                    if n_head == 0 || d_model == 0 || !d_model.is_multiple_of(n_head) {
                         anyhow::bail!(
                             "typed_config invalid for KV layout: d_model {} head_count {}",
                             d_model,
                             n_head
                         );
                     }
-                    let hd = cfg.attention_key_length.unwrap_or(d_model / n_head) as u32;
+                    let hd = cfg.attention_key_length.unwrap_or(d_model / n_head);
                     (n_head, hd)
                 } else {
                     let n_head = self.get_u32_meta("llama.attention.head_count").unwrap_or(8);

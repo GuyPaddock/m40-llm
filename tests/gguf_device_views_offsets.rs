@@ -165,3 +165,75 @@ fn gguf_device_views_quantized_nbytes_zero() {
     assert_eq!(q.nbytes, 0);
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn gguf_device_views_misaligned_offset_rejected() {
+    // F32 requires 4-byte alignment; put at offset 2 to force misalignment
+    let path = tmp_path("gguf_misaligned");
+    let (k, n) = (1u64, 1u64);
+    let f32_dtype = 0u32; // GgmlDType::F32 per mapping in gguf.rs
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "X");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, f32_dtype);
+        write_le_u64(&mut f, 2); // misaligned
+
+        // Data region long enough but offset is misaligned
+        f.write_all(&vec![0u8; 8]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("misaligned"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_device_views_offset_beyond_end_rejected() {
+    // Unknown-size dtype (simulate quantized) should still require offset < data_len
+    let path = tmp_path("gguf_offset_beyond_end");
+    let (k, n) = (1u64, 1u64);
+    let q4_0 = 2u32; // treated as unknown nbytes in loader
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "Q");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, q4_0);
+        write_le_u64(&mut f, 4); // offset exactly at end of 4-byte data region
+
+        // Provide 4 bytes only; offset==len should be rejected
+        f.write_all(&vec![0u8; 4]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("starts beyond end") || msg.contains("overflows weights blob"));
+    let _ = std::fs::remove_file(&path);
+}
