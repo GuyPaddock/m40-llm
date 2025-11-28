@@ -23,11 +23,27 @@ impl Tokenizer {
         }
     }
 
-    /// Construct from GGUF metadata when available. For now, returns byte-level fallback.
+    pub fn kind(&self) -> &TokenizerKind {
+        &self.kind
+    }
+
+    /// Construct from GGUF metadata when available. Fallback to byte-level.
+    /// Detection heuristics (non-exhaustive):
+    /// - If metadata contains a SentencePiece model (e.g., "tokenizer.ggml.model" == "spm" or
+    ///   keys like "sentencepiece.model"), we would select SentencePiece (not yet implemented).
+    /// - If BPE merges/vocab present, we would select BPE (not yet implemented).
+    /// For now: always return byte-level; wire-up keeps interface stable for later integration.
     pub fn from_gguf_metadata(
-        _metadata: &std::collections::HashMap<String, crate::gguf::GgufValue>,
+        metadata: &std::collections::HashMap<String, crate::gguf::GgufValue>,
     ) -> Result<Self> {
-        // TODO: inspect keys such as tokenizer.ggml.* or sentencepiece.model and select appropriate backend.
+        // placeholder detection; currently returns byte-level until SP/BPE added
+        let _maybe_kind = metadata
+            .get("tokenizer.ggml.model")
+            .and_then(|v| v.as_str());
+        let _maybe_sp = metadata.get("sentencepiece.model").and_then(|v| v.as_str());
+        let _maybe_bpe = metadata
+            .get("tokenizer.ggml.bpe_merges")
+            .and_then(|v| v.as_str());
         Ok(Self::byte_level())
     }
 

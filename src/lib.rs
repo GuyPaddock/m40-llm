@@ -6,6 +6,7 @@ pub mod infer;
 #[cfg(feature = "gguf_ext")]
 pub mod gguf_ext;
 pub mod model;
+pub mod sampling;
 #[cfg(feature = "server")]
 pub mod server;
 pub mod tokenizer;
