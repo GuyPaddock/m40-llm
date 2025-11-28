@@ -397,7 +397,7 @@ fn build_device_tensor_views(
             addr as *mut c_void
         };
         #[cfg(not(feature = "cuda"))]
-        let dptr: *mut c_void = std::ptr::null_mut();
+        let _dptr: *mut c_void = std::ptr::null_mut();
         let view = DeviceTensorView {
             dtype: t.dtype,
             shape: t.shape.clone(),
