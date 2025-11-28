@@ -4,10 +4,11 @@
 
 use anyhow::{anyhow, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenizerKind {
     ByteLevel,
-    // Future: SentencePiece, BPE
+    SentencePiece,
+    Bpe,
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +52,9 @@ impl Tokenizer {
     /// Byte-level fallback: one byte per token (u32 in 0..=255).
     pub fn encode(&self, text: &str) -> Result<Vec<u32>> {
         match self.kind {
-            TokenizerKind::ByteLevel => Ok(text.as_bytes().iter().map(|&b| b as u32).collect()),
+            TokenizerKind::ByteLevel | TokenizerKind::SentencePiece | TokenizerKind::Bpe => {
+                Ok(text.as_bytes().iter().map(|&b| b as u32).collect())
+            }
         }
     }
 
@@ -59,7 +62,7 @@ impl Tokenizer {
     /// Invalid byte values (>255) are replaced with 0x3F ('?').
     pub fn decode(&self, ids: &[u32]) -> Result<String> {
         match self.kind {
-            TokenizerKind::ByteLevel => {
+            TokenizerKind::ByteLevel | TokenizerKind::SentencePiece | TokenizerKind::Bpe => {
                 let bytes: Vec<u8> = ids
                     .iter()
                     .map(|&id| if id <= 255 { id as u8 } else { b'?' })
