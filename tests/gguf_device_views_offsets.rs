@@ -237,3 +237,76 @@ fn gguf_device_views_offset_beyond_end_rejected() {
     assert!(msg.contains("starts beyond end") || msg.contains("overflows weights blob"));
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn gguf_device_views_f16_misaligned_offset_rejected() {
+    // F16 requires 2-byte alignment; put at offset 1 to force misalignment
+    let path = tmp_path("gguf_f16_misaligned");
+    let (k, n) = (1u64, 1u64);
+    let f16 = 1u32; // GgmlDType::F16 per mapping
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "Y");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, f16);
+        write_le_u64(&mut f, 1); // misaligned for F16
+
+        // Data region long enough but offset is misaligned
+        f.write_all(&vec![0u8; 4]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("misaligned"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_device_views_end_overflow_from_offset_rejected() {
+    // Provide buffer length that is insufficient when starting from non-zero offset
+    let path = tmp_path("gguf_end_overflow_from_offset");
+    let (k, n) = (2u64, 2u64); // 4 elems F16 => 8 bytes needed
+    let f16 = 1u32;
+    let offset = 5u64; // 5 + 8 = 13, but we'll only provide 10 bytes
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "Z");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, f16);
+        write_le_u64(&mut f, offset);
+
+        // Only 10 bytes in data region => overflow relative to offset
+        f.write_all(&vec![0u8; 10]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("overflows weights blob"));
+    let _ = std::fs::remove_file(&path);
+}
