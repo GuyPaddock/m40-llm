@@ -33,14 +33,19 @@ fn main() {
             let conda_include = conda_prefix.as_ref().map(|p| format!("{}/include", p));
             let conda_lib = conda_prefix.as_ref().map(|p| format!("{}/lib", p));
             // Conda CUDA layout also uses targets/x86_64-linux
-            let conda_targets_include =
-                conda_prefix.as_ref().map(|p| format!("{}/targets/x86_64-linux/include", p));
-            let conda_targets_lib =
-                conda_prefix.as_ref().map(|p| format!("{}/targets/x86_64-linux/lib", p));
+            let conda_targets_include = conda_prefix
+                .as_ref()
+                .map(|p| format!("{}/targets/x86_64-linux/include", p));
+            let conda_targets_lib = conda_prefix
+                .as_ref()
+                .map(|p| format!("{}/targets/x86_64-linux/lib", p));
 
             // Detect cuBLAS availability: require both header and shared library
             let mut have_cublas_header = false;
-            for inc in [conda_targets_include.as_deref(), conda_include.as_deref()].into_iter().flatten() {
+            for inc in [conda_targets_include.as_deref(), conda_include.as_deref()]
+                .into_iter()
+                .flatten()
+            {
                 let hdr = std::path::Path::new(inc).join("cublas_v2.h");
                 if hdr.exists() {
                     have_cublas_header = true;
@@ -58,14 +63,19 @@ fn main() {
             }
             // Detect shared library presence
             let mut have_cublas_lib = false;
-            for libp in [conda_targets_lib.as_deref(), conda_lib.as_deref()].into_iter().flatten() {
+            for libp in [conda_targets_lib.as_deref(), conda_lib.as_deref()]
+                .into_iter()
+                .flatten()
+            {
                 for name in ["libcublas.so", "libcublas.so.12", "libcublas.so.11"] {
                     if std::path::Path::new(libp).join(name).exists() {
                         have_cublas_lib = true;
                         break;
                     }
                 }
-                if have_cublas_lib { break; }
+                if have_cublas_lib {
+                    break;
+                }
             }
             for p in [
                 "/usr/local/cuda/lib64",

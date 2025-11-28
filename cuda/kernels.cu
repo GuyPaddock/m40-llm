@@ -384,7 +384,21 @@ extern "C" {
             d_C_f32, CUDA_R_32F, N,
             CUDA_R_32F,
             CUBLAS_GEMM_DEFAULT);
-        return st == CUBLAS_STATUS_SUCCESS ? 0 : -3;
+        if (st == CUBLAS_STATUS_SUCCESS) {
+            return 0;
+        }
+        // Fallback to simple kernel when cuBLAS does not support this mixed-type combination on this device
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const __half* B = reinterpret_cast<const __half*>(d_B_f16);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f32xf16_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
     #else
         const float* A = reinterpret_cast<const float*>(d_A_f32);
         const __half* B = reinterpret_cast<const __half*>(d_B_f16);
