@@ -106,8 +106,10 @@ async fn generate(
                 let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
 
                 // Free device buffers
-                let _ = model.cuda.device_free(d_x);
-                let _ = model.cuda.device_free(d_out);
+                unsafe {
+                    let _ = model.cuda.device_free(d_x);
+                    let _ = model.cuda.device_free(d_out);
+                }
 
                 seq_len += 1;
                 Ok(logits)

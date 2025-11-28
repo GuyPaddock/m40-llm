@@ -1149,52 +1149,159 @@ impl LoadedModel {
     ) -> Result<()> {
         let w = self.map_standard_layer(layer)?;
         #[cfg(feature = "cuda")]
-        let wq_ptr = (self.d_weights_base as usize + w.wq.byte_offset as usize) as *const c_void;
+        {
+            let wq_ptr =
+                (self.d_weights_base as usize + w.wq.byte_offset as usize) as *const c_void;
+            let wk_ptr =
+                (self.d_weights_base as usize + w.wk.byte_offset as usize) as *const c_void;
+            let wv_ptr =
+                (self.d_weights_base as usize + w.wv.byte_offset as usize) as *const c_void;
+            let wo_ptr =
+                (self.d_weights_base as usize + w.wo.byte_offset as usize) as *const c_void;
+            let w_gate_ptr =
+                (self.d_weights_base as usize + w.w_gate.byte_offset as usize) as *const c_void;
+            let w_up_ptr =
+                (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
+            let w_down_ptr =
+                (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
+            return self.forward_one_token_minimal(
+                d_x_f32,
+                w.d_model as i32,
+                wq_ptr,
+                wk_ptr,
+                wv_ptr,
+                wo_ptr,
+                w_gate_ptr,
+                w_up_ptr,
+                w_down_ptr,
+                w.hidden_dim as i32,
+                seq_id,
+                seq_len,
+                d_out_f32,
+            );
+        }
         #[cfg(not(feature = "cuda"))]
-        let wq_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let wk_ptr = (self.d_weights_base as usize + w.wk.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let wk_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let wv_ptr = (self.d_weights_base as usize + w.wv.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let wv_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let wo_ptr = (self.d_weights_base as usize + w.wo.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let wo_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let w_gate_ptr =
-            (self.d_weights_base as usize + w.w_gate.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let w_gate_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let w_up_ptr =
-            (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let w_up_ptr = std::ptr::null();
-        #[cfg(feature = "cuda")]
-        let w_down_ptr =
-            (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
-        #[cfg(not(feature = "cuda"))]
-        let w_down_ptr = std::ptr::null();
+        {
+            use half::f16;
+            use std::slice;
+            let d_model = w.d_model;
+            let hidden_dim = w.hidden_dim;
 
-        self.forward_one_token_minimal(
-            d_x_f32,
-            w.d_model as i32,
-            wq_ptr,
-            wk_ptr,
-            wv_ptr,
-            wo_ptr,
-            w_gate_ptr,
-            w_up_ptr,
-            w_down_ptr,
-            w.hidden_dim as i32,
-            seq_id,
-            seq_len,
-            d_out_f32,
-        )
+            // Read input x (f32) from host pointer
+            let x_slice = slice::from_raw_parts(d_x_f32 as *const f32, d_model);
+
+            // RMSNorm
+            let eps = 1e-6f32;
+            let mut mean_sq = 0f32;
+            for &v in x_slice {
+                mean_sq += v * v;
+            }
+            mean_sq /= d_model as f32;
+            let scale = 1.0f32 / (mean_sq + eps).sqrt();
+            let mut x_n = vec![0f32; d_model];
+            for i in 0..d_model {
+                x_n[i] = x_slice[i] * scale;
+            }
+
+            // Helper to multiply f32 row (1xK) by f16 matrix (KxN) into f32 (1xN)
+            let dot_row = |row: &[f32], t: &crate::infer::DeviceTensorView, n: usize| -> Vec<f32> {
+                let k = t.shape[0] as usize;
+                debug_assert_eq!(k, row.len());
+                let off = t.byte_offset as usize;
+                let bytes = &self.host_weights[off..off + k * n * 2];
+                let mut out = vec![0f32; n];
+                for j in 0..n {
+                    let mut acc = 0f32;
+                    let mut idx = j * 2; // column-major stride over rows in row-major [k x n]
+                    for r in 0..k {
+                        let lo = bytes[idx] as u16;
+                        let hi = bytes[idx + 1] as u16;
+                        let w = f16::from_bits(lo | (hi << 8)).to_f32();
+                        acc += row[r] * w;
+                        idx += n * 2;
+                    }
+                    out[j] = acc;
+                }
+                out
+            };
+
+            // Q, K, V
+            let nq = w.wq.shape[1] as usize;
+            let nk = w.wk.shape[1] as usize;
+            let nv = w.wv.shape[1] as usize;
+            let q = dot_row(&x_n, &w.wq, nq);
+            let k_vec = dot_row(&x_n, &w.wk, nk);
+            let v_vec = dot_row(&x_n, &w.wv, nv);
+
+            // Append KV (host path)
+            self.append_kv_token_f32_from_host(seq_id, &k_vec, &v_vec)?;
+
+            // Attention over last token using KV cache helper
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("kv_cache not allocated"))?;
+            let num_heads = kv.num_heads();
+            let head_dim = kv.head_dim();
+            let mut attn_out = vec![0u8; d_model * 4];
+            kv.attention_last_token_f32(
+                &self.cuda,
+                seq_id,
+                q.as_ptr() as *const c_void,
+                seq_len,
+                attn_out.as_mut_ptr() as *mut c_void,
+            )?;
+            let attn: Vec<f32> = attn_out
+                .chunks_exact(4)
+                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+                .collect();
+            let _ = (num_heads, head_dim); // already validated during allocation
+
+            // Out projection and residual add: x1 = x + attn·Wo
+            let no = w.wo.shape[1] as usize;
+            debug_assert_eq!(no, d_model);
+            let y_attn = dot_row(&attn, &w.wo, no);
+            let mut x1 = vec![0f32; d_model];
+            for i in 0..d_model {
+                x1[i] = x_slice[i] + y_attn[i];
+            }
+
+            // Post-attention norm
+            let mut mean_sq2 = 0f32;
+            for &v in &x1 {
+                mean_sq2 += v * v;
+            }
+            mean_sq2 /= d_model as f32;
+            let scale2 = 1.0f32 / (mean_sq2 + eps).sqrt();
+            let mut x1n = vec![0f32; d_model];
+            for i in 0..d_model {
+                x1n[i] = x1[i] * scale2;
+            }
+
+            // MLP: gate/up -> SiLU(gate)*up -> down -> residual add with x1
+            let h = w.w_up.shape[1] as usize;
+            debug_assert_eq!(h, hidden_dim);
+            let gate = dot_row(&x1n, &w.w_gate, h);
+            let up = dot_row(&x1n, &w.w_up, h);
+            fn sigmoid(v: f32) -> f32 {
+                1.0 / (1.0 + (-v).exp())
+            }
+            let mut hidden = vec![0f32; h];
+            for i in 0..h {
+                let g = gate[i];
+                hidden[i] = (g * sigmoid(g)) * up[i];
+            }
+            let y_mlp = dot_row(&hidden, &w.w_down, d_model);
+            let mut y = vec![0f32; d_model];
+            for i in 0..d_model {
+                y[i] = x1[i] + y_mlp[i];
+            }
+
+            // Write to output pointer
+            let out_slice = slice::from_raw_parts_mut(d_out_f32 as *mut f32, d_model);
+            out_slice.copy_from_slice(&y);
+            Ok(())
+        }
     }
 }
 
