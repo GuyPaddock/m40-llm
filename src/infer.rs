@@ -321,6 +321,46 @@ impl LoadedModel {
             w_down,
         })
     }
+    /// Map the language modeling head (output projection) tensor if present.
+    /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
+    /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
+    pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
+        use crate::gguf::GgmlDType;
+        let d_model = self
+            .get_u32_meta("llama.embedding_length")
+            .map(|v| v as usize)
+            .ok_or_else(|| anyhow!("missing llama.embedding_length in metadata"))?;
+
+        let candidates = vec![
+            "output.weight".to_string(),
+            "lm_head.weight".to_string(),
+            "output".to_string(),
+        ];
+        if let Ok(t) = self.find_tensor_any(&candidates) {
+            if t.dtype != GgmlDType::F16 {
+                anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
+            }
+            if t.shape.len() != 2 {
+                anyhow::bail!(
+                    "lm_head shape invalid: expected [d_model, vocab], got {:?}",
+                    t.shape
+                );
+            }
+            let k = t.shape[0] as usize;
+            let n = t.shape[1] as usize;
+            if k != d_model || n == 0 {
+                anyhow::bail!(
+                    "lm_head dims invalid: first dim {} must equal d_model {} and vocab>0 (got n={})",
+                    k, d_model, n
+                );
+            }
+            return Ok((t.clone(), d_model, n, false));
+        }
+        anyhow::bail!(
+            "lm_head tensor not found; expected one of {}",
+            candidates.join(", ")
+        )
+    }
 }
 
 impl LoadedModel {
@@ -1237,5 +1277,104 @@ impl LoadedModel {
         k: i32,
     ) -> Result<()> {
         self.matmul_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
+}
+
+impl LoadedModel {
+    /// # Safety
+    /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
+    pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
+        let lm = self.map_lm_head()?.0;
+        let d_model = self
+            .get_u32_meta("llama.embedding_length")
+            .ok_or_else(|| anyhow!("missing llama.embedding_length in metadata"))?
+            as usize;
+        let vocab = lm.shape[1] as usize;
+        #[cfg(feature = "cuda")]
+        let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
+        #[cfg(not(feature = "cuda"))]
+        let d_w: *const c_void = std::ptr::null();
+        #[cfg(not(feature = "cuda"))]
+        let _ = &lm;
+        let bytes_logits = vocab * std::mem::size_of::<f32>();
+        let d_logits = self.cuda.device_malloc(bytes_logits)?;
+        self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)?;
+        let mut host = vec![0u8; bytes_logits];
+        self.cuda
+            .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
+        let mut logits = Vec::with_capacity(vocab);
+        for ch in host.chunks_exact(4) {
+            logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+        }
+        let _ = self.cuda.device_free(d_logits);
+        Ok(logits)
+    }
+}
+
+impl LoadedModel {
+    /// # Safety
+    /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
+    /// to host-side dot with per-row copies from tok_embeddings.
+    pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
+        if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
+            #[cfg(feature = "cuda")]
+            let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
+            #[cfg(not(feature = "cuda"))]
+            let d_w: *const c_void = std::ptr::null();
+            let bytes_logits = vocab * std::mem::size_of::<f32>();
+            let d_logits = self.cuda.device_malloc(bytes_logits)?;
+            self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)?;
+            let mut host = vec![0u8; bytes_logits];
+            self.cuda
+                .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
+            let mut logits = Vec::with_capacity(vocab);
+            for ch in host.chunks_exact(4) {
+                logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let _ = self.cuda.device_free(d_logits);
+            return Ok(logits);
+        }
+        // Fallback: use tok_embeddings^T as lm_head on host
+        let tok = self
+            .device_tensors
+            .get("tok_embeddings.weight")
+            .ok_or_else(|| anyhow!("missing tok_embeddings.weight and no lm_head available"))?;
+        if tok.shape.len() != 2 {
+            anyhow::bail!("tok_embeddings must be rank-2 [vocab, d_model]");
+        }
+        let vocab = tok.shape[0] as usize;
+        let d_model = tok.shape[1] as usize;
+        let bytes_d = d_model * std::mem::size_of::<f32>();
+        // Copy hidden to host
+        let mut out_h = vec![0u8; bytes_d];
+        self.cuda
+            .memcpy_d2h(out_h.as_mut_ptr() as *mut c_void, d_hidden_f32, bytes_d)?;
+        let mut out_f = vec![0f32; d_model];
+        for (i, ch) in out_h.chunks_exact(4).enumerate() {
+            out_f[i] = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
+        }
+        use half::f16;
+        let row_bytes = d_model * 2;
+        let mut logits = vec![0f32; vocab];
+        for v in 0..vocab {
+            let mut row_h = vec![0u8; row_bytes as usize];
+            #[cfg(feature = "cuda")]
+            {
+                let row_dev = (self.d_weights_base as usize
+                    + tok.byte_offset as usize
+                    + v * row_bytes as usize) as *const c_void;
+                self.cuda
+                    .memcpy_d2h(row_h.as_mut_ptr() as *mut c_void, row_dev, row_bytes)?;
+            }
+            let mut acc = 0f32;
+            for i in 0..d_model {
+                let lo = row_h[i * 2];
+                let hi = row_h[i * 2 + 1];
+                let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
+                acc += out_f[i] * val;
+            }
+            logits[v] = acc;
+        }
+        Ok(logits)
     }
 }
