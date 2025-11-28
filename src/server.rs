@@ -1,7 +1,6 @@
 // src/server.rs
 #![allow(dead_code)]
 use axum::{routing::post, Json, Router};
-use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
@@ -9,13 +8,13 @@ use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 
-#[derive(Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenerateRequest {
     pub prompt: String,
     pub max_tokens: Option<usize>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenerateResponse {
     pub output: String,
 }
