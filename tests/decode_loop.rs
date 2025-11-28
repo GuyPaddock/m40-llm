@@ -7,7 +7,7 @@ fn decode_loop_respects_eos_and_max_tokens() -> Result<()> {
     let tokenizer = Tokenizer::byte_level();
     let eos_id = Some(b'!' as u32);
     let stopping = StoppingCriteria::new(Some(5), eos_id);
-    let mut sampler = greedy_sampler(123);
+    let sampler = greedy_sampler(123);
 
     // logits function that points strongly to next byte of "Hi!" cycle
     let seq = [b'H' as u32, b'i' as u32, b'!' as u32];

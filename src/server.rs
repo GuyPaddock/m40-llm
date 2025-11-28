@@ -102,14 +102,35 @@ async fn generate(
 
             #[cfg(not(feature = "cuda"))]
             {
-                let _ = (ids, bytes);
-                // CPU fallback placeholder: emit a simple rising logit on last byte id
-                let vocab = 256usize;
-                let mut logits = vec![0.0f32; vocab];
-                if let Some(&last) = ids.last() {
-                    let idx = (last as usize) % vocab;
-                    logits[idx] = 1.0;
+                use half::f16;
+                use std::ffi::c_void;
+                // Build hidden state from tok_embeddings row (F16 -> F32) for the last token, then compute host logits
+                let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as usize;
+                let tok = model
+                    .device_tensors
+                    .get("tok_embeddings.weight")
+                    .ok_or_else(|| anyhow::anyhow!("missing tok_embeddings.weight"))?;
+                if tok.shape.len() != 2 {
+                    return Err(anyhow::anyhow!("tok_embeddings must be [vocab, d_model]"));
                 }
+                let vocab = tok.shape[0] as usize;
+                if tok_id >= vocab {
+                    return Err(anyhow::anyhow!(format!(
+                        "token id {} out of range (vocab={})",
+                        tok_id, vocab
+                    )));
+                }
+                let d_model = tok.shape[1] as usize;
+                let row_bytes = d_model * 2;
+                let off = tok.byte_offset as usize + tok_id * row_bytes;
+                let row = &model.host_weights[off..off + row_bytes];
+                let mut hidden = vec![0f32; d_model];
+                for i in 0..d_model {
+                    let lo = row[2 * i] as u16;
+                    let hi = row[2 * i + 1] as u16;
+                    hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
+                }
+                let logits = unsafe { model.logits_from_hidden(hidden.as_ptr() as *const c_void) }?;
                 seq_len += 1;
                 Ok(logits)
             }
