@@ -211,14 +211,42 @@ async fn generate(
                     )));
                 }
                 let d_model = tok.shape[1] as usize;
-                let row_bytes = d_model * 2;
-                let off = tok.byte_offset as usize + tok_id * row_bytes;
-                let row = &model.host_weights[off..off + row_bytes];
                 let mut hidden = vec![0f32; d_model];
-                for i in 0..d_model {
-                    let lo = row[2 * i] as u16;
-                    let hi = row[2 * i + 1] as u16;
-                    hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
+                match tok.dtype {
+                    GgmlDType::F16 => {
+                        let row_bytes = d_model * 2;
+                        let off = tok.byte_offset as usize + tok_id * row_bytes;
+                        let row = &model.host_weights[off..off + row_bytes];
+                        for i in 0..d_model {
+                            let lo = row[2 * i] as u16;
+                            let hi = row[2 * i + 1] as u16;
+                            hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
+                        }
+                    }
+                    GgmlDType::Q8_0 => {
+                        let blocks = (d_model + 31) / 32;
+                        let row_bytes = blocks * 36;
+                        let off = tok.byte_offset as usize + tok_id * row_bytes;
+                        let row = &model.host_weights[off..off + row_bytes];
+                        for i in 0..d_model {
+                            let blk = i / 32;
+                            let idx = i % 32;
+                            let base = blk * 36;
+                            let d = f32::from_le_bytes([
+                                row[base + 0],
+                                row[base + 1],
+                                row[base + 2],
+                                row[base + 3],
+                            ]);
+                            let q = row[base + 4 + idx] as i8 as f32;
+                            hidden[i] = d * q;
+                        }
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "unsupported embeddings dtype for host path"
+                        ))
+                    }
                 }
                 let logits = unsafe { model.logits_from_hidden(hidden.as_ptr() as *const c_void) }?;
                 Ok(logits)
