@@ -120,6 +120,61 @@ extern "C" {
         return ctx;
     }
 
+}
+
+
+
+    __global__ void kernel_f16_to_f32(const __half* in, float* out, size_t n) {
+        size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n) {
+            out[i] = __half2float(in[i]);
+        }
+    }
+
+    // Q8_0 block layout per ggml: struct { float d; int8_t qs[32]; }
+    __global__ void kernel_q80_to_f32(const int8_t* in, float* out, size_t n) {
+        size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n) {
+            size_t blk = i / 32;
+            size_t idx = i % 32;
+            const char* base = reinterpret_cast<const char*>(in) + blk * 36;
+            const float d = *reinterpret_cast<const float*>(base + 0);
+            int8_t q = *(reinterpret_cast<const int8_t*>(base + 4 + idx));
+            out[i] = d * static_cast<float>(q);
+        }
+    }
+extern "C" {
+
+    int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {
+        if (!ctx || !d_in_f16 || !d_out_f32) return -1;
+        const int threads = 256;
+        const int blocks = (int)((n + threads - 1) / threads);
+        kernel_f16_to_f32<<<blocks, threads, 0, ctx->prefill_stream>>>(
+            reinterpret_cast<const __half*>(d_in_f16),
+            reinterpret_cast<float*>(d_out_f32),
+            n);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
+    int m40llm_q80_to_f32(M40llmCudaContext* ctx, const void* d_in_q80, void* d_out_f32, size_t n) {
+        if (!ctx || !d_in_q80 || !d_out_f32) return -1;
+        const int threads = 256;
+        const int blocks = (int)((n + threads - 1) / threads);
+        kernel_q80_to_f32<<<blocks, threads, 0, ctx->prefill_stream>>>(
+            reinterpret_cast<const int8_t*>(d_in_q80),
+            reinterpret_cast<float*>(d_out_f32),
+            n);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
     // Query the current CUDA device properties for test/CI guardrails.
     // Returns 0 on success, negative on error.
     int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {

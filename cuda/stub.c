@@ -88,6 +88,14 @@ int m40llm_attention_last_token_f32(
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 
+
+  int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {
+      (void)ctx; (void)d_in_f16; (void)d_out_f32; (void)n; return -1;
+  }
+  int m40llm_q80_to_f32(M40llmCudaContext* ctx, const void* d_in_q80, void* d_out_f32, size_t n) {
+      (void)ctx; (void)d_in_q80; (void)d_out_f32; (void)n; return -1;
+  }
+
 #ifdef __cplusplus
 }
 #endif

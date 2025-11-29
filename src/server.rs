@@ -4,6 +4,7 @@ use axum::{routing::post, Json, Router};
 use std::sync::Arc;
 
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
+use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
@@ -25,7 +26,6 @@ pub struct GenerateResponse {
 pub struct ErrorResponse {
     pub error: String,
 }
-
 
 pub struct AppState {
     pub model: LoadedModel,
@@ -93,10 +93,15 @@ async fn generate(
                 .iter()
                 .find_map(|n| model.device_tensors.get(*n));
             if tok_opt.is_none() {
-                eprintln!("[server] warning: no known embedding tensor found; will try lm_head only");
+                eprintln!(
+                    "[server] warning: no known embedding tensor found; will try lm_head only"
+                );
             }
-            let d_model_from_tok = tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
-            if let Some(t) = tok_opt { eprintln!("[server] embeddings shape: {:?}", t.shape); }
+            let d_model_from_tok =
+                tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
+            if let Some(t) = tok_opt {
+                eprintln!("[server] embeddings shape: {:?}", t.shape);
+            }
 
             let (d, can_forward) = match model.map_standard_layer(0) {
                 Ok(w) => {
@@ -104,12 +109,17 @@ async fn generate(
                     if !ok {
                         eprintln!("[server] KV cache not available; using embeddings-only logits fallback");
                     }
-                    eprintln!("[server] mapped standard layer d_model={} hidden_dim={}", w.d_model, w.hidden_dim);
+                    eprintln!(
+                        "[server] mapped standard layer d_model={} hidden_dim={}",
+                        w.d_model, w.hidden_dim
+                    );
                     (w.d_model, ok)
                 }
                 Err(e) => {
                     eprintln!("[server] map_standard_layer failed; falling back to embeddings/logits path: {e}");
-                    let d_try = if d_model_from_tok > 0 { d_model_from_tok } else {
+                    let d_try = if d_model_from_tok > 0 {
+                        d_model_from_tok
+                    } else {
                         match model.map_lm_head() {
                             Ok((_lm, d_m, _vocab, _tied)) => {
                                 eprintln!("[server] derived d_model from lm_head: {}", d_m);
@@ -121,14 +131,18 @@ async fn generate(
                             }
                         }
                     };
-                    if d_try == 0 { return Err(anyhow::anyhow!("could not determine d_model")); }
+                    if d_try == 0 {
+                        return Err(anyhow::anyhow!("could not determine d_model"));
+                    }
                     (d_try, false)
                 }
             };
             let bytes = d * std::mem::size_of::<f32>();
 
             #[cfg(not(feature = "cuda"))]
-            { let _ = (can_forward, bytes); }
+            {
+                let _ = (can_forward, bytes);
+            }
 
             #[cfg(feature = "cuda")]
             {
@@ -140,7 +154,9 @@ async fn generate(
                 let d_x = model.cuda.device_malloc(bytes)?;
 
                 // Load embedding row for last token into d_x (f32)
-                unsafe { model.load_token_embedding_f16_to_f32(tok_id, d_x)?; }
+                unsafe {
+                    model.load_token_embedding_to_f32(tok_id, d_x)?;
+                }
 
                 // If we have FP16 layer weights mapped and KV available, run the minimal forward through one layer.
                 let logits = if can_forward {
@@ -155,7 +171,9 @@ async fn generate(
                         )?;
                     }
                     let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
-                    unsafe { let _ = model.cuda.device_free(d_out); }
+                    unsafe {
+                        let _ = model.cuda.device_free(d_out);
+                    }
                     logits
                 } else {
                     // Fallback: treat embedding as hidden and compute logits (uses lm_head when present or tok_embeddings^T)
@@ -163,7 +181,9 @@ async fn generate(
                 };
 
                 // Free embedding buffer
-                unsafe { let _ = model.cuda.device_free(d_x); }
+                unsafe {
+                    let _ = model.cuda.device_free(d_x);
+                }
 
                 Ok(logits)
             }
@@ -177,13 +197,18 @@ async fn generate(
                 let tok = embed_names
                     .iter()
                     .find_map(|n| model.device_tensors.get(*n))
-                    .ok_or_else(|| anyhow::anyhow!("missing embeddings tensor (tried common names)"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("missing embeddings tensor (tried common names)")
+                    })?;
                 if tok.shape.len() != 2 {
                     return Err(anyhow::anyhow!("embeddings must be [vocab, d_model]"));
                 }
                 let vocab = tok.shape[0] as usize;
                 if tok_id >= vocab {
-                    return Err(anyhow::anyhow!(format!("token id {} out of range (vocab={})", tok_id, vocab)));
+                    return Err(anyhow::anyhow!(format!(
+                        "token id {} out of range (vocab={})",
+                        tok_id, vocab
+                    )));
                 }
                 let d_model = tok.shape[1] as usize;
                 let row_bytes = d_model * 2;
@@ -213,14 +238,24 @@ async fn generate(
         Ok(ids) => ids,
         Err(e) => {
             eprintln!("[server] decode_loop failed: {e}");
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: format!("generation failed: {e}") })));
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("generation failed: {e}"),
+                }),
+            ));
         }
     };
     let text = match tokenizer.decode_ignoring_specials(&ids) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("[server] decode failed: {e}");
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: format!("decode failed: {e}") })));
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("decode failed: {e}"),
+                }),
+            ));
         }
     };
     Ok(Json(GenerateResponse { output: text }))

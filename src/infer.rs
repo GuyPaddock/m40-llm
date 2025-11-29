@@ -91,10 +91,10 @@ impl LoadedModel {
             "token_embd".to_string(),
             "token_embeddings.weight".to_string(),
         ])?;
-        // Enforce embeddings dtype/shape policy: FP16 [vocab, d_model]
-        if tok.dtype != GgmlDType::F16 {
+        // Enforce embeddings dtype/shape policy: F16 or Q8_0 [vocab, d_model]
+        if tok.dtype != GgmlDType::F16 && tok.dtype != GgmlDType::Q8_0 {
             anyhow::bail!(
-                "tok_embeddings.weight expected F16 [vocab, d_model], got {:?}",
+                "tok_embeddings.weight expected F16 or Q8_0 [vocab, d_model], got {:?}",
                 tok.dtype
             )
         }
@@ -349,7 +349,10 @@ impl LoadedModel {
             let d_model = t.shape[0] as usize;
             let vocab = t.shape[1] as usize;
             if d_model == 0 || vocab == 0 {
-                anyhow::bail!("lm_head dims invalid: non-zero [d_model, vocab] required: {:?}", t.shape);
+                anyhow::bail!(
+                    "lm_head dims invalid: non-zero [d_model, vocab] required: {:?}",
+                    t.shape
+                );
             }
             return Ok((t.clone(), d_model, vocab, false));
         }
@@ -1075,7 +1078,7 @@ impl LoadedModel {
     /// # Safety
     /// - d_out_f32 must be a valid device pointer to a buffer of size d_model * sizeof(f32)
     /// - token_id must be < vocab size (tok_embeddings.shape[0])
-    pub unsafe fn load_token_embedding_f16_to_f32(
+    pub unsafe fn load_token_embedding_to_f32(
         &self,
         token_id: u64,
         d_out_f32: *mut c_void,
@@ -1083,7 +1086,7 @@ impl LoadedModel {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (token_id, d_out_f32);
-            anyhow::bail!("load_token_embedding_f16_to_f32 requires CUDA feature");
+            anyhow::bail!("load_token_embedding_to_f32 requires CUDA feature");
         }
         #[cfg(feature = "cuda")]
         {
@@ -1094,38 +1097,34 @@ impl LoadedModel {
                 "token_embd".to_string(),
                 "token_embeddings.weight".to_string(),
             ])?;
-            if tok.dtype != GgmlDType::F16 || tok.shape.len() != 2 {
-                anyhow::bail!("embeddings must be F16 [vocab, d_model]");
+            if tok.shape.len() != 2 {
+                anyhow::bail!("embeddings must be [vocab, d_model]");
             }
-            let vocab = tok.shape[0] as usize;
+            let n_vocab = tok.shape[0];
+            if token_id >= n_vocab {
+                anyhow::bail!(
+                    "token_id {} out of range for vocab size {}",
+                    token_id,
+                    n_vocab
+                );
+            }
             let d_model = tok.shape[1] as usize;
-            if token_id as usize >= vocab {
-                anyhow::bail!("token_id {} out of range (vocab={})", token_id, vocab);
+            match tok.dtype {
+                GgmlDType::F16 => {
+                    let row_bytes = d_model * 2;
+                    let d_row =
+                        (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
+                    self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
+                }
+                GgmlDType::Q8_0 => {
+                    let blocks = (d_model + 31) / 32;
+                    let row_bytes = blocks * 36;
+                    let d_row =
+                        (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
+                    self.cuda.q80_to_f32(d_row, d_out_f32, d_model)?;
+                }
+                other => anyhow::bail!("unsupported embedding dtype: {:?}", other),
             }
-            let row_bytes_f16 = d_model * 2;
-            let offset = tok.byte_offset as usize + (token_id as usize) * row_bytes_f16;
-            // Copy F16 row from device to host
-            let mut row_f16 = vec![0u8; row_bytes_f16];
-            self.cuda.memcpy_d2h(
-                row_f16.as_mut_ptr() as *mut c_void,
-                (self.d_weights_base as usize + offset) as *const c_void,
-                row_bytes_f16,
-            )?;
-            // Convert to f32 on host
-            let mut row_f32_bytes = Vec::with_capacity(d_model * 4);
-            for i in 0..d_model {
-                let lo = row_f16[2 * i] as u16;
-                let hi = row_f16[2 * i + 1] as u16;
-                let bits = lo | (hi << 8);
-                let v = f16::from_bits(bits).to_f32();
-                row_f32_bytes.extend_from_slice(&v.to_le_bytes());
-            }
-            // Upload to device output buffer
-            self.cuda.memcpy_h2d(
-                d_out_f32,
-                row_f32_bytes.as_ptr() as *const c_void,
-                d_model * 4,
-            )?;
             Ok(())
         }
     }

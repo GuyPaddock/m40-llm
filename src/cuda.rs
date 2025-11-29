@@ -132,6 +132,19 @@ mod ffi {
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
+        // Utility conversion/dequant kernels
+        pub fn m40llm_f16_to_f32(
+            ctx: *mut M40llmCudaContext,
+            d_in_f16: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
+        ) -> i32;
+        pub fn m40llm_q80_to_f32(
+            ctx: *mut M40llmCudaContext,
+            d_in_q80: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
+        ) -> i32;
     }
 }
 
@@ -583,6 +596,44 @@ impl CudaContext {
             let rc = unsafe { ffi::m40llm_stop_persistent_decode(self.inner.raw.as_ptr()) };
             if rc != 0 {
                 return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// # Safety
+    /// d_in_f16 and d_out_f32 must be valid device pointers on this context's device.
+    pub unsafe fn f16_to_f32(
+        &self,
+        d_in_f16: *const c_void,
+        d_out_f32: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_f16_to_f32(self.inner.raw.as_ptr(), d_in_f16, d_out_f32, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// # Safety
+    /// d_in_q80 must point to Q8_0 blocks in scale-first layout; d_out_f32 is f32 output.
+    pub unsafe fn q80_to_f32(
+        &self,
+        d_in_q80: *const c_void,
+        d_out_f32: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_q80_to_f32(self.inner.raw.as_ptr(), d_in_q80, d_out_f32, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_q80_to_f32 failed: {rc}"));
             }
         }
         Ok(())
