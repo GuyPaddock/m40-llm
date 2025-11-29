@@ -201,17 +201,17 @@ fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
                 )?;
             }
             let mut logits = vec![0f32; vocab];
-            for col in 0..vocab {
+            for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
                 let mut acc = 0f32;
                 let mut idx = col * 2;
-                for rowi in 0..d_model {
+                for (_rowi, h) in hidden.iter().copied().enumerate().take(d_model) {
                     let lo = w_bytes[idx] as u16;
                     let hi = w_bytes[idx + 1] as u16;
                     let w = f16::from_bits(lo | (hi << 8)).to_f32();
-                    acc += hidden[rowi] * w;
+                    acc += h * w;
                     idx += vocab * 2;
                 }
-                logits[col] = acc;
+                *logit_ref = acc;
             }
             Ok(logits)
         }

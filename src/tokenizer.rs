@@ -68,7 +68,7 @@ impl Tokenizer {
     /// - If metadata contains a SentencePiece model (e.g., "tokenizer.ggml.model" == "spm" or
     ///   keys like "sentencepiece.model"), we would select SentencePiece (not yet implemented).
     /// - If BPE merges/vocab present, we would select BPE (not yet implemented).
-    /// For now: always return byte-level; wire-up keeps interface stable for later integration.
+    ///   For now: always return byte-level; wire-up keeps interface stable for later integration.
     pub fn from_gguf_metadata(
         metadata: &std::collections::HashMap<String, crate::gguf::GgufValue>,
     ) -> Result<Self> {

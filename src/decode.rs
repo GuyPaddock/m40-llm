@@ -75,12 +75,14 @@ where
             }
         }
         // Safety guard: avoid runaway if neither criterion present (tests should set at least one)
-        if stopping.max_tokens.is_none() && stopping.eos_id.is_none() {
-            if generated.len() > 4 * (start_len.max(1)) && generated.len() > 4096 {
-                return Err(anyhow!(
-                    "decode_loop_with: refusing to continue without stopping criteria"
-                ));
-            }
+        if stopping.max_tokens.is_none()
+            && stopping.eos_id.is_none()
+            && generated.len() > 4 * (start_len.max(1))
+            && generated.len() > 4096
+        {
+            return Err(anyhow!(
+                "decode_loop_with: refusing to continue without stopping criteria"
+            ));
         }
     }
     Ok(ids)

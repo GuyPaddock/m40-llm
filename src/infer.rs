@@ -85,7 +85,7 @@ impl LoadedModel {
             .get_u32_meta("llama.embedding_length")
             .map(|x| x as usize);
         // Try common embedding tensor names across families (LLaMA/Qwen)
-        let tok = self.find_tensor_any(&vec![
+        let tok = self.find_tensor_any(&[
             "tok_embeddings.weight".to_string(),
             "token_embd.weight".to_string(),
             "token_embd".to_string(),
@@ -96,7 +96,7 @@ impl LoadedModel {
             anyhow::bail!(
                 "tok_embeddings.weight expected F16 [vocab, d_model], got {:?}",
                 tok.dtype
-            );
+            )
         }
         if tok.shape.len() != 2 {
             anyhow::bail!(
@@ -104,7 +104,7 @@ impl LoadedModel {
                 tok.shape
             );
         }
-        let vocab_rows = tok.shape.get(0).copied().unwrap_or(0) as usize;
+        let vocab_rows = tok.shape.first().copied().unwrap_or(0) as usize;
         let d_model_from_tok = tok.shape.get(1).copied().unwrap_or(0) as usize;
         let d_model = d_model_meta.unwrap_or(d_model_from_tok);
         if d_model == 0 {
@@ -1096,7 +1096,7 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             // Resolve embeddings tensor (supports Qwen names)
-            let tok = self.find_tensor_any(&vec![
+            let tok = self.find_tensor_any(&[
                 "tok_embeddings.weight".to_string(),
                 "token_embd.weight".to_string(),
                 "token_embd".to_string(),
@@ -1170,7 +1170,7 @@ impl LoadedModel {
                 (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
             let w_down_ptr =
                 (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
-            return self.forward_one_token_minimal(
+            self.forward_one_token_minimal(
                 d_x_f32,
                 w.d_model as i32,
                 wq_ptr,
@@ -1184,7 +1184,7 @@ impl LoadedModel {
                 seq_id,
                 seq_len,
                 d_out_f32,
-            );
+            )
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1496,7 +1496,7 @@ impl LoadedModel {
         }
         // Fallback: use tok_embeddings^T as lm_head on host
         // Resolve embeddings for fallback when lm_head absent
-        let tok = self.find_tensor_any(&vec![
+        let tok = self.find_tensor_any(&[
             "tok_embeddings.weight".to_string(),
             "token_embd.weight".to_string(),
             "token_embd".to_string(),
@@ -1519,13 +1519,13 @@ impl LoadedModel {
         use half::f16;
         let row_bytes = d_model * 2;
         let mut logits = vec![0f32; vocab];
-        for v in 0..vocab {
+        for (v, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
             #[cfg(feature = "cuda")]
             {
-                let mut row_h = vec![0u8; row_bytes as usize];
+                let mut row_h = vec![0u8; row_bytes];
                 let row_dev = (self.d_weights_base as usize
                     + tok.byte_offset as usize
-                    + v * row_bytes as usize) as *const c_void;
+                    + v * row_bytes) as *const c_void;
                 self.cuda
                     .memcpy_d2h(row_h.as_mut_ptr() as *mut c_void, row_dev, row_bytes)?;
                 let mut acc = 0f32;
@@ -1535,12 +1535,12 @@ impl LoadedModel {
                     let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
                     acc += out_f[i] * val;
                 }
-                logits[v] = acc;
+                *logit_ref = acc;
             }
             #[cfg(not(feature = "cuda"))]
             {
-                let off = tok.byte_offset as usize + v * row_bytes as usize;
-                let row_slice = &self.host_weights[off..off + row_bytes as usize];
+                let off = tok.byte_offset as usize + v * row_bytes;
+                let row_slice = &self.host_weights[off..off + row_bytes];
                 let mut acc = 0f32;
                 for i in 0..d_model {
                     let lo = row_slice[i * 2];
@@ -1548,7 +1548,7 @@ impl LoadedModel {
                     let val = f16::from_bits(u16::from_le_bytes([lo, hi])).to_f32();
                     acc += out_f[i] * val;
                 }
-                logits[v] = acc;
+                *logit_ref = acc;
             }
         }
         Ok(logits)
