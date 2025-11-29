@@ -66,52 +66,95 @@ async fn generate(
     let sampler = greedy_sampler(42);
 
     // logits_fn that uses the minimal forward path to produce next-token logits
-    let mut seq_len: u32 = 0;
     let logits_fn = {
         let model = &state.model;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             // KV cache is pre-allocated at startup on the real model instance
 
-            // Prepare device buffers for embeddings and layer output
-            let w = model.map_standard_layer(0)?; // use first layer for minimal path
-            let d = w.d_model as usize;
+            eprintln!("[server] logits_fn called with {} tokens", ids.len());
+            let seq_len_now: u32 = ids.len() as u32;
+
+            // Determine d_model and whether we can run the minimal forward layer path
+            // Try to infer d_model from embeddings or lm_head as fallback
+            let embed_names = [
+                "tok_embeddings.weight",
+                "token_embd.weight",
+                "token_embd",
+                "token_embeddings.weight",
+            ];
+            let tok_opt = embed_names
+                .iter()
+                .find_map(|n| model.device_tensors.get(*n));
+            if tok_opt.is_none() {
+                eprintln!("[server] warning: no known embedding tensor found; will try lm_head only");
+            }
+            let d_model_from_tok = tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
+            if let Some(t) = tok_opt { eprintln!("[server] embeddings shape: {:?}", t.shape); }
+
+            let (d, can_forward) = match model.map_standard_layer(0) {
+                Ok(w) => {
+                    let ok = model.kv_cache.is_some();
+                    if !ok {
+                        eprintln!("[server] KV cache not available; using embeddings-only logits fallback");
+                    }
+                    eprintln!("[server] mapped standard layer d_model={} hidden_dim={}", w.d_model, w.hidden_dim);
+                    (w.d_model as usize, ok)
+                }
+                Err(e) => {
+                    eprintln!("[server] map_standard_layer failed; falling back to embeddings/logits path: {e}");
+                    let d_try = if d_model_from_tok > 0 { d_model_from_tok } else {
+                        match model.map_lm_head() {
+                            Ok((_lm, d_m, _vocab, _tied)) => {
+                                eprintln!("[server] derived d_model from lm_head: {}", d_m);
+                                d_m
+                            }
+                            Err(e2) => {
+                                eprintln!("[server] could not derive d_model from lm_head: {e2}");
+                                0
+                            }
+                        }
+                    };
+                    if d_try == 0 { return Err(anyhow::anyhow!("could not determine d_model")); }
+                    (d_try, false)
+                }
+            };
             let bytes = d * std::mem::size_of::<f32>();
 
             #[cfg(feature = "cuda")]
             {
                 // Last token id to embed
                 let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as u64;
+                eprintln!("[server] token id {}", tok_id);
 
-                // Allocate device buffers
+                // Allocate device buffer for embedding row (f32)
                 let d_x = model.cuda.device_malloc(bytes)?;
-                let d_out = model.cuda.device_malloc(bytes)?;
 
                 // Load embedding row for last token into d_x (f32)
-                unsafe {
-                    model.load_token_embedding_f16_to_f32(tok_id, d_x)?;
-                }
+                unsafe { model.load_token_embedding_f16_to_f32(tok_id, d_x)?; }
 
-                // Run minimal forward through one layer (prefill+decode semantics simplified as last-token)
-                unsafe {
-                    model.forward_one_token_with_layer(
-                        d_x as *const _,
-                        0,
-                        0,
-                        seq_len + 1,
-                        d_out,
-                    )?;
-                }
+                // If we have FP16 layer weights mapped and KV available, run the minimal forward through one layer.
+                let logits = if can_forward {
+                    let d_out = model.cuda.device_malloc(bytes)?;
+                    unsafe {
+                        model.forward_one_token_with_layer(
+                            d_x as *const _,
+                            0,
+                            0,
+                            seq_len_now,
+                            d_out,
+                        )?;
+                    }
+                    let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
+                    unsafe { let _ = model.cuda.device_free(d_out); }
+                    logits
+                } else {
+                    // Fallback: treat embedding as hidden and compute logits (uses lm_head when present or tok_embeddings^T)
+                    unsafe { model.logits_from_hidden(d_x as *const _) }?
+                };
 
-                // Compute logits using lm_head if available (GPU GEMM); fallback to embeddings^T host path
-                let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
+                // Free embedding buffer
+                unsafe { let _ = model.cuda.device_free(d_x); }
 
-                // Free device buffers
-                unsafe {
-                    let _ = model.cuda.device_free(d_x);
-                    let _ = model.cuda.device_free(d_out);
-                }
-
-                seq_len += 1;
                 Ok(logits)
             }
 
@@ -119,21 +162,18 @@ async fn generate(
             {
                 use half::f16;
                 use std::ffi::c_void;
-                // Build hidden state from tok_embeddings row (F16 -> F32) for the last token, then compute host logits
+                // Build hidden state from embeddings row (F16 -> F32) for the last token, then compute host logits
                 let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as usize;
-                let tok = model
-                    .device_tensors
-                    .get("tok_embeddings.weight")
-                    .ok_or_else(|| anyhow::anyhow!("missing tok_embeddings.weight"))?;
+                let tok = embed_names
+                    .iter()
+                    .find_map(|n| model.device_tensors.get(*n))
+                    .ok_or_else(|| anyhow::anyhow!("missing embeddings tensor (tried common names)"))?;
                 if tok.shape.len() != 2 {
-                    return Err(anyhow::anyhow!("tok_embeddings must be [vocab, d_model]"));
+                    return Err(anyhow::anyhow!("embeddings must be [vocab, d_model]"));
                 }
                 let vocab = tok.shape[0] as usize;
                 if tok_id >= vocab {
-                    return Err(anyhow::anyhow!(format!(
-                        "token id {} out of range (vocab={})",
-                        tok_id, vocab
-                    )));
+                    return Err(anyhow::anyhow!(format!("token id {} out of range (vocab={})", tok_id, vocab)));
                 }
                 let d_model = tok.shape[1] as usize;
                 let row_bytes = d_model * 2;
@@ -146,7 +186,6 @@ async fn generate(
                     hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
                 }
                 let logits = unsafe { model.logits_from_hidden(hidden.as_ptr() as *const c_void) }?;
-                seq_len += 1;
                 Ok(logits)
             }
         }

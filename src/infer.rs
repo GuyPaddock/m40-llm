@@ -84,20 +84,23 @@ impl LoadedModel {
         let d_model_meta = self
             .get_u32_meta("llama.embedding_length")
             .map(|x| x as usize);
-        let tok_name = "tok_embeddings.weight".to_string();
-        let tok = self
-            .device_tensor(&tok_name)
-            .ok_or_else(|| anyhow!("missing tensor: {}", tok_name))?;
+        // Try common embedding tensor names across families (LLaMA/Qwen)
+        let tok = self.find_tensor_any(&vec![
+            "tok_embeddings.weight".to_string(),
+            "token_embd.weight".to_string(),
+            "token_embd".to_string(),
+            "token_embeddings.weight".to_string(),
+        ])?;
         // Enforce embeddings dtype/shape policy: FP16 [vocab, d_model]
         if tok.dtype != GgmlDType::F16 {
             anyhow::bail!(
-                "tok_embeddings.weight expected F16 [vocab, d_model], got {:?}",
+                "embeddings expected F16 [vocab, d_model], got {:?}",
                 tok.dtype
             );
         }
         if tok.shape.len() != 2 {
             anyhow::bail!(
-                "tok_embeddings.weight shape invalid: expected [vocab, d_model], got {:?}",
+                "embeddings shape invalid: expected [vocab, d_model], got {:?}",
                 tok.shape
             );
         }
@@ -109,17 +112,17 @@ impl LoadedModel {
         }
         if d_model_meta.is_some() && d_model_from_tok != d_model {
             anyhow::bail!(
-                "tok_embeddings.weight second dim {} != d_model meta {}",
+                "embeddings second dim {} != d_model meta {}",
                 d_model_from_tok,
                 d_model
             );
         }
-        // If metadata has vocab_size, ensure it matches tok_embeddings rows
+        // If metadata has vocab_size, ensure it matches embeddings rows
         if let Some(v_meta) = self.get_u32_meta("llama.vocab_size") {
             let v_meta = v_meta as usize;
             if v_meta != vocab_rows {
                 anyhow::bail!(
-                    "vocab_size meta {} != tok_embeddings rows {}",
+                    "vocab_size meta {} != embeddings rows {}",
                     v_meta,
                     vocab_rows
                 );
@@ -1092,12 +1095,15 @@ impl LoadedModel {
         }
         #[cfg(feature = "cuda")]
         {
-            let tok = self
-                .device_tensors
-                .get("tok_embeddings.weight")
-                .ok_or_else(|| anyhow!("missing tok_embeddings.weight"))?;
+            // Resolve embeddings tensor (supports Qwen names)
+            let tok = self.find_tensor_any(&vec![
+                "tok_embeddings.weight".to_string(),
+                "token_embd.weight".to_string(),
+                "token_embd".to_string(),
+                "token_embeddings.weight".to_string(),
+            ])?;
             if tok.dtype != GgmlDType::F16 || tok.shape.len() != 2 {
-                anyhow::bail!("tok_embeddings must be F16 [vocab, d_model]");
+                anyhow::bail!("embeddings must be F16 [vocab, d_model]");
             }
             let vocab = tok.shape[0] as usize;
             let d_model = tok.shape[1] as usize;
@@ -1489,12 +1495,15 @@ impl LoadedModel {
             }
         }
         // Fallback: use tok_embeddings^T as lm_head on host
-        let tok = self
-            .device_tensors
-            .get("tok_embeddings.weight")
-            .ok_or_else(|| anyhow!("missing tok_embeddings.weight and no lm_head available"))?;
+        // Resolve embeddings for fallback when lm_head absent
+        let tok = self.find_tensor_any(&vec![
+            "tok_embeddings.weight".to_string(),
+            "token_embd.weight".to_string(),
+            "token_embd".to_string(),
+            "token_embeddings.weight".to_string(),
+        ])?;
         if tok.shape.len() != 2 {
-            anyhow::bail!("tok_embeddings must be rank-2 [vocab, d_model]");
+            anyhow::bail!("embeddings must be rank-2 [vocab, d_model]");
         }
         let vocab = tok.shape[0] as usize;
         let d_model = tok.shape[1] as usize;
