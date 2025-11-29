@@ -331,11 +331,6 @@ impl LoadedModel {
     /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
     pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
-        let d_model = self
-            .get_u32_meta("llama.embedding_length")
-            .map(|v| v as usize)
-            .ok_or_else(|| anyhow!("missing llama.embedding_length in metadata"))?;
-
         let candidates = vec![
             "output.weight".to_string(),
             "lm_head.weight".to_string(),
@@ -351,15 +346,12 @@ impl LoadedModel {
                     t.shape
                 );
             }
-            let k = t.shape[0] as usize;
-            let n = t.shape[1] as usize;
-            if k != d_model || n == 0 {
-                anyhow::bail!(
-                    "lm_head dims invalid: first dim {} must equal d_model {} and vocab>0 (got n={})",
-                    k, d_model, n
-                );
+            let d_model = t.shape[0] as usize;
+            let vocab = t.shape[1] as usize;
+            if d_model == 0 || vocab == 0 {
+                anyhow::bail!("lm_head dims invalid: non-zero [d_model, vocab] required: {:?}", t.shape);
             }
-            return Ok((t.clone(), d_model, n, false));
+            return Ok((t.clone(), d_model, vocab, false));
         }
         anyhow::bail!(
             "lm_head tensor not found; expected one of {}",

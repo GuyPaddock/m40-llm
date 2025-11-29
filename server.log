@@ -1,0 +1,6 @@
+nohup: ignoring input
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/m40-llm run qwen2.5-0.5b-instruct --addr '0.0.0.0:52150' --device-id=-1`
+[gguf_ext] overview unavailable for this file
+[cuda] device: 'Tesla M40 24GB' (id 1), sm_52
+Serving qwen2.5-0.5b-instruct on http://0.0.0.0:52150/generate

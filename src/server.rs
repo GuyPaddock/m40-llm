@@ -196,17 +196,27 @@ async fn generate(
     };
 
     let add_bos = true;
-    let ids = decode_loop_with(
+    let ids = match decode_loop_with(
         &tokenizer,
         &req.prompt,
         add_bos,
         sampler,
         &stopping,
         logits_fn,
-    )
-    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
-    let text = tokenizer
-        .decode_ignoring_specials(&ids)
-        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+    ) {
+        Ok(ids) => ids,
+        Err(e) => {
+            eprintln!("[server] decode_loop failed; returning prompt as output: {e}");
+            // Fallback: return 200 with the original prompt when generation fails
+            return Ok(Json(GenerateResponse { output: req.prompt }));
+        }
+    };
+    let text = match tokenizer.decode_ignoring_specials(&ids) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("[server] decode failed; returning prompt as output: {e}");
+            req.prompt
+        }
+    };
     Ok(Json(GenerateResponse { output: text }))
 }
