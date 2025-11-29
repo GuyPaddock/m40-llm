@@ -94,7 +94,7 @@ impl LoadedModel {
         // Enforce embeddings dtype/shape policy: FP16 [vocab, d_model]
         if tok.dtype != GgmlDType::F16 {
             anyhow::bail!(
-                "embeddings expected F16 [vocab, d_model], got {:?}",
+                "tok_embeddings.weight expected F16 [vocab, d_model], got {:?}",
                 tok.dtype
             );
         }

@@ -72,7 +72,7 @@ async fn generate(
             // KV cache is pre-allocated at startup on the real model instance
 
             eprintln!("[server] logits_fn called with {} tokens", ids.len());
-            let seq_len_now: u32 = ids.len() as u32;
+            let _seq_len_now: u32 = ids.len() as u32;
 
             // Determine d_model and whether we can run the minimal forward layer path
             // Try to infer d_model from embeddings or lm_head as fallback
@@ -91,7 +91,7 @@ async fn generate(
             let d_model_from_tok = tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
             if let Some(t) = tok_opt { eprintln!("[server] embeddings shape: {:?}", t.shape); }
 
-            let (d, can_forward) = match model.map_standard_layer(0) {
+            let (d, _can_forward) = match model.map_standard_layer(0) {
                 Ok(w) => {
                     let ok = model.kv_cache.is_some();
                     if !ok {
@@ -118,7 +118,7 @@ async fn generate(
                     (d_try, false)
                 }
             };
-            let bytes = d * std::mem::size_of::<f32>();
+            let _bytes = d * std::mem::size_of::<f32>();
 
             #[cfg(feature = "cuda")]
             {
