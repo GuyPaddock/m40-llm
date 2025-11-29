@@ -1130,6 +1130,19 @@ impl LoadedModel {
     }
 }
 
+#[cfg(feature = "cuda")]
+impl LoadedModel {
+    /// Backward-compat shim for tests until they are updated
+    /// Safety: same as load_token_embedding_to_f32
+    pub unsafe fn load_token_embedding_f16_to_f32(
+        &self,
+        token_id: u64,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.load_token_embedding_to_f32(token_id, d_out_f32)
+    }
+}
+
 impl LoadedModel {
     /// Helper to run forward_one_token_minimal using mapped layer weights.
     /// Assumes embeddings have already produced x (f32) for the token index.
