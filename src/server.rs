@@ -7,7 +7,7 @@ use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
-use axum::http::{HeaderName, HeaderValue};
+use axum::http::{HeaderName, HeaderValue, StatusCode};
 use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -20,6 +20,12 @@ pub struct GenerateRequest {
 pub struct GenerateResponse {
     pub output: String,
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ErrorResponse {
+    pub error: String,
+}
+
 
 pub struct AppState {
     pub model: LoadedModel,
@@ -53,7 +59,7 @@ pub fn app_router(state: Arc<AppState>) -> Router {
 async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, axum::http::StatusCode> {
+) -> Result<Json<GenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Build tokenizer from GGUF metadata. Fallback to byte-level.
     let tokenizer: Tokenizer = match Tokenizer::from_gguf_metadata(&state.model.gguf.metadata) {
         Ok(t) => t,
@@ -206,16 +212,15 @@ async fn generate(
     ) {
         Ok(ids) => ids,
         Err(e) => {
-            eprintln!("[server] decode_loop failed; returning prompt as output: {e}");
-            // Fallback: return 200 with the original prompt when generation fails
-            return Ok(Json(GenerateResponse { output: req.prompt }));
+            eprintln!("[server] decode_loop failed: {e}");
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: format!("generation failed: {e}") })));
         }
     };
     let text = match tokenizer.decode_ignoring_specials(&ids) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("[server] decode failed; returning prompt as output: {e}");
-            req.prompt
+            eprintln!("[server] decode failed: {e}");
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: format!("decode failed: {e}") })));
         }
     };
     Ok(Json(GenerateResponse { output: text }))
