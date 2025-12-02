@@ -1,6 +1,19 @@
 nohup: ignoring input
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
-     Running `target/debug/m40-llm run qwen2.5-0.5b-instruct --addr '0.0.0.0:52150' --device-id=-1`
 [gguf_ext] overview unavailable for this file
 [cuda] device: 'Tesla M40 24GB' (id 1), sm_52
-Serving qwen2.5-0.5b-instruct on http://0.0.0.0:52150/generate
+Error: Address already in use (os error 98)
+rver] logits_fn called with 6 tokens
+[server] embeddings shape: [896, 151936]
+[server] map_standard_layer failed; falling back to embeddings/logits path: typed_config.embedding_length 896 != inferred d_model 151936
+[server] token id 111
+
+thread 'tokio-runtime-worker' (31576) panicked at src/sampling.rs:50:78:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[server] logits_fn called with 11 tokens
+[server] embeddings shape: [896, 151936]
+[server] map_standard_layer failed; falling back to embeddings/logits path: typed_config.embedding_length 896 != inferred d_model 151936
+[server] token id 101
+
+thread 'tokio-runtime-worker' (31576) panicked at src/sampling.rs:50:78:
+called `Option::unwrap()` on a `None` value

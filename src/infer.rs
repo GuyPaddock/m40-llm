@@ -4,8 +4,6 @@
 use crate::cuda::{CudaContext, KVCache};
 use crate::gguf::{GgmlDType, GgufModel, GgufTensor};
 use anyhow::{anyhow, Context, Result};
-#[cfg(feature = "cuda")]
-use half::f16;
 use std::collections::HashMap;
 use std::ffi::c_void;
 
@@ -1108,20 +1106,123 @@ impl LoadedModel {
                     n_vocab
                 );
             }
-            let d_model = tok.shape[1] as usize;
+            let r0 = tok.shape[0] as usize;
+            let r1 = tok.shape[1] as usize;
+            // Determine d_model and which dimension is vocab vs d_model
+            let mut d_model = self.get_u32_meta("llama.embedding_length").map(|x| x as usize).unwrap_or(0);
+            #[cfg(feature = "gguf_ext")]
+            if let Some(cfg) = &self.typed_config {
+                if cfg.embedding_length > 0 { d_model = cfg.embedding_length as usize; }
+            }
+            if d_model == 0 { d_model = r0.min(r1); }
+            // rows_are_vocab = true when shape is [vocab, d_model]
+            let rows_are_vocab = {
+                if let Some(vsz) = self.get_u32_meta("llama.vocab_size").map(|x| x as usize) {
+                    if vsz == r0 { true } else if vsz == r1 { false } else {
+                        // Fallback to embedding_length alignment
+                        r1 == d_model
+                    }
+                } else {
+                    // No vocab meta; infer from embedding length match
+                    if r1 == d_model { true } else if r0 == d_model { false } else { r1 == d_model }
+                }
+            };
+            let vocab = if rows_are_vocab { r0 } else { r1 };
+            if (token_id as usize) >= vocab {
+                anyhow::bail!("token_id {} out of range for vocab size {}", token_id, vocab);
+            }
             match tok.dtype {
                 GgmlDType::F16 => {
-                    let row_bytes = d_model * 2;
-                    let d_row =
-                        (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
-                    self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
+                    if rows_are_vocab {
+                        // Contiguous row: [vocab, d_model]
+                        let row_bytes = d_model * 2;
+                        let d_row = (tok.dptr as usize + (token_id as usize) * row_bytes)
+                            as *const c_void;
+                        self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
+                    } else {
+                        // Column gather: shape [d_model, vocab], take column = token_id
+                        use half::f16;
+                        let row_stride = r1 * 2; // vocab elements per row (f16)
+                        let mut out = vec![0f32; d_model];
+                        for i in 0..d_model {
+                            let elem_off = (tok.dptr as usize)
+                                + i * row_stride
+                                + (token_id as usize) * 2;
+                            let mut bytes = [0u8; 2];
+                            self.cuda.memcpy_d2h(
+                                bytes.as_mut_ptr() as *mut c_void,
+                                elem_off as *const c_void,
+                                2,
+                            )?;
+                            let bits = (bytes[0] as u16) | ((bytes[1] as u16) << 8);
+                            out[i] = f16::from_bits(bits).to_f32();
+                        }
+                        let out_bytes = d_model * std::mem::size_of::<f32>();
+                        self.cuda
+                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                    }
                 }
                 GgmlDType::Q8_0 => {
-                    let blocks = (d_model + 31) / 32;
-                    let row_bytes = blocks * 36;
-                    let d_row =
-                        (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
-                    self.cuda.q80_to_f32(d_row, d_out_f32, d_model)?;
+                    if rows_are_vocab {
+                        // Row dequant: shape [vocab, d_model], blocks along d_model
+                        let blocks = (d_model + 31) / 32;
+                        let row_bytes = blocks * 36; // 4 + 32 bytes per block
+                        let d_row = (tok.dptr as usize + (token_id as usize) * row_bytes)
+                            as *const c_void;
+                        // Pull the quantized row bytes to host
+                        let mut qrow = vec![0u8; row_bytes];
+                        self.cuda
+                            .memcpy_d2h(qrow.as_mut_ptr() as *mut c_void, d_row, row_bytes)?;
+                        // Dequantize to f32 on host
+                        let mut out = vec![0f32; d_model];
+                        for blk in 0..blocks {
+                            let base = blk * 36;
+                            let d = f32::from_le_bytes([
+                                qrow[base + 0],
+                                qrow[base + 1],
+                                qrow[base + 2],
+                                qrow[base + 3],
+                            ]);
+                            for idx in 0..32 {
+                                let i = blk * 32 + idx;
+                                if i >= d_model { break; }
+                                let q = qrow[base + 4 + idx] as i8 as f32;
+                                out[i] = d * q;
+                            }
+                        }
+                        let out_bytes = d_model * std::mem::size_of::<f32>();
+                        self.cuda
+                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                    } else {
+                        // Column dequant: shape [d_model, vocab], blocks along vocab
+                        let vocab = r1;
+                        let blocks = (vocab + 31) / 32;
+                        let row_stride = blocks * 36; // bytes per row
+                        let b = (token_id as usize) / 32;
+                        let idx = (token_id as usize) % 32;
+                        let mut out = vec![0f32; d_model];
+                        let mut block_buf = [0u8; 36];
+                        for i in 0..d_model {
+                            let row_base = (tok.dptr as usize) + i * row_stride;
+                            let blk_off = row_base + b * 36;
+                            self.cuda.memcpy_d2h(
+                                block_buf.as_mut_ptr() as *mut c_void,
+                                blk_off as *const c_void,
+                                36,
+                            )?;
+                            let d = f32::from_le_bytes([
+                                block_buf[0],
+                                block_buf[1],
+                                block_buf[2],
+                                block_buf[3],
+                            ]);
+                            let q = block_buf[4 + idx] as i8 as f32;
+                            out[i] = d * q;
+                        }
+                        let out_bytes = d_model * std::mem::size_of::<f32>();
+                        self.cuda
+                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                    }
                 }
                 other => anyhow::bail!("unsupported embedding dtype: {:?}", other),
             }

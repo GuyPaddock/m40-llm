@@ -4,7 +4,7 @@ use axum::{routing::post, Json, Router};
 use std::sync::Arc;
 
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
-use crate::gguf::GgmlDType;
+// use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;

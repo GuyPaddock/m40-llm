@@ -19,7 +19,7 @@ fi
 
 # 2) Validate with cocogitto and capture subject
 subject=$(sed -n '1{s/[ \t]*$//;p}' "$MSG_FILE")
-if ! cog verify --file "$MSG_FILE" >/dev/null 2>&1; then
+if ! cog verify --file "$MSG_FILE"; then
   echo "[commit-msg] cocogitto verify failed on the commit message file." >&2
   exit 1
 fi
