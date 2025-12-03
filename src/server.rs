@@ -300,7 +300,7 @@ async fn generate(
         Err(e) => {
             #[cfg(feature = "cuda")]
             eprintln!(
-                "[mem] pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+                "[mem] (finish-err) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
                 std::process::id(),
                 state.model.cuda.device_id(),
                 CudaContext::total_device_bytes()
