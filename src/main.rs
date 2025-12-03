@@ -79,6 +79,14 @@ async fn main() -> Result<()> {
                 let gguf_model = gguf::load_gguf(&local.path)?;
                 let mut loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, device_id)?; // device selection
 
+                #[cfg(feature = "cuda")]
+                eprintln!(
+                    "[mem] (load) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+                    std::process::id(),
+                    loaded.cuda.device_id(),
+                    m40_llm::cuda::CudaContext::total_device_bytes()
+                );
+
                 // Optional: enforce sm_52 guard
                 if require_sm52 {
                     let props = loaded.cuda.current_device_props()?;
