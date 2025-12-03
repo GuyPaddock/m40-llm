@@ -91,10 +91,22 @@ async fn generate(
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
         let model = &state.model;
+        let mut step: usize = 0;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             // KV cache is pre-allocated at startup on the real model instance
 
+            step += 1;
             eprintln!("[server] logits_fn called with {} tokens", ids.len());
+            #[cfg(feature = "cuda")]
+            {
+                eprintln!(
+                    "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+                    step,
+                    std::process::id(),
+                    model.cuda.device_id(),
+                    CudaContext::total_device_bytes()
+                );
+            }
             #[cfg(feature = "cuda")]
             let seq_len_now: u32 = ids.len() as u32;
 
