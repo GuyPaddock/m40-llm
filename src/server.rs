@@ -72,7 +72,7 @@ async fn generate(
 ) -> Result<Json<GenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
     #[cfg(feature = "cuda")]
     eprintln!(
-        "[mem] pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+        "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
         std::process::id(),
         state.model.cuda.device_id(),
         CudaContext::total_device_bytes()
