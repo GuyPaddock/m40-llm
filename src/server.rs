@@ -314,5 +314,12 @@ async fn generate(
             ));
         }
     };
+    #[cfg(feature = "cuda")]
+    eprintln!(
+        "[mem] (finish) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+        std::process::id(),
+        state.model.cuda.device_id(),
+        CudaContext::total_device_bytes()
+    );
     Ok(Json(GenerateResponse { output: text }))
 }
