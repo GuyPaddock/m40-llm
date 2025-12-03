@@ -6,6 +6,8 @@ use axum::{
 };
 use std::sync::Arc;
 
+#[cfg(feature = "cuda")]
+use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
 // use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
@@ -68,6 +70,13 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Json<GenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
+    #[cfg(feature = "cuda")]
+    eprintln!(
+        "[mem] pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+        std::process::id(),
+        state.model.cuda.device_id(),
+        CudaContext::total_device_bytes()
+    );
     // Build tokenizer from GGUF metadata. Fallback to byte-level.
     let tokenizer: Tokenizer = match Tokenizer::from_gguf_metadata(&state.model.gguf.metadata) {
         Ok(t) => t,
@@ -289,6 +298,13 @@ async fn generate(
     let text = match tokenizer.decode_ignoring_specials(&ids) {
         Ok(t) => t,
         Err(e) => {
+            #[cfg(feature = "cuda")]
+            eprintln!(
+                "[mem] pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+                std::process::id(),
+                state.model.cuda.device_id(),
+                CudaContext::total_device_bytes()
+            );
             eprintln!("[server] decode failed: {e}");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,

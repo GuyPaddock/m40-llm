@@ -161,7 +161,7 @@ pub struct DeviceProps {
 }
 
 // Global allocation tracker (bytes) for diagnostics only
-static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
 struct AllocInfo {
@@ -197,6 +197,10 @@ unsafe impl Send for CudaContextInner {}
 unsafe impl Sync for CudaContextInner {}
 
 impl CudaContext {
+    #[inline]
+    pub fn total_device_bytes() -> usize {
+        TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
+    }
     pub fn new(device_id: i32) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
