@@ -1,4 +1,6 @@
 // src/cuda.rs
+#![allow(clippy::uninlined_format_args)]
+
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
@@ -6,8 +8,10 @@ use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
 
+use std::collections::HashMap;
 #[cfg(feature = "cuda")]
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "cuda")]
@@ -156,6 +160,15 @@ pub struct DeviceProps {
     pub device_id: i32,
 }
 
+// Global allocation tracker (bytes) for diagnostics only
+static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Debug, Clone)]
+struct AllocInfo {
+    size: usize,
+    tag: Option<String>,
+}
+
 // Public-safe wrapper types usable in both CUDA and non-CUDA builds
 #[derive(Debug, Clone)]
 pub struct CudaContext {
@@ -172,6 +185,10 @@ struct CudaContextInner {
     raw: NonNull<ffi::M40llmCudaContext>,
     #[cfg(feature = "cuda")]
     weights_ptr: Mutex<Option<NonNull<c_void>>>,
+    #[cfg(feature = "cuda")]
+    weights_size: Mutex<usize>,
+    #[cfg(feature = "cuda")]
+    alloc_map: Mutex<HashMap<*mut c_void, AllocInfo>>, // per-allocation info (size, tag)
 }
 
 #[cfg(feature = "cuda")]
@@ -192,6 +209,8 @@ impl CudaContext {
                     lock: Mutex::new(()),
                     raw,
                     weights_ptr: Mutex::new(None),
+                    weights_size: Mutex::new(0),
+                    alloc_map: Mutex::new(HashMap::new()),
                 }),
             })
         }
@@ -206,6 +225,10 @@ impl CudaContext {
                     raw: NonNull::dangling(),
                     #[cfg(feature = "cuda")]
                     weights_ptr: Mutex::new(None),
+                    #[cfg(feature = "cuda")]
+                    weights_size: Mutex::new(0),
+                    #[cfg(feature = "cuda")]
+                    alloc_map: Mutex::new(HashMap::new()),
                 }),
             })
         }
@@ -263,26 +286,107 @@ impl CudaContext {
 
 #[cfg(feature = "cuda")]
 impl CudaContext {
-    pub fn device_malloc(&self, bytes: usize) -> Result<*mut c_void> {
+    #[track_caller]
+    fn device_malloc_inner(&self, bytes: usize, tag: Option<&str>) -> Result<*mut c_void> {
         let _g = self.inner.lock.lock().unwrap();
         let mut out: *mut c_void = std::ptr::null_mut();
         let rc = unsafe {
             ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _)
         };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_device_malloc failed: {rc}"));
+        if rc != 0 || out.is_null() {
+            let props = self.current_device_props().ok();
+            return Err(anyhow!(
+                "m40llm_device_malloc failed: rc={rc}, bytes={bytes}, total_before={}{}",
+                TOTAL_DEVICE_BYTES.load(Ordering::SeqCst),
+                props
+                    .map(|p| format!(
+                        ", device='{}' sm_{}{} id {}",
+                        p.name, p.major, p.minor, p.device_id
+                    ))
+                    .unwrap_or_default()
+            ));
         }
+        TOTAL_DEVICE_BYTES.fetch_add(bytes, Ordering::SeqCst);
+        if let Ok(mut map) = self.inner.alloc_map.lock() {
+            map.insert(
+                out,
+                AllocInfo {
+                    size: bytes,
+                    tag: tag.map(|s| s.to_string()),
+                },
+            );
+        }
+        let caller = std::panic::Location::caller();
+        let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
+        let mut msg = format!(
+            "[cuda] device_malloc: {} bytes (total={}) at {}:{}",
+            bytes,
+            total,
+            caller.file(),
+            caller.line()
+        );
+        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
+            let bt = std::backtrace::Backtrace::capture();
+            msg.push_str(&format!("\n{:?}", bt));
+        }
+        eprintln!(
+            "{}{}",
+            msg,
+            tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
+        );
         Ok(out)
+    }
+
+    #[track_caller]
+    pub fn device_malloc(&self, bytes: usize) -> Result<*mut c_void> {
+        self.device_malloc_inner(bytes, None)
+    }
+
+    #[track_caller]
+    pub fn device_malloc_tagged(&self, bytes: usize, tag: &str) -> Result<*mut c_void> {
+        self.device_malloc_inner(bytes, Some(tag))
     }
     /// # Safety
     /// `ptr` must be a valid device pointer previously allocated by `device_malloc` or the CUDA runtime.
     /// The memory must not be used after this call and must belong to this context/device.
+    #[track_caller]
     pub unsafe fn device_free(&self, ptr: *mut c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
+        // Pre-read for log, then free
+        let before = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
         let rc = unsafe { ffi::m40llm_device_free(self.inner.raw.as_ptr(), ptr) };
         if rc != 0 {
             return Err(anyhow!("m40llm_device_free failed: {rc}"));
         }
+        // Decrement tracked total if we know this allocation size
+        let mut dec = 0usize;
+        let mut tag: Option<String> = None;
+        if let Ok(mut map) = self.inner.alloc_map.lock() {
+            if let Some(info) = map.remove(&ptr) {
+                dec = info.size;
+                tag = info.tag;
+                TOTAL_DEVICE_BYTES.fetch_sub(info.size, Ordering::SeqCst);
+            }
+        }
+        let after = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
+        let caller = std::panic::Location::caller();
+        let mut msg = format!(
+            "[cuda] device_free: ptr={:?} dec={} (total {} -> {}) at {}:{}",
+            ptr,
+            dec,
+            before,
+            after,
+            caller.file(),
+            caller.line()
+        );
+        if let Some(t) = &tag {
+            msg.push_str(&format!(" tag={}", t));
+        }
+        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
+            let bt = std::backtrace::Backtrace::capture();
+            msg.push_str(&format!("\n{:?}", bt));
+        }
+        eprintln!("{}", msg);
         Ok(())
     }
     /// # Safety
@@ -442,9 +546,24 @@ impl CudaContext {
             let _g = self.inner.lock.lock().unwrap();
             // Free any previously uploaded weights to avoid leaks on re-upload
             if let Some(prev) = self.inner.weights_ptr.lock().unwrap().take() {
+                // Adjust tracked totals using recorded size
+                let mut wbytes = 0usize;
+                if let Ok(mut m) = self.inner.alloc_map.lock() {
+                    if let Some(info) = m.remove(&prev.as_ptr()) {
+                        wbytes = info.size;
+                    }
+                }
+                if wbytes > 0 {
+                    TOTAL_DEVICE_BYTES.fetch_sub(wbytes, Ordering::SeqCst);
+                }
                 unsafe {
                     let _ = ffi::m40llm_device_free(self.inner.raw.as_ptr(), prev.as_ptr());
                 }
+                eprintln!(
+                    "[cuda] upload_weights: freed prev {} bytes (total={})",
+                    wbytes,
+                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
+                );
             }
             let mut d_ptr: *mut c_void = std::ptr::null_mut();
             let rc = unsafe {
@@ -456,8 +575,29 @@ impl CudaContext {
                 )
             };
             if rc != 0 || d_ptr.is_null() {
-                return Err(anyhow!("m40llm_upload_weights failed: {rc}"));
+                return Err(anyhow!(
+                    "m40llm_upload_weights failed: rc={rc}, bytes={}, total_before={}",
+                    data.len(),
+                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
+                ));
             }
+            // Upload uses cudaMalloc + copy under the hood; conservatively track bytes
+            TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
+            if let Ok(mut map) = self.inner.alloc_map.lock() {
+                map.insert(
+                    d_ptr,
+                    AllocInfo {
+                        size: data.len(),
+                        tag: Some("weights".into()),
+                    },
+                );
+            }
+            let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
+            eprintln!(
+                "[cuda] upload_weights: {} bytes (total={}) tag=weights",
+                data.len(),
+                total
+            );
             // Track ownership inside the context so it can be freed on drop
             let mut slot = self.inner.weights_ptr.lock().unwrap();
             *slot = NonNull::new(d_ptr);
