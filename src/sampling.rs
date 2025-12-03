@@ -45,14 +45,22 @@ impl Sampler {
         let probs = softmax_temp(logits, self.cfg.temperature);
         // 2) Apply top-k / top-p filtering into a working buffer of (idx, prob)
         let mut items: Vec<(usize, f32)> = probs.iter().copied().enumerate().collect();
+        // Sanitize NaN/Inf probabilities to avoid panics
+        for (_, pr) in &mut items {
+            if !pr.is_finite() || *pr < 0.0 {
+                *pr = 0.0;
+            }
+        }
+        let mut nonzero = items.iter().any(|&(_, p)| p > 0.0);
         if let Some(k) = self.cfg.top_k {
             if k > 0 && k < items.len() {
-                items.select_nth_unstable_by(k, |a, b| b.1.partial_cmp(&a.1).unwrap());
+                items.select_nth_unstable_by(k, |a, b| f32::total_cmp(&b.1, &a.1));
                 items.truncate(k);
+                nonzero = items.iter().any(|&(_, p)| p > 0.0);
             }
         }
         if let Some(p) = self.cfg.top_p {
-            items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            items.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
             let mut cum = 0.0f32;
             let mut keep = 0usize;
             for &(_, pr) in &items {
@@ -63,6 +71,11 @@ impl Sampler {
                 }
             }
             items.truncate(keep.max(1));
+            nonzero = items.iter().any(|&(_, p)| p > 0.0);
+        }
+        // If everything is zero (underflow or NaNs), fall back to greedy on logits
+        if !nonzero {
+            return self.sample_greedy(logits);
         }
         // 3) Normalize remaining and draw
         let sum: f32 = items.iter().map(|&(_, p)| p).sum();
@@ -105,10 +118,15 @@ fn softmax_temp(logits: &[f32], temperature: f32) -> Vec<f32> {
     }
     let mut exps = Vec::with_capacity(logits.len());
     for &v in logits {
-        exps.push(((v * inv_t) - max_logit).exp());
+        let x = ((v * inv_t) - max_logit).exp();
+        if x.is_finite() && x > 0.0 {
+            exps.push(x);
+        } else {
+            exps.push(0.0);
+        }
     }
     let sum: f32 = exps.iter().sum();
-    if sum <= 0.0 {
+    if sum <= 0.0 || !sum.is_finite() {
         return vec![0.0; logits.len()];
     }
     exps.into_iter().map(|x| x / sum).collect()
