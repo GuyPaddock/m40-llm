@@ -1,6 +1,9 @@
 // src/server.rs
 #![allow(dead_code)]
-use axum::{routing::post, Json, Router};
+use axum::{
+    routing::{get, post},
+    Json, Router,
+};
 use std::sync::Arc;
 
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
@@ -49,11 +52,16 @@ pub fn app_router(state: Arc<AppState>) -> Router {
     );
 
     Router::new()
+        .route("/health", get(health))
         .route("/generate", post(generate))
         .layer(csp)
         .layer(xfo)
         .layer(cors)
         .with_state(state)
+}
+
+async fn health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"status":"ok"}))
 }
 
 async fn generate(

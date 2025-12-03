@@ -20,7 +20,8 @@ SERVER_LOG=${LOG_DIR}/server_memtest.log
 SMI_LOG=${LOG_DIR}/nvidia_smi_gpu${GPU_INDEX}_${PORT}.log
 PID_FILE=${LOG_DIR}/server_${PORT}.pid
 CUDA_LAUNCH_BLOCKING=${CUDA_LAUNCH_BLOCKING:-0}
-M40LLM_FORCE_M40=${M40LLM_FORCE_M40:-1}
+# Respect --device-id by default; set to 1 to force M40 auto-select
+M40LLM_FORCE_M40=${M40LLM_FORCE_M40:-0}
 M40LLM_ALLOC_BT=${M40LLM_ALLOC_BT:-0}
 
 cleanup() {
@@ -62,14 +63,14 @@ fi
 # Start server in background
 set -m
 CUDA_LAUNCH_BLOCKING=$CUDA_LAUNCH_BLOCKING M40LLM_FORCE_M40=$M40LLM_FORCE_M40 M40LLM_ALLOC_BT=$M40LLM_ALLOC_BT \
-$BIN run --model "$MODEL_NAME" --addr "$ADDR" --device-id "$DEVICE_ID" >"$SERVER_LOG" 2>&1 &
+$BIN run "$MODEL_NAME" --addr "$ADDR" --device-id "$DEVICE_ID" >"$SERVER_LOG" 2>&1 &
 SRV_PID=$!
 echo $SRV_PID > "$PID_FILE"
 echo "[server] pid=$SRV_PID log=$SERVER_LOG"
 
-# Wait for ready
+# Wait for ready (GET /health)
 for _ in $(seq 1 60); do
-  if $CURL -s "http://127.0.0.1:${PORT}/generate" -o /dev/null ; then
+  if $CURL -sf "http://127.0.0.1:${PORT}/health" -o /dev/null ; then
     break
   fi
   sleep 0.5
