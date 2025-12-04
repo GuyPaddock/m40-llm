@@ -151,7 +151,9 @@ async fn generate(
                 eprintln!("[server] token id {}", tok_id);
 
                 // Allocate device buffer for embedding row (f32)
-                let d_x = model.cuda.device_malloc(bytes)?;
+                let d_x = model
+                    .cuda
+                    .device_malloc_tagged(bytes, "server:d_x_embed_f32")?;
 
                 // Load embedding row for last token into d_x (f32)
                 unsafe {
@@ -160,7 +162,9 @@ async fn generate(
 
                 // If we have FP16 layer weights mapped and KV available, run the minimal forward through one layer.
                 let logits = if can_forward {
-                    let d_out = model.cuda.device_malloc(bytes)?;
+                    let d_out = model
+                        .cuda
+                        .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
                     unsafe {
                         model.forward_one_token_with_layer(
                             d_x as *const _,
@@ -172,7 +176,7 @@ async fn generate(
                     }
                     let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
                     unsafe {
-                        let _ = model.cuda.device_free(d_out);
+                        let _ = model.cuda.device_free(d_out); // freed server:d_out_hidden_f32
                     }
                     logits
                 } else {
