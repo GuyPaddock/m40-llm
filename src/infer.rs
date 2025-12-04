@@ -78,10 +78,8 @@ impl LoadedModel {
     /// Supports both layers.N.* and blk.N.* naming variants.
     pub fn map_standard_layer(&self, layer: usize) -> Result<StandardLayerWeights> {
         use crate::gguf::GgmlDType;
-        // Determine d_model from metadata or embeddings tensor shape
-        let d_model_meta = self
-            .get_u32_meta("llama.embedding_length")
-            .map(|x| x as usize);
+        // Determine d_model from typed config or metadata and support embeddings layout
+        // in either [vocab, d_model] or [d_model, vocab] (e.g., Qwen).
         // Try common embedding tensor names across families (LLaMA/Qwen)
         let tok = self.find_tensor_any(&[
             "tok_embeddings.weight".to_string(),
@@ -89,40 +87,60 @@ impl LoadedModel {
             "token_embd".to_string(),
             "token_embeddings.weight".to_string(),
         ])?;
-        // Enforce embeddings dtype/shape policy: F16 or Q8_0 [vocab, d_model]
+        // Enforce embeddings dtype policy: F16 or Q8_0
         if tok.dtype != GgmlDType::F16 && tok.dtype != GgmlDType::Q8_0 {
             anyhow::bail!(
-                "tok_embeddings.weight expected F16 or Q8_0 [vocab, d_model], got {:?}",
+                "tok_embeddings.weight expected F16 or Q8_0 [*, *], got {:?}",
                 tok.dtype
             )
         }
         if tok.shape.len() != 2 {
             anyhow::bail!(
-                "embeddings shape invalid: expected [vocab, d_model], got {:?}",
+                "embeddings shape invalid: expected rank-2, got {:?}",
                 tok.shape
             );
         }
-        let vocab_rows = tok.shape.first().copied().unwrap_or(0) as usize;
-        let d_model_from_tok = tok.shape.get(1).copied().unwrap_or(0) as usize;
-        let d_model = d_model_meta.unwrap_or(d_model_from_tok);
+        let r0 = tok.shape[0] as usize;
+        let r1 = tok.shape[1] as usize;
+        // Prefer typed_config for d_model; fallback to raw metadata; else infer from smaller dim
+        let mut d_model = None::<usize>;
+        #[cfg(feature = "gguf_ext")]
+        if let Some(cfg) = &self.typed_config {
+            if cfg.embedding_length > 0 {
+                d_model = Some(cfg.embedding_length as usize);
+            }
+        }
+        if d_model.is_none() {
+            d_model = self
+                .get_u32_meta("llama.embedding_length")
+                .map(|x| x as usize);
+        }
+        let d_model = d_model.unwrap_or(r0.min(r1));
         if d_model == 0 {
             anyhow::bail!("could not determine d_model")
         }
-        if d_model_meta.is_some() && d_model_from_tok != d_model {
+        // Validate that one embedding dimension equals d_model and the other matches vocab if present
+        let rows_are_vocab = if r1 == d_model {
+            true // [vocab, d_model]
+        } else if r0 == d_model {
+            false // [d_model, vocab]
+        } else {
+            // Neither dimension equals d_model -> invalid
             anyhow::bail!(
-                "embeddings second dim {} != d_model meta {}",
-                d_model_from_tok,
+                "embeddings dims {:?} do not contain d_model {}",
+                tok.shape,
                 d_model
             );
-        }
-        // If metadata has vocab_size, ensure it matches embeddings rows
+        };
         if let Some(v_meta) = self.get_u32_meta("llama.vocab_size") {
             let v_meta = v_meta as usize;
-            if v_meta != vocab_rows {
+            let vocab_dim = if rows_are_vocab { r0 } else { r1 };
+            if v_meta != vocab_dim {
                 anyhow::bail!(
-                    "vocab_size meta {} != embeddings rows {}",
+                    "vocab_size meta {} != embeddings vocab dim {} (shape={:?})",
                     v_meta,
-                    vocab_rows
+                    vocab_dim,
+                    tok.shape
                 );
             }
         }
