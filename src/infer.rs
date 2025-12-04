@@ -753,18 +753,18 @@ impl LoadedModel {
             // Allocate scratch buffers
             let bytes_d = (d_model as usize) * 4;
             let bytes_h = (hidden_dim as usize) * 4;
-            let dq = self.cuda.device_malloc(bytes_d)?;
-            let dk = self.cuda.device_malloc(bytes_d)?;
-            let dv = self.cuda.device_malloc(bytes_d)?;
-            let datt = self.cuda.device_malloc(bytes_d)?; // attention output
-            let dy_attn = self.cuda.device_malloc(bytes_d)?; // after out-proj
-            let dgate = self.cuda.device_malloc(bytes_h)?;
-            let dup = self.cuda.device_malloc(bytes_h)?;
-            let dhid = self.cuda.device_malloc(bytes_h)?;
-            let dy_mlp = self.cuda.device_malloc(bytes_d)?;
-            let d_xn = self.cuda.device_malloc(bytes_d)?; // pre-attn norm(x)
-            let d_x1 = self.cuda.device_malloc(bytes_d)?; // x + attn(xn)
-            let d_x1n = self.cuda.device_malloc(bytes_d)?; // norm(x1)
+            let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
+            let dk = self.cuda.device_malloc_tagged(bytes_d, "fwd:dk_f32")?;
+            let dv = self.cuda.device_malloc_tagged(bytes_d, "fwd:dv_f32")?;
+            let datt = self.cuda.device_malloc_tagged(bytes_d, "fwd:datt_f32")?; // attention output
+            let dy_attn = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_attn_f32")?; // after out-proj
+            let dgate = self.cuda.device_malloc_tagged(bytes_h, "fwd:dgate_f32")?;
+            let dup = self.cuda.device_malloc_tagged(bytes_h, "fwd:dup_f32")?;
+            let dhid = self.cuda.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?;
+            let dy_mlp = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?;
+            let d_xn = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?; // pre-attn norm(x)
+            let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
+            let d_x1n = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?; // norm(x1)
 
             let res = (|| -> Result<()> {
                 // Pre-norm (RMSNorm) on x -> xn
@@ -1109,35 +1109,56 @@ impl LoadedModel {
             let r0 = tok.shape[0] as usize;
             let r1 = tok.shape[1] as usize;
             // Determine d_model and which dimension is vocab vs d_model
-            let mut d_model = self.get_u32_meta("llama.embedding_length").map(|x| x as usize).unwrap_or(0);
+            let mut d_model = self
+                .get_u32_meta("llama.embedding_length")
+                .map(|x| x as usize)
+                .unwrap_or(0);
             #[cfg(feature = "gguf_ext")]
             if let Some(cfg) = &self.typed_config {
-                if cfg.embedding_length > 0 { d_model = cfg.embedding_length as usize; }
+                if cfg.embedding_length > 0 {
+                    d_model = cfg.embedding_length as usize;
+                }
             }
-            if d_model == 0 { d_model = r0.min(r1); }
+            if d_model == 0 {
+                d_model = r0.min(r1);
+            }
             // rows_are_vocab = true when shape is [vocab, d_model]
             let rows_are_vocab = {
                 if let Some(vsz) = self.get_u32_meta("llama.vocab_size").map(|x| x as usize) {
-                    if vsz == r0 { true } else if vsz == r1 { false } else {
+                    if vsz == r0 {
+                        true
+                    } else if vsz == r1 {
+                        false
+                    } else {
                         // Fallback to embedding_length alignment
                         r1 == d_model
                     }
                 } else {
                     // No vocab meta; infer from embedding length match
-                    if r1 == d_model { true } else if r0 == d_model { false } else { r1 == d_model }
+                    if r1 == d_model {
+                        true
+                    } else if r0 == d_model {
+                        false
+                    } else {
+                        r1 == d_model
+                    }
                 }
             };
             let vocab = if rows_are_vocab { r0 } else { r1 };
             if (token_id as usize) >= vocab {
-                anyhow::bail!("token_id {} out of range for vocab size {}", token_id, vocab);
+                anyhow::bail!(
+                    "token_id {} out of range for vocab size {}",
+                    token_id,
+                    vocab
+                );
             }
             match tok.dtype {
                 GgmlDType::F16 => {
                     if rows_are_vocab {
                         // Contiguous row: [vocab, d_model]
                         let row_bytes = d_model * 2;
-                        let d_row = (tok.dptr as usize + (token_id as usize) * row_bytes)
-                            as *const c_void;
+                        let d_row =
+                            (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
                         self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
                     } else {
                         // Column gather: shape [d_model, vocab], take column = token_id
@@ -1145,9 +1166,8 @@ impl LoadedModel {
                         let row_stride = r1 * 2; // vocab elements per row (f16)
                         let mut out = vec![0f32; d_model];
                         for i in 0..d_model {
-                            let elem_off = (tok.dptr as usize)
-                                + i * row_stride
-                                + (token_id as usize) * 2;
+                            let elem_off =
+                                (tok.dptr as usize) + i * row_stride + (token_id as usize) * 2;
                             let mut bytes = [0u8; 2];
                             self.cuda.memcpy_d2h(
                                 bytes.as_mut_ptr() as *mut c_void,
@@ -1158,8 +1178,11 @@ impl LoadedModel {
                             out[i] = f16::from_bits(bits).to_f32();
                         }
                         let out_bytes = d_model * std::mem::size_of::<f32>();
-                        self.cuda
-                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                        self.cuda.memcpy_h2d(
+                            d_out_f32,
+                            out.as_ptr() as *const c_void,
+                            out_bytes,
+                        )?;
                     }
                 }
                 GgmlDType::Q8_0 => {
@@ -1167,8 +1190,8 @@ impl LoadedModel {
                         // Row dequant: shape [vocab, d_model], blocks along d_model
                         let blocks = (d_model + 31) / 32;
                         let row_bytes = blocks * 36; // 4 + 32 bytes per block
-                        let d_row = (tok.dptr as usize + (token_id as usize) * row_bytes)
-                            as *const c_void;
+                        let d_row =
+                            (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
                         // Pull the quantized row bytes to host
                         let mut qrow = vec![0u8; row_bytes];
                         self.cuda
@@ -1185,14 +1208,19 @@ impl LoadedModel {
                             ]);
                             for idx in 0..32 {
                                 let i = blk * 32 + idx;
-                                if i >= d_model { break; }
+                                if i >= d_model {
+                                    break;
+                                }
                                 let q = qrow[base + 4 + idx] as i8 as f32;
                                 out[i] = d * q;
                             }
                         }
                         let out_bytes = d_model * std::mem::size_of::<f32>();
-                        self.cuda
-                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                        self.cuda.memcpy_h2d(
+                            d_out_f32,
+                            out.as_ptr() as *const c_void,
+                            out_bytes,
+                        )?;
                     } else {
                         // Column dequant: shape [d_model, vocab], blocks along vocab
                         let vocab = r1;
@@ -1220,8 +1248,11 @@ impl LoadedModel {
                             out[i] = d * q;
                         }
                         let out_bytes = d_model * std::mem::size_of::<f32>();
-                        self.cuda
-                            .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                        self.cuda.memcpy_h2d(
+                            d_out_f32,
+                            out.as_ptr() as *const c_void,
+                            out_bytes,
+                        )?;
                     }
                 }
                 other => anyhow::bail!("unsupported embedding dtype: {:?}", other),
