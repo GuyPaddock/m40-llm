@@ -9,7 +9,7 @@ use std::sync::Arc;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
-// use crate::gguf::GgmlDType;
+use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;

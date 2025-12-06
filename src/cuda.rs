@@ -8,6 +8,7 @@ use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
 
+#[allow(unused_imports)]
 use std::collections::HashMap;
 #[cfg(feature = "cuda")]
 use std::ptr::NonNull;
