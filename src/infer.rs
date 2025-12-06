@@ -201,7 +201,7 @@ impl LoadedModel {
         let w_up = self.find_tensor_any(&w_up_names)?.clone();
         let w_down = self.find_tensor_any(&w_down_names)?.clone();
 
-        // DType checks: we currently require FP16 weights for GEMM paths
+        // DType checks: we support FP16 or Q5_1 weights for GEMM paths
         for (name, t) in [
             ("wq", &wq),
             ("wk", &wk),
@@ -211,8 +211,8 @@ impl LoadedModel {
             ("w_up", &w_up),
             ("w_down", &w_down),
         ] {
-            if t.dtype != GgmlDType::F16 {
-                anyhow::bail!("tensor {} expected F16, got {:?}", name, t.dtype);
+            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q5_1 {
+                anyhow::bail!("tensor {} expected F16 or Q5_1, got {:?}", name, t.dtype);
             }
         }
         // Shape checks (row-major): X [1 x d_model] · W[K=d_model x N] => out [1 x N]
@@ -1273,6 +1273,35 @@ impl LoadedModel {
                         )?;
                     }
                 }
+                GgmlDType::Q5_1 => {
+                    // Q5_1 dequantization: shape [K, N], blocks along N
+                    let blocks = (r1 + 31) / 32;
+                    let row_stride = blocks * 6; // 4 + 32 bytes per block
+                    let b = (token_id as usize) / 32;
+                    let idx = (token_id as usize) % 32;
+                    let mut out = vec![0f32; d_model];
+                    let mut block_buf = [0u8; 6];
+                    for i in 0..d_model {
+                        let row_base = (tok.dptr as usize) + i * row_stride;
+                        let blk_off = row_base + b * 6;
+                        self.cuda.memcpy_d2h(
+                            block_buf.as_mut_ptr() as *mut c_void,
+                            blk_off as *const c_void,
+                            6,
+                        )?;
+                        let d = f32::from_le_bytes([
+                            block_buf[0],
+                            block_buf[1],
+                            block_buf[2],
+                            block_buf[3],
+                        ]);
+                        let q = block_buf[4 + idx] as i8 as f32;
+                        out[i] = d * q;
+                    }
+                    let out_bytes = d_model * std::mem::size_of::<f32>();
+                    self.cuda
+                        .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                }
                 other => anyhow::bail!("unsupported embedding dtype: {:?}", other),
             }
             Ok(())
@@ -1385,13 +1414,56 @@ impl LoadedModel {
                 out
             };
 
+            // Helper to multiply f32 row (1xK) by Q5_1 matrix (KxN) into f32 (1xN)
+            let dot_row_q5_1 =
+                |row: &[f32], t: &crate::infer::DeviceTensorView, n: usize| -> Vec<f32> {
+                    let k = t.shape[0] as usize;
+                    debug_assert_eq!(k, row.len());
+                    let off = t.byte_offset as usize;
+                    let mut out = vec![0f32; n];
+
+                    let blocks = (k + 31) / 32;
+                    for j in 0..n {
+                        let mut acc = 0f32;
+                        for r in 0..k {
+                            let b = r / 32;
+                            let idx = r % 32;
+                            let block_base = off + j * blocks * 6 + b * 6;
+                            let scale_bytes = &self.host_weights[block_base..block_base + 4];
+                            let scale = f32::from_le_bytes([
+                                scale_bytes[0],
+                                scale_bytes[1],
+                                scale_bytes[2],
+                                scale_bytes[3],
+                            ]);
+                            let q = self.host_weights[block_base + 4 + idx] as i8 as f32;
+                            acc += row[r] * scale * q;
+                        }
+                        out[j] = acc;
+                    }
+
+                    out
+                };
+
             // Q, K, V
             let nq = w.wq.shape[1] as usize;
             let nk = w.wk.shape[1] as usize;
             let nv = w.wv.shape[1] as usize;
-            let q = dot_row(&x_n, &w.wq, nq);
-            let k_vec = dot_row(&x_n, &w.wk, nk);
-            let v_vec = dot_row(&x_n, &w.wv, nv);
+            let q = if w.wq.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wq, nq)
+            } else {
+                dot_row(&x_n, &w.wq, nq)
+            };
+            let k_vec = if w.wk.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wk, nk)
+            } else {
+                dot_row(&x_n, &w.wk, nk)
+            };
+            let v_vec = if w.wv.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wv, nv)
+            } else {
+                dot_row(&x_n, &w.wv, nv)
+            };
 
             // Append KV (host path)
             self.append_kv_token_f32_from_host(seq_id, &k_vec, &v_vec)?;
@@ -1420,7 +1492,11 @@ impl LoadedModel {
             // Out projection and residual add: x1 = x + attn·Wo
             let no = w.wo.shape[1] as usize;
             debug_assert_eq!(no, d_model);
-            let y_attn = dot_row(&attn, &w.wo, no);
+            let y_attn = if w.wo.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&attn, &w.wo, no)
+            } else {
+                dot_row(&attn, &w.wo, no)
+            };
             let mut x1 = vec![0f32; d_model];
             for i in 0..d_model {
                 x1[i] = x_slice[i] + y_attn[i];
@@ -1441,8 +1517,16 @@ impl LoadedModel {
             // MLP: gate/up -> SiLU(gate)*up -> down -> residual add with x1
             let h = w.w_up.shape[1] as usize;
             debug_assert_eq!(h, hidden_dim);
-            let gate = dot_row(&x1n, &w.w_gate, h);
-            let up = dot_row(&x1n, &w.w_up, h);
+            let gate = if w.w_gate.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x1n, &w.w_gate, h)
+            } else {
+                dot_row(&x1n, &w.w_gate, h)
+            };
+            let up = if w.w_up.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x1n, &w.w_up, h)
+            } else {
+                dot_row(&x1n, &w.w_up, h)
+            };
             fn sigmoid(v: f32) -> f32 {
                 1.0 / (1.0 + (-v).exp())
             }
@@ -1451,7 +1535,11 @@ impl LoadedModel {
                 let g = gate[i];
                 hidden[i] = (g * sigmoid(g)) * up[i];
             }
-            let y_mlp = dot_row(&hidden, &w.w_down, d_model);
+            let y_mlp = if w.w_down.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&hidden, &w.w_down, d_model)
+            } else {
+                dot_row(&hidden, &w.w_down, d_model)
+            };
             let mut y = vec![0f32; d_model];
             for i in 0..d_model {
                 y[i] = x1[i] + y_mlp[i];
