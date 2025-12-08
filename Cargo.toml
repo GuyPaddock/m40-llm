@@ -35,6 +35,7 @@ gguf-llms = { version = "0.0.2", optional = true }
 gguf-rs-lib = { version = "0.2", optional = true }
 
 [features]
+nvcc = []
 default = []
 server = ["dep:axum", "dep:tower-http"]
 cuda = []

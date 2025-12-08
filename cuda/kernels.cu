@@ -848,6 +848,29 @@ extern "C" {
     out[pos] = value;
 }
 
+// C wrapper for RMSNorm kernel
+extern "C" void m40llm_rms_norm_f32(M40llmCudaContext* ctx, const float* in, float* out, const uint32_t* seq_map, uint32_t seq_len, uint32_t dim, float eps) {
+    // Determine grid and block sizes
+    const int threads_per_block = 256;
+    const int blocks = (seq_len * dim + threads_per_block - 1) / threads_per_block;
+    rms_norm_f32<<<blocks, threads_per_block>>>(in, out, seq_map, seq_len, dim, eps);
+}
+
+// Residual add kernel
+__global__ void residual_add_f32(const float* a, const float* b, float* out, uint32_t size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        out[idx] = a[idx] + b[idx];
+    }
+}
+
+// C wrapper for residual add kernel
+extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, const float* b, float* out, uint32_t size) {
+    const int threads_per_block = 256;
+    const int blocks = (size + threads_per_block - 1) / threads_per_block;
+    residual_add_f32<<<blocks, threads_per_block>>>(a, b, out, size);
+}
+
     // MLP: SwiGLU - FP16→FP32→FP16
     // Input: [batch*seq, dim]
     // Output: [batch*seq, dim]

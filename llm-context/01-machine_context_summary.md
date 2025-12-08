@@ -89,7 +89,7 @@ Important APIs and files
 Task tracker snapshot (grouped, current)
 - In progress
   - t23-6-autoselect-m40: runtime auto-select + guardrails; tests use ctx_m40()
-  - t26-min-forward: minimal forward pass wiring; smoke path uses KV layout API
+  
   - t23-5e-attn-green: keep attention parity grid green during integration
   - t26-3-guards: FP16 + shape invariants in map_standard_layer
   - t26-5-docs: document minimal forward wiring/limits; KV layout + CUDA grid usage
@@ -101,11 +101,12 @@ Task tracker snapshot (grouped, current)
   - t22-parity-check: CUDA<->CPU parity for last-token attention grid (M40) green
   - t23-cublas-gemm: cuBLAS-enabled GEMM wrappers; tests pass with cuBLAS off/on
   - t26-run-tests: non-CUDA and CUDA suites passing on M40 sm_52
+- t26-min-forward: minimal forward validated (prefill + decode) – Done
 - Todo (near-term P1 focus)
   - t24-gguf-integration: integrate gguf-rs-lib + gguf-llms (typed hparams/tensors)
   - t24a-gguf-device-mapping: single upload; device pointers; dtype validation
   - t25-rope-rmsnorm: verify RMSNorm; implement RoPE host+CUDA with tests
-  - t26-min-forward: complete 1-layer prefill+decode on toy weights; numeric checks
+
   - t27-tokenizer: from GGUF metadata; tests on small vocabs
   - t28-sampling: host softmax + top‑k/top‑p; optional CUDA later
   - t29-e2e-decode: end‑to‑end decode loop with KV cache

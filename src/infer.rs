@@ -1353,21 +1353,97 @@ impl LoadedModel {
                 (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
             let w_down_ptr =
                 (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
-            self.forward_one_token_minimal(
-                d_x_f32,
-                w.d_model as i32,
-                wq_ptr,
-                wk_ptr,
-                wv_ptr,
-                wo_ptr,
-                w_gate_ptr,
-                w_up_ptr,
-                w_down_ptr,
-                w.hidden_dim as i32,
-                seq_id,
-                seq_len,
-                d_out_f32,
-            )
+
+            #[cfg(feature = "cuda")]
+            {
+                // Allocate scratch buffers for attention output and intermediate results
+                let bytes_d = (w.d_model as usize) * 4;
+                let d_y_attn = self
+                    .cuda
+                    .device_malloc_tagged(bytes_d, "fwd:d_y_attn_f32")?;
+                let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?;
+
+                self.forward_one_token_minimal(
+                    d_x1,
+                    w.d_model as i32,
+                    wq_ptr,
+                    wk_ptr,
+                    wv_ptr,
+                    wo_ptr,
+                    w_gate_ptr,
+                    w_up_ptr,
+                    w_down_ptr,
+                    w.hidden_dim as i32,
+                    seq_id,
+                    seq_len,
+                    d_out_f32,
+                )?;
+
+                // Free scratch buffers
+                self.cuda.device_free(d_y_attn)?;
+                self.cuda.device_free(d_x1)?;
+            }
+
+            // Residual add on host: x1 = x + y_attn (fallback)
+            let bytes_d = (w.d_model as usize) * 4;
+            let mut h_x = vec![0u8; bytes_d];
+            let mut h_y_attn = vec![0u8; bytes_d];
+            self.cuda.memcpy_d2h(
+                h_x.as_mut_ptr() as *mut c_void,
+                d_x_f32 as *const c_void,
+                bytes_d,
+            )?;
+            self.cuda.memcpy_d2h(
+                h_y_attn.as_mut_ptr() as *mut c_void,
+                d_y_attn as *const c_void,
+                bytes_d,
+            )?;
+            let mut x_f = Vec::with_capacity(d_model as usize);
+            let mut y_attn_f = Vec::with_capacity(d_model as usize);
+            for ch in h_x.chunks_exact(4) {
+                x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            for ch in h_y_attn.chunks_exact(4) {
+                y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let mut x1_f = Vec::with_capacity(d_model as usize);
+            for i in 0..(d_model as usize) {
+                x1_f.push(x_f[i] + y_attn_f[i]);
+            }
+            let mut x1_bytes = Vec::with_capacity(bytes_d);
+            for v in &x1_f {
+                x1_bytes.extend_from_slice(&v.to_le_bytes());
+            }
+            self.cuda.memcpy_h2d(
+                d_x_f32 as *mut c_void,
+                x1_bytes.as_ptr() as *const c_void,
+                bytes_d,
+            )?;
+
+            // Post-attention norm
+            let mut h_x1 = vec![0u8; bytes_d];
+            self.cuda.memcpy_d2h(
+                h_x1.as_mut_ptr() as *mut c_void,
+                d_x1 as *const c_void,
+                bytes_d,
+            )?;
+            let mut x1_f = Vec::with_capacity(d_model as usize);
+            for ch in h_x1.chunks_exact(4) {
+                x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let mut mean_sq2 = 0f32;
+            for v in &x1_f {
+                mean_sq2 += v * v;
+            }
+            mean_sq2 /= d_model as f32;
+            let scale2 = 1.0f32 / (mean_sq2 + eps).sqrt();
+            let mut x1n = vec![0f32; d_model];
+            for i in 0..d_model {
+                x1n[i] = x1_f[i] * scale2;
+            }
+
+            // Free scratch tensors
+            let _ = self.cuda.device_free(d_y_attn);
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1497,24 +1573,65 @@ impl LoadedModel {
             } else {
                 dot_row(&attn, &w.wo, no)
             };
-            let mut x1 = vec![0f32; d_model];
-            for i in 0..d_model {
-                x1[i] = x_slice[i] + y_attn[i];
+            // Residual add on host: x1 = x + y_attn (fallback)
+            let bytes_d = (d_model as usize) * 4;
+            let mut h_x = vec![0u8; bytes_d];
+            let mut h_y_attn = vec![0u8; bytes_d];
+            self.cuda.memcpy_d2h(
+                h_x.as_mut_ptr() as *mut c_void,
+                d_x_f32 as *const c_void,
+                bytes_d,
+            )?;
+            // In non-CUDA path, we don't have d_y_attn, so we use y_attn directly
+            for i in 0..y_attn.len() {
+                let bytes = y_attn[i].to_le_bytes();
+                h_y_attn[i * 4..i * 4 + 4].copy_from_slice(&bytes);
             }
+            let mut x_f = Vec::with_capacity(d_model as usize);
+            let mut y_attn_f = Vec::with_capacity(d_model as usize);
+            for ch in h_x.chunks_exact(4) {
+                x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            for ch in h_y_attn.chunks_exact(4) {
+                y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let mut x1_f = Vec::with_capacity(d_model as usize);
+            for i in 0..(d_model as usize) {
+                x1_f.push(x_f[i] + y_attn_f[i]);
+            }
+            let mut x1_bytes = Vec::with_capacity(bytes_d);
+            for v in &x1_f {
+                x1_bytes.extend_from_slice(&v.to_le_bytes());
+            }
+            self.cuda.memcpy_h2d(
+                d_x_f32 as *mut c_void,
+                x1_bytes.as_ptr() as *const c_void,
+                bytes_d,
+            )?;
 
             // Post-attention norm
+            let mut h_x1 = vec![0u8; bytes_d];
+            self.cuda.memcpy_d2h(
+                h_x1.as_mut_ptr() as *mut c_void,
+                d_x1 as *const c_void,
+                bytes_d,
+            )?;
+            let mut x1_f = Vec::with_capacity(d_model as usize);
+            for ch in h_x1.chunks_exact(4) {
+                x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
             let mut mean_sq2 = 0f32;
-            for &v in &x1 {
+            for v in &x1_f {
                 mean_sq2 += v * v;
             }
             mean_sq2 /= d_model as f32;
             let scale2 = 1.0f32 / (mean_sq2 + eps).sqrt();
             let mut x1n = vec![0f32; d_model];
             for i in 0..d_model {
-                x1n[i] = x1[i] * scale2;
+                x1n[i] = x1_f[i] * scale2;
             }
 
-            // MLP: gate/up -> SiLU(gate)*up -> down -> residual add with x1
+            // MLP: gate/up -> SiLU(gate)*up -> down -> residual add with x1n
             let h = w.w_up.shape[1] as usize;
             debug_assert_eq!(h, hidden_dim);
             let gate = if w.w_gate.dtype == GgmlDType::Q5_1 {
@@ -1542,12 +1659,15 @@ impl LoadedModel {
             };
             let mut y = vec![0f32; d_model];
             for i in 0..d_model {
-                y[i] = x1[i] + y_mlp[i];
+                y[i] = x1n[i] + y_mlp[i];
             }
 
             // Write to output pointer
             let out_slice = slice::from_raw_parts_mut(d_out_f32 as *mut f32, d_model);
             out_slice.copy_from_slice(&y);
+
+            // Free scratch buffers
+
             Ok(())
         }
     }
