@@ -781,7 +781,7 @@ impl LoadedModel {
             let dhid = self.cuda.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?;
             let dy_mlp = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?;
             let d_xn = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?; // pre-attn norm(x)
-            let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
+            let mut d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
             let d_x1n = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?; // norm(x1)
 
             let res = (|| -> Result<()> {
@@ -1613,7 +1613,7 @@ impl LoadedModel {
             let mut h_x1 = vec![0u8; bytes_d];
             self.cuda.memcpy_d2h(
                 h_x1.as_mut_ptr() as *mut c_void,
-                d_x1 as *const c_void,
+                h_x1.as_ptr() as *const c_void,
                 bytes_d,
             )?;
             let mut x1_f = Vec::with_capacity(d_model as usize);
