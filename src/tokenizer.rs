@@ -178,7 +178,8 @@ impl Tokenizer {
             TokenizerKind::ByteLevel | TokenizerKind::SentencePiece | TokenizerKind::Bpe => {
                 let bytes: Vec<u8> = ids
                     .iter()
-                    .map(|&id| if id <= 255 { id as u8 } else { b'?' })
+                    .filter(|&id| *id != 0)
+                    .map(|&id| if id <= 255 { id as u8 } else { 0u8 })
                     .collect();
                 String::from_utf8(bytes).map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"))
             }
