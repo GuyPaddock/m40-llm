@@ -93,7 +93,6 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         weights_len: 0,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
-        #[cfg(not(feature = "cuda"))]
         host_weights: Vec::new(),
         model_config,
         #[cfg(feature = "gguf_ext")]

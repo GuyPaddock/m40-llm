@@ -22,9 +22,10 @@ fn main() {
         .status()
         .map(|status| status.success())
         .unwrap_or(false);
+    let nvcc_enabled = env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
 
     if cuda_feature_enabled {
-        if nvcc_available {
+        if nvcc_available && nvcc_enabled {
             // Expose cfg so tests/examples can detect real CUDA
             println!("cargo:rustc-cfg=nvcc");
 
@@ -104,7 +105,19 @@ fn main() {
                 .cuda(true)
                 .include("cuda")
                 .file("cuda/kernels.cu")
-                .flag("-std=c++14")
+                // NVCC does not recognize the newer C23 floatN keywords on some
+                // hosts (e.g., Ubuntu 24.04 with glibc 2.39). Provide fallbacks
+                // so the headers parse.
+                .define("_Float32", Some("float"))
+                .define("_Float32x", Some("double"))
+                .define("_Float64", Some("double"))
+                .define("_Float64x", Some("long double"))
+                .define("_Float128", Some("long double"))
+                // Compile as C++17 and ask the host compiler for the GNU dialect so
+                // glibc exposes the _Float* typedefs needed by newer headers.
+                .flag("-std=c++17")
+                .flag("-Xcompiler")
+                .flag("-std=gnu++17")
                 .flag("-O3")
                 .flag("-Xcompiler")
                 .flag("-fPIC")

@@ -124,7 +124,6 @@ fn make_model_with_layer(
         weights_len: 0,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
-        #[cfg(not(feature = "cuda"))]
         host_weights: Vec::new(),
         model_config,
         #[cfg(feature = "gguf_ext")]

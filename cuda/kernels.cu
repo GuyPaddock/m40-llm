@@ -1,4 +1,18 @@
 // cuda/kernels.cu
+// Provide fallback definitions for the C23 floatN types so NVCC can parse
+// glibc headers that reference them.
+#ifndef __FLT32_MANT_DIG__
+#define _Float32 float
+#define _Float32x double
+#endif
+#ifndef __FLT64_MANT_DIG__
+#define _Float64 double
+#define _Float64x long double
+#endif
+#ifndef __FLT128_MANT_DIG__
+#define _Float128 long double
+#endif
+
 #include <cuda_runtime.h>
 #ifdef M40LLM_HAVE_CUBLAS
 #include <cublas_v2.h>
@@ -6,10 +20,10 @@
 #include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
-#include <math.h>
 #include <cstring>
-#include <cstdlib>
 #include "common.h"
+
+extern "C" char* getenv(const char*);
 
 struct M40llmCudaContext {
     int device_id;

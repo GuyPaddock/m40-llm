@@ -42,14 +42,36 @@ impl ModelConfig {
         tensors: &[GgufTensor],
     ) -> Result<Self> {
         let d_model = typed.embedding_length;
-        let vocab_size =
-            derive_vocab_size(metadata, tensors, d_model).context("derive vocab_size from gguf")?;
+        if d_model % typed.attention_head_count != 0 {
+            anyhow::bail!(
+                "embedding_length {} not divisible by attention_head_count {}",
+                d_model,
+                typed.attention_head_count
+            );
+        }
         let head_kv = typed
             .attention_head_count_kv
             .unwrap_or(typed.attention_head_count);
+        if typed.attention_head_count % head_kv != 0 {
+            anyhow::bail!(
+                "attention_head_count {} not divisible by attention_head_count_kv {}",
+                typed.attention_head_count,
+                head_kv
+            );
+        }
         let head_dim = typed
             .attention_key_length
-            .unwrap_or_else(|| typed.embedding_length / typed.attention_head_count);
+            .unwrap_or_else(|| d_model / typed.attention_head_count);
+        if d_model != typed.attention_head_count * head_dim {
+            anyhow::bail!(
+                "embedding_length {} must equal attention_head_count {} * attention_key_length {}",
+                d_model,
+                typed.attention_head_count,
+                head_dim
+            );
+        }
+        let vocab_size =
+            derive_vocab_size(metadata, tensors, d_model).context("derive vocab_size from gguf")?;
         let layer_norm_epsilon = typed.layer_norm_epsilon.unwrap_or(1e-5);
         let rope_freq_base = typed.rope_freq_base.unwrap_or(10_000.0);
         let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
@@ -77,7 +99,7 @@ impl ModelConfig {
         tensors: &[GgufTensor],
     ) -> Result<Self> {
         let architecture = get_str_meta(metadata, "general.architecture")
-            .ok_or_else(|| anyhow!("missing general.architecture"))?
+            .unwrap_or("llama")
             .to_string();
         let embedding_length = get_u32_meta(metadata, "llama.embedding_length")
             .ok_or_else(|| anyhow!("missing llama.embedding_length"))?;
@@ -97,6 +119,58 @@ impl ModelConfig {
         let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
         let vocab_size = derive_vocab_size(metadata, tensors, embedding_length)
             .context("derive vocab_size from gguf metadata")?;
+        let cfg = Self {
+            architecture,
+            block_count,
+            context_length,
+            embedding_length,
+            feed_forward_length,
+            attention_head_count,
+            attention_head_count_kv: head_kv,
+            attention_key_length: head_dim,
+            layer_norm_epsilon,
+            rope_freq_base,
+            rope_freq_scale,
+            vocab_size,
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    /// A lenient metadata parser that tolerates missing fields and attempts to
+    /// infer values from tensor shapes. Intended for fallback use when
+    /// gguf_ext parsing fails on non-shape-related issues.
+    pub fn from_metadata_lenient(
+        metadata: &HashMap<String, GgufValue>,
+        tensors: &[GgufTensor],
+    ) -> Result<Self> {
+        if let Ok(cfg) = Self::from_metadata(metadata, tensors) {
+            return Ok(cfg);
+        }
+
+        let (tensor_d_model, tensor_vocab) = infer_embedding_dims(tensors).unzip();
+        let architecture = get_str_meta(metadata, "general.architecture")
+            .unwrap_or("llama")
+            .to_string();
+        let embedding_length = get_u32_meta(metadata, "llama.embedding_length")
+            .or(tensor_d_model)
+            .ok_or_else(|| anyhow!("missing llama.embedding_length"))?;
+        let attention_head_count =
+            get_u32_meta(metadata, "llama.attention.head_count").unwrap_or(1);
+        let block_count = get_u32_meta(metadata, "llama.block_count").unwrap_or(1);
+        let context_length = get_u32_meta(metadata, "llama.context_length").unwrap_or(2048);
+        let feed_forward_length = derive_feed_forward_length(metadata, tensors, embedding_length)
+            .unwrap_or(4 * embedding_length);
+        let head_kv =
+            get_u32_meta(metadata, "llama.attention.head_count_kv").unwrap_or(attention_head_count);
+        let head_dim = get_u32_meta(metadata, "llama.attention.key_length")
+            .unwrap_or_else(|| embedding_length / attention_head_count.max(1));
+        let layer_norm_epsilon = get_f32_meta(metadata, "llama.layer_norm_epsilon").unwrap_or(1e-5);
+        let rope_freq_base = get_f32_meta(metadata, "llama.rope.freq_base").unwrap_or(10_000.0);
+        let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
+        let vocab_size = derive_vocab_size(metadata, tensors, embedding_length)
+            .or_else(|_| tensor_vocab.ok_or_else(|| anyhow!("vocab_size missing")))?;
+
         let cfg = Self {
             architecture,
             block_count,
@@ -262,6 +336,29 @@ fn get_str_meta<'a>(metadata: &'a HashMap<String, GgufValue>, key: &str) -> Opti
     metadata.get(key).and_then(|v| v.as_str())
 }
 
+fn infer_embedding_dims(tensors: &[GgufTensor]) -> Option<(u32, u32)> {
+    let candidates = [
+        "tok_embeddings.weight",
+        "token_embd.weight",
+        "token_embd",
+        "token_embeddings.weight",
+    ];
+    for name in candidates {
+        if let Some(t) = tensors.iter().find(|t| t.name == name) {
+            if t.shape.len() == 2 {
+                let r0 = t.shape[0] as u32;
+                let r1 = t.shape[1] as u32;
+                if r0 > 0 && r1 > 0 {
+                    let d_model = r0.min(r1);
+                    let vocab = r0.max(r1);
+                    return Some((d_model, vocab));
+                }
+            }
+        }
+    }
+    None
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceTensorView {
     pub dtype: GgmlDType,
@@ -283,7 +380,6 @@ pub struct LoadedModel {
     pub weights_len: usize,
     #[cfg(feature = "cuda")]
     pub d_weights_base: *mut c_void,
-    #[cfg(not(feature = "cuda"))]
     pub host_weights: Vec<u8>,
     pub model_config: ModelConfig,
     #[cfg(feature = "gguf_ext")]
@@ -596,7 +692,7 @@ impl LoadedModel {
 }
 
 impl LoadedModel {
-    pub fn from_gguf(gguf: GgufModel, mut gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
+    pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
         let data_off = gguf.data_offset as usize;
         if data_off > gguf_bytes.len() {
@@ -606,10 +702,53 @@ impl LoadedModel {
                 gguf_bytes.len()
             );
         }
-        let weights_bytes = gguf_bytes.split_off(data_off);
+        #[cfg(feature = "gguf_ext")]
+        let (model_config, typed_cfg) =
+            match ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata, &gguf.tensors) {
+                Ok(pair) => pair,
+                Err(ext_err) => {
+                    let msg = ext_err.to_string();
+                    if msg.contains("not divisible") || msg.contains("must equal") {
+                        return Err(ext_err);
+                    }
+                    eprintln!(
+                        "gguf_ext parse failed ({}); falling back to metadata-only config",
+                        msg
+                    );
+                    let meta_cfg =
+                        ModelConfig::from_metadata_lenient(&gguf.metadata, &gguf.tensors)?;
+                    let typed = gguf_llms::model::ModelConfig {
+                        architecture: meta_cfg.architecture.clone(),
+                        block_count: meta_cfg.block_count,
+                        context_length: meta_cfg.context_length,
+                        embedding_length: meta_cfg.embedding_length,
+                        feed_forward_length: meta_cfg.feed_forward_length,
+                        attention_head_count: meta_cfg.attention_head_count,
+                        attention_head_count_kv: Some(meta_cfg.attention_head_count_kv),
+                        attention_key_length: Some(meta_cfg.attention_key_length),
+                        layer_norm_epsilon: Some(meta_cfg.layer_norm_epsilon),
+                        rope_freq_base: Some(meta_cfg.rope_freq_base),
+                    };
+                    (meta_cfg, typed)
+                }
+            };
+        #[cfg(not(feature = "gguf_ext"))]
+        let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors)?;
+
+        let weights_bytes = gguf_bytes[data_off..].to_vec();
         let weights_len = weights_bytes.len();
+        let host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
-        let d_base = cuda.upload_weights(&weights_bytes)?;
+        let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
+        #[cfg(feature = "cuda")]
+        let d_base = {
+            let uploaded = if use_device_weights {
+                cuda.upload_weights(&weights_bytes).ok()
+            } else {
+                None
+            };
+            Some(uploaded.unwrap_or(host_base))
+        };
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
             if let Some(layout) = dtype_size_bytes(t.dtype) {
@@ -634,15 +773,11 @@ impl LoadedModel {
             }
         }
         #[cfg(feature = "cuda")]
-        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_len)?;
+        let device_tensors =
+            build_device_tensor_views(&gguf.tensors, d_base.unwrap_or(host_base), weights_len)?;
         #[cfg(not(feature = "cuda"))]
         let device_tensors =
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_len)?;
-        #[cfg(feature = "gguf_ext")]
-        let (model_config, typed_cfg) =
-            ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata, &gguf.tensors)?;
-        #[cfg(not(feature = "gguf_ext"))]
-        let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors)?;
 
         Ok(Self {
             gguf,
@@ -651,8 +786,7 @@ impl LoadedModel {
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
-            d_weights_base: d_base,
-            #[cfg(not(feature = "cuda"))]
+            d_weights_base: d_base.unwrap_or(std::ptr::null_mut()),
             host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
@@ -1104,7 +1238,7 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             // Allocate scratch buffers
-            let bytes_d = d_model * 4;
+            let bytes_d = (d_model as usize) * 4;
             let bytes_h = (hidden_dim as usize) * 4;
             let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
             let dk = self.cuda.device_malloc_tagged(bytes_d, "fwd:dk_f32")?;
@@ -1693,65 +1827,9 @@ impl LoadedModel {
                 // Free scratch buffers
                 self.cuda.device_free(d_y_attn)?;
                 self.cuda.device_free(d_x1)?;
-            }
 
-            // Residual add on host: x1 = x + y_attn (fallback)
-            let bytes_d = (w.d_model as usize) * 4;
-            let mut h_x = vec![0u8; bytes_d];
-            let mut h_y_attn = vec![0u8; bytes_d];
-            self.cuda
-                .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
-            self.cuda.memcpy_d2h(
-                h_y_attn.as_mut_ptr() as *mut c_void,
-                d_y_attn as *const c_void,
-                bytes_d,
-            )?;
-            let mut x_f = Vec::with_capacity(d_model);
-            let mut y_attn_f = Vec::with_capacity(d_model);
-            for ch in h_x.chunks_exact(4) {
-                x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                return Ok(());
             }
-            for ch in h_y_attn.chunks_exact(4) {
-                y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-            }
-            let mut x1_f = Vec::with_capacity(d_model);
-            for i in 0..d_model {
-                x1_f.push(x_f[i] + y_attn_f[i]);
-            }
-            let mut x1_bytes = Vec::with_capacity(bytes_d);
-            for v in &x1_f {
-                x1_bytes.extend_from_slice(&v.to_le_bytes());
-            }
-            self.cuda.memcpy_h2d(
-                d_x_f32 as *mut c_void,
-                x1_bytes.as_ptr() as *const c_void,
-                bytes_d,
-            )?;
-
-            // Post-attention norm
-            let mut h_x1 = vec![0u8; bytes_d];
-            self.cuda.memcpy_d2h(
-                h_x1.as_mut_ptr() as *mut c_void,
-                d_x1 as *const c_void,
-                bytes_d,
-            )?;
-            let mut x1_f = Vec::with_capacity(d_model);
-            for ch in h_x1.chunks_exact(4) {
-                x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-            }
-            let mut mean_sq2 = 0f32;
-            for v in &x1_f {
-                mean_sq2 += v * v;
-            }
-            mean_sq2 /= d_model as f32;
-            let scale2 = 1.0f32 / (mean_sq2 + eps).sqrt();
-            let mut x1n = vec![0f32; d_model];
-            for i in 0..d_model {
-                x1n[i] = x1_f[i] * scale2;
-            }
-
-            // Free scratch tensors
-            let _ = self.cuda.device_free(d_y_attn);
         }
         #[cfg(not(feature = "cuda"))]
         {

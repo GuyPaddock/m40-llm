@@ -144,7 +144,7 @@ async fn generate(
     let eos_id = tokenizer.eos_id();
     let max_tokens = req
         .max_tokens
-        .or_else(|| state.model.model_config.context_length.map(|v| v as usize))
+        .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
     let sampler = greedy_sampler(42);
