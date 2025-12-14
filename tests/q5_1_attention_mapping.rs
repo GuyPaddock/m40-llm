@@ -49,6 +49,18 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
         "llama.attention.head_count".into(),
         GgufValue::Scalar(GgufScalar::U32(1)),
     );
+    gguf.metadata.insert(
+        "llama.block_count".into(),
+        GgufValue::Scalar(GgufScalar::U32(3)),
+    );
+    gguf.metadata.insert(
+        "llama.context_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(32)),
+    );
+    gguf.metadata.insert(
+        "llama.vocab_size".into(),
+        GgufValue::Scalar(GgufScalar::U32(1024)),
+    );
     let hidden_dim = d_model * 2; // arbitrary
     gguf.metadata.insert(
         "llama.feed_forward_length".into(),
@@ -108,7 +120,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
         device_tensors.insert(key, device_tensor(wt_f16, shape));
     }
 
-    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
+    let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();
     LoadedModel {
         gguf,
         cuda,

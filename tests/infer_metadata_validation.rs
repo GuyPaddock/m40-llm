@@ -19,6 +19,10 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         GgufValue::Scalar(GgufScalar::U32(4)),
     );
     gguf.metadata.insert(
+        "llama.context_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(16)),
+    );
+    gguf.metadata.insert(
         "llama.embedding_length".into(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
     );
@@ -67,7 +71,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         );
     }
 
-    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
+    let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();
     LoadedModel {
         gguf,
         cuda,
@@ -118,7 +122,7 @@ fn layer_index_checked_against_block_count() {
         "llama.block_count".into(),
         GgufValue::Scalar(GgufScalar::U32(1)),
     );
-    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata).unwrap();
+    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap();
     // mapping layer 1 should fail (only 0 valid)
     let err = lm.map_standard_layer(1).unwrap_err();
     let msg = format!("{}", err);

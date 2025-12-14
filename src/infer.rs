@@ -10,17 +10,17 @@ use std::ffi::c_void;
 #[derive(Debug, Clone)]
 pub struct ModelConfig {
     pub architecture: String,
-    pub block_count: Option<u32>,
-    pub context_length: Option<u32>,
+    pub block_count: u32,
+    pub context_length: u32,
     pub embedding_length: u32,
-    pub feed_forward_length: Option<u32>,
+    pub feed_forward_length: u32,
     pub attention_head_count: u32,
-    pub attention_head_count_kv: Option<u32>,
-    pub attention_key_length: Option<u32>,
-    pub layer_norm_epsilon: Option<f32>,
-    pub rope_freq_base: Option<f32>,
-    pub rope_freq_scale: Option<f32>,
-    pub vocab_size: Option<u32>,
+    pub attention_head_count_kv: u32,
+    pub attention_key_length: u32,
+    pub layer_norm_epsilon: f32,
+    pub rope_freq_base: f32,
+    pub rope_freq_scale: f32,
+    pub vocab_size: u32,
 }
 
 impl ModelConfig {
@@ -28,9 +28,10 @@ impl ModelConfig {
     fn from_gguf_ext_bytes(
         bytes: &[u8],
         metadata: &HashMap<String, GgufValue>,
+        tensors: &[GgufTensor],
     ) -> Result<(Self, gguf_llms::model::ModelConfig)> {
         let typed = crate::gguf_ext::extract_model_config_from_bytes(bytes)?;
-        let model_cfg = Self::from_typed_and_metadata(&typed, metadata)?;
+        let model_cfg = Self::from_typed_and_metadata(&typed, metadata, tensors)?;
         Ok((model_cfg, typed))
     }
 
@@ -38,26 +39,43 @@ impl ModelConfig {
     fn from_typed_and_metadata(
         typed: &gguf_llms::model::ModelConfig,
         metadata: &HashMap<String, GgufValue>,
+        tensors: &[GgufTensor],
     ) -> Result<Self> {
+        let d_model = typed.embedding_length;
+        let vocab_size =
+            derive_vocab_size(metadata, tensors, d_model).context("derive vocab_size from gguf")?;
+        let head_kv = typed
+            .attention_head_count_kv
+            .unwrap_or(typed.attention_head_count);
+        let head_dim = typed
+            .attention_key_length
+            .unwrap_or_else(|| typed.embedding_length / typed.attention_head_count);
+        let layer_norm_epsilon = typed.layer_norm_epsilon.unwrap_or(1e-5);
+        let rope_freq_base = typed.rope_freq_base.unwrap_or(10_000.0);
+        let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
+        let feed_forward_length = derive_feed_forward_length(metadata, tensors, d_model)?;
         let cfg = Self {
             architecture: typed.architecture.clone(),
-            block_count: Some(typed.block_count),
-            context_length: Some(typed.context_length),
-            embedding_length: typed.embedding_length,
-            feed_forward_length: Some(typed.feed_forward_length),
+            block_count: typed.block_count,
+            context_length: typed.context_length,
+            embedding_length: d_model,
+            feed_forward_length,
             attention_head_count: typed.attention_head_count,
-            attention_head_count_kv: typed.attention_head_count_kv,
-            attention_key_length: typed.attention_key_length,
-            layer_norm_epsilon: typed.layer_norm_epsilon,
-            rope_freq_base: typed.rope_freq_base,
-            rope_freq_scale: get_f32_meta(metadata, "llama.rope.freq_scale"),
-            vocab_size: get_u32_meta(metadata, "llama.vocab_size"),
+            attention_head_count_kv: head_kv,
+            attention_key_length: head_dim,
+            layer_norm_epsilon,
+            rope_freq_base,
+            rope_freq_scale,
+            vocab_size,
         };
         cfg.validate()?;
         Ok(cfg)
     }
 
-    pub fn from_metadata(metadata: &HashMap<String, GgufValue>) -> Result<Self> {
+    pub fn from_metadata(
+        metadata: &HashMap<String, GgufValue>,
+        tensors: &[GgufTensor],
+    ) -> Result<Self> {
         let architecture = get_str_meta(metadata, "general.architecture")
             .ok_or_else(|| anyhow!("missing general.architecture"))?
             .to_string();
@@ -65,20 +83,33 @@ impl ModelConfig {
             .ok_or_else(|| anyhow!("missing llama.embedding_length"))?;
         let attention_head_count = get_u32_meta(metadata, "llama.attention.head_count")
             .ok_or_else(|| anyhow!("missing llama.attention.head_count"))?;
-
+        let block_count = get_u32_meta(metadata, "llama.block_count")
+            .ok_or_else(|| anyhow!("missing llama.block_count"))?;
+        let context_length = get_u32_meta(metadata, "llama.context_length")
+            .ok_or_else(|| anyhow!("missing llama.context_length"))?;
+        let feed_forward_length = derive_feed_forward_length(metadata, tensors, embedding_length)?;
+        let head_kv =
+            get_u32_meta(metadata, "llama.attention.head_count_kv").unwrap_or(attention_head_count);
+        let head_dim = get_u32_meta(metadata, "llama.attention.key_length")
+            .unwrap_or_else(|| embedding_length / attention_head_count);
+        let layer_norm_epsilon = get_f32_meta(metadata, "llama.layer_norm_epsilon").unwrap_or(1e-5);
+        let rope_freq_base = get_f32_meta(metadata, "llama.rope.freq_base").unwrap_or(10_000.0);
+        let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
+        let vocab_size = derive_vocab_size(metadata, tensors, embedding_length)
+            .context("derive vocab_size from gguf metadata")?;
         let cfg = Self {
             architecture,
-            block_count: get_u32_meta(metadata, "llama.block_count"),
-            context_length: get_u32_meta(metadata, "llama.context_length"),
+            block_count,
+            context_length,
             embedding_length,
-            feed_forward_length: get_u32_meta(metadata, "llama.feed_forward_length"),
+            feed_forward_length,
             attention_head_count,
-            attention_head_count_kv: get_u32_meta(metadata, "llama.attention.head_count_kv"),
-            attention_key_length: get_u32_meta(metadata, "llama.attention.key_length"),
-            layer_norm_epsilon: get_f32_meta(metadata, "llama.layer_norm_epsilon"),
-            rope_freq_base: get_f32_meta(metadata, "llama.rope.freq_base"),
-            rope_freq_scale: get_f32_meta(metadata, "llama.rope.freq_scale"),
-            vocab_size: get_u32_meta(metadata, "llama.vocab_size"),
+            attention_head_count_kv: head_kv,
+            attention_key_length: head_dim,
+            layer_norm_epsilon,
+            rope_freq_base,
+            rope_freq_scale,
+            vocab_size,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -91,6 +122,24 @@ impl ModelConfig {
         if self.attention_head_count == 0 {
             anyhow::bail!("attention_head_count must be > 0");
         }
+        if self.block_count == 0 {
+            anyhow::bail!("block_count must be > 0");
+        }
+        if self.context_length == 0 {
+            anyhow::bail!("context_length must be > 0");
+        }
+        if self.feed_forward_length == 0 {
+            anyhow::bail!("feed_forward_length must be > 0");
+        }
+        if self.vocab_size == 0 {
+            anyhow::bail!("vocab_size must be > 0");
+        }
+        if self.attention_head_count_kv == 0 {
+            anyhow::bail!("attention_head_count_kv must be > 0");
+        }
+        if self.attention_key_length == 0 {
+            anyhow::bail!("attention_key_length must be > 0");
+        }
         if self.embedding_length % self.attention_head_count != 0 {
             anyhow::bail!(
                 "embedding_length {} not divisible by attention_head_count {}",
@@ -98,15 +147,12 @@ impl ModelConfig {
                 self.attention_head_count
             );
         }
-        if let Some(ctx) = self.context_length {
-            if ctx == 0 {
-                anyhow::bail!("context_length must be > 0");
-            }
-        }
-        if let Some(vocab) = self.vocab_size {
-            if vocab == 0 {
-                anyhow::bail!("vocab_size must be > 0 when present");
-            }
+        if self.attention_head_count % self.attention_head_count_kv != 0 {
+            anyhow::bail!(
+                "attention_head_count {} not divisible by attention_head_count_kv {}",
+                self.attention_head_count,
+                self.attention_head_count_kv
+            );
         }
         Ok(())
     }
@@ -118,6 +164,77 @@ fn get_u32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<u32>
         GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
         _ => None,
     })
+}
+
+fn derive_vocab_size(
+    metadata: &HashMap<String, GgufValue>,
+    tensors: &[GgufTensor],
+    d_model: u32,
+) -> Result<u32> {
+    if let Some(v) = get_u32_meta(metadata, "llama.vocab_size") {
+        if v == 0 {
+            anyhow::bail!("llama.vocab_size must be > 0");
+        }
+        return Ok(v);
+    }
+    let candidates = [
+        "tok_embeddings.weight",
+        "token_embd.weight",
+        "token_embd",
+        "token_embeddings.weight",
+    ];
+    for name in candidates {
+        if let Some(t) = tensors.iter().find(|t| t.name == name) {
+            if t.shape.len() != 2 {
+                anyhow::bail!("embedding tensor {name} must be rank-2");
+            }
+            let r0 = t.shape[0] as u32;
+            let r1 = t.shape[1] as u32;
+            if r0 == d_model && r1 > 0 {
+                return Ok(r1);
+            }
+            if r1 == d_model && r0 > 0 {
+                return Ok(r0);
+            }
+        }
+    }
+    anyhow::bail!("vocab_size missing; add llama.vocab_size or embeddings tensor")
+}
+
+fn derive_feed_forward_length(
+    metadata: &HashMap<String, GgufValue>,
+    tensors: &[GgufTensor],
+    d_model: u32,
+) -> Result<u32> {
+    if let Some(v) = get_u32_meta(metadata, "llama.feed_forward_length") {
+        if v == 0 {
+            anyhow::bail!("llama.feed_forward_length must be > 0");
+        }
+        return Ok(v);
+    }
+    let candidates = [
+        "layers.0.feed_forward.w1.weight",
+        "layers.0.feed_forward.w3.weight",
+        "blk.0.ffn_gate.weight",
+        "blk.0.ffn_up.weight",
+        "layers.0.ffn_gate.weight",
+        "layers.0.ffn_up.weight",
+    ];
+    for name in candidates {
+        if let Some(t) = tensors.iter().find(|t| t.name == name) {
+            if t.shape.len() != 2 {
+                anyhow::bail!("feed-forward tensor {name} must be rank-2");
+            }
+            let k = t.shape[0] as u32;
+            let n = t.shape[1] as u32;
+            if k == d_model && n > 0 {
+                return Ok(n);
+            }
+        }
+    }
+    anyhow::bail!(
+        "feed_forward_length missing; add llama.feed_forward_length or a feed-forward weight tensor"
+    )
 }
 
 fn get_f32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<f32> {
@@ -170,16 +287,8 @@ pub struct StandardLayerWeights {
 }
 
 impl LoadedModel {
-    fn get_u32_meta(&self, key: &str) -> Option<u32> {
-        get_u32_meta(&self.gguf.metadata, key)
-    }
-
     fn device_tensor(&self, name: &str) -> Option<&DeviceTensorView> {
         self.device_tensors.get(name)
-    }
-
-    fn get_f32_meta(&self, key: &str) -> Option<f32> {
-        get_f32_meta(&self.gguf.metadata, key)
     }
 
     fn find_tensor_any<'a>(&'a self, candidates: &[String]) -> Result<&'a DeviceTensorView> {
@@ -233,31 +342,23 @@ impl LoadedModel {
                 d_model
             );
         };
-        if let Some(v_meta) = self
-            .model_config
-            .vocab_size
-            .or_else(|| self.get_u32_meta("llama.vocab_size"))
-        {
-            let v_meta = v_meta as usize;
-            let vocab_dim = if rows_are_vocab { r0 } else { r1 };
-            if v_meta != vocab_dim {
-                anyhow::bail!(
-                    "vocab_size meta {} != embeddings vocab dim {} (shape={:?})",
-                    v_meta,
-                    vocab_dim,
-                    tok.shape
-                );
-            }
+        let vocab_dim = if rows_are_vocab { r0 } else { r1 };
+        let v_meta = self.model_config.vocab_size as usize;
+        if v_meta != vocab_dim {
+            anyhow::bail!(
+                "vocab_size meta {} != embeddings vocab dim {} (shape={:?})",
+                v_meta,
+                vocab_dim,
+                tok.shape
+            );
         }
         // If metadata has block_count, ensure requested layer is in-range
-        if let Some(n_layers) = self
-            .model_config
-            .block_count
-            .or_else(|| self.get_u32_meta("llama.block_count"))
-        {
-            if layer as u32 >= n_layers {
-                anyhow::bail!("layer {} out of range (block_count={})", layer, n_layers);
-            }
+        if layer as u32 >= self.model_config.block_count {
+            anyhow::bail!(
+                "layer {} out of range (block_count={})",
+                layer,
+                self.model_config.block_count
+            );
         }
         // Candidates for layer names
         let wq_names = vec![
@@ -326,19 +427,8 @@ impl LoadedModel {
         }
         // Validate Q/K/V/WO N dims using head counts from parsed config
         let n_head = self.model_config.attention_head_count as usize;
-        let head_dim = self
-            .model_config
-            .attention_key_length
-            .map(|v| v as usize)
-            .unwrap_or(d_model / n_head);
-        if head_dim == 0 {
-            anyhow::bail!("attention_key_length must be > 0");
-        }
-        let n_kv = self
-            .model_config
-            .attention_head_count_kv
-            .map(|v| v as usize)
-            .unwrap_or(n_head);
+        let head_dim = self.model_config.attention_key_length as usize;
+        let n_kv = self.model_config.attention_head_count_kv as usize;
         let expect_nq = n_head * head_dim;
         let expect_nk = n_kv * head_dim;
         let expect_nv = n_kv * head_dim;
@@ -392,31 +482,13 @@ impl LoadedModel {
             );
         }
         // If parsed config has feed_forward_length, enforce it matches hidden_dim
-        if let Some(h_cfg) = self.model_config.feed_forward_length.map(|v| v as usize) {
-            if h_cfg != hidden_dim {
-                anyhow::bail!(
-                    "model_config.feed_forward_length {} != inferred hidden_dim {}",
-                    h_cfg,
-                    hidden_dim
-                );
-            }
-        }
-
-        // Optional: validate context_length and rope base/scale if present in raw metadata
-        if let Some(ctx_len) = self.get_u32_meta("llama.context_length") {
-            if ctx_len == 0 {
-                anyhow::bail!("llama.context_length must be > 0");
-            }
-        }
-        if let Some(base) = self.get_f32_meta("llama.rope.freq_base") {
-            if !base.is_finite() || base <= 0.0 {
-                anyhow::bail!("llama.rope.freq_base must be finite and > 0");
-            }
-        }
-        if let Some(scale) = self.get_f32_meta("llama.rope.freq_scale") {
-            if !scale.is_finite() || scale <= 0.0 {
-                anyhow::bail!("llama.rope.freq_scale must be finite and > 0");
-            }
+        let h_cfg = self.model_config.feed_forward_length as usize;
+        if h_cfg != hidden_dim {
+            anyhow::bail!(
+                "model_config.feed_forward_length {} != inferred hidden_dim {}",
+                h_cfg,
+                hidden_dim
+            );
         }
 
         Ok(StandardLayerWeights {
@@ -513,9 +585,9 @@ impl LoadedModel {
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_bytes.len())?;
         #[cfg(feature = "gguf_ext")]
         let (model_config, typed_cfg) =
-            ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata)?;
+            ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata, &gguf.tensors)?;
         #[cfg(not(feature = "gguf_ext"))]
-        let model_config = ModelConfig::from_metadata(&gguf.metadata)?;
+        let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors)?;
 
         Ok(Self {
             gguf,
@@ -753,10 +825,7 @@ impl LoadedModel {
                 num_heads
             );
         }
-        let head_dim = self
-            .model_config
-            .attention_key_length
-            .unwrap_or(d_model / num_heads);
+        let head_dim = self.model_config.attention_key_length;
         if head_dim == 0 {
             anyhow::bail!("attention_key_length must be > 0");
         }
@@ -1273,29 +1342,17 @@ impl LoadedModel {
             let d_model = self.model_config.embedding_length as usize;
             // rows_are_vocab = true when shape is [vocab, d_model]
             let rows_are_vocab = {
-                if let Some(vsz) = self
-                    .model_config
-                    .vocab_size
-                    .or_else(|| self.get_u32_meta("llama.vocab_size"))
-                    .map(|x| x as usize)
-                {
-                    if vsz == r0 {
-                        true
-                    } else if vsz == r1 {
-                        false
-                    } else {
-                        // Fallback to embedding_length alignment
-                        r1 == d_model
-                    }
+                let vsz = self.model_config.vocab_size as usize;
+                if vsz == r0 {
+                    true
+                } else if vsz == r1 {
+                    false
+                } else if r1 == d_model {
+                    true
+                } else if r0 == d_model {
+                    false
                 } else {
-                    // No vocab meta; infer from embedding length match
-                    if r1 == d_model {
-                        true
-                    } else if r0 == d_model {
-                        false
-                    } else {
-                        r1 == d_model
-                    }
+                    r1 == d_model
                 }
             };
             let vocab = if rows_are_vocab { r0 } else { r1 };
@@ -1901,10 +1958,7 @@ impl LoadedModel {
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
         let lm = self.map_lm_head()?.0;
-        let d_model = self
-            .get_u32_meta("llama.embedding_length")
-            .ok_or_else(|| anyhow!("missing llama.embedding_length in metadata"))?
-            as usize;
+        let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
         let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;

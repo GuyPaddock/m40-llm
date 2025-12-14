@@ -109,17 +109,17 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
 
     let model_config = ModelConfig {
         architecture: "llama".into(),
-        block_count: Some(1),
-        context_length: Some(1),
+        block_count: 1,
+        context_length: 1,
         embedding_length: k as u32,
-        feed_forward_length: None,
+        feed_forward_length: k as u32,
         attention_head_count: 1,
-        attention_head_count_kv: None,
-        attention_key_length: Some(k as u32),
-        layer_norm_epsilon: None,
-        rope_freq_base: None,
-        rope_freq_scale: None,
-        vocab_size: None,
+        attention_head_count_kv: 1,
+        attention_key_length: k as u32,
+        layer_norm_epsilon: 1e-5,
+        rope_freq_base: 10_000.0,
+        rope_freq_scale: 1.0,
+        vocab_size: 1,
     };
     // Minimal LoadedModel wrapping the context
     let lm = LoadedModel {
@@ -246,17 +246,17 @@ fn out_proj_f32xf16_f32_smoke() -> Result<()> {
 
     let model_config = ModelConfig {
         architecture: "llama".into(),
-        block_count: Some(1),
-        context_length: Some(1),
+        block_count: 1,
+        context_length: 1,
         embedding_length: k as u32,
-        feed_forward_length: None,
+        feed_forward_length: k as u32,
         attention_head_count: 1,
-        attention_head_count_kv: None,
-        attention_key_length: Some(k as u32),
-        layer_norm_epsilon: None,
-        rope_freq_base: None,
-        rope_freq_scale: None,
-        vocab_size: None,
+        attention_head_count_kv: 1,
+        attention_key_length: k as u32,
+        layer_norm_epsilon: 1e-5,
+        rope_freq_base: 10_000.0,
+        rope_freq_scale: 1.0,
+        vocab_size: 1,
     };
     let lm = LoadedModel {
         gguf: GgufModel::new(0),
