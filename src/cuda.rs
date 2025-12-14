@@ -164,6 +164,7 @@ pub struct DeviceProps {
 // Global allocation tracker (bytes) for diagnostics only
 pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(feature = "cuda")]
 #[derive(Debug, Clone)]
 struct AllocInfo {
     size: usize,
