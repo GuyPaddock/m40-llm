@@ -168,6 +168,42 @@ fn gguf_device_views_quantized_overflow_detected() {
 }
 
 #[test]
+fn gguf_device_views_q5_1_overflow_detected() {
+    // Q5_1 uses 36-byte blocks; a short payload should be rejected
+    let path = tmp_path("gguf_q5_1_overflow");
+    let (k, n) = (1u64, 1u64);
+    let q5_1 = 7u32;
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "Q5_1");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, q5_1);
+        write_le_u64(&mut f, 0);
+
+        // Provide fewer than the required 36 bytes for one block
+        f.write_all(&vec![0u8; 24]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("overflows weights blob"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn gguf_device_views_misaligned_offset_rejected() {
     // F32 requires 4-byte alignment; put at offset 2 to force misalignment
     let path = tmp_path("gguf_misaligned");
@@ -200,6 +236,40 @@ fn gguf_device_views_misaligned_offset_rejected() {
         .expect("should error");
     let msg = format!("{}", err);
     assert!(msg.contains("misaligned"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_device_views_unknown_dtype_rejected() {
+    // Unknown dtype should surface a clear error
+    let path = tmp_path("gguf_unknown_dtype");
+    let unknown = 42u32; // maps to GgmlDType::Unknown
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "UNK");
+        write_le_u32(&mut f, 1);
+        write_le_u64(&mut f, 4);
+        write_le_u32(&mut f, unknown);
+        write_le_u64(&mut f, 0);
+
+        // Supply some bytes; loader should fail before size checks
+        f.write_all(&vec![0u8; 16]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("unsupported dtype"));
     let _ = std::fs::remove_file(&path);
 }
 
