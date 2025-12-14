@@ -3,8 +3,9 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::gguf::{GgmlDType, GgufModel, GgufTensor};
+use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
+use std::collections::HashMap;
 use std::ffi::c_void;
 
 fn make_halves_bytes(vals: &[f32]) -> Vec<u8> {
@@ -25,6 +26,31 @@ fn make_f32_bytes(vals: &[f32]) -> Vec<u8> {
     out
 }
 
+fn minimal_metadata() -> HashMap<String, GgufValue> {
+    use GgufScalar as S;
+    let mut m = HashMap::new();
+    m.insert(
+        "general.architecture".into(),
+        GgufValue::Scalar(S::Str("llama".into())),
+    );
+    m.insert(
+        "llama.embedding_length".into(),
+        GgufValue::Scalar(S::U32(4)),
+    );
+    m.insert(
+        "llama.attention.head_count".into(),
+        GgufValue::Scalar(S::U32(1)),
+    );
+    m.insert("llama.block_count".into(), GgufValue::Scalar(S::U32(1)));
+    m.insert("llama.context_length".into(), GgufValue::Scalar(S::U32(16)));
+    m.insert(
+        "llama.feed_forward_length".into(),
+        GgufValue::Scalar(S::U32(8)),
+    );
+    m.insert("llama.vocab_size".into(), GgufValue::Scalar(S::U32(32)));
+    m
+}
+
 #[test]
 fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
     let ctx = cuda_env::ctx_m40()?;
@@ -35,6 +61,7 @@ fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
 
     // Build an in-memory GGUF model with two tensors at known offsets
     let mut gg = GgufModel::new(0);
+    gg.metadata = minimal_metadata();
     let a_shape = vec![2u64, 3u64]; // 2x3 f16 => 12 bytes
     let b_shape = vec![2u64, 2u64]; // 2x2 f32 => 16 bytes
     let a_bytes = make_halves_bytes(&[0.1, -0.2, 0.3, -0.4, 0.5, -0.6]);

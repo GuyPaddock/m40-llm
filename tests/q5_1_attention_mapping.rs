@@ -3,6 +3,16 @@ use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
 use std::collections::HashMap;
 
 fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
+    let strides = {
+        let mut out = Vec::with_capacity(shape.len());
+        let mut stride = 1usize;
+        for &dim in shape.iter().rev() {
+            out.push(stride);
+            stride *= dim as usize;
+        }
+        out.reverse();
+        out
+    };
     let elem_bytes = match dtype {
         GgmlDType::F16 => 2,
         GgmlDType::Q5_1 => {
@@ -14,6 +24,7 @@ fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
             return DeviceTensorView {
                 dtype,
                 shape,
+                strides,
                 byte_offset: 0,
                 nbytes: blocks * Q5_1_BLOCK_BYTES * rows,
                 #[cfg(feature = "cuda")]
@@ -27,6 +38,7 @@ fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
     DeviceTensorView {
         dtype,
         shape,
+        strides,
         byte_offset: 0,
         nbytes,
         #[cfg(feature = "cuda")]
