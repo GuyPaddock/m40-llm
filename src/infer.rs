@@ -485,25 +485,25 @@ impl LoadedModel {
         let d_base = cuda.upload_weights(weights_bytes)?;
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
-            let layout = dtype_size_bytes(t.dtype)
-                .with_context(|| format!("tensor '{}' unsupported dtype: {:?}", t.name, t.dtype))?;
-            let n_elems: u64 = t.shape.iter().copied().product::<u64>();
-            let n_elems: usize =
-                usize::try_from(n_elems).context("tensor element count does not fit in usize")?;
-            let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
-            let need = n_blocks
-                .checked_mul(layout.block_bytes)
-                .context("tensor size overflow")?;
-            let start = t.offset as usize;
-            let end = start.saturating_add(need);
-            if end > weights_bytes.len() {
-                anyhow::bail!(
-                    "tensor '{}' overflows weights blob: [{}..{}) > {}",
-                    t.name,
-                    start,
-                    end,
-                    weights_bytes.len()
-                );
+            if let Some(layout) = dtype_size_bytes(t.dtype) {
+                let n_elems: u64 = t.shape.iter().copied().product::<u64>();
+                let n_elems: usize = usize::try_from(n_elems)
+                    .context("tensor element count does not fit in usize")?;
+                let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
+                let need = n_blocks
+                    .checked_mul(layout.block_bytes)
+                    .context("tensor size overflow")?;
+                let start = t.offset as usize;
+                let end = start.saturating_add(need);
+                if end > weights_bytes.len() {
+                    anyhow::bail!(
+                        "tensor '{}' overflows weights blob: [{}..{}) > {}",
+                        t.name,
+                        start,
+                        end,
+                        weights_bytes.len()
+                    );
+                }
             }
         }
         #[cfg(feature = "cuda")]
