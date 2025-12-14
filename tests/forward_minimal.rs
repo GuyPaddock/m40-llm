@@ -4,7 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use m40_llm::gguf::GgufModel;
-use m40_llm::infer::LoadedModel;
+use m40_llm::infer::{LoadedModel, ModelConfig};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
@@ -43,6 +43,20 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
 
     // Build a minimal LoadedModel with a KV cache
     let kv = m40_llm::cuda::KVCache::new_with_context(&ctx, 8, 1, num_heads, head_dim)?;
+    let model_config = ModelConfig {
+        architecture: "llama".into(),
+        block_count: Some(1),
+        context_length: Some(8),
+        embedding_length: d_model as u32,
+        feed_forward_length: Some(hidden_dim as u32),
+        attention_head_count: num_heads,
+        attention_head_count_kv: None,
+        attention_key_length: Some(head_dim),
+        layer_norm_epsilon: None,
+        rope_freq_base: None,
+        rope_freq_scale: None,
+        vocab_size: None,
+    };
     let mut lm = LoadedModel {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
@@ -50,8 +64,20 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         device_tensors: HashMap::new(),
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        model_config,
         #[cfg(feature = "gguf_ext")]
-        typed_config: None,
+        typed_config: gguf_llms::model::ModelConfig {
+            architecture: "llama".into(),
+            block_count: 1,
+            context_length: 8,
+            embedding_length: d_model as u32,
+            feed_forward_length: hidden_dim as u32,
+            attention_head_count: num_heads,
+            attention_head_count_kv: None,
+            attention_key_length: Some(head_dim),
+            layer_norm_epsilon: None,
+            rope_freq_base: None,
+        },
     };
 
     // Input x (1 x d_model)

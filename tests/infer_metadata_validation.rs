@@ -1,5 +1,5 @@
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufValue};
-use m40_llm::infer::{DeviceTensorView, LoadedModel};
+use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
 use std::collections::HashMap;
 
 fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
@@ -67,6 +67,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         );
     }
 
+    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
     LoadedModel {
         gguf,
         cuda,
@@ -76,8 +77,20 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         d_weights_base: std::ptr::null_mut(),
         #[cfg(not(feature = "cuda"))]
         host_weights: Vec::new(),
+        model_config,
         #[cfg(feature = "gguf_ext")]
-        typed_config: None,
+        typed_config: gguf_llms::model::ModelConfig {
+            architecture: "llama".into(),
+            block_count: 4,
+            context_length: 0,
+            embedding_length: d_model as u32,
+            feed_forward_length: (2 * d_model) as u32,
+            attention_head_count: 1,
+            attention_head_count_kv: None,
+            attention_key_length: Some((d_model as u32) / 1),
+            layer_norm_epsilon: None,
+            rope_freq_base: None,
+        },
     }
 }
 
@@ -105,6 +118,7 @@ fn layer_index_checked_against_block_count() {
         "llama.block_count".into(),
         GgufValue::Scalar(GgufScalar::U32(1)),
     );
+    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata).unwrap();
     // mapping layer 1 should fail (only 0 valid)
     let err = lm.map_standard_layer(1).unwrap_err();
     let msg = format!("{}", err);

@@ -2,10 +2,134 @@
 #![allow(dead_code)]
 
 use crate::cuda::{CudaContext, KVCache};
-use crate::gguf::{GgmlDType, GgufModel, GgufTensor};
+use crate::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::ffi::c_void;
+
+#[derive(Debug, Clone)]
+pub struct ModelConfig {
+    pub architecture: String,
+    pub block_count: Option<u32>,
+    pub context_length: Option<u32>,
+    pub embedding_length: u32,
+    pub feed_forward_length: Option<u32>,
+    pub attention_head_count: u32,
+    pub attention_head_count_kv: Option<u32>,
+    pub attention_key_length: Option<u32>,
+    pub layer_norm_epsilon: Option<f32>,
+    pub rope_freq_base: Option<f32>,
+    pub rope_freq_scale: Option<f32>,
+    pub vocab_size: Option<u32>,
+}
+
+impl ModelConfig {
+    #[cfg(feature = "gguf_ext")]
+    fn from_gguf_ext_bytes(
+        bytes: &[u8],
+        metadata: &HashMap<String, GgufValue>,
+    ) -> Result<(Self, gguf_llms::model::ModelConfig)> {
+        let typed = crate::gguf_ext::extract_model_config_from_bytes(bytes)?;
+        let model_cfg = Self::from_typed_and_metadata(&typed, metadata)?;
+        Ok((model_cfg, typed))
+    }
+
+    #[cfg(feature = "gguf_ext")]
+    fn from_typed_and_metadata(
+        typed: &gguf_llms::model::ModelConfig,
+        metadata: &HashMap<String, GgufValue>,
+    ) -> Result<Self> {
+        let cfg = Self {
+            architecture: typed.architecture.clone(),
+            block_count: Some(typed.block_count),
+            context_length: Some(typed.context_length),
+            embedding_length: typed.embedding_length,
+            feed_forward_length: Some(typed.feed_forward_length),
+            attention_head_count: typed.attention_head_count,
+            attention_head_count_kv: typed.attention_head_count_kv,
+            attention_key_length: typed.attention_key_length,
+            layer_norm_epsilon: typed.layer_norm_epsilon,
+            rope_freq_base: typed.rope_freq_base,
+            rope_freq_scale: get_f32_meta(metadata, "llama.rope.freq_scale"),
+            vocab_size: get_u32_meta(metadata, "llama.vocab_size"),
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    pub fn from_metadata(metadata: &HashMap<String, GgufValue>) -> Result<Self> {
+        let architecture = get_str_meta(metadata, "general.architecture")
+            .ok_or_else(|| anyhow!("missing general.architecture"))?
+            .to_string();
+        let embedding_length = get_u32_meta(metadata, "llama.embedding_length")
+            .ok_or_else(|| anyhow!("missing llama.embedding_length"))?;
+        let attention_head_count = get_u32_meta(metadata, "llama.attention.head_count")
+            .ok_or_else(|| anyhow!("missing llama.attention.head_count"))?;
+
+        let cfg = Self {
+            architecture,
+            block_count: get_u32_meta(metadata, "llama.block_count"),
+            context_length: get_u32_meta(metadata, "llama.context_length"),
+            embedding_length,
+            feed_forward_length: get_u32_meta(metadata, "llama.feed_forward_length"),
+            attention_head_count,
+            attention_head_count_kv: get_u32_meta(metadata, "llama.attention.head_count_kv"),
+            attention_key_length: get_u32_meta(metadata, "llama.attention.key_length"),
+            layer_norm_epsilon: get_f32_meta(metadata, "llama.layer_norm_epsilon"),
+            rope_freq_base: get_f32_meta(metadata, "llama.rope.freq_base"),
+            rope_freq_scale: get_f32_meta(metadata, "llama.rope.freq_scale"),
+            vocab_size: get_u32_meta(metadata, "llama.vocab_size"),
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    fn validate(&self) -> Result<()> {
+        if self.embedding_length == 0 {
+            anyhow::bail!("embedding_length must be > 0");
+        }
+        if self.attention_head_count == 0 {
+            anyhow::bail!("attention_head_count must be > 0");
+        }
+        if self.embedding_length % self.attention_head_count != 0 {
+            anyhow::bail!(
+                "embedding_length {} not divisible by attention_head_count {}",
+                self.embedding_length,
+                self.attention_head_count
+            );
+        }
+        if let Some(ctx) = self.context_length {
+            if ctx == 0 {
+                anyhow::bail!("context_length must be > 0");
+            }
+        }
+        if let Some(vocab) = self.vocab_size {
+            if vocab == 0 {
+                anyhow::bail!("vocab_size must be > 0 when present");
+            }
+        }
+        Ok(())
+    }
+}
+
+fn get_u32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<u32> {
+    metadata.get(key).and_then(|v| match v {
+        GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
+        GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
+        _ => None,
+    })
+}
+
+fn get_f32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<f32> {
+    metadata.get(key).and_then(|v| match v {
+        GgufValue::Scalar(GgufScalar::F32(x)) => Some(*x),
+        _ => None,
+    })
+}
+
+fn get_str_meta<'a>(metadata: &'a HashMap<String, GgufValue>, key: &str) -> Option<&'a str> {
+    metadata.get(key).and_then(|v| v.as_str())
+}
 
 #[derive(Debug, Clone)]
 pub struct DeviceTensorView {
@@ -26,8 +150,9 @@ pub struct LoadedModel {
     pub d_weights_base: *mut c_void,
     #[cfg(not(feature = "cuda"))]
     pub host_weights: Vec<u8>,
+    pub model_config: ModelConfig,
     #[cfg(feature = "gguf_ext")]
-    pub typed_config: Option<gguf_llms::model::ModelConfig>,
+    pub typed_config: gguf_llms::model::ModelConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -46,11 +171,7 @@ pub struct StandardLayerWeights {
 
 impl LoadedModel {
     fn get_u32_meta(&self, key: &str) -> Option<u32> {
-        use crate::gguf::{GgufScalar, GgufValue};
-        self.gguf.metadata.get(key).and_then(|v| match v {
-            GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
-            _ => None,
-        })
+        get_u32_meta(&self.gguf.metadata, key)
     }
 
     fn device_tensor(&self, name: &str) -> Option<&DeviceTensorView> {
@@ -58,11 +179,7 @@ impl LoadedModel {
     }
 
     fn get_f32_meta(&self, key: &str) -> Option<f32> {
-        use crate::gguf::{GgufScalar, GgufValue};
-        self.gguf.metadata.get(key).and_then(|v| match v {
-            GgufValue::Scalar(GgufScalar::F32(x)) => Some(*x),
-            _ => None,
-        })
+        get_f32_meta(&self.gguf.metadata, key)
     }
 
     fn find_tensor_any<'a>(&'a self, candidates: &[String]) -> Result<&'a DeviceTensorView> {
@@ -78,7 +195,7 @@ impl LoadedModel {
     /// Supports both layers.N.* and blk.N.* naming variants.
     pub fn map_standard_layer(&self, layer: usize) -> Result<StandardLayerWeights> {
         use crate::gguf::GgmlDType;
-        // Determine d_model from typed config or metadata and support embeddings layout
+        // Determine d_model from parsed config and support embeddings layout
         // in either [vocab, d_model] or [d_model, vocab] (e.g., Qwen).
         // Try common embedding tensor names across families (LLaMA/Qwen)
         let tok = self.find_tensor_any(&[
@@ -102,23 +219,7 @@ impl LoadedModel {
         }
         let r0 = tok.shape[0] as usize;
         let r1 = tok.shape[1] as usize;
-        // Prefer typed_config for d_model; fallback to raw metadata; else infer from smaller dim
-        let mut d_model = None::<usize>;
-        #[cfg(feature = "gguf_ext")]
-        if let Some(cfg) = &self.typed_config {
-            if cfg.embedding_length > 0 {
-                d_model = Some(cfg.embedding_length as usize);
-            }
-        }
-        if d_model.is_none() {
-            d_model = self
-                .get_u32_meta("llama.embedding_length")
-                .map(|x| x as usize);
-        }
-        let d_model = d_model.unwrap_or(r0.min(r1));
-        if d_model == 0 {
-            anyhow::bail!("could not determine d_model")
-        }
+        let d_model = self.model_config.embedding_length as usize;
         // Validate that one embedding dimension equals d_model and the other matches vocab if present
         let rows_are_vocab = if r1 == d_model {
             true // [vocab, d_model]
@@ -132,7 +233,11 @@ impl LoadedModel {
                 d_model
             );
         };
-        if let Some(v_meta) = self.get_u32_meta("llama.vocab_size") {
+        if let Some(v_meta) = self
+            .model_config
+            .vocab_size
+            .or_else(|| self.get_u32_meta("llama.vocab_size"))
+        {
             let v_meta = v_meta as usize;
             let vocab_dim = if rows_are_vocab { r0 } else { r1 };
             if v_meta != vocab_dim {
@@ -145,21 +250,13 @@ impl LoadedModel {
             }
         }
         // If metadata has block_count, ensure requested layer is in-range
-        if let Some(n_layers) = self.get_u32_meta("llama.block_count") {
+        if let Some(n_layers) = self
+            .model_config
+            .block_count
+            .or_else(|| self.get_u32_meta("llama.block_count"))
+        {
             if layer as u32 >= n_layers {
                 anyhow::bail!("layer {} out of range (block_count={})", layer, n_layers);
-            }
-        }
-        // If typed_config present, enforce embedding_length matches d_model
-        #[cfg(feature = "gguf_ext")]
-        if let Some(cfg) = &self.typed_config {
-            let em = cfg.embedding_length as usize;
-            if em != d_model {
-                anyhow::bail!(
-                    "typed_config.embedding_length {} != inferred d_model {}",
-                    em,
-                    d_model
-                );
             }
         }
         // Candidates for layer names
@@ -227,45 +324,40 @@ impl LoadedModel {
                 );
             }
         }
-        // If typed_config present, validate Q/K/V/WO N dims using head counts
-        #[cfg(feature = "gguf_ext")]
-        if let Some(cfg) = &self.typed_config {
-            let n_head = cfg.attention_head_count as usize;
-            if n_head == 0 || !d_model.is_multiple_of(n_head) {
-                anyhow::bail!(
-                    "typed_config invalid: d_model {} not divisible by attention_head_count {}",
-                    d_model,
-                    n_head
-                );
-            }
-            let head_dim = cfg
-                .attention_key_length
-                .map(|v| v as usize)
-                .unwrap_or(d_model / n_head);
-            let n_kv = cfg
-                .attention_head_count_kv
-                .map(|v| v as usize)
-                .unwrap_or(n_head);
-            let expect_nq = n_head * head_dim;
-            let expect_nk = n_kv * head_dim;
-            let expect_nv = n_kv * head_dim;
-            let expect_no = d_model;
-            let qn = *wq.shape.get(1).unwrap_or(&0) as usize;
-            let kn = *wk.shape.get(1).unwrap_or(&0) as usize;
-            let vn = *wv.shape.get(1).unwrap_or(&0) as usize;
-            let on = *wo.shape.get(1).unwrap_or(&0) as usize;
-            if qn != expect_nq {
-                anyhow::bail!("wq second dim {} != expected {}", qn, expect_nq);
-            }
-            if kn != expect_nk {
-                anyhow::bail!("wk second dim {} != expected {}", kn, expect_nk);
-            }
-            if vn != expect_nv {
-                anyhow::bail!("wv second dim {} != expected {}", vn, expect_nv);
-            }
-            if on != expect_no {
-                anyhow::bail!("wo second dim {} != expected {}", on, expect_no);
-            }
+        // Validate Q/K/V/WO N dims using head counts from parsed config
+        let n_head = self.model_config.attention_head_count as usize;
+        let head_dim = self
+            .model_config
+            .attention_key_length
+            .map(|v| v as usize)
+            .unwrap_or(d_model / n_head);
+        if head_dim == 0 {
+            anyhow::bail!("attention_key_length must be > 0");
+        }
+        let n_kv = self
+            .model_config
+            .attention_head_count_kv
+            .map(|v| v as usize)
+            .unwrap_or(n_head);
+        let expect_nq = n_head * head_dim;
+        let expect_nk = n_kv * head_dim;
+        let expect_nv = n_kv * head_dim;
+        let expect_no = d_model;
+        let qn = *wq.shape.get(1).unwrap_or(&0) as usize;
+        let kn = *wk.shape.get(1).unwrap_or(&0) as usize;
+        let vn = *wv.shape.get(1).unwrap_or(&0) as usize;
+        let on = *wo.shape.get(1).unwrap_or(&0) as usize;
+        if qn != expect_nq {
+            anyhow::bail!("wq second dim {} != expected {}", qn, expect_nq);
+        }
+        if kn != expect_nk {
+            anyhow::bail!("wk second dim {} != expected {}", kn, expect_nk);
+        }
+        if vn != expect_nv {
+            anyhow::bail!("wv second dim {} != expected {}", vn, expect_nv);
+        }
+        if on != expect_no {
+            anyhow::bail!("wo second dim {} != expected {}", on, expect_no);
         }
         // Infer hidden_dim from up/gate
         for (name, t) in [("w_gate", &w_gate), ("w_up", &w_up)] {
@@ -299,13 +391,11 @@ impl LoadedModel {
                 w_down.shape
             );
         }
-        // If typed_config present, enforce feed_forward_length matches hidden_dim
-        #[cfg(feature = "gguf_ext")]
-        if let Some(cfg) = &self.typed_config {
-            let h_cfg = cfg.feed_forward_length as usize;
+        // If parsed config has feed_forward_length, enforce it matches hidden_dim
+        if let Some(h_cfg) = self.model_config.feed_forward_length.map(|v| v as usize) {
             if h_cfg != hidden_dim {
                 anyhow::bail!(
-                    "typed_config.feed_forward_length {} != inferred hidden_dim {}",
+                    "model_config.feed_forward_length {} != inferred hidden_dim {}",
                     h_cfg,
                     hidden_dim
                 );
@@ -418,9 +508,11 @@ impl LoadedModel {
         #[cfg(not(feature = "cuda"))]
         let device_tensors =
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_bytes.len())?;
-        // Optionally, derive typed model config via gguf_ext from the same in-memory bytes
         #[cfg(feature = "gguf_ext")]
-        let typed_cfg = crate::gguf_ext::extract_model_config_from_bytes(&gguf_bytes).ok();
+        let (model_config, typed_cfg) =
+            ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata)?;
+        #[cfg(not(feature = "gguf_ext"))]
+        let model_config = ModelConfig::from_metadata(&gguf.metadata)?;
 
         Ok(Self {
             gguf,
@@ -431,6 +523,7 @@ impl LoadedModel {
             d_weights_base: d_base,
             #[cfg(not(feature = "cuda"))]
             host_weights: weights_bytes.to_vec(),
+            model_config,
             #[cfg(feature = "gguf_ext")]
             typed_config: typed_cfg,
         })
@@ -586,37 +679,22 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
-        // Prefer typed_config to choose layout when available; fallback to metadata-derived
-        let (num_heads, head_dim) = {
-            #[cfg(feature = "gguf_ext")]
-            {
-                if let Some(cfg) = &self.typed_config {
-                    let n_head = cfg.attention_head_count;
-                    let d_model = cfg.embedding_length;
-                    if n_head == 0 || d_model == 0 || !d_model.is_multiple_of(n_head) {
-                        anyhow::bail!(
-                            "typed_config invalid for KV layout: d_model {} head_count {}",
-                            d_model,
-                            n_head
-                        );
-                    }
-                    let hd = cfg.attention_key_length.unwrap_or(d_model / n_head);
-                    (n_head, hd)
-                } else {
-                    let n_head = self.get_u32_meta("llama.attention.head_count").unwrap_or(8);
-                    let d_model = self.get_u32_meta("llama.embedding_length").unwrap_or(512);
-                    let hd = (d_model / n_head.max(1)).max(1);
-                    (n_head, hd)
-                }
-            }
-            #[cfg(not(feature = "gguf_ext"))]
-            {
-                let n_head = self.get_u32_meta("llama.attention.head_count").unwrap_or(8);
-                let d_model = self.get_u32_meta("llama.embedding_length").unwrap_or(512);
-                let hd = (d_model / n_head.max(1)).max(1);
-                (n_head, hd)
-            }
-        };
+        let num_heads = self.model_config.attention_head_count;
+        let d_model = self.model_config.embedding_length;
+        if num_heads == 0 || d_model == 0 || !d_model.is_multiple_of(num_heads) {
+            anyhow::bail!(
+                "model_config invalid for KV layout: d_model {} head_count {}",
+                d_model,
+                num_heads
+            );
+        }
+        let head_dim = self
+            .model_config
+            .attention_key_length
+            .unwrap_or(d_model / num_heads);
+        if head_dim == 0 {
+            anyhow::bail!("attention_key_length must be > 0");
+        }
         let kv = KVCache::new_with_context(
             &self.cuda,
             max_seq_len,
@@ -1127,22 +1205,15 @@ impl LoadedModel {
             let r0 = tok.shape[0] as usize;
             let r1 = tok.shape[1] as usize;
             // Determine d_model and which dimension is vocab vs d_model
-            let mut d_model = self
-                .get_u32_meta("llama.embedding_length")
-                .map(|x| x as usize)
-                .unwrap_or(0);
-            #[cfg(feature = "gguf_ext")]
-            if let Some(cfg) = &self.typed_config {
-                if cfg.embedding_length > 0 {
-                    d_model = cfg.embedding_length as usize;
-                }
-            }
-            if d_model == 0 {
-                d_model = r0.min(r1);
-            }
+            let d_model = self.model_config.embedding_length as usize;
             // rows_are_vocab = true when shape is [vocab, d_model]
             let rows_are_vocab = {
-                if let Some(vsz) = self.get_u32_meta("llama.vocab_size").map(|x| x as usize) {
+                if let Some(vsz) = self
+                    .model_config
+                    .vocab_size
+                    .or_else(|| self.get_u32_meta("llama.vocab_size"))
+                    .map(|x| x as usize)
+                {
                     if vsz == r0 {
                         true
                     } else if vsz == r1 {

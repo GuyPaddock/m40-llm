@@ -108,8 +108,8 @@ async fn main() -> Result<()> {
                     );
                 }
 
-                // Allocate KV cache upfront using config; use a conservative default length
-                let max_len = 1024u32;
+                // Allocate KV cache upfront using config; default to context_length when known
+                let max_len = loaded.model_config.context_length.unwrap_or(1024);
                 let _ = loaded.allocate_kv_cache(max_len, 1);
 
                 let state = Arc::new(server::AppState { model: loaded });

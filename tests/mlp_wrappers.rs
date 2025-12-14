@@ -4,7 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use m40_llm::gguf::GgufModel;
-use m40_llm::infer::LoadedModel;
+use m40_llm::infer::{LoadedModel, ModelConfig};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
@@ -122,6 +122,20 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         )?;
     }
 
+    let model_config = ModelConfig {
+        architecture: "llama".into(),
+        block_count: Some(1),
+        context_length: Some(1),
+        embedding_length: k as u32,
+        feed_forward_length: Some(h as u32),
+        attention_head_count: 1,
+        attention_head_count_kv: None,
+        attention_key_length: Some(k as u32),
+        layer_norm_epsilon: None,
+        rope_freq_base: None,
+        rope_freq_scale: None,
+        vocab_size: None,
+    };
     let lm = LoadedModel {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
@@ -129,8 +143,20 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         device_tensors: HashMap::new(),
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        model_config,
         #[cfg(feature = "gguf_ext")]
-        typed_config: None,
+        typed_config: gguf_llms::model::ModelConfig {
+            architecture: "llama".into(),
+            block_count: 1,
+            context_length: 1,
+            embedding_length: k as u32,
+            feed_forward_length: h as u32,
+            attention_head_count: 1,
+            attention_head_count_kv: None,
+            attention_key_length: Some(k as u32),
+            layer_norm_epsilon: None,
+            rope_freq_base: None,
+        },
     };
 
     unsafe {

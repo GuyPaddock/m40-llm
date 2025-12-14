@@ -117,9 +117,9 @@ fn gguf_typed_config_and_kv_layout_cuda_smoke() -> Result<()> {
         f.read_to_end(&mut file_bytes).unwrap();
     }
 
-    // Construct model; typed_config should be Some
+    // Construct model; typed_config should be populated and mirrored into model_config
     let mut lm = LoadedModel::from_gguf(gg, file_bytes, -1)?;
-    let cfg = lm.typed_config.as_ref().expect("typed_config Some");
+    let cfg = &lm.model_config;
     assert_eq!(cfg.embedding_length as u64, d_model);
     assert_eq!(cfg.attention_head_count as u64, n_head);
 
@@ -127,7 +127,7 @@ fn gguf_typed_config_and_kv_layout_cuda_smoke() -> Result<()> {
     let w = lm.map_standard_layer(0)?;
     assert_eq!(w.d_model as u64, d_model);
 
-    // KV allocation pulls from typed_config
+    // KV allocation pulls from parsed model_config
     lm.allocate_kv_cache(16, 1)?;
     let kv = lm.kv_cache.as_ref().unwrap();
     assert_eq!(kv.num_heads(), n_head as u32);

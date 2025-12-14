@@ -1,5 +1,5 @@
-use m40_llm::gguf::{GgmlDType, GgufModel};
-use m40_llm::infer::{DeviceTensorView, LoadedModel};
+use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufValue};
+use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
 use std::collections::HashMap;
 
 fn make_model_with_layer(
@@ -9,7 +9,23 @@ fn make_model_with_layer(
     f16_weights: bool,
 ) -> LoadedModel {
     // Minimal GGUF backing; only used for metadata if present
-    let gguf = GgufModel::new(0);
+    let mut gguf = GgufModel::new(0);
+    gguf.metadata.insert(
+        "general.architecture".into(),
+        GgufValue::Scalar(GgufScalar::Str("llama".into())),
+    );
+    gguf.metadata.insert(
+        "llama.embedding_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    gguf.metadata.insert(
+        "llama.attention.head_count".into(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    gguf.metadata.insert(
+        "llama.feed_forward_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(hidden as u32)),
+    );
     let cuda = m40_llm::cuda::CudaContext::new(-1).unwrap();
 
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
@@ -92,6 +108,7 @@ fn make_model_with_layer(
         );
     }
 
+    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
     LoadedModel {
         gguf,
         cuda,
@@ -101,8 +118,20 @@ fn make_model_with_layer(
         d_weights_base: std::ptr::null_mut(),
         #[cfg(not(feature = "cuda"))]
         host_weights: Vec::new(),
+        model_config,
         #[cfg(feature = "gguf_ext")]
-        typed_config: None,
+        typed_config: gguf_llms::model::ModelConfig {
+            architecture: "llama".into(),
+            block_count: 1,
+            context_length: 0,
+            embedding_length: d_model as u32,
+            feed_forward_length: hidden as u32,
+            attention_head_count: 1,
+            attention_head_count_kv: None,
+            attention_key_length: Some((d_model as u32) / 1),
+            layer_norm_epsilon: None,
+            rope_freq_base: None,
+        },
     }
 }
 
