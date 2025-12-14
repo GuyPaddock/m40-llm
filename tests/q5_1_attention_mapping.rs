@@ -6,15 +6,16 @@ fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
     let elem_bytes = match dtype {
         GgmlDType::F16 => 2,
         GgmlDType::Q5_1 => {
-            // Q5_1 stores blocks of 32 values with a fixed 6-byte stride in tests
+            const Q5_1_BLOCK: usize = 32;
+            const Q5_1_BLOCK_BYTES: usize = 36; // 4-byte scale + 32 quantized bytes
             let n = *shape.get(1).unwrap_or(&0) as usize;
             let rows = *shape.get(0).unwrap_or(&0) as usize;
-            let blocks = (n + 31) / 32;
+            let blocks = (n + Q5_1_BLOCK - 1) / Q5_1_BLOCK;
             return DeviceTensorView {
                 dtype,
                 shape,
                 byte_offset: 0,
-                nbytes: blocks * 6 * rows,
+                nbytes: blocks * Q5_1_BLOCK_BYTES * rows,
                 #[cfg(feature = "cuda")]
                 dptr: std::ptr::null_mut(),
             };
