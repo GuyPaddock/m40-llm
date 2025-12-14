@@ -280,6 +280,7 @@ pub struct LoadedModel {
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
+    pub weights_len: usize,
     #[cfg(feature = "cuda")]
     pub d_weights_base: *mut c_void,
     #[cfg(not(feature = "cuda"))]
@@ -306,6 +307,42 @@ pub struct StandardLayerWeights {
 impl LoadedModel {
     fn device_tensor(&self, name: &str) -> Option<&DeviceTensorView> {
         self.device_tensors.get(name)
+    }
+
+    #[cfg(feature = "cuda")]
+    fn tensor_device_ptr(&self, name: &str, view: &DeviceTensorView) -> Result<*const c_void> {
+        if view.dptr.is_null() {
+            anyhow::bail!("tensor '{}' device pointer is null", name);
+        }
+        let off: usize = view
+            .byte_offset
+            .try_into()
+            .context("tensor offset does not fit in usize")?;
+        let end = off
+            .checked_add(view.nbytes)
+            .context("tensor span overflow")?;
+        if end > self.weights_len {
+            anyhow::bail!(
+                "tensor '{}' device span {}..{} exceeds weights length {}",
+                name,
+                off,
+                end,
+                self.weights_len
+            );
+        }
+        let expected = (self.d_weights_base as usize)
+            .checked_add(off)
+            .context("device pointer offset overflow")?;
+        if view.dptr as usize != expected {
+            anyhow::bail!(
+                "tensor '{}' device pointer {} != base {} + offset {}",
+                name,
+                view.dptr as usize,
+                self.d_weights_base as usize,
+                off
+            );
+        }
+        Ok(view.dptr as *const c_void)
     }
 
     fn find_tensor_any<'a>(&'a self, candidates: &[String]) -> Result<&'a DeviceTensorView> {
@@ -570,6 +607,7 @@ impl LoadedModel {
             );
         }
         let weights_bytes = gguf_bytes.split_off(data_off);
+        let weights_len = weights_bytes.len();
         #[cfg(feature = "cuda")]
         let d_base = cuda.upload_weights(&weights_bytes)?;
         // Validate that all known-sized tensors fit within weights_bytes
@@ -595,7 +633,6 @@ impl LoadedModel {
                 }
             }
         }
-        let weights_len = weights_bytes.len();
         #[cfg(feature = "cuda")]
         let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_len)?;
         #[cfg(not(feature = "cuda"))]
@@ -612,6 +649,7 @@ impl LoadedModel {
             cuda,
             kv_cache: None,
             device_tensors,
+            weights_len,
             #[cfg(feature = "cuda")]
             d_weights_base: d_base,
             #[cfg(not(feature = "cuda"))]
@@ -796,6 +834,40 @@ fn build_device_tensor_views(
         map.insert(t.name.clone(), view);
     }
     Ok(map)
+}
+
+#[cfg(all(test, feature = "cuda"))]
+mod cuda_tensor_view_tests {
+    use super::*;
+
+    #[test]
+    fn device_pointer_matches_base_and_offset() {
+        let tensors = vec![GgufTensor {
+            name: "w".to_string(),
+            dtype: GgmlDType::F16,
+            shape: vec![2, 2],
+            offset: 8,
+        }];
+        let base = 0x1000usize as *mut c_void;
+        let views = build_device_tensor_views(&tensors, base, 64).expect("views");
+        let w = views.get("w").expect("tensor view");
+        assert_eq!(w.dptr as usize, base as usize + 8);
+    }
+
+    #[test]
+    fn null_device_base_rejected() {
+        let tensors = vec![GgufTensor {
+            name: "w".to_string(),
+            dtype: GgmlDType::F16,
+            shape: vec![1, 1],
+            offset: 0,
+        }];
+        let err =
+            build_device_tensor_views(&tensors, std::ptr::null_mut(), 16).expect_err("should err");
+        assert!(err
+            .to_string()
+            .contains("device weights base pointer is null"));
+    }
 }
 
 impl LoadedModel {
@@ -1585,20 +1657,13 @@ impl LoadedModel {
         let w = self.map_standard_layer(layer)?;
         #[cfg(feature = "cuda")]
         {
-            let wq_ptr =
-                (self.d_weights_base as usize + w.wq.byte_offset as usize) as *const c_void;
-            let wk_ptr =
-                (self.d_weights_base as usize + w.wk.byte_offset as usize) as *const c_void;
-            let wv_ptr =
-                (self.d_weights_base as usize + w.wv.byte_offset as usize) as *const c_void;
-            let wo_ptr =
-                (self.d_weights_base as usize + w.wo.byte_offset as usize) as *const c_void;
-            let w_gate_ptr =
-                (self.d_weights_base as usize + w.w_gate.byte_offset as usize) as *const c_void;
-            let w_up_ptr =
-                (self.d_weights_base as usize + w.w_up.byte_offset as usize) as *const c_void;
-            let w_down_ptr =
-                (self.d_weights_base as usize + w.w_down.byte_offset as usize) as *const c_void;
+            let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
+            let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
+            let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+            let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
+            let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
+            let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
+            let w_down_ptr = self.tensor_device_ptr("w_down", &w.w_down)?;
 
             #[cfg(feature = "cuda")]
             {
@@ -2012,7 +2077,7 @@ impl LoadedModel {
         let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
-        let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
+        let d_w = self.tensor_device_ptr("lm_head", &lm)?;
         #[cfg(not(feature = "cuda"))]
         let d_w: *const c_void = std::ptr::null();
         #[cfg(not(feature = "cuda"))]
@@ -2040,7 +2105,7 @@ impl LoadedModel {
         if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
             #[cfg(feature = "cuda")]
             {
-                let d_w = (self.d_weights_base as usize + lm.byte_offset as usize) as *const c_void;
+                let d_w = self.tensor_device_ptr("lm_head", &lm)?;
                 let bytes_logits = vocab * std::mem::size_of::<f32>();
                 let d_logits = self.cuda.device_malloc(bytes_logits)?;
                 self.matmul_f32xf16_f32(
@@ -2120,9 +2185,10 @@ impl LoadedModel {
             #[cfg(feature = "cuda")]
             {
                 let mut row_h = vec![0u8; row_bytes];
-                let row_dev = (self.d_weights_base as usize
-                    + tok.byte_offset as usize
-                    + v * row_bytes) as *const c_void;
+                let row_dev = self
+                    .tensor_device_ptr("tok_embeddings", tok)?
+                    .cast::<u8>()
+                    .wrapping_add(v * row_bytes) as *const c_void;
                 self.cuda
                     .memcpy_d2h(row_h.as_mut_ptr() as *mut c_void, row_dev, row_bytes)?;
                 let mut acc = 0f32;

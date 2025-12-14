@@ -138,3 +138,67 @@ fn gguf_device_views_f32_size_and_shape() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn gguf_device_views_reject_empty_shape() {
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "m40llm_gguf_tensor_empty_shape_{}.gguf",
+        std::process::id()
+    ));
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 7);
+        write_minimal_metadata(&mut f);
+
+        write_string(&mut f, "empty");
+        write_le_u32(&mut f, 0); // n_dims = 0
+        write_le_u32(&mut f, 1); // dtype f16
+        write_le_u64(&mut f, 0); // offset
+
+        f.write_all(&[0u8; 2]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(LoadedModel::from_gguf(gg, bytes, -1).is_err());
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_device_views_reject_zero_dim() {
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "m40llm_gguf_tensor_zero_dim_{}.gguf",
+        std::process::id()
+    ));
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 7);
+        write_minimal_metadata(&mut f);
+
+        write_string(&mut f, "zero");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, 4);
+        write_le_u64(&mut f, 0); // zero dim
+        write_le_u32(&mut f, 1); // dtype f16
+        write_le_u64(&mut f, 0);
+
+        f.write_all(&vec![0u8; 8]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(LoadedModel::from_gguf(gg, bytes, -1).is_err());
+    let _ = std::fs::remove_file(&path);
+}

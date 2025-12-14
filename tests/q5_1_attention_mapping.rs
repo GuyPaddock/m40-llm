@@ -138,6 +138,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
         cuda,
         kv_cache: None,
         device_tensors,
+        weights_len: 0,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
         #[cfg(not(feature = "cuda"))]
