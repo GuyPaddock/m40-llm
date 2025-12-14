@@ -1,8 +1,37 @@
-#![cfg(not(feature = "cuda"))]
-
 use m40_llm::gguf::{GgmlDType, GgufModel};
 use m40_llm::infer::{DeviceTensorView, LoadedModel};
 use std::collections::HashMap;
+
+fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
+    let elem_bytes = match dtype {
+        GgmlDType::F16 => 2,
+        GgmlDType::Q5_1 => {
+            // Q5_1 stores blocks of 32 values with a fixed 6-byte stride in tests
+            let n = *shape.get(1).unwrap_or(&0) as usize;
+            let rows = *shape.get(0).unwrap_or(&0) as usize;
+            let blocks = (n + 31) / 32;
+            return DeviceTensorView {
+                dtype,
+                shape,
+                byte_offset: 0,
+                nbytes: blocks * 6 * rows,
+                #[cfg(feature = "cuda")]
+                dptr: std::ptr::null_mut(),
+            };
+        }
+        _ => 0,
+    };
+
+    let nbytes = (shape.iter().product::<u64>() as usize).saturating_mul(elem_bytes);
+    DeviceTensorView {
+        dtype,
+        shape,
+        byte_offset: 0,
+        nbytes,
+        #[cfg(feature = "cuda")]
+        dptr: std::ptr::null_mut(),
+    }
+}
 
 fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedModel {
     // Minimal GGUF backing; only used for metadata if present
@@ -13,14 +42,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
     // Embeddings: [vocab, d_model] - use F16 for embeddings
     device_tensors.insert(
         "tok_embeddings.weight".into(),
-        DeviceTensorView {
-            dtype: GgmlDType::F16,
-            shape: vec![1024, d_model as u64],
-            byte_offset: 0,
-            nbytes: 0,
-            #[cfg(feature = "cuda")]
-            dptr: std::ptr::null_mut(),
-        },
+        device_tensor(GgmlDType::F16, vec![1024, d_model as u64]),
     );
 
     // Attention weights: [d_model, d_model] - use Q5_1 for attention
@@ -44,17 +66,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
             vec![d_model as u64, d_model as u64],
         ),
     ] {
-        device_tensors.insert(
-            key,
-            DeviceTensorView {
-                dtype: q5_1,
-                shape,
-                byte_offset: 0,
-                nbytes: 0,
-                #[cfg(feature = "cuda")]
-                dptr: std::ptr::null_mut(),
-            },
-        );
+        device_tensors.insert(key, device_tensor(q5_1, shape));
     }
 
     // MLP weights: use F16 for MLP (not testing quantization here)
@@ -76,17 +88,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> LoadedM
             vec![hidden_dim as u64, d_model as u64],
         ),
     ] {
-        device_tensors.insert(
-            key,
-            DeviceTensorView {
-                dtype: wt_f16,
-                shape,
-                byte_offset: 0,
-                nbytes: 0,
-                #[cfg(feature = "cuda")]
-                dptr: std::ptr::null_mut(),
-            },
-        );
+        device_tensors.insert(key, device_tensor(wt_f16, shape));
     }
 
     LoadedModel {
@@ -116,10 +118,20 @@ fn q5_1_attention_mapping_ok() {
 }
 
 #[test]
-fn q5_1_attention_mapping_fallback_to_f16() {
-    let lm = make_model_with_q5_1_attention_layer(1, 16);
-    // Before implementing Q5_1 support, this should fall back to F16
-    let mapped = lm.map_standard_layer(1).expect("should map with fallback");
+fn q5_1_attention_mapping_accepts_f16_attention() {
+    let mut lm = make_model_with_q5_1_attention_layer(1, 16);
+    // Overwrite attention weights to F16 to ensure the legacy path still works deterministically
+    for suffix in ["wq", "wk", "wv", "wo"] {
+        let key = format!("layers.1.attention.{suffix}.weight");
+        let entry = lm
+            .device_tensors
+            .get_mut(&key)
+            .expect("attention weight present");
+        entry.dtype = GgmlDType::F16;
+        entry.nbytes = (entry.shape.iter().product::<u64>() * 2) as usize;
+    }
+
+    let mapped = lm.map_standard_layer(1).expect("should map f16 attention");
     assert_eq!(mapped.d_model, 16);
     assert_eq!(mapped.hidden_dim, 16 * 2);
 }
