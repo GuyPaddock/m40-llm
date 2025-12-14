@@ -1,10 +1,16 @@
 // src/server.rs
 #![allow(dead_code)]
 use axum::{
+    body::Body,
+    response::IntoResponse,
+    response::Response,
     routing::{get, post},
     Json, Router,
 };
-use std::sync::Arc;
+use bytes::Bytes;
+use std::{io, sync::Arc};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
@@ -13,13 +19,15 @@ use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
-use axum::http::{HeaderName, HeaderValue, StatusCode};
+use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
 use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct GenerateRequest {
     pub prompt: String,
     pub max_tokens: Option<usize>,
+    #[serde(default)]
+    pub stream: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -28,8 +36,58 @@ pub struct GenerateResponse {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct GenerateStreamChunk {
+    pub output: String,
+    pub done: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ErrorResponse {
     pub error: String,
+}
+
+fn sanitize_output(text: &str) -> String {
+    text.chars().filter(|c| *c != '\0').collect()
+}
+
+fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
+    let safe_chunk = GenerateStreamChunk {
+        output: sanitize_output(&chunk.output),
+        done: chunk.done,
+    };
+
+    let mut buf: Vec<u8> = Vec::with_capacity(safe_chunk.output.len() + 16);
+    serde_json::to_writer(&mut buf, &safe_chunk)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    buf.push(b'\n');
+    Ok(Bytes::from(buf))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chunk_bytes_strip_nuls_and_terminate() {
+        let chunk = GenerateStreamChunk {
+            output: "hi\0there".to_string(),
+            done: false,
+        };
+        let bytes = chunk_to_bytes(&chunk).expect("serialize chunk");
+        assert_eq!(bytes.last().copied(), Some(b'\n'));
+        assert!(bytes[..bytes.len() - 1].iter().all(|b| *b != 0));
+
+        let lines: Vec<&[u8]> = bytes.split(|b| *b == b'\n').collect();
+        let parsed: GenerateStreamChunk = serde_json::from_slice(lines[0]).expect("decode chunk");
+        assert_eq!(parsed.output, "hithere");
+        assert!(!parsed.done);
+    }
+
+    #[test]
+    fn sanitize_output_passes_clean_text() {
+        let clean = sanitize_output("abc");
+        assert_eq!(clean, "abc");
+    }
 }
 
 pub struct AppState {
@@ -69,7 +127,7 @@ async fn health() -> Json<serde_json::Value> {
 async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
-) -> Result<Json<GenerateResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     #[cfg(feature = "cuda")]
     eprintln!(
         "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
@@ -90,15 +148,17 @@ async fn generate(
 
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
-        let model = &state.model;
+        let state_for_logits = state.clone();
+        #[cfg(feature = "cuda")]
         let mut step: usize = 0;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
+            let model = &state_for_logits.model;
             // KV cache is pre-allocated at startup on the real model instance
 
-            step += 1;
             eprintln!("[server] logits_fn called with {} tokens", ids.len());
             #[cfg(feature = "cuda")]
             {
+                step += 1;
                 eprintln!(
                     "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
                     step,
@@ -288,11 +348,144 @@ async fn generate(
     };
 
     let add_bos = true;
+    let base_sampler = sampler;
+
+    if req.stream {
+        let mut sampler = base_sampler.clone();
+        let tokenizer_stream = tokenizer.clone();
+        let prompt = req.prompt.clone();
+        #[allow(unused_mut)]
+        let mut logits_fn = logits_fn;
+        let stopping_stream = stopping.clone();
+        let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
+        tokio::spawn(async move {
+            let mut ids = match tokenizer_stream.encode_with_specials(&prompt, add_bos, false) {
+                Ok(ids) => ids,
+                Err(e) => {
+                    let _ = tx
+                        .send(Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("encode failed: {e}"),
+                        )))
+                        .await;
+                    return;
+                }
+            };
+            let mut generated: Vec<u32> = Vec::new();
+
+            let send_chunk = |chunk: GenerateStreamChunk| {
+                let tx = tx.clone();
+                async move {
+                    match chunk_to_bytes(&chunk) {
+                        Ok(bytes) => {
+                            let _ = tx.send(Ok(bytes)).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(e)).await;
+                        }
+                    }
+                }
+            };
+
+            loop {
+                if stopping_stream.should_stop(&generated) {
+                    break;
+                }
+                let logits = match logits_fn(&ids) {
+                    Ok(logits) => logits,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                            .await;
+                        return;
+                    }
+                };
+                if logits.is_empty() {
+                    let _ = tx
+                        .send(Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            "logits_fn returned empty logits",
+                        )))
+                        .await;
+                    return;
+                }
+                let next = match sampler.sample(&logits) {
+                    Ok(n) => n as u32,
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                            .await;
+                        return;
+                    }
+                };
+                ids.push(next);
+                generated.push(next);
+
+                match tokenizer_stream.decode_ignoring_specials(&ids) {
+                    Ok(text) => {
+                        let _ = send_chunk(GenerateStreamChunk {
+                            output: sanitize_output(&text),
+                            done: false,
+                        })
+                        .await;
+                    }
+                    Err(e) => {
+                        let _ = tx
+                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                            .await;
+                        return;
+                    }
+                }
+
+                if let Some(eos) = stopping_stream.eos_id {
+                    if next == eos {
+                        break;
+                    }
+                }
+                if let Some(mt) = stopping_stream.max_tokens {
+                    if generated.len() >= mt {
+                        break;
+                    }
+                }
+            }
+
+            let final_text = match tokenizer_stream.decode_ignoring_specials(&ids) {
+                Ok(t) => t,
+                Err(e) => {
+                    let _ = tx
+                        .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                        .await;
+                    return;
+                }
+            };
+            let _ = send_chunk(GenerateStreamChunk {
+                output: sanitize_output(&final_text),
+                done: true,
+            })
+            .await;
+        });
+
+        let body_stream = ReceiverStream::new(rx);
+        let response = Response::builder()
+            .status(StatusCode::OK)
+            .header(CONTENT_TYPE, "application/jsonl")
+            .body(Body::from_stream(body_stream))
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("streaming response build failed: {e}"),
+                    }),
+                )
+            })?;
+        return Ok(response);
+    }
+
     let ids = match decode_loop_with(
         &tokenizer,
         &req.prompt,
         add_bos,
-        sampler,
+        base_sampler,
         &stopping,
         logits_fn,
     ) {
@@ -308,7 +501,7 @@ async fn generate(
         }
     };
     let text = match tokenizer.decode_ignoring_specials(&ids) {
-        Ok(t) => t,
+        Ok(t) => sanitize_output(&t),
         Err(e) => {
             #[cfg(feature = "cuda")]
             eprintln!(
@@ -333,5 +526,5 @@ async fn generate(
         state.model.cuda.device_id(),
         CudaContext::total_device_bytes()
     );
-    Ok(Json(GenerateResponse { output: text }))
+    Ok(Json(GenerateResponse { output: text }).into_response())
 }

@@ -4,10 +4,13 @@ use anyhow::Result;
 use half::f16;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
-use m40_llm::server::{app_router, AppState, GenerateRequest, GenerateResponse};
+use m40_llm::server::{
+    app_router, AppState, GenerateRequest, GenerateResponse, GenerateStreamChunk,
+};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio_stream::StreamExt;
 
 fn f16_bytes(v: f32) -> [u8; 2] {
     let h = f16::from_f32(v);
@@ -128,6 +131,20 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
     (gguf, weights)
 }
 
+async fn start_test_server(model: LoadedModel) -> Result<SocketAddr> {
+    let state = Arc::new(AppState { model });
+    let router = app_router(state);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr: SocketAddr = listener.local_addr()?;
+    tokio::spawn(async move {
+        axum::serve(listener, router.into_make_service())
+            .await
+            .unwrap();
+    });
+    Ok(addr)
+}
+
 #[tokio::test]
 async fn server_generate_smoke() -> Result<()> {
     let vocab = 256usize;
@@ -139,17 +156,7 @@ async fn server_generate_smoke() -> Result<()> {
     // KV cache optional for non-CUDA path but harmless to allocate small
     let _ = model.allocate_kv_cache(16, 1);
 
-    let state = Arc::new(AppState { model });
-    let router = app_router(state);
-
-    // Bind to an ephemeral local port
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let addr: SocketAddr = listener.local_addr()?;
-    tokio::spawn(async move {
-        axum::serve(listener, router.into_make_service())
-            .await
-            .unwrap();
-    });
+    let addr = start_test_server(model).await?;
 
     // Request small generation
     let client = reqwest::Client::new();
@@ -157,11 +164,56 @@ async fn server_generate_smoke() -> Result<()> {
     let req = GenerateRequest {
         prompt: "A".to_string(),
         max_tokens: Some(3),
+        stream: false,
     };
     let resp = client.post(&url).json(&req).send().await.unwrap();
     assert!(resp.status().is_success());
-    let jr: GenerateResponse = resp.json().await.unwrap();
+    let raw = resp.bytes().await.unwrap();
+    assert!(raw.iter().all(|b| *b != 0));
+    let jr: GenerateResponse = serde_json::from_slice(&raw).unwrap();
     // Expect at least prompt length + 1
     assert!(jr.output.len() >= 2);
+    Ok(())
+}
+
+#[tokio::test]
+async fn server_generate_streaming_nul_free() -> Result<()> {
+    let vocab = 256usize;
+    let d_model = 256usize;
+    let hidden = 16usize;
+    let (gguf, bytes) = make_min_gguf(vocab, d_model, hidden);
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    let _ = model.allocate_kv_cache(16, 1);
+
+    let addr = start_test_server(model).await?;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", addr);
+    let req = GenerateRequest {
+        prompt: "A".to_string(),
+        max_tokens: Some(3),
+        stream: true,
+    };
+    let resp = client.post(&url).json(&req).send().await.unwrap();
+    assert!(resp.status().is_success());
+
+    let mut stream = resp.bytes_stream();
+    let mut combined: Vec<u8> = Vec::new();
+    let mut last: Option<GenerateStreamChunk> = None;
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.unwrap();
+        assert!(bytes.iter().all(|b| *b != 0));
+        combined.extend_from_slice(&bytes);
+        for line in bytes.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
+            let part: GenerateStreamChunk = serde_json::from_slice(line).unwrap();
+            last = Some(part);
+        }
+    }
+
+    assert!(!combined.is_empty());
+    let last = last.expect("expected at least one streamed chunk");
+    assert!(last.done);
+    assert!(!last.output.is_empty());
     Ok(())
 }
