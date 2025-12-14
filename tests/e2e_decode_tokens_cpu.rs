@@ -27,9 +27,18 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
         "llama.attention.head_count".to_string(),
         GgufValue::Scalar(GgufScalar::U32(1)),
     );
+
     metadata.insert(
         "llama.vocab_size".to_string(),
         GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
+    );
+    metadata.insert(
+        "llama.block_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    metadata.insert(
+        "llama.context_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1024)), // Assuming a default context length of 1024
     );
 
     let mut tensors: Vec<GgufTensor> = Vec::new();
