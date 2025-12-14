@@ -19,8 +19,20 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         GgufValue::Scalar(GgufScalar::U32(4)),
     );
     gguf.metadata.insert(
+        "llama.context_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(16)),
+    );
+    gguf.metadata.insert(
         "llama.embedding_length".into(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    gguf.metadata.insert(
+        "llama.feed_forward_length".into(),
+        GgufValue::Scalar(GgufScalar::U32((2 * d_model) as u32)),
+    );
+    gguf.metadata.insert(
+        "llama.vocab_size".into(),
+        GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
     );
 
     let cuda = m40_llm::cuda::CudaContext::new(-1).unwrap();
@@ -67,7 +79,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         );
     }
 
-    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
+    let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();
     LoadedModel {
         gguf,
         cuda,
@@ -102,6 +114,7 @@ fn vocab_size_must_match_embeddings_rows_when_present() {
         "llama.vocab_size".into(),
         GgufValue::Scalar(GgufScalar::U32(99)),
     );
+    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap();
     let err = lm.map_standard_layer(0).unwrap_err();
     let msg = format!("{}", err);
     assert!(msg.contains("vocab_size meta"), "unexpected: {}", msg);
@@ -118,7 +131,7 @@ fn layer_index_checked_against_block_count() {
         "llama.block_count".into(),
         GgufValue::Scalar(GgufScalar::U32(1)),
     );
-    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata).unwrap();
+    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap();
     // mapping layer 1 should fail (only 0 valid)
     let err = lm.map_standard_layer(1).unwrap_err();
     let msg = format!("{}", err);
@@ -132,7 +145,7 @@ fn context_length_zero_rejected_when_present() {
         "llama.context_length".into(),
         GgufValue::Scalar(GgufScalar::U32(0)),
     );
-    let err = lm.map_standard_layer(0).unwrap_err();
+    let err = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap_err();
     let msg = format!("{}", err);
     assert!(
         msg.contains("context_length must be > 0"),
@@ -148,9 +161,9 @@ fn rope_params_must_be_finite_and_positive_when_present() {
         "llama.rope.freq_base".into(),
         GgufValue::Scalar(GgufScalar::F32(0.0)),
     );
-    let err = lm.map_standard_layer(0).unwrap_err();
+    let err = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("rope.freq_base"), "unexpected: {}", msg);
+    assert!(msg.contains("rope_freq_base"), "unexpected: {}", msg);
 
     // fix base; set bad scale
     let mut lm2 = base_model_with_emb(100, 32);
@@ -158,7 +171,7 @@ fn rope_params_must_be_finite_and_positive_when_present() {
         "llama.rope.freq_scale".into(),
         GgufValue::Scalar(GgufScalar::F32(-1.0)),
     );
-    let err2 = lm2.map_standard_layer(0).unwrap_err();
+    let err2 = ModelConfig::from_metadata(&lm2.gguf.metadata, &lm2.gguf.tensors).unwrap_err();
     let msg2 = format!("{}", err2);
-    assert!(msg2.contains("rope.freq_scale"), "unexpected: {}", msg2);
+    assert!(msg2.contains("rope_freq_scale"), "unexpected: {}", msg2);
 }

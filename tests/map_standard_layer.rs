@@ -26,6 +26,18 @@ fn make_model_with_layer(
         "llama.feed_forward_length".into(),
         GgufValue::Scalar(GgufScalar::U32(hidden as u32)),
     );
+    gguf.metadata.insert(
+        "llama.block_count".into(),
+        GgufValue::Scalar(GgufScalar::U32(4)),
+    );
+    gguf.metadata.insert(
+        "llama.context_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(16)),
+    );
+    gguf.metadata.insert(
+        "llama.vocab_size".into(),
+        GgufValue::Scalar(GgufScalar::U32(1024)),
+    );
     let cuda = m40_llm::cuda::CudaContext::new(-1).unwrap();
 
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
@@ -108,7 +120,7 @@ fn make_model_with_layer(
         );
     }
 
-    let model_config = ModelConfig::from_metadata(&gguf.metadata).unwrap();
+    let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();
     LoadedModel {
         gguf,
         cuda,

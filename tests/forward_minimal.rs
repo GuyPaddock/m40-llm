@@ -45,17 +45,17 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
     let kv = m40_llm::cuda::KVCache::new_with_context(&ctx, 8, 1, num_heads, head_dim)?;
     let model_config = ModelConfig {
         architecture: "llama".into(),
-        block_count: Some(1),
-        context_length: Some(8),
+        block_count: 1,
+        context_length: 8,
         embedding_length: d_model as u32,
-        feed_forward_length: Some(hidden_dim as u32),
+        feed_forward_length: hidden_dim as u32,
         attention_head_count: num_heads,
-        attention_head_count_kv: None,
-        attention_key_length: Some(head_dim),
-        layer_norm_epsilon: None,
-        rope_freq_base: None,
-        rope_freq_scale: None,
-        vocab_size: None,
+        attention_head_count_kv: num_heads,
+        attention_key_length: head_dim,
+        layer_norm_epsilon: 1e-5,
+        rope_freq_base: 10_000.0,
+        rope_freq_scale: 1.0,
+        vocab_size: 1,
     };
     let mut lm = LoadedModel {
         gguf: GgufModel::new(0),
