@@ -16,8 +16,16 @@ fn f16_bytes(v: f32) -> [u8; 2] {
 fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec<u8>) {
     let mut metadata = std::collections::HashMap::new();
     metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    metadata.insert(
         "llama.embedding_length".to_string(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    metadata.insert(
+        "llama.attention.head_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
     );
     metadata.insert(
         "llama.vocab_size".to_string(),

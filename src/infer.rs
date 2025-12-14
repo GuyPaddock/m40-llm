@@ -564,7 +564,7 @@ fn dtype_size_bytes(dt: GgmlDType) -> Option<DTypeLayout> {
         }),
         GgmlDType::Q5_1 => Some(DTypeLayout {
             block_elems: 32,
-            block_bytes: 24,
+            block_bytes: 36,
         }),
         GgmlDType::Q8_0 => Some(DTypeLayout {
             block_elems: 32,
@@ -630,23 +630,21 @@ fn build_device_tensor_views(
                 align
             );
         }
-        let (nbytes, end_ok) = if let Some(layout) = dtype_size_bytes(t.dtype) {
-            // Known element size: check shape product and bounds within weights_len
-            let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
-            let n_elems: usize = usize::try_from(n_elems_u64)
-                .context("tensor element count does not fit in usize")?;
-            let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
-            let need = n_blocks
-                .checked_mul(layout.block_bytes)
-                .context("tensor size overflow")?;
-            let end = offset_usize
-                .checked_add(need)
-                .context("tensor end offset overflow")?;
-            (need, end <= weights_len)
-        } else {
-            // Unknown sizing: require offset within allocation to keep dptr valid
-            (0usize, offset_usize < weights_len)
-        };
+        let layout = dtype_size_bytes(t.dtype)
+            .with_context(|| format!("tensor '{}' unsupported dtype: {:?}", t.name, t.dtype))?;
+        // Known element size: check shape product and bounds within weights_len
+        let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
+        let n_elems: usize =
+            usize::try_from(n_elems_u64).context("tensor element count does not fit in usize")?;
+        let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
+        let need = n_blocks
+            .checked_mul(layout.block_bytes)
+            .context("tensor size overflow")?;
+        let end = offset_usize
+            .checked_add(need)
+            .context("tensor end offset overflow")?;
+        let nbytes = need;
+        let end_ok = end <= weights_len;
         if !end_ok {
             anyhow::bail!(
                 "tensor '{}' overflows weights blob or starts beyond end (off={}, nbytes={}, total={})",
