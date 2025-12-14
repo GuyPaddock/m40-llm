@@ -132,11 +132,11 @@ fn gguf_device_views_overflow_detected() {
 }
 
 #[test]
-fn gguf_device_views_quantized_nbytes_zero() {
-    // Quantized dtype gets nbytes = 0 in view; loader should not error
-    let path = tmp_path("gguf_quant");
-    let (k, n) = (2u64, 2u64);
-    let q4_0 = 2u32; // per mapping in gguf.rs
+fn gguf_device_views_quantized_overflow_detected() {
+    // Quantized tensor should account for block size when validating payload length
+    let path = tmp_path("gguf_quant_overflow");
+    let (k, n) = (1u64, 1u64); // still requires a full Q4_0 block (18 bytes)
+    let q4_0 = 2u32;
 
     {
         let mut f = File::create(&path).unwrap();
@@ -152,17 +152,18 @@ fn gguf_device_views_quantized_nbytes_zero() {
         write_le_u32(&mut f, q4_0);
         write_le_u64(&mut f, 0);
 
-        // Provide small data region; loader doesn't validate unknown sizes
-        f.write_all(&[0u8; 1]).unwrap();
+        // Intentionally short: need 18 bytes for one block
+        f.write_all(&vec![0u8; 10]).unwrap();
         f.flush().unwrap();
     }
 
     let gg = load_gguf(&path).expect("parse gguf");
     let bytes = std::fs::read(&path).unwrap();
-    let lm = LoadedModel::from_gguf(gg, bytes, -1).expect("from_gguf ok");
-
-    let q = lm.device_tensors.get("Q").unwrap();
-    assert_eq!(q.nbytes, 0);
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("overflows weights blob"));
     let _ = std::fs::remove_file(&path);
 }
 
@@ -204,10 +205,10 @@ fn gguf_device_views_misaligned_offset_rejected() {
 
 #[test]
 fn gguf_device_views_offset_beyond_end_rejected() {
-    // Unknown-size dtype (simulate quantized) should still require offset < data_len
+    // Quantized dtype should still require both offset < data_len and full block fit
     let path = tmp_path("gguf_offset_beyond_end");
     let (k, n) = (1u64, 1u64);
-    let q4_0 = 2u32; // treated as unknown nbytes in loader
+    let q4_0 = 2u32;
 
     {
         let mut f = File::create(&path).unwrap();
@@ -298,6 +299,43 @@ fn gguf_device_views_end_overflow_from_offset_rejected() {
 
         // Only 10 bytes in data region => overflow relative to offset
         f.write_all(&vec![0u8; 10]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    let bytes = std::fs::read(&path).unwrap();
+    let err = LoadedModel::from_gguf(gg, bytes, -1)
+        .err()
+        .expect("should error");
+    let msg = format!("{}", err);
+    assert!(msg.contains("overflows weights blob"));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_device_views_quantized_offset_overflow_rejected() {
+    // Use a larger quantized block type to ensure offset + block size check
+    let path = tmp_path("gguf_quant_offset_overflow");
+    let (k, n) = (1u64, 1u64);
+    let q8k = 15u32; // GgmlDType::Q8K
+    let offset = 16u64;
+
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 0);
+
+        write_string(&mut f, "Q8K");
+        write_le_u32(&mut f, 2);
+        write_le_u64(&mut f, k);
+        write_le_u64(&mut f, n);
+        write_le_u32(&mut f, q8k);
+        write_le_u64(&mut f, offset);
+
+        // Provide less than offset + required 292 bytes
+        f.write_all(&vec![0u8; 200]).unwrap();
         f.flush().unwrap();
     }
 

@@ -485,10 +485,14 @@ impl LoadedModel {
         let d_base = cuda.upload_weights(weights_bytes)?;
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
-            if let Some(esize) = dtype_size_bytes(t.dtype) {
+            if let Some(layout) = dtype_size_bytes(t.dtype) {
                 let n_elems: u64 = t.shape.iter().copied().product::<u64>();
-                let need = (n_elems as usize)
-                    .checked_mul(esize)
+                let n_elems: usize =
+                    usize::try_from(n_elems).context("tensor element count does not fit in usize")?;
+                let n_blocks =
+                    (n_elems + layout.block_elems - 1) / layout.block_elems;
+                let need = n_blocks
+                    .checked_mul(layout.block_bytes)
                     .context("tensor size overflow")?;
                 let start = t.offset as usize;
                 let end = start.saturating_add(need);
@@ -530,10 +534,71 @@ impl LoadedModel {
     }
 }
 
-fn dtype_size_bytes(dt: GgmlDType) -> Option<usize> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DTypeLayout {
+    block_elems: usize,
+    block_bytes: usize,
+}
+
+fn dtype_size_bytes(dt: GgmlDType) -> Option<DTypeLayout> {
     match dt {
-        GgmlDType::F32 => Some(4),
-        GgmlDType::F16 => Some(2),
+        GgmlDType::F32 => Some(DTypeLayout {
+            block_elems: 1,
+            block_bytes: 4,
+        }),
+        GgmlDType::F16 => Some(DTypeLayout {
+            block_elems: 1,
+            block_bytes: 2,
+        }),
+        // GGUF/ggml quantization block sizes (see ggml-common.h)
+        GgmlDType::Q4_0 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 18,
+        }),
+        GgmlDType::Q4_1 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 20,
+        }),
+        GgmlDType::Q5_0 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 22,
+        }),
+        GgmlDType::Q5_1 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 24,
+        }),
+        GgmlDType::Q8_0 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 34,
+        }),
+        GgmlDType::Q8_1 => Some(DTypeLayout {
+            block_elems: 32,
+            block_bytes: 36,
+        }),
+        GgmlDType::Q2K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 84,
+        }),
+        GgmlDType::Q3K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 110,
+        }),
+        GgmlDType::Q4K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 144,
+        }),
+        GgmlDType::Q5K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 176,
+        }),
+        GgmlDType::Q6K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 210,
+        }),
+        GgmlDType::Q8K => Some(DTypeLayout {
+            block_elems: 256,
+            block_bytes: 292,
+        }),
         _ => None,
     }
 }
@@ -566,18 +631,21 @@ fn build_device_tensor_views(
                 align
             );
         }
-        let (nbytes, end_ok) = if let Some(esize) = dtype_size_bytes(t.dtype) {
+        let (nbytes, end_ok) = if let Some(layout) = dtype_size_bytes(t.dtype) {
             // Known element size: check shape product and bounds within weights_len
             let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
             let n_elems: usize = usize::try_from(n_elems_u64)
                 .context("tensor element count does not fit in usize")?;
-            let need = n_elems.checked_mul(esize).context("tensor size overflow")?;
+            let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
+            let need = n_blocks
+                .checked_mul(layout.block_bytes)
+                .context("tensor size overflow")?;
             let end = offset_usize
                 .checked_add(need)
                 .context("tensor end offset overflow")?;
             (need, end <= weights_len)
         } else {
-            // Unknown sizing (quantized): require offset within allocation to keep dptr valid
+            // Unknown sizing: require offset within allocation to keep dptr valid
             (0usize, offset_usize < weights_len)
         };
         if !end_ok {
