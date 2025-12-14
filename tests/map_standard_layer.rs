@@ -50,7 +50,7 @@ fn make_model_with_layer(
     );
     gguf.metadata.insert(
         "llama.block_count".into(),
-        GgufValue::Scalar(GgufScalar::U32(4)),
+        GgufValue::Scalar(GgufScalar::U32((layer + 1) as u32)),
     );
     gguf.metadata.insert(
         "llama.context_length".into(),
