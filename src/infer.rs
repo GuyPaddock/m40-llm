@@ -487,10 +487,9 @@ impl LoadedModel {
         for t in &gguf.tensors {
             if let Some(layout) = dtype_size_bytes(t.dtype) {
                 let n_elems: u64 = t.shape.iter().copied().product::<u64>();
-                let n_elems: usize =
-                    usize::try_from(n_elems).context("tensor element count does not fit in usize")?;
-                let n_blocks =
-                    (n_elems + layout.block_elems - 1) / layout.block_elems;
+                let n_elems: usize = usize::try_from(n_elems)
+                    .context("tensor element count does not fit in usize")?;
+                let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
                 let need = n_blocks
                     .checked_mul(layout.block_bytes)
                     .context("tensor size overflow")?;
