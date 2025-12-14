@@ -769,7 +769,7 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             // Allocate scratch buffers
-            let bytes_d = (d_model as usize) * 4;
+            let bytes_d = d_model * 4;
             let bytes_h = (hidden_dim as usize) * 4;
             let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
             let dk = self.cuda.device_malloc_tagged(bytes_d, "fwd:dk_f32")?;
@@ -1390,26 +1390,23 @@ impl LoadedModel {
             let bytes_d = (w.d_model as usize) * 4;
             let mut h_x = vec![0u8; bytes_d];
             let mut h_y_attn = vec![0u8; bytes_d];
-            self.cuda.memcpy_d2h(
-                h_x.as_mut_ptr() as *mut c_void,
-                d_x_f32 as *const c_void,
-                bytes_d,
-            )?;
+            self.cuda
+                .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
             self.cuda.memcpy_d2h(
                 h_y_attn.as_mut_ptr() as *mut c_void,
                 d_y_attn as *const c_void,
                 bytes_d,
             )?;
-            let mut x_f = Vec::with_capacity(d_model as usize);
-            let mut y_attn_f = Vec::with_capacity(d_model as usize);
+            let mut x_f = Vec::with_capacity(d_model);
+            let mut y_attn_f = Vec::with_capacity(d_model);
             for ch in h_x.chunks_exact(4) {
                 x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
             for ch in h_y_attn.chunks_exact(4) {
                 y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
-            let mut x1_f = Vec::with_capacity(d_model as usize);
-            for i in 0..(d_model as usize) {
+            let mut x1_f = Vec::with_capacity(d_model);
+            for i in 0..d_model {
                 x1_f.push(x_f[i] + y_attn_f[i]);
             }
             let mut x1_bytes = Vec::with_capacity(bytes_d);
@@ -1429,7 +1426,7 @@ impl LoadedModel {
                 d_x1 as *const c_void,
                 bytes_d,
             )?;
-            let mut x1_f = Vec::with_capacity(d_model as usize);
+            let mut x1_f = Vec::with_capacity(d_model);
             for ch in h_x1.chunks_exact(4) {
                 x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
@@ -1477,17 +1474,17 @@ impl LoadedModel {
                 let off = t.byte_offset as usize;
                 let bytes = &self.host_weights[off..off + k * n * 2];
                 let mut out = vec![0f32; n];
-                for j in 0..n {
+                for (j, out_j) in out.iter_mut().enumerate().take(n) {
                     let mut acc = 0f32;
                     let mut idx = j * 2; // column-major stride over rows in row-major [k x n]
-                    for r in 0..k {
+                    for &row_val in row.iter().take(k) {
                         let lo = bytes[idx] as u16;
                         let hi = bytes[idx + 1] as u16;
                         let w = f16::from_bits(lo | (hi << 8)).to_f32();
-                        acc += row[r] * w;
+                        acc += row_val * w;
                         idx += n * 2;
                     }
-                    out[j] = acc;
+                    *out_j = acc;
                 }
                 out
             };
@@ -1500,10 +1497,10 @@ impl LoadedModel {
                     let off = t.byte_offset as usize;
                     let mut out = vec![0f32; n];
 
-                    let blocks = (k + 31) / 32;
-                    for j in 0..n {
+                    let blocks = k.div_ceil(32);
+                    for (j, out_j) in out.iter_mut().enumerate().take(n) {
                         let mut acc = 0f32;
-                        for r in 0..k {
+                        for (r, &row_val) in row.iter().enumerate().take(k) {
                             let b = r / 32;
                             let idx = r % 32;
                             let block_base = off + j * blocks * 6 + b * 6;
@@ -1515,9 +1512,9 @@ impl LoadedModel {
                                 scale_bytes[3],
                             ]);
                             let q = self.host_weights[block_base + 4 + idx] as i8 as f32;
-                            acc += row[r] * scale * q;
+                            acc += row_val * scale * q;
                         }
-                        out[j] = acc;
+                        *out_j = acc;
                     }
 
                     out
@@ -1576,29 +1573,26 @@ impl LoadedModel {
                 dot_row(&attn, &w.wo, no)
             };
             // Residual add on host: x1 = x + y_attn (fallback)
-            let bytes_d = (d_model as usize) * 4;
+            let bytes_d = d_model * 4;
             let mut h_x = vec![0u8; bytes_d];
             let mut h_y_attn = vec![0u8; bytes_d];
-            self.cuda.memcpy_d2h(
-                h_x.as_mut_ptr() as *mut c_void,
-                d_x_f32 as *const c_void,
-                bytes_d,
-            )?;
+            self.cuda
+                .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
             // In non-CUDA path, we don't have d_y_attn, so we use y_attn directly
             for i in 0..y_attn.len() {
                 let bytes = y_attn[i].to_le_bytes();
                 h_y_attn[i * 4..i * 4 + 4].copy_from_slice(&bytes);
             }
-            let mut x_f = Vec::with_capacity(d_model as usize);
-            let mut y_attn_f = Vec::with_capacity(d_model as usize);
+            let mut x_f = Vec::with_capacity(d_model);
+            let mut y_attn_f = Vec::with_capacity(d_model);
             for ch in h_x.chunks_exact(4) {
                 x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
             for ch in h_y_attn.chunks_exact(4) {
                 y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
-            let mut x1_f = Vec::with_capacity(d_model as usize);
-            for i in 0..(d_model as usize) {
+            let mut x1_f = Vec::with_capacity(d_model);
+            for i in 0..d_model {
                 x1_f.push(x_f[i] + y_attn_f[i]);
             }
             let mut x1_bytes = Vec::with_capacity(bytes_d);
@@ -1618,7 +1612,7 @@ impl LoadedModel {
                 h_x1.as_ptr() as *const c_void,
                 bytes_d,
             )?;
-            let mut x1_f = Vec::with_capacity(d_model as usize);
+            let mut x1_f = Vec::with_capacity(d_model);
             for ch in h_x1.chunks_exact(4) {
                 x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
             }
@@ -1829,31 +1823,29 @@ impl LoadedModel {
             #[cfg(not(feature = "cuda"))]
             {
                 // Host path: compute logits = hidden (1xD f32) × W (D×V f16) on CPU using host-stored weights
-                let d = d_model as usize;
-                let v = vocab as usize;
                 // SAFETY: treat d_hidden_f32 as host pointer to D f32s in non-CUDA builds
                 let hidden_bytes =
-                    unsafe { std::slice::from_raw_parts(d_hidden_f32 as *const u8, d * 4) };
-                let mut hidden = vec![0f32; d];
+                    unsafe { std::slice::from_raw_parts(d_hidden_f32 as *const u8, d_model * 4) };
+                let mut hidden = vec![0f32; d_model];
                 for (i, ch) in hidden_bytes.chunks_exact(4).enumerate() {
                     hidden[i] = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
                 }
                 // Weights are row-major [D, V] in f16
                 let off = lm.byte_offset as usize;
-                let w_bytes = &self.host_weights[off..off + d * v * 2];
-                let mut logits = vec![0f32; v];
-                for col in 0..v {
+                let w_bytes = &self.host_weights[off..off + d_model * vocab * 2];
+                let mut logits = vec![0f32; vocab];
+                for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
                     let mut acc = 0f32;
                     let mut idx = col * 2; // element (row=0,col) byte index within the 2-byte stream
-                    for row in 0..d {
+                    for &hidden_val in hidden.iter().take(d_model) {
                         let lo = w_bytes[idx] as u16;
                         let hi = w_bytes[idx + 1] as u16;
                         let bits = lo | (hi << 8);
                         let w = half::f16::from_bits(bits).to_f32();
-                        acc += hidden[row] * w;
-                        idx += v * 2; // move to next row at same column
+                        acc += hidden_val * w;
+                        idx += vocab * 2; // move to next row at same column
                     }
-                    logits[col] = acc;
+                    *logit_ref = acc;
                 }
                 return Ok(logits);
             }
