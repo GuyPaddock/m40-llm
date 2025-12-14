@@ -25,6 +25,7 @@ fn decode_replaces_out_of_range_with_qmark() {
     let t = Tokenizer::byte_level();
     let ids = vec![65u32, 300u32, 66u32];
     let back = t.decode(&ids).expect("decode");
+    assert!(!back.contains('\0'));
     assert_eq!(back, "A?B");
 }
 
