@@ -559,7 +559,7 @@ impl LoadedModel {
 }
 
 impl LoadedModel {
-    pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
+    pub fn from_gguf(gguf: GgufModel, mut gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
         let cuda = CudaContext::new(device_id)?;
         let data_off = gguf.data_offset as usize;
         if data_off > gguf_bytes.len() {
@@ -569,9 +569,9 @@ impl LoadedModel {
                 gguf_bytes.len()
             );
         }
-        let weights_bytes = &gguf_bytes[data_off..];
+        let weights_bytes = gguf_bytes.split_off(data_off);
         #[cfg(feature = "cuda")]
-        let d_base = cuda.upload_weights(weights_bytes)?;
+        let d_base = cuda.upload_weights(&weights_bytes)?;
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
             if let Some(layout) = dtype_size_bytes(t.dtype) {
@@ -595,11 +595,12 @@ impl LoadedModel {
                 }
             }
         }
+        let weights_len = weights_bytes.len();
         #[cfg(feature = "cuda")]
-        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_bytes.len())?;
+        let device_tensors = build_device_tensor_views(&gguf.tensors, d_base, weights_len)?;
         #[cfg(not(feature = "cuda"))]
         let device_tensors =
-            build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_bytes.len())?;
+            build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_len)?;
         #[cfg(feature = "gguf_ext")]
         let (model_config, typed_cfg) =
             ModelConfig::from_gguf_ext_bytes(&gguf_bytes, &gguf.metadata, &gguf.tensors)?;
@@ -614,7 +615,7 @@ impl LoadedModel {
             #[cfg(feature = "cuda")]
             d_weights_base: d_base,
             #[cfg(not(feature = "cuda"))]
-            host_weights: weights_bytes.to_vec(),
+            host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
             typed_config: typed_cfg,
@@ -692,9 +693,15 @@ fn dtype_size_bytes(dt: GgmlDType) -> Option<DTypeLayout> {
 }
 
 fn contiguous_strides(shape: &[u64]) -> Result<Vec<usize>> {
+    if shape.is_empty() {
+        anyhow::bail!("tensor shape must be non-empty");
+    }
     let mut strides_rev = Vec::with_capacity(shape.len());
     let mut stride = 1usize;
     for (dim_idx, &dim) in shape.iter().enumerate().rev() {
+        if dim == 0 {
+            anyhow::bail!("tensor dim {dim_idx} must be > 0");
+        }
         strides_rev.push(stride);
         let dim_usize =
             usize::try_from(dim).with_context(|| format!("dim {dim_idx} does not fit in usize"))?;
@@ -714,6 +721,12 @@ fn build_device_tensor_views(
 ) -> Result<HashMap<String, DeviceTensorView>> {
     let mut map = HashMap::with_capacity(tensors.len());
     for t in tensors {
+        if t.shape.is_empty() {
+            anyhow::bail!("tensor '{}' has empty shape", t.name);
+        }
+        if let Some((idx, _)) = t.shape.iter().enumerate().find(|(_, &d)| d == 0) {
+            anyhow::bail!("tensor '{}' has zero in dimension {}", t.name, idx);
+        }
         // Compute size and perform bounds/alignment checks
         let offset_usize: usize = t
             .offset
