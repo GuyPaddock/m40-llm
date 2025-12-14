@@ -3,6 +3,28 @@ use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
 use std::collections::HashMap;
 
 fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
+    fn strides_from(shape: &[u64]) -> Vec<usize> {
+        let mut out = Vec::with_capacity(shape.len());
+        let mut stride = 1usize;
+        for &dim in shape.iter().rev() {
+            out.push(stride);
+            stride *= dim as usize;
+        }
+        out.reverse();
+        out
+    }
+    fn make_view(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
+        let strides = strides_from(&shape);
+        DeviceTensorView {
+            dtype,
+            shape,
+            strides,
+            byte_offset: 0,
+            nbytes: 0,
+            #[cfg(feature = "cuda")]
+            dptr: std::ptr::null_mut(),
+        }
+    }
     let mut gguf = GgufModel::new(0);
     // minimal llama markers
     gguf.metadata.insert(
@@ -40,14 +62,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
     device_tensors.insert(
         "tok_embeddings.weight".into(),
-        DeviceTensorView {
-            dtype: GgmlDType::F16,
-            shape: vec![vocab as u64, d_model as u64],
-            byte_offset: 0,
-            nbytes: 0,
-            #[cfg(feature = "cuda")]
-            dptr: std::ptr::null_mut(),
-        },
+        make_view(GgmlDType::F16, vec![vocab as u64, d_model as u64]),
     );
     // a single layer's minimal required tensors to make map_standard_layer reach validations
     for key in [
@@ -66,17 +81,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         } else {
             vec![d_model as u64, d_model as u64]
         };
-        device_tensors.insert(
-            key.to_string(),
-            DeviceTensorView {
-                dtype: GgmlDType::F16,
-                shape,
-                byte_offset: 0,
-                nbytes: 0,
-                #[cfg(feature = "cuda")]
-                dptr: std::ptr::null_mut(),
-            },
-        );
+        device_tensors.insert(key.to_string(), make_view(GgmlDType::F16, shape));
     }
 
     let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();

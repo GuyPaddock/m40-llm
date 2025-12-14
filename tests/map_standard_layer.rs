@@ -8,6 +8,28 @@ fn make_model_with_layer(
     hidden: usize,
     f16_weights: bool,
 ) -> LoadedModel {
+    fn strides_from(shape: &[u64]) -> Vec<usize> {
+        let mut out = Vec::with_capacity(shape.len());
+        let mut stride = 1usize;
+        for &dim in shape.iter().rev() {
+            out.push(stride);
+            stride *= dim as usize;
+        }
+        out.reverse();
+        out
+    }
+    fn make_view(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
+        let strides = strides_from(&shape);
+        DeviceTensorView {
+            dtype,
+            shape,
+            strides,
+            byte_offset: 0,
+            nbytes: 0,
+            #[cfg(feature = "cuda")]
+            dptr: std::ptr::null_mut(),
+        }
+    }
     // Minimal GGUF backing; only used for metadata if present
     let mut gguf = GgufModel::new(0);
     gguf.metadata.insert(
@@ -44,14 +66,7 @@ fn make_model_with_layer(
     // Embeddings: [vocab, d_model]
     device_tensors.insert(
         "tok_embeddings.weight".into(),
-        DeviceTensorView {
-            dtype: GgmlDType::F16,
-            shape: vec![1024, d_model as u64],
-            byte_offset: 0,
-            nbytes: 0,
-            #[cfg(feature = "cuda")]
-            dptr: std::ptr::null_mut(),
-        },
+        make_view(GgmlDType::F16, vec![1024, d_model as u64]),
     );
 
     let wt = if f16_weights {
@@ -79,17 +94,7 @@ fn make_model_with_layer(
             vec![d_model as u64, d_model as u64],
         ),
     ] {
-        device_tensors.insert(
-            key,
-            DeviceTensorView {
-                dtype: wt,
-                shape,
-                byte_offset: 0,
-                nbytes: 0,
-                #[cfg(feature = "cuda")]
-                dptr: std::ptr::null_mut(),
-            },
-        );
+        device_tensors.insert(key, make_view(wt, shape));
     }
 
     // MLP: gate/up [d_model, hidden], down [hidden, d_model]
@@ -107,17 +112,7 @@ fn make_model_with_layer(
             vec![hidden as u64, d_model as u64],
         ),
     ] {
-        device_tensors.insert(
-            key,
-            DeviceTensorView {
-                dtype: wt,
-                shape,
-                byte_offset: 0,
-                nbytes: 0,
-                #[cfg(feature = "cuda")]
-                dptr: std::ptr::null_mut(),
-            },
-        );
+        device_tensors.insert(key, make_view(wt, shape));
     }
 
     let model_config = ModelConfig::from_metadata(&gguf.metadata, &gguf.tensors).unwrap();

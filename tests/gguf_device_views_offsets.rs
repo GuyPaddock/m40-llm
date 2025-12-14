@@ -15,6 +15,32 @@ fn write_string(f: &mut File, s: &str) {
     write_le_u64(f, s.len() as u64);
     f.write_all(s.as_bytes()).unwrap();
 }
+fn write_kv_str(f: &mut File, key: &str, val: &str) {
+    write_string(f, key);
+    write_le_u32(f, 8); // string type
+    write_string(f, val);
+}
+fn write_kv_u32(f: &mut File, key: &str, val: u32) {
+    write_string(f, key);
+    write_le_u32(f, 4);
+    write_le_u32(f, val);
+}
+fn write_minimal_metadata(f: &mut File) {
+    write_kv_str(f, "general.architecture", "llama");
+    write_kv_u32(f, "llama.embedding_length", 4);
+    write_kv_u32(f, "llama.attention.head_count", 1);
+    write_kv_u32(f, "llama.block_count", 1);
+    write_kv_u32(f, "llama.context_length", 16);
+    write_kv_u32(f, "llama.feed_forward_length", 8);
+    write_kv_u32(f, "llama.vocab_size", 32);
+}
+fn write_header_with_metadata(f: &mut File, n_tensors: u64) {
+    f.write_all(b"GGUF").unwrap();
+    write_le_u32(f, 3); // version
+    write_le_u64(f, n_tensors);
+    write_le_u64(f, 7); // n_kv
+    write_minimal_metadata(f);
+}
 
 fn tmp_path(name: &str) -> PathBuf {
     let mut p = std::env::temp_dir();
@@ -47,10 +73,7 @@ fn gguf_device_views_nonzero_offsets_multiple_tensors_ok() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3); // version
-        write_le_u64(&mut f, 2); // n_tensors
-        write_le_u64(&mut f, 0); // n_kv
+        write_header_with_metadata(&mut f, 2);
 
         // Tensor A
         write_string(&mut f, "A");
@@ -104,10 +127,7 @@ fn gguf_device_views_overflow_detected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "W");
         write_le_u32(&mut f, 2);
@@ -140,10 +160,7 @@ fn gguf_device_views_quantized_overflow_detected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Q");
         write_le_u32(&mut f, 2);
@@ -176,10 +193,7 @@ fn gguf_device_views_q5_1_overflow_detected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Q5_1");
         write_le_u32(&mut f, 2);
@@ -212,10 +226,7 @@ fn gguf_device_views_misaligned_offset_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "X");
         write_le_u32(&mut f, 2);
@@ -247,10 +258,7 @@ fn gguf_device_views_unknown_dtype_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "UNK");
         write_le_u32(&mut f, 1);
@@ -282,10 +290,7 @@ fn gguf_device_views_offset_beyond_end_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Q");
         write_le_u32(&mut f, 2);
@@ -318,10 +323,7 @@ fn gguf_device_views_f16_misaligned_offset_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Y");
         write_le_u32(&mut f, 2);
@@ -355,10 +357,7 @@ fn gguf_device_views_end_overflow_from_offset_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Z");
         write_le_u32(&mut f, 2);
@@ -392,10 +391,7 @@ fn gguf_device_views_quantized_offset_overflow_rejected() {
 
     {
         let mut f = File::create(&path).unwrap();
-        f.write_all(b"GGUF").unwrap();
-        write_le_u32(&mut f, 3);
-        write_le_u64(&mut f, 1);
-        write_le_u64(&mut f, 0);
+        write_header_with_metadata(&mut f, 1);
 
         write_string(&mut f, "Q8K");
         write_le_u32(&mut f, 2);

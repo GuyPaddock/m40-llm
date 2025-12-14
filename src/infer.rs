@@ -266,6 +266,9 @@ fn get_str_meta<'a>(metadata: &'a HashMap<String, GgufValue>, key: &str) -> Opti
 pub struct DeviceTensorView {
     pub dtype: GgmlDType,
     pub shape: Vec<u64>,
+    /// Row-major contiguous strides in elements (dense view).
+    /// For quantized tensors, these reflect logical element strides.
+    pub strides: Vec<usize>,
     pub byte_offset: u64, // from start of tensor data region in file
     pub nbytes: usize,    // 0 if unknown dtype sizing
     #[cfg(feature = "cuda")]
@@ -688,6 +691,21 @@ fn dtype_size_bytes(dt: GgmlDType) -> Option<DTypeLayout> {
     }
 }
 
+fn contiguous_strides(shape: &[u64]) -> Result<Vec<usize>> {
+    let mut strides_rev = Vec::with_capacity(shape.len());
+    let mut stride = 1usize;
+    for (dim_idx, &dim) in shape.iter().enumerate().rev() {
+        strides_rev.push(stride);
+        let dim_usize =
+            usize::try_from(dim).with_context(|| format!("dim {dim_idx} does not fit in usize"))?;
+        stride = stride
+            .checked_mul(dim_usize)
+            .context("stride overflow while building tensor view")?;
+    }
+    strides_rev.reverse();
+    Ok(strides_rev)
+}
+
 #[allow(clippy::collapsible_if)]
 fn build_device_tensor_views(
     tensors: &[GgufTensor],
@@ -737,9 +755,14 @@ fn build_device_tensor_views(
                 t.name, offset_usize, nbytes, weights_len
             );
         }
+        let strides = contiguous_strides(&t.shape)
+            .with_context(|| format!("tensor '{}' stride computation failed", t.name))?;
         // Safe device pointer arithmetic
         #[cfg(feature = "cuda")]
         let dptr: *mut c_void = {
+            if d_base.is_null() {
+                anyhow::bail!("device weights base pointer is null");
+            }
             let base = d_base as usize;
             let addr = base
                 .checked_add(offset_usize)
@@ -751,6 +774,7 @@ fn build_device_tensor_views(
         let view = DeviceTensorView {
             dtype: t.dtype,
             shape: t.shape.clone(),
+            strides,
             byte_offset: t.offset,
             nbytes,
             #[cfg(feature = "cuda")]

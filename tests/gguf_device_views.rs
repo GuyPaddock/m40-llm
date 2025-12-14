@@ -14,6 +14,25 @@ fn write_string(f: &mut File, s: &str) {
     write_le_u64(f, s.len() as u64);
     f.write_all(s.as_bytes()).unwrap();
 }
+fn write_kv_str(f: &mut File, key: &str, val: &str) {
+    write_string(f, key);
+    write_le_u32(f, 8); // string type
+    write_string(f, val);
+}
+fn write_kv_u32(f: &mut File, key: &str, val: u32) {
+    write_string(f, key);
+    write_le_u32(f, 4); // u32 type
+    write_le_u32(f, val);
+}
+fn write_minimal_metadata(f: &mut File) {
+    write_kv_str(f, "general.architecture", "llama");
+    write_kv_u32(f, "llama.embedding_length", 4);
+    write_kv_u32(f, "llama.attention.head_count", 1);
+    write_kv_u32(f, "llama.block_count", 1);
+    write_kv_u32(f, "llama.context_length", 16);
+    write_kv_u32(f, "llama.feed_forward_length", 8);
+    write_kv_u32(f, "llama.vocab_size", 32);
+}
 
 #[test]
 fn gguf_device_views_basic_f16_size_and_shape() {
@@ -30,7 +49,10 @@ fn gguf_device_views_basic_f16_size_and_shape() {
         f.write_all(b"GGUF").unwrap();
         write_le_u32(&mut f, 3); // version
         write_le_u64(&mut f, 1); // n_tensors
-        write_le_u64(&mut f, 0); // n_kv
+        write_le_u64(&mut f, 7); // n_kv
+
+        // metadata
+        write_minimal_metadata(&mut f);
 
         // tensor[0]
         write_string(&mut f, "W");
@@ -59,6 +81,7 @@ fn gguf_device_views_basic_f16_size_and_shape() {
     assert_eq!(w.shape, vec![k, n]);
     assert_eq!(w.byte_offset, 0);
     assert_eq!(w.nbytes, (k * n) as usize * 2);
+    assert_eq!(w.strides, vec![n as usize, 1]);
 
     let _ = std::fs::remove_file(&path);
 }
@@ -81,7 +104,9 @@ fn gguf_device_views_f32_size_and_shape() {
         f.write_all(b"GGUF").unwrap();
         write_le_u32(&mut f, 3); // version
         write_le_u64(&mut f, 1); // n_tensors
-        write_le_u64(&mut f, 0); // n_kv
+        write_le_u64(&mut f, 7); // n_kv
+
+        write_minimal_metadata(&mut f);
 
         // tensor[0]
         write_string(&mut f, "W32");
@@ -109,6 +134,7 @@ fn gguf_device_views_f32_size_and_shape() {
     assert_eq!(w.shape, vec![k, n]);
     assert_eq!(w.byte_offset, 0);
     assert_eq!(w.nbytes, (k * n) as usize * 4);
+    assert_eq!(w.strides, vec![n as usize, 1]);
 
     let _ = std::fs::remove_file(&path);
 }
