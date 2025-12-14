@@ -147,7 +147,11 @@ fn context_length_zero_rejected_when_present() {
     );
     let err = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("context_length must be > 0"), "unexpected: {}", msg);
+    assert!(
+        msg.contains("context_length must be > 0"),
+        "unexpected: {}",
+        msg
+    );
 }
 
 #[test]

@@ -31,12 +31,12 @@ impl ModelConfig {
         tensors: &[GgufTensor],
     ) -> Result<(Self, gguf_llms::model::ModelConfig)> {
         let typed = crate::gguf_ext::extract_model_config_from_bytes(bytes)?;
-        let model_cfg = Self::from_typed_and_metadata(&typed, metadata, tensors)?;
+        let model_cfg = Self::from_typed(&typed, metadata, tensors)?;
         Ok((model_cfg, typed))
     }
 
     #[cfg(feature = "gguf_ext")]
-    fn from_typed_and_metadata(
+    pub fn from_typed(
         typed: &gguf_llms::model::ModelConfig,
         metadata: &HashMap<String, GgufValue>,
         tensors: &[GgufTensor],
@@ -53,7 +53,7 @@ impl ModelConfig {
         let layer_norm_epsilon = typed.layer_norm_epsilon.unwrap_or(1e-5);
         let rope_freq_base = typed.rope_freq_base.unwrap_or(10_000.0);
         let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
-        let feed_forward_length = derive_feed_forward_length(metadata, tensors, d_model)?;
+        let feed_forward_length = typed.feed_forward_length;
         let cfg = Self {
             architecture: typed.architecture.clone(),
             block_count: typed.block_count,
