@@ -26,6 +26,14 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> LoadedModel {
         "llama.embedding_length".into(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
     );
+    gguf.metadata.insert(
+        "llama.feed_forward_length".into(),
+        GgufValue::Scalar(GgufScalar::U32((2 * d_model) as u32)),
+    );
+    gguf.metadata.insert(
+        "llama.vocab_size".into(),
+        GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
+    );
 
     let cuda = m40_llm::cuda::CudaContext::new(-1).unwrap();
 
@@ -106,6 +114,7 @@ fn vocab_size_must_match_embeddings_rows_when_present() {
         "llama.vocab_size".into(),
         GgufValue::Scalar(GgufScalar::U32(99)),
     );
+    lm.model_config = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap();
     let err = lm.map_standard_layer(0).unwrap_err();
     let msg = format!("{}", err);
     assert!(msg.contains("vocab_size meta"), "unexpected: {}", msg);
@@ -136,13 +145,9 @@ fn context_length_zero_rejected_when_present() {
         "llama.context_length".into(),
         GgufValue::Scalar(GgufScalar::U32(0)),
     );
-    let err = lm.map_standard_layer(0).unwrap_err();
+    let err = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap_err();
     let msg = format!("{}", err);
-    assert!(
-        msg.contains("context_length must be > 0"),
-        "unexpected: {}",
-        msg
-    );
+    assert!(msg.contains("context_length must be > 0"), "unexpected: {}", msg);
 }
 
 #[test]
@@ -152,9 +157,9 @@ fn rope_params_must_be_finite_and_positive_when_present() {
         "llama.rope.freq_base".into(),
         GgufValue::Scalar(GgufScalar::F32(0.0)),
     );
-    let err = lm.map_standard_layer(0).unwrap_err();
+    let err = ModelConfig::from_metadata(&lm.gguf.metadata, &lm.gguf.tensors).unwrap_err();
     let msg = format!("{}", err);
-    assert!(msg.contains("rope.freq_base"), "unexpected: {}", msg);
+    assert!(msg.contains("rope_freq_base"), "unexpected: {}", msg);
 
     // fix base; set bad scale
     let mut lm2 = base_model_with_emb(100, 32);
@@ -162,7 +167,7 @@ fn rope_params_must_be_finite_and_positive_when_present() {
         "llama.rope.freq_scale".into(),
         GgufValue::Scalar(GgufScalar::F32(-1.0)),
     );
-    let err2 = lm2.map_standard_layer(0).unwrap_err();
+    let err2 = ModelConfig::from_metadata(&lm2.gguf.metadata, &lm2.gguf.tensors).unwrap_err();
     let msg2 = format!("{}", err2);
-    assert!(msg2.contains("rope.freq_scale"), "unexpected: {}", msg2);
+    assert!(msg2.contains("rope_freq_scale"), "unexpected: {}", msg2);
 }

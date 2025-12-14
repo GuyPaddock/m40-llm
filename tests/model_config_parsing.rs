@@ -56,19 +56,37 @@ fn model_config_missing_head_count_fails() {
 #[test]
 fn model_config_rejects_non_divisible_d_model() {
     let mut meta = HashMap::new();
-    meta.insert(
-        "general.architecture".into(),
-        GgufValue::Scalar(GgufScalar::Str("llama".into())),
-    );
-    meta.insert(
-        "llama.embedding_length".into(),
-        GgufValue::Scalar(GgufScalar::U32(10)),
-    );
+    meta.extend(base_metadata());
+    meta.insert("llama.embedding_length".into(), GgufValue::Scalar(GgufScalar::U32(10)));
     meta.insert(
         "llama.attention.head_count".into(),
         GgufValue::Scalar(GgufScalar::U32(3)),
     );
     let err = ModelConfig::from_metadata(&meta, &[]).unwrap_err();
     let msg = format!("{err}");
-    assert!(msg.contains("not divisible"));
+    assert!(msg.contains("attention_head_count"));
+}
+
+#[test]
+fn model_config_respects_kv_head_override() {
+    let mut meta = base_metadata();
+    meta.insert(
+        "llama.attention.head_count_kv".into(),
+        GgufValue::Scalar(GgufScalar::U32(2)),
+    );
+    let cfg = ModelConfig::from_metadata(&meta, &[]).expect("config should parse");
+    assert_eq!(cfg.attention_head_count, 4);
+    assert_eq!(cfg.attention_head_count_kv, 2);
+}
+
+#[test]
+fn model_config_rejects_mismatched_attention_key_length() {
+    let mut meta = base_metadata();
+    meta.insert(
+        "llama.attention.key_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(5)),
+    );
+    let err = ModelConfig::from_metadata(&meta, &[]).unwrap_err();
+    let msg = format!("{err}");
+    assert!(msg.contains("attention_key_length"));
 }

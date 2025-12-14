@@ -140,6 +140,14 @@ impl ModelConfig {
         if self.attention_key_length == 0 {
             anyhow::bail!("attention_key_length must be > 0");
         }
+        if self.embedding_length != self.attention_head_count * self.attention_key_length {
+            anyhow::bail!(
+                "embedding_length {} must equal attention_head_count {} * attention_key_length {}",
+                self.embedding_length,
+                self.attention_head_count,
+                self.attention_key_length
+            );
+        }
         if self.embedding_length % self.attention_head_count != 0 {
             anyhow::bail!(
                 "embedding_length {} not divisible by attention_head_count {}",
@@ -153,6 +161,12 @@ impl ModelConfig {
                 self.attention_head_count,
                 self.attention_head_count_kv
             );
+        }
+        if !self.rope_freq_base.is_finite() || self.rope_freq_base <= 0.0 {
+            anyhow::bail!("rope_freq_base must be finite and > 0");
+        }
+        if !self.rope_freq_scale.is_finite() || self.rope_freq_scale <= 0.0 {
+            anyhow::bail!("rope_freq_scale must be finite and > 0");
         }
         Ok(())
     }
