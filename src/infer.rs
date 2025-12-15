@@ -635,7 +635,10 @@ impl LoadedModel {
 
         let weights_bytes = gguf_bytes[data_off..].to_vec();
         let weights_len = weights_bytes.len();
+        #[cfg(feature = "cuda")]
         let host_base = weights_bytes.as_ptr() as *mut c_void;
+        #[cfg(not(feature = "cuda"))]
+        let _host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
         let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
         #[cfg(feature = "cuda")]
