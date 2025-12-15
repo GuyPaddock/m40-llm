@@ -4,6 +4,7 @@
 #include <cublas_v2.h>
 #endif
 #include <cuda_fp16.h>
+#include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
@@ -813,47 +814,55 @@ extern "C" {
 }
 
     // RMSNorm: FP32→FP32
-    __global__ void rms_norm_f32(const float* __restrict__ in,
-                                float* __restrict__ out,
-                                const uint32_t* __restrict__ seq_map,
-                                uint32_t seq_len,
-                                uint32_t dim,
-                                float eps) {
-    const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= seq_len * dim) return;
+    __global__ void rms_norm_f32(
+        const float* __restrict__ in,
+        float* __restrict__ out,
+        uint32_t rows,
+        uint32_t dim,
+        float eps) {
+    const uint32_t row = blockIdx.x;
+    const uint32_t tid = threadIdx.x;
+    if (row >= rows) return;
 
-    // Get sequence and element indices
-    const uint32_t seq = i / dim;
-    const uint32_t elem = i % dim;
-
-    // Compute position in flat array
-    const uint32_t pos = seq_map[seq] + elem;
-
-    // Load data
-    float value = in[pos];
-
-    // Compute RMS norm
+    extern __shared__ float sdata[];
     float sum = 0.0f;
-    for (uint32_t j = 0; j < dim; ++j) {
-        float v = in[pos + j];
+    const uint32_t base = row * dim;
+    for (uint32_t i = tid; i < dim; i += blockDim.x) {
+        float v = in[base + i];
         sum += v * v;
     }
-    sum /= dim;
+    sdata[tid] = sum;
+    __syncthreads();
 
-    // Apply norm and eps
-    float denom = sqrt(sum + eps);
-    value /= denom;
+    for (uint32_t offset = blockDim.x / 2; offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            sdata[tid] += sdata[tid + offset];
+        }
+        __syncthreads();
+    }
 
-    // Write result
-    out[pos] = value;
+    float inv_scale = rsqrtf(sdata[0] / static_cast<float>(dim) + eps);
+    for (uint32_t i = tid; i < dim; i += blockDim.x) {
+        out[base + i] = in[base + i] * inv_scale;
+    }
 }
 
 // C wrapper for RMSNorm kernel
-extern "C" void m40llm_rms_norm_f32(M40llmCudaContext* ctx, const float* in, float* out, const uint32_t* seq_map, uint32_t seq_len, uint32_t dim, float eps) {
-    // Determine grid and block sizes
+extern "C" int m40llm_rms_norm_f32(
+    M40llmCudaContext* ctx,
+    const float* in,
+    float* out,
+    uint32_t rows,
+    uint32_t dim,
+    float eps) {
+    if (!ctx || !in || !out || dim == 0) return -1;
     const int threads_per_block = 256;
-    const int blocks = (seq_len * dim + threads_per_block - 1) / threads_per_block;
-    rms_norm_f32<<<blocks, threads_per_block>>>(in, out, seq_map, seq_len, dim, eps);
+    size_t shared = threads_per_block * sizeof(float);
+    rms_norm_f32<<<rows, threads_per_block, shared, ctx->decode_stream>>>(in, out, rows, dim, eps);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) return -2;
+    err = cudaStreamSynchronize(ctx->decode_stream);
+    return err == cudaSuccess ? 0 : -3;
 }
 
 // Residual add kernel
@@ -869,6 +878,67 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
     const int threads_per_block = 256;
     const int blocks = (size + threads_per_block - 1) / threads_per_block;
     residual_add_f32<<<blocks, threads_per_block>>>(a, b, out, size);
+}
+
+    __global__ void rope_f32(
+        float* __restrict__ q,
+        float* __restrict__ k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+
+    const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+    const uint32_t total_pairs = rows * pairs_per_row;
+    if (pair_idx >= total_pairs) return;
+
+    const uint32_t row = pair_idx / pairs_per_row;
+    const uint32_t pair_in_row = pair_idx % pairs_per_row;
+    const uint32_t head = pair_in_row / (head_dim / 2);
+    const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
+
+    const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+    const float pos = static_cast<float>(past_len + row) * freq_scale;
+    const float theta = pos * powf(freq_base, -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+    const float c = cosf(theta);
+    const float s = sinf(theta);
+
+    const float q0 = q[base];
+    const float q1 = q[base + 1];
+    q[base] = q0 * c - q1 * s;
+    q[base + 1] = q0 * s + q1 * c;
+
+    const float k0 = k[base];
+    const float k1 = k[base + 1];
+    k[base] = k0 * c - k1 * s;
+    k[base + 1] = k0 * s + k1 * c;
+}
+
+extern "C" int m40llm_rope_f32(
+    M40llmCudaContext* ctx,
+    float* q,
+    float* k,
+    uint32_t rows,
+    uint32_t num_heads,
+    uint32_t head_dim,
+    uint32_t past_len,
+    float freq_base,
+    float freq_scale) {
+    if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
+    if (head_dim % 2 != 0) return -2;
+    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+    const uint32_t total_pairs = rows * pairs_per_row;
+    const int threads_per_block = 256;
+    const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+    rope_f32<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
+        q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) return -3;
+    err = cudaStreamSynchronize(ctx->decode_stream);
+    return err == cudaSuccess ? 0 : -4;
 }
 
     // MLP: SwiGLU - FP16→FP32→FP16

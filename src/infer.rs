@@ -635,7 +635,10 @@ impl LoadedModel {
 
         let weights_bytes = gguf_bytes[data_off..].to_vec();
         let weights_len = weights_bytes.len();
+        #[cfg(feature = "cuda")]
         let host_base = weights_bytes.as_ptr() as *mut c_void;
+        #[cfg(not(feature = "cuda"))]
+        let _host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
         let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
         #[cfg(feature = "cuda")]
@@ -1161,15 +1164,25 @@ impl LoadedModel {
                     dk, dv,
                 )?;
 
-                // Append K/V for this token, then attention over last token
-                self.append_kv_token_f32(seq_id, dk as *const c_void, dv as *const c_void)?;
-
-                // Use KV cache layout to validate/run attention
                 let kv = self.kv_cache.as_ref().ok_or_else(|| {
                     anyhow!("kv_cache not allocated; call allocate_kv_cache first")
                 })?;
                 let num_heads = kv.num_heads();
                 let head_dim = kv.head_dim();
+                let pos = seq_len.saturating_sub(1);
+                self.apply_rope_f32(
+                    dq as *mut c_void,
+                    dk as *mut c_void,
+                    1,
+                    num_heads,
+                    head_dim,
+                    pos,
+                )?;
+
+                // Append K/V for this token, then attention over last token
+                self.append_kv_token_f32(seq_id, dk as *const c_void, dv as *const c_void)?;
+
+                // Use KV cache layout to validate/run attention
                 self.run_attention(
                     dq as *const c_void,
                     datt,
@@ -1409,47 +1422,42 @@ impl LoadedModel {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            // Host fallback operating on device buffers: copy MxD slice, normalize per-row, copy back
-            let m = seq_len as usize;
-            let d = dim as usize;
-            let bytes = m * d * std::mem::size_of::<f32>();
-
-            let mut host = vec![0u8; bytes];
-            unsafe {
-                self.cuda
-                    .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_in, bytes)?;
-            }
-            let mut out = vec![0f32; m * d];
-            let inp: Vec<f32> = host
-                .chunks_exact(4)
-                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
-                .collect();
-            for row in 0..m {
-                let start = row * d;
-                let x = &inp[start..start + d];
-                let mut mean_sq = 0.0f32;
-                for &v in x {
-                    mean_sq += v * v;
-                }
-                mean_sq /= d as f32;
-                let scale = 1.0f32 / (mean_sq + eps).sqrt();
-                for i in 0..d {
-                    out[start + i] = x[i] * scale;
-                }
-            }
-            let mut out_bytes = Vec::with_capacity(bytes);
-            for v in &out {
-                out_bytes.extend_from_slice(&v.to_le_bytes());
-            }
-            unsafe {
-                self.cuda
-                    .memcpy_h2d(d_out, out_bytes.as_ptr() as *const c_void, bytes)?;
-            }
-            Ok(())
+            self.cuda.rms_norm_f32(d_in, d_out, seq_len, dim, eps)
         }
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Applies RoPE to Q/K in-place. Buffers must be sized for `rows * num_heads * head_dim` f32 values.
+    pub unsafe fn apply_rope_f32(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda.rope_f32(
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                self.model_config.rope_freq_base,
+                self.model_config.rope_freq_scale,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_q, d_k, rows, num_heads, head_dim, past_len);
             Ok(())
         }
     }

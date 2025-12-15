@@ -23,13 +23,19 @@ fn main() {
         .map(|status| status.success())
         .unwrap_or(false);
 
-        // Prefer a CUDA-supported host compiler; CUDA 12.x accepts gcc <= 12.
-        let host_cxx = env::var("CXX")
-            .ok()
-            .filter(|cxx| Command::new(cxx).arg("--version").status().map(|s| s.success()).unwrap_or(false))
-            .or_else(|| which_preferring(&["g++-12", "gcc-12", "g++-11", "gcc-11"]))
-            .or_else(|| which_preferring(&["g++", "c++"]))
-            .unwrap_or_else(|| "c++".to_string());
+    // Prefer a CUDA-supported host compiler; CUDA 12.x accepts gcc <= 12.
+    let host_cxx = env::var("CXX")
+        .ok()
+        .filter(|cxx| {
+            Command::new(cxx)
+                .arg("--version")
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        })
+        .or_else(|| which_preferring(&["g++-12", "gcc-12", "g++-11", "gcc-11"]))
+        .or_else(|| which_preferring(&["g++", "c++"]))
+        .unwrap_or_else(|| "c++".to_string());
 
     if cuda_feature_enabled {
         if !nvcc_available {
@@ -171,7 +177,7 @@ fn main() {
         println!("cargo:rustc-link-lib=static=m40llm_kernels");
         println!("cargo:rustc-link-lib=cudart");
         if have_cublas {
-        println!("cargo:rustc-link-lib=cublas");
+            println!("cargo:rustc-link-lib=cublas");
         }
     } else {
         // No CUDA feature: nothing to build/link
