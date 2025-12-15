@@ -3,6 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaContext;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use std::collections::HashMap;
@@ -53,6 +54,13 @@ fn minimal_metadata() -> HashMap<String, GgufValue> {
 
 #[test]
 fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
+    println!(
+        "DEBUG - Enabled features: {:?}",
+        std::env::vars()
+            .filter(|(k, _)| k.starts_with("CARGO_FEATURE_"))
+            .collect::<Vec<_>>()
+    );
+
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
@@ -94,16 +102,29 @@ fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
     weights[(a_off as usize)..(a_off as usize + a_bytes.len())].copy_from_slice(&a_bytes);
     weights[(b_off as usize)..(b_off as usize + b_bytes.len())].copy_from_slice(&b_bytes);
 
+    // Ensure device weights are enabled
+    std::env::set_var("M40LLM_ENABLE_NVCC", "1");
     // Load model
     let lm = LoadedModel::from_gguf(gg, weights.clone(), -1)?;
 
-    // Validate base pointer is non-null
+    // Validate base pointer is non-null and CUDA-valid
     assert!(!lm.d_weights_base.is_null());
+    ctx.validate_device_ptr(lm.d_weights_base)
+        .expect("valid CUDA base pointer");
 
     // Check each tensor view's device pointer equals base + byte_offset
     for name in ["A", "B"] {
         let tv = lm.device_tensors.get(name).expect("tensor view present");
         let expect_ptr = (lm.d_weights_base as usize + tv.byte_offset as usize) as *const c_void;
+
+        println!(
+            "[DEBUG] Validating tensor {}: ptr={:?}, expect_ptr={:?}, offset={}, size={}",
+            name, tv.dptr, expect_ptr, tv.byte_offset, tv.nbytes
+        );
+
+        // Explicit CUDA pointer validation
+        ctx.validate_device_ptr(tv.dptr as *const c_void)
+            .unwrap_or_else(|e| panic!("invalid CUDA pointer for {}: {}", name, e));
         assert_eq!(
             tv.dptr as *const c_void as usize, expect_ptr as usize,
             "{} dptr mismatch",
