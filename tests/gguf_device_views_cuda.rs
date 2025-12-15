@@ -54,12 +54,8 @@ fn minimal_metadata() -> HashMap<String, GgufValue> {
 
 #[test]
 fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
-    println!(
-        "DEBUG - Enabled features: {:?}",
-        std::env::vars()
-            .filter(|(k, _)| k.starts_with("CARGO_FEATURE_"))
-            .collect::<Vec<_>>()
-    );
+    // Ensure device weights are enabled
+    std::env::set_var("M40LLM_ENABLE_NVCC", "1");
 
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

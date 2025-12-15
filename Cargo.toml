@@ -11,7 +11,11 @@ path = "src/lib.rs"
 name = "m40-llm"
 path = "src/main.rs"
 
+[build-dependencies]
+cc = "1.0"
+
 [dependencies]
+rand = "0.8"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -38,7 +42,7 @@ gguf-rs-lib = { version = "0.2", optional = true }
 nvcc = []
 default = []
 server = ["dep:axum", "dep:tower-http"]
-cuda = []
+cuda = ["dep:cc"]  # Enable CUDA compilation support
 # Enable extended GGUF integration via external crates
 # Off by default to keep minimal deps for non-integration builds
 gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]
@@ -66,8 +70,9 @@ harness = false
 
 
 [build-dependencies]
-cc = "1"
+cc = { version = "1", optional = true }
 
 [[test]]
 name = "m40-llm"
 path = "tests/integration_test.rs"
+cc = "1.0"
