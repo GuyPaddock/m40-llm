@@ -51,16 +51,19 @@ impl Sampler {
                 *pr = 0.0;
             }
         }
-        let mut nonzero = items.iter().any(|&(_, p)| p > 0.0);
+        let mut is_sorted_desc = false;
         if let Some(k) = self.cfg.top_k {
             if k > 0 && k < items.len() {
-                items.select_nth_unstable_by(k, |a, b| f32::total_cmp(&b.1, &a.1));
+                items.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
                 items.truncate(k);
-                nonzero = items.iter().any(|&(_, p)| p > 0.0);
+                is_sorted_desc = true;
             }
         }
         if let Some(p) = self.cfg.top_p {
-            items.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+            if !is_sorted_desc {
+                items.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+                is_sorted_desc = true;
+            }
             let mut cum = 0.0f32;
             let mut keep = 0usize;
             for &(_, pr) in &items {
@@ -71,8 +74,12 @@ impl Sampler {
                 }
             }
             items.truncate(keep.max(1));
-            nonzero = items.iter().any(|&(_, p)| p > 0.0);
         }
+        if !is_sorted_desc {
+            // Sort once to make the RNG path deterministic even when top-k/p are None.
+            items.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+        }
+        let nonzero = items.iter().any(|&(_, p)| p > 0.0);
         // If everything is zero (underflow or NaNs), fall back to greedy on logits
         if !nonzero {
             return self.sample_greedy(logits);
@@ -211,6 +218,34 @@ mod tests {
         for _ in 0..100 {
             let idx = s.sample(&logits).unwrap();
             assert!(idx == 1 || idx == 2);
+        }
+    }
+
+    #[test]
+    fn sampling_is_deterministic_when_unfiltered() {
+        let logits = [0.5f32, 0.25, 0.25];
+        let mut s1 = Sampler::new(SamplerConfig {
+            temperature: 0.9,
+            seed: 7,
+            ..Default::default()
+        });
+        let mut s2 = Sampler::new(SamplerConfig {
+            temperature: 0.9,
+            seed: 7,
+            ..Default::default()
+        });
+        let seq1: Vec<_> = (0..10).map(|_| s1.sample(&logits).unwrap()).collect();
+        let seq2: Vec<_> = (0..10).map(|_| s2.sample(&logits).unwrap()).collect();
+        assert_eq!(seq1, seq2);
+    }
+
+    #[test]
+    fn nan_logits_fall_back_to_greedy() {
+        let mut s = Sampler::new(SamplerConfig::default());
+        let logits = [f32::NAN, -1.0, 3.0];
+        // Softmax will zero out the NaN entry; greedy fallback should pick index 2.
+        for _ in 0..10 {
+            assert_eq!(s.sample(&logits).unwrap(), 2);
         }
     }
 }

@@ -54,7 +54,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t28-sampling",
       "priority": 5,
-      "status": "todo",
+      "status": "done",
       "title": "Host-side sampling (softmax, top-k, top-p)",
       "rationale": "Host sampling keeps the GPU MVP simple and correct.",
       "scope": [
