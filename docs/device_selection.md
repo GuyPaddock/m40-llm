@@ -8,5 +8,5 @@ This project targets Tesla M40 (sm_52). By default, the runtime will select devi
 
 Notes
 - CUDA_VISIBLE_DEVICES affects device enumeration seen by the program
-- Non‑CUDA builds and CUDA builds without nvcc keep tests green via cfg gates
+- Non‑CUDA builds keep tests green via cfg gates; CUDA builds require nvcc
 - When using benches/tests, prefer cuda_env::ctx_m40() for uniform selection
