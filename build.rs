@@ -23,6 +23,14 @@ fn main() {
         .map(|status| status.success())
         .unwrap_or(false);
 
+    // Prefer a CUDA-supported host compiler (CUDA 11.x supports up to gcc 11)
+    let host_cxx = env::var("CXX")
+        .ok()
+        .filter(|cxx| Command::new(cxx).arg("--version").status().map(|s| s.success()).unwrap_or(false))
+        .or_else(|| which_preferring(&["g++-11", "gcc-11"]))
+        .or_else(|| which_preferring(&["g++", "c++"]))
+        .unwrap_or_else(|| "c++".to_string());
+
     if cuda_feature_enabled {
         if !nvcc_available {
             panic!(
@@ -108,14 +116,33 @@ fn main() {
             .cuda(true)
             .include("cuda")
             .file("cuda/kernels.cu")
+            // Use an older host compiler when available to stay within CUDA's
+            // supported gcc range (11.8 supports up to gcc 11).
+            .flag(&format!("-ccbin={}", host_cxx))
             // NVCC does not recognize the newer C23 floatN keywords on some
             // hosts (e.g., Ubuntu 24.04 with glibc 2.39). Provide fallbacks
             // so the headers parse.
+            .flag("-U__HAVE_FLOAT16")
+            .flag("-U__HAVE_FLOAT128")
+            .flag("-U__HAVE_FLOAT128X")
+            .flag("-U__HAVE_FLOAT64X")
+            // Pretend to be a newer GCC so glibc skips _Float128 shims that
+            // older NVCC front-ends cannot parse.
+            .flag("-D__GNUC__=13")
+            .flag("-D__GNUC_MINOR__=3")
+            .flag("-D__GNUC_PATCHLEVEL__=0")
+            .flag("-D__STDC_WANT_IEC_60559_TYPES_EXT__=0")
+            .define("__HAVE_FLOAT16", Some("0"))
+            .define("__HAVE_FLOAT128", Some("0"))
+            .define("__HAVE_FLOAT128X", Some("0"))
+            .define("__HAVE_FLOAT64X", Some("0"))
+            .define("_Float16", Some("__half"))
             .define("_Float32", Some("float"))
             .define("_Float32x", Some("double"))
             .define("_Float64", Some("double"))
             .define("_Float64x", Some("long double"))
             .define("_Float128", Some("long double"))
+            .define("_Float128x", Some("long double"))
             // Compile as C++17 and ask the host compiler for the GNU dialect so
             // glibc exposes the _Float* typedefs needed by newer headers.
             .flag("-std=c++17")
@@ -168,11 +195,25 @@ fn main() {
         println!("cargo:rustc-link-lib=static=m40llm_kernels");
         println!("cargo:rustc-link-lib=cudart");
         if have_cublas {
-            println!("cargo:rustc-link-lib=cublas");
+        println!("cargo:rustc-link-lib=cublas");
         }
     } else {
         // No CUDA feature: nothing to build/link
         let _ = File::create(out_dir.join("kernels.cubin")).unwrap();
         println!("cargo:rustc-link-search=native={}", out_dir.display());
     }
+}
+
+fn which_preferring(candidates: &[&str]) -> Option<String> {
+    for candidate in candidates {
+        if Command::new("which")
+            .arg(candidate)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+        {
+            return Some(candidate.to_string());
+        }
+    }
+    None
 }
