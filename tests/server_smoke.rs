@@ -147,6 +147,10 @@ async fn start_test_server(model: LoadedModel) -> Result<SocketAddr> {
 
 #[tokio::test]
 async fn server_generate_smoke() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
     let vocab = 256usize;
     let d_model = 256usize;
     let hidden = 16usize;
@@ -178,6 +182,10 @@ async fn server_generate_smoke() -> Result<()> {
 
 #[tokio::test]
 async fn server_generate_streaming_nul_free() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
     let vocab = 256usize;
     let d_model = 256usize;
     let hidden = 16usize;

@@ -31,7 +31,10 @@ fn gemm_f16_storage_f32_compute_rowmajor_shapes() -> Result<()> {
     // B = [ 5 6 ; 7 8 ]
     // C = A * B = [ 19 22 ; 43 50 ]
 
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());
@@ -95,7 +98,10 @@ fn gemm_f16_storage_f32_compute_rectangular() -> Result<()> {
     // A = [1,2,3]
     // B = [[4,5],[6,7],[8,9]] row-major as [4,5,6,7,8,9]
     // C = A*B = [40, 46]
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

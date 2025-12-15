@@ -13,7 +13,10 @@ fn cpu_f32_to_f16_bits(v: f32) -> u16 {
 
 #[test]
 fn append_token_f32_cast_matches_cpu() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

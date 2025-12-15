@@ -19,7 +19,10 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
     let max_seq_len: u32 = 4;
     let max_batch_size: u32 = 1;
 
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

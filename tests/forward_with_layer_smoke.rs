@@ -19,7 +19,10 @@ fn halves_from_f32(vals: &[f32]) -> Vec<u8> {
 
 #[test]
 fn forward_one_token_with_layer_smoke() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

@@ -109,8 +109,8 @@ async fn main() -> Result<()> {
                 }
 
                 // Allocate KV cache upfront using config; default to context_length when known
-                let max_len = loaded.model_config.context_length.unwrap_or(1024);
-                let _ = loaded.allocate_kv_cache(max_len, 1);
+                let max_len = loaded.model_config.context_length as usize;
+                let _ = loaded.allocate_kv_cache(max_len.try_into().unwrap(), 1);
 
                 let state = Arc::new(server::AppState { model: loaded });
                 let router = server::app_router(state);

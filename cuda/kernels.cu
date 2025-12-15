@@ -6,10 +6,10 @@
 #include <cuda_fp16.h>
 #include <cstdio>
 #include <cstdint>
-#include <math.h>
 #include <cstring>
-#include <cstdlib>
 #include "common.h"
+
+extern "C" char* getenv(const char*);
 
 struct M40llmCudaContext {
     int device_id;

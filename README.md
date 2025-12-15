@@ -32,12 +32,12 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
 
 - `cuda`: Enables the CUDA backend. When set:
-  - If `nvcc` is available, we compile CUDA kernels for sm_52 and link against CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found, we also link cuBLAS and enable GEMM paths and tests.
-  - If `nvcc` is not available, we build and link a stub library that provides the required symbols so the crate still compiles. This lets you develop on machines with only CUDA headers/libs (e.g., conda) or no CUDA toolchain.
+  - Requires `nvcc`; the build will fail if the CUDA feature is enabled without a CUDA toolkit on `PATH`.
+  - Compiles CUDA kernels for sm_52 and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found, we also link cuBLAS and enable GEMM paths and tests.
 - `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
 
 Build script behavior:
-- When `nvcc` is present, compiles kernels for `sm_52` and also embeds PTX for `compute_52` so newer GPUs can JIT from PTX if needed.
+- Compiles kernels for `sm_52` and also embeds PTX for `compute_52` so newer GPUs can JIT from PTX if needed.
 - Always exposes `cfg(have_cublas_header)` when the cuBLAS header is detected so tests can gate accordingly.
 - Always exposes `cfg(nvcc)` when `nvcc` is present so code/tests can detect a real CUDA toolchain.
 
@@ -47,16 +47,13 @@ Build the project in one of these modes:
 - CPU only (no CUDA):
   - Build: `cargo build --no-default-features`
   - Test: `cargo test --no-default-features`
-- CUDA enabled, without nvcc (e.g., conda headers/libs available):
-  - Build: `cargo build --features cuda`
-  - Test: `cargo test --features cuda`
-- CUDA enabled, with nvcc installed:
+- CUDA enabled (requires nvcc on PATH):
   - Build: `cargo build --features cuda`
   - Test: `cargo test --features cuda`
 
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
-- CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. If `nvcc` is present, tests will also be able to detect `cfg(nvcc)` paths.
+- CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.
 - Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for a CUDA‑gated toy test validating one‑layer, seq_len=1 numerics.
 
 
