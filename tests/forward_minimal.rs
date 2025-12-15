@@ -28,7 +28,10 @@ fn f32s_to_halves_bytes(vals: &[f32]) -> Vec<u8> {
 
 #[test]
 fn forward_one_token_minimal_smoke() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());
@@ -62,8 +65,10 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         cuda: ctx.clone(),
         kv_cache: Some(kv),
         device_tensors: HashMap::new(),
+        weights_len: 0,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        host_weights: Vec::new(),
         model_config,
         #[cfg(feature = "gguf_ext")]
         typed_config: gguf_llms::model::ModelConfig {

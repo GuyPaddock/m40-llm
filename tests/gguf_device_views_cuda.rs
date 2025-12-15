@@ -53,7 +53,10 @@ fn minimal_metadata() -> HashMap<String, GgufValue> {
 
 #[test]
 fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

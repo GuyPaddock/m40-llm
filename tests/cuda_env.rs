@@ -12,6 +12,18 @@ pub fn ctx_m40() -> Result<CudaContext> {
     CudaContext::new(-1)
 }
 
+/// Try to create an M40-oriented CUDA context; return `None` and log if CUDA is
+/// unavailable so tests can skip gracefully in CPU-only environments.
+pub fn ctx_m40_or_skip() -> Option<CudaContext> {
+    match ctx_m40() {
+        Ok(ctx) => Some(ctx),
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            None
+        }
+    }
+}
+
 /// Optional guard to ensure we are actually on device with sm_52.
 /// Call at top of CUDA tests that must validate on M40 specifically.
 pub fn require_sm52(ctx: &CudaContext) -> Result<()> {

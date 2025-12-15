@@ -59,7 +59,10 @@ fn silu(x: f32) -> f32 {
 
 #[test]
 fn forward_one_token_minimal_parity_toy() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());
@@ -359,7 +362,10 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
 
 #[test]
 fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());

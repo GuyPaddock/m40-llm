@@ -49,7 +49,10 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
 
 #[test]
 fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("{}", e);
         return Ok(());
@@ -141,8 +144,10 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         cuda: ctx.clone(),
         kv_cache: None,
         device_tensors: HashMap::new(),
+        weights_len: 0,
         #[cfg(feature = "cuda")]
         d_weights_base: std::ptr::null_mut(),
+        host_weights: Vec::new(),
         model_config,
         #[cfg(feature = "gguf_ext")]
         typed_config: gguf_llms::model::ModelConfig {

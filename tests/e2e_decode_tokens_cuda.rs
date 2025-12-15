@@ -121,7 +121,10 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
 
 #[test]
 fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
-    let ctx = cuda_env::ctx_m40()?;
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
     if let Err(e) = cuda_env::require_sm52(&ctx) {
         eprintln!("skipping: {}", e);
         return Ok(());

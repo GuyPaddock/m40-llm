@@ -1,37 +1,5 @@
 // cuda/kernels.cu
 // Provide fallback definitions for the C23 floatN types so NVCC can parse
-// glibc headers that reference them.  These definitions intentionally disable
-// the newer floatN variants that the CUDA 11.x front-end does not understand
-// when paired with glibc 2.39.
-#ifndef __HAVE_FLOAT16
-#define __HAVE_FLOAT16 0
-#endif
-#ifndef __HAVE_FLOAT128
-#define __HAVE_FLOAT128 0
-#endif
-#ifndef __HAVE_FLOAT128X
-#define __HAVE_FLOAT128X 0
-#endif
-#ifndef __HAVE_FLOAT64X
-#define __HAVE_FLOAT64X 0
-#endif
-
-#ifndef __FLT16_MANT_DIG__
-#define _Float16 __half
-#endif
-#ifndef __FLT32_MANT_DIG__
-#define _Float32 float
-#define _Float32x double
-#endif
-#ifndef __FLT64_MANT_DIG__
-#define _Float64 double
-#define _Float64x long double
-#endif
-#ifndef __FLT128_MANT_DIG__
-#define _Float128 long double
-#define _Float128x long double
-#endif
-
 #include <cuda_runtime.h>
 #ifdef M40LLM_HAVE_CUBLAS
 #include <cublas_v2.h>
