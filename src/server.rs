@@ -14,9 +14,10 @@ use tokio_stream::wrappers::ReceiverStream;
 
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
-use crate::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
+use crate::decode::{decode_loop_with, StoppingCriteria};
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
+use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
@@ -28,6 +29,14 @@ pub struct GenerateRequest {
     pub max_tokens: Option<usize>,
     #[serde(default)]
     pub stream: bool,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default)]
+    pub top_k: Option<usize>,
+    #[serde(default)]
+    pub top_p: Option<f32>,
+    #[serde(default)]
+    pub seed: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -63,6 +72,41 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     Ok(Bytes::from(buf))
 }
 
+fn sampler_from_request(req: &GenerateRequest) -> Result<Sampler> {
+    let mut cfg = SamplerConfig::default();
+    if let Some(t) = req.temperature {
+        if t <= 0.0 {
+            anyhow::bail!("temperature must be > 0");
+        }
+        cfg.temperature = t;
+    }
+    if let Some(k) = req.top_k {
+        if k == 0 {
+            anyhow::bail!("top_k must be > 0 when provided");
+        }
+        cfg.top_k = Some(k);
+    }
+    if let Some(p) = req.top_p {
+        if !(0.0 < p && p <= 1.0) {
+            anyhow::bail!("top_p must be in (0, 1]");
+        }
+        cfg.top_p = Some(p);
+    }
+    if let Some(seed) = req.seed {
+        cfg.seed = seed;
+    }
+    Ok(Sampler::new(cfg))
+}
+
+fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse {
+            error: err.to_string(),
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +131,34 @@ mod tests {
     fn sanitize_output_passes_clean_text() {
         let clean = sanitize_output("abc");
         assert_eq!(clean, "abc");
+    }
+
+    #[test]
+    fn sampler_from_request_applies_overrides() {
+        let req = GenerateRequest {
+            prompt: "hi".to_string(),
+            temperature: Some(0.5),
+            top_k: Some(1),
+            top_p: Some(0.9),
+            seed: Some(7),
+            ..Default::default()
+        };
+        let mut sampler = sampler_from_request(&req).expect("build sampler");
+        let logits = [0.2f32, 0.8, 0.1];
+        // top_k=1 should force the max logit (index 1)
+        for _ in 0..5 {
+            assert_eq!(sampler.sample(&logits).unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn sampler_from_request_rejects_invalid_top_p() {
+        let req = GenerateRequest {
+            prompt: "".to_string(),
+            top_p: Some(1.5),
+            ..Default::default()
+        };
+        assert!(sampler_from_request(&req).is_err());
     }
 }
 
@@ -147,7 +219,7 @@ async fn generate(
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
-    let sampler = greedy_sampler(42);
+    let mut sampler = sampler_from_request(&req).map_err(internal_error)?;
 
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
