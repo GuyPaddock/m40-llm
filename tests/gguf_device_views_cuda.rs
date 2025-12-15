@@ -117,11 +117,6 @@ fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
         let tv = lm.device_tensors.get(name).expect("tensor view present");
         let expect_ptr = (lm.d_weights_base as usize + tv.byte_offset as usize) as *const c_void;
 
-        println!(
-            "[DEBUG] Validating tensor {}: ptr={:?}, expect_ptr={:?}, offset={}, size={}",
-            name, tv.dptr, expect_ptr, tv.byte_offset, tv.nbytes
-        );
-
         // Explicit CUDA pointer validation
         ctx.validate_device_ptr(tv.dptr as *const c_void)
             .unwrap_or_else(|e| panic!("invalid CUDA pointer for {}: {}", name, e));
