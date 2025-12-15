@@ -33,3 +33,27 @@ fn top_p_truncates_integration() {
         assert!(idx == 1 || idx == 2);
     }
 }
+
+#[test]
+fn deterministic_given_seed() {
+    let logits = [0.5f32, 0.1, 0.4];
+    let mut s1 = Sampler::new(SamplerConfig {
+        temperature: 0.8,
+        top_k: Some(2),
+        top_p: Some(0.9),
+        seed: 999,
+    });
+    let mut s2 = Sampler::new(SamplerConfig {
+        temperature: 0.8,
+        top_k: Some(2),
+        top_p: Some(0.9),
+        seed: 999,
+    });
+    let mut seq1 = Vec::new();
+    let mut seq2 = Vec::new();
+    for _ in 0..10 {
+        seq1.push(s1.sample(&logits).unwrap());
+        seq2.push(s2.sample(&logits).unwrap());
+    }
+    assert_eq!(seq1, seq2);
+}
