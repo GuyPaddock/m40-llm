@@ -94,6 +94,27 @@ mod ffi {
             K: i32,
         ) -> i32;
 
+        pub fn m40llm_rms_norm_f32(
+            ctx: *mut M40llmCudaContext,
+            d_in: *const c_void,
+            d_out: *mut c_void,
+            rows: u32,
+            dim: u32,
+            eps: f32,
+        ) -> i32;
+
+        pub fn m40llm_rope_f32(
+            ctx: *mut M40llmCudaContext,
+            d_q: *mut c_void,
+            d_k: *mut c_void,
+            rows: u32,
+            num_heads: u32,
+            head_dim: u32,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
+
         pub fn m40llm_kvcache_create(
             ctx: *mut M40llmCudaContext,
             max_seq_len: u32,
@@ -720,6 +741,73 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a, d_b, d_c, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_in` and `d_out` must be valid device pointers to `rows * dim` f32 elements.
+    pub unsafe fn rms_norm_f32(
+        &self,
+        d_in: *const c_void,
+        d_out: *mut c_void,
+        rows: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rms_norm_f32(self.inner.raw.as_ptr(), d_in, d_out, rows, dim, eps);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rms_norm_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_out, rows, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Applies in-place RoPE rotation to Q/K shaped [rows, num_heads * head_dim] (row-major f32).
+    pub unsafe fn rope_f32(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rope_f32(
+                self.inner.raw.as_ptr(),
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rope_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
             Ok(())
         }
     }
