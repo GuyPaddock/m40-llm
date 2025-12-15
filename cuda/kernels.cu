@@ -1,5 +1,4 @@
 // cuda/kernels.cu
-// Provide fallback definitions for the C23 floatN types so NVCC can parse
 #include <cuda_runtime.h>
 #ifdef M40LLM_HAVE_CUBLAS
 #include <cublas_v2.h>
