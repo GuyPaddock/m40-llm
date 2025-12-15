@@ -19,6 +19,25 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 - vs vLLM: excellent on modern GPUs but impractical on M40 (sm_52). m40‑llm is designed to be M40‑first and actually set up/run there.
 - vs llama.cpp: very portable, but most speed paths target newer GPUs. On M40 it tends to run without its big speed tricks; m40‑llm focuses on sm_52‑specific performance instead of broad portability.
 
+## Building
+
+### Standard (non-CUDA)
+```bash
+cargo build --no-default-features
+```
+
+### CUDA-enabled (requires CUDA 12.x toolkit)
+```bash
+cargo build --features cuda  # With NVCC installed
+```
+
+CI verifies three configurations:
+1. `noncuda`: No CUDA dependencies
+2. `cuda-no-nvcc`: CUDA headers only
+3. `cuda-with-nvcc`: Full CUDA+NVCC toolchain
+
+---
+
 ## Performance strategy on M40
 - FP16 storage, FP32 compute tiles: load FP16 to shared, convert to FP32, compute in registers
 - Tuned GEMM with cuBLAS/cuBLASLt; explicit row/col layouts; layout tests included
