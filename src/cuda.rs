@@ -1,9 +1,7 @@
 // src/cuda.rs
 #![allow(clippy::uninlined_format_args)]
 
-#[cfg(feature = "cuda")]
-use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
@@ -165,6 +163,8 @@ mod ffi {
             d_out_f32: *mut c_void,
             n: usize,
         ) -> i32;
+
+        pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
         pub fn m40llm_q80_to_f32(
             ctx: *mut M40llmCudaContext,
             d_in_q80: *const c_void,
@@ -313,6 +313,17 @@ impl CudaContext {
 
 #[cfg(feature = "cuda")]
 impl CudaContext {
+    /// Validates that a device pointer is properly allocated and accessible
+    /// Returns Ok(()) if valid, Err if invalid pointer
+    pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_validate_device_ptr(ptr) };
+        if rc != 0 {
+            Err(anyhow!("Invalid CUDA device pointer (error code: {})", rc))
+        } else {
+            Ok(())
+        }
+    }
+
     #[track_caller]
     fn device_malloc_inner(&self, bytes: usize, tag: Option<&str>) -> Result<*mut c_void> {
         let _g = self.inner.lock.lock().unwrap();
@@ -514,6 +525,29 @@ impl CudaContext {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
+
+    /// Validates a CUDA device pointer
+    /// Returns Ok(()) if valid, Err with description otherwise
+    pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            unsafe {
+                let rc = ffi::m40llm_validate_device_ptr(ptr);
+                match rc {
+                    0 => Ok(()),
+                    -1 => Err(anyhow!("null pointer")),
+                    -2 => Err(anyhow!("invalid CUDA pointer")),
+                    -3 => Err(anyhow!("not a device pointer")),
+                    _ => Err(anyhow!("unknown CUDA error {}", rc)),
+                }
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Err(anyhow!("CUDA feature not enabled"))
+        }
+    }
     #[allow(dead_code)]
     pub fn gemm_f32xf16_f32(
         &self,
@@ -602,12 +636,23 @@ impl CudaContext {
                 )
             };
             if rc != 0 || d_ptr.is_null() {
+                eprintln!(
+                    "[cuda] upload_weights failed - rc={rc}, ptr={:?}, len={}, total_before={}",
+                    d_ptr,
+                    data.len(),
+                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
+                );
                 return Err(anyhow!(
                     "m40llm_upload_weights failed: rc={rc}, bytes={}, total_before={}",
                     data.len(),
                     TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
                 ));
             }
+            eprintln!(
+                "[cuda] upload_weights success - ptr={:?}, len={}",
+                d_ptr,
+                data.len()
+            );
             // Upload uses cudaMalloc + copy under the hood; conservatively track bytes
             TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
             if let Ok(mut map) = self.inner.alloc_map.lock() {
@@ -846,6 +891,16 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
+
+            // Validate input pointer
+            let ptr_rc = unsafe { ffi::m40llm_validate_device_ptr(d_in_f16) };
+            if ptr_rc != 0 {
+                return Err(anyhow!(
+                    "invalid CUDA input pointer for f16_to_f32 conversion: {}",
+                    ptr_rc
+                ));
+            }
+
             let rc = ffi::m40llm_f16_to_f32(self.inner.raw.as_ptr(), d_in_f16, d_out_f32, n);
             if rc != 0 {
                 return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
