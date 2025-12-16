@@ -1,25 +1,40 @@
 // src/cuda.rs
 #![allow(clippy::uninlined_format_args)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
+#[cfg(feature = "logging")]
+use chrono;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
+use std::ptr;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
 #[cfg(feature = "cuda")]
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "cuda")]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub enum CudaMemcpyKind {
+    HostToHost = 0,
+    HostToDevice = 1,
+    DeviceToHost = 2,
+    DeviceToDevice = 3,
+}
 
 #[cfg(feature = "cuda")]
 mod ffi {
     use super::*;
+
     #[repr(C)]
     pub struct M40llmCudaContext {
         _private: [u8; 0],
     }
+
     #[repr(C)]
     pub struct M40llmKVCache {
         _private: [u8; 0],
@@ -38,13 +53,16 @@ mod ffi {
             bytes: usize,
             out_ptr: *mut *mut c_void,
         ) -> i32;
+
         pub fn m40llm_device_free(ctx: *mut M40llmCudaContext, ptr: *mut c_void) -> i32;
+
         pub fn m40llm_memcpy_h2d(
             ctx: *mut M40llmCudaContext,
             dst_device: *mut c_void,
             src_host: *const c_void,
             bytes: usize,
         ) -> i32;
+
         pub fn m40llm_memcpy_d2h(
             ctx: *mut M40llmCudaContext,
             dst_host: *mut c_void,
@@ -72,15 +90,64 @@ mod ffi {
             K: i32,
         ) -> i32;
 
-        pub fn m40llm_gemm_f32xf16_f32(
-            ctx: *mut M40llmCudaContext,
-            d_A_f32: *const c_void,
-            d_B_f16: *const c_void,
-            d_C_f32: *mut c_void,
-            M: i32,
-            N: i32,
-            K: i32,
+        pub unsafe fn malloc(ctx: *mut M40llmCudaContext, size: usize) -> *mut c_void {
+            let mut ptr: *mut c_void = std::ptr::null_mut();
+            let result = m40llm_device_malloc(ctx, size, &mut ptr);
+            if result != 0 {
+                std::ptr::null_mut()
+            } else {
+                ptr
+            }
+        }
+
+    }
+
+    pub const CUDA_SUCCESS: i32 = 0;
+
+    #[link(name = "cudart")]
+    extern "C" {
+        pub fn cudaSetDevice(device: i32) -> i32;
+
+        pub fn cudaMemcpy(
+            dst: *mut c_void,
+            src: *const c_void,
+            count: usize,
+            kind: CudaMemcpyKind,
         ) -> i32;
+
+        pub fn cudaDeviceSynchronize() -> i32;
+        pub fn cudaPointerGetAttributes(attributes: *mut c_void, ptr: *const c_void) -> i32;
+    }
+
+    #[derive(Debug)]
+    pub struct M40llmCudaContext {
+        ctx: *mut ffi::M40llmCudaContext,
+    }
+
+    impl M40llmCudaContext {
+        pub unsafe fn new(cuda_device: i32) -> Result<Self> {
+            let ctx = ffi::m40llm_create_context(cuda_device);
+            if ctx.is_null() {
+                bail!("Failed to create CUDA context")
+            }
+            Ok(Self { ctx })
+        }
+
+        pub fn upload_weights(&self, weights: &[u8]) -> Result<()> {
+            unsafe {
+                let mut device_ptr: *mut c_void = ptr::null_mut();
+                let result = ffi::m40llm_upload_weights(
+                    self.ctx,
+                    weights.as_ptr() as _,
+                    weights.len(),
+                    &mut device_ptr,
+                );
+                if result != 0 {
+                    bail!("Failed to upload weights: error code {}", result);
+                }
+                Ok(())
+            }
+        }
 
         pub fn m40llm_gemm_f16xf16_f32(
             ctx: *mut M40llmCudaContext,
@@ -212,6 +279,8 @@ struct CudaContextInner {
     weights_size: Mutex<usize>,
     #[cfg(feature = "cuda")]
     alloc_map: Mutex<HashMap<*mut c_void, AllocInfo>>, // per-allocation info (size, tag)
+    #[cfg(feature = "cuda")]
+    is_initialized: AtomicBool,
 }
 
 #[cfg(feature = "cuda")]
@@ -230,6 +299,10 @@ impl CudaContext {
             let ptr = unsafe { ffi::m40llm_create_context(device_id) };
             let raw =
                 NonNull::new(ptr).ok_or_else(|| anyhow!("m40llm_create_context returned null"))?;
+
+            // Initialize CUDA context
+            unsafe { ffi::cudaSetDevice(device_id) };
+
             Ok(Self {
                 inner: Arc::new(CudaContextInner {
                     device_id,
@@ -238,6 +311,7 @@ impl CudaContext {
                     weights_ptr: Mutex::new(None),
                     weights_size: Mutex::new(0),
                     alloc_map: Mutex::new(HashMap::new()),
+                    is_initialized: AtomicBool::new(true),
                 }),
             })
         }
@@ -308,6 +382,22 @@ impl CudaContext {
                 device_id: self.inner.device_id,
             })
         }
+    }
+
+    fn device_malloc_inner(&self, bytes: usize, tag: Option<&str>) -> Result<*mut c_void> {
+        #[cfg(feature = "cuda")]
+        if let Some(t) = tag {
+            eprintln!("[CUDA] Allocating {bytes} bytes (tag: {t})");
+        }
+
+        let out = unsafe {
+            let ptr = ffi::malloc(bytes);
+            if ptr.is_null() {
+                return Err(anyhow!("CUDA allocation failed"));
+            }
+            ptr
+        };
+        Ok(out)
     }
 }
 
@@ -508,23 +598,43 @@ impl CudaContext {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
-    #[allow(dead_code)]
-    pub fn upload_weights(&self, _data: &[u8]) -> Result<*mut c_void> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(std::ptr::null_mut())
+
+    pub fn upload_weights(&self, weights: &[u8]) -> Result<()> {
+        let mut device_ptr: *mut c_void = std::ptr::null_mut();
+        let result = unsafe {
+            ffi::m40llm_upload_weights(
+                self.ctx,
+                weights.as_ptr() as _,
+                weights.len(),
+                &mut device_ptr,
+            )
+        };
+        if result != 0 {
+            Err(anyhow!("Failed to upload weights: error code {}", result))
+        } else {
+            Ok(())
+        }
     }
-    #[allow(dead_code)]
+
     pub fn gemm_f16_f32(
         &self,
-        _d_a: *const c_void,
-        _d_b: *const c_void,
-        _d_c: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
+        a: *const c_void,
+        b: *const c_void,
+        c: *mut c_void,
+        m: usize,
+        n: usize,
+        k: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
+        let result = unsafe {
+            ffi::m40llm_gemm_f16_storage_f32_compute(
+                self.ctx, a, b, c, m as i32, n as i32, k as i32,
+            )
+        };
+        if result != 0 {
+            Err(anyhow!("GEMM operation failed: error code {}", result))
+        } else {
+            Ok(())
+        }
     }
     #[allow(dead_code)]
     pub fn start_persistent_decode(&self) -> Result<()> {
@@ -584,6 +694,86 @@ impl CudaContext {
     ) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
+    }
+
+    pub fn rms_norm_f32(
+        &self,
+        input: *const c_void,
+        output: *mut c_void,
+        seq_len: usize,
+        dim: usize,
+        eps: f32,
+    ) -> Result<()> {
+        let result = unsafe {
+            ffi::m40llm_rms_norm_f32(self.ctx, input, output, seq_len as u32, dim as u32, eps)
+        };
+        if result != 0 {
+            Err(anyhow!("RMS norm failed: error code {}", result))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn rope_f32(
+        &self,
+        q: *mut c_void,
+        k: *mut c_void,
+        seq_len: usize,
+        n_embd: usize,
+        n_head: usize,
+        pos: usize,
+        freq_base: f32,
+    ) -> Result<()> {
+        let result = unsafe {
+            ffi::m40llm_rope_f32(
+                self.ctx,
+                q,
+                k,
+                seq_len as u32,
+                n_embd as u32,
+                n_head as u32,
+                pos as u32,
+                freq_base,
+            )
+        };
+        if result != 0 {
+            Err(anyhow!("RoPE failed: error code {}", result))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn rms_norm_f32(
+        &self,
+        input: *const c_void,
+        output: *mut c_void,
+        seq_len: usize,
+        dim: usize,
+        eps: f32,
+    ) -> Result<()> {
+        todo!("Implement RMS norm")
+    }
+
+    pub fn rope_f32(
+        &self,
+        q: *mut c_void,
+        k: *mut c_void,
+        seq_len: usize,
+        n_embd: usize,
+        n_head: usize,
+        pos: usize,
+        freq_base: f32,
+    ) -> Result<()> {
+        todo!("Implement RoPE")
+    }
+
+    pub fn f16_to_f32(
+        &self,
+        input: *const c_void,
+        output: *mut c_void,
+        count: usize,
+    ) -> Result<()> {
+        todo!("Implement F16 to F32 conversion")
     }
 }
 
