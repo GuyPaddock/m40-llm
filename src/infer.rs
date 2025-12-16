@@ -853,7 +853,12 @@ fn build_device_tensor_views(
             let addr = base
                 .checked_add(offset_usize)
                 .context("device pointer offset overflow")?;
-            addr as *mut c_void
+            let ptr = addr as *mut c_void;
+            eprintln!(
+                "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
+                t.name, d_base, offset_usize, ptr
+            );
+            ptr
         };
         #[cfg(not(feature = "cuda"))]
         let _dptr: *mut c_void = std::ptr::null_mut();
@@ -1530,10 +1535,35 @@ impl LoadedModel {
                 GgmlDType::F16 => {
                     if rows_are_vocab {
                         // Contiguous row: [vocab, d_model]
+                        println!(
+                            "Debug: Base ptr={:?}, token_id={}, d_model={}",
+                            tok.dptr, token_id, d_model
+                        );
                         let row_bytes = d_model * 2;
+                        println!(
+                            "Debug: row_bytes={}, calculated offset={}",
+                            row_bytes,
+                            (token_id as usize) * row_bytes
+                        );
                         let d_row =
                             (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
-                        self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
+                        println!("Debug: Final d_row={:?}", d_row);
+                        println!(
+                            "Debug: f16_to_f32 params - d_row={:?}, d_out_f32={:?}, d_model={}",
+                            d_row, d_out_f32, d_model
+                        );
+                        // Test pointer validity by attempting a small memcpy
+                        let mut test_buf = [0u8; 4];
+                        let test_ptr = test_buf.as_mut_ptr() as *mut c_void;
+                        println!("Debug: Testing input ptr via memcpy_d2h...");
+                        let test_res = self.cuda.memcpy_d2h(test_ptr, d_row, 4);
+                        println!("Debug: Input ptr test result - {:?}", test_res);
+                        println!("Debug: Testing output ptr via memcpy_h2d...");
+                        let test_res = self.cuda.memcpy_h2d(d_out_f32, test_ptr, 4);
+                        println!("Debug: Output ptr test result - {:?}", test_res);
+                        let res = self.cuda.f16_to_f32(d_row, d_out_f32, d_model);
+                        println!("Debug: f16_to_f32 result - {:?}", res);
+                        res?;
                     } else {
                         // Column gather: shape [d_model, vocab], take column = token_id
                         use half::f16;

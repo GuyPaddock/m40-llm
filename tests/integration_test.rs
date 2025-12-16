@@ -1,4 +1,4 @@
-#![cfg(not(feature = "cuda"))]
+#![cfg(feature = "cuda")]
 
 use anyhow::Result;
 use m40_llm::gguf::{GgufModel, GgufScalar, GgufValue};
@@ -57,7 +57,7 @@ fn test_attention_operation() -> Result<()> {
     model.allocate_kv_cache(128, 8)?;
     // Provide valid input/output buffers
     let dim = 8 * 64; // must match allocate_kv_cache layout
-    let q: Vec<f32> = vec![0.0; dim as usize];
+    let q: Vec<f32> = vec![1.0; dim as usize]; // Initialize with non-zero values
     let mut out: Vec<f32> = vec![0.0; dim as usize];
     unsafe {
         model.run_attention(
@@ -70,6 +70,7 @@ fn test_attention_operation() -> Result<()> {
             64,
         )?;
     }
+    assert!(!out.iter().all(|&x| x == 0.0)); // Verify computation occurred
     Ok(())
 }
 
@@ -89,10 +90,17 @@ fn test_rms_norm_operation() -> Result<()> {
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
     let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
-    let input = std::ptr::null::<c_void>();
-    let output = std::ptr::null_mut::<c_void>();
+    let mut input: Vec<f32> = vec![1.0; 512];
+    let mut output: Vec<f32> = vec![0.0; 512];
     unsafe {
-        model.run_rms_norm(input, output, 128, 512, 1e-5)?;
+        model.run_rms_norm(
+            input.as_ptr() as *const c_void,
+            output.as_mut_ptr() as *mut c_void,
+            128,
+            512,
+            1e-5,
+        )?;
     }
+    assert!(!output.iter().all(|&x| x == 0.0)); // Verify output was modified
     Ok(())
 }

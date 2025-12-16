@@ -367,11 +367,22 @@ impl CudaContext {
             let bt = std::backtrace::Backtrace::capture();
             msg.push_str(&format!("\n{:?}", bt));
         }
-        eprintln!(
-            "{}{}",
-            msg,
-            tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
-        );
+        {
+            let ts = if cfg!(feature = "logging") {
+                format!(
+                    "[{}] ",
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f")
+                )
+            } else {
+                String::new()
+            };
+            eprintln!(
+                "[CUDA] {}{}{}",
+                ts,
+                msg,
+                tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
+            );
+        }
         Ok(out)
     }
 
