@@ -2,17 +2,17 @@ use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
-fn which(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
-        .status()
-        .map(|s| s.success())
+fn have_cmd(cmd: &str) -> bool {
+    Command::new(cmd)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
         .unwrap_or(false)
 }
 
 fn pick_host_cxx() -> String {
     for c in ["g++-12", "g++-11", "g++-10", "g++", "c++"] {
-        if which(c) {
+        if have_cmd(c) {
             return c.to_string();
         }
     }
@@ -24,15 +24,18 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(nvcc)");
     println!("cargo:rustc-check-cfg=cfg(have_cublas)");
 
-    // Re-run triggers
+    // Rebuild triggers
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CUDA");
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR set by Cargo"));
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let cuda_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
 
     if cuda_enabled {
+        // ─────────────────────────────────────────────
+        // CUDA BUILD
+        // ─────────────────────────────────────────────
 
         if !have_cmd("nvcc") {
             panic!(
@@ -57,6 +60,7 @@ fn main() {
             .flag("-O3")
             .flag("-Xcompiler")
             .flag("-fPIC")
+            // Tesla M40 (Maxwell)
             .flag("-gencode=arch=compute_52,code=sm_52")
             .compile("m40llm_native");
 
@@ -67,6 +71,10 @@ fn main() {
         println!("cargo:rustc-link-lib=cudart");
         println!("cargo:rustc-link-lib=cublas");
     } else {
+        // ─────────────────────────────────────────────
+        // CPU / STUB BUILD
+        // ─────────────────────────────────────────────
+
         let mut build = cc::Build::new();
         build
             .include("cuda")
