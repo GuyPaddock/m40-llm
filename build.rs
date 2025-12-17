@@ -22,7 +22,7 @@ fn pick_host_cxx() -> String {
 fn main() {
     // Declare allowed cfgs (prevents check-cfg warnings)
     println!("cargo:rustc-check-cfg=cfg(nvcc)");
-    println!("cargo:rustc-check-cfg=cfg(have_cublas_header)");
+    println!("cargo:rustc-check-cfg=cfg(have_cublas)");
 
     // Re-run triggers
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CUDA");
@@ -43,6 +43,7 @@ fn main() {
 
         // This cfg means: "this build actually used nvcc"
         println!("cargo:rustc-cfg=nvcc");
+        println!("cargo:rustc-cfg=have_cublas");
 
         let host_cxx = pick_host_cxx();
 
@@ -61,7 +62,10 @@ fn main() {
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_kernels");
+
+        // CUDA runtime + cuBLAS
         println!("cargo:rustc-link-lib=cudart");
+        println!("cargo:rustc-link-lib=cublas");
     } else {
         let mut build = cc::Build::new();
         build
