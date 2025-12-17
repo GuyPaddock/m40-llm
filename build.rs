@@ -99,7 +99,11 @@ fn main() {
     let cuda_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
     let nvcc_available = have_cmd("nvcc");
 
-    if cuda_enabled && nvcc_available {
+    if cuda_enabled && !nvcc_available {
+        panic!("CUDA feature requested but nvcc was not found on PATH");
+    }
+
+    if cuda_enabled {
         // ─────────────────────────────────────────────
         // CUDA BUILD
         // ─────────────────────────────────────────────
@@ -121,6 +125,7 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=gnu++17")
+            .flag("-cudart=shared")
             .flag("-O3")
             .flag("-Xcompiler")
             .flag("-fPIC")
@@ -144,22 +149,17 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_native");
 
+        for p in cublas_paths.rpaths.iter() {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", p.display());
+            println!("cargo:rustc-link-search=native={}", p.display());
+        }
+
         // CUDA runtime + optional cuBLAS
         println!("cargo:rustc-link-lib=cudart");
         if cublas_enabled {
-            for p in cublas_paths.rpaths {
-                println!("cargo:rustc-link-arg=-Wl,-rpath,{}", p.display());
-                println!("cargo:rustc-link-search=native={}", p.display());
-            }
             println!("cargo:rustc-link-lib=cublas");
         }
     } else {
-        if cuda_enabled {
-            println!(
-                "cargo:warning=nvcc not found on PATH; building CUDA stubs instead of real kernels"
-            );
-        }
-
         // ─────────────────────────────────────────────
         // CPU / STUB BUILD
         // ─────────────────────────────────────────────
