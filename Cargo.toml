@@ -12,7 +12,9 @@ name = "m40-llm"
 path = "src/main.rs"
 
 [build-dependencies]
-cc = { version = "1.0", optional = true }
+# `build.rs` compiles either CUDA kernels (.cu) or the non-CUDA C stub (.c).
+# That requires the `cc` crate even when the `cuda` feature is disabled.
+cc = "1.0"
 
 [dependencies]
 chrono = { version = "0.4", optional = true, features = ["serde", "clock"] }
@@ -43,7 +45,7 @@ gguf-rs-lib = { version = "0.2", optional = true }
 logging = ["chrono"]
 nvcc = []
 server = ["dep:axum", "dep:tower-http"]
-cuda = ["dep:cc"]  # Enable CUDA compilation support
+cuda = []  # Enable CUDA compilation support
 # Enable extended GGUF integration via external crates
 # Off by default to keep minimal deps for non-integration builds
 gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]
