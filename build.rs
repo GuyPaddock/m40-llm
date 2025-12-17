@@ -30,21 +30,19 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR set by Cargo"));
+    let cuda_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
 
-    let cuda_feature_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
-    let have_nvcc = which("nvcc");
+    if cuda_enabled {
 
-    if have_nvcc {
-        println!("cargo:rustc-cfg=nvcc");
-    }
-
-    if cuda_feature_enabled {
-        if !have_nvcc {
+        if !have_cmd("nvcc") {
             panic!(
-                "Feature `cuda` enabled but `nvcc` not found in PATH. \
-                 Install CUDA or build without `--features cuda`."
+                "Feature `cuda` is enabled, but `nvcc` was not found in PATH.\n\
+                 Install the CUDA toolkit or build without `--features cuda`."
             );
         }
+
+        // This cfg means: "this build actually used nvcc"
+        println!("cargo:rustc-cfg=nvcc");
 
         let host_cxx = pick_host_cxx();
 
