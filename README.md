@@ -51,8 +51,8 @@ CI verifies three configurations:
 This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
 
 - `cuda`: Enables the CUDA backend. When set:
-  - Requires `nvcc`; the build will fail if the CUDA feature is enabled without a CUDA toolkit on `PATH`.
-  - Compiles CUDA kernels for sm_52 and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found, we also link cuBLAS and enable GEMM paths and tests.
+  - Uses `nvcc` when available; if `nvcc` is missing, the build falls back to the stubbed CUDA bindings and emits a warning.
+  - Compiles CUDA kernels for sm_52 (plus compute_52 PTX) and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found and `M40LLM_ENABLE_CUBLAS=1` is set, we also link cuBLAS and enable GEMM paths and tests.
 - `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
 
 Build script behavior:
