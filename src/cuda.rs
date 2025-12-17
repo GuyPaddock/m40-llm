@@ -1,32 +1,17 @@
 // src/cuda.rs
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::missing_safety_doc)]
 
-use anyhow::{anyhow, bail, Result};
-#[cfg(feature = "logging")]
-use chrono;
+use anyhow::{bail, Result};
 use std::ffi::c_void;
-#[cfg(feature = "cuda")]
-use std::ffi::CStr;
-use std::ptr;
 
-#[allow(unused_imports)]
-use std::collections::HashMap;
-#[cfg(feature = "cuda")]
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+mod kvcache;
+pub use kvcache::KVCache;
 
-#[cfg(feature = "cuda")]
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub enum CudaMemcpyKind {
-    HostToHost = 0,
-    HostToDevice = 1,
-    DeviceToHost = 2,
-    DeviceToDevice = 3,
-}
+// -------------------------------------------------------------------------------------------------
+// FFI (always declared; implementation comes from either kernels.cu or stub.c)
+// -------------------------------------------------------------------------------------------------
 
-#[cfg(feature = "cuda")]
+#[allow(non_camel_case_types)]
 mod ffi {
     use super::*;
 
@@ -48,12 +33,15 @@ mod ffi {
             minor: *mut i32,
             device_id: *mut i32,
         ) -> i32;
+
+        pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
+        pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
+
         pub fn m40llm_device_malloc(
             ctx: *mut M40llmCudaContext,
             bytes: usize,
             out_ptr: *mut *mut c_void,
         ) -> i32;
-
         pub fn m40llm_device_free(ctx: *mut M40llmCudaContext, ptr: *mut c_void) -> i32;
 
         pub fn m40llm_memcpy_h2d(
@@ -62,16 +50,12 @@ mod ffi {
             src_host: *const c_void,
             bytes: usize,
         ) -> i32;
-
         pub fn m40llm_memcpy_d2h(
             ctx: *mut M40llmCudaContext,
             dst_host: *mut c_void,
             src_device: *const c_void,
             bytes: usize,
         ) -> i32;
-
-        pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
-        pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -90,96 +74,21 @@ mod ffi {
             K: i32,
         ) -> i32;
 
-        pub unsafe fn malloc(ctx: *mut M40llmCudaContext, size: usize) -> *mut c_void {
-            let mut ptr: *mut c_void = std::ptr::null_mut();
-            let result = m40llm_device_malloc(ctx, size, &mut ptr);
-            if result != 0 {
-                std::ptr::null_mut()
-            } else {
-                ptr
-            }
-        }
-
-    }
-
-    pub const CUDA_SUCCESS: i32 = 0;
-
-    #[link(name = "cudart")]
-    extern "C" {
-        pub fn cudaSetDevice(device: i32) -> i32;
-
-        pub fn cudaMemcpy(
-            dst: *mut c_void,
-            src: *const c_void,
-            count: usize,
-            kind: CudaMemcpyKind,
-        ) -> i32;
-
-        pub fn cudaDeviceSynchronize() -> i32;
-        pub fn cudaPointerGetAttributes(attributes: *mut c_void, ptr: *const c_void) -> i32;
-    }
-
-    #[derive(Debug)]
-    pub struct M40llmCudaContext {
-        ctx: *mut ffi::M40llmCudaContext,
-    }
-
-    impl M40llmCudaContext {
-        pub unsafe fn new(cuda_device: i32) -> Result<Self> {
-            let ctx = ffi::m40llm_create_context(cuda_device);
-            if ctx.is_null() {
-                bail!("Failed to create CUDA context")
-            }
-            Ok(Self { ctx })
-        }
-
-        pub fn upload_weights(&self, weights: &[u8]) -> Result<()> {
-            unsafe {
-                let mut device_ptr: *mut c_void = ptr::null_mut();
-                let result = ffi::m40llm_upload_weights(
-                    self.ctx,
-                    weights.as_ptr() as _,
-                    weights.len(),
-                    &mut device_ptr,
-                );
-                if result != 0 {
-                    bail!("Failed to upload weights: error code {}", result);
-                }
-                Ok(())
-            }
-        }
-
-        pub fn m40llm_gemm_f16xf16_f32(
+        // Optional helpers (may be stubbed on non-CUDA builds)
+        pub fn m40llm_f16_to_f32(
             ctx: *mut M40llmCudaContext,
-            d_A_f16: *const c_void,
-            d_B_f16: *const c_void,
-            d_C_f32: *mut c_void,
-            M: i32,
-            N: i32,
-            K: i32,
+            d_in_f16: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
         ) -> i32;
-
-        pub fn m40llm_rms_norm_f32(
+        pub fn m40llm_q80_to_f32(
             ctx: *mut M40llmCudaContext,
-            d_in: *const c_void,
-            d_out: *mut c_void,
-            rows: u32,
-            dim: u32,
-            eps: f32,
+            d_in_q80: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
         ) -> i32;
 
-        pub fn m40llm_rope_f32(
-            ctx: *mut M40llmCudaContext,
-            d_q: *mut c_void,
-            d_k: *mut c_void,
-            rows: u32,
-            num_heads: u32,
-            head_dim: u32,
-            past_len: u32,
-            freq_base: f32,
-            freq_scale: f32,
-        ) -> i32;
-
+        // KV cache
         pub fn m40llm_kvcache_create(
             ctx: *mut M40llmCudaContext,
             max_seq_len: u32,
@@ -187,6 +96,7 @@ mod ffi {
             num_heads: u32,
             head_dim: u32,
         ) -> *mut M40llmKVCache;
+        pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
         pub fn m40llm_kvcache_append_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -206,721 +116,223 @@ mod ffi {
             kv: *mut M40llmKVCache,
             seq_id: u32,
             token: u32,
-            out_k_f16: *mut c_void,
-            out_v_f16: *mut c_void,
+            out_k_host: *mut c_void,
+            out_v_host: *mut c_void,
         ) -> i32;
 
         pub fn m40llm_attention_last_token_f32(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
             seq_id: u32,
-            d_q_f32: *const c_void,
+            q_dev_f32: *const c_void,
             seq_len: u32,
-            d_out_f32: *mut c_void,
+            out_dev_f32: *mut c_void,
         ) -> i32;
 
-        pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
-
+        // Persistent decode (optional)
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
-        // Utility conversion/dequant kernels
-        pub fn m40llm_f16_to_f32(
-            ctx: *mut M40llmCudaContext,
-            d_in_f16: *const c_void,
-            d_out_f32: *mut c_void,
-            n: usize,
-        ) -> i32;
-
-        pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
-        pub fn m40llm_q80_to_f32(
-            ctx: *mut M40llmCudaContext,
-            d_in_q80: *const c_void,
-            d_out_f32: *mut c_void,
-            n: usize,
-        ) -> i32;
     }
+
+    pub const CUDA_SUCCESS: i32 = 0;
 }
 
-#[derive(Debug, Clone)]
-pub struct DeviceProps {
-    pub name: String,
-    pub major: i32,
-    pub minor: i32,
-    pub device_id: i32,
-}
+// -------------------------------------------------------------------------------------------------
+// CudaContext
+// -------------------------------------------------------------------------------------------------
 
-// Global allocation tracker (bytes) for diagnostics only
-pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
-
-#[cfg(feature = "cuda")]
-#[derive(Debug, Clone)]
-struct AllocInfo {
-    size: usize,
-    tag: Option<String>,
-}
-
-// Public-safe wrapper types usable in both CUDA and non-CUDA builds
+/// A handle to the CUDA-side context. When the `cuda` feature is disabled, this
+/// is still constructible, but most methods return an error.
 #[derive(Debug, Clone)]
 pub struct CudaContext {
-    #[allow(dead_code)]
-    inner: Arc<CudaContextInner>,
+    inner: std::sync::Arc<CudaContextInner>,
 }
 
 #[derive(Debug)]
 struct CudaContextInner {
     device_id: i32,
-    #[allow(dead_code)]
-    lock: Mutex<()>,
     #[cfg(feature = "cuda")]
-    raw: NonNull<ffi::M40llmCudaContext>,
-    #[cfg(feature = "cuda")]
-    weights_ptr: Mutex<Option<NonNull<c_void>>>,
-    #[cfg(feature = "cuda")]
-    weights_size: Mutex<usize>,
-    #[cfg(feature = "cuda")]
-    alloc_map: Mutex<HashMap<*mut c_void, AllocInfo>>, // per-allocation info (size, tag)
-    #[cfg(feature = "cuda")]
-    is_initialized: AtomicBool,
+    raw: std::ptr::NonNull<ffi::M40llmCudaContext>,
 }
 
-#[cfg(feature = "cuda")]
-unsafe impl Send for CudaContextInner {}
-#[cfg(feature = "cuda")]
-unsafe impl Sync for CudaContextInner {}
-
 impl CudaContext {
-    #[inline]
-    pub fn total_device_bytes() -> usize {
-        TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
-    }
     pub fn new(device_id: i32) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
-            let ptr = unsafe { ffi::m40llm_create_context(device_id) };
-            let raw =
-                NonNull::new(ptr).ok_or_else(|| anyhow!("m40llm_create_context returned null"))?;
-
-            // Initialize CUDA context
-            unsafe { ffi::cudaSetDevice(device_id) };
-
+            let raw = unsafe { ffi::m40llm_create_context(device_id) };
+            let raw = std::ptr::NonNull::new(raw)
+                .ok_or_else(|| anyhow::anyhow!("m40llm_create_context returned null"))?;
             Ok(Self {
-                inner: Arc::new(CudaContextInner {
-                    device_id,
-                    lock: Mutex::new(()),
-                    raw,
-                    weights_ptr: Mutex::new(None),
-                    weights_size: Mutex::new(0),
-                    alloc_map: Mutex::new(HashMap::new()),
-                    is_initialized: AtomicBool::new(true),
-                }),
+                inner: std::sync::Arc::new(CudaContextInner { device_id, raw }),
             })
         }
 
         #[cfg(not(feature = "cuda"))]
         {
+            // Non-CUDA builds still create a context so the rest of the code can run.
+            // The C stub returns a non-null sentinel; we do not store it.
+            let _ = unsafe { ffi::m40llm_create_context(device_id) };
             Ok(Self {
-                inner: Arc::new(CudaContextInner {
-                    device_id,
-                    lock: Mutex::new(()),
-                    #[cfg(feature = "cuda")]
-                    raw: NonNull::dangling(),
-                    #[cfg(feature = "cuda")]
-                    weights_ptr: Mutex::new(None),
-                    #[cfg(feature = "cuda")]
-                    weights_size: Mutex::new(0),
-                    #[cfg(feature = "cuda")]
-                    alloc_map: Mutex::new(HashMap::new()),
-                }),
+                inner: std::sync::Arc::new(CudaContextInner { device_id }),
             })
         }
     }
 
-    #[allow(dead_code)]
     pub fn device_id(&self) -> i32 {
         self.inner.device_id
     }
 
-    /// Convenience: create a context that auto-selects Tesla M40 (sm_52) when available.
-    /// Equivalent to `CudaContext::new(-1)`.
-    pub fn new_m40() -> Result<Self> {
-        Self::new(-1)
+    #[cfg(feature = "cuda")]
+    pub(crate) fn raw_ptr(&self) -> *mut ffi::M40llmCudaContext {
+        self.inner.raw.as_ptr()
     }
 
-    pub fn current_device_props(&self) -> Result<DeviceProps> {
-        #[cfg(feature = "cuda")]
-        {
-            let mut name_buf = [0i8; 128];
-            let mut major: i32 = 0;
-            let mut minor: i32 = 0;
-            let mut device_id: i32 = -1;
-            let rc = unsafe {
-                ffi::m40llm_current_device_props(
-                    name_buf.as_mut_ptr(),
-                    name_buf.len(),
-                    &mut major as *mut _,
-                    &mut minor as *mut _,
-                    &mut device_id as *mut _,
-                )
-            };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_current_device_props failed: {rc}"));
+    #[cfg(not(feature = "cuda"))]
+    pub(crate) fn raw_ptr(&self) -> *mut ffi::M40llmCudaContext {
+        // Stub implementation doesn't require a real pointer.
+        std::ptr::null_mut()
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn upload_weights(&self, weights: &[u8]) -> Result<*mut c_void> {
+        unsafe {
+            let mut out: *mut c_void = std::ptr::null_mut();
+            let rc = ffi::m40llm_upload_weights(self.raw_ptr(), weights.as_ptr() as _, weights.len(), &mut out);
+            if rc != ffi::CUDA_SUCCESS || out.is_null() {
+                bail!("m40llm_upload_weights failed (rc={})", rc);
             }
-            let cname = unsafe { CStr::from_ptr(name_buf.as_ptr()) };
-            Ok(DeviceProps {
-                name: cname.to_string_lossy().into_owned(),
-                major,
-                minor,
-                device_id,
-            })
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            Ok(DeviceProps {
-                name: "stub".into(),
-                major: 0,
-                minor: 0,
-                device_id: self.inner.device_id,
-            })
+            Ok(out)
         }
     }
 
-    fn device_malloc_inner(&self, bytes: usize, tag: Option<&str>) -> Result<*mut c_void> {
-        #[cfg(feature = "cuda")]
-        if let Some(t) = tag {
-            eprintln!("[CUDA] Allocating {bytes} bytes (tag: {t})");
-        }
-
-        let out = unsafe {
-            let ptr = ffi::malloc(bytes);
-            if ptr.is_null() {
-                return Err(anyhow!("CUDA allocation failed"));
-            }
-            ptr
-        };
-        Ok(out)
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl CudaContext {
-    /// Validates that a device pointer is properly allocated and accessible
-    /// Returns Ok(()) if valid, Err if invalid pointer
-    pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
-        let rc = unsafe { ffi::m40llm_validate_device_ptr(ptr) };
-        if rc != 0 {
-            Err(anyhow!("Invalid CUDA device pointer (error code: {})", rc))
-        } else {
-            Ok(())
-        }
+    #[cfg(not(feature = "cuda"))]
+    pub fn upload_weights(&self, _weights: &[u8]) -> Result<*mut c_void> {
+        bail!("CUDA support not enabled (build without --features cuda)")
     }
 
-    #[track_caller]
-    fn device_malloc_inner(&self, bytes: usize, tag: Option<&str>) -> Result<*mut c_void> {
-        let _g = self.inner.lock.lock().unwrap();
-        let mut out: *mut c_void = std::ptr::null_mut();
-        let rc = unsafe {
-            ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _)
-        };
-        if rc != 0 || out.is_null() {
-            let props = self.current_device_props().ok();
-            return Err(anyhow!(
-                "m40llm_device_malloc failed: rc={rc}, bytes={bytes}, total_before={}{}",
-                TOTAL_DEVICE_BYTES.load(Ordering::SeqCst),
-                props
-                    .map(|p| format!(
-                        ", device='{}' sm_{}{} id {}",
-                        p.name, p.major, p.minor, p.device_id
-                    ))
-                    .unwrap_or_default()
-            ));
-        }
-        TOTAL_DEVICE_BYTES.fetch_add(bytes, Ordering::SeqCst);
-        if let Ok(mut map) = self.inner.alloc_map.lock() {
-            map.insert(
-                out,
-                AllocInfo {
-                    size: bytes,
-                    tag: tag.map(|s| s.to_string()),
-                },
-            );
-        }
-        let caller = std::panic::Location::caller();
-        let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-        let mut msg = format!(
-            "[cuda] device_malloc: {} bytes (total={}) at {}:{}",
-            bytes,
-            total,
-            caller.file(),
-            caller.line()
-        );
-        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
-            let bt = std::backtrace::Backtrace::capture();
-            msg.push_str(&format!("\n{:?}", bt));
-        }
-        {
-            let ts = if cfg!(feature = "logging") {
-                format!(
-                    "[{}] ",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f")
-                )
-            } else {
-                String::new()
-            };
-            eprintln!(
-                "[CUDA] {}{}{}",
-                ts,
-                msg,
-                tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
-            );
-        }
-        Ok(out)
-    }
-
-    #[track_caller]
+    #[cfg(feature = "cuda")]
     pub fn device_malloc(&self, bytes: usize) -> Result<*mut c_void> {
-        self.device_malloc_inner(bytes, None)
+        unsafe {
+            let mut out: *mut c_void = std::ptr::null_mut();
+            let rc = ffi::m40llm_device_malloc(self.raw_ptr(), bytes, &mut out);
+            if rc != ffi::CUDA_SUCCESS || out.is_null() {
+                bail!("m40llm_device_malloc({} bytes) failed (rc={})", bytes, rc);
+            }
+            Ok(out)
+        }
     }
 
-    #[track_caller]
-    pub fn device_malloc_tagged(&self, bytes: usize, tag: &str) -> Result<*mut c_void> {
-        self.device_malloc_inner(bytes, Some(tag))
+    #[cfg(not(feature = "cuda"))]
+    pub fn device_malloc(&self, _bytes: usize) -> Result<*mut c_void> {
+        bail!("CUDA support not enabled (build without --features cuda)")
     }
-    /// # Safety
-    /// `ptr` must be a valid device pointer previously allocated by `device_malloc` or the CUDA runtime.
-    /// The memory must not be used after this call and must belong to this context/device.
-    #[track_caller]
+
+    #[cfg(feature = "cuda")]
     pub unsafe fn device_free(&self, ptr: *mut c_void) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        // Pre-read for log, then free
-        let before = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-        let rc = unsafe { ffi::m40llm_device_free(self.inner.raw.as_ptr(), ptr) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_device_free failed: {rc}"));
+        let rc = ffi::m40llm_device_free(self.raw_ptr(), ptr);
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_device_free failed (rc={})", rc);
         }
-        // Decrement tracked total if we know this allocation size
-        let mut dec = 0usize;
-        let mut tag: Option<String> = None;
-        if let Ok(mut map) = self.inner.alloc_map.lock() {
-            if let Some(info) = map.remove(&ptr) {
-                dec = info.size;
-                tag = info.tag;
-                TOTAL_DEVICE_BYTES.fetch_sub(info.size, Ordering::SeqCst);
-            }
-        }
-        let after = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-        let caller = std::panic::Location::caller();
-        let mut msg = format!(
-            "[cuda] device_free: ptr={:?} dec={} (total {} -> {}) at {}:{}",
-            ptr,
-            dec,
-            before,
-            after,
-            caller.file(),
-            caller.line()
-        );
-        if let Some(t) = &tag {
-            msg.push_str(&format!(" tag={}", t));
-        }
-        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
-            let bt = std::backtrace::Backtrace::capture();
-            msg.push_str(&format!("\n{:?}", bt));
-        }
-        eprintln!("{}", msg);
         Ok(())
     }
-    /// # Safety
-    /// `dst_device` must be a valid, writable device pointer to at least `bytes` bytes on this context's device.
-    /// `src_host` must be a valid, readable host pointer to at least `bytes` bytes.
-    pub unsafe fn memcpy_h2d(
+
+    #[cfg(not(feature = "cuda"))]
+    pub unsafe fn device_free(&self, _ptr: *mut c_void) -> Result<()> {
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn memcpy_h2d(
         &self,
         dst_device: *mut c_void,
         src_host: *const c_void,
         bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
+        // SAFETY: the caller must ensure pointers are valid for `bytes`.
+        let rc = unsafe { ffi::m40llm_memcpy_h2d(self.raw_ptr(), dst_device, src_host, bytes) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_memcpy_h2d failed (rc={})", rc);
         }
         Ok(())
     }
-    /// # Safety
-    /// `dst_host` must be a valid, writable host pointer to at least `bytes` bytes.
-    /// `src_device` must be a valid, readable device pointer to at least `bytes` bytes on this context's device.
-    pub unsafe fn memcpy_d2h(
-        &self,
-        dst_host: *mut c_void,
-        src_device: *const c_void,
-        bytes: usize,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
-        }
-        Ok(())
-    }
-}
 
-#[cfg(not(feature = "cuda"))]
-impl CudaContext {
-    #[allow(dead_code)]
-    pub fn device_malloc(&self, _bytes: usize) -> Result<*mut c_void> {
-        let _g = self.inner.lock.lock().unwrap();
-        let _ = self.inner.device_id;
-        Ok(std::ptr::null_mut())
-    }
-    #[allow(dead_code)]
-    pub fn device_free(&self, _ptr: *mut c_void) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let _ = self.inner.device_id;
-        Ok(())
-    }
-    #[allow(dead_code)]
+    #[cfg(not(feature = "cuda"))]
     pub fn memcpy_h2d(
         &self,
         _dst_device: *mut c_void,
         _src_host: *const c_void,
         _bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn memcpy_d2h(
+        &self,
+        dst_host: *mut c_void,
+        src_device: *const c_void,
+        bytes: usize,
+    ) -> Result<()> {
+        // SAFETY: the caller must ensure pointers are valid for `bytes`.
+        let rc = unsafe { ffi::m40llm_memcpy_d2h(self.raw_ptr(), dst_host, src_device, bytes) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_memcpy_d2h failed (rc={})", rc);
+        }
         Ok(())
     }
-    #[allow(dead_code)]
+
+    #[cfg(not(feature = "cuda"))]
     pub fn memcpy_d2h(
         &self,
         _dst_host: *mut c_void,
         _src_device: *const c_void,
         _bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
+        bail!("CUDA support not enabled (build without --features cuda)")
     }
 
-    pub fn upload_weights(&self, weights: &[u8]) -> Result<()> {
-        let mut device_ptr: *mut c_void = std::ptr::null_mut();
-        let result = unsafe {
-            ffi::m40llm_upload_weights(
-                self.ctx,
-                weights.as_ptr() as _,
-                weights.len(),
-                &mut device_ptr,
-            )
-        };
-        if result != 0 {
-            Err(anyhow!("Failed to upload weights: error code {}", result))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn gemm_f16_f32(
-        &self,
-        a: *const c_void,
-        b: *const c_void,
-        c: *mut c_void,
-        m: usize,
-        n: usize,
-        k: usize,
-    ) -> Result<()> {
-        let result = unsafe {
-            ffi::m40llm_gemm_f16_storage_f32_compute(
-                self.ctx, a, b, c, m as i32, n as i32, k as i32,
-            )
-        };
-        if result != 0 {
-            Err(anyhow!("GEMM operation failed: error code {}", result))
-        } else {
-            Ok(())
-        }
-    }
-    #[allow(dead_code)]
-    pub fn start_persistent_decode(&self) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn stop_persistent_decode(&self) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-
-    /// Validates a CUDA device pointer
-    /// Returns Ok(()) if valid, Err with description otherwise
-    pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
+    /// Convert an f16 buffer to f32 on device.
+    ///
+    /// This exists primarily for debugging / reference paths.
+    pub fn f16_to_f32(&self, d_in_f16: *const c_void, d_out_f32: *mut c_void, n: usize) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let _g = self.inner.lock.lock().unwrap();
-            unsafe {
-                let rc = ffi::m40llm_validate_device_ptr(ptr);
-                match rc {
-                    0 => Ok(()),
-                    -1 => Err(anyhow!("null pointer")),
-                    -2 => Err(anyhow!("invalid CUDA pointer")),
-                    -3 => Err(anyhow!("not a device pointer")),
-                    _ => Err(anyhow!("unknown CUDA error {}", rc)),
-                }
+            let rc = unsafe { ffi::m40llm_f16_to_f32(self.raw_ptr(), d_in_f16, d_out_f32, n) };
+            if rc != ffi::CUDA_SUCCESS {
+                bail!("m40llm_f16_to_f32 failed (rc={})", rc);
             }
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
-            Err(anyhow!("CUDA feature not enabled"))
-        }
-    }
-    #[allow(dead_code)]
-    pub fn gemm_f32xf16_f32(
-        &self,
-        _d_a_f32: *const c_void,
-        _d_b_f16: *const c_void,
-        _d_c_f32: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn gemm_f16xf16_f32(
-        &self,
-        _d_a_f16: *const c_void,
-        _d_b_f16: *const c_void,
-        _d_c_f32: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-
-    pub fn rms_norm_f32(
-        &self,
-        input: *const c_void,
-        output: *mut c_void,
-        seq_len: usize,
-        dim: usize,
-        eps: f32,
-    ) -> Result<()> {
-        let result = unsafe {
-            ffi::m40llm_rms_norm_f32(self.ctx, input, output, seq_len as u32, dim as u32, eps)
-        };
-        if result != 0 {
-            Err(anyhow!("RMS norm failed: error code {}", result))
-        } else {
-            Ok(())
+            let _ = (d_in_f16, d_out_f32, n);
+            bail!("CUDA support not enabled (build without --features cuda)")
         }
     }
 
-    pub fn rope_f32(
-        &self,
-        q: *mut c_void,
-        k: *mut c_void,
-        seq_len: usize,
-        n_embd: usize,
-        n_head: usize,
-        pos: usize,
-        freq_base: f32,
-    ) -> Result<()> {
-        let result = unsafe {
-            ffi::m40llm_rope_f32(
-                self.ctx,
-                q,
-                k,
-                seq_len as u32,
-                n_embd as u32,
-                n_head as u32,
-                pos as u32,
-                freq_base,
-            )
-        };
-        if result != 0 {
-            Err(anyhow!("RoPE failed: error code {}", result))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn rms_norm_f32(
-        &self,
-        input: *const c_void,
-        output: *mut c_void,
-        seq_len: usize,
-        dim: usize,
-        eps: f32,
-    ) -> Result<()> {
-        todo!("Implement RMS norm")
-    }
-
-    pub fn rope_f32(
-        &self,
-        q: *mut c_void,
-        k: *mut c_void,
-        seq_len: usize,
-        n_embd: usize,
-        n_head: usize,
-        pos: usize,
-        freq_base: f32,
-    ) -> Result<()> {
-        todo!("Implement RoPE")
-    }
-
-    pub fn f16_to_f32(
-        &self,
-        input: *const c_void,
-        output: *mut c_void,
-        count: usize,
-    ) -> Result<()> {
-        todo!("Implement F16 to F32 conversion")
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl CudaContext {
-    pub fn create_kvcache(
-        &self,
-        max_seq_len: u32,
-        max_batch_size: u32,
-        num_heads: u32,
-        head_dim: u32,
-    ) -> Result<*mut ffi::M40llmKVCache> {
-        let _g = self.inner.lock.lock().unwrap();
-        let kv = unsafe {
-            ffi::m40llm_kvcache_create(
-                self.inner.raw.as_ptr(),
-                max_seq_len,
-                max_batch_size,
-                num_heads,
-                head_dim,
-            )
-        };
-        if kv.is_null() {
-            return Err(anyhow!("m40llm_kvcache_create returned null"));
-        }
-        Ok(kv)
-    }
-
-    pub fn upload_weights(&self, data: &[u8]) -> Result<*mut c_void> {
+    /// Convert a Q8_0 row (GGUF/ggml format) to f32 on device.
+    pub fn q80_to_f32(&self, d_in_q80: *const c_void, d_out_f32: *mut c_void, n: usize) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let _g = self.inner.lock.lock().unwrap();
-            // Free any previously uploaded weights to avoid leaks on re-upload
-            if let Some(prev) = self.inner.weights_ptr.lock().unwrap().take() {
-                // Adjust tracked totals using recorded size
-                let mut wbytes = 0usize;
-                if let Ok(mut m) = self.inner.alloc_map.lock() {
-                    if let Some(info) = m.remove(&prev.as_ptr()) {
-                        wbytes = info.size;
-                    }
-                }
-                if wbytes > 0 {
-                    TOTAL_DEVICE_BYTES.fetch_sub(wbytes, Ordering::SeqCst);
-                }
-                unsafe {
-                    let _ = ffi::m40llm_device_free(self.inner.raw.as_ptr(), prev.as_ptr());
-                }
-                eprintln!(
-                    "[cuda] upload_weights: freed prev {} bytes (total={})",
-                    wbytes,
-                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
-                );
+            let rc = unsafe { ffi::m40llm_q80_to_f32(self.raw_ptr(), d_in_q80, d_out_f32, n) };
+            if rc != ffi::CUDA_SUCCESS {
+                bail!("m40llm_q80_to_f32 failed (rc={})", rc);
             }
-            let mut d_ptr: *mut c_void = std::ptr::null_mut();
-            let rc = unsafe {
-                ffi::m40llm_upload_weights(
-                    self.inner.raw.as_ptr(),
-                    data.as_ptr() as *const _,
-                    data.len(),
-                    &mut d_ptr as *mut _,
-                )
-            };
-            if rc != 0 || d_ptr.is_null() {
-                eprintln!(
-                    "[cuda] upload_weights failed - rc={rc}, ptr={:?}, len={}, total_before={}",
-                    d_ptr,
-                    data.len(),
-                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
-                );
-                return Err(anyhow!(
-                    "m40llm_upload_weights failed: rc={rc}, bytes={}, total_before={}",
-                    data.len(),
-                    TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
-                ));
-            }
-            eprintln!(
-                "[cuda] upload_weights success - ptr={:?}, len={}",
-                d_ptr,
-                data.len()
-            );
-            // Upload uses cudaMalloc + copy under the hood; conservatively track bytes
-            TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
-            if let Ok(mut map) = self.inner.alloc_map.lock() {
-                map.insert(
-                    d_ptr,
-                    AllocInfo {
-                        size: data.len(),
-                        tag: Some("weights".into()),
-                    },
-                );
-            }
-            let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-            eprintln!(
-                "[cuda] upload_weights: {} bytes (total={}) tag=weights",
-                data.len(),
-                total
-            );
-            // Track ownership inside the context so it can be freed on drop
-            let mut slot = self.inner.weights_ptr.lock().unwrap();
-            *slot = NonNull::new(d_ptr);
-            Ok(d_ptr)
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
-            Ok(std::ptr::null_mut())
+            let _ = (d_in_q80, d_out_f32, n);
+            bail!("CUDA support not enabled (build without --features cuda)")
         }
     }
 
+    /// GEMM: C = A * B with A/B stored as f16 and accumulate into f32 C.
+    ///
     /// # Safety
-    /// `d_a_f32`, `d_b_f16`, and `d_c_f32` must be valid device pointers on this context's device.
-    /// Dimensions m, n, k must match the underlying buffer shapes.
-    pub unsafe fn gemm_f32xf16_f32(
-        &self,
-        d_a_f32: *const c_void,
-        d_b_f16: *const c_void,
-        d_c_f32: *mut c_void,
-        m: i32,
-        n: i32,
-        k: i32,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_gemm_f32xf16_f32(
-                self.inner.raw.as_ptr(),
-                d_a_f32,
-                d_b_f16,
-                d_c_f32,
-                m,
-                n,
-                k,
-            );
-            if rc != 0 {
-                return Err(anyhow!("m40llm_gemm_f32xf16_f32 failed: {rc}"));
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
-            Ok(())
-        }
-    }
-
-    /// # Safety
-    /// A f16 × B f16 → C f32 row-major GEMM. Device pointers must be valid on this context's device.
-    pub unsafe fn gemm_f16xf16_f32(
+    /// Device pointers must be valid and sized for (M x K), (K x N), (M x N).
+    #[cfg(feature = "cuda")]
+    pub unsafe fn gemm_f16_f32(
         &self,
         d_a_f16: *const c_void,
         d_b_f16: *const c_void,
@@ -929,582 +341,148 @@ impl CudaContext {
         n: i32,
         k: i32,
     ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_gemm_f16xf16_f32(
-                self.inner.raw.as_ptr(),
-                d_a_f16,
-                d_b_f16,
-                d_c_f32,
-                m,
-                n,
-                k,
-            );
-            if rc != 0 {
-                return Err(anyhow!("m40llm_gemm_f16xf16_f32 failed: {rc}"));
-            }
-            Ok(())
+        let rc = ffi::m40llm_gemm_f16_storage_f32_compute(self.raw_ptr(), d_a_f16, d_b_f16, d_c_f32, m, n, k);
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_gemm_f16_storage_f32_compute failed (rc={})", rc);
         }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (d_a_f16, d_b_f16, d_c_f32, m, n, k);
-            Ok(())
-        }
+        Ok(())
     }
 
-    /// # Safety
-    /// `d_a`, `d_b`, and `d_c` must be valid device pointers on this context's device.
-    /// Dimensions m, n, k must match the underlying buffer shapes.
+    #[cfg(not(feature = "cuda"))]
     pub unsafe fn gemm_f16_f32(
         &self,
-        d_a: *const c_void,
-        d_b: *const c_void,
-        d_c: *mut c_void,
-        m: i32,
-        n: i32,
-        k: i32,
+        _d_a_f16: *const c_void,
+        _d_b_f16: *const c_void,
+        _d_c_f32: *mut c_void,
+        _m: i32,
+        _n: i32,
+        _k: i32,
     ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = unsafe {
-                ffi::m40llm_gemm_f16_storage_f32_compute(
-                    self.inner.raw.as_ptr(),
-                    d_a,
-                    d_b,
-                    d_c,
-                    m,
-                    n,
-                    k,
-                )
-            };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}"));
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (d_a, d_b, d_c, m, n, k);
-            Ok(())
-        }
+        bail!("CUDA support not enabled (build without --features cuda)")
     }
 
-    /// # Safety
-    /// `d_in` and `d_out` must be valid device pointers to `rows * dim` f32 elements.
-    pub unsafe fn rms_norm_f32(
-        &self,
-        d_in: *const c_void,
-        d_out: *mut c_void,
-        rows: u32,
-        dim: u32,
-        eps: f32,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rms_norm_f32(self.inner.raw.as_ptr(), d_in, d_out, rows, dim, eps);
-            if rc != 0 {
-                return Err(anyhow!("m40llm_rms_norm_f32 failed: {rc}"));
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (d_in, d_out, rows, dim, eps);
-            Ok(())
-        }
-    }
-
-    /// # Safety
-    /// Applies in-place RoPE rotation to Q/K shaped [rows, num_heads * head_dim] (row-major f32).
-    pub unsafe fn rope_f32(
-        &self,
-        d_q: *mut c_void,
-        d_k: *mut c_void,
-        rows: u32,
-        num_heads: u32,
-        head_dim: u32,
-        past_len: u32,
-        freq_base: f32,
-        freq_scale: f32,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32(
-                self.inner.raw.as_ptr(),
-                d_q,
-                d_k,
-                rows,
-                num_heads,
-                head_dim,
-                past_len,
-                freq_base,
-                freq_scale,
-            );
-            if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32 failed: {rc}"));
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (
-                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
-            );
-            Ok(())
-        }
-    }
-
-    pub fn start_persistent_decode(&self) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = unsafe { ffi::m40llm_start_persistent_decode(self.inner.raw.as_ptr()) };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_start_persistent_decode failed: {rc}"));
-            }
-        }
-        Ok(())
-    }
-    pub fn stop_persistent_decode(&self) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = unsafe { ffi::m40llm_stop_persistent_decode(self.inner.raw.as_ptr()) };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}"));
-            }
-        }
-        Ok(())
-    }
-
-    /// # Safety
-    /// d_in_f16 and d_out_f32 must be valid device pointers on this context's device.
-    pub unsafe fn f16_to_f32(
-        &self,
-        d_in_f16: *const c_void,
-        d_out_f32: *mut c_void,
-        n: usize,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-
-            // Validate input pointer
-            let ptr_rc = unsafe { ffi::m40llm_validate_device_ptr(d_in_f16) };
-            if ptr_rc != 0 {
-                return Err(anyhow!(
-                    "invalid CUDA input pointer for f16_to_f32 conversion: {}",
-                    ptr_rc
-                ));
-            }
-
-            let rc = ffi::m40llm_f16_to_f32(self.inner.raw.as_ptr(), d_in_f16, d_out_f32, n);
-            if rc != 0 {
-                return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
-            }
-        }
-        Ok(())
-    }
-
-    /// # Safety
-    /// d_in_q80 must point to Q8_0 blocks in scale-first layout; d_out_f32 is f32 output.
-    pub unsafe fn q80_to_f32(
-        &self,
-        d_in_q80: *const c_void,
-        d_out_f32: *mut c_void,
-        n: usize,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_q80_to_f32(self.inner.raw.as_ptr(), d_in_q80, d_out_f32, n);
-            if rc != 0 {
-                return Err(anyhow!("m40llm_q80_to_f32 failed: {rc}"));
-            }
-        }
-        Ok(())
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl Drop for CudaContextInner {
-    fn drop(&mut self) {
-        // Free tracked weights if present to avoid device memory leak
-        if let Ok(inner) = self.weights_ptr.get_mut() {
-            if let Some(ptr) = inner.take() {
-                unsafe {
-                    let _ = ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr());
-                }
-            }
-        }
-        // SAFETY: raw was constructed from a non-null FFI pointer and is only freed here when Arc count drops to 0
-        unsafe { ffi::m40llm_destroy_context(self.raw.as_ptr()) };
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct KVCache {
-    inner: Arc<KVCacheInner>,
-}
-
-impl KVCache {
-    pub fn num_heads(&self) -> u32 {
-        self.inner.num_heads
-    }
-    pub fn head_dim(&self) -> u32 {
-        self.inner.head_dim
-    }
-}
-
-#[derive(Debug)]
-struct KVCacheInner {
-    // Layout: [seq][token][head][head_dim]
-    // - seq in [0, max_batch_size)
-    // - token in [0, max_seq_len)
-    // - head in [0, num_heads)
-    // - head_dim in [0, head_dim)
-    // Strides (elements):
-    //   elems_per_token = num_heads * head_dim
-    //   base(seq, token) = (seq * max_seq_len + token) * elems_per_token
-    #[allow(dead_code)]
-    //   index(seq, token, head, dim) = base + head * head_dim + dim
-    max_seq_len: u32,
-    _max_batch_size: u32,
-    num_heads: u32,
-    head_dim: u32,
     #[cfg(feature = "cuda")]
-    raw: NonNull<ffi::M40llmKVCache>,
-    #[cfg(not(feature = "cuda"))]
-    k: Mutex<Vec<half::f16>>, // length = max_seq_len * max_batch_size * elems_per_token
-    #[cfg(not(feature = "cuda"))]
-    v: Mutex<Vec<half::f16>>, // same length as k
-    #[cfg(not(feature = "cuda"))]
-    len_by_seq: Mutex<Vec<u32>>, // current length per sequence
-}
+    pub fn start_persistent_decode(&self) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_start_persistent_decode(self.raw_ptr()) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_start_persistent_decode failed (rc={})", rc);
+        }
+        Ok(())
+    }
 
-#[cfg(feature = "cuda")]
-unsafe impl Send for KVCacheInner {}
-#[cfg(feature = "cuda")]
-unsafe impl Sync for KVCacheInner {}
+    #[cfg(not(feature = "cuda"))]
+    pub fn start_persistent_decode(&self) -> Result<()> {
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
 
-impl KVCache {
-    pub fn new_with_context(
-        ctx: &CudaContext,
+    #[cfg(feature = "cuda")]
+    pub fn stop_persistent_decode(&self) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_stop_persistent_decode(self.raw_ptr()) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_stop_persistent_decode failed (rc={})", rc);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    pub fn stop_persistent_decode(&self) -> Result<()> {
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
+
+    /// Convert a contiguous f16 vector to f32 on device.
+    ///
+    /// # Safety
+    /// `d_in_f16` and `d_out_f32` must be valid device pointers.
+    #[cfg(feature = "cuda")]
+    pub fn f16_to_f32(&self, d_in_f16: *const c_void, d_out_f32: *mut c_void, n: usize) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_f16_to_f32(self.raw_ptr(), d_in_f16, d_out_f32, n) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_f16_to_f32 failed (rc={})", rc);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    pub fn f16_to_f32(&self, _d_in_f16: *const c_void, _d_out_f32: *mut c_void, _n: usize) -> Result<()> {
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
+
+    /// Convert a contiguous Q8_0 row to f32 on device (if implemented by CUDA side).
+    #[cfg(feature = "cuda")]
+    pub fn q80_to_f32(&self, d_in_q80: *const c_void, d_out_f32: *mut c_void, n: usize) -> Result<()> {
+        let rc = unsafe { ffi::m40llm_q80_to_f32(self.raw_ptr(), d_in_q80, d_out_f32, n) };
+        if rc != ffi::CUDA_SUCCESS {
+            bail!("m40llm_q80_to_f32 failed (rc={})", rc);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cuda"))]
+    pub fn q80_to_f32(&self, _d_in_q80: *const c_void, _d_out_f32: *mut c_void, _n: usize) -> Result<()> {
+        bail!("CUDA support not enabled (build without --features cuda)")
+    }
+
+    // Expose a small subset of FFI for KVCache.
+    pub(crate) unsafe fn kvcache_create(
+        &self,
         max_seq_len: u32,
         max_batch_size: u32,
         num_heads: u32,
         head_dim: u32,
-    ) -> Result<Self> {
+    ) -> *mut ffi::M40llmKVCache {
+        ffi::m40llm_kvcache_create(self.raw_ptr(), max_seq_len, max_batch_size, num_heads, head_dim)
+    }
+
+    pub(crate) unsafe fn kvcache_destroy(&self, kv: *mut ffi::M40llmKVCache) {
+        let _ = self; // keep signature symmetric
+        ffi::m40llm_kvcache_destroy(kv)
+    }
+
+    pub(crate) unsafe fn kvcache_append_token_f32(
+        &self,
+        kv: *mut ffi::M40llmKVCache,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+    ) -> i32 {
+        ffi::m40llm_kvcache_append_token_f32(self.raw_ptr(), kv, seq_id, k_dev_f32, v_dev_f32)
+    }
+
+    pub(crate) unsafe fn attention_last_token_f32(
+        &self,
+        kv: *const ffi::M40llmKVCache,
+        seq_id: u32,
+        q_dev_f32: *const c_void,
+        seq_len: u32,
+        out_dev_f32: *mut c_void,
+    ) -> i32 {
+        ffi::m40llm_attention_last_token_f32(self.raw_ptr(), kv, seq_id, q_dev_f32, seq_len, out_dev_f32)
+    }
+
+    pub(crate) unsafe fn kvcache_debug_read_token(
+        &self,
+        kv: *mut ffi::M40llmKVCache,
+        seq_id: u32,
+        token: u32,
+        out_k_host: *mut c_void,
+        out_v_host: *mut c_void,
+    ) -> i32 {
+        ffi::m40llm_kvcache_debug_read_token(self.raw_ptr(), kv, seq_id, token, out_k_host, out_v_host)
+    }
+}
+
+impl Drop for CudaContextInner {
+    fn drop(&mut self) {
+        // Only destroy the context when built with CUDA enabled.
         #[cfg(feature = "cuda")]
-        {
-            let raw = ctx.create_kvcache(max_seq_len, max_batch_size, num_heads, head_dim)?;
-            Ok(KVCache {
-                inner: Arc::new(KVCacheInner {
-                    max_seq_len,
-                    _max_batch_size: max_batch_size,
-                    num_heads,
-                    head_dim,
-                    raw: NonNull::new(raw).expect("non-null kv from ffi"),
-                    #[cfg(not(feature = "cuda"))]
-                    k: Mutex::new(Vec::new()),
-                    #[cfg(not(feature = "cuda"))]
-                    v: Mutex::new(Vec::new()),
-                    #[cfg(not(feature = "cuda"))]
-                    len_by_seq: Mutex::new(Vec::new()),
-                }),
-            })
+        unsafe {
+            ffi::m40llm_destroy_context(self.raw.as_ptr());
         }
         #[cfg(not(feature = "cuda"))]
-        {
-            let _ = ctx;
-            let elems_per_token = (num_heads as usize) * (head_dim as usize);
-            let total_tokens = (max_seq_len as usize) * (max_batch_size as usize);
-            let cap = total_tokens * elems_per_token;
-            Ok(KVCache {
-                inner: Arc::new(KVCacheInner {
-                    max_seq_len,
-                    _max_batch_size: max_batch_size,
-                    num_heads,
-                    head_dim,
-                    k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
-                    v: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
-                    len_by_seq: Mutex::new(vec![0u32; max_batch_size as usize]),
-                    #[cfg(feature = "cuda")]
-                    raw: NonNull::dangling(),
-                }),
-            })
+        unsafe {
+            // stub: nothing to do (the stub returns a sentinel pointer)
+            let _ = self;
         }
-    }
-
-    #[inline]
-    pub fn elems_per_token(&self) -> usize {
-        (self.inner.num_heads as usize) * (self.inner.head_dim as usize)
-    }
-
-    #[inline]
-    pub fn base_offset_elems(&self, seq: u32, token: u32) -> usize {
-        ((seq as usize) * (self.inner.max_seq_len as usize) + (token as usize))
-            * self.elems_per_token()
-    }
-
-    #[cfg(not(feature = "cuda"))]
-    fn append_token_host(
-        &self,
-        seq_id: u32,
-        k_f32: *const c_void,
-        v_f32: *const c_void,
-    ) -> Result<()> {
-        let elems = self.elems_per_token();
-        // Determine token index from len_by_seq
-        let mut lens = self.inner.len_by_seq.lock().unwrap();
-        let token = lens[seq_id as usize];
-        if token >= self.inner.max_seq_len {
-            return Err(anyhow::anyhow!("append_token_host: seq {} full", seq_id));
-        }
-        // Safety: caller promises k_f32/v_f32 are valid pointers to elems f32 entries
-        let k_slice = unsafe { std::slice::from_raw_parts(k_f32 as *const f32, elems) };
-        let v_slice = unsafe { std::slice::from_raw_parts(v_f32 as *const f32, elems) };
-        let base = self.base_offset_elems(seq_id, token);
-        let mut k_lock = self.inner.k.lock().unwrap();
-        let mut v_lock = self.inner.v.lock().unwrap();
-        for i in 0..elems {
-            k_lock[base + i] = half::f16::from_f32(k_slice[i]);
-            v_lock[base + i] = half::f16::from_f32(v_slice[i]);
-        }
-        lens[seq_id as usize] += 1;
-        Ok(())
-    }
-
-    #[inline]
-    #[allow(dead_code)]
-    pub fn index_elems(&self, seq: u32, token: u32, head: u32, dim: u32) -> usize {
-        self.base_offset_elems(seq, token)
-            + (head as usize) * (self.inner.head_dim as usize)
-            + (dim as usize)
     }
 }
 
-#[cfg(feature = "cuda")]
-impl KVCache {
-    /// # Safety
-    /// `k_dev` and `v_dev` must be valid device pointers containing one token's worth of K/V in f16 layout.
-    /// `seq_id` must be in range. Context must target same device as this cache.
-    pub unsafe fn append_token(
-        &self,
-        ctx: &CudaContext,
-        seq_id: u32,
-        k_dev: *const c_void,
-        v_dev: *const c_void,
-    ) -> Result<()> {
-        let _g = ctx.inner.lock.lock().unwrap();
-        let rc = unsafe {
-            ffi::m40llm_kvcache_append_token(
-                ctx.inner.raw.as_ptr(),
-                self.inner.raw.as_ptr(),
-                seq_id,
-                k_dev,
-                v_dev,
-            )
-        };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
-        }
-        Ok(())
-    }
-
-    /// # Safety
-    /// `k_dev_f32` and `v_dev_f32` must be valid device pointers containing one token's worth of K/V in f32 layout.
-    /// They will be converted to f16 in-place in the cache. Context/device must match.
-    pub unsafe fn append_token_f32(
-        &self,
-        ctx: &CudaContext,
-        seq_id: u32,
-        k_dev_f32: *const c_void,
-        v_dev_f32: *const c_void,
-    ) -> Result<()> {
-        let _g = ctx.inner.lock.lock().unwrap();
-        let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32(
-                ctx.inner.raw.as_ptr(),
-                self.inner.raw.as_ptr(),
-                seq_id,
-                k_dev_f32,
-                v_dev_f32,
-            )
-        };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_kvcache_append_token_f32 failed: {rc}"));
-        }
-        Ok(())
-    }
-
-    /// # Safety
-    /// `d_q_f32` and `d_out_f32` must be valid device pointers. `seq_len` must not exceed already appended tokens.
-    /// Context/device must match. Shapes must align with KV cache configuration.
-    pub unsafe fn attention_last_token_f32(
-        &self,
-        ctx: &CudaContext,
-        seq_id: u32,
-        d_q_f32: *const c_void,
-        seq_len: u32,
-        d_out_f32: *mut c_void,
-    ) -> Result<()> {
-        let _g = ctx.inner.lock.lock().unwrap();
-        let rc = unsafe {
-            ffi::m40llm_attention_last_token_f32(
-                ctx.inner.raw.as_ptr(),
-                self.inner.raw.as_ptr(),
-                seq_id,
-                d_q_f32,
-                seq_len,
-                d_out_f32,
-            )
-        };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_attention_last_token_f32 failed: {}", rc));
-        }
-        Ok(())
-    }
-}
-
-#[cfg(not(feature = "cuda"))]
-impl KVCache {
-    pub fn append_token(
-        &self,
-        _ctx: &CudaContext,
-        seq_id: u32,
-        k_dev: *const c_void,
-        v_dev: *const c_void,
-    ) -> Result<()> {
-        self.append_token_host(seq_id, k_dev, v_dev)
-    }
-    pub fn append_token_f32(
-        &self,
-        _ctx: &CudaContext,
-        seq_id: u32,
-        k_dev_f32: *const c_void,
-        v_dev_f32: *const c_void,
-    ) -> Result<()> {
-        self.append_token_host(seq_id, k_dev_f32, v_dev_f32)
-    }
-    pub fn attention_last_token_f32(
-        &self,
-        _ctx: &CudaContext,
-        seq_id: u32,
-        d_q_f32: *const c_void,
-        seq_len: u32,
-        d_out_f32: *mut c_void,
-    ) -> Result<()> {
-        // Pure CPU reference implementation operating on host f16 K/V, f32 compute
-        let elems = self.elems_per_token();
-        let num_heads = self.inner.num_heads as usize;
-        let head_dim = self.inner.head_dim as usize;
-        let q = unsafe { std::slice::from_raw_parts(d_q_f32 as *const f32, elems) };
-        let k_lock = self.inner.k.lock().unwrap();
-        let v_lock = self.inner.v.lock().unwrap();
-        let mut out = vec![0f32; elems];
-        let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
-        for h in 0..num_heads {
-            let qh = &q[h * head_dim..(h + 1) * head_dim];
-            let mut max_s = f32::NEG_INFINITY;
-            for t in 0..(seq_len as usize) {
-                let base = self.base_offset_elems(seq_id, t as u32) + h * head_dim;
-                let mut dot = 0.0f32;
-                for d in 0..head_dim {
-                    let kf = k_lock[base + d].to_f32();
-                    dot += qh[d] * kf;
-                }
-                let s = dot * inv_sqrt;
-                if s > max_s {
-                    max_s = s;
-                }
-            }
-            let mut denom = 0.0f32;
-            let mut scores = vec![0.0f32; seq_len as usize];
-            for (t, score) in scores.iter_mut().enumerate().take(seq_len as usize) {
-                let base = self.base_offset_elems(seq_id, t as u32) + h * head_dim;
-                let mut dot = 0.0f32;
-                for d in 0..head_dim {
-                    let kf = k_lock[base + d].to_f32();
-                    dot += qh[d] * kf;
-                }
-                let s = dot * inv_sqrt;
-                let e = (s - max_s).exp();
-                *score = e;
-                denom += e;
-            }
-            if denom == 0.0 {
-                denom = 1.0;
-            }
-            for d in 0..head_dim {
-                let mut acc = 0.0f32;
-                for (t, prob) in scores
-                    .iter()
-                    .map(|s| s / denom)
-                    .enumerate()
-                    .take(seq_len as usize)
-                {
-                    let vbase = self.base_offset_elems(seq_id, t as u32) + h * head_dim;
-                    acc += prob * v_lock[vbase + d].to_f32();
-                }
-                out[h * head_dim + d] = acc;
-            }
-        }
-        // Write back to out_dev
-        let out_slice = unsafe { std::slice::from_raw_parts_mut(d_out_f32 as *mut f32, elems) };
-        out_slice.copy_from_slice(&out);
-        Ok(())
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl Drop for KVCacheInner {
-    fn drop(&mut self) {
-        unsafe { ffi::m40llm_kvcache_destroy(self.raw.as_ptr()) };
-    }
-}
-
-// Public test/debug helper to read back one KV token (FP16) via FFI.
-// Only available when the CUDA feature is enabled.
-#[cfg(feature = "cuda")]
-/// # Safety
-/// `out_k_f16` and `out_v_f16` must be valid pointers to write one token's K and V (num_heads*head_dim f16 each).
-/// `seq_id`/`token` must be within appended ranges; the context and cache must be on the same device.
-pub unsafe fn ffi_debug_read_kv_token(
-    ctx: &CudaContext,
-    kv: &KVCache,
-    seq_id: u32,
-    token: u32,
-    out_k_f16: *mut u8,
-    out_v_f16: *mut u8,
-) -> i32 {
-    let _g = ctx.inner.lock.lock().unwrap();
-    ffi::m40llm_kvcache_debug_read_token(
-        ctx.inner.raw.as_ptr(),
-        kv.inner.raw.as_ptr(),
-        seq_id,
-        token,
-        out_k_f16 as *mut c_void,
-        out_v_f16 as *mut c_void,
-    )
-}
-
-// Host-pinned ring buffer stub. In non-CUDA environments, we just heap-allocate.
-pub struct SharedRing<T> {
-    pub ptr: *mut T,
-    pub len: usize,
-}
-
-impl<T> SharedRing<T> {
-    #[allow(dead_code)]
-    pub fn new(count: usize) -> Result<Self> {
-        let mut v: Vec<T> = Vec::with_capacity(count);
-        let ptr = v.as_mut_ptr();
-        std::mem::forget(v); // leak capacity; fine for test stubs
-        Ok(Self { ptr, len: count })
-    }
-}
