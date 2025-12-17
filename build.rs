@@ -58,10 +58,10 @@ fn main() {
             .flag("-Xcompiler")
             .flag("-fPIC")
             .flag("-gencode=arch=compute_52,code=sm_52")
-            .compile("m40llm_kernels");
+            .compile("m40llm_native");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
-        println!("cargo:rustc-link-lib=static=m40llm_kernels");
+        println!("cargo:rustc-link-lib=static=m40llm_native");
 
         // CUDA runtime + cuBLAS
         println!("cargo:rustc-link-lib=cudart");
@@ -73,9 +73,9 @@ fn main() {
             .file("cuda/stub.c")
             .flag_if_supported("-O3")
             .flag_if_supported("-fPIC")
-            .compile("m40llm_stub");
+            .compile("m40llm_native");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
-        println!("cargo:rustc-link-lib=static=m40llm_stub");
+        println!("cargo:rustc-link-lib=static=m40llm_native");
     }
 }
