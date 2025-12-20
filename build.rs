@@ -153,6 +153,10 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
+            // Avoid the glibc C2x math extension overloads (cospi/sinpi)
+            // conflicting with CUDA's declarations.
+            .flag("-Xcompiler")
+            .flag("-D__STDC_WANT_IEC_60559_FUNCS_EXT__=0")
             // Disable fortify helpers that rely on new GCC builtins unsupported
             // by older NVCC frontends.
             .flag("-Xcompiler")
