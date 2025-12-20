@@ -142,8 +142,8 @@ fn main() {
         println!("cargo:rustc-cfg=nvcc");
 
         let cublas_paths = detect_cublas_paths();
-        let cublas_enabled = cublas_paths.detected
-            && env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1");
+        let cublas_enabled =
+            cublas_paths.detected && env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1");
 
         let mut build = cc::Build::new();
         build
