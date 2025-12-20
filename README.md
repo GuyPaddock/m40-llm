@@ -31,10 +31,9 @@ cargo build --no-default-features
 cargo build --features cuda  # With NVCC installed
 ```
 
-CI verifies three configurations:
+CI verifies two configurations:
 1. `noncuda`: No CUDA dependencies
-2. `cuda-no-nvcc`: CUDA headers only
-3. `cuda-with-nvcc`: Full CUDA+NVCC toolchain
+2. `cuda-with-nvcc`: Full CUDA+NVCC toolchain
 
 ---
 
@@ -51,14 +50,14 @@ CI verifies three configurations:
 This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
 
 - `cuda`: Enables the CUDA backend. When set:
-  - Uses `nvcc` when available; if `nvcc` is missing, the build falls back to the stubbed CUDA bindings and emits a warning.
+  - Requires `nvcc` on PATH; CUDA builds fail fast if the toolchain is missing.
   - Compiles CUDA kernels for sm_52 (plus compute_52 PTX) and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found and `M40LLM_ENABLE_CUBLAS=1` is set, we also link cuBLAS and enable GEMM paths and tests.
 - `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
 
 Build script behavior:
 - Compiles kernels for `sm_52` and also embeds PTX for `compute_52` so newer GPUs can JIT from PTX if needed.
-- Always exposes `cfg(have_cublas_header)` when the cuBLAS header is detected so tests can gate accordingly.
-- Always exposes `cfg(nvcc)` when `nvcc` is present so code/tests can detect a real CUDA toolchain.
+- Exposes `cfg(nvcc)` when a real CUDA toolchain is present.
+- Exposes `cfg(have_cublas)` when cuBLAS headers and libraries are found and `M40LLM_ENABLE_CUBLAS=1`.
 
 ## Build
 Build the project in one of these modes:
@@ -81,7 +80,7 @@ Build the project in one of these modes:
 - Force selection: set M40LLM_FORCE_M40=1 to force runtime selection of an sm_52 device even when a specific device_id is passed.
 - Respect CUDA_VISIBLE_DEVICES: device enumeration respects CUDA_VISIBLE_DEVICES. The auto‑picker searches only among visible devices and selects the first sm_52 it finds.
 - cuBLAS control: by default, we do not link cuBLAS even if headers are present. Set M40LLM_ENABLE_CUBLAS=1 to enable cuBLAS integration if both the header (cublas_v2.h) and a shared library (e.g., libcublas.so.11) are detected. Otherwise, fallback CUDA kernels are used.
-- Test gating: build.rs exposes cfg(nvcc) when a real CUDA toolchain is present and cfg(have_cublas_header) when the cuBLAS headers are detected; CUDA tests use these to gate cuBLAS‑specific coverage. Some CUDA tests also use require_sm52() to skip gracefully when not on an sm_52 device.
+- Test gating: build.rs exposes cfg(nvcc) when a real CUDA toolchain is present and cfg(have_cublas) when cuBLAS is enabled; CUDA tests use these to gate cuBLAS‑specific coverage. Some CUDA tests also use require_sm52() to skip gracefully when not on an sm_52 device.
 
 ## Server (feature = server)
 ```
