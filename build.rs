@@ -153,6 +153,11 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
+            // Restrict host headers to ISO C/C++ so glibc doesn't surface
+            // GNU-only math overloads (cospi/sinpi) that conflict with CUDA
+            // math declarations.
+            .flag("-Xcompiler")
+            .flag("-D__STRICT_ANSI__")
             // Avoid the glibc C2x math extension overloads (cospi/sinpi)
             // conflicting with CUDA's declarations.
             .flag("-Xcompiler")
