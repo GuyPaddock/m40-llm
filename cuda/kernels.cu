@@ -4,13 +4,11 @@
 #include <cublas_v2.h>
 #endif
 #include <cuda_fp16.h>
-#include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include "common.h"
-
-extern "C" char* getenv(const char*);
 
 struct M40llmCudaContext {
     int device_id;
@@ -393,7 +391,7 @@ extern "C" int m40llm_rms_norm_f32(
         const float* qh = Q + (size_t)h * (size_t)head_dim;
         
         // Cast to proper type based on KV cache type
-        bool is_fp16 = reinterpret_cast<const uintptr_t>(K) & 0x1; // Check for alignment
+        bool is_fp16 = reinterpret_cast<uintptr_t>(K) & 0x1; // Check for alignment
         const float* K32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(K);
         const float* V32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(V);
         const __half* K16 = is_fp16 ? reinterpret_cast<const __half*>(K) : nullptr;

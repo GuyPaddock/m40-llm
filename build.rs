@@ -10,15 +10,6 @@ fn have_cmd(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn pick_host_cxx() -> String {
-    for c in ["g++-12", "g++-11", "g++-10", "g++", "c++"] {
-        if have_cmd(c) {
-            return c.to_string();
-        }
-    }
-    "c++".to_string()
-}
-
 struct CublasPaths {
     includes: Vec<PathBuf>,
     rpaths: Vec<PathBuf>,
@@ -26,28 +17,42 @@ struct CublasPaths {
 }
 
 fn detect_cublas_paths() -> CublasPaths {
-    let conda_prefix = env::var("CONDA_PREFIX").ok();
-    let conda_include = conda_prefix.as_ref().map(|p| PathBuf::from(p).join("include"));
-    let conda_lib = conda_prefix.as_ref().map(|p| PathBuf::from(p).join("lib"));
-    let conda_targets_include = conda_prefix
-        .as_ref()
-        .map(|p| PathBuf::from(p).join("targets/x86_64-linux/include"));
-    let conda_targets_lib = conda_prefix
-        .as_ref()
-        .map(|p| PathBuf::from(p).join("targets/x86_64-linux/lib"));
+    let mut prefixes: Vec<PathBuf> = vec![];
+
+    if let Ok(conda_prefix) = env::var("CONDA_PREFIX") {
+        prefixes.push(PathBuf::from(conda_prefix));
+    }
+
+    if let Ok(mamba_root) = env::var("MAMBA_ROOT_PREFIX") {
+        prefixes.push(PathBuf::from(mamba_root));
+    }
+
+    let default_mamba = PathBuf::from("/root/.local/share/mamba");
+    if default_mamba.exists() {
+        prefixes.push(default_mamba);
+    }
 
     let mut include_paths: Vec<PathBuf> = vec![];
-    include_paths.extend(conda_targets_include.clone());
-    include_paths.extend(conda_include.clone());
+    let mut lib_paths: Vec<PathBuf> = vec![];
+
+    for prefix in prefixes.iter() {
+        include_paths.push(prefix.join("targets/x86_64-linux/include"));
+        include_paths.push(prefix.join("include"));
+
+        lib_paths.push(prefix.join("targets/x86_64-linux/lib"));
+        lib_paths.push(prefix.join("lib"));
+    }
+
     include_paths.push(PathBuf::from("/usr/local/cuda/include"));
     include_paths.push(PathBuf::from("/usr/include"));
+    include_paths.sort();
+    include_paths.dedup();
 
-    let mut lib_paths: Vec<PathBuf> = vec![];
-    lib_paths.extend(conda_targets_lib.clone());
-    lib_paths.extend(conda_lib.clone());
     lib_paths.push(PathBuf::from("/usr/local/cuda/lib64"));
     lib_paths.push(PathBuf::from("/usr/lib/x86_64-linux-gnu"));
     lib_paths.push(PathBuf::from("/usr/lib64"));
+    lib_paths.sort();
+    lib_paths.dedup();
 
     let have_header = include_paths.iter().any(|p| p.join("cublas_v2.h").exists());
     let have_lib = lib_paths.iter().any(|p| {
@@ -56,12 +61,9 @@ fn detect_cublas_paths() -> CublasPaths {
             .any(|name| p.join(name).exists())
     });
 
-    let mut rpaths = vec![];
-    rpaths.extend(conda_targets_lib);
-    rpaths.extend(conda_lib);
-    rpaths.push(PathBuf::from("/usr/local/cuda/lib64"));
-    rpaths.push(PathBuf::from("/usr/lib/x86_64-linux-gnu"));
-    rpaths.push(PathBuf::from("/usr/lib64"));
+    let mut rpaths = lib_paths.clone();
+    rpaths.sort();
+    rpaths.dedup();
 
     let detected = have_header && have_lib;
 
@@ -70,6 +72,24 @@ fn detect_cublas_paths() -> CublasPaths {
         rpaths,
         detected,
     }
+}
+
+fn nvcc_host_compiler() -> Option<String> {
+    if let Ok(ccbin) = env::var("NVCC_CCBIN").or_else(|_| env::var("CUDAHOSTCXX")) {
+        return Some(ccbin);
+    }
+
+    if let Ok(cxx) = env::var("CXX") {
+        return Some(cxx);
+    }
+
+    for candidate in ["/usr/bin/g++", "g++-13", "g++-12", "g++-11", "g++"] {
+        if have_cmd(candidate) {
+            return Some(candidate.to_string());
+        }
+    }
+
+    None
 }
 
 fn build_stub(out_dir: &Path) {
@@ -114,7 +134,6 @@ fn main() {
         // This cfg means: "this build actually used nvcc"
         println!("cargo:rustc-cfg=nvcc");
 
-        let host_cxx = pick_host_cxx();
         let cublas_paths = detect_cublas_paths();
         let cublas_enabled = cublas_paths.detected
             && env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1");
@@ -124,7 +143,6 @@ fn main() {
             .cuda(true)
             .include("cuda")
             .file("cuda/kernels.cu")
-            .flag(&format!("-ccbin={}", host_cxx))
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=gnu++17")
@@ -137,6 +155,16 @@ fn main() {
             // Also embed PTX so newer GPUs can JIT
             .flag("-gencode=arch=compute_52,code=compute_52")
             .flag("-allow-unsupported-compiler");
+
+        if let Some(ccbin) = nvcc_host_compiler() {
+            if env::var("CXX").is_err() {
+                env::set_var("CXX", &ccbin);
+            }
+
+            if env::var("CUDAHOSTCXX").is_err() {
+                env::set_var("CUDAHOSTCXX", &ccbin);
+            }
+        }
 
         for inc in cublas_paths.includes.iter() {
             build.include(inc);
