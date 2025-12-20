@@ -9,6 +9,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
 1. Review `CONTRIBUTING.md` and set up the git hooks (pre-commit and commit message hooks).
 2. Ensure Cocogitto (`cog`) is installed and working.
 3. Ensure `nvcc` is available. If missing, install CUDA Toolkit compatible with Tesla M40 (up to `cuda-nvcc=12.4.*`, `cuda-cudart=12.4.*`, and `cuda-cudart-dev=12.4.*`) and modern `gcc`/`g++`.
+   - Always install CUDA Toolkit **12.4** plus cuBLAS development headers before building (use the micromamba command in `README.md`).
 4. If you are running in OpenHands (not Codex): Use micromamba to install packages, not apt-get.
 
 ## Commit Discipline
