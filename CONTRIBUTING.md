@@ -18,6 +18,34 @@ Rules:
 - wrap body at ~72 columns; explain what changed and why (not the steps you ran)
 - Avoid vague subjects like "fmt" or "fixes" — say what changed and why
 - Prefer `refactor(...)` over `chore(...)` for structural/API changes that do not alter behavior
+
+## Building
+
+### Non-CUDA Build
+```bash
+cargo build --no-default-features
+```
+
+### CUDA Build (Requires CUDA 12.x Toolkit)
+```bash
+cargo build --features cuda
+```
+
+### Testing
+```bash
+# Run all non-CUDA tests
+cargo test --no-default-features --locked
+
+# Run all CUDA tests (requires NVCC)
+cargo test --features cuda --locked
+
+# Run specific test with logging
+RUST_LOG=debug cargo test test_name -- --nocapture
+```
+
+### Feature Flags
+- `cuda`: Enables NVIDIA CUDA support (requires CUDA toolkit)
+- `server`: Enables HTTP server functionality
 - Use `style` for formatting-only changes (no code semantics). Prefer squashing style changes into the related code commit rather than separate noisy commits
 - Mark breaking changes with `!` after the type (e.g., `refactor(api)!: ...`) and include migration notes; or add a `BREAKING CHANGE:` footer
 

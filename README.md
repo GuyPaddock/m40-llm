@@ -19,6 +19,40 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 - vs vLLM: excellent on modern GPUs but impractical on M40 (sm_52). m40‑llm is designed to be M40‑first and actually set up/run there.
 - vs llama.cpp: very portable, but most speed paths target newer GPUs. On M40 it tends to run without its big speed tricks; m40‑llm focuses on sm_52‑specific performance instead of broad portability.
 
+## Building
+
+### Standard (non-CUDA)
+```bash
+cargo build --no-default-features
+```
+
+### CUDA-enabled (requires CUDA 12.x toolkit)
+```bash
+cargo build --features cuda  # With NVCC installed
+```
+
+Recommended micromamba toolchain setup (x86_64, tested on this branch):
+
+```bash
+# install micromamba if needed
+curl -Ls https://micro.mamba.pm/install.sh | bash
+source ~/.bashrc
+
+# CUDA 12.4 toolchain with cuBLAS headers + libs
+micromamba create -y -n cuda -c conda-forge -c nvidia/label/cuda-12.4.1 \
+  cuda-nvcc=12.4.99 cuda-cudart=12.4.99 cuda-cudart-dev=12.4.99 \
+  libcublas=12.4.5.8 libcublas-dev=12.4.5.8
+
+# Build/link with cuBLAS enabled
+micromamba run -n cuda env M40LLM_ENABLE_CUBLAS=1 cargo build --features cuda
+```
+
+CI verifies two configurations:
+1. `noncuda`: No CUDA dependencies
+2. `cuda-with-nvcc`: Full CUDA+NVCC toolchain
+
+---
+
 ## Performance strategy on M40
 - FP16 storage, FP32 compute tiles: load FP16 to shared, convert to FP32, compute in registers
 - Tuned GEMM with cuBLAS/cuBLASLt; explicit row/col layouts; layout tests included
@@ -32,14 +66,14 @@ Tesla M40–optimized Rust + CUDA LLM server/runtime. FP16 weights, FP32 compute
 This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
 
 - `cuda`: Enables the CUDA backend. When set:
-  - Requires `nvcc`; the build will fail if the CUDA feature is enabled without a CUDA toolkit on `PATH`.
-  - Compiles CUDA kernels for sm_52 and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found, we also link cuBLAS and enable GEMM paths and tests.
+  - Requires `nvcc` on PATH; CUDA builds fail fast if the toolchain is missing.
+  - Compiles CUDA kernels for sm_52 (plus compute_52 PTX) and links against the CUDA runtime. If the cuBLAS header (`cublas_v2.h`) is found and `M40LLM_ENABLE_CUBLAS=1` is set, we also link cuBLAS and enable GEMM paths and tests.
 - `server`: Includes the HTTP server binary routes so you can run `m40-llm run ...`.
 
 Build script behavior:
 - Compiles kernels for `sm_52` and also embeds PTX for `compute_52` so newer GPUs can JIT from PTX if needed.
-- Always exposes `cfg(have_cublas_header)` when the cuBLAS header is detected so tests can gate accordingly.
-- Always exposes `cfg(nvcc)` when `nvcc` is present so code/tests can detect a real CUDA toolchain.
+- Exposes `cfg(nvcc)` when a real CUDA toolchain is present.
+- Exposes `cfg(have_cublas)` when cuBLAS headers and libraries are found and `M40LLM_ENABLE_CUBLAS=1`.
 
 ## Build
 Build the project in one of these modes:
@@ -62,7 +96,7 @@ Build the project in one of these modes:
 - Force selection: set M40LLM_FORCE_M40=1 to force runtime selection of an sm_52 device even when a specific device_id is passed.
 - Respect CUDA_VISIBLE_DEVICES: device enumeration respects CUDA_VISIBLE_DEVICES. The auto‑picker searches only among visible devices and selects the first sm_52 it finds.
 - cuBLAS control: by default, we do not link cuBLAS even if headers are present. Set M40LLM_ENABLE_CUBLAS=1 to enable cuBLAS integration if both the header (cublas_v2.h) and a shared library (e.g., libcublas.so.11) are detected. Otherwise, fallback CUDA kernels are used.
-- Test gating: build.rs exposes cfg(nvcc) when a real CUDA toolchain is present and cfg(have_cublas_header) when the cuBLAS headers are detected; CUDA tests use these to gate cuBLAS‑specific coverage. Some CUDA tests also use require_sm52() to skip gracefully when not on an sm_52 device.
+- Test gating: build.rs exposes cfg(nvcc) when a real CUDA toolchain is present and cfg(have_cublas) when cuBLAS is enabled; CUDA tests use these to gate cuBLAS‑specific coverage. Some CUDA tests also use require_sm52() to skip gracefully when not on an sm_52 device.
 
 ## Server (feature = server)
 ```

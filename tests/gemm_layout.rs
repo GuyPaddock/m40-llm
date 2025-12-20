@@ -1,4 +1,4 @@
-#![cfg(all(feature = "cuda", nvcc, have_cublas_header))]
+#![cfg(all(feature = "cuda", nvcc, have_cublas))]
 
 mod cuda_env;
 

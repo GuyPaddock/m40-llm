@@ -11,7 +11,14 @@ path = "src/lib.rs"
 name = "m40-llm"
 path = "src/main.rs"
 
+[build-dependencies]
+# `build.rs` compiles either CUDA kernels (.cu) or the non-CUDA C stub (.c).
+# That requires the `cc` crate even when the `cuda` feature is disabled.
+cc = "1.0"
+
 [dependencies]
+chrono = { version = "0.4", optional = true, features = ["serde", "clock"] }
+rand = "0.8"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -35,10 +42,10 @@ gguf-llms = { version = "0.0.2", optional = true }
 gguf-rs-lib = { version = "0.2", optional = true }
 
 [features]
+logging = ["chrono"]
 nvcc = []
-default = []
 server = ["dep:axum", "dep:tower-http"]
-cuda = []
+cuda = []  # Enable CUDA compilation support
 # Enable extended GGUF integration via external crates
 # Off by default to keep minimal deps for non-integration builds
 gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]
@@ -64,9 +71,6 @@ harness = false
 name = "gemm_fallback"
 harness = false
 
-
-[build-dependencies]
-cc = "1"
 
 [[test]]
 name = "m40-llm"

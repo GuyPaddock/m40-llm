@@ -5,6 +5,7 @@ use half::f16;
 use m40_llm::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
+use rand::Rng;
 
 mod cuda_env;
 
@@ -15,6 +16,17 @@ fn f16_bytes(v: f32) -> [u8; 2] {
 
 fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec<u8>) {
     let mut metadata = std::collections::HashMap::new();
+    // Core metadata
+    metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    metadata.insert(
+        "general.file_type".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)), // 1 = LLaMA
+    );
+
+    // Model architecture
     metadata.insert(
         "llama.embedding_length".to_string(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
@@ -23,9 +35,34 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
         "llama.vocab_size".to_string(),
         GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
     );
+    metadata.insert(
+        "llama.block_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)), // Only testing one layer
+    );
+    metadata.insert(
+        "llama.attention.head_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(16)), // Testing with 16 heads
+    );
+    metadata.insert(
+        "llama.feed_forward_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(hidden as u32)),
+    );
+    metadata.insert(
+        "llama.context_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(512)), // Standard context length
+    );
+    metadata.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
 
     let mut tensors: Vec<GgufTensor> = Vec::new();
     let mut weights: Vec<u8> = Vec::new();
+    // Initialize with random normalized values
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let scale = 1.0 / (d_model as f32).sqrt();
+
     let mut add_tensor =
         |name: &str, dtype: GgmlDType, shape: &[u64], fill: &mut dyn FnMut(&mut Vec<u8>)| {
             let offset = weights.len() as u64;
@@ -38,14 +75,15 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
             });
         };
 
-    // tok_embeddings.weight: one-hot rows
+    // tok_embeddings.weight: random initialization with proper scaling
     {
+        let scale = 1.0 / (d_model as f32).sqrt();
+        let mut rng = rand::thread_rng();
         let mut fill = |buf: &mut Vec<u8>| {
-            for row in 0..vocab {
-                for col in 0..d_model {
-                    let v = if row == col { 1.0 } else { 0.0 };
-                    buf.extend_from_slice(&f16_bytes(v));
-                }
+            for _ in 0..vocab * d_model {
+                let val = rng.gen::<f32>() * scale;
+                let f16_val = half::f16::from_f32(val);
+                buf.extend_from_slice(&f16_val.to_le_bytes());
             }
         };
         add_tensor(
@@ -135,7 +173,10 @@ fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
     let hidden = 16usize;
     let (gguf, bytes) = make_min_gguf(vocab, d_model, hidden);
 
+    println!("Before model load, verifying CUDA context and tensor sizes");
+    println!("vocab: {}, d_model: {}, hidden: {}", vocab, d_model, hidden);
     let model = LoadedModel::from_gguf(gguf, bytes, -1)?;
+    println!("Model loaded successfully, checking tensor conversion");
     let tokenizer = m40_llm::tokenizer::Tokenizer::byte_level();
 
     let eos_id = tokenizer.eos_id();
@@ -148,8 +189,38 @@ fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
         let model = &model;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as u64;
+            println!("Converting token embedding for ID: {}", tok_id);
             unsafe {
-                model.load_token_embedding_f16_to_f32(tok_id, d_x)?;
+                println!("Running f16_to_f32 conversion for token {}", tok_id);
+                println!("Pointer details - d_x={:?}", d_x);
+
+                // Enhanced memory validation
+                println!("Validating tensor dimensions...");
+                let d_model = model.model_config.embedding_length as usize;
+                let vocab_size = model.model_config.vocab_size as usize;
+                println!(
+                    "Model config - d_model={}, vocab_size={}",
+                    d_model, vocab_size
+                );
+                println!("Calculated row bytes={}", d_model * 2);
+                println!(
+                    "Calculated row offset for token {}={} bytes",
+                    tok_id,
+                    tok_id as usize * d_model * 2
+                );
+
+                let res = model.load_token_embedding_f16_to_f32(tok_id, d_x);
+                match &res {
+                    Ok(_) => println!("Conversion succeeded"),
+                    Err(e) => {
+                        println!("Conversion failed with error: {}", e);
+                        if let Some(inner) = e.source() {
+                            println!("Error cause: {}", inner);
+                        }
+                    }
+                }
+                println!("After f16_to_f32 conversion, result: {:?}", res);
+                res?;
                 model.logits_from_hidden(d_x)
             }
         }
