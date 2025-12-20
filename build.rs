@@ -145,7 +145,7 @@ fn main() {
             .file("cuda/kernels.cu")
             .flag("-std=c++17")
             .flag("-Xcompiler")
-            .flag("-std=gnu++17")
+            .flag("-std=c++17")
             .flag("-cudart=shared")
             .flag("-O3")
             .flag("-Xcompiler")
