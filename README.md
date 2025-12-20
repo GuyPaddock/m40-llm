@@ -39,12 +39,12 @@ curl -Ls https://micro.mamba.pm/install.sh | bash
 source ~/.bashrc
 
 # CUDA 12.4 toolchain with cuBLAS headers + libs
-micromamba create -y -n cuda -c conda-forge -c nvidia/label/cuda-12.4.1 \
+micromamba create -y -n m40-llm -c conda-forge -c nvidia/label/cuda-12.4.1 \
   cuda-nvcc=12.4.99 cuda-cudart=12.4.99 cuda-cudart-dev=12.4.99 \
   libcublas=12.4.5.8 libcublas-dev=12.4.5.8
 
 # Build/link with cuBLAS enabled
-micromamba run -n cuda env M40LLM_ENABLE_CUBLAS=1 cargo build --features cuda
+micromamba run -n m40-llm env M40LLM_ENABLE_CUBLAS=1 cargo build --features cuda
 ```
 
 CI verifies two configurations:
