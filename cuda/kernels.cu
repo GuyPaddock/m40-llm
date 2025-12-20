@@ -116,9 +116,9 @@ extern "C" {
         }
 
         if (cudaSetDevice(selected) != cudaSuccess) {
-            delete ctx;
             return nullptr;
         }
+
         M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = selected;
 
