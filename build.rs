@@ -146,6 +146,11 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
+            // Disable GNU-only math prototypes (e.g., cospi/sinpi) to avoid
+            // conflicting exception specs with CUDA's math_functions.h
+            .define("__STRICT_ANSI__", None)
+            .flag("-Xcompiler")
+            .flag("-D__STRICT_ANSI__")
             .flag("-cudart=shared")
             .flag("-O3")
             .flag("-Xcompiler")
