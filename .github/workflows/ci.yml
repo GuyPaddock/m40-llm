@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [noncuda, cuda-no-nvcc, cuda-with-nvcc]
+        preset: [noncuda, cuda-with-nvcc]
     env:
       RUSTFLAGS: "-D warnings"
     steps:
@@ -36,18 +36,16 @@ jobs:
               - conda-forge
               - nvidia/label/cuda-12.4.1
           create-args: >-
+            cuda-nvcc=12.4.*
+            cuda-cudart=12.4.*
             cuda-cudart-dev=12.4.*
-            cuda-toolkit=12.4.*
+            libcublas=12.4.*
+            libcublas-dev=12.4.*
       - name: Cargo build/tests (non-CUDA)
         if: matrix.preset == 'noncuda'
         run: |
           cargo build --no-default-features --locked
           cargo test --no-default-features --locked --all
-      - name: Cargo build/tests (CUDA feature, without NVCC)
-        if: matrix.preset == 'cuda-no-nvcc'
-        run: |
-          micromamba run -n m40-llm-ci cargo build --features cuda --locked
-          micromamba run -n m40-llm-ci cargo test --features cuda --locked --all
       - name: Cargo build/tests (CUDA feature, with NVCC)
         if: matrix.preset == 'cuda-with-nvcc'
         run: |
