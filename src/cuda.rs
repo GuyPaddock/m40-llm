@@ -174,6 +174,21 @@ mod ffi {
     }
 }
 
+#[cfg(not(feature = "cuda"))]
+mod ffi {
+    #[allow(dead_code)]
+    #[repr(C)]
+    pub struct M40llmCudaContext {
+        _private: [u8; 0],
+    }
+
+    #[allow(dead_code)]
+    #[repr(C)]
+    pub struct M40llmKVCache {
+        _private: [u8; 0],
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DeviceProps {
     pub name: String,
@@ -481,63 +496,8 @@ impl CudaContext {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
-    #[allow(dead_code)]
-    pub fn upload_weights(&self, _data: &[u8]) -> Result<*mut c_void> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(std::ptr::null_mut())
-    }
-    #[allow(dead_code)]
-    pub fn gemm_f16_f32(
-        &self,
-        _d_a: *const c_void,
-        _d_b: *const c_void,
-        _d_c: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn start_persistent_decode(&self) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn stop_persistent_decode(&self) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn gemm_f32xf16_f32(
-        &self,
-        _d_a_f32: *const c_void,
-        _d_b_f16: *const c_void,
-        _d_c_f32: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub fn gemm_f16xf16_f32(
-        &self,
-        _d_a_f16: *const c_void,
-        _d_b_f16: *const c_void,
-        _d_c_f32: *mut c_void,
-        _m: i32,
-        _n: i32,
-        _k: i32,
-    ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        Ok(())
-    }
 }
 
-#[cfg(feature = "cuda")]
 impl CudaContext {
     pub fn create_kvcache(
         &self,
@@ -546,20 +506,30 @@ impl CudaContext {
         num_heads: u32,
         head_dim: u32,
     ) -> Result<*mut ffi::M40llmKVCache> {
-        let _g = self.inner.lock.lock().unwrap();
-        let kv = unsafe {
-            ffi::m40llm_kvcache_create(
-                self.inner.raw.as_ptr(),
-                max_seq_len,
-                max_batch_size,
-                num_heads,
-                head_dim,
-            )
-        };
-        if kv.is_null() {
-            return Err(anyhow!("m40llm_kvcache_create returned null"));
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let kv = unsafe {
+                ffi::m40llm_kvcache_create(
+                    self.inner.raw.as_ptr(),
+                    max_seq_len,
+                    max_batch_size,
+                    num_heads,
+                    head_dim,
+                )
+            };
+            if kv.is_null() {
+                return Err(anyhow::anyhow!("m40llm_kvcache_create returned null"));
+            }
+            return Ok(kv);
         }
-        Ok(kv)
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let _ = (max_seq_len, max_batch_size, num_heads, head_dim);
+            Ok(std::ptr::null_mut())
+        }
     }
 
     pub fn upload_weights(&self, data: &[u8]) -> Result<*mut c_void> {
@@ -627,6 +597,7 @@ impl CudaContext {
         }
         #[cfg(not(feature = "cuda"))]
         {
+            let _ = data;
             Ok(std::ptr::null_mut())
         }
     }
@@ -846,6 +817,10 @@ impl CudaContext {
                 return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
             }
         }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in_f16, d_out_f32, n);
+        }
         Ok(())
     }
 
@@ -864,6 +839,10 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_q80_to_f32 failed: {rc}"));
             }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in_q80, d_out_f32, n);
         }
         Ok(())
     }
