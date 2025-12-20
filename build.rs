@@ -209,10 +209,18 @@ fn main() {
         }
 
         for inc in cublas_paths.includes.iter() {
-            build.include(inc);
+            // Avoid pulling in the host system's glibc headers when we’re compiling
+            // with the Conda CUDA toolchain; mixing them with CUDA’s own CRT headers
+            // causes cospi/sinpi exception-spec mismatches.
+            let s = inc.to_string_lossy();
+            if !s.starts_with("/usr/include") {
+                build.include(inc);
+            }
         }
 
-        build.include("/usr/include/x86_64-linux-gnu");
+        // Don’t unconditionally add the host glibc multiarch include; it reintroduces
+        // the same conflict we just filtered out.
+        // build.include("/usr/include/x86_64-linux-gnu");
 
         if cublas_enabled {
             build.define("M40LLM_HAVE_CUBLAS", None);
