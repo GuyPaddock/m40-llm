@@ -59,10 +59,6 @@ fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec
     let mut tensors: Vec<GgufTensor> = Vec::new();
     let mut weights: Vec<u8> = Vec::new();
     // Initialize with random normalized values
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let scale = 1.0 / (d_model as f32).sqrt();
-
     let mut add_tensor =
         |name: &str, dtype: GgmlDType, shape: &[u64], fill: &mut dyn FnMut(&mut Vec<u8>)| {
             let offset = weights.len() as u64;
