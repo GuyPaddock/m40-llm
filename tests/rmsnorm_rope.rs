@@ -113,10 +113,10 @@ fn rope_kernel_matches_cpu() -> Result<()> {
     let freq_base = 10_000.0f32;
     let freq_scale = 1.0f32;
 
-    let mut q: Vec<f32> = (0..rows * num_heads * head_dim)
+    let q: Vec<f32> = (0..rows * num_heads * head_dim)
         .map(|i| (i as f32) * 0.1 + 0.5)
         .collect();
-    let mut k = q.clone();
+    let k = q.clone();
     let mut expected_q = q.clone();
     let mut expected_k = k.clone();
     cpu_rope(
