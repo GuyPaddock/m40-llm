@@ -1156,7 +1156,7 @@ impl LoadedModel {
             let dhid = self.cuda.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?;
             let dy_mlp = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?;
             let d_xn = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?; // pre-attn norm(x)
-            let mut d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
+            let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
             let d_x1n = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?; // norm(x1)
 
             let res = (|| -> Result<()> {
@@ -1735,37 +1735,23 @@ impl LoadedModel {
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
             let w_down_ptr = self.tensor_device_ptr("w_down", &w.w_down)?;
 
-            #[cfg(feature = "cuda")]
-            {
-                // Allocate scratch buffers for attention output and intermediate results
-                let bytes_d = (w.d_model as usize) * 4;
-                let d_y_attn = self
-                    .cuda
-                    .device_malloc_tagged(bytes_d, "fwd:d_y_attn_f32")?;
-                let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?;
+            self.forward_one_token_minimal(
+                d_x_f32,
+                w.d_model as i32,
+                wq_ptr,
+                wk_ptr,
+                wv_ptr,
+                wo_ptr,
+                w_gate_ptr,
+                w_up_ptr,
+                w_down_ptr,
+                w.hidden_dim as i32,
+                seq_id,
+                seq_len,
+                d_out_f32,
+            )?;
 
-                self.forward_one_token_minimal(
-                    d_x1,
-                    w.d_model as i32,
-                    wq_ptr,
-                    wk_ptr,
-                    wv_ptr,
-                    wo_ptr,
-                    w_gate_ptr,
-                    w_up_ptr,
-                    w_down_ptr,
-                    w.hidden_dim as i32,
-                    seq_id,
-                    seq_len,
-                    d_out_f32,
-                )?;
-
-                // Free scratch buffers
-                self.cuda.device_free(d_y_attn)?;
-                self.cuda.device_free(d_x1)?;
-
-                return Ok(());
-            }
+            return Ok(());
         }
         #[cfg(not(feature = "cuda"))]
         {
