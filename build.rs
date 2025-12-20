@@ -159,6 +159,12 @@ fn main() {
             .flag("-U_GNU_SOURCE")
             .flag("-Xcompiler")
             .flag("-D_GNU_SOURCE=0")
+            // Also clear the default-source feature set which otherwise enables
+            // __USE_MISC and reintroduces the same GNU-only math prototypes.
+            .flag("-Xcompiler")
+            .flag("-U_DEFAULT_SOURCE")
+            .flag("-Xcompiler")
+            .flag("-D_DEFAULT_SOURCE=0")
             // Restrict host headers to ISO C/C++ so glibc doesn't surface
             // GNU-only math overloads (cospi/sinpi) that conflict with CUDA
             // math declarations.
