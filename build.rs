@@ -79,6 +79,13 @@ fn nvcc_host_compiler() -> Option<String> {
         return Some(ccbin);
     }
 
+    if let Ok(prefix) = env::var("CONDA_PREFIX") {
+        let ccbin = Path::new(&prefix).join("bin/x86_64-conda-linux-gnu-g++");
+        if ccbin.exists() {
+            return Some(ccbin.display().to_string());
+        }
+    }
+
     if let Ok(cxx) = env::var("CXX") {
         return Some(cxx);
     }
@@ -146,11 +153,38 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
-            // Disable GNU-only math prototypes (e.g., cospi/sinpi) to avoid
-            // conflicting exception specs with CUDA's math_functions.h
-            .define("__STRICT_ANSI__", None)
+            // Disable fortify helpers that rely on new GCC builtins unsupported
+            // by older NVCC frontends.
             .flag("-Xcompiler")
-            .flag("-D__STRICT_ANSI__")
+            .flag("-U_FORTIFY_SOURCE")
+            .flag("-Xcompiler")
+            .flag("-D_FORTIFY_SOURCE=0")
+            // Keep glibc from emitting TS 18661 float extensions that
+            // NVCC 11.x does not understand (_Float32, _Float128, etc.).
+            .flag("-Xcompiler")
+            .flag("-D__STDC_WANT_IEC_60559_TYPES_EXT__=0")
+            .flag("-Xcompiler")
+            .flag("-D__STDC_WANT_IEC_60559_EXT__=0")
+            .flag("-Xcompiler")
+            .flag("-D__STDC_WANT_IEC_60559_FUNCS_EXT__=0")
+            .flag("-Xcompiler")
+            .flag("-D__STDC_WANT_IEC_60559_BFP_EXT__=0")
+            // Force old glibc float feature macros off so the CUDA front-end
+            // never sees _FloatN prototypes it cannot parse.
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT16=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT32=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT64=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT128=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT32X=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT64X=0")
+            .flag("-Xcompiler")
+            .flag("-D__HAVE_FLOAT128X=0")
             .flag("-cudart=shared")
             .flag("-O3")
             .flag("-Xcompiler")
@@ -160,6 +194,14 @@ fn main() {
             // Also embed PTX so newer GPUs can JIT
             .flag("-gencode=arch=compute_52,code=compute_52")
             .flag("-allow-unsupported-compiler");
+
+        if let Ok(prefix) = env::var("CONDA_PREFIX") {
+            let sysroot = Path::new(&prefix).join("x86_64-conda-linux-gnu/sysroot");
+            let sys_include = sysroot.join("usr/include");
+            if sys_include.exists() {
+                build.include(&sys_include);
+            }
+        }
 
         if let Some(ccbin) = nvcc_host_compiler() {
             if env::var("CXX").is_err() {
@@ -174,6 +216,8 @@ fn main() {
         for inc in cublas_paths.includes.iter() {
             build.include(inc);
         }
+
+        build.include("/usr/include/x86_64-linux-gnu");
 
         if cublas_enabled {
             build.define("M40LLM_HAVE_CUBLAS", None);
