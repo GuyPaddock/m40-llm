@@ -40,11 +40,18 @@ extern "C" {
     // Back-compat alias so other TU code using KVCache still compiles
     typedef M40llmKVCache KVCache;
 
+    static int ensure_device(M40llmCudaContext* ctx) {
+        if (!ctx) return -1;
+        cudaError_t set_err = cudaSetDevice(ctx->device_id);
+        return set_err == cudaSuccess ? 0 : -2;
+    }
+
     int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
         if (!ctx || !out_ptr) return -1;
+        if (ensure_device(ctx) != 0) return -2;
         void* d = nullptr;
         cudaError_t err = cudaMalloc(&d, bytes);
-        if (err != cudaSuccess) return -2;
+        if (err != cudaSuccess) return -3;
         *out_ptr = d;
         return 0;
     }
@@ -108,7 +115,10 @@ extern "C" {
             }
         }
 
-        cudaSetDevice(selected);
+        if (cudaSetDevice(selected) != cudaSuccess) {
+            delete ctx;
+            return nullptr;
+        }
         M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = selected;
 
@@ -680,6 +690,7 @@ extern "C" int m40llm_rms_norm_f32(
                                          uint32_t num_heads,
                                          uint32_t head_dim) {
         if (!ctx) return nullptr;
+        if (ensure_device(ctx) != 0) return nullptr;
         M40llmKVCache* kv = new M40llmKVCache();
         kv->max_seq_len = max_seq_len;
         kv->max_batch_size = max_batch_size;
