@@ -384,8 +384,8 @@ extern "C" int m40llm_rms_norm_f32(
     // Q: [num_heads * head_dim] (f32) for the last token of a sequence
     // Output: [num_heads * head_dim] (f32)
     __global__ void attention_last_token_kernel(
-        const void* __restrict__ K,
-        const void* __restrict__ V,
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
         uint32_t max_seq_len,
         uint32_t num_heads,
         uint32_t head_dim,
@@ -400,12 +400,7 @@ extern "C" int m40llm_rms_norm_f32(
         const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
         const float* qh = Q + (size_t)h * (size_t)head_dim;
         
-        // Cast to proper type based on KV cache type
-        bool is_fp16 = reinterpret_cast<uintptr_t>(K) & 0x1; // Check for alignment
-        const float* K32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(K);
-        const float* V32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(V);
-        const __half* K16 = is_fp16 ? reinterpret_cast<const __half*>(K) : nullptr;
-        const __half* V16 = is_fp16 ? reinterpret_cast<const __half*>(V) : nullptr;
+        // KV cache always stores data as FP16, so we always use FP16 access
 
         // Pass 1: find max score for numerical stability
         float max_score = -1e30f;
@@ -414,7 +409,7 @@ extern "C" int m40llm_rms_norm_f32(
                                + (size_t)h * (size_t)head_dim;
             float dot = 0.0f;
             for (uint32_t d = 0; d < head_dim; ++d) {
-                float kf = is_fp16 ? __half2float(K16[base + d]) : K32[base + d];
+                float kf = __half2float(K[base + d]);
                 dot += qh[d] * kf;
             }
             float score = dot * inv_sqrt;
@@ -428,7 +423,7 @@ extern "C" int m40llm_rms_norm_f32(
                                + (size_t)h * (size_t)head_dim;
             float dot = 0.0f;
             for (uint32_t d = 0; d < head_dim; ++d) {
-                float kf = is_fp16 ? __half2float(K16[base + d]) : K32[base + d];
+                float kf = __half2float(K[base + d]);
                 dot += qh[d] * kf;
             }
             float score = dot * inv_sqrt;
@@ -438,26 +433,24 @@ extern "C" int m40llm_rms_norm_f32(
 
         // Pass 3: compute output = sum_t softmax(score)*V
         float* out_h = Out + (size_t)h * (size_t)head_dim;
-        float* scores = (float*)malloc(seq_len * sizeof(float));  // Dynamic allocation
         for (uint32_t d = 0; d < head_dim; ++d) {
             float acc = 0.0f;
             for (uint32_t t = 0; t < seq_len; ++t) {
                 const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
                                    + (size_t)h * (size_t)head_dim;
-                // Recompute score
+                // Recompute score (same as passes 1 and 2)
                 float dot = 0.0f;
                 for (uint32_t dd = 0; dd < head_dim; ++dd) {
-                    float kf = is_fp16 ? __half2float(K16[base + dd]) : K32[base + dd];
+                    float kf = __half2float(K[base + dd]);
                     dot += qh[dd] * kf;
                 }
                 float score = dot * inv_sqrt;
                 float p = expf(score - max_score) / denom;
-                float vf = is_fp16 ? __half2float(V16[base + d]) : V32[base + d];
+                float vf = __half2float(V[base + d]);
                 acc += p * vf;
             }
             out_h[d] = acc;
         }
-        free(scores);
     }
 
     int m40llm_attention_last_token_f32(
