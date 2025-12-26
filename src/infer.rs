@@ -1179,6 +1179,7 @@ impl LoadedModel {
                 })?;
                 let num_heads = kv.num_heads();
                 let head_dim = kv.head_dim();
+                eprintln!("DEBUG: num_heads={}, head_dim={}", num_heads, head_dim);
                 let pos = seq_len.saturating_sub(1);
                 self.apply_rope_f32(
                     dq as *mut c_void,
