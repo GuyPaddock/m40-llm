@@ -2079,7 +2079,7 @@ impl LoadedModel {
     /// # Safety
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
+        let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
         let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
