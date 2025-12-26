@@ -80,6 +80,7 @@ extern "C" {
 
     int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_host, size_t bytes) {
         if (!ctx || !dst_device || !src_host) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_device, src_host, bytes, cudaMemcpyHostToDevice);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -87,6 +88,7 @@ extern "C" {
 
     int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
         if (!ctx || !dst_host || !src_device) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_host, src_device, bytes, cudaMemcpyDeviceToHost);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -248,6 +250,7 @@ extern "C" {
         uint32_t n_heads,
         uint32_t n_batch) {
         if (!ctx || !d_x || !d_out || !d_positions) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         const int threads = 256;
         const int elements = n_batch * n_heads * head_size;
         const int blocks = (elements + threads - 1) / threads;
@@ -992,6 +995,7 @@ __global__ void residual_add_f32(const float* a, const float* b, float* out, uin
 }
 
 // C wrapper for residual add kernel
+    if (ensure_device(ctx) != 0) return;
 extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, const float* b, float* out, uint32_t size) {
     const int threads_per_block = 256;
     const int blocks = (size + threads_per_block - 1) / threads_per_block;
