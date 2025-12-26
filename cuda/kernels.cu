@@ -1007,6 +1007,7 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
     residual_add_f32<<<blocks, threads_per_block>>>(a, b, out, size);
 }
 
+    // rope_f32 kernel - rotary position embedding for query and key tensors
     __global__ void rope_f32(
         float* __restrict__ q,
         float* __restrict__ k,
