@@ -104,6 +104,7 @@ extern "C" {
     }
 
     M40llmCudaContext* m40llm_create_context(int device_id) {
+        fprintf(stderr, "DEBUG: m40llm_create_context called with device_id=%d\n", device_id);
         // Allow runtime auto-selection of Tesla M40 (sm_52) when:
         // - device_id < 0, or
         // - environment variable M40LLM_FORCE_M40=1 is set.
@@ -117,6 +118,7 @@ extern "C" {
                     cudaDeviceProp prop;
                     if (cudaGetDeviceProperties(&prop, i) == cudaSuccess) {
                         if (prop.major == 5 && prop.minor == 2) {
+                            fprintf(stderr, "DEBUG: Found Tesla M40 (sm_52) at device %d\n", i);
                             selected = i;
                             break;
                         }
@@ -132,8 +134,10 @@ extern "C" {
         }
 
         if (cudaSetDevice(selected) != cudaSuccess) {
+            fprintf(stderr, "DEBUG: cudaSetDevice(%d) failed during context creation\n", selected);
             return nullptr;
         }
+        fprintf(stderr, "DEBUG: cudaSetDevice(%d) succeeded\n", selected);
 
         M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = selected;
@@ -151,6 +155,7 @@ extern "C" {
         cublasSetStream(ctx->cublas, ctx->prefill_stream); // default
     #endif
 
+        fprintf(stderr, "DEBUG: Created context %p for device %d\n", ctx, selected);
         return ctx;
     }
 
@@ -995,8 +1000,8 @@ __global__ void residual_add_f32(const float* a, const float* b, float* out, uin
 }
 
 // C wrapper for residual add kernel
-    if (ensure_device(ctx) != 0) return;
 extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, const float* b, float* out, uint32_t size) {
+    if (ensure_device(ctx) != 0) return;
     const int threads_per_block = 256;
     const int blocks = (size + threads_per_block - 1) / threads_per_block;
     residual_add_f32<<<blocks, threads_per_block>>>(a, b, out, size);
