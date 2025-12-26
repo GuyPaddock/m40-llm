@@ -42,8 +42,22 @@ extern "C" {
 
     static int ensure_device(M40llmCudaContext* ctx) {
         if (!ctx) return -1;
-        cudaError_t set_err = cudaSetDevice(ctx->device_id);
-        return set_err == cudaSuccess ? 0 : -2;
+        int current_device;
+        cudaError_t get_err = cudaGetDevice(&current_device);
+        if (get_err != cudaSuccess) {
+            fprintf(stderr, "DEBUG: cudaGetDevice failed: %s\\n", cudaGetErrorString(get_err));
+            return -3;
+        }
+        if (current_device != ctx->device_id) {
+            fprintf(stderr, "DEBUG: Device mismatch: current=%d, ctx->device_id=%d\\n", current_device, ctx->device_id);
+            cudaError_t set_err = cudaSetDevice(ctx->device_id);
+            if (set_err != cudaSuccess) {
+                fprintf(stderr, "DEBUG: cudaSetDevice failed: %s\\n", cudaGetErrorString(set_err));
+                return -4;
+            }
+            fprintf(stderr, "DEBUG: Switched device from %d to %d\\n", current_device, ctx->device_id);
+        }
+        return 0;
     }
 
     int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
