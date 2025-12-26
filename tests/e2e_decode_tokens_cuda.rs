@@ -259,7 +259,7 @@ fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
                 hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
             }
             // logits = hidden x output.weight (D x V) using host matmul over copied weights
-            let (lm, _d_model, vocab, _tied) = model.map_lm_head()?;
+            let (_name, lm, _d_model, vocab, _tied) = model.map_lm_head()?;
             let w_off = lm.byte_offset as usize;
             let bytes = d_model * vocab * 2;
             let mut w_bytes = vec![0u8; bytes];
