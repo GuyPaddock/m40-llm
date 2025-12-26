@@ -201,9 +201,7 @@ fn main() {
         let debug_enabled = env::var("DEBUG").unwrap_or_default() == "true";
         if debug_enabled {
             eprintln!("Debug mode enabled: using -O0 -g for CUDA compilation");
-            build
-                .flag("-O0")
-                .flag("-g");
+            build.flag("-O0").flag("-g");
         } else {
             build.flag("-O3");
         }
@@ -258,7 +256,7 @@ fn main() {
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_native");
-        
+
         // Force inclusion of all symbols from the static library
         // This ensures that debug symbols and all functions are available
         println!("cargo:rustc-link-arg=-Wl,--whole-archive");
