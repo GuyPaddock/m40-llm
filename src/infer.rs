@@ -582,7 +582,7 @@ impl LoadedModel {
     /// Map the language modeling head (output projection) tensor if present.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
     /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
-    pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
+    pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
             "output.weight".to_string(),
@@ -590,6 +590,11 @@ impl LoadedModel {
             "output".to_string(),
         ];
         if let Ok(t) = self.find_tensor_any(&candidates) {
+            let name = candidates
+                .iter()
+                .find(|c| self.device_tensor(c).is_some())
+                .unwrap()
+                .clone();
             if t.dtype != GgmlDType::F16 {
                 anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
             }
@@ -607,7 +612,7 @@ impl LoadedModel {
                     t.shape
                 );
             }
-            return Ok((t.clone(), d_model, vocab, false));
+            return Ok((name, t.clone(), d_model, vocab, false));
         }
         anyhow::bail!(
             "lm_head tensor not found; expected one of {}",
