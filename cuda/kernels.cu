@@ -1055,19 +1055,44 @@ extern "C" int m40llm_rope_f32(
     uint32_t past_len,
     float freq_base,
     float freq_scale) {
-    if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
-    if (head_dim % 2 != 0) return -2;
+    fprintf(stderr, "DEBUG FFI ENTRY: ctx=%p, q=%p, k=%p\n", ctx, q, k);
+    fflush(stderr);
+    fprintf(stderr, "DEBUG FFI PARAMS: head_dim=%u, num_heads=%u, rows=%u, past_len=%u\n", head_dim, num_heads, rows, past_len);
+    fflush(stderr);
+    fprintf(stderr, "DEBUG FFI: head_dim value = %u, head_dim %% 2 = %u\n", head_dim, head_dim % 2);
+    fflush(stderr);
+    if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) {
+        fprintf(stderr, "DEBUG FFI: null check failed: ctx=%p, q=%p, k=%p, head_dim=%u, num_heads=%u\n", ctx, q, k, head_dim, num_heads);
+        fflush(stderr);
+        return -1;
+    }
+    if (ensure_device(ctx) != 0) return -5;
+    if (head_dim % 2 != 0) {
+        fprintf(stderr, "DEBUG FFI: head_dim %% 2 != 0 check failed: head_dim=%u, head_dim %% 2=%u\n", head_dim, head_dim % 2);
+        fflush(stderr);
+        return -2;
+    }
     const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
     const uint32_t total_pairs = rows * pairs_per_row;
     const int threads_per_block = 256;
     const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+    fprintf(stderr, "DEBUG FFI: rows=%u, num_heads=%u, pairs_per_row=%u, total_pairs=%u\n", rows, num_heads, pairs_per_row, total_pairs);
+    fflush(stderr);
+    fprintf(stderr, "DEBUG FFI: blocks=%d, threads_per_block=%d\n", blocks, threads_per_block);
+    fflush(stderr);
+    fprintf(stderr, "DEBUG FFI: Launching kernel with blocks=%d, threads=%d, total_pairs=%u\n", blocks, threads_per_block, total_pairs);
+    fflush(stderr);
     rope_f32<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
         q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
     cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) return -3;
+    if (err != cudaSuccess) {
+        fprintf(stderr, "DEBUG FFI: CUDA kernel launch failed: %s (error code %d)\n", cudaGetErrorString(err), err);
+        fflush(stderr);
+        return -3;
+    }
     err = cudaStreamSynchronize(ctx->decode_stream);
     return err == cudaSuccess ? 0 : -4;
-}
+
 
     // MLP: SwiGLU - FP16→FP32→FP16
     // Input: [batch*seq, dim]
