@@ -692,7 +692,7 @@ impl LoadedModel {
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
-            d_weights_base: d_base.unwrap_or(std::ptr::null_mut()),
+            d_weights_base: d_base.unwrap_or(host_base),
             host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
