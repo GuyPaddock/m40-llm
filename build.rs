@@ -126,6 +126,21 @@ fn main() {
     let cuda_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
     let nvcc_available = have_cmd("nvcc");
 
+    // Debug output to understand build configuration
+    eprintln!("=== M40-LLM Build Script Debug ===");
+    eprintln!("OUT_DIR: {}", out_dir.display());
+    eprintln!("CARGO_FEATURE_CUDA: {}", cuda_enabled);
+    eprintln!("nvcc available: {}", nvcc_available);
+    eprintln!(
+        "CARGO_PKG_NAME: {}",
+        env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".to_string())
+    );
+    eprintln!(
+        "CARGO_CFG_TARGET_ARCH: {}",
+        env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string())
+    );
+    eprintln!("===================================");
+
     if cuda_enabled && !nvcc_available {
         panic!(
             "Feature `cuda` is enabled, but `nvcc` was not found in PATH.\n\
@@ -180,8 +195,20 @@ fn main() {
             .flag("-U_FORTIFY_SOURCE")
             .flag("-Xcompiler")
             .flag("-D_FORTIFY_SOURCE=0")
-            .flag("-cudart=shared")
-            .flag("-O3")
+            .flag("-cudart=shared");
+
+        // Check if debug mode is enabled
+        let debug_enabled = env::var("DEBUG").unwrap_or_default() == "true";
+        if debug_enabled {
+            eprintln!("Debug mode enabled: using -O0 -g for CUDA compilation");
+            build
+                .flag("-O0")
+                .flag("-g");
+        } else {
+            build.flag("-O3");
+        }
+
+        build
             .flag("-Xcompiler")
             .flag("-fPIC")
             // Tesla M40 (Maxwell)
@@ -231,6 +258,12 @@ fn main() {
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_native");
+        
+        // Force inclusion of all symbols from the static library
+        // This ensures that debug symbols and all functions are available
+        println!("cargo:rustc-link-arg=-Wl,--whole-archive");
+        println!("cargo:rustc-link-arg=-lm40llm_native");
+        println!("cargo:rustc-link-arg=-Wl,--no-whole-archive");
 
         for p in cublas_paths.rpaths.iter() {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", p.display());
