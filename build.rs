@@ -257,12 +257,6 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_native");
 
-        // Force inclusion of all symbols from the static library
-        // This ensures that debug symbols and all functions are available
-        println!("cargo:rustc-link-arg=-Wl,--whole-archive");
-        println!("cargo:rustc-link-arg=-lm40llm_native");
-        println!("cargo:rustc-link-arg=-Wl,--no-whole-archive");
-
         for p in cublas_paths.rpaths.iter() {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", p.display());
             println!("cargo:rustc-link-search=native={}", p.display());
