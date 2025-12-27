@@ -40,11 +40,32 @@ extern "C" {
     // Back-compat alias so other TU code using KVCache still compiles
     typedef M40llmKVCache KVCache;
 
+    static int ensure_device(M40llmCudaContext* ctx) {
+        if (!ctx) return -1;
+        int current_device;
+        cudaError_t get_err = cudaGetDevice(&current_device);
+        if (get_err != cudaSuccess) {
+            fprintf(stderr, "DEBUG: cudaGetDevice failed: %s\\n", cudaGetErrorString(get_err));
+            return -3;
+        }
+        if (current_device != ctx->device_id) {
+            fprintf(stderr, "DEBUG: Device mismatch: current=%d, ctx->device_id=%d\\n", current_device, ctx->device_id);
+            cudaError_t set_err = cudaSetDevice(ctx->device_id);
+            if (set_err != cudaSuccess) {
+                fprintf(stderr, "DEBUG: cudaSetDevice failed: %s\\n", cudaGetErrorString(set_err));
+                return -4;
+            }
+            fprintf(stderr, "DEBUG: Switched device from %d to %d\\n", current_device, ctx->device_id);
+        }
+        return 0;
+    }
+
     int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
         if (!ctx || !out_ptr) return -1;
+        if (ensure_device(ctx) != 0) return -2;
         void* d = nullptr;
         cudaError_t err = cudaMalloc(&d, bytes);
-        if (err != cudaSuccess) return -2;
+        if (err != cudaSuccess) return -3;
         *out_ptr = d;
         return 0;
     }
@@ -59,6 +80,7 @@ extern "C" {
 
     int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_host, size_t bytes) {
         if (!ctx || !dst_device || !src_host) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_device, src_host, bytes, cudaMemcpyHostToDevice);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -66,6 +88,7 @@ extern "C" {
 
     int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
         if (!ctx || !dst_host || !src_device) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_host, src_device, bytes, cudaMemcpyDeviceToHost);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -81,6 +104,7 @@ extern "C" {
     }
 
     M40llmCudaContext* m40llm_create_context(int device_id) {
+        fprintf(stderr, "DEBUG: m40llm_create_context called with device_id=%d\n", device_id);
         // Allow runtime auto-selection of Tesla M40 (sm_52) when:
         // - device_id < 0, or
         // - environment variable M40LLM_FORCE_M40=1 is set.
@@ -94,6 +118,7 @@ extern "C" {
                     cudaDeviceProp prop;
                     if (cudaGetDeviceProperties(&prop, i) == cudaSuccess) {
                         if (prop.major == 5 && prop.minor == 2) {
+                            fprintf(stderr, "DEBUG: Found Tesla M40 (sm_52) at device %d\n", i);
                             selected = i;
                             break;
                         }
@@ -108,7 +133,12 @@ extern "C" {
             }
         }
 
-        cudaSetDevice(selected);
+        if (cudaSetDevice(selected) != cudaSuccess) {
+            fprintf(stderr, "DEBUG: cudaSetDevice(%d) failed during context creation\n", selected);
+            return nullptr;
+        }
+        fprintf(stderr, "DEBUG: cudaSetDevice(%d) succeeded\n", selected);
+
         M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = selected;
 
@@ -125,6 +155,7 @@ extern "C" {
         cublasSetStream(ctx->cublas, ctx->prefill_stream); // default
     #endif
 
+        fprintf(stderr, "DEBUG: Created context %p for device %d\n", ctx, selected);
         return ctx;
     }
 
@@ -210,41 +241,6 @@ extern "C" {
             out[idx + half_d] = x0 * sin_theta_pos + x1 * cos_theta_pos;
         }
     }
-
-    // RMS Normalization (FP32)
-    // Rotary Position Embedding (FP32)
-    int m40llm_rope_f32(
-        M40llmCudaContext* ctx,
-        void* d_x,
-        void* d_out,
-        const uint32_t* d_positions,
-        uint32_t dim,
-        uint32_t head_size,
-        uint32_t n_ctx,
-        uint32_t n_heads,
-        uint32_t n_batch) {
-        if (!ctx || !d_x || !d_out || !d_positions) return -1;
-        const int threads = 256;
-        const int elements = n_batch * n_heads * head_size;
-        const int blocks = (elements + threads - 1) / threads;
-        rope_kernel<<<blocks, threads, 0, ctx->prefill_stream>>>(
-            reinterpret_cast<float*>(d_x),
-            reinterpret_cast<float*>(d_out),
-            d_positions,
-            dim,
-            head_size,
-            n_ctx,
-            n_heads,
-            n_batch);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) return -2;
-        err = cudaStreamSynchronize(ctx->prefill_stream);
-        if (err != cudaSuccess) return -3;
-        return 0;
-    }
-
-    // Forward declaration
-// Declaration removed - using extern "C" version below
 
 // RMS Normalization (FP32)
 extern "C" int m40llm_rms_norm_f32(
@@ -374,8 +370,8 @@ extern "C" int m40llm_rms_norm_f32(
     // Q: [num_heads * head_dim] (f32) for the last token of a sequence
     // Output: [num_heads * head_dim] (f32)
     __global__ void attention_last_token_kernel(
-        const void* __restrict__ K,
-        const void* __restrict__ V,
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
         uint32_t max_seq_len,
         uint32_t num_heads,
         uint32_t head_dim,
@@ -390,12 +386,7 @@ extern "C" int m40llm_rms_norm_f32(
         const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
         const float* qh = Q + (size_t)h * (size_t)head_dim;
         
-        // Cast to proper type based on KV cache type
-        bool is_fp16 = reinterpret_cast<uintptr_t>(K) & 0x1; // Check for alignment
-        const float* K32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(K);
-        const float* V32 = is_fp16 ? nullptr : reinterpret_cast<const float*>(V);
-        const __half* K16 = is_fp16 ? reinterpret_cast<const __half*>(K) : nullptr;
-        const __half* V16 = is_fp16 ? reinterpret_cast<const __half*>(V) : nullptr;
+        // KV cache always stores data as FP16, so we always use FP16 access
 
         // Pass 1: find max score for numerical stability
         float max_score = -1e30f;
@@ -404,7 +395,7 @@ extern "C" int m40llm_rms_norm_f32(
                                + (size_t)h * (size_t)head_dim;
             float dot = 0.0f;
             for (uint32_t d = 0; d < head_dim; ++d) {
-                float kf = is_fp16 ? __half2float(K16[base + d]) : K32[base + d];
+                float kf = __half2float(K[base + d]);
                 dot += qh[d] * kf;
             }
             float score = dot * inv_sqrt;
@@ -418,7 +409,7 @@ extern "C" int m40llm_rms_norm_f32(
                                + (size_t)h * (size_t)head_dim;
             float dot = 0.0f;
             for (uint32_t d = 0; d < head_dim; ++d) {
-                float kf = is_fp16 ? __half2float(K16[base + d]) : K32[base + d];
+                float kf = __half2float(K[base + d]);
                 dot += qh[d] * kf;
             }
             float score = dot * inv_sqrt;
@@ -428,26 +419,24 @@ extern "C" int m40llm_rms_norm_f32(
 
         // Pass 3: compute output = sum_t softmax(score)*V
         float* out_h = Out + (size_t)h * (size_t)head_dim;
-        float* scores = (float*)malloc(seq_len * sizeof(float));  // Dynamic allocation
         for (uint32_t d = 0; d < head_dim; ++d) {
             float acc = 0.0f;
             for (uint32_t t = 0; t < seq_len; ++t) {
                 const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
                                    + (size_t)h * (size_t)head_dim;
-                // Recompute score
+                // Recompute score (same as passes 1 and 2)
                 float dot = 0.0f;
                 for (uint32_t dd = 0; dd < head_dim; ++dd) {
-                    float kf = is_fp16 ? __half2float(K16[base + dd]) : K32[base + dd];
+                    float kf = __half2float(K[base + dd]);
                     dot += qh[dd] * kf;
                 }
                 float score = dot * inv_sqrt;
                 float p = expf(score - max_score) / denom;
-                float vf = is_fp16 ? __half2float(V16[base + d]) : V32[base + d];
+                float vf = __half2float(V[base + d]);
                 acc += p * vf;
             }
             out_h[d] = acc;
         }
-        free(scores);
     }
 
     int m40llm_attention_last_token_f32(
@@ -680,6 +669,7 @@ extern "C" int m40llm_rms_norm_f32(
                                          uint32_t num_heads,
                                          uint32_t head_dim) {
         if (!ctx) return nullptr;
+        if (ensure_device(ctx) != 0) return nullptr;
         M40llmKVCache* kv = new M40llmKVCache();
         kv->max_seq_len = max_seq_len;
         kv->max_batch_size = max_batch_size;
@@ -975,73 +965,14 @@ __global__ void residual_add_f32(const float* a, const float* b, float* out, uin
 
 // C wrapper for residual add kernel
 extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, const float* b, float* out, uint32_t size) {
+    if (ensure_device(ctx) != 0) return;
     const int threads_per_block = 256;
     const int blocks = (size + threads_per_block - 1) / threads_per_block;
     residual_add_f32<<<blocks, threads_per_block>>>(a, b, out, size);
 }
 
-    __global__ void rope_f32(
-        float* __restrict__ q,
-        float* __restrict__ k,
-        uint32_t rows,
-        uint32_t num_heads,
-        uint32_t head_dim,
-        uint32_t past_len,
-        float freq_base,
-        float freq_scale) {
 
-    const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
-    const uint32_t total_pairs = rows * pairs_per_row;
-    if (pair_idx >= total_pairs) return;
-
-    const uint32_t row = pair_idx / pairs_per_row;
-    const uint32_t pair_in_row = pair_idx % pairs_per_row;
-    const uint32_t head = pair_in_row / (head_dim / 2);
-    const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
-
-    const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
-    const float pos = static_cast<float>(past_len + row) * freq_scale;
-    const float theta = pos * powf(freq_base, -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
-    const float c = cosf(theta);
-    const float s = sinf(theta);
-
-    const float q0 = q[base];
-    const float q1 = q[base + 1];
-    q[base] = q0 * c - q1 * s;
-    q[base + 1] = q0 * s + q1 * c;
-
-    const float k0 = k[base];
-    const float k1 = k[base + 1];
-    k[base] = k0 * c - k1 * s;
-    k[base + 1] = k0 * s + k1 * c;
-}
-
-extern "C" int m40llm_rope_f32(
-    M40llmCudaContext* ctx,
-    float* q,
-    float* k,
-    uint32_t rows,
-    uint32_t num_heads,
-    uint32_t head_dim,
-    uint32_t past_len,
-    float freq_base,
-    float freq_scale) {
-    if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
-    if (head_dim % 2 != 0) return -2;
-    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
-    const uint32_t total_pairs = rows * pairs_per_row;
-    const int threads_per_block = 256;
-    const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
-    rope_f32<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-        q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) return -3;
-    err = cudaStreamSynchronize(ctx->decode_stream);
-    return err == cudaSuccess ? 0 : -4;
-}
-
-    // MLP: SwiGLU - FP16→FP32→FP16
+// MLP: SwiGLU - FP16→FP32→FP16
     // Input: [batch*seq, dim]
     // Output: [batch*seq, dim]
     __global__ void mlp_swiglu_f16(
@@ -1227,4 +1158,74 @@ extern "C" int m40llm_rope_f32(
 
     int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
     int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
+
+    // rope_f32 kernel - rotary position embedding for query and key tensors
+    __global__ void rope_f32(
+            float* __restrict__ q,
+            float* __restrict__ k,
+            uint32_t rows,
+            uint32_t num_heads,
+            uint32_t head_dim,
+            uint32_t past_len,
+            float freq_base,
+            float freq_scale) {
+
+    const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+    const uint32_t total_pairs = rows * pairs_per_row;
+    if (pair_idx >= total_pairs) return;
+
+    const uint32_t row = pair_idx / pairs_per_row;
+    const uint32_t pair_in_row = pair_idx % pairs_per_row;
+    const uint32_t head = pair_in_row / (head_dim / 2);
+    const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
+
+    const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+    const float pos = static_cast<float>(past_len + row) * freq_scale;
+    const float theta = pos * powf(freq_base, -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+    const float c = cosf(theta);
+    const float s = sinf(theta);
+
+    const float q0 = q[base];
+    const float q1 = q[base + 1];
+    q[base] = q0 * c - q1 * s;
+    q[base + 1] = q0 * s + q1 * c;
+
+    const float k0 = k[base];
+    const float k1 = k[base + 1];
+    k[base] = k0 * c - k1 * s;
+    k[base + 1] = k0 * s + k1 * c;
+    }
+
+    extern "C" int m40llm_rope_f32(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+        if (ensure_device(ctx) != 0) return -1;
+        if (!q || !k) return -1;
+
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        if (total_pairs == 0) return 0;
+
+        const int threads_per_block = 256;
+        const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+
+        rope_f32<<<blocks, threads_per_block>>>(
+            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "CUDA error in rope_f32: %s\n", cudaGetErrorString(err));
+            return -1;
+        }
+
+        return 0;
+    }
 } // extern "C"

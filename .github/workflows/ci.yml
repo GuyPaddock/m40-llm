@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [noncuda, cuda-no-nvcc, cuda-with-nvcc]
+        preset: [noncuda, cuda-with-nvcc]
     env:
       RUSTFLAGS: "-D warnings"
     steps:
@@ -25,43 +25,30 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - name: Install system deps (NVCC only)
-        if: matrix.preset == 'cuda-with-nvcc'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y nvidia-cuda-toolkit
-      - name: Setup conda CUDA (headers and libs)
+      - name: Setup micromamba CUDA (headers and libs)
         if: matrix.preset != 'noncuda'
-        uses: conda-incubator/setup-miniconda@v3
+        uses: mamba-org/setup-micromamba@v2
         with:
-          miniforge-variant: Mambaforge
-          activate-environment: m40-llm-ci
-          auto-activate-base: false
-          use-mamba: true
-      - name: Install CUDA dev packages via conda
-        if: matrix.preset != 'noncuda'
-        shell: bash -l {0}
-        run: |
-          mamba install -y -c conda-forge -c nvidia cuda-cudart-dev=12.* cuda-toolkit=12.*
+          environment-name: m40-llm-ci
+          cache-downloads: true
+          condarc: |
+            channels:
+              - conda-forge
+              - nvidia/label/cuda-12.4.1
+          create-args: >-
+            cuda-nvcc=12.4.*
+            cuda-cudart=12.4.*
+            cuda-cudart-dev=12.4.*
+            libcublas=12.4.*
+            libcublas-dev=12.4.*
       - name: Cargo build/tests (non-CUDA)
         if: matrix.preset == 'noncuda'
         run: |
           cargo build --no-default-features --locked
           cargo test --no-default-features --locked --all
-      - name: Cargo build/tests (CUDA feature, without NVCC)
-        if: matrix.preset == 'cuda-no-nvcc'
-        shell: bash -l {0}
-        env:
-          CONDA_PREFIX: ${{ env.CONDA_PREFIX }}
-        run: |
-          cargo build --features cuda --locked
-          cargo test --features cuda --locked --all
       - name: Cargo build/tests (CUDA feature, with NVCC)
         if: matrix.preset == 'cuda-with-nvcc'
-        shell: bash -l {0}
-        env:
-          CONDA_PREFIX: ${{ env.CONDA_PREFIX }}
         run: |
-          which nvcc || true
-          cargo build --features cuda --locked
-          cargo test --features cuda --locked --all
+          micromamba run -n m40-llm-ci which nvcc || true
+          micromamba run -n m40-llm-ci cargo build --features cuda --locked
+          micromamba run -n m40-llm-ci cargo test --features cuda --locked --all

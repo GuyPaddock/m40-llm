@@ -126,6 +126,21 @@ fn main() {
     let cuda_enabled = env::var("CARGO_FEATURE_CUDA").is_ok();
     let nvcc_available = have_cmd("nvcc");
 
+    // Debug output to understand build configuration
+    eprintln!("=== M40-LLM Build Script Debug ===");
+    eprintln!("OUT_DIR: {}", out_dir.display());
+    eprintln!("CARGO_FEATURE_CUDA: {}", cuda_enabled);
+    eprintln!("nvcc available: {}", nvcc_available);
+    eprintln!(
+        "CARGO_PKG_NAME: {}",
+        env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "unknown".to_string())
+    );
+    eprintln!(
+        "CARGO_CFG_TARGET_ARCH: {}",
+        env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string())
+    );
+    eprintln!("===================================");
+
     if cuda_enabled && !nvcc_available {
         panic!(
             "Feature `cuda` is enabled, but `nvcc` was not found in PATH.\n\
@@ -142,8 +157,8 @@ fn main() {
         println!("cargo:rustc-cfg=nvcc");
 
         let cublas_paths = detect_cublas_paths();
-        let cublas_enabled = cublas_paths.detected
-            && env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1");
+        let cublas_enabled =
+            cublas_paths.detected && env::var("M40LLM_ENABLE_CUBLAS").ok().as_deref() == Some("1");
 
         let mut build = cc::Build::new();
         build
@@ -180,15 +195,44 @@ fn main() {
             .flag("-U_FORTIFY_SOURCE")
             .flag("-Xcompiler")
             .flag("-D_FORTIFY_SOURCE=0")
-            .flag("-cudart=shared")
-            .flag("-O3")
+            .flag("-cudart=shared");
+
+        // Check if debug mode is enabled
+        let debug_enabled = env::var("DEBUG").unwrap_or_default() == "true";
+        if debug_enabled {
+            eprintln!("Debug mode enabled: using -O0 -g for CUDA compilation");
+            build.flag("-O0").flag("-g");
+        } else {
+            build.flag("-O3");
+        }
+
+        // Detect CUDA version to determine supported architectures
+        let cuda_version_output = Command::new("nvcc")
+            .arg("--version")
+            .output()
+            .expect("Failed to run nvcc --version");
+
+        let cuda_version_str = String::from_utf8_lossy(&cuda_version_output.stdout);
+        let cuda_major_version = cuda_version_str
+            .lines()
+            .find(|line| line.contains("release"))
+            .and_then(|line| line.split("release").nth(1))
+            .and_then(|line| line.trim().split(',').next())
+            .and_then(|version| version.split('.').next())
+            .and_then(|version| version.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        eprintln!("Detected CUDA version: {}", cuda_major_version);
+
+        build
             .flag("-Xcompiler")
             .flag("-fPIC")
             // Tesla M40 (Maxwell)
             .flag("-gencode=arch=compute_52,code=sm_52")
             // Also embed PTX so newer GPUs can JIT
-            .flag("-gencode=arch=compute_52,code=compute_52")
-            .flag("-allow-unsupported-compiler");
+            .flag("-gencode=arch=compute_52,code=compute_52");
+
+        eprintln!("Using compute_52 for Maxwell GPU (CUDA 12.4 or earlier)");
 
         if let Ok(prefix) = env::var("CONDA_PREFIX") {
             let sysroot = Path::new(&prefix).join("x86_64-conda-linux-gnu/sysroot");

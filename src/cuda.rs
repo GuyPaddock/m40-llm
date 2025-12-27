@@ -54,6 +54,8 @@ mod ffi {
             bytes: usize,
         ) -> i32;
 
+        pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
+
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
         pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
 
@@ -460,6 +462,15 @@ impl CudaContext {
         }
         Ok(())
     }
+
+    pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        let rc = unsafe { ffi::m40llm_validate_device_ptr(ptr) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_validate_device_ptr failed: {rc}"));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -493,6 +504,12 @@ impl CudaContext {
         _src_device: *const c_void,
         _bytes: usize,
     ) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn validate_device_ptr(&self, _ptr: *const c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         Ok(())
     }
@@ -753,6 +770,9 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
+            eprintln!("[DEBUG rope_f32] d_q={:?}, d_k={:?}, rows={}, num_heads={}, head_dim={}, past_len={}", 
+                d_q, d_k, rows, num_heads, head_dim, past_len);
+            eprintln!("[DEBUG rope_f32] head_dim % 2 = {}", head_dim % 2);
             let rc = ffi::m40llm_rope_f32(
                 self.inner.raw.as_ptr(),
                 d_q,

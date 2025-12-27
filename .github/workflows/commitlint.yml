@@ -30,18 +30,26 @@ jobs:
       - name: Install cocogitto
         run: cargo install cocogitto --locked
 
-      - name: Lint commits since latest tag (baseline policy)
+      - name: Detect latest tag (if any)
+        id: latest-tag
         shell: bash
         run: |
-          set -e
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
           if [ -n "$latest_tag" ]; then
+            echo "tag=$latest_tag" >> "$GITHUB_OUTPUT"
             echo "Found latest tag: $latest_tag"
-            cog check --from-latest-tag
-            echo "Contextual log since $latest_tag:";
-            git log --pretty=format:'%h %s' "$latest_tag"..HEAD || true
           else
             echo "No tags found. Skipping Conventional Commits check until a baseline tag is created."
             echo "To enable enforcement, create a baseline tag on main, e.g.:"
             echo "  git tag -a cc-baseline -m 'Conventional Commits baseline' && git push origin cc-baseline"
           fi
+
+      - name: Lint commits since latest tag (baseline policy)
+        if: steps.latest-tag.outputs.tag != ''
+        shell: bash
+        run: |
+          set -e
+          echo "Linting commits since ${{ steps.latest-tag.outputs.tag }}"
+          cog check --from "${{ steps.latest-tag.outputs.tag }}"
+          echo "Contextual log since ${{ steps.latest-tag.outputs.tag }}:";
+          git log --pretty=format:'%h %s' "${{ steps.latest-tag.outputs.tag }}"..HEAD || true

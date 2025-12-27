@@ -339,9 +339,7 @@ async fn generate(
                         )?;
                     }
                     let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
-                    unsafe {
-                        let _ = model.cuda.device_free(d_out); // freed server:d_out_hidden_f32
-                    }
+                    // IMPORTANT: Do NOT free d_out here - logits_from_hidden needs to access it
                     logits
                 } else {
                     // Fallback: treat embedding as hidden and compute logits (uses lm_head when present or tok_embeddings^T)
@@ -351,6 +349,13 @@ async fn generate(
                 // Free embedding buffer
                 unsafe {
                     let _ = model.cuda.device_free(d_x);
+                }
+
+                // Now safe to free d_out after logits_from_hidden is done using it
+                if !use_fallback {
+                    unsafe {
+                        let _ = model.cuda.device_free(d_out); // freed server:d_out_hidden_f32
+                    }
                 }
 
                 Ok(logits)

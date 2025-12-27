@@ -582,7 +582,7 @@ impl LoadedModel {
     /// Map the language modeling head (output projection) tensor if present.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
     /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
-    pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
+    pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
             "output.weight".to_string(),
@@ -590,6 +590,11 @@ impl LoadedModel {
             "output".to_string(),
         ];
         if let Ok(t) = self.find_tensor_any(&candidates) {
+            let name = candidates
+                .iter()
+                .find(|c| self.device_tensor(c).is_some())
+                .unwrap()
+                .clone();
             if t.dtype != GgmlDType::F16 {
                 anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
             }
@@ -607,7 +612,7 @@ impl LoadedModel {
                     t.shape
                 );
             }
-            return Ok((t.clone(), d_model, vocab, false));
+            return Ok((name, t.clone(), d_model, vocab, false));
         }
         anyhow::bail!(
             "lm_head tensor not found; expected one of {}",
@@ -687,7 +692,7 @@ impl LoadedModel {
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
-            d_weights_base: d_base.unwrap_or(std::ptr::null_mut()),
+            d_weights_base: d_base.unwrap_or(host_base),
             host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
@@ -1174,6 +1179,7 @@ impl LoadedModel {
                 })?;
                 let num_heads = kv.num_heads();
                 let head_dim = kv.head_dim();
+                eprintln!("DEBUG: num_heads={}, head_dim={}", num_heads, head_dim);
                 let pos = seq_len.saturating_sub(1);
                 self.apply_rope_f32(
                     dq as *mut c_void,
@@ -1547,22 +1553,22 @@ impl LoadedModel {
                         );
                         let d_row =
                             (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
-                        println!("Debug: Final d_row={:?}", d_row);
-                        println!(
-                            "Debug: f16_to_f32 params - d_row={:?}, d_out_f32={:?}, d_model={}",
-                            d_row, d_out_f32, d_model
-                        );
-                        // Test pointer validity by attempting a small memcpy
-                        let mut test_buf = [0u8; 4];
-                        let test_ptr = test_buf.as_mut_ptr() as *mut c_void;
-                        println!("Debug: Testing input ptr via memcpy_d2h...");
-                        let test_res = self.cuda.memcpy_d2h(test_ptr, d_row, 4);
-                        println!("Debug: Input ptr test result - {:?}", test_res);
-                        println!("Debug: Testing output ptr via memcpy_h2d...");
-                        let test_res = self.cuda.memcpy_h2d(d_out_f32, test_ptr, 4);
-                        println!("Debug: Output ptr test result - {:?}", test_res);
-                        let res = self.cuda.f16_to_f32(d_row, d_out_f32, d_model);
-                        println!("Debug: f16_to_f32 result - {:?}", res);
+
+                        // Check if the tensor pointer is a device pointer
+                        let is_device_ptr = self.cuda.validate_device_ptr(d_row).is_ok();
+
+                        let res = if is_device_ptr {
+                            // Use the pointer directly if it's already a device pointer
+                            self.cuda.f16_to_f32(d_row, d_out_f32, d_model)
+                        } else {
+                            // If it's a host pointer, we need to copy the data to device memory first
+                            let temp_device_ptr = self.cuda.device_malloc(row_bytes)?;
+                            let host_ptr = d_row as *const c_void;
+                            self.cuda.memcpy_h2d(temp_device_ptr, host_ptr, row_bytes)?;
+                            let result = self.cuda.f16_to_f32(temp_device_ptr, d_out_f32, d_model);
+                            self.cuda.device_free(temp_device_ptr)?;
+                            result
+                        };
                         res?;
                     } else {
                         // Column gather: shape [d_model, vocab], take column = token_id
@@ -2073,11 +2079,11 @@ impl LoadedModel {
     /// # Safety
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        let lm = self.map_lm_head()?.0;
+        let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
         let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
-        let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+        let d_w = self.tensor_device_ptr(&name, &lm)?;
         #[cfg(not(feature = "cuda"))]
         let d_w: *const c_void = std::ptr::null();
         #[cfg(not(feature = "cuda"))]
@@ -2102,10 +2108,46 @@ impl LoadedModel {
     /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
     /// to host-side dot with per-row copies from tok_embeddings.
     pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
+        if let Ok((name, lm, d_model, vocab, _)) = self.map_lm_head() {
             #[cfg(feature = "cuda")]
             {
-                let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+                let d_w = self.tensor_device_ptr(&name, &lm)?;
+                // Validate that d_w is actually a device pointer before launching kernel
+                if let Err(e) = self.cuda.validate_device_ptr(d_w) {
+                    // Weights are on host, fall back to CPU computation
+                    eprintln!(
+                        "lm_head weights not on device ({}), falling back to CPU path",
+                        e
+                    );
+                    // Copy hidden state from device to host
+                    let mut hidden = vec![0f32; d_model];
+                    let hidden_bytes = hidden.len() * std::mem::size_of::<f32>();
+                    unsafe {
+                        self.cuda.memcpy_d2h(
+                            hidden.as_mut_ptr() as *mut std::ffi::c_void,
+                            d_hidden_f32 as *const std::ffi::c_void,
+                            hidden_bytes,
+                        )?;
+                    }
+                    // Weights are row-major [D, V] in f16
+                    let off = lm.byte_offset as usize;
+                    let w_bytes = &self.host_weights[off..off + d_model * vocab * 2];
+                    let mut logits = vec![0f32; vocab];
+                    for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                        let mut acc = 0f32;
+                        let mut idx = col * 2; // element (row=0,col) byte index within the 2-byte stream
+                        for &hidden_val in hidden.iter().take(d_model) {
+                            let lo = w_bytes[idx] as u16;
+                            let hi = w_bytes[idx + 1] as u16;
+                            let bits = lo | (hi << 8);
+                            let w = half::f16::from_bits(bits).to_f32();
+                            acc += hidden_val * w;
+                            idx += vocab * 2; // move to next row at same column
+                        }
+                        *logit_ref = acc;
+                    }
+                    return Ok(logits);
+                }
                 let bytes_logits = vocab * std::mem::size_of::<f32>();
                 let d_logits = self.cuda.device_malloc(bytes_logits)?;
                 self.matmul_f32xf16_f32(
