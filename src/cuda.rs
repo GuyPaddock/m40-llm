@@ -770,6 +770,9 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
+            eprintln!("[DEBUG rope_f32] d_q={:?}, d_k={:?}, rows={}, num_heads={}, head_dim={}, past_len={}", 
+                d_q, d_k, rows, num_heads, head_dim, past_len);
+            eprintln!("[DEBUG rope_f32] head_dim % 2 = {}", head_dim % 2);
             let rc = ffi::m40llm_rope_f32(
                 self.inner.raw.as_ptr(),
                 d_q,
