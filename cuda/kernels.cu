@@ -242,42 +242,6 @@ extern "C" {
         }
     }
 
-    // RMS Normalization (FP32)
-    // Rotary Position Embedding (FP32)
-    int m40llm_rope_f32(
-        M40llmCudaContext* ctx,
-        void* d_x,
-        void* d_out,
-        const uint32_t* d_positions,
-        uint32_t dim,
-        uint32_t head_size,
-        uint32_t n_ctx,
-        uint32_t n_heads,
-        uint32_t n_batch) {
-        if (!ctx || !d_x || !d_out || !d_positions) return -1;
-        if (ensure_device(ctx) != 0) return -3;
-        const int threads = 256;
-        const int elements = n_batch * n_heads * head_size;
-        const int blocks = (elements + threads - 1) / threads;
-        rope_kernel<<<blocks, threads, 0, ctx->prefill_stream>>>(
-            reinterpret_cast<float*>(d_x),
-            reinterpret_cast<float*>(d_out),
-            d_positions,
-            dim,
-            head_size,
-            n_ctx,
-            n_heads,
-            n_batch);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) return -2;
-        err = cudaStreamSynchronize(ctx->prefill_stream);
-        if (err != cudaSuccess) return -3;
-        return 0;
-    }
-
-    // Forward declaration
-// Declaration removed - using extern "C" version below
-
 // RMS Normalization (FP32)
 extern "C" int m40llm_rms_norm_f32(
         M40llmCudaContext* ctx,
