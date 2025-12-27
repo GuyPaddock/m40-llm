@@ -206,14 +206,33 @@ fn main() {
             build.flag("-O3");
         }
 
+        // Detect CUDA version to determine supported architectures
+        let cuda_version_output = Command::new("nvcc")
+            .arg("--version")
+            .output()
+            .expect("Failed to run nvcc --version");
+
+        let cuda_version_str = String::from_utf8_lossy(&cuda_version_output.stdout);
+        let cuda_major_version = cuda_version_str
+            .lines()
+            .find(|line| line.contains("release"))
+            .and_then(|line| line.split("release").nth(1))
+            .and_then(|line| line.trim().split(',').next())
+            .and_then(|version| version.split('.').next())
+            .and_then(|version| version.parse::<u32>().ok())
+            .unwrap_or(0);
+
+        eprintln!("Detected CUDA version: {}", cuda_major_version);
+
         build
             .flag("-Xcompiler")
             .flag("-fPIC")
             // Tesla M40 (Maxwell)
             .flag("-gencode=arch=compute_52,code=sm_52")
             // Also embed PTX so newer GPUs can JIT
-            .flag("-gencode=arch=compute_52,code=compute_52")
-            .flag("-allow-unsupported-compiler");
+            .flag("-gencode=arch=compute_52,code=compute_52");
+
+        eprintln!("Using compute_52 for Maxwell GPU (CUDA 12.4 or earlier)");
 
         if let Ok(prefix) = env::var("CONDA_PREFIX") {
             let sysroot = Path::new(&prefix).join("x86_64-conda-linux-gnu/sysroot");
