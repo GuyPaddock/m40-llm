@@ -1158,4 +1158,74 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
 
     int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
     int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
+
+    // rope_f32 kernel - rotary position embedding for query and key tensors
+    __global__ void rope_f32(
+            float* __restrict__ q,
+            float* __restrict__ k,
+            uint32_t rows,
+            uint32_t num_heads,
+            uint32_t head_dim,
+            uint32_t past_len,
+            float freq_base,
+            float freq_scale) {
+
+    const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+    const uint32_t total_pairs = rows * pairs_per_row;
+    if (pair_idx >= total_pairs) return;
+
+    const uint32_t row = pair_idx / pairs_per_row;
+    const uint32_t pair_in_row = pair_idx % pairs_per_row;
+    const uint32_t head = pair_in_row / (head_dim / 2);
+    const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
+
+    const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+    const float pos = static_cast<float>(past_len + row) * freq_scale;
+    const float theta = pos * powf(freq_base, -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+    const float c = cosf(theta);
+    const float s = sinf(theta);
+
+    const float q0 = q[base];
+    const float q1 = q[base + 1];
+    q[base] = q0 * c - q1 * s;
+    q[base + 1] = q0 * s + q1 * c;
+
+    const float k0 = k[base];
+    const float k1 = k[base + 1];
+    k[base] = k0 * c - k1 * s;
+    k[base + 1] = k0 * s + k1 * c;
+    }
+
+    extern "C" int m40llm_rope_f32(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+        if (ensure_device(ctx) != 0) return -1;
+        if (!q || !k) return -1;
+
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        if (total_pairs == 0) return 0;
+
+        const int threads_per_block = 256;
+        const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+
+        rope_f32<<<blocks, threads_per_block>>>(
+            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "CUDA error in rope_f32: %s\n", cudaGetErrorString(err));
+            return -1;
+        }
+
+        return 0;
+    }
 } // extern "C"
