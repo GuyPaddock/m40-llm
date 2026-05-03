@@ -139,3 +139,43 @@ fn gguf_device_views_cuda_dptr_and_bytes_match() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn gguf_device_views_keep_null_base_when_upload_disabled() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    drop(ctx);
+
+    let previous = std::env::var("M40LLM_ENABLE_NVCC").ok();
+    std::env::set_var("M40LLM_ENABLE_NVCC", "0");
+
+    let result = (|| -> Result<()> {
+        let mut gg = GgufModel::new(0);
+        gg.metadata = minimal_metadata();
+        gg.tensors.push(GgufTensor {
+            name: "A".into(),
+            dtype: GgmlDType::F16,
+            shape: vec![2u64, 2u64],
+            offset: 0,
+        });
+        let weights = make_halves_bytes(&[0.1, 0.2, 0.3, 0.4]);
+
+        let lm = LoadedModel::from_gguf(gg, weights, -1)?;
+        assert!(lm.d_weights_base.is_null());
+        assert!(lm.device_tensors.get("A").expect("A view").dptr.is_null());
+        Ok(())
+    })();
+
+    match previous {
+        Some(value) => std::env::set_var("M40LLM_ENABLE_NVCC", value),
+        None => std::env::remove_var("M40LLM_ENABLE_NVCC"),
+    }
+
+    result
+}

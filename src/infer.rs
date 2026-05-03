@@ -640,8 +640,6 @@ impl LoadedModel {
 
         let weights_bytes = gguf_bytes[data_off..].to_vec();
         let weights_len = weights_bytes.len();
-        #[cfg(feature = "cuda")]
-        let host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(not(feature = "cuda"))]
         let _host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
@@ -655,7 +653,7 @@ impl LoadedModel {
             } else {
                 None
             };
-            Some(uploaded.unwrap_or(host_base))
+            uploaded
         };
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
@@ -681,8 +679,11 @@ impl LoadedModel {
             }
         }
         #[cfg(feature = "cuda")]
-        let device_tensors =
-            build_device_tensor_views(&gguf.tensors, d_base.unwrap_or(host_base), weights_len)?;
+        let device_tensors = build_device_tensor_views(
+            &gguf.tensors,
+            d_base.unwrap_or(std::ptr::null_mut()),
+            weights_len,
+        )?;
         #[cfg(not(feature = "cuda"))]
         let device_tensors =
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_len)?;
@@ -694,7 +695,7 @@ impl LoadedModel {
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
-            d_weights_base: d_base.unwrap_or(host_base),
+            d_weights_base: d_base.unwrap_or(std::ptr::null_mut()),
             host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
@@ -854,20 +855,21 @@ fn build_device_tensor_views(
         #[cfg(feature = "cuda")]
         let dptr: *mut c_void = {
             if d_base.is_null() {
-                anyhow::bail!("device weights base pointer is null");
+                std::ptr::null_mut()
+            } else {
+                let base = d_base as usize;
+                let addr = base
+                    .checked_add(offset_usize)
+                    .context("device pointer offset overflow")?;
+                let ptr = addr as *mut c_void;
+                if std::env::var("M40LLM_TENSOR_VIEW_LOG").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
+                        t.name, d_base, offset_usize, ptr
+                    );
+                }
+                ptr
             }
-            let base = d_base as usize;
-            let addr = base
-                .checked_add(offset_usize)
-                .context("device pointer offset overflow")?;
-            let ptr = addr as *mut c_void;
-            if std::env::var("M40LLM_TENSOR_VIEW_LOG").ok().as_deref() == Some("1") {
-                eprintln!(
-                    "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
-                    t.name, d_base, offset_usize, ptr
-                );
-            }
-            ptr
         };
         #[cfg(not(feature = "cuda"))]
         let _dptr: *mut c_void = std::ptr::null_mut();
@@ -904,18 +906,16 @@ mod cuda_tensor_view_tests {
     }
 
     #[test]
-    fn null_device_base_rejected() {
+    fn null_device_base_keeps_tensor_ptr_null() {
         let tensors = vec![GgufTensor {
             name: "w".to_string(),
             dtype: GgmlDType::F16,
             shape: vec![1, 1],
             offset: 0,
         }];
-        let err =
-            build_device_tensor_views(&tensors, std::ptr::null_mut(), 16).expect_err("should err");
-        assert!(err
-            .to_string()
-            .contains("device weights base pointer is null"));
+        let views = build_device_tensor_views(&tensors, std::ptr::null_mut(), 16).expect("views");
+        let w = views.get("w").expect("tensor view");
+        assert!(w.dptr.is_null());
     }
 }
 
