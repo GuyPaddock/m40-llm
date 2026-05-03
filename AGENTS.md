@@ -72,7 +72,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t26-min-forward",
       "priority": 6,
-      "status": "in_progress",
+      "status": "done",
       "title": "Minimal forward pass (prefill + decode)",
       "rationale": "This is the minimal computation needed to produce logits.",
       "scope": [
@@ -375,7 +375,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t30-server",
       "priority": 5,
-      "status": "todo",
+      "status": "in_progress",
       "title": "HTTP server wired to real decode path",
       "rationale": "Server interface is required for real-world usage.",
       "scope": [
