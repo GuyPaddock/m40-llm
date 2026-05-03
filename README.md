@@ -100,6 +100,8 @@ Build the project in one of these modes:
 - Allocation tracing: set `M40LLM_ALLOC_LOG=1` to print per-allocation
   `device_malloc`/`device_free` traces. Add `M40LLM_ALLOC_BT=1` to include
   backtraces with those allocation logs.
+- Tensor view tracing: set `M40LLM_TENSOR_VIEW_LOG=1` to print each GGUF
+  tensor-to-device pointer mapping during model load.
 
 ## Server (feature = server)
 ```

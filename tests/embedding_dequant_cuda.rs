@@ -38,12 +38,21 @@ fn metadata(vocab: usize, d_model: usize) -> HashMap<String, GgufValue> {
 }
 
 fn model_with_embeddings(dtype: GgmlDType, vocab: usize, d_model: usize) -> GgufModel {
+    model_with_embedding_shape(dtype, vocab, d_model, vec![vocab as u64, d_model as u64])
+}
+
+fn model_with_embedding_shape(
+    dtype: GgmlDType,
+    vocab: usize,
+    d_model: usize,
+    shape: Vec<u64>,
+) -> GgufModel {
     let mut gguf = GgufModel::new(0);
     gguf.metadata = metadata(vocab, d_model);
     gguf.tensors.push(GgufTensor {
         name: "tok_embeddings.weight".into(),
         dtype,
-        shape: vec![vocab as u64, d_model as u64],
+        shape,
         offset: 0,
     });
     gguf
@@ -112,6 +121,58 @@ fn f16_embedding_row_load_matches_host() -> Result<()> {
     let expected: Vec<f32> = values[token_id as usize * d_model..(token_id as usize + 1) * d_model]
         .iter()
         .map(|&v| f16::from_f32(v).to_f32())
+        .collect();
+    assert_close(&actual, &expected);
+    Ok(())
+}
+
+#[test]
+fn f16_embedding_column_load_matches_host() -> Result<()> {
+    let Some(ctx) = cuda_env::ctx_m40_or_skip() else {
+        return Ok(());
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let vocab = 5;
+    let d_model = 4;
+    let token_id = 3u64;
+    let values: Vec<f32> = (0..d_model * vocab)
+        .map(|i| (i as f32 - 5.0) * 0.25)
+        .collect();
+    let mut weights = Vec::with_capacity(values.len() * 2);
+    for &value in &values {
+        weights.extend_from_slice(&f16::from_f32(value).to_bits().to_le_bytes());
+    }
+
+    let model = LoadedModel::from_gguf(
+        model_with_embedding_shape(
+            GgmlDType::F16,
+            vocab,
+            d_model,
+            vec![d_model as u64, vocab as u64],
+        ),
+        weights,
+        -1,
+    )?;
+    let out = model
+        .cuda
+        .device_malloc(d_model * std::mem::size_of::<f32>())?;
+    unsafe {
+        model.load_token_embedding_to_f32(token_id, out)?;
+    }
+    let actual = read_device_f32(&model, out as *const c_void, d_model)?;
+    unsafe {
+        model.cuda.device_free(out)?;
+    }
+
+    let expected: Vec<f32> = (0..d_model)
+        .map(|row| {
+            let idx = row * vocab + token_id as usize;
+            f16::from_f32(values[idx]).to_f32()
+        })
         .collect();
     assert_close(&actual, &expected);
     Ok(())

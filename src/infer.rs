@@ -861,10 +861,12 @@ fn build_device_tensor_views(
                 .checked_add(offset_usize)
                 .context("device pointer offset overflow")?;
             let ptr = addr as *mut c_void;
-            eprintln!(
-                "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
-                t.name, d_base, offset_usize, ptr
-            );
+            if std::env::var("M40LLM_TENSOR_VIEW_LOG").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
+                    t.name, d_base, offset_usize, ptr
+                );
+            }
             ptr
         };
         #[cfg(not(feature = "cuda"))]
@@ -1502,14 +1504,6 @@ impl LoadedModel {
             ])?;
             if tok.shape.len() != 2 {
                 anyhow::bail!("embeddings must be [vocab, d_model]");
-            }
-            let n_vocab = tok.shape[0];
-            if token_id >= n_vocab {
-                anyhow::bail!(
-                    "token_id {} out of range for vocab size {}",
-                    token_id,
-                    n_vocab
-                );
             }
             let r0 = tok.shape[0] as usize;
             let r1 = tok.shape[1] as usize;
