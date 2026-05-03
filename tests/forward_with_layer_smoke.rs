@@ -37,8 +37,32 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     // Build a minimal GGUF in-memory model with required tensors
     let mut gg = GgufModel::new(0);
     gg.metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    gg.metadata.insert(
         "llama.embedding_length".to_string(),
         GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    gg.metadata.insert(
+        "llama.attention.head_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(num_heads)),
+    );
+    gg.metadata.insert(
+        "llama.block_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    gg.metadata.insert(
+        "llama.context_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(16)),
+    );
+    gg.metadata.insert(
+        "llama.feed_forward_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(hidden as u32)),
+    );
+    gg.metadata.insert(
+        "llama.layer_norm_epsilon".to_string(),
+        GgufValue::Scalar(GgufScalar::F32(1e-6)),
     );
 
     // Token embeddings: [vocab, d_model]
