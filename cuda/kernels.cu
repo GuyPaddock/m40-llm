@@ -74,6 +74,7 @@ extern "C" {
 
     int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_host, size_t bytes) {
         if (!ctx || !dst_device || !src_host) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_device, src_host, bytes, cudaMemcpyHostToDevice);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -81,6 +82,7 @@ extern "C" {
 
     int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
         if (!ctx || !dst_host || !src_device) return -1;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_host, src_device, bytes, cudaMemcpyDeviceToHost);
         if (err != cudaSuccess) return -2;
         return 0;
