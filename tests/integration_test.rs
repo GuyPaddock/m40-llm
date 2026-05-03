@@ -1,9 +1,20 @@
-#![cfg(feature = "cuda")]
+#![cfg(all(feature = "cuda", nvcc))]
 
 use anyhow::Result;
 use m40_llm::gguf::{GgufModel, GgufScalar, GgufValue};
 use m40_llm::infer::LoadedModel;
 use std::ffi::c_void;
+
+mod cuda_env;
+
+fn cuda_device_or_skip() -> Option<i32> {
+    let ctx = cuda_env::ctx_m40_or_skip()?;
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return None;
+    }
+    Some(-1)
+}
 
 fn minimal_gguf() -> GgufModel {
     use GgufScalar as S;
@@ -31,18 +42,24 @@ fn minimal_gguf() -> GgufModel {
 
 #[test]
 fn test_model_loading() -> Result<()> {
+    let Some(device_id) = cuda_device_or_skip() else {
+        return Ok(());
+    };
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
-    let _model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    let _model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
     // LoadedModel no longer exposes raw device pointer; construction succeeds in non-CUDA path
     Ok(())
 }
 
 #[test]
 fn test_kv_cache_allocation() -> Result<()> {
+    let Some(device_id) = cuda_device_or_skip() else {
+        return Ok(());
+    };
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
-    let mut model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    let mut model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
     model.allocate_kv_cache(128, 8)?;
     assert!(model.kv_cache.is_some());
     Ok(())
@@ -50,9 +67,12 @@ fn test_kv_cache_allocation() -> Result<()> {
 
 #[test]
 fn test_attention_operation() -> Result<()> {
+    let Some(device_id) = cuda_device_or_skip() else {
+        return Ok(());
+    };
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
-    let mut model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    let mut model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
     // Allocate KV cache with standard layout (8 heads, 64 dim per head)
     model.allocate_kv_cache(128, 8)?;
     // Provide valid input/output buffers
@@ -76,9 +96,12 @@ fn test_attention_operation() -> Result<()> {
 
 #[test]
 fn test_mlp_operation() -> Result<()> {
+    let Some(device_id) = cuda_device_or_skip() else {
+        return Ok(());
+    };
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
-    let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    let model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
     let input = std::ptr::null::<c_void>();
     let output = std::ptr::null_mut::<c_void>();
     model.run_mlp(input, output, 8, 512, 2048)?;
@@ -87,9 +110,12 @@ fn test_mlp_operation() -> Result<()> {
 
 #[test]
 fn test_rms_norm_operation() -> Result<()> {
+    let Some(device_id) = cuda_device_or_skip() else {
+        return Ok(());
+    };
     let gguf = minimal_gguf();
     let gguf_bytes = vec![];
-    let model = LoadedModel::from_gguf(gguf, gguf_bytes, 0)?;
+    let model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
 
     // Initialize host data
     let host_input = vec![1.0; 512];

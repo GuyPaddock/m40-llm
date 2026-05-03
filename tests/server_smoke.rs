@@ -169,6 +169,7 @@ async fn server_generate_smoke() -> Result<()> {
         prompt: "A".to_string(),
         max_tokens: Some(3),
         stream: false,
+        ..Default::default()
     };
     let resp = client.post(&url).json(&req).send().await.unwrap();
     assert!(resp.status().is_success());
@@ -202,6 +203,7 @@ async fn server_generate_streaming_nul_free() -> Result<()> {
         prompt: "A".to_string(),
         max_tokens: Some(3),
         stream: true,
+        ..Default::default()
     };
     let resp = client.post(&url).json(&req).send().await.unwrap();
     assert!(resp.status().is_success());

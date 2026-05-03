@@ -3,7 +3,6 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::CudaContext;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use std::collections::HashMap;

@@ -11,6 +11,11 @@
 set -uuo pipefail
 MSG_FILE="$1"
 
+if [ -f "scripts/dev-env.sh" ]; then
+  # shellcheck disable=SC1091
+  . "scripts/dev-env.sh"
+fi
+
 # 1) Reject literal \n sequences
 if grep -q '\\n' "$MSG_FILE"; then
   echo "[commit-msg] Found literal \\n in commit message. Use real newlines or multiple -m flags." >&2
