@@ -329,7 +329,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t23-6-benches-ctx",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "title": "Unify benchmarks on ctx_m40",
       "rationale": "Benchmarks must reflect real target hardware.",
       "scope": [
