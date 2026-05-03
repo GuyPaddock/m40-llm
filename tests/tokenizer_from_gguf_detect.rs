@@ -33,6 +33,23 @@ fn detection_sees_bpe_keys() {
 }
 
 #[test]
+fn detection_treats_llama_model_as_sentencepiece() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(m40_llm::gguf::GgufScalar::Str("llama".to_string())),
+    );
+    meta.insert(
+        "tokenizer.ggml.tokens".to_string(),
+        GgufValue::Array(vec![m40_llm::gguf::GgufScalar::Str("▁hello".to_string())]),
+    );
+
+    let t = Tokenizer::from_gguf_metadata(&meta).unwrap();
+    assert!(matches!(t.kind(), TokenizerKind::SentencePiece));
+    assert_eq!(t.decode(&[0]).unwrap(), "hello");
+}
+
+#[test]
 fn special_tokens_extract_from_metadata() {
     use m40_llm::gguf::{GgufScalar, GgufValue};
     use std::collections::HashMap;

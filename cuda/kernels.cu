@@ -778,6 +778,16 @@ extern "C" int m40llm_rms_norm_f32(
         return 0;
     }
 
+    int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
+        if (!ctx || !kv) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        const size_t seq_map_size = (size_t)kv->max_batch_size * sizeof(uint32_t);
+        cudaError_t err = cudaMemsetAsync(kv->d_seq_map, 0, seq_map_size, ctx->decode_stream);
+        if (err != cudaSuccess) return -3;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -4;
+        return 0;
+    }
 
     int m40llm_kvcache_debug_read_token(M40llmCudaContext* ctx,
                                          M40llmKVCache* kv,

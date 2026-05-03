@@ -88,7 +88,10 @@ impl Tokenizer {
             .get("sentencepiece.model")
             .and_then(|v| v.as_str())
             .is_some()
-            || matches!(model_str.as_deref(), Some("spm" | "sentencepiece"));
+            || matches!(
+                model_str.as_deref(),
+                Some("spm" | "sentencepiece" | "llama")
+            );
         let has_bpe = metadata
             .get("tokenizer.ggml.bpe_merges")
             .and_then(|v| v.as_str())

@@ -138,6 +138,7 @@ mod ffi {
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
         ) -> i32;
+        pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -901,6 +902,29 @@ impl KVCache {
     }
     pub fn head_dim(&self) -> u32 {
         self.inner.head_dim
+    }
+
+    pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = ctx.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_kvcache_reset(ctx.inner.raw.as_ptr(), self.inner.raw.as_ptr())
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_kvcache_reset failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = ctx;
+            let mut lens = self.inner.len_by_seq.lock().unwrap();
+            for len in lens.iter_mut() {
+                *len = 0;
+            }
+            Ok(())
+        }
     }
 }
 

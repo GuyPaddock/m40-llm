@@ -115,3 +115,90 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_kvcache_reset_restarts_append_position() -> Result<()> {
+    let num_heads: u32 = 1;
+    let head_dim: u32 = 3;
+    let max_seq_len: u32 = 4;
+    let max_batch_size: u32 = 1;
+
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let kv = KVCache::new_with_context(&ctx, max_seq_len, max_batch_size, num_heads, head_dim)?;
+    let elems_per_token = (num_heads as usize) * (head_dim as usize);
+
+    let k_first: Vec<f32> = (0..elems_per_token).map(|i| i as f32 + 1.0).collect();
+    let v_first: Vec<f32> = (0..elems_per_token).map(|i| i as f32 + 10.0).collect();
+    let k_after_reset: Vec<f32> = (0..elems_per_token).map(|i| i as f32 + 100.0).collect();
+    let v_after_reset: Vec<f32> = (0..elems_per_token).map(|i| i as f32 + 200.0).collect();
+
+    let k_dev: *mut c_void = ctx.device_malloc(elems_per_token * 4)?;
+    let v_dev: *mut c_void = ctx.device_malloc(elems_per_token * 4)?;
+    unsafe {
+        ctx.memcpy_h2d(
+            k_dev,
+            k_first.as_ptr() as *const c_void,
+            elems_per_token * 4,
+        )?;
+        ctx.memcpy_h2d(
+            v_dev,
+            v_first.as_ptr() as *const c_void,
+            elems_per_token * 4,
+        )?;
+        kv.append_token_f32(&ctx, 0, k_dev as *const c_void, v_dev as *const c_void)?;
+    }
+
+    kv.reset(&ctx)?;
+
+    unsafe {
+        ctx.memcpy_h2d(
+            k_dev,
+            k_after_reset.as_ptr() as *const c_void,
+            elems_per_token * 4,
+        )?;
+        ctx.memcpy_h2d(
+            v_dev,
+            v_after_reset.as_ptr() as *const c_void,
+            elems_per_token * 4,
+        )?;
+        kv.append_token_f32(&ctx, 0, k_dev as *const c_void, v_dev as *const c_void)?;
+    }
+
+    let bytes = elems_per_token * 2;
+    let mut k_back = vec![0u8; bytes];
+    let mut v_back = vec![0u8; bytes];
+    unsafe {
+        ffi_debug_read_kv_token(&ctx, &kv, 0, 0, k_back.as_mut_ptr(), v_back.as_mut_ptr());
+    }
+
+    let k_expected_bits = f32s_to_f16_bits(&k_after_reset);
+    let v_expected_bits = f32s_to_f16_bits(&v_after_reset);
+    for i in 0..elems_per_token {
+        let bits = u16::from_le_bytes([k_back[2 * i], k_back[2 * i + 1]]);
+        assert_eq!(
+            bits, k_expected_bits[i],
+            "K reset token0 element {} mismatch",
+            i
+        );
+        let bits_v = u16::from_le_bytes([v_back[2 * i], v_back[2 * i + 1]]);
+        assert_eq!(
+            bits_v, v_expected_bits[i],
+            "V reset token0 element {} mismatch",
+            i
+        );
+    }
+
+    unsafe {
+        ctx.device_free(k_dev)?;
+        ctx.device_free(v_dev)?;
+    }
+
+    Ok(())
+}

@@ -1033,6 +1033,14 @@ impl LoadedModel {
         Ok(())
     }
 
+    pub fn reset_kv_cache(&self) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        kv.reset(&self.cuda)
+    }
+
     #[allow(clippy::too_many_arguments)]
     /// # Safety
     /// `d_q` and `d_out` must be valid pointers to device buffers matching KV cache layout.
