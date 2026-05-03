@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# commit-msg hook: two-stage commit with deterministic nonce and preview
-# Responsibilities:
+# commit-msg hook:
 #  1) Reject literal \n sequences in the message
 #  2) Validate Conventional Commits with cocogitto
 #  3) Enforce subject length <= 100
-#  4) Preview mode (no NONCE): show staged diff + message, compute and print NONCE, abort
-#  5) Finalize mode (with NONCE): recompute and validate NONCE; allow commit
-# Note: The hook owns preview; the finalize step simply reuses .git/COMMIT_EDITMSG with NONCE.
 
-set -uuo pipefail
+set -euo pipefail
 MSG_FILE="$1"
 
 if [ -f "scripts/dev-env.sh" ]; then
@@ -16,104 +12,19 @@ if [ -f "scripts/dev-env.sh" ]; then
   . "scripts/dev-env.sh"
 fi
 
-# 1) Reject literal \n sequences
 if grep -q '\\n' "$MSG_FILE"; then
   echo "[commit-msg] Found literal \\n in commit message. Use real newlines or multiple -m flags." >&2
   exit 1
 fi
 
-# 2) Validate with cocogitto and capture subject
 subject=$(sed -n '1{s/[ \t]*$//;p}' "$MSG_FILE")
 if ! cog verify --file "$MSG_FILE"; then
   echo "[commit-msg] cocogitto verify failed on the commit message file." >&2
   exit 1
 fi
 
-# 3) Subject length check (<= 100)
 subject_len=${#subject}
 if [ "$subject_len" -gt 100 ]; then
   echo "[commit-msg] Subject is ${subject_len} characters (max 100). Please shorten it." >&2
   exit 1
 fi
-
-# Compute deterministic nonce from staged diff + message content
-git_dir=$(git rev-parse --git-dir 2>/dev/null || echo .git)
-state_file="$git_dir/m40llm_nonce_state"
-branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
-index_tree=$(git write-tree 2>/dev/null || echo "")
-
-staged_diff=$(git --no-pager diff --cached --no-color || true)
-diff_hash=$(printf "%s" "$staged_diff" | sha256sum | awk '{print $1}')
-msg_hash=$(sha256sum "$MSG_FILE" | awk '{print $1}')
-nonce=$(printf "%s" "$diff_hash:$msg_hash" | sha256sum | cut -c1-16)
-
-# If nonce is provided, verify state lock and allow commit
-if [ -n "${M40LLM_COMMIT_NONCE:-}" ]; then
-  if [ ! -f "$state_file" ]; then
-    echo "[commit-msg] Missing nonce state at $state_file. Re-run 'git commit' to preview and obtain a new nonce." >&2
-    exit 1
-  fi
-  . "$state_file"
-  err=0
-  if [ "${LOCK_BRANCH:-}" != "$branch" ]; then
-    echo "[commit-msg] Branch changed since preview. expected=$LOCK_BRANCH actual=$branch" >&2
-    err=1
-  fi
-  if [ "${LOCK_INDEX_TREE:-}" != "$index_tree" ]; then
-    echo "[commit-msg] Staged index changed since preview." >&2
-    echo "[commit-msg] expected index_tree=$LOCK_INDEX_TREE" >&2
-    echo "[commit-msg] actual   index_tree=$index_tree" >&2
-    err=1
-  fi
-  calc_msg_hash=$(sha256sum "$MSG_FILE" | awk '{print $1}')
-  if [ "${LOCK_MSG_SHA256:-}" != "$calc_msg_hash" ]; then
-    echo "[commit-msg] Commit message changed since preview." >&2
-    echo "[commit-msg] expected msg_sha256=$LOCK_MSG_SHA256" >&2
-    echo "[commit-msg] actual   msg_sha256=$calc_msg_hash" >&2
-    err=1
-  fi
-  if [ "$M40LLM_COMMIT_NONCE" != "${LOCK_NONCE:-}" ] || [ "$M40LLM_COMMIT_NONCE" != "$nonce" ]; then
-    echo "[commit-msg] Provided nonce does not match locked/computed value." >&2
-    echo "[commit-msg] expected (locked)=$LOCK_NONCE computed(now)=$nonce provided=$M40LLM_COMMIT_NONCE" >&2
-    err=1
-  fi
-  if [ "$err" -ne 0 ]; then
-    echo "[commit-msg] Aborting finalize. Re-run 'git commit' to preview and obtain a new nonce." >&2
-    exit 1
-  fi
-  rm -f -- "$state_file" || true
-  echo "[commit-msg] Nonce/state validated. Finalizing commit." >&2
-  exit 0
-fi
-
-# No nonce provided: show details and abort with instructions
-# Persist lock state for finalize step
-{
-  echo "# m40-llm commit finalize lockfile"
-  echo "LOCK_BRANCH=$branch"
-  echo "LOCK_INDEX_TREE=$index_tree"
-  echo "LOCK_MSG_SHA256=$msg_hash"
-  echo "LOCK_NONCE=$nonce"
-  echo "LOCK_TS=$(date -u +%s)"
-} > "$state_file"
-
-echo "=== START OF COMMIT DIFF (staged) ==="
-printf "%s\n" "$staged_diff"
-echo "=== END OF COMMIT DIFF ==="
-
-echo "=== START OF COMMIT MESSAGE ==="
-cat -- "$MSG_FILE"
-echo "[commit-msg] State saved to $state_file" >&2
-echo "=== END OF COMMIT MESSAGE ==="
-
-echo "[commit-msg] Deterministic nonce for this staged diff + message: $nonce" >&2
-echo "[commit-msg] BEFORE FINALIZING WITH THE NONCE, answer BOTH questions with YES:" >&2
-echo "[commit-msg]  1) Does the commit message properly represent what changed AND why in the diff above?" >&2
-echo "[commit-msg]  2) Does it have the correct Conventional Commits type for what changed?" >&2
-echo "[commit-msg] If either answer is NO: revise the commit message (and/or type) and try 'git commit' again. A new nonce will be shown for the revised message." >&2
-echo "[commit-msg] Only if BOTH answers are YES, finalize the commit by running the following commmand:" >&2
-echo "  ./scripts/finalize-commit $nonce" >&2
-echo
-echo "[commit-msg] Your commit message was saved to $MSG_FILE"
-# Note: users using 'git commit' interactively can re-run with -m or -F and the nonce set.
-exit 1
