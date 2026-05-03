@@ -50,6 +50,6 @@ jobs:
         run: |
           set -e
           echo "Linting commits since ${{ steps.latest-tag.outputs.tag }}"
-          cog check --from "${{ steps.latest-tag.outputs.tag }}"
+          cog check "${{ steps.latest-tag.outputs.tag }}..HEAD"
           echo "Contextual log since ${{ steps.latest-tag.outputs.tag }}:";
           git log --pretty=format:'%h %s' "${{ steps.latest-tag.outputs.tag }}"..HEAD || true
