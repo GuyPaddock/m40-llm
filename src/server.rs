@@ -60,6 +60,17 @@ fn sanitize_output(text: &str) -> String {
     text.chars().filter(|c| *c != '\0').collect()
 }
 
+fn decode_generated_text(
+    tokenizer: &Tokenizer,
+    ids: &[u32],
+    prompt_token_len: usize,
+) -> Result<String> {
+    let generated = ids
+        .get(prompt_token_len..)
+        .ok_or_else(|| anyhow::anyhow!("prompt token length exceeds decoded ids"))?;
+    tokenizer.decode_ignoring_specials(generated)
+}
+
 fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     let safe_chunk = GenerateStreamChunk {
         output: sanitize_output(&chunk.output),
@@ -160,6 +171,54 @@ mod tests {
             ..Default::default()
         };
         assert!(sampler_from_request(&req).is_err());
+    }
+
+    #[test]
+    fn decode_generated_text_excludes_prompt_tokens() {
+        let tokenizer = Tokenizer::byte_level();
+        let prompt = "Hello";
+        let prompt_ids = tokenizer
+            .encode_with_specials(prompt, true, false)
+            .expect("encode prompt");
+        let mut ids = prompt_ids.clone();
+        ids.extend("ijk".bytes().map(u32::from));
+
+        let generated =
+            decode_generated_text(&tokenizer, &ids, prompt_ids.len()).expect("decode generated");
+
+        assert_eq!(generated, "ijk");
+    }
+
+    #[test]
+    fn decode_generated_text_counts_tokens_not_characters() {
+        use crate::gguf::{GgufScalar, GgufValue};
+        use std::collections::HashMap;
+
+        let mut meta = HashMap::new();
+        meta.insert(
+            "tokenizer.ggml.model".to_string(),
+            GgufValue::Scalar(GgufScalar::Str("spm".to_string())),
+        );
+        meta.insert(
+            "tokenizer.ggml.tokens".to_string(),
+            GgufValue::Array(vec![
+                GgufScalar::Str("<s>".to_string()),
+                GgufScalar::Str("▁Hello".to_string()),
+                GgufScalar::Str("ijk".to_string()),
+            ]),
+        );
+        meta.insert(
+            "tokenizer.ggml.bos_token_id".to_string(),
+            GgufValue::Scalar(GgufScalar::U32(0)),
+        );
+        let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+        let prompt_ids = vec![0, 1];
+        let ids = vec![0, 1, 2];
+
+        let generated =
+            decode_generated_text(&tokenizer, &ids, prompt_ids.len()).expect("decode generated");
+
+        assert_eq!(generated, "ijk");
     }
 }
 
@@ -529,7 +588,7 @@ async fn generate(
                 ids.push(next);
                 generated.push(next);
 
-                match tokenizer_stream.decode_ignoring_specials(&ids) {
+                match tokenizer_stream.decode_ignoring_specials(&generated) {
                     Ok(text) => {
                         let _ = send_chunk(GenerateStreamChunk {
                             output: sanitize_output(&text),
@@ -557,7 +616,7 @@ async fn generate(
                 }
             }
 
-            let final_text = match tokenizer_stream.decode_ignoring_specials(&ids) {
+            let final_text = match tokenizer_stream.decode_ignoring_specials(&generated) {
                 Ok(t) => t,
                 Err(e) => {
                     let _ = tx
@@ -589,6 +648,19 @@ async fn generate(
         return Ok(response);
     }
 
+    let prompt_token_len = match tokenizer.encode_with_specials(&req.prompt, add_bos, false) {
+        Ok(ids) => ids.len(),
+        Err(e) => {
+            eprintln!("[server] prompt encode failed: {e}");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("encode failed: {e}"),
+                }),
+            ));
+        }
+    };
+
     let ids = match decode_loop_with(
         &tokenizer,
         &req.prompt,
@@ -608,7 +680,7 @@ async fn generate(
             ));
         }
     };
-    let text = match tokenizer.decode_ignoring_specials(&ids) {
+    let text = match decode_generated_text(&tokenizer, &ids, prompt_token_len) {
         Ok(t) => sanitize_output(&t),
         Err(e) => {
             #[cfg(feature = "cuda")]

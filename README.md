@@ -88,7 +88,7 @@ Build the project in one of these modes:
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.
-- Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for a CUDA‑gated toy test validating one‑layer, seq_len=1 numerics.
+- Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for CUDA‑gated toy coverage. The real server path now runs full-layer TinyLlama F16 `/generate` on M40; remaining hot-path host round trips are tracked as optimization work.
 
 
 ## CUDA device selection and cuBLAS
@@ -105,12 +105,29 @@ Build the project in one of these modes:
 
 ## Server (feature = server)
 ```
-cargo run \
-  --no-default-features \
-  --features server \
+M40LLM_ENABLE_CUBLAS=1 cargo run \
+  --features cuda,server \
   -- run path/to.gguf \
   --addr 0.0.0.0:58439
 ```
+
+`POST /generate` accepts JSON such as:
+
+```bash
+curl -sS -X POST http://127.0.0.1:58439/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Hello","max_tokens":1,"temperature":1.0,"top_k":1}'
+```
+
+The `output` field contains generated text only; it does not echo the prompt.
+`max_tokens` counts generated token IDs, not decoded characters, so a single token
+may decode to multiple characters.
+
+Current M40 validation target:
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Expected log evidence: `full-layer forward enabled layers=22`
+- Known limitation: residual adds and SiLU/gated MLP activation still use host
+  round trips and should be moved to CUDA kernels before performance claims.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

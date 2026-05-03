@@ -176,8 +176,8 @@ async fn server_generate_smoke() -> Result<()> {
     let raw = resp.bytes().await.unwrap();
     assert!(raw.iter().all(|b| *b != 0));
     let jr: GenerateResponse = serde_json::from_slice(&raw).unwrap();
-    // Expect at least prompt length + 1
-    assert!(jr.output.len() >= 2);
+    assert!(!jr.output.starts_with(&req.prompt));
+    assert!(!jr.output.is_empty());
     Ok(())
 }
 
@@ -225,5 +225,6 @@ async fn server_generate_streaming_nul_free() -> Result<()> {
     let last = last.expect("expected at least one streamed chunk");
     assert!(last.done);
     assert!(!last.output.is_empty());
+    assert!(!last.output.starts_with(&req.prompt));
     Ok(())
 }
