@@ -116,6 +116,16 @@ mod ffi {
             freq_base: f32,
             freq_scale: f32,
         ) -> i32;
+        pub fn m40llm_rope_f32_inplace(
+            ctx: *mut M40llmCudaContext,
+            d_x: *mut c_void,
+            rows: u32,
+            num_heads: u32,
+            head_dim: u32,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
 
         pub fn m40llm_kvcache_create(
             ctx: *mut M40llmCudaContext,
@@ -153,6 +163,15 @@ mod ffi {
             kv: *const M40llmKVCache,
             seq_id: u32,
             d_q_f32: *const c_void,
+            seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
             seq_len: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
@@ -805,6 +824,45 @@ impl CudaContext {
         }
     }
 
+    /// # Safety
+    /// Applies in-place RoPE rotation to a tensor shaped [rows, num_heads * head_dim] (row-major f32).
+    pub unsafe fn rope_f32_inplace(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rope_f32_inplace(
+                self.inner.raw.as_ptr(),
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rope_f32_inplace failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
     pub fn start_persistent_decode(&self) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
@@ -1140,6 +1198,36 @@ impl KVCache {
         }
         Ok(())
     }
+
+    /// # Safety
+    /// `d_q_f32` and `d_out_f32` must be valid device pointers. `q_heads` must be a multiple of
+    /// this cache's KV head count.
+    pub unsafe fn attention_last_token_f32_gqa(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_attention_last_token_f32_gqa failed: {rc}"));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -1229,6 +1317,25 @@ impl KVCache {
         let out_slice = unsafe { std::slice::from_raw_parts_mut(d_out_f32 as *mut f32, elems) };
         out_slice.copy_from_slice(&out);
         Ok(())
+    }
+
+    pub fn attention_last_token_f32_gqa(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if q_heads != self.inner.num_heads {
+            anyhow::bail!(
+                "host GQA attention is not implemented: q_heads={} kv_heads={}",
+                q_heads,
+                self.inner.num_heads
+            );
+        }
+        self.attention_last_token_f32(ctx, seq_id, d_q_f32, seq_len, d_out_f32)
     }
 }
 

@@ -67,6 +67,10 @@ int m40llm_rope_f32(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows,
     (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
 
+int m40llm_rope_f32_inplace(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+
 M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
     (void)ctx; (void)max_seq_len; (void)max_batch_size; (void)num_heads; (void)head_dim; return (M40llmKVCache*)0x1;
 }
@@ -94,6 +98,17 @@ int m40llm_attention_last_token_f32(
     uint32_t seq_len,
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)seq_len; (void)out_dev_f32; return -1;
+}
+
+int m40llm_attention_last_token_f32_gqa(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
 }
 
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }

@@ -1028,12 +1028,17 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
-        let num_heads = self.model_config.attention_head_count;
+        let num_heads = self.model_config.attention_head_count_kv;
         let d_model = self.model_config.embedding_length;
-        if num_heads == 0 || d_model == 0 || !d_model.is_multiple_of(num_heads) {
+        if self.model_config.attention_head_count == 0
+            || num_heads == 0
+            || d_model == 0
+            || !d_model.is_multiple_of(self.model_config.attention_head_count)
+        {
             anyhow::bail!(
-                "model_config invalid for KV layout: d_model {} head_count {}",
+                "model_config invalid for KV layout: d_model {} head_count {} kv_head_count {}",
                 d_model,
+                self.model_config.attention_head_count,
                 num_heads
             );
         }
@@ -1155,9 +1160,16 @@ impl LoadedModel {
             .kv_cache
             .as_ref()
             .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
-        if kv.num_heads() != num_heads || kv.head_dim() != head_dim {
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
             anyhow::bail!(
-                "KVCache layout mismatch: kv has (heads={}, dim={}), requested ({},{})",
+                "run_attention: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
                 kv.num_heads(),
                 kv.head_dim(),
                 num_heads,
@@ -1166,11 +1178,11 @@ impl LoadedModel {
         }
         #[cfg(feature = "cuda")]
         unsafe {
-            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
+            kv.attention_last_token_f32_gqa(&self.cuda, seq_id, d_q, num_heads, seq_len, d_out)
         }
         #[cfg(not(feature = "cuda"))]
         {
-            kv.attention_last_token_f32(&self.cuda, seq_id, d_q, seq_len, d_out)
+            kv.attention_last_token_f32_gqa(&self.cuda, seq_id, d_q, num_heads, seq_len, d_out)
         }
     }
 
@@ -1219,7 +1231,7 @@ impl LoadedModel {
     /// Minimal forward pass for one token through attention + MLP using existing primitives.
     /// Assumptions:
     /// - Batch size = 1
-    /// - Q/K/V and out-proj output dims equal d_model
+    /// - Q/out-proj output dims equal d_model; K/V may use grouped-query KV dims
     /// - Activations and residual adds are performed on host as a temporary fallback
     /// - KV cache must be pre-allocated with matching num_heads/head_dim
     ///
@@ -1248,12 +1260,39 @@ impl LoadedModel {
 
         #[cfg(feature = "cuda")]
         {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            let q_heads = self.model_config.attention_head_count;
+            let kv_heads = kv.num_heads();
+            let head_dim = kv.head_dim();
+            let kv_dim = kv_heads
+                .checked_mul(head_dim)
+                .context("KV projection dim overflow")?;
+            if q_heads == 0 || q_heads % kv_heads != 0 {
+                anyhow::bail!(
+                    "forward_one_token_minimal: query heads {} must be a multiple of kv heads {}",
+                    q_heads,
+                    kv_heads
+                );
+            }
+            if d_model as u32 != q_heads.saturating_mul(head_dim) {
+                anyhow::bail!(
+                    "forward_one_token_minimal: d_model {} != query heads {} * head_dim {}",
+                    d_model,
+                    q_heads,
+                    head_dim
+                );
+            }
+
             // Allocate scratch buffers
             let bytes_d = (d_model as usize) * 4;
+            let bytes_kv = (kv_dim as usize) * 4;
             let bytes_h = (hidden_dim as usize) * 4;
             let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
-            let dk = self.cuda.device_malloc_tagged(bytes_d, "fwd:dk_f32")?;
-            let dv = self.cuda.device_malloc_tagged(bytes_d, "fwd:dv_f32")?;
+            let dk = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dk_f32")?;
+            let dv = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dv_f32")?;
             let datt = self.cuda.device_malloc_tagged(bytes_d, "fwd:datt_f32")?; // attention output
             let dy_attn = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_attn_f32")?; // after out-proj
             let dgate = self.cuda.device_malloc_tagged(bytes_h, "fwd:dgate_f32")?;
@@ -1268,25 +1307,40 @@ impl LoadedModel {
                 // Pre-norm (RMSNorm) on x -> xn
                 self.run_rms_norm(d_x_f32, d_xn, 1, d_model as u32, 1e-6)?;
 
-                // Q/K/V projections (m=1, k=d_model, n=d_model)
+                // Q uses query heads; K/V use KV heads for GQA models.
                 self.qkv_project_f32xf16_f32(
-                    d_xn, 1, d_model, d_wq_f16, d_model, d_wk_f16, d_model, d_wv_f16, d_model, dq,
-                    dk, dv,
+                    d_xn,
+                    1,
+                    d_model,
+                    d_wq_f16,
+                    d_model,
+                    d_wk_f16,
+                    kv_dim as i32,
+                    d_wv_f16,
+                    kv_dim as i32,
+                    dq,
+                    dk,
+                    dv,
                 )?;
 
-                let kv = self.kv_cache.as_ref().ok_or_else(|| {
-                    anyhow!("kv_cache not allocated; call allocate_kv_cache first")
-                })?;
-                let num_heads = kv.num_heads();
-                let head_dim = kv.head_dim();
                 let pos = seq_len.saturating_sub(1);
-                self.apply_rope_f32(
+                self.cuda.rope_f32_inplace(
                     dq as *mut c_void,
-                    dk as *mut c_void,
                     1,
-                    num_heads,
+                    q_heads,
                     head_dim,
                     pos,
+                    self.model_config.rope_freq_base,
+                    self.model_config.rope_freq_scale,
+                )?;
+                self.cuda.rope_f32_inplace(
+                    dk as *mut c_void,
+                    1,
+                    kv_heads,
+                    head_dim,
+                    pos,
+                    self.model_config.rope_freq_base,
+                    self.model_config.rope_freq_scale,
                 )?;
 
                 // Append K/V for this token, then attention over last token
@@ -1299,7 +1353,7 @@ impl LoadedModel {
                     seq_id,
                     seq_len,
                     d_model as u32,
-                    num_heads,
+                    q_heads,
                     head_dim,
                 )?;
 
