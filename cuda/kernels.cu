@@ -206,9 +206,8 @@ extern "C" int m40llm_rms_norm_f32(
         uint32_t dim,
         float eps) {
         if (!ctx || !d_input || !d_output || dim == 0) return -1;
-        const int threads_per_block = 256;
-        size_t shared = threads_per_block * sizeof(float);
-        rms_norm_f32<<<rows, threads_per_block, shared, ctx->decode_stream>>>(
+        cudaGetLastError();
+        rms_norm_f32<<<rows, 1, 0, ctx->decode_stream>>>(
             reinterpret_cast<const float*>(d_input),
             reinterpret_cast<float*>(d_output),
             rows,
@@ -750,6 +749,7 @@ extern "C" int m40llm_rms_norm_f32(
 
         if (pairs > 0) {
             const int blocks_h2 = (int)((pairs + threads - 1) / threads);
+            cudaGetLastError();
             cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(k_in_h2, k_out_h2, pairs);
             cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(v_in_h2, v_out_h2, pairs);
         }
@@ -758,6 +758,7 @@ extern "C" int m40llm_rms_norm_f32(
             const float* v_tail_in = v_in_h2 + pairs * 2;
             __half* k_tail_out = k_out_h2 + pairs * 2;
             __half* v_tail_out = v_out_h2 + pairs * 2;
+            cudaGetLastError();
             cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(k_tail_in, k_tail_out, 1);
             cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(v_tail_in, v_tail_out, 1);
         }
