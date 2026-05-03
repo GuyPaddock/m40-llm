@@ -363,6 +363,8 @@ pub struct StandardLayerWeights {
     pub w_gate: DeviceTensorView,
     pub w_up: DeviceTensorView,
     pub w_down: DeviceTensorView,
+    pub attn_norm: Option<DeviceTensorView>,
+    pub ffn_norm: Option<DeviceTensorView>,
 }
 
 impl LoadedModel {
@@ -413,6 +415,34 @@ impl LoadedModel {
             }
         }
         anyhow::bail!("missing required tensor; tried: {}", candidates.join(", "))
+    }
+
+    fn find_tensor_any_optional(&self, candidates: &[String]) -> Option<DeviceTensorView> {
+        candidates
+            .iter()
+            .find_map(|name| self.device_tensor(name))
+            .cloned()
+    }
+
+    fn validate_norm_weight(&self, label: &str, view: &DeviceTensorView, dim: usize) -> Result<()> {
+        if view.dtype != GgmlDType::F16 && view.dtype != GgmlDType::F32 {
+            anyhow::bail!("{label} expected F16 or F32, got {:?}", view.dtype);
+        }
+        if view.shape.len() != 1 || view.shape[0] as usize != dim {
+            anyhow::bail!(
+                "{label} shape invalid: expected [{dim}], got {:?}",
+                view.shape
+            );
+        }
+        Ok(())
+    }
+
+    fn norm_weight_dtype_code(dtype: GgmlDType) -> Result<u32> {
+        match dtype {
+            GgmlDType::F16 => Ok(0),
+            GgmlDType::F32 => Ok(1),
+            other => anyhow::bail!("unsupported norm weight dtype: {:?}", other),
+        }
     }
 
     /// Map standard LLaMA-style GGUF tensor names for a single layer.
@@ -505,6 +535,16 @@ impl LoadedModel {
             format!("layers.{layer}.feed_forward.w2.weight"),
             format!("blk.{layer}.ffn_down.weight"),
         ];
+        let attn_norm_names = vec![
+            format!("layers.{layer}.attention_norm.weight"),
+            format!("layers.{layer}.attn_norm.weight"),
+            format!("blk.{layer}.attn_norm.weight"),
+        ];
+        let ffn_norm_names = vec![
+            format!("layers.{layer}.ffn_norm.weight"),
+            format!("layers.{layer}.feed_forward_norm.weight"),
+            format!("blk.{layer}.ffn_norm.weight"),
+        ];
 
         let wq = self.find_tensor_any(&wq_names)?.clone();
         let wk = self.find_tensor_any(&wk_names)?.clone();
@@ -513,6 +553,8 @@ impl LoadedModel {
         let w_gate = self.find_tensor_any(&w_gate_names)?.clone();
         let w_up = self.find_tensor_any(&w_up_names)?.clone();
         let w_down = self.find_tensor_any(&w_down_names)?.clone();
+        let attn_norm = self.find_tensor_any_optional(&attn_norm_names);
+        let ffn_norm = self.find_tensor_any_optional(&ffn_norm_names);
 
         // DType checks: we support FP16 or Q5_1 weights for GEMM paths
         for (name, t) in [
@@ -605,6 +647,12 @@ impl LoadedModel {
                 hidden_dim
             );
         }
+        if let Some(t) = &attn_norm {
+            self.validate_norm_weight("attention norm", t, d_model)?;
+        }
+        if let Some(t) = &ffn_norm {
+            self.validate_norm_weight("ffn norm", t, d_model)?;
+        }
 
         Ok(StandardLayerWeights {
             d_model,
@@ -617,6 +665,8 @@ impl LoadedModel {
             w_gate,
             w_up,
             w_down,
+            attn_norm,
+            ffn_norm,
         })
     }
     /// Map the language modeling head (output projection) tensor if present.
@@ -658,6 +708,28 @@ impl LoadedModel {
             "lm_head tensor not found; expected one of {}",
             candidates.join(", ")
         )
+    }
+
+    pub fn map_output_norm(&self) -> Result<Option<(String, DeviceTensorView)>> {
+        let candidates = vec![
+            "output_norm.weight".to_string(),
+            "norm.weight".to_string(),
+            "model.norm.weight".to_string(),
+        ];
+        let Some(view) = self.find_tensor_any_optional(&candidates) else {
+            return Ok(None);
+        };
+        let name = candidates
+            .iter()
+            .find(|candidate| self.device_tensor(candidate).is_some())
+            .context("output norm tensor name not found after candidate match")?
+            .clone();
+        self.validate_norm_weight(
+            "output norm",
+            &view,
+            self.model_config.embedding_length as usize,
+        )?;
+        Ok(Some((name, view)))
     }
 }
 
@@ -1238,7 +1310,7 @@ impl LoadedModel {
     /// # Safety
     /// All device pointers must be valid on this context's device.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn forward_one_token_minimal(
+    pub unsafe fn forward_one_token_minimal_with_norms(
         &self,
         d_x_f32: *const c_void,
         d_model: i32,
@@ -1252,6 +1324,8 @@ impl LoadedModel {
         hidden_dim: i32,
         seq_id: u32,
         seq_len: u32,
+        attn_norm_weight: Option<(*const c_void, GgmlDType)>,
+        ffn_norm_weight: Option<(*const c_void, GgmlDType)>,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         if d_model <= 0 || hidden_dim <= 0 {
@@ -1305,7 +1379,25 @@ impl LoadedModel {
 
             let res = (|| -> Result<()> {
                 // Pre-norm (RMSNorm) on x -> xn
-                self.run_rms_norm(d_x_f32, d_xn, 1, d_model as u32, 1e-6)?;
+                if let Some((d_weight, dtype)) = attn_norm_weight {
+                    self.run_rms_norm_weighted(
+                        d_x_f32,
+                        d_weight,
+                        dtype,
+                        d_xn,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm(
+                        d_x_f32,
+                        d_xn,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
 
                 // Q uses query heads; K/V use KV heads for GQA models.
                 self.qkv_project_f32xf16_f32(
@@ -1399,7 +1491,25 @@ impl LoadedModel {
                 }
 
                 // Post-attention norm: x1n = norm(x1)
-                self.run_rms_norm(d_x1, d_x1n, 1, d_model as u32, 1e-6)?;
+                if let Some((d_weight, dtype)) = ffn_norm_weight {
+                    self.run_rms_norm_weighted(
+                        d_x1,
+                        d_weight,
+                        dtype,
+                        d_x1n,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm(
+                        d_x1,
+                        d_x1n,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
 
                 // MLP gates and up (now feed post-attn normalized x1n)
                 self.mlp_gates_f32xf16_f32(
@@ -1528,10 +1638,52 @@ impl LoadedModel {
                 hidden_dim,
                 seq_id,
                 seq_len,
+                attn_norm_weight,
+                ffn_norm_weight,
                 d_out_f32,
             );
             Ok(())
         }
+    }
+
+    /// Minimal forward pass for one token without learned RMSNorm weights.
+    ///
+    /// # Safety
+    /// All device pointers must be valid on this context's device.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn forward_one_token_minimal(
+        &self,
+        d_x_f32: *const c_void,
+        d_model: i32,
+        d_wq_f16: *const c_void,
+        d_wk_f16: *const c_void,
+        d_wv_f16: *const c_void,
+        d_wo_f16: *const c_void,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        d_w_down_f16: *const c_void,
+        hidden_dim: i32,
+        seq_id: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.forward_one_token_minimal_with_norms(
+            d_x_f32,
+            d_model,
+            d_wq_f16,
+            d_wk_f16,
+            d_wv_f16,
+            d_wo_f16,
+            d_w_gate_f16,
+            d_w_up_f16,
+            d_w_down_f16,
+            hidden_dim,
+            seq_id,
+            seq_len,
+            None,
+            None,
+            d_out_f32,
+        )
     }
 
     /// # Safety
@@ -1594,6 +1746,32 @@ impl LoadedModel {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Device pointers must reference buffers sized for `seq_len * dim` f32 values and
+    /// a norm weight vector of `dim` F16/F32 values on the same CUDA context.
+    pub unsafe fn run_rms_norm_weighted(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        weight_dtype: GgmlDType,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        let dtype_code = Self::norm_weight_dtype_code(weight_dtype)?;
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda
+                .rms_norm_f32_weighted(d_in, d_weight, d_out, seq_len, dim, eps, dtype_code)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, seq_len, dim, eps, dtype_code);
             Ok(())
         }
     }
@@ -1857,8 +2035,24 @@ impl LoadedModel {
             let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
             let w_down_ptr = self.tensor_device_ptr("w_down", &w.w_down)?;
+            let attn_norm_ptr = w
+                .attn_norm
+                .as_ref()
+                .map(|view| {
+                    self.tensor_device_ptr("attn_norm", view)
+                        .map(|ptr| (ptr, view.dtype))
+                })
+                .transpose()?;
+            let ffn_norm_ptr = w
+                .ffn_norm
+                .as_ref()
+                .map(|view| {
+                    self.tensor_device_ptr("ffn_norm", view)
+                        .map(|ptr| (ptr, view.dtype))
+                })
+                .transpose()?;
 
-            self.forward_one_token_minimal(
+            self.forward_one_token_minimal_with_norms(
                 d_x_f32,
                 w.d_model as i32,
                 wq_ptr,
@@ -1871,6 +2065,8 @@ impl LoadedModel {
                 w.hidden_dim as i32,
                 seq_id,
                 seq_len,
+                attn_norm_ptr,
+                ffn_norm_ptr,
                 d_out_f32,
             )?;
 
@@ -2315,28 +2511,58 @@ impl LoadedModel {
             #[cfg(feature = "cuda")]
             {
                 let d_w = self.tensor_device_ptr(&name, &lm)?;
+                let bytes_hidden = d_model * std::mem::size_of::<f32>();
                 let bytes_logits = vocab * std::mem::size_of::<f32>();
+                let mut d_norm_hidden = std::ptr::null_mut();
                 let d_logits = self.cuda.device_malloc(bytes_logits)?;
-                self.matmul_f32xf16_f32(
-                    d_hidden_f32,
-                    d_w,
-                    d_logits,
-                    1,
-                    vocab as i32,
-                    d_model as i32,
-                )
-                .with_context(|| {
-                    format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
-                })?;
-                let mut host = vec![0u8; bytes_logits];
-                self.cuda
-                    .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
-                let mut logits = Vec::with_capacity(vocab);
-                for ch in host.chunks_exact(4) {
-                    logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                let result = (|| -> Result<Vec<f32>> {
+                    let hidden_for_logits =
+                        if let Some((norm_name, norm)) = self.map_output_norm()? {
+                            let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
+                            d_norm_hidden = self
+                                .cuda
+                                .device_malloc_tagged(bytes_hidden, "logits:output_norm_f32")?;
+                            self.run_rms_norm_weighted(
+                                d_hidden_f32,
+                                d_norm_w,
+                                norm.dtype,
+                                d_norm_hidden,
+                                1,
+                                d_model as u32,
+                                self.model_config.layer_norm_epsilon,
+                            )?;
+                            d_norm_hidden as *const c_void
+                        } else {
+                            d_hidden_f32
+                        };
+                    self.matmul_f32xf16_f32(
+                        hidden_for_logits,
+                        d_w,
+                        d_logits,
+                        1,
+                        vocab as i32,
+                        d_model as i32,
+                    )
+                    .with_context(|| {
+                        format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
+                    })?;
+                    let mut host = vec![0u8; bytes_logits];
+                    self.cuda.memcpy_d2h(
+                        host.as_mut_ptr() as *mut c_void,
+                        d_logits,
+                        bytes_logits,
+                    )?;
+                    let mut logits = Vec::with_capacity(vocab);
+                    for ch in host.chunks_exact(4) {
+                        logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                    }
+                    Ok(logits)
+                })();
+                if !d_norm_hidden.is_null() {
+                    let _ = self.cuda.device_free(d_norm_hidden);
                 }
                 let _ = self.cuda.device_free(d_logits);
-                return Ok(logits);
+                return result;
             }
             #[cfg(not(feature = "cuda"))]
             {

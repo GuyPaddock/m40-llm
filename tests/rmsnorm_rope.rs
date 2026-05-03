@@ -22,6 +22,22 @@ fn cpu_rms_norm(input: &[f32], rows: usize, dim: usize, eps: f32) -> Vec<f32> {
     out
 }
 
+fn cpu_rms_norm_weighted(
+    input: &[f32],
+    weight: &[f32],
+    rows: usize,
+    dim: usize,
+    eps: f32,
+) -> Vec<f32> {
+    let mut out = cpu_rms_norm(input, rows, dim, eps);
+    for r in 0..rows {
+        for c in 0..dim {
+            out[r * dim + c] *= weight[c];
+        }
+    }
+    out
+}
+
 fn cpu_rope(
     q: &mut [f32],
     k: &mut [f32],
@@ -94,6 +110,61 @@ fn rms_norm_kernel_matches_cpu() -> Result<()> {
     }
     unsafe {
         ctx.device_free(d_in)?;
+        ctx.device_free(d_out)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn weighted_rms_norm_kernel_matches_cpu_f32_weight() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+
+    let rows = 2usize;
+    let dim = 8usize;
+    let eps = 1e-5f32;
+    let input: Vec<f32> = (0..rows * dim).map(|i| (i as f32) * 0.125 - 1.0).collect();
+    let weight: Vec<f32> = (0..dim).map(|i| 0.5 + i as f32 * 0.1).collect();
+    let expected = cpu_rms_norm_weighted(&input, &weight, rows, dim, eps);
+
+    let input_bytes = input.len() * std::mem::size_of::<f32>();
+    let weight_bytes = weight.len() * std::mem::size_of::<f32>();
+    let d_in = ctx.device_malloc(input_bytes)?;
+    let d_weight = ctx.device_malloc(weight_bytes)?;
+    let d_out = ctx.device_malloc(input_bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_in, input.as_ptr() as *const c_void, input_bytes)?;
+        ctx.memcpy_h2d(d_weight, weight.as_ptr() as *const c_void, weight_bytes)?;
+        ctx.rms_norm_f32_weighted(
+            d_in,
+            d_weight as *const c_void,
+            d_out,
+            rows as u32,
+            dim as u32,
+            eps,
+            1,
+        )?;
+        let mut out_bytes = vec![0u8; input_bytes];
+        ctx.memcpy_d2h(out_bytes.as_mut_ptr() as *mut c_void, d_out, input_bytes)?;
+        let actual: Vec<f32> = out_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        for (i, (a, b)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (a - b).abs() < 1e-4,
+                "mismatch at {}: got {}, expected {}",
+                i,
+                a,
+                b
+            );
+        }
+    }
+    unsafe {
+        ctx.device_free(d_in)?;
+        ctx.device_free(d_weight)?;
         ctx.device_free(d_out)?;
     }
     Ok(())

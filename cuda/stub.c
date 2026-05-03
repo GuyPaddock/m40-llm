@@ -63,6 +63,10 @@ int m40llm_rms_norm_f32(M40llmCudaContext* ctx, const void* d_in, void* d_out, u
     (void)ctx; (void)d_in; (void)d_out; (void)rows; (void)dim; (void)eps; return -1;
 }
 
+int m40llm_rms_norm_f32_weighted(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
+    (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
+}
+
 int m40llm_rope_f32(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }

@@ -104,6 +104,16 @@ mod ffi {
             dim: u32,
             eps: f32,
         ) -> i32;
+        pub fn m40llm_rms_norm_f32_weighted(
+            ctx: *mut M40llmCudaContext,
+            d_in: *const c_void,
+            d_weight: *const c_void,
+            d_out: *mut c_void,
+            rows: u32,
+            dim: u32,
+            eps: f32,
+            weight_dtype: u32,
+        ) -> i32;
 
         pub fn m40llm_rope_f32(
             ctx: *mut M40llmCudaContext,
@@ -779,6 +789,44 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_in, d_out, rows, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_in`, `d_weight`, and `d_out` must be valid device pointers. `d_weight`
+    /// must contain `dim` elements, with dtype code 0=F16 and 1=F32.
+    pub unsafe fn rms_norm_f32_weighted(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        d_out: *mut c_void,
+        rows: u32,
+        dim: u32,
+        eps: f32,
+        weight_dtype: u32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rms_norm_f32_weighted(
+                self.inner.raw.as_ptr(),
+                d_in,
+                d_weight,
+                d_out,
+                rows,
+                dim,
+                eps,
+                weight_dtype,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rms_norm_f32_weighted failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, rows, dim, eps, weight_dtype);
             Ok(())
         }
     }

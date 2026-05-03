@@ -119,6 +119,17 @@ fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
+#[cfg(feature = "cuda")]
+fn log_top_logits(logits: &[f32], k: usize) {
+    if std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1") {
+        return;
+    }
+    let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
+    top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+    top.truncate(k);
+    eprintln!("[server] top_logits={top:?}");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,7 +452,9 @@ async fn generate(
                         let _ = model.cuda.device_free(d_x);
                     }
 
-                    logits = Some(token_logits?);
+                    let token_logits = token_logits?;
+                    log_top_logits(&token_logits, 8);
+                    logits = Some(token_logits);
                 }
                 if can_forward {
                     processed_len = ids.len();
@@ -587,6 +600,13 @@ async fn generate(
                 };
                 ids.push(next);
                 generated.push(next);
+                #[cfg(feature = "cuda")]
+                if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+                    let text = tokenizer_stream
+                        .decode_ignoring_specials(&[next])
+                        .unwrap_or_else(|_| "<decode-error>".to_string());
+                    eprintln!("[server] sampled token id={next} text={text:?}");
+                }
 
                 match tokenizer_stream.decode_ignoring_specials(&generated) {
                     Ok(text) => {

@@ -175,6 +175,33 @@ extern "C" {
         }
     }
 
+    extern "C" __global__ void rms_norm_f32_weighted(
+        const float* __restrict__ input,
+        const void* __restrict__ weight,
+        float* __restrict__ output,
+        size_t n_rows,
+        size_t row_stride,
+        float eps,
+        uint32_t weight_dtype) {
+        const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
+        if (row >= n_rows) return;
+
+        float ss = 0.0f;
+        for (size_t i = 0; i < row_stride; i++) {
+            float x = input[row * row_stride + i];
+            ss += x * x;
+        }
+        float rms = sqrtf(ss / row_stride + eps);
+        const float scale = 1.0f / rms;
+
+        const __half* w_f16 = reinterpret_cast<const __half*>(weight);
+        const float* w_f32 = reinterpret_cast<const float*>(weight);
+        for (size_t i = 0; i < row_stride; i++) {
+            const float w = weight_dtype == 0 ? __half2float(w_f16[i]) : w_f32[i];
+            output[row * row_stride + i] = input[row * row_stride + i] * scale * w;
+        }
+    }
+
     __global__ void kernel_f16_to_f32(const __half* in, float* out, size_t n) {
         size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < n) {
@@ -215,6 +242,32 @@ extern "C" int m40llm_rms_norm_f32(
             rows,
             dim,
             eps);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -3;
+    }
+
+extern "C" int m40llm_rms_norm_f32_weighted(
+        M40llmCudaContext* ctx,
+        const void* d_input,
+        const void* d_weight,
+        void* d_output,
+        uint32_t rows,
+        uint32_t dim,
+        float eps,
+        uint32_t weight_dtype) {
+        if (!ctx || !d_input || !d_weight || !d_output || dim == 0) return -1;
+        if (weight_dtype > 1) return -4;
+        cudaGetLastError();
+        rms_norm_f32_weighted<<<rows, 1, 0, ctx->decode_stream>>>(
+            reinterpret_cast<const float*>(d_input),
+            d_weight,
+            reinterpret_cast<float*>(d_output),
+            rows,
+            dim,
+            eps,
+            weight_dtype);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->decode_stream);
