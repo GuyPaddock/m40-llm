@@ -119,6 +119,7 @@ fn main() {
 
     // Rebuild triggers
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CUDA");
+    println!("cargo:rerun-if-env-changed=M40LLM_SYSROOT");
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
@@ -153,33 +154,26 @@ fn main() {
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
-            // Drop GNU extensions so glibc does not expose the GNU-only cospi/sinpi
-            // overloads that conflict with CUDA's math prototypes.
+            // Drop GNU extensions so glibc does not expose C23/IEC math
+            // prototypes that conflict with CUDA's math declarations.
             .flag("-Xcompiler")
             .flag("-U_GNU_SOURCE")
-            .flag("-Xcompiler")
-            .flag("-D_GNU_SOURCE=0")
-            // Also clear the default-source feature set which otherwise enables
-            // __USE_MISC and reintroduces the same GNU-only math prototypes.
+            // Also clear the default-source feature set; do not define these
+            // macros to 0 because glibc checks some feature macros with
+            // `defined(...)`, not truthiness.
             .flag("-Xcompiler")
             .flag("-U_DEFAULT_SOURCE")
-            .flag("-Xcompiler")
-            .flag("-D_DEFAULT_SOURCE=0")
             // Restrict host headers to ISO C/C++ so glibc doesn't surface
-            // GNU-only math overloads (cospi/sinpi) that conflict with CUDA
-            // math declarations.
+            // extension math declarations that conflict with CUDA.
             .flag("-Xcompiler")
             .flag("-D__STRICT_ANSI__")
-            // Avoid the glibc C2x math extension overloads (cospi/sinpi)
-            // conflicting with CUDA's declarations.
+            // Avoid TS 18661/C23 math extensions such as rsqrt/cospi/sinpi.
             .flag("-Xcompiler")
-            .flag("-D__STDC_WANT_IEC_60559_FUNCS_EXT__=0")
+            .flag("-U__STDC_WANT_IEC_60559_FUNCS_EXT__")
             // Disable fortify helpers that rely on new GCC builtins unsupported
             // by older NVCC frontends.
             .flag("-Xcompiler")
             .flag("-U_FORTIFY_SOURCE")
-            .flag("-Xcompiler")
-            .flag("-D_FORTIFY_SOURCE=0")
             .flag("-cudart=shared")
             .flag("-O3")
             .flag("-Xcompiler")
@@ -190,7 +184,12 @@ fn main() {
             .flag("-gencode=arch=compute_52,code=compute_52")
             .flag("-allow-unsupported-compiler");
 
-        if let Ok(prefix) = env::var("CONDA_PREFIX") {
+        if let Ok(sysroot) = env::var("M40LLM_SYSROOT") {
+            let sys_include = Path::new(&sysroot).join("usr/include");
+            if sys_include.exists() {
+                build.include(&sys_include);
+            }
+        } else if let Ok(prefix) = env::var("CONDA_PREFIX") {
             let sysroot = Path::new(&prefix).join("x86_64-conda-linux-gnu/sysroot");
             let sys_include = sysroot.join("usr/include");
             if sys_include.exists() {

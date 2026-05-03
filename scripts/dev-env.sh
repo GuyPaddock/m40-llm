@@ -9,6 +9,11 @@ if [ -z "${MAMBA_ROOT_PREFIX:-}" ] || [ ! -d "$MAMBA_ROOT_PREFIX/envs/m40-rustfm
 fi
 
 M40_RUSTFMT_BIN="$MAMBA_ROOT_PREFIX/envs/m40-rustfmt/bin"
+M40_RUSTFMT_SYSROOT="$MAMBA_ROOT_PREFIX/envs/m40-rustfmt/x86_64-conda-linux-gnu/sysroot"
+if [ -d "$M40_RUSTFMT_SYSROOT/usr/include" ]; then
+  export M40LLM_SYSROOT="${M40LLM_SYSROOT:-$M40_RUSTFMT_SYSROOT}"
+fi
+
 M40_LOCAL_BIN="$HOME/.local/bin"
 if [ -d "$M40_LOCAL_BIN" ]; then
   case ":$PATH:" in

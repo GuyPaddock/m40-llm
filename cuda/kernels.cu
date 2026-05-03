@@ -46,6 +46,14 @@ extern "C" {
         return set_err == cudaSuccess ? 0 : -2;
     }
 
+    static size_t m40llm_strnlen_host(const char* s, size_t max_len) {
+        size_t n = 0;
+        while (n < max_len && s[n] != '\0') {
+            ++n;
+        }
+        return n;
+    }
+
     int m40llm_device_malloc(M40llmCudaContext* ctx, size_t bytes, void** out_ptr) {
         if (!ctx || !out_ptr) return -1;
         if (ensure_device(ctx) != 0) return -2;
@@ -331,7 +339,7 @@ extern "C" int m40llm_rms_norm_f32(
         cudaDeviceProp prop;
         err = cudaGetDeviceProperties(&prop, dev);
         if (err != cudaSuccess) return -3;
-        size_t nlen = strnlen(prop.name, sizeof(prop.name));
+        size_t nlen = m40llm_strnlen_host(prop.name, sizeof(prop.name));
         if (buf_len <= nlen) {
             nlen = buf_len - 1;
         }
