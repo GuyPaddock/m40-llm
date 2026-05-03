@@ -194,73 +194,6 @@ extern "C" {
     }
 extern "C" {
 
-    // RMS Normalization (FP32)
-    // Rotary Position Embedding kernel (FP32)
-    __global__ void rope_kernel(
-        float* x,
-        float* out,
-        const uint32_t* positions,
-        uint32_t dim,
-        uint32_t head_size,
-        uint32_t n_ctx,
-        uint32_t n_heads,
-        uint32_t n_batch) {
-        const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-        if (i >= n_batch * n_heads * head_size) return;
-
-        const uint32_t b = i / (n_heads * head_size);
-        const uint32_t h = (i % (n_heads * head_size)) / head_size;
-        const uint32_t d = i % head_size;
-        const uint32_t pos = positions[b];
-        const uint32_t half_d = dim / 2;
-
-        const float theta = 1.0f / powf(10000.0f, float(d % half_d) / float(half_d));
-        const float theta_pos = theta * float(pos);
-        const float cos_theta_pos = cosf(theta_pos);
-        const float sin_theta_pos = sinf(theta_pos);
-
-        const uint32_t idx = b * n_heads * head_size + h * head_size + d;
-        const float x0 = x[idx];
-        const float x1 = idx + half_d < n_batch * n_heads * head_size ? x[idx + half_d] : 0.0f;
-        
-        out[idx] = x0 * cos_theta_pos - x1 * sin_theta_pos;
-        if (d < half_d) {
-            out[idx + half_d] = x0 * sin_theta_pos + x1 * cos_theta_pos;
-        }
-    }
-
-    // RMS Normalization (FP32)
-    // Rotary Position Embedding (FP32)
-    int m40llm_rope_f32(
-        M40llmCudaContext* ctx,
-        void* d_x,
-        void* d_out,
-        const uint32_t* d_positions,
-        uint32_t dim,
-        uint32_t head_size,
-        uint32_t n_ctx,
-        uint32_t n_heads,
-        uint32_t n_batch) {
-        if (!ctx || !d_x || !d_out || !d_positions) return -1;
-        const int threads = 256;
-        const int elements = n_batch * n_heads * head_size;
-        const int blocks = (elements + threads - 1) / threads;
-        rope_kernel<<<blocks, threads, 0, ctx->prefill_stream>>>(
-            reinterpret_cast<float*>(d_x),
-            reinterpret_cast<float*>(d_out),
-            d_positions,
-            dim,
-            head_size,
-            n_ctx,
-            n_heads,
-            n_batch);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) return -2;
-        err = cudaStreamSynchronize(ctx->prefill_stream);
-        if (err != cudaSuccess) return -3;
-        return 0;
-    }
-
     // Forward declaration
 // Declaration removed - using extern "C" version below
 
@@ -872,6 +805,68 @@ extern "C" int m40llm_rms_norm_f32(
         if (kv->d_v) cudaFree(kv->d_v);
         if (kv->d_seq_map) cudaFree(kv->d_seq_map);
         delete kv;
+    }
+
+    __global__ void rope_f32_kernel(
+        float* __restrict__ q,
+        float* __restrict__ k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+        const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        if (pair_idx >= total_pairs) return;
+
+        const uint32_t row = pair_idx / pairs_per_row;
+        const uint32_t pair_in_row = pair_idx % pairs_per_row;
+        const uint32_t head = pair_in_row / (head_dim / 2);
+        const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
+
+        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        const float pos = static_cast<float>(past_len + row) * freq_scale;
+        const float theta = pos * powf(
+            freq_base,
+            -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+        const float c = cosf(theta);
+        const float s = sinf(theta);
+
+        const float q0 = q[base];
+        const float q1 = q[base + 1];
+        q[base] = q0 * c - q1 * s;
+        q[base + 1] = q0 * s + q1 * c;
+
+        const float k0 = k[base];
+        const float k1 = k[base + 1];
+        k[base] = k0 * c - k1 * s;
+        k[base + 1] = k0 * s + k1 * c;
+    }
+
+    int m40llm_rope_f32(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+        if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
+        if (head_dim % 2 != 0) return -2;
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        const int threads_per_block = 256;
+        const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+        rope_f32_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
+            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -4;
     }
 
     // A stub persistent decode kernel: one warp = one sequence
