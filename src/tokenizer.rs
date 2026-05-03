@@ -88,7 +88,10 @@ impl Tokenizer {
             .get("sentencepiece.model")
             .and_then(|v| v.as_str())
             .is_some()
-            || matches!(model_str.as_deref(), Some("spm" | "sentencepiece"));
+            || matches!(
+                model_str.as_deref(),
+                Some("spm" | "sentencepiece" | "llama")
+            );
         let has_bpe = metadata
             .get("tokenizer.ggml.bpe_merges")
             .and_then(|v| v.as_str())
@@ -214,27 +217,31 @@ impl Tokenizer {
                 .map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"));
         }
 
-        let mut pieces = Vec::with_capacity(ids.len());
+        let mut bytes = Vec::new();
         for &id in ids {
             if let Some(tok) = self.vocab.get(id as usize) {
-                pieces.push(tok.clone());
+                if let Some(byte) = parse_byte_fallback_token(tok) {
+                    bytes.push(byte);
+                } else {
+                    bytes.extend_from_slice(tok.as_bytes());
+                }
             } else if id <= 255 {
-                pieces.push((id as u8 as char).to_string());
+                bytes.push(id as u8);
             } else {
-                pieces.push("?".to_string());
+                bytes.push(b'?');
             }
         }
 
+        let joined = decode_utf8_with_qmark(&bytes);
         let text = match self.kind {
             TokenizerKind::SentencePiece => {
-                let joined = pieces.concat();
                 let mut replaced = joined.replace('▁', " ");
                 if replaced.starts_with(' ') {
                     replaced = replaced.trim_start().to_string();
                 }
                 replaced
             }
-            _ => pieces.concat(),
+            _ => joined,
         };
 
         Ok(text)
@@ -352,6 +359,39 @@ impl Tokenizer {
         }
         symbols
     }
+}
+
+fn parse_byte_fallback_token(token: &str) -> Option<u8> {
+    let hex = token
+        .strip_prefix("<0x")
+        .and_then(|rest| rest.strip_suffix('>'))?;
+    if hex.len() != 2 || !hex.as_bytes().iter().all(u8::is_ascii_hexdigit) {
+        return None;
+    }
+    u8::from_str_radix(hex, 16).ok()
+}
+
+fn decode_utf8_with_qmark(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    let mut remaining = bytes;
+    while !remaining.is_empty() {
+        match std::str::from_utf8(remaining) {
+            Ok(valid) => {
+                out.push_str(valid);
+                break;
+            }
+            Err(err) => {
+                let valid_up_to = err.valid_up_to();
+                if valid_up_to > 0 {
+                    out.push_str(std::str::from_utf8(&remaining[..valid_up_to]).expect("valid"));
+                }
+                out.push('?');
+                let skip = err.error_len().unwrap_or(1);
+                remaining = &remaining[valid_up_to + skip..];
+            }
+        }
+    }
+    out
 }
 
 fn extract_string_array(

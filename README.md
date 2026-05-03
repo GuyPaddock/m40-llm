@@ -97,17 +97,20 @@ Build the project in one of these modes:
 - Respect CUDA_VISIBLE_DEVICES: device enumeration respects CUDA_VISIBLE_DEVICES. The auto‑picker searches only among visible devices and selects the first sm_52 it finds.
 - cuBLAS control: by default, we do not link cuBLAS even if headers are present. Set M40LLM_ENABLE_CUBLAS=1 to enable cuBLAS integration if both the header (cublas_v2.h) and a shared library (e.g., libcublas.so.11) are detected. Otherwise, fallback CUDA kernels are used.
 - Test gating: build.rs exposes cfg(nvcc) when a real CUDA toolchain is present and cfg(have_cublas) when cuBLAS is enabled; CUDA tests use these to gate cuBLAS‑specific coverage. Some CUDA tests also use require_sm52() to skip gracefully when not on an sm_52 device.
+- Allocation tracing: set `M40LLM_ALLOC_LOG=1` to print per-allocation
+  `device_malloc`/`device_free` traces. Add `M40LLM_ALLOC_BT=1` to include
+  backtraces with those allocation logs.
+- Tensor view tracing: set `M40LLM_TENSOR_VIEW_LOG=1` to print each GGUF
+  tensor-to-device pointer mapping during model load.
 
 ## Server (feature = server)
 ```
 cargo run \
   --no-default-features \
   --features server \
-  -- run \
-  --model path/to.gguf \
+  -- run path/to.gguf \
   --addr 0.0.0.0:58439
 ```
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.
-

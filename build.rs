@@ -130,7 +130,7 @@ fn main() {
     if cuda_enabled && !nvcc_available {
         panic!(
             "Feature `cuda` is enabled, but `nvcc` was not found in PATH.\n\
-            Install the CUDA toolkit or build without `--features cuda`."
+            Install the CUDA toolkit (12.x) or build with `--no-default-features` instead."
         );
     }
 

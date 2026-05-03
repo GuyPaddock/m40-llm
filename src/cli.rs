@@ -23,7 +23,7 @@ pub enum Commands {
     /// List locally available models
     List {},
 
-    /// Run the HTTP server for a given model
+    /// Run the HTTP server for a local model name or GGUF path
     Run {
         model: String,
         #[arg(long, default_value = "0.0.0.0:11434")]

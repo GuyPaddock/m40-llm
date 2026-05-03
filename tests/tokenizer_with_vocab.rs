@@ -56,3 +56,48 @@ fn sentencepiece_roundtrip_from_metadata() {
     let text = tokenizer.decode(&ids).expect("decode");
     assert_eq!(text, "hello world");
 }
+
+#[test]
+fn bpe_byte_fallback_replaces_invalid_byte_with_qmark() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("bpe".to_string())),
+    );
+    let tokens = vec!["Hello", "<0xAA>"];
+    meta.insert("tokenizer.ggml.tokens".to_string(), make_array(&tokens));
+
+    let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+    let text = tokenizer.decode(&[0, 1]).expect("decode");
+    assert_eq!(text, "Hello?");
+}
+
+#[test]
+fn bpe_byte_fallback_preserves_valid_utf8_sequence() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("bpe".to_string())),
+    );
+    let tokens = vec!["cost ", "<0xE2>", "<0x82>", "<0xAC>"];
+    meta.insert("tokenizer.ggml.tokens".to_string(), make_array(&tokens));
+
+    let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+    let text = tokenizer.decode(&[0, 1, 2, 3]).expect("decode");
+    assert_eq!(text, "cost €");
+}
+
+#[test]
+fn sentencepiece_byte_fallback_keeps_space_normalization() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("spm".to_string())),
+    );
+    let tokens = vec!["▁Hello", "<0x20>", "world"];
+    meta.insert("tokenizer.ggml.tokens".to_string(), make_array(&tokens));
+
+    let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+    let text = tokenizer.decode(&[0, 1, 2]).expect("decode");
+    assert_eq!(text, "Hello world");
+}

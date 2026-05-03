@@ -581,8 +581,8 @@ impl LoadedModel {
     }
     /// Map the language modeling head (output projection) tensor if present.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
-    /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
-    pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
+    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings=false).
+    pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
             "output.weight".to_string(),
@@ -590,6 +590,11 @@ impl LoadedModel {
             "output".to_string(),
         ];
         if let Ok(t) = self.find_tensor_any(&candidates) {
+            let name = candidates
+                .iter()
+                .find(|candidate| self.device_tensor(candidate).is_some())
+                .context("lm_head tensor name not found after candidate match")?
+                .clone();
             if t.dtype != GgmlDType::F16 {
                 anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
             }
@@ -607,7 +612,7 @@ impl LoadedModel {
                     t.shape
                 );
             }
-            return Ok((t.clone(), d_model, vocab, false));
+            return Ok((name, t.clone(), d_model, vocab, false));
         }
         anyhow::bail!(
             "lm_head tensor not found; expected one of {}",
@@ -635,12 +640,12 @@ impl LoadedModel {
 
         let weights_bytes = gguf_bytes[data_off..].to_vec();
         let weights_len = weights_bytes.len();
-        #[cfg(feature = "cuda")]
-        let host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(not(feature = "cuda"))]
         let _host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
-        let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
+        let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC")
+            .map(|v| v != "0")
+            .unwrap_or(cfg!(nvcc));
         #[cfg(feature = "cuda")]
         let d_base = {
             let uploaded = if use_device_weights {
@@ -648,7 +653,7 @@ impl LoadedModel {
             } else {
                 None
             };
-            Some(uploaded.unwrap_or(host_base))
+            uploaded
         };
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
@@ -674,8 +679,11 @@ impl LoadedModel {
             }
         }
         #[cfg(feature = "cuda")]
-        let device_tensors =
-            build_device_tensor_views(&gguf.tensors, d_base.unwrap_or(host_base), weights_len)?;
+        let device_tensors = build_device_tensor_views(
+            &gguf.tensors,
+            d_base.unwrap_or(std::ptr::null_mut()),
+            weights_len,
+        )?;
         #[cfg(not(feature = "cuda"))]
         let device_tensors =
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_len)?;
@@ -847,18 +855,21 @@ fn build_device_tensor_views(
         #[cfg(feature = "cuda")]
         let dptr: *mut c_void = {
             if d_base.is_null() {
-                anyhow::bail!("device weights base pointer is null");
+                std::ptr::null_mut()
+            } else {
+                let base = d_base as usize;
+                let addr = base
+                    .checked_add(offset_usize)
+                    .context("device pointer offset overflow")?;
+                let ptr = addr as *mut c_void;
+                if std::env::var("M40LLM_TENSOR_VIEW_LOG").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
+                        t.name, d_base, offset_usize, ptr
+                    );
+                }
+                ptr
             }
-            let base = d_base as usize;
-            let addr = base
-                .checked_add(offset_usize)
-                .context("device pointer offset overflow")?;
-            let ptr = addr as *mut c_void;
-            eprintln!(
-                "[cuda] tensor_view: name={}, base={:?}, offset={}, ptr={:?}",
-                t.name, d_base, offset_usize, ptr
-            );
-            ptr
         };
         #[cfg(not(feature = "cuda"))]
         let _dptr: *mut c_void = std::ptr::null_mut();
@@ -895,18 +906,16 @@ mod cuda_tensor_view_tests {
     }
 
     #[test]
-    fn null_device_base_rejected() {
+    fn null_device_base_keeps_tensor_ptr_null() {
         let tensors = vec![GgufTensor {
             name: "w".to_string(),
             dtype: GgmlDType::F16,
             shape: vec![1, 1],
             offset: 0,
         }];
-        let err =
-            build_device_tensor_views(&tensors, std::ptr::null_mut(), 16).expect_err("should err");
-        assert!(err
-            .to_string()
-            .contains("device weights base pointer is null"));
+        let views = build_device_tensor_views(&tensors, std::ptr::null_mut(), 16).expect("views");
+        let w = views.get("w").expect("tensor view");
+        assert!(w.dptr.is_null());
     }
 }
 
@@ -1022,6 +1031,14 @@ impl LoadedModel {
         )?;
         self.kv_cache = Some(kv);
         Ok(())
+    }
+
+    pub fn reset_kv_cache(&self) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        kv.reset(&self.cuda)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1496,14 +1513,6 @@ impl LoadedModel {
             if tok.shape.len() != 2 {
                 anyhow::bail!("embeddings must be [vocab, d_model]");
             }
-            let n_vocab = tok.shape[0];
-            if token_id >= n_vocab {
-                anyhow::bail!(
-                    "token_id {} out of range for vocab size {}",
-                    token_id,
-                    n_vocab
-                );
-            }
             let r0 = tok.shape[0] as usize;
             let r1 = tok.shape[1] as usize;
             // Determine d_model and which dimension is vocab vs d_model
@@ -1535,35 +1544,10 @@ impl LoadedModel {
                 GgmlDType::F16 => {
                     if rows_are_vocab {
                         // Contiguous row: [vocab, d_model]
-                        println!(
-                            "Debug: Base ptr={:?}, token_id={}, d_model={}",
-                            tok.dptr, token_id, d_model
-                        );
                         let row_bytes = d_model * 2;
-                        println!(
-                            "Debug: row_bytes={}, calculated offset={}",
-                            row_bytes,
-                            (token_id as usize) * row_bytes
-                        );
                         let d_row =
                             (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
-                        println!("Debug: Final d_row={:?}", d_row);
-                        println!(
-                            "Debug: f16_to_f32 params - d_row={:?}, d_out_f32={:?}, d_model={}",
-                            d_row, d_out_f32, d_model
-                        );
-                        // Test pointer validity by attempting a small memcpy
-                        let mut test_buf = [0u8; 4];
-                        let test_ptr = test_buf.as_mut_ptr() as *mut c_void;
-                        println!("Debug: Testing input ptr via memcpy_d2h...");
-                        let test_res = self.cuda.memcpy_d2h(test_ptr, d_row, 4);
-                        println!("Debug: Input ptr test result - {:?}", test_res);
-                        println!("Debug: Testing output ptr via memcpy_h2d...");
-                        let test_res = self.cuda.memcpy_h2d(d_out_f32, test_ptr, 4);
-                        println!("Debug: Output ptr test result - {:?}", test_res);
-                        let res = self.cuda.f16_to_f32(d_row, d_out_f32, d_model);
-                        println!("Debug: f16_to_f32 result - {:?}", res);
-                        res?;
+                        self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
                     } else {
                         // Column gather: shape [d_model, vocab], take column = token_id
                         use half::f16;
@@ -1590,10 +1574,12 @@ impl LoadedModel {
                     }
                 }
                 GgmlDType::Q8_0 => {
+                    const Q8_0_BLOCK: usize = 32;
+                    const Q8_0_BLOCK_BYTES: usize = 34;
                     if rows_are_vocab {
                         // Row dequant: shape [vocab, d_model], blocks along d_model
-                        let blocks = (d_model + 31) / 32;
-                        let row_bytes = blocks * 36; // 4 + 32 bytes per block
+                        let blocks = d_model.div_ceil(Q8_0_BLOCK);
+                        let row_bytes = blocks * Q8_0_BLOCK_BYTES;
                         let d_row =
                             (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
                         // Pull the quantized row bytes to host
@@ -1603,19 +1589,15 @@ impl LoadedModel {
                         // Dequantize to f32 on host
                         let mut out = vec![0f32; d_model];
                         for blk in 0..blocks {
-                            let base = blk * 36;
-                            let d = f32::from_le_bytes([
-                                qrow[base + 0],
-                                qrow[base + 1],
-                                qrow[base + 2],
-                                qrow[base + 3],
-                            ]);
-                            for idx in 0..32 {
-                                let i = blk * 32 + idx;
+                            let base = blk * Q8_0_BLOCK_BYTES;
+                            let d_bits = u16::from_le_bytes([qrow[base], qrow[base + 1]]);
+                            let d = half::f16::from_bits(d_bits).to_f32();
+                            for idx in 0..Q8_0_BLOCK {
+                                let i = blk * Q8_0_BLOCK + idx;
                                 if i >= d_model {
                                     break;
                                 }
-                                let q = qrow[base + 4 + idx] as i8 as f32;
+                                let q = qrow[base + 2 + idx] as i8 as f32;
                                 out[i] = d * q;
                             }
                         }
@@ -1628,27 +1610,23 @@ impl LoadedModel {
                     } else {
                         // Column dequant: shape [d_model, vocab], blocks along vocab
                         let vocab = r1;
-                        let blocks = (vocab + 31) / 32;
-                        let row_stride = blocks * 36; // bytes per row
-                        let b = (token_id as usize) / 32;
-                        let idx = (token_id as usize) % 32;
+                        let blocks = vocab.div_ceil(Q8_0_BLOCK);
+                        let row_stride = blocks * Q8_0_BLOCK_BYTES;
+                        let b = (token_id as usize) / Q8_0_BLOCK;
+                        let idx = (token_id as usize) % Q8_0_BLOCK;
                         let mut out = vec![0f32; d_model];
-                        let mut block_buf = [0u8; 36];
+                        let mut block_buf = [0u8; Q8_0_BLOCK_BYTES];
                         for i in 0..d_model {
                             let row_base = (tok.dptr as usize) + i * row_stride;
-                            let blk_off = row_base + b * 36;
+                            let blk_off = row_base + b * Q8_0_BLOCK_BYTES;
                             self.cuda.memcpy_d2h(
                                 block_buf.as_mut_ptr() as *mut c_void,
                                 blk_off as *const c_void,
-                                36,
+                                Q8_0_BLOCK_BYTES,
                             )?;
-                            let d = f32::from_le_bytes([
-                                block_buf[0],
-                                block_buf[1],
-                                block_buf[2],
-                                block_buf[3],
-                            ]);
-                            let q = block_buf[4 + idx] as i8 as f32;
+                            let d_bits = u16::from_le_bytes([block_buf[0], block_buf[1]]);
+                            let d = half::f16::from_bits(d_bits).to_f32();
+                            let q = block_buf[2 + idx] as i8 as f32;
                             out[i] = d * q;
                         }
                         let out_bytes = d_model * std::mem::size_of::<f32>();
@@ -2073,11 +2051,13 @@ impl LoadedModel {
     /// # Safety
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        let lm = self.map_lm_head()?.0;
+        let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
+        #[cfg(not(feature = "cuda"))]
+        let _ = &name;
         let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
-        let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+        let d_w = self.tensor_device_ptr(&name, &lm)?;
         #[cfg(not(feature = "cuda"))]
         let d_w: *const c_void = std::ptr::null();
         #[cfg(not(feature = "cuda"))]
@@ -2102,10 +2082,12 @@ impl LoadedModel {
     /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
     /// to host-side dot with per-row copies from tok_embeddings.
     pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
+        if let Ok((name, lm, d_model, vocab, _)) = self.map_lm_head() {
+            #[cfg(not(feature = "cuda"))]
+            let _ = &name;
             #[cfg(feature = "cuda")]
             {
-                let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+                let d_w = self.tensor_device_ptr(&name, &lm)?;
                 let bytes_logits = vocab * std::mem::size_of::<f32>();
                 let d_logits = self.cuda.device_malloc(bytes_logits)?;
                 self.matmul_f32xf16_f32(

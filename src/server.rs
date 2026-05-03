@@ -15,6 +15,7 @@ use tokio_stream::wrappers::ReceiverStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
+#[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::sampling::{Sampler, SamplerConfig};
@@ -221,11 +222,17 @@ async fn generate(
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
     let sampler = sampler_from_request(&req).map_err(internal_error)?;
 
+    if state.model.kv_cache.is_some() {
+        state.model.reset_kv_cache().map_err(internal_error)?;
+    }
+
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
         let state_for_logits = state.clone();
         #[cfg(feature = "cuda")]
         let mut step: usize = 0;
+        #[cfg(feature = "cuda")]
+        let mut processed_len: usize = 0;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let model = &state_for_logits.model;
             // KV cache is pre-allocated at startup on the real model instance
@@ -242,9 +249,6 @@ async fn generate(
                     CudaContext::total_device_bytes()
                 );
             }
-            #[cfg(feature = "cuda")]
-            let seq_len_now: u32 = ids.len() as u32;
-
             // Determine d_model and whether we can run the minimal forward layer path
             // Try to infer d_model from embeddings or lm_head as fallback
             let embed_names = [
@@ -285,7 +289,7 @@ async fn generate(
                         d_model_from_tok
                     } else {
                         match model.map_lm_head() {
-                            Ok((_lm, d_m, _vocab, _tied)) => {
+                            Ok((_name, _lm, d_m, _vocab, _tied)) => {
                                 eprintln!("[server] derived d_model from lm_head: {}", d_m);
                                 d_m
                             }
@@ -311,49 +315,75 @@ async fn generate(
             #[cfg(feature = "cuda")]
             {
                 // Last token id to embed
-                let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as u64;
-                eprintln!("[server] token id {}", tok_id);
-
-                // Allocate device buffer for embedding row (f32)
-                let d_x = model
-                    .cuda
-                    .device_malloc_tagged(bytes, "server:d_x_embed_f32")?;
-
-                // Load embedding row for last token into d_x (f32)
-                unsafe {
-                    model.load_token_embedding_to_f32(tok_id, d_x)?;
+                if ids.is_empty() {
+                    return Err(anyhow::anyhow!("empty ids"));
+                }
+                if processed_len > ids.len() {
+                    processed_len = 0;
+                    if model.kv_cache.is_some() {
+                        model.reset_kv_cache()?;
+                    }
                 }
 
-                // If we have FP16 layer weights mapped and KV available, run the minimal forward through one layer.
-                let logits = if can_forward {
-                    let d_out = model
-                        .cuda
-                        .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
-                    unsafe {
-                        model.forward_one_token_with_layer(
-                            d_x as *const _,
-                            0,
-                            0,
-                            seq_len_now,
-                            d_out,
-                        )?;
-                    }
-                    let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
-                    unsafe {
-                        let _ = model.cuda.device_free(d_out); // freed server:d_out_hidden_f32
-                    }
-                    logits
+                let start = if can_forward {
+                    processed_len
                 } else {
-                    // Fallback: treat embedding as hidden and compute logits (uses lm_head when present or tok_embeddings^T)
-                    unsafe { model.logits_from_hidden(d_x as *const _) }?
+                    ids.len().saturating_sub(1)
                 };
+                let mut logits: Option<Vec<f32>> = None;
+                for token_idx in start..ids.len() {
+                    let tok_id = ids[token_idx] as u64;
+                    eprintln!("[server] token id {}", tok_id);
 
-                // Free embedding buffer
-                unsafe {
-                    let _ = model.cuda.device_free(d_x);
+                    // Allocate device buffer for embedding row (f32)
+                    let d_x = model
+                        .cuda
+                        .device_malloc_tagged(bytes, "server:d_x_embed_f32")?;
+
+                    let token_logits = (|| -> anyhow::Result<Vec<f32>> {
+                        // Load embedding row for the token into d_x (f32)
+                        unsafe {
+                            model.load_token_embedding_to_f32(tok_id, d_x)?;
+                        }
+
+                        // If we have layer weights and KV, run prompt tokens as prefill and sampled tokens as decode.
+                        if can_forward {
+                            let d_out = model
+                                .cuda
+                                .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
+                            let result = (|| -> anyhow::Result<Vec<f32>> {
+                                unsafe {
+                                    model.forward_one_token_with_layer(
+                                        d_x as *const _,
+                                        0,
+                                        0,
+                                        (token_idx + 1) as u32,
+                                        d_out,
+                                    )?;
+                                    model.logits_from_hidden(d_out as *const _)
+                                }
+                            })();
+                            unsafe {
+                                let _ = model.cuda.device_free(d_out);
+                            }
+                            result
+                        } else {
+                            // Fallback: treat embedding as hidden and compute logits.
+                            unsafe { model.logits_from_hidden(d_x as *const _) }
+                        }
+                    })();
+
+                    unsafe {
+                        let _ = model.cuda.device_free(d_x);
+                    }
+
+                    logits = Some(token_logits?);
+                }
+                if can_forward {
+                    processed_len = ids.len();
                 }
 
-                Ok(logits)
+                logits.ok_or_else(|| anyhow::anyhow!("no token processed for logits"))
             }
 
             #[cfg(not(feature = "cuda"))]
@@ -392,21 +422,19 @@ async fn generate(
                         }
                     }
                     GgmlDType::Q8_0 => {
-                        let blocks = (d_model + 31) / 32;
-                        let row_bytes = blocks * 36;
+                        const Q8_0_BLOCK: usize = 32;
+                        const Q8_0_BLOCK_BYTES: usize = 34;
+                        let blocks = d_model.div_ceil(Q8_0_BLOCK);
+                        let row_bytes = blocks * Q8_0_BLOCK_BYTES;
                         let off = tok.byte_offset as usize + tok_id * row_bytes;
                         let row = &model.host_weights[off..off + row_bytes];
                         for i in 0..d_model {
-                            let blk = i / 32;
-                            let idx = i % 32;
-                            let base = blk * 36;
-                            let d = f32::from_le_bytes([
-                                row[base + 0],
-                                row[base + 1],
-                                row[base + 2],
-                                row[base + 3],
-                            ]);
-                            let q = row[base + 4 + idx] as i8 as f32;
+                            let blk = i / Q8_0_BLOCK;
+                            let idx = i % Q8_0_BLOCK;
+                            let base = blk * Q8_0_BLOCK_BYTES;
+                            let d_bits = u16::from_le_bytes([row[base], row[base + 1]]);
+                            let d = f16::from_bits(d_bits).to_f32();
+                            let q = row[base + 2 + idx] as i8 as f32;
                             hidden[i] = d * q;
                         }
                     }

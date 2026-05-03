@@ -75,20 +75,25 @@ fn test_attention_operation() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf, gguf_bytes, device_id)?;
     // Allocate KV cache with standard layout (8 heads, 64 dim per head)
     model.allocate_kv_cache(128, 8)?;
-    // Provide valid input/output buffers
     let dim = 8 * 64; // must match allocate_kv_cache layout
-    let q: Vec<f32> = vec![1.0; dim as usize]; // Initialize with non-zero values
-    let mut out: Vec<f32> = vec![0.0; dim as usize];
+    let q: Vec<f32> = vec![1.0; dim as usize];
+    let k: Vec<f32> = vec![0.5; dim as usize];
+    let v: Vec<f32> = (0..dim).map(|i| (i as f32) * 0.001 + 1.0).collect();
+    model.append_kv_token_f32_from_host(0, &k, &v)?;
+    let mut out = vec![0.0f32; dim as usize];
     unsafe {
-        model.run_attention(
-            q.as_ptr() as *const c_void,
-            out.as_mut_ptr() as *mut c_void,
-            0,
-            4,
-            dim as u32,
-            8,
-            64,
-        )?;
+        let bytes = dim as usize * std::mem::size_of::<f32>();
+        let d_q = model.cuda.device_malloc(bytes)?;
+        let d_out = model.cuda.device_malloc(bytes)?;
+        model
+            .cuda
+            .memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes)?;
+        model.run_attention(d_q as *const c_void, d_out, 0, 1, dim as u32, 8, 64)?;
+        model
+            .cuda
+            .memcpy_d2h(out.as_mut_ptr() as *mut c_void, d_out, bytes)?;
+        model.cuda.device_free(d_q)?;
+        model.cuda.device_free(d_out)?;
     }
     assert!(!out.iter().all(|&x| x == 0.0)); // Verify computation occurred
     Ok(())
@@ -122,92 +127,29 @@ fn test_rms_norm_operation() -> Result<()> {
     let mut host_output = vec![0.0; 512];
 
     unsafe {
-        // Allocate device buffers with validation
         let elem_size = std::mem::size_of::<f32>();
         let bytes = 512 * elem_size;
-        println!("[DEBUG] Allocating {} bytes ({} elements)", bytes, 512);
-
         let d_input = model.cuda.device_malloc(bytes)?;
-        eprintln!("[DEBUG] Allocating {} bytes for input", bytes);
         let d_output = model.cuda.device_malloc(bytes)?;
-
-        // Verify allocations succeeded
-        println!(
-            "[DEBUG] Device pointers - input: {:?}, output: {:?}",
-            d_input, d_output
-        );
-        assert!(!d_input.is_null(), "Failed to allocate input buffer");
-        assert!(!d_output.is_null(), "Failed to allocate output buffer");
-
-        // Validate device pointers before copy
-        println!(
-            "[DEBUG] d_input ptr: {:?}, size: {} bytes",
-            d_input,
-            512 * std::mem::size_of::<f32>()
-        );
-        assert!(!d_input.is_null(), "Device input pointer null");
 
         // Copy input to device
         let copy_size = 512 * std::mem::size_of::<f32>();
-        eprintln!(
-            "[DEBUG] Pre-memcpy_d2h validation - d_output: {:?}, host_output: {:?}, bytes: {}",
-            d_output,
-            host_output.as_ptr(),
-            bytes
-        );
-        eprintln!(
-            "[DEBUG] Memory alignment - host: {}, device: {}",
-            host_output.as_ptr() as usize % 16,
-            d_output as usize % 16
-        );
-        let res = model
+        model
             .cuda
-            .memcpy_h2d(d_input, host_input.as_ptr() as *const c_void, copy_size);
-        println!("[DEBUG] h2d copy result: {:?}", res);
-        res?;
-
-        // Validate device pointers before kernel
-        println!(
-            "[DEBUG] Pre-kernel pointers - input: {:?}, output: {:?}",
-            d_input, d_output
-        );
+            .memcpy_h2d(d_input, host_input.as_ptr() as *const c_void, copy_size)?;
 
         // Run kernel
-        println!("[DEBUG] Calling RMS norm with rows=1, dim=512, eps=1e-5");
-        let kernel_res = model.run_rms_norm(
+        model.run_rms_norm(
             d_input, d_output, 1,   // seq_len/rows
             512, // dim
             1e-5,
-        );
-        println!(
-            "[DEBUG] Kernel execution successful: {:?}",
-            kernel_res.is_ok()
-        );
-        println!("[DEBUG] Kernel result: {:?}", kernel_res);
-        kernel_res?;
-
-        // Validate device pointers after kernel
-        println!(
-            "[DEBUG] Post-kernel pointers - input: {:?}, output: {:?}",
-            d_input, d_output
-        );
-
-        // Validate before d2h copy
-        println!(
-            "[DEBUG] d_output ptr: {:?}, size: {} bytes",
-            d_output,
-            512 * std::mem::size_of::<f32>()
-        );
-        assert!(!d_output.is_null(), "Device output pointer null");
+        )?;
 
         // Copy back results
         let copy_size = 512 * std::mem::size_of::<f32>();
-        let res =
-            model
-                .cuda
-                .memcpy_d2h(d_output, host_output.as_mut_ptr() as *mut c_void, copy_size);
-        println!("[DEBUG] d2h copy result: {:?}", res);
-        res?;
+        model
+            .cuda
+            .memcpy_d2h(host_output.as_mut_ptr() as *mut c_void, d_output, copy_size)?;
 
         assert!(!host_output.iter().all(|&x| x == 0.0)); // Verify output was modified
 

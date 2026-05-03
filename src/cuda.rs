@@ -138,6 +138,7 @@ mod ffi {
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
         ) -> i32;
+        pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -201,6 +202,11 @@ pub struct DeviceProps {
 
 // Global allocation tracker (bytes) for diagnostics only
 pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "cuda")]
+fn alloc_log_enabled() -> bool {
+    std::env::var("M40LLM_ALLOC_LOG").ok().as_deref() == Some("1")
+}
 
 #[cfg(feature = "cuda")]
 #[derive(Debug, Clone)]
@@ -355,24 +361,26 @@ impl CudaContext {
                 },
             );
         }
-        let caller = std::panic::Location::caller();
-        let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-        let mut msg = format!(
-            "[cuda] device_malloc: {} bytes (total={}) at {}:{}",
-            bytes,
-            total,
-            caller.file(),
-            caller.line()
-        );
-        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
-            let bt = std::backtrace::Backtrace::capture();
-            msg.push_str(&format!("\n{:?}", bt));
+        if alloc_log_enabled() {
+            let caller = std::panic::Location::caller();
+            let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
+            let mut msg = format!(
+                "[cuda] device_malloc: {} bytes (total={}) at {}:{}",
+                bytes,
+                total,
+                caller.file(),
+                caller.line()
+            );
+            if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
+                let bt = std::backtrace::Backtrace::capture();
+                msg.push_str(&format!("\n{:?}", bt));
+            }
+            eprintln!(
+                "{}{}",
+                msg,
+                tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
+            );
         }
-        eprintln!(
-            "{}{}",
-            msg,
-            tag.map(|t| format!(" tag={}", t)).unwrap_or_default()
-        );
         Ok(out)
     }
 
@@ -407,25 +415,27 @@ impl CudaContext {
                 TOTAL_DEVICE_BYTES.fetch_sub(info.size, Ordering::SeqCst);
             }
         }
-        let after = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
-        let caller = std::panic::Location::caller();
-        let mut msg = format!(
-            "[cuda] device_free: ptr={:?} dec={} (total {} -> {}) at {}:{}",
-            ptr,
-            dec,
-            before,
-            after,
-            caller.file(),
-            caller.line()
-        );
-        if let Some(t) = &tag {
-            msg.push_str(&format!(" tag={}", t));
+        if alloc_log_enabled() {
+            let after = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
+            let caller = std::panic::Location::caller();
+            let mut msg = format!(
+                "[cuda] device_free: ptr={:?} dec={} (total {} -> {}) at {}:{}",
+                ptr,
+                dec,
+                before,
+                after,
+                caller.file(),
+                caller.line()
+            );
+            if let Some(t) = &tag {
+                msg.push_str(&format!(" tag={}", t));
+            }
+            if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
+                let bt = std::backtrace::Backtrace::capture();
+                msg.push_str(&format!("\n{:?}", bt));
+            }
+            eprintln!("{}", msg);
         }
-        if std::env::var("M40LLM_ALLOC_BT").ok().as_deref() == Some("1") {
-            let bt = std::backtrace::Backtrace::capture();
-            msg.push_str(&format!("\n{:?}", bt));
-        }
-        eprintln!("{}", msg);
         Ok(())
     }
     /// # Safety
@@ -842,7 +852,7 @@ impl CudaContext {
     }
 
     /// # Safety
-    /// d_in_q80 must point to Q8_0 blocks in scale-first layout; d_out_f32 is f32 output.
+    /// d_in_q80 must point to GGML Q8_0 blocks; d_out_f32 is f32 output.
     pub unsafe fn q80_to_f32(
         &self,
         d_in_q80: *const c_void,
@@ -892,6 +902,29 @@ impl KVCache {
     }
     pub fn head_dim(&self) -> u32 {
         self.inner.head_dim
+    }
+
+    pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = ctx.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_kvcache_reset(ctx.inner.raw.as_ptr(), self.inner.raw.as_ptr())
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_kvcache_reset failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = ctx;
+            let mut lens = self.inner.len_by_seq.lock().unwrap();
+            for len in lens.iter_mut() {
+                *len = 0;
+            }
+            Ok(())
+        }
     }
 }
 

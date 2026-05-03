@@ -55,12 +55,7 @@ async fn main() -> Result<()> {
             let _ = (&model, &addr, device_id, require_sm52);
             #[cfg(feature = "server")]
             {
-                let local = model::list_models()?
-                    .into_iter()
-                    .find(|m| m.name == model.replace(':', "_"))
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(format!("Model not found locally: {}", model))
-                    })?;
+                let local = model::resolve_model_arg(&model)?;
 
                 // If gguf_ext feature is enabled, inspect via gguf-llms for a quick overview
                 #[cfg(feature = "gguf_ext")]

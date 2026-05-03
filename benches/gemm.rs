@@ -9,19 +9,17 @@ use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
+#[cfg(all(feature = "cuda", nvcc))]
+#[path = "../tests/cuda_env.rs"]
+mod cuda_env;
+
 fn bench_gemm_impl(c: &mut Criterion) {
     let mut group = c.benchmark_group("gemm_f16xf16_f32");
 
     // Only meaningful under CUDA + nvcc. Otherwise, early return.
     #[cfg(all(feature = "cuda", nvcc))]
     {
-        use m40_llm::cuda::CudaContext;
-
-        // Prefer Tesla M40 (sm_52) using the same helper pattern as tests
-        fn ctx_m40() -> CudaContext {
-            CudaContext::new(-1).expect("cuda context")
-        }
-        let ctx = ctx_m40();
+        let ctx = cuda_env::ctx_m40().expect("cuda context");
         // Shapes to test
         let cases = vec![
             (64, 64, 64),
