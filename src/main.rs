@@ -103,9 +103,9 @@ async fn main() -> Result<()> {
                     );
                 }
 
-                // Allocate KV cache upfront using config; default to context_length when known
+                // Allocate one KV slot per layer for the single-request full-stack decode path.
                 let max_len = loaded.model_config.context_length as usize;
-                let _ = loaded.allocate_kv_cache(max_len.try_into().unwrap(), 1);
+                loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
 
                 let state = Arc::new(server::AppState { model: loaded });
                 let router = server::app_router(state);

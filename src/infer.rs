@@ -1012,6 +1012,54 @@ impl LoadedModel {
         Ok(())
     }
 
+    pub fn allocate_kv_cache_for_layers(&mut self, max_seq_len: u32) -> Result<()> {
+        let layer_count = self.model_config.block_count;
+        if layer_count == 0 {
+            anyhow::bail!("model_config.block_count must be > 0");
+        }
+        self.allocate_kv_cache(max_seq_len, layer_count)
+    }
+
+    pub fn kv_cache_can_address_layers(&self) -> bool {
+        self.kv_cache
+            .as_ref()
+            .map(|kv| kv.max_batch_size() >= self.model_config.block_count)
+            .unwrap_or(false)
+    }
+
+    pub fn validate_standard_layers(&self) -> Result<(usize, usize)> {
+        let layer_count = self.model_config.block_count as usize;
+        if layer_count == 0 {
+            anyhow::bail!("model_config.block_count must be > 0");
+        }
+
+        let mut d_model = None;
+        let mut hidden_dim = None;
+        for layer in 0..layer_count {
+            let w = self
+                .map_standard_layer(layer)
+                .with_context(|| format!("mapping standard layer {layer}"))?;
+            match d_model {
+                Some(expected) if expected != w.d_model => anyhow::bail!(
+                    "layer {layer} d_model mismatch: expected {expected}, got {}",
+                    w.d_model
+                ),
+                None => d_model = Some(w.d_model),
+                _ => {}
+            }
+            match hidden_dim {
+                Some(expected) if expected != w.hidden_dim => anyhow::bail!(
+                    "layer {layer} hidden_dim mismatch: expected {expected}, got {}",
+                    w.hidden_dim
+                ),
+                None => hidden_dim = Some(w.hidden_dim),
+                _ => {}
+            }
+        }
+
+        Ok((d_model.unwrap_or(0), hidden_dim.unwrap_or(0)))
+    }
+
     pub fn allocate_kv_cache_with_layout(
         &mut self,
         max_seq_len: u32,
@@ -1952,6 +2000,80 @@ impl LoadedModel {
             // Free scratch buffers
 
             Ok(())
+        }
+    }
+
+    /// Runs one token through every transformer layer.
+    ///
+    /// The current single-request server path uses KV cache sequence slots as
+    /// per-layer slots, so the cache must be allocated with at least
+    /// `model_config.block_count` batch entries.
+    ///
+    /// # Safety
+    /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
+    /// - Both buffers must contain/be sized for one f32 hidden vector of `embedding_length`.
+    pub unsafe fn forward_one_token_all_layers(
+        &self,
+        d_x_f32: *const c_void,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<usize> {
+        let layer_count = self.model_config.block_count as usize;
+        if layer_count == 0 {
+            anyhow::bail!("forward_one_token_all_layers: model has zero layers");
+        }
+        let (d_model, _) = self.validate_standard_layers()?;
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        if kv.max_batch_size() < self.model_config.block_count {
+            anyhow::bail!(
+                "kv_cache has {} slots, but full-layer forward needs {} layer slots",
+                kv.max_batch_size(),
+                self.model_config.block_count
+            );
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            if layer_count == 1 {
+                self.forward_one_token_with_layer(d_x_f32, 0, 0, seq_len, d_out_f32)?;
+                return Ok(1);
+            }
+
+            let bytes = d_model * std::mem::size_of::<f32>();
+            let scratch_a = self
+                .cuda
+                .device_malloc_tagged(bytes, "fwd_all:scratch_a_f32")?;
+            let scratch_b = self
+                .cuda
+                .device_malloc_tagged(bytes, "fwd_all:scratch_b_f32")?;
+
+            let res = (|| -> Result<usize> {
+                let mut current = d_x_f32;
+                for layer in 0..layer_count {
+                    let next = if layer + 1 == layer_count {
+                        d_out_f32
+                    } else if layer % 2 == 0 {
+                        scratch_a
+                    } else {
+                        scratch_b
+                    };
+                    self.forward_one_token_with_layer(current, layer, layer as u32, seq_len, next)?;
+                    current = next as *const c_void;
+                }
+                Ok(layer_count)
+            })();
+
+            let _ = self.cuda.device_free(scratch_a);
+            let _ = self.cuda.device_free(scratch_b);
+            return res;
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_x_f32, seq_len, d_out_f32, d_model);
+            anyhow::bail!("forward_one_token_all_layers requires CUDA device buffers")
         }
     }
 }

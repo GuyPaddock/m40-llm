@@ -903,6 +903,9 @@ impl KVCache {
     pub fn head_dim(&self) -> u32 {
         self.inner.head_dim
     }
+    pub fn max_batch_size(&self) -> u32 {
+        self.inner.max_batch_size
+    }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
         #[cfg(feature = "cuda")]
@@ -941,7 +944,7 @@ struct KVCacheInner {
     #[allow(dead_code)]
     //   index(seq, token, head, dim) = base + head * head_dim + dim
     max_seq_len: u32,
-    _max_batch_size: u32,
+    max_batch_size: u32,
     num_heads: u32,
     head_dim: u32,
     #[cfg(feature = "cuda")]
@@ -973,7 +976,7 @@ impl KVCache {
             Ok(KVCache {
                 inner: Arc::new(KVCacheInner {
                     max_seq_len,
-                    _max_batch_size: max_batch_size,
+                    max_batch_size,
                     num_heads,
                     head_dim,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
@@ -995,7 +998,7 @@ impl KVCache {
             Ok(KVCache {
                 inner: Arc::new(KVCacheInner {
                     max_seq_len,
-                    _max_batch_size: max_batch_size,
+                    max_batch_size,
                     num_heads,
                     head_dim,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),

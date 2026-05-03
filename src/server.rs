@@ -249,7 +249,7 @@ async fn generate(
                     CudaContext::total_device_bytes()
                 );
             }
-            // Determine d_model and whether we can run the minimal forward layer path
+            // Determine d_model and whether we can run the full transformer stack.
             // Try to infer d_model from embeddings or lm_head as fallback
             let embed_names = [
                 "tok_embeddings.weight",
@@ -271,20 +271,22 @@ async fn generate(
                 eprintln!("[server] embeddings shape: {:?}", t.shape);
             }
 
-            let (d, can_forward) = match model.map_standard_layer(0) {
-                Ok(w) => {
-                    let ok = model.kv_cache.is_some();
+            let (d, can_forward) = match model.validate_standard_layers() {
+                Ok((d_model, hidden_dim)) => {
+                    let ok = model.kv_cache_can_address_layers();
                     if !ok {
-                        eprintln!("[server] KV cache not available; using embeddings-only logits fallback");
+                        eprintln!(
+                            "[server] KV cache cannot address all layers; using embeddings-only logits fallback"
+                        );
                     }
                     eprintln!(
-                        "[server] mapped standard layer d_model={} hidden_dim={}",
-                        w.d_model, w.hidden_dim
+                        "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                        model.model_config.block_count, d_model, hidden_dim
                     );
-                    (w.d_model, ok)
+                    (d_model, ok)
                 }
                 Err(e) => {
-                    eprintln!("[server] map_standard_layer failed; falling back to embeddings/logits path: {e}");
+                    eprintln!("[server] validate_standard_layers failed; falling back to embeddings/logits path: {e}");
                     let d_try = if d_model_from_tok > 0 {
                         d_model_from_tok
                     } else {
@@ -353,13 +355,16 @@ async fn generate(
                                 .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
                             let result = (|| -> anyhow::Result<Vec<f32>> {
                                 unsafe {
-                                    model.forward_one_token_with_layer(
+                                    let layers = model.forward_one_token_all_layers(
                                         d_x as *const _,
-                                        0,
-                                        0,
                                         (token_idx + 1) as u32,
                                         d_out,
                                     )?;
+                                    if token_idx == start {
+                                        eprintln!(
+                                            "[server] full-layer forward enabled layers={layers}"
+                                        );
+                                    }
                                     model.logits_from_hidden(d_out as *const _)
                                 }
                             })();
