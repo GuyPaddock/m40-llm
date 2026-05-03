@@ -219,7 +219,7 @@ async fn generate(
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
-    let mut sampler = sampler_from_request(&req).map_err(internal_error)?;
+    let sampler = sampler_from_request(&req).map_err(internal_error)?;
 
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
