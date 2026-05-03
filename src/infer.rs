@@ -110,10 +110,15 @@ impl ModelConfig {
         let context_length = get_u32_meta(metadata, "llama.context_length")
             .ok_or_else(|| anyhow!("missing llama.context_length"))?;
         let feed_forward_length = derive_feed_forward_length(metadata, tensors, embedding_length)?;
-        let head_kv =
-            get_u32_meta(metadata, "llama.attention.head_count_kv").unwrap_or(attention_head_count);
         let head_dim = get_u32_meta(metadata, "llama.attention.key_length")
             .unwrap_or_else(|| embedding_length / attention_head_count);
+        let head_kv = derive_attention_head_count_kv(
+            metadata,
+            tensors,
+            embedding_length,
+            attention_head_count,
+            head_dim,
+        )?;
         let layer_norm_epsilon = get_f32_meta(metadata, "llama.layer_norm_epsilon").unwrap_or(1e-5);
         let rope_freq_base = get_f32_meta(metadata, "llama.rope.freq_base").unwrap_or(10_000.0);
         let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
@@ -198,8 +203,43 @@ fn get_u32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<u32>
     metadata.get(key).and_then(|v| match v {
         GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
         GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
+        GgufValue::Scalar(GgufScalar::U64(x)) => u32::try_from(*x).ok(),
+        GgufValue::Scalar(GgufScalar::I64(x)) => u32::try_from(*x).ok(),
         _ => None,
     })
+}
+
+fn derive_attention_head_count_kv(
+    metadata: &HashMap<String, GgufValue>,
+    tensors: &[GgufTensor],
+    d_model: u32,
+    attention_head_count: u32,
+    head_dim: u32,
+) -> Result<u32> {
+    if let Some(v) = get_u32_meta(metadata, "llama.attention.head_count_kv") {
+        return Ok(v);
+    }
+
+    let candidates = [
+        "layers.0.attention.wk.weight",
+        "blk.0.attn_k.weight",
+        "layers.0.attention.wv.weight",
+        "blk.0.attn_v.weight",
+    ];
+    for name in candidates {
+        if let Some(t) = tensors.iter().find(|t| t.name == name) {
+            if t.shape.len() != 2 {
+                anyhow::bail!("attention tensor {name} must be rank-2");
+            }
+            let k = t.shape[0] as u32;
+            let n = t.shape[1] as u32;
+            if k == d_model && n > 0 && n.is_multiple_of(head_dim) {
+                return Ok(n / head_dim);
+            }
+        }
+    }
+
+    Ok(attention_head_count)
 }
 
 fn derive_vocab_size(
@@ -1458,8 +1498,10 @@ impl LoadedModel {
         if m <= 0 || k <= 0 || h <= 0 {
             anyhow::bail!("mlp_gates: invalid dims");
         }
-        self.matmul_f32xf16_f32(d_x_f32, d_w_gate_f16, d_gate_out_f32, m, h, k)?;
+        self.matmul_f32xf16_f32(d_x_f32, d_w_gate_f16, d_gate_out_f32, m, h, k)
+            .with_context(|| format!("mlp gate GEMM failed: m={m} n={h} k={k}"))?;
         self.matmul_f32xf16_f32(d_x_f32, d_w_up_f16, d_up_out_f32, m, h, k)
+            .with_context(|| format!("mlp up GEMM failed: m={m} n={h} k={k}"))
     }
 
     /// # Safety
@@ -1477,6 +1519,7 @@ impl LoadedModel {
             anyhow::bail!("mlp_down_proj: invalid dims");
         }
         self.matmul_f32xf16_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
+            .with_context(|| format!("mlp down GEMM failed: m={m} n={n} k={h}"))
     }
 
     /// # Safety
@@ -2132,9 +2175,12 @@ impl LoadedModel {
         if m <= 0 || k <= 0 || n_q <= 0 || n_k <= 0 || n_v <= 0 {
             anyhow::bail!("qkv_project: invalid dims");
         }
-        self.matmul_f32xf16_f32(d_x_f32, d_wq_f16, d_q_out_f32, m, n_q, k)?;
-        self.matmul_f32xf16_f32(d_x_f32, d_wk_f16, d_k_out_f32, m, n_k, k)?;
+        self.matmul_f32xf16_f32(d_x_f32, d_wq_f16, d_q_out_f32, m, n_q, k)
+            .with_context(|| format!("Q projection GEMM failed: m={m} n={n_q} k={k}"))?;
+        self.matmul_f32xf16_f32(d_x_f32, d_wk_f16, d_k_out_f32, m, n_k, k)
+            .with_context(|| format!("K projection GEMM failed: m={m} n={n_k} k={k}"))?;
         self.matmul_f32xf16_f32(d_x_f32, d_wv_f16, d_v_out_f32, m, n_v, k)
+            .with_context(|| format!("V projection GEMM failed: m={m} n={n_v} k={k}"))
     }
 
     /// # Safety
@@ -2152,6 +2198,7 @@ impl LoadedModel {
             anyhow::bail!("out_proj: invalid dims");
         }
         self.matmul_f32xf16_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
+            .with_context(|| format!("attention output projection GEMM failed: m={m} n={n} k={k}"))
     }
 
     /// # Safety
@@ -2166,6 +2213,7 @@ impl LoadedModel {
         k: i32,
     ) -> Result<()> {
         self.matmul_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+            .with_context(|| format!("projection wrapper GEMM failed: m={m} n={n} k={k}"))
     }
 }
 
@@ -2186,7 +2234,10 @@ impl LoadedModel {
         let _ = &lm;
         let bytes_logits = vocab * std::mem::size_of::<f32>();
         let d_logits = self.cuda.device_malloc(bytes_logits)?;
-        self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)?;
+        self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)
+            .with_context(|| {
+                format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
+            })?;
         let mut host = vec![0u8; bytes_logits];
         self.cuda
             .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
@@ -2219,7 +2270,10 @@ impl LoadedModel {
                     1,
                     vocab as i32,
                     d_model as i32,
-                )?;
+                )
+                .with_context(|| {
+                    format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
+                })?;
                 let mut host = vec![0u8; bytes_logits];
                 self.cuda
                     .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
