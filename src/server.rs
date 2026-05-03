@@ -15,6 +15,7 @@ use tokio_stream::wrappers::ReceiverStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
+#[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::sampling::{Sampler, SamplerConfig};

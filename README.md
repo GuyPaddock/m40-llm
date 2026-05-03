@@ -103,11 +103,9 @@ Build the project in one of these modes:
 cargo run \
   --no-default-features \
   --features server \
-  -- run \
-  --model path/to.gguf \
+  -- run path/to.gguf \
   --addr 0.0.0.0:58439
 ```
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.
-
