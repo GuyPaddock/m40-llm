@@ -180,15 +180,15 @@ extern "C" {
         }
     }
 
-    // Q8_0 block layout per ggml: struct { float d; int8_t qs[32]; }
+    // Q8_0 block layout per ggml: struct { ggml_half d; int8_t qs[32]; }
     __global__ void kernel_q80_to_f32(const int8_t* in, float* out, size_t n) {
         size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < n) {
             size_t blk = i / 32;
             size_t idx = i % 32;
-            const char* base = reinterpret_cast<const char*>(in) + blk * 36;
-            const float d = *reinterpret_cast<const float*>(base + 0);
-            int8_t q = *(reinterpret_cast<const int8_t*>(base + 4 + idx));
+            const char* base = reinterpret_cast<const char*>(in) + blk * 34;
+            const float d = __half2float(*reinterpret_cast<const __half*>(base + 0));
+            int8_t q = *(reinterpret_cast<const int8_t*>(base + 2 + idx));
             out[i] = d * static_cast<float>(q);
         }
     }

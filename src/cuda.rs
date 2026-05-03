@@ -842,7 +842,7 @@ impl CudaContext {
     }
 
     /// # Safety
-    /// d_in_q80 must point to Q8_0 blocks in scale-first layout; d_out_f32 is f32 output.
+    /// d_in_q80 must point to GGML Q8_0 blocks; d_out_f32 is f32 output.
     pub unsafe fn q80_to_f32(
         &self,
         d_in_q80: *const c_void,

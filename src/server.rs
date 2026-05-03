@@ -392,21 +392,19 @@ async fn generate(
                         }
                     }
                     GgmlDType::Q8_0 => {
-                        let blocks = (d_model + 31) / 32;
-                        let row_bytes = blocks * 36;
+                        const Q8_0_BLOCK: usize = 32;
+                        const Q8_0_BLOCK_BYTES: usize = 34;
+                        let blocks = d_model.div_ceil(Q8_0_BLOCK);
+                        let row_bytes = blocks * Q8_0_BLOCK_BYTES;
                         let off = tok.byte_offset as usize + tok_id * row_bytes;
                         let row = &model.host_weights[off..off + row_bytes];
                         for i in 0..d_model {
-                            let blk = i / 32;
-                            let idx = i % 32;
-                            let base = blk * 36;
-                            let d = f32::from_le_bytes([
-                                row[base + 0],
-                                row[base + 1],
-                                row[base + 2],
-                                row[base + 3],
-                            ]);
-                            let q = row[base + 4 + idx] as i8 as f32;
+                            let blk = i / Q8_0_BLOCK;
+                            let idx = i % Q8_0_BLOCK;
+                            let base = blk * Q8_0_BLOCK_BYTES;
+                            let d_bits = u16::from_le_bytes([row[base], row[base + 1]]);
+                            let d = f16::from_bits(d_bits).to_f32();
+                            let q = row[base + 2 + idx] as i8 as f32;
                             hidden[i] = d * q;
                         }
                     }
