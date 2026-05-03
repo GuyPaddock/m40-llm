@@ -57,6 +57,37 @@ fn silu(x: f32) -> f32 {
     x / (1.0 + (-x).exp())
 }
 
+fn insert_minimal_metadata(gg: &mut GgufModel, d_model: usize, num_heads: u32, hidden: usize) {
+    gg.metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    gg.metadata.insert(
+        "llama.embedding_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
+    );
+    gg.metadata.insert(
+        "llama.attention.head_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(num_heads)),
+    );
+    gg.metadata.insert(
+        "llama.block_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    gg.metadata.insert(
+        "llama.context_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(16)),
+    );
+    gg.metadata.insert(
+        "llama.feed_forward_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(hidden as u32)),
+    );
+    gg.metadata.insert(
+        "llama.layer_norm_epsilon".to_string(),
+        GgufValue::Scalar(GgufScalar::F32(1e-6)),
+    );
+}
+
 #[test]
 fn forward_one_token_minimal_parity_toy() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -77,10 +108,7 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
 
     // Build GGUF skeleton
     let mut gg = GgufModel::new(0);
-    gg.metadata.insert(
-        "llama.embedding_length".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
-    );
+    insert_minimal_metadata(&mut gg, d_model, num_heads, hidden);
 
     // Tensors
     let vocab = 32u64;
@@ -379,10 +407,7 @@ fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
 
     // Build GGUF and weights same as one-token test
     let mut gg = GgufModel::new(0);
-    gg.metadata.insert(
-        "llama.embedding_length".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
-    );
+    insert_minimal_metadata(&mut gg, d_model, num_heads as u32, hidden);
     let vocab = 32u64;
     gg.tensors.push(GgufTensor {
         name: "tok_embeddings.weight".into(),

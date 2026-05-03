@@ -160,12 +160,12 @@ extern "C" {
         const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
         if (row >= n_rows) return;
 
-        float ss = eps; 
+        float ss = 0.0f;
         for (size_t i = 0; i < row_stride; i++) {
             float x = input[row * row_stride + i];
             ss += x * x;
         }
-        float rms = sqrtf(ss / row_stride);
+        float rms = sqrtf(ss / row_stride + eps);
         const float scale = 1.0f / rms;
 
         for (size_t i = 0; i < row_stride; i++) {
