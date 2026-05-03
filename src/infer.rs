@@ -581,8 +581,8 @@ impl LoadedModel {
     }
     /// Map the language modeling head (output projection) tensor if present.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
-    /// Returns (tensor view, d_model, vocab, tied_to_embeddings=false).
-    pub fn map_lm_head(&self) -> Result<(DeviceTensorView, usize, usize, bool)> {
+    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings=false).
+    pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
             "output.weight".to_string(),
@@ -590,6 +590,11 @@ impl LoadedModel {
             "output".to_string(),
         ];
         if let Ok(t) = self.find_tensor_any(&candidates) {
+            let name = candidates
+                .iter()
+                .find(|candidate| self.device_tensor(candidate).is_some())
+                .context("lm_head tensor name not found after candidate match")?
+                .clone();
             if t.dtype != GgmlDType::F16 {
                 anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
             }
@@ -607,7 +612,7 @@ impl LoadedModel {
                     t.shape
                 );
             }
-            return Ok((t.clone(), d_model, vocab, false));
+            return Ok((name, t.clone(), d_model, vocab, false));
         }
         anyhow::bail!(
             "lm_head tensor not found; expected one of {}",
@@ -640,7 +645,9 @@ impl LoadedModel {
         #[cfg(not(feature = "cuda"))]
         let _host_base = weights_bytes.as_ptr() as *mut c_void;
         #[cfg(feature = "cuda")]
-        let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() == Some("1");
+        let use_device_weights = std::env::var("M40LLM_ENABLE_NVCC")
+            .map(|v| v != "0")
+            .unwrap_or(cfg!(nvcc));
         #[cfg(feature = "cuda")]
         let d_base = {
             let uploaded = if use_device_weights {
@@ -687,7 +694,7 @@ impl LoadedModel {
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
-            d_weights_base: d_base.unwrap_or(std::ptr::null_mut()),
+            d_weights_base: d_base.unwrap_or(host_base),
             host_weights: weights_bytes,
             model_config,
             #[cfg(feature = "gguf_ext")]
@@ -2073,11 +2080,11 @@ impl LoadedModel {
     /// # Safety
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        let lm = self.map_lm_head()?.0;
+        let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
         let d_model = self.model_config.embedding_length as usize;
         let vocab = lm.shape[1] as usize;
         #[cfg(feature = "cuda")]
-        let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+        let d_w = self.tensor_device_ptr(&name, &lm)?;
         #[cfg(not(feature = "cuda"))]
         let d_w: *const c_void = std::ptr::null();
         #[cfg(not(feature = "cuda"))]
@@ -2102,10 +2109,10 @@ impl LoadedModel {
     /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
     /// to host-side dot with per-row copies from tok_embeddings.
     pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
-        if let Ok((lm, d_model, vocab, _)) = self.map_lm_head() {
+        if let Ok((name, lm, d_model, vocab, _)) = self.map_lm_head() {
             #[cfg(feature = "cuda")]
             {
-                let d_w = self.tensor_device_ptr("lm_head", &lm)?;
+                let d_w = self.tensor_device_ptr(&name, &lm)?;
                 let bytes_logits = vocab * std::mem::size_of::<f32>();
                 let d_logits = self.cuda.device_malloc(bytes_logits)?;
                 self.matmul_f32xf16_f32(

@@ -285,7 +285,7 @@ async fn generate(
                         d_model_from_tok
                     } else {
                         match model.map_lm_head() {
-                            Ok((_lm, d_m, _vocab, _tied)) => {
+                            Ok((_name, _lm, d_m, _vocab, _tied)) => {
                                 eprintln!("[server] derived d_model from lm_head: {}", d_m);
                                 d_m
                             }
@@ -338,11 +338,11 @@ async fn generate(
                             d_out,
                         )?;
                     }
-                    let logits = unsafe { model.logits_from_hidden(d_out as *const _) }?;
+                    let logits = unsafe { model.logits_from_hidden(d_out as *const _) };
                     unsafe {
                         let _ = model.cuda.device_free(d_out); // freed server:d_out_hidden_f32
                     }
-                    logits
+                    logits?
                 } else {
                     // Fallback: treat embedding as hidden and compute logits (uses lm_head when present or tok_embeddings^T)
                     unsafe { model.logits_from_hidden(d_x as *const _) }?
