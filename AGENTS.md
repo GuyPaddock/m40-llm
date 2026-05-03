@@ -103,7 +103,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t22-parity-check",
       "priority": 8,
-      "status": "in_progress",
+      "status": "done",
       "title": "CUDA ↔ CPU parity checks",
       "rationale": "Protects correctness while wiring GPU math.",
       "scope": [
