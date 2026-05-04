@@ -69,6 +69,62 @@ fn cpu_last_token_attention(
     out
 }
 
+fn cpu_last_token_attention_gqa(
+    q: &[f32],             // [q_heads*head_dim]
+    k_tokens: &[Vec<f32>], // seq_len entries, each [kv_heads*head_dim]
+    v_tokens: &[Vec<f32>], // seq_len entries, each [kv_heads*head_dim]
+    q_heads: usize,
+    kv_heads: usize,
+    head_dim: usize,
+) -> Vec<f32> {
+    assert_eq!(q_heads % kv_heads, 0);
+    let dim = q_heads * head_dim;
+    let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
+    let group = q_heads / kv_heads;
+    let mut out = vec![0.0f32; dim];
+
+    for qh_idx in 0..q_heads {
+        let kvh_idx = qh_idx / group;
+        let qh = &q[qh_idx * head_dim..(qh_idx + 1) * head_dim];
+        let mut max_s = f32::NEG_INFINITY;
+        for k_t in k_tokens.iter() {
+            let k_base = &k_t[kvh_idx * head_dim..(kvh_idx + 1) * head_dim];
+            let mut dot = 0.0f32;
+            for d in 0..head_dim {
+                dot += qh[d] * k_base[d];
+            }
+            max_s = max_s.max(dot * inv_sqrt);
+        }
+
+        let mut denom = 0.0f32;
+        let mut scores: Vec<f32> = Vec::with_capacity(k_tokens.len());
+        for k_t in k_tokens.iter() {
+            let k_base = &k_t[kvh_idx * head_dim..(kvh_idx + 1) * head_dim];
+            let mut dot = 0.0f32;
+            for d in 0..head_dim {
+                dot += qh[d] * k_base[d];
+            }
+            let e = (dot * inv_sqrt - max_s).exp();
+            scores.push(e);
+            denom += e;
+        }
+        if denom == 0.0 {
+            denom = 1.0;
+        }
+
+        for d in 0..head_dim {
+            let mut acc = 0.0f32;
+            for (e, v_t) in scores.iter().zip(v_tokens.iter()) {
+                let v_base = &v_t[kvh_idx * head_dim..(kvh_idx + 1) * head_dim];
+                acc += (*e / denom) * v_base[d];
+            }
+            out[qh_idx * head_dim + d] = acc;
+        }
+    }
+
+    out
+}
+
 #[test]
 fn attention_last_token_cuda_parity_grid() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -161,6 +217,118 @@ fn attention_last_token_cuda_parity_grid() -> Result<()> {
                         diff < 1e-3,
                         "mismatch (heads={},dim={},seq_len={},i={}) cpu={} gpu={} diff={}",
                         num_heads,
+                        head_dim,
+                        seq_len,
+                        i,
+                        a,
+                        b,
+                        diff
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn attention_last_token_cuda_gqa_parity_grid() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let head_dims = [1u32, 5, 8, 16, 32];
+    let head_pairs = [(2u32, 1u32), (4, 1), (8, 2), (32, 4)];
+    let seq_lens = [1u32, 2, 3, 4, 8, 16];
+    let max_seq_len = *seq_lens.iter().max().unwrap();
+
+    for &(q_heads, kv_heads) in &head_pairs {
+        for &head_dim in &head_dims {
+            let q_dim = (q_heads * head_dim) as usize;
+            let kv_dim = (kv_heads * head_dim) as usize;
+
+            for &seq_len in &seq_lens {
+                let kv = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+
+                let mut k_tokens_f32: Vec<Vec<f32>> = Vec::new();
+                let mut v_tokens_f32: Vec<Vec<f32>> = Vec::new();
+                for t in 0..seq_len as usize {
+                    let mut k = Vec::with_capacity(kv_dim);
+                    let mut v = Vec::with_capacity(kv_dim);
+                    for i in 0..kv_dim {
+                        k.push(((t * kv_dim + i) as f32) * 0.011 - 0.7);
+                        v.push(((t * kv_dim + (kv_dim - 1 - i)) as f32) * 0.017 - 1.3);
+                    }
+                    let k_cast = cast_f32_to_f16_then_back(&k);
+                    let v_cast = cast_f32_to_f16_then_back(&v);
+                    k_tokens_f32.push(k_cast.clone());
+                    v_tokens_f32.push(v_cast.clone());
+
+                    let bytes = kv_dim * std::mem::size_of::<f32>();
+                    let d_k = ctx.device_malloc(bytes)?;
+                    let d_v = ctx.device_malloc(bytes)?;
+                    unsafe {
+                        ctx.memcpy_h2d(d_k, k_cast.as_ptr() as *const c_void, bytes)?;
+                        ctx.memcpy_h2d(d_v, v_cast.as_ptr() as *const c_void, bytes)?;
+                        kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+                        ctx.device_free(d_k)?;
+                        ctx.device_free(d_v)?;
+                    }
+                }
+
+                let mut q = Vec::with_capacity(q_dim);
+                for i in 0..q_dim {
+                    q.push((i as f32) * 0.004 - 0.25);
+                }
+                let bytes_f32 = q_dim * std::mem::size_of::<f32>();
+                let d_q = ctx.device_malloc(bytes_f32)?;
+                let d_out = ctx.device_malloc(bytes_f32)?;
+                unsafe {
+                    ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_f32)?;
+                    kv.attention_last_token_f32_gqa(
+                        &ctx,
+                        0,
+                        d_q as *const c_void,
+                        q_heads,
+                        seq_len,
+                        d_out,
+                    )?;
+                }
+                let mut out_gpu = vec![0f32; q_dim];
+                unsafe {
+                    ctx.memcpy_d2h(
+                        out_gpu.as_mut_ptr() as *mut c_void,
+                        d_out as *const c_void,
+                        bytes_f32,
+                    )?;
+                    ctx.device_free(d_q)?;
+                    ctx.device_free(d_out)?;
+                }
+
+                let out_cpu = cpu_last_token_attention_gqa(
+                    &q,
+                    &k_tokens_f32,
+                    &v_tokens_f32,
+                    q_heads as usize,
+                    kv_heads as usize,
+                    head_dim as usize,
+                );
+
+                for i in 0..q_dim {
+                    let a = out_cpu[i];
+                    let b = out_gpu[i];
+                    let diff = (a - b).abs();
+                    assert!(
+                        diff < 1e-3,
+                        "GQA mismatch (q_heads={},kv_heads={},dim={},seq_len={},i={}) cpu={} gpu={} diff={}",
+                        q_heads,
+                        kv_heads,
                         head_dim,
                         seq_len,
                         i,
