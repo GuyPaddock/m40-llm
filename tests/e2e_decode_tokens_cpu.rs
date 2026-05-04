@@ -3,145 +3,16 @@
 use anyhow::Result;
 use half::f16;
 use m40_llm::decode::{decode_loop_with, greedy_sampler, StoppingCriteria};
-use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use m40_llm::tokenizer::Tokenizer;
 use std::ffi::c_void;
 
-fn f16_bytes(v: f32) -> [u8; 2] {
-    let h = f16::from_f32(v);
-    h.to_bits().to_le_bytes()
-}
-
-fn make_min_gguf(vocab: usize, d_model: usize, hidden: usize) -> (GgufModel, Vec<u8>) {
-    let mut metadata = std::collections::HashMap::new();
-    metadata.insert(
-        "general.architecture".to_string(),
-        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
-    );
-    metadata.insert(
-        "llama.embedding_length".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(d_model as u32)),
-    );
-    metadata.insert(
-        "llama.attention.head_count".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(1)),
-    );
-
-    metadata.insert(
-        "llama.vocab_size".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
-    );
-    metadata.insert(
-        "llama.block_count".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(1)),
-    );
-    metadata.insert(
-        "llama.context_length".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(1024)), // Assuming a default context length of 1024
-    );
-
-    let mut tensors: Vec<GgufTensor> = Vec::new();
-    let mut weights: Vec<u8> = Vec::new();
-    let mut add_tensor =
-        |name: &str, dtype: GgmlDType, shape: &[u64], fill: &mut dyn FnMut(&mut Vec<u8>)| {
-            let offset = weights.len() as u64;
-            fill(&mut weights);
-            tensors.push(GgufTensor {
-                name: name.to_string(),
-                dtype,
-                shape: shape.to_vec(),
-                offset,
-            });
-        };
-
-    // tok_embeddings.weight: one-hot rows
-    {
-        let mut fill = |buf: &mut Vec<u8>| {
-            for row in 0..vocab {
-                for col in 0..d_model {
-                    let v = if row == col { 1.0 } else { 0.0 };
-                    buf.extend_from_slice(&f16_bytes(v));
-                }
-            }
-        };
-        add_tensor(
-            "tok_embeddings.weight",
-            GgmlDType::F16,
-            &[vocab as u64, d_model as u64],
-            &mut fill,
-        );
-    }
-
-    // output.weight (lm_head): identity D x V
-    {
-        let mut fill = |buf: &mut Vec<u8>| {
-            for r in 0..d_model {
-                for c in 0..vocab {
-                    let v = if r == c { 1.0 } else { 0.0 };
-                    buf.extend_from_slice(&f16_bytes(v));
-                }
-            }
-        };
-        add_tensor(
-            "output.weight",
-            GgmlDType::F16,
-            &[d_model as u64, vocab as u64],
-            &mut fill,
-        );
-    }
-
-    // Minimal layer 0 weights
-    let zeros_f16 = |n: usize| -> Vec<u8> { (0..n).flat_map(|_| f16_bytes(0.0)).collect() };
-    let mut add_zeros = |name: &str, shape: &[u64]| {
-        let elems: usize = shape.iter().copied().product::<u64>() as usize;
-        let mut fill = |buf: &mut Vec<u8>| buf.extend_from_slice(&zeros_f16(elems));
-        add_tensor(name, GgmlDType::F16, shape, &mut fill);
-    };
-    add_zeros(
-        "layers.0.attention.wq.weight",
-        &[d_model as u64, d_model as u64],
-    );
-    add_zeros(
-        "layers.0.attention.wk.weight",
-        &[d_model as u64, d_model as u64],
-    );
-    add_zeros(
-        "layers.0.attention.wv.weight",
-        &[d_model as u64, d_model as u64],
-    );
-    add_zeros(
-        "layers.0.attention.wo.weight",
-        &[d_model as u64, d_model as u64],
-    );
-    add_zeros(
-        "layers.0.feed_forward.w3.weight",
-        &[d_model as u64, hidden as u64],
-    );
-    add_zeros(
-        "layers.0.feed_forward.w1.weight",
-        &[d_model as u64, hidden as u64],
-    );
-    add_zeros(
-        "layers.0.feed_forward.w2.weight",
-        &[hidden as u64, d_model as u64],
-    );
-
-    let gguf = GgufModel {
-        version: 1,
-        metadata,
-        tensors,
-        data_offset: 0,
-    };
-    (gguf, weights)
-}
+#[path = "common/tiny_gguf.rs"]
+mod tiny_gguf;
 
 #[test]
 fn e2e_decode_tokens_cpu_identity() -> Result<()> {
-    let vocab = 256usize;
-    let d_model = 256usize;
-    let hidden = 16usize;
-    let (gguf, bytes) = make_min_gguf(vocab, d_model, hidden);
+    let (gguf, bytes) = tiny_gguf::make_identity_tiny_gguf(tiny_gguf::TinyGgufConfig::default());
 
     let model = LoadedModel::from_gguf(gguf, bytes, 0)?;
     let tokenizer = Tokenizer::byte_level();
