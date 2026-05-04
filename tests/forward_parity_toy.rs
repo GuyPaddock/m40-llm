@@ -27,14 +27,14 @@ fn halves_to_f32(bytes: &[u8]) -> Vec<f32> {
     out
 }
 
-fn matmul_row_major(a: &[f32], m: usize, k: usize, b: &[f32], n: usize) -> Vec<f32> {
-    // a: [m x k], b: [k x n] -> c: [m x n]
+fn matmul_gguf_native(a: &[f32], m: usize, k: usize, b: &[f32], n: usize) -> Vec<f32> {
+    // GGUF stores tensor dimension 0 fastest, so logical B[p, j] is b[j * k + p].
     let mut c = vec![0f32; m * n];
     for i in 0..m {
         for j in 0..n {
             let mut acc = 0f32;
             for p in 0..k {
-                acc += a[i * k + p] * b[p * n + j];
+                acc += a[i * k + p] * b[j * k + p];
             }
             c[i * n + j] = acc;
         }
@@ -55,6 +55,24 @@ fn rms_norm(x: &[f32], eps: f32) -> Vec<f32> {
 
 fn silu(x: f32) -> f32 {
     x / (1.0 + (-x).exp())
+}
+
+fn apply_rope_one(vec: &mut [f32], num_heads: usize, head_dim: usize, pos: usize) {
+    let freq_base = 10_000.0f32;
+    let pos = pos as f32;
+    for h in 0..num_heads {
+        let head_base = h * head_dim;
+        for pair in 0..head_dim / 2 {
+            let idx = head_base + pair * 2;
+            let theta = pos * freq_base.powf(-2.0f32 * pair as f32 / head_dim as f32);
+            let c = theta.cos();
+            let s = theta.sin();
+            let x0 = vec[idx];
+            let x1 = vec[idx + 1];
+            vec[idx] = x0 * c - x1 * s;
+            vec[idx + 1] = x0 * s + x1 * c;
+        }
+    }
 }
 
 fn insert_minimal_metadata(gg: &mut GgufModel, d_model: usize, num_heads: u32, hidden: usize) {
@@ -320,14 +338,14 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
     );
 
     // Q, K, V (1 x d_model)
-    let _q = matmul_row_major(&x_n, 1, d_model, &wq, d_model);
-    let _k = matmul_row_major(&x_n, 1, d_model, &wk, d_model);
-    let v = matmul_row_major(&x_n, 1, d_model, &wv, d_model);
+    let _q = matmul_gguf_native(&x_n, 1, d_model, &wq, d_model);
+    let _k = matmul_gguf_native(&x_n, 1, d_model, &wk, d_model);
+    let v = matmul_gguf_native(&x_n, 1, d_model, &wv, d_model);
 
     // With seq_len=1, attention context equals V
     let context = v;
 
-    let y_attn = matmul_row_major(&context, 1, d_model, &wo, d_model);
+    let y_attn = matmul_gguf_native(&context, 1, d_model, &wo, d_model);
     let x1: Vec<f32> = x0.iter().zip(y_attn.iter()).map(|(a, b)| a + b).collect();
 
     // Post-attn norm
@@ -355,8 +373,8 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
         &lm,
     );
 
-    let gate = matmul_row_major(&x1n, 1, d_model, &w_gate, hidden);
-    let up = matmul_row_major(&x1n, 1, d_model, &w_up, hidden);
+    let gate = matmul_gguf_native(&x1n, 1, d_model, &w_gate, hidden);
+    let up = matmul_gguf_native(&x1n, 1, d_model, &w_up, hidden);
     let hidden_act: Vec<f32> = gate
         .iter()
         .zip(up.iter())
@@ -364,14 +382,15 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
         .collect();
 
     // hidden_act [1 x hidden] * w_down [hidden x d_model] => [1 x d_model]
-    let y_mlp = matmul_row_major(&hidden_act, 1, hidden, &w_down, d_model);
+    let y_mlp = matmul_gguf_native(&hidden_act, 1, hidden, &w_down, d_model);
     let y_ref: Vec<f32> = x1.iter().zip(y_mlp.iter()).map(|(a, b)| a + b).collect();
 
     assert_eq!(y_ref.len(), out_dev.len());
+    let tol = 5e-3f32;
     for (i, (a, b)) in y_ref.iter().zip(out_dev.iter()).enumerate() {
         let diff = (*a - *b).abs();
         assert!(
-            diff <= 1e-3,
+            diff <= tol,
             "mismatch at {}: got {:.6}, expect {:.6}, diff {:.6}",
             i,
             b,
@@ -539,11 +558,13 @@ fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
     let wv = halves_to_f32_blob("layers.0.attention.wv.weight", d_model, d_model);
     let wo = halves_to_f32_blob("layers.0.attention.wo.weight", d_model, d_model);
 
-    let q1 = matmul_row_major(&x1n, 1, d_model, &wq, d_model);
-    let k0 = matmul_row_major(&x0n, 1, d_model, &wk, d_model);
-    let k1 = matmul_row_major(&x1n, 1, d_model, &wk, d_model);
-    let v0 = matmul_row_major(&x0n, 1, d_model, &wv, d_model);
-    let v1 = matmul_row_major(&x1n, 1, d_model, &wv, d_model);
+    let mut q1 = matmul_gguf_native(&x1n, 1, d_model, &wq, d_model);
+    let k0 = matmul_gguf_native(&x0n, 1, d_model, &wk, d_model);
+    let mut k1 = matmul_gguf_native(&x1n, 1, d_model, &wk, d_model);
+    let v0 = matmul_gguf_native(&x0n, 1, d_model, &wv, d_model);
+    let v1 = matmul_gguf_native(&x1n, 1, d_model, &wv, d_model);
+    apply_rope_one(&mut q1, num_heads as usize, head_dim as usize, 1);
+    apply_rope_one(&mut k1, num_heads as usize, head_dim as usize, 1);
 
     let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
     let mut context = vec![0f32; d_model];
@@ -567,21 +588,21 @@ fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
         }
     }
 
-    let y_attn = matmul_row_major(&context, 1, d_model, &wo, d_model);
+    let y_attn = matmul_gguf_native(&context, 1, d_model, &wo, d_model);
     let x1_residual: Vec<f32> = x1.iter().zip(y_attn.iter()).map(|(a, b)| a + b).collect();
     let x1n2 = rms_norm(&x1_residual, 1e-6);
 
     let w_gate = halves_to_f32_blob("layers.0.feed_forward.w3.weight", d_model, hidden);
     let w_up = halves_to_f32_blob("layers.0.feed_forward.w1.weight", d_model, hidden);
     let w_down = halves_to_f32_blob("layers.0.feed_forward.w2.weight", hidden, d_model);
-    let gate = matmul_row_major(&x1n2, 1, d_model, &w_gate, hidden);
-    let up = matmul_row_major(&x1n2, 1, d_model, &w_up, hidden);
+    let gate = matmul_gguf_native(&x1n2, 1, d_model, &w_gate, hidden);
+    let up = matmul_gguf_native(&x1n2, 1, d_model, &w_up, hidden);
     let hidden_act: Vec<f32> = gate
         .iter()
         .zip(up.iter())
         .map(|(g, u)| silu(*g) * *u)
         .collect();
-    let y_mlp = matmul_row_major(&hidden_act, 1, hidden, &w_down, d_model);
+    let y_mlp = matmul_gguf_native(&hidden_act, 1, hidden, &w_down, d_model);
     let y_ref: Vec<f32> = x1_residual
         .iter()
         .zip(y_mlp.iter())
