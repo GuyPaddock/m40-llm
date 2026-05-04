@@ -408,4 +408,60 @@ impl LoadedModel {
 
         Ok((d_model.unwrap_or(0), hidden_dim.unwrap_or(0)))
     }
+
+    pub fn validate_full_layer_decode(&self) -> Result<(usize, usize)> {
+        let (d_model, hidden_dim) = self.validate_standard_layers()?;
+        let (_lm_name, _lm_head, lm_d_model, _vocab, _tied) = self.map_lm_head()?;
+        if lm_d_model != d_model {
+            anyhow::bail!(
+                "lm_head d_model {} != layer d_model {}",
+                lm_d_model,
+                d_model
+            );
+        }
+        if !self.kv_cache_can_address_layers() {
+            let slots = self
+                .kv_cache
+                .as_ref()
+                .map(|kv| kv.max_batch_size())
+                .unwrap_or(0);
+            anyhow::bail!(
+                "KV cache has {} slots, but full-layer decode needs {} layer slots",
+                slots,
+                self.model_config.block_count
+            );
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            self.tensor_device_ptr(&_lm_name, &_lm_head)
+                .with_context(|| format!("validating lm_head tensor '{_lm_name}'"))?;
+            for layer in 0..self.model_config.block_count as usize {
+                let w = self.map_standard_layer(layer)?;
+                for (name, view) in [
+                    ("tok_embeddings", &w.tok_embeddings),
+                    ("wq", &w.wq),
+                    ("wk", &w.wk),
+                    ("wv", &w.wv),
+                    ("wo", &w.wo),
+                    ("w_gate", &w.w_gate),
+                    ("w_up", &w.w_up),
+                    ("w_down", &w.w_down),
+                ] {
+                    self.tensor_device_ptr(name, view)
+                        .with_context(|| format!("validating layer {layer} tensor '{name}'"))?;
+                }
+                if let Some(view) = &w.attn_norm {
+                    self.tensor_device_ptr("attn_norm", view)
+                        .with_context(|| format!("validating layer {layer} attn_norm"))?;
+                }
+                if let Some(view) = &w.ffn_norm {
+                    self.tensor_device_ptr("ffn_norm", view)
+                        .with_context(|| format!("validating layer {layer} ffn_norm"))?;
+                }
+            }
+        }
+
+        Ok((d_model, hidden_dim))
+    }
 }

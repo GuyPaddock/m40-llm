@@ -296,6 +296,12 @@ async fn generate(
         state.model.reset_kv_cache().map_err(internal_error)?;
     }
 
+    #[cfg(feature = "cuda")]
+    let (full_decode_d_model, full_decode_hidden_dim) = state
+        .model
+        .validate_full_layer_decode()
+        .map_err(|e| internal_error(e.context("CUDA full-layer decode is unavailable")))?;
+
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
         let state_for_logits = state.clone();
@@ -321,26 +327,40 @@ async fn generate(
             }
             // Determine d_model and whether we can run the full transformer stack.
             // Try to infer d_model from embeddings or lm_head as fallback
+            #[cfg(not(feature = "cuda"))]
             let embed_names = [
                 "tok_embeddings.weight",
                 "token_embd.weight",
                 "token_embd",
                 "token_embeddings.weight",
             ];
+            #[cfg(not(feature = "cuda"))]
             let tok_opt = embed_names
                 .iter()
                 .find_map(|n| model.device_tensors.get(*n));
+            #[cfg(not(feature = "cuda"))]
             if tok_opt.is_none() {
                 eprintln!(
                     "[server] warning: no known embedding tensor found; will try lm_head only"
                 );
             }
+            #[cfg(not(feature = "cuda"))]
             let d_model_from_tok =
                 tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
+            #[cfg(not(feature = "cuda"))]
             if let Some(t) = tok_opt {
                 eprintln!("[server] embeddings shape: {:?}", t.shape);
             }
 
+            #[cfg(feature = "cuda")]
+            let (d, can_forward) = {
+                eprintln!(
+                    "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                    model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
+                );
+                (full_decode_d_model, true)
+            };
+            #[cfg(not(feature = "cuda"))]
             let (d, can_forward) = match model.validate_standard_layers() {
                 Ok((d_model, hidden_dim)) => {
                     let ok = model.kv_cache_can_address_layers();
