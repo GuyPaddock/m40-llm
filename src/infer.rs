@@ -1913,28 +1913,12 @@ impl LoadedModel {
                             (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
                         self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
                     } else {
-                        // Column gather: shape [d_model, vocab], take column = token_id
-                        use half::f16;
-                        let row_stride = r1 * 2; // vocab elements per row (f16)
-                        let mut out = vec![0f32; d_model];
-                        for i in 0..d_model {
-                            let elem_off =
-                                (tok.dptr as usize) + i * row_stride + (token_id as usize) * 2;
-                            let mut bytes = [0u8; 2];
-                            self.cuda.memcpy_d2h(
-                                bytes.as_mut_ptr() as *mut c_void,
-                                elem_off as *const c_void,
-                                2,
-                            )?;
-                            let bits = (bytes[0] as u16) | ((bytes[1] as u16) << 8);
-                            out[i] = f16::from_bits(bits).to_f32();
-                        }
-                        let out_bytes = d_model * std::mem::size_of::<f32>();
-                        self.cuda.memcpy_h2d(
-                            d_out_f32,
-                            out.as_ptr() as *const c_void,
-                            out_bytes,
-                        )?;
+                        // GGUF-native [d_model, vocab]: dimension 0 is fastest, so each token
+                        // vector is contiguous even though vocab is shape dimension 1.
+                        let row_bytes = d_model * 2;
+                        let d_row =
+                            (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
+                        self.cuda.f16_to_f32(d_row, d_out_f32, d_model)?;
                     }
                 }
                 GgmlDType::Q8_0 => {
@@ -1972,26 +1956,27 @@ impl LoadedModel {
                             out_bytes,
                         )?;
                     } else {
-                        // Column dequant: shape [d_model, vocab], blocks along vocab
-                        let vocab = r1;
-                        let blocks = vocab.div_ceil(Q8_0_BLOCK);
-                        let row_stride = blocks * Q8_0_BLOCK_BYTES;
-                        let b = (token_id as usize) / Q8_0_BLOCK;
-                        let idx = (token_id as usize) % Q8_0_BLOCK;
+                        // GGUF-native [d_model, vocab]: blocks are along d_model for each token.
+                        let blocks = d_model.div_ceil(Q8_0_BLOCK);
+                        let row_bytes = blocks * Q8_0_BLOCK_BYTES;
+                        let d_row =
+                            (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
+                        let mut qrow = vec![0u8; row_bytes];
+                        self.cuda
+                            .memcpy_d2h(qrow.as_mut_ptr() as *mut c_void, d_row, row_bytes)?;
                         let mut out = vec![0f32; d_model];
-                        let mut block_buf = [0u8; Q8_0_BLOCK_BYTES];
-                        for i in 0..d_model {
-                            let row_base = (tok.dptr as usize) + i * row_stride;
-                            let blk_off = row_base + b * Q8_0_BLOCK_BYTES;
-                            self.cuda.memcpy_d2h(
-                                block_buf.as_mut_ptr() as *mut c_void,
-                                blk_off as *const c_void,
-                                Q8_0_BLOCK_BYTES,
-                            )?;
-                            let d_bits = u16::from_le_bytes([block_buf[0], block_buf[1]]);
+                        for blk in 0..blocks {
+                            let base = blk * Q8_0_BLOCK_BYTES;
+                            let d_bits = u16::from_le_bytes([qrow[base], qrow[base + 1]]);
                             let d = half::f16::from_bits(d_bits).to_f32();
-                            let q = block_buf[2 + idx] as i8 as f32;
-                            out[i] = d * q;
+                            for idx in 0..Q8_0_BLOCK {
+                                let i = blk * Q8_0_BLOCK + idx;
+                                if i >= d_model {
+                                    break;
+                                }
+                                let q = qrow[base + 2 + idx] as i8 as f32;
+                                out[i] = d * q;
+                            }
                         }
                         let out_bytes = d_model * std::mem::size_of::<f32>();
                         self.cuda.memcpy_h2d(

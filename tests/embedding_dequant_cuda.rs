@@ -168,11 +168,9 @@ fn f16_embedding_column_load_matches_host() -> Result<()> {
         model.cuda.device_free(out)?;
     }
 
-    let expected: Vec<f32> = (0..d_model)
-        .map(|row| {
-            let idx = row * vocab + token_id as usize;
-            f16::from_f32(values[idx]).to_f32()
-        })
+    let expected: Vec<f32> = values[token_id as usize * d_model..(token_id as usize + 1) * d_model]
+        .iter()
+        .map(|&value| f16::from_f32(value).to_f32())
         .collect();
     assert_close(&actual, &expected);
     Ok(())
