@@ -311,6 +311,11 @@ impl Tokenizer {
             return;
         }
 
+        if self.kind == TokenizerKind::SentencePiece && self.bpe_ranks.is_empty() {
+            self.encode_piece_longest_match(piece, out);
+            return;
+        }
+
         let mut symbols: Vec<String> = piece.chars().map(|c| c.to_string()).collect();
         if !self.bpe_ranks.is_empty() {
             symbols = self.apply_bpe(symbols);
@@ -329,6 +334,41 @@ impl Tokenizer {
             } else {
                 out.extend(sym.as_bytes().iter().map(|&b| b as u32));
             }
+        }
+    }
+
+    fn encode_piece_longest_match(&self, piece: &str, out: &mut Vec<u32>) {
+        let starts: Vec<usize> = piece
+            .char_indices()
+            .map(|(idx, _)| idx)
+            .chain(std::iter::once(piece.len()))
+            .collect();
+        let mut pos_idx = 0usize;
+        while pos_idx + 1 < starts.len() {
+            let start = starts[pos_idx];
+            let mut matched = None;
+            for end_idx in ((pos_idx + 1)..starts.len()).rev() {
+                let candidate = &piece[start..starts[end_idx]];
+                if let Some(id) = self.token_to_id.get(candidate) {
+                    matched = Some((*id, end_idx));
+                    break;
+                }
+            }
+            if let Some((id, next_idx)) = matched {
+                out.push(id);
+                pos_idx = next_idx;
+                continue;
+            }
+
+            let ch = &piece[start..starts[pos_idx + 1]];
+            if let Some(id) = self.token_to_id.get(ch) {
+                out.push(*id);
+            } else if let Some(unk) = self.unk_id {
+                out.push(unk);
+            } else {
+                out.extend(ch.as_bytes().iter().map(|&b| b as u32));
+            }
+            pos_idx += 1;
         }
     }
 
