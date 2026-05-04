@@ -88,7 +88,7 @@ Build the project in one of these modes:
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.
-- Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for CUDA‑gated toy coverage. The real server path now runs full-layer TinyLlama F16 `/generate` on M40; remaining hot-path host round trips are tracked as optimization work.
+- Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for CUDA‑gated toy coverage. The real server path now runs full-layer TinyLlama F16 `/generate` on M40. The CUDA forward path keeps residual adds and SwiGLU activation on device; remaining optimization work should be measured before making performance claims.
 
 
 ## CUDA device selection and cuBLAS
@@ -126,8 +126,11 @@ may decode to multiple characters.
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
 - Expected log evidence: `full-layer forward enabled layers=22`
-- Known limitation: residual adds and SiLU/gated MLP activation still use host
-  round trips and should be moved to CUDA kernels before performance claims.
+- CUDA hot path: RMSNorm, RoPE, residual adds, and SiLU/gated MLP
+  activation run on device in the forward path.
+- Next performance step: collect a fresh M40 latency baseline, then proceed to
+  cuBLAS hardening, attention microbenchmarks, streams, and persistent decode
+  experiments.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

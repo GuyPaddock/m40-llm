@@ -88,7 +88,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t25-rope-rmsnorm",
       "priority": 7,
-      "status": "todo",
+      "status": "done",
       "title": "RMSNorm and RoPE (GPU-first)",
       "rationale": "Keeping activations on the GPU avoids catastrophic perf loss.",
       "scope": [
