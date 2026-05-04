@@ -156,36 +156,13 @@ impl LoadedModel {
                     d_model,
                 )?;
 
-                // Residual add y_attn: x1 = x + y_attn (host fallback)
-                {
-                    let mut h_x = vec![0u8; bytes_d];
-                    let mut h_y = vec![0u8; bytes_d];
-                    self.cuda
-                        .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
-                    self.cuda.memcpy_d2h(
-                        h_y.as_mut_ptr() as *mut c_void,
-                        dy_attn as *const c_void,
-                        bytes_d,
-                    )?;
-                    let mut x = Vec::with_capacity(d_model as usize);
-                    let mut y = Vec::with_capacity(d_model as usize);
-                    for ch in h_x.chunks_exact(4) {
-                        x.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                    }
-                    for ch in h_y.chunks_exact(4) {
-                        y.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                    }
-                    let mut out = Vec::with_capacity(d_model as usize);
-                    for i in 0..(d_model as usize) {
-                        out.push(x[i] + y[i]);
-                    }
-                    let mut out_bytes = Vec::with_capacity(bytes_d);
-                    for v in &out {
-                        out_bytes.extend_from_slice(&v.to_le_bytes());
-                    }
-                    self.cuda
-                        .memcpy_h2d(d_x1, out_bytes.as_ptr() as *const c_void, bytes_d)?;
-                }
+                // Residual add y_attn: x1 = x + y_attn.
+                self.cuda.residual_add_f32(
+                    d_x_f32,
+                    dy_attn as *const c_void,
+                    d_x1,
+                    d_model as usize,
+                )?;
 
                 // Post-attention norm: x1n = norm(x1)
                 if let Some((d_weight, dtype)) = ffn_norm_weight {
@@ -220,43 +197,13 @@ impl LoadedModel {
                     dup,
                 )?;
 
-                // Host fallback for elementwise: hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x)
-                let mut h_gate = vec![0u8; bytes_h];
-                let mut h_up = vec![0u8; bytes_h];
-                self.cuda.memcpy_d2h(
-                    h_gate.as_mut_ptr() as *mut c_void,
+                // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
+                self.cuda.swiglu_f32(
                     dgate as *const c_void,
-                    bytes_h,
-                )?;
-                self.cuda.memcpy_d2h(
-                    h_up.as_mut_ptr() as *mut c_void,
                     dup as *const c_void,
-                    bytes_h,
+                    dhid,
+                    hidden_dim as usize,
                 )?;
-                let mut gate_f = Vec::with_capacity(hidden_dim as usize);
-                let mut up_f = Vec::with_capacity(hidden_dim as usize);
-                for ch in h_gate.chunks_exact(4) {
-                    gate_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                }
-                for ch in h_up.chunks_exact(4) {
-                    up_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                }
-                fn sigmoid(v: f32) -> f32 {
-                    1.0 / (1.0 + (-v).exp())
-                }
-                let mut hid_f = Vec::with_capacity(hidden_dim as usize);
-                for i in 0..(hidden_dim as usize) {
-                    let g = gate_f[i];
-                    let silu = g * sigmoid(g);
-                    hid_f.push(silu * up_f[i]);
-                }
-                // Copy hidden back to device
-                let mut h_hid_bytes = Vec::with_capacity(bytes_h);
-                for v in &hid_f {
-                    h_hid_bytes.extend_from_slice(&v.to_le_bytes());
-                }
-                self.cuda
-                    .memcpy_h2d(dhid, h_hid_bytes.as_ptr() as *const c_void, bytes_h)?;
 
                 // Down projection
                 self.mlp_down_proj_f32xf16_gguf_f32(
@@ -268,37 +215,13 @@ impl LoadedModel {
                     dy_mlp,
                 )?;
 
-                // Final residual add on host per pre-norm layout: out = x1 + y_mlp, where x1 = x + y_attn
-                let mut h_x1 = vec![0u8; bytes_d];
-                let mut h_mlp = vec![0u8; bytes_d];
-                self.cuda.memcpy_d2h(
-                    h_x1.as_mut_ptr() as *mut c_void,
+                // Final residual add per pre-norm layout: out = x1 + y_mlp.
+                self.cuda.residual_add_f32(
                     d_x1 as *const c_void,
-                    bytes_d,
-                )?;
-                self.cuda.memcpy_d2h(
-                    h_mlp.as_mut_ptr() as *mut c_void,
                     dy_mlp as *const c_void,
-                    bytes_d,
+                    d_out_f32,
+                    d_model as usize,
                 )?;
-                let mut x1_f = Vec::with_capacity(d_model as usize);
-                let mut mlp_f = Vec::with_capacity(d_model as usize);
-                for ch in h_x1.chunks_exact(4) {
-                    x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                }
-                for ch in h_mlp.chunks_exact(4) {
-                    mlp_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                }
-                let mut y_f = Vec::with_capacity(d_model as usize);
-                for i in 0..(d_model as usize) {
-                    y_f.push(x1_f[i] + mlp_f[i]);
-                }
-                let mut y_bytes = Vec::with_capacity(bytes_d);
-                for v in &y_f {
-                    y_bytes.extend_from_slice(&v.to_le_bytes());
-                }
-                self.cuda
-                    .memcpy_h2d(d_out_f32, y_bytes.as_ptr() as *const c_void, bytes_d)?;
 
                 Ok(())
             })();
