@@ -146,6 +146,20 @@ mod ffi {
             freq_base: f32,
             freq_scale: f32,
         ) -> i32;
+        pub fn m40llm_residual_add_f32(
+            ctx: *mut M40llmCudaContext,
+            d_a_f32: *const c_void,
+            d_b_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
+        ) -> i32;
+        pub fn m40llm_swiglu_f32(
+            ctx: *mut M40llmCudaContext,
+            d_gate_f32: *const c_void,
+            d_up_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
+        ) -> i32;
 
         pub fn m40llm_kvcache_create(
             ctx: *mut M40llmCudaContext,
@@ -953,6 +967,56 @@ impl CudaContext {
             let _ = (
                 d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
             );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_a`, `d_b`, and `d_out` must be valid device pointers to `n` f32 elements.
+    pub unsafe fn residual_add_f32(
+        &self,
+        d_a: *const c_void,
+        d_b: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_residual_add_f32(self.inner.raw.as_ptr(), d_a, d_b, d_out, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_residual_add_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a, d_b, d_out, n);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_gate`, `d_up`, and `d_out` must be valid device pointers to `n` f32 elements.
+    pub unsafe fn swiglu_f32(
+        &self,
+        d_gate: *const c_void,
+        d_up: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_swiglu_f32(self.inner.raw.as_ptr(), d_gate, d_up, d_out, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_swiglu_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_gate, d_up, d_out, n);
             Ok(())
         }
     }

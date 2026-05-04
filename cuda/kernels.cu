@@ -221,6 +221,30 @@ extern "C" {
             out[i] = d * static_cast<float>(q);
         }
     }
+
+    __global__ void residual_add_f32_kernel(
+        const float* __restrict__ a,
+        const float* __restrict__ b,
+        float* __restrict__ out,
+        size_t n) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n) {
+            out[i] = a[i] + b[i];
+        }
+    }
+
+    __global__ void swiglu_f32_kernel(
+        const float* __restrict__ gate,
+        const float* __restrict__ up,
+        float* __restrict__ out,
+        size_t n) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i < n) {
+            const float g = gate[i];
+            const float silu = g / (1.0f + expf(-g));
+            out[i] = silu * up[i];
+        }
+    }
 extern "C" {
 
     // Forward declaration
@@ -313,6 +337,52 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->prefill_stream);
         if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
+    int m40llm_residual_add_f32(
+        M40llmCudaContext* ctx,
+        const void* d_a_f32,
+        const void* d_b_f32,
+        void* d_out_f32,
+        size_t n) {
+        if (!ctx || !d_a_f32 || !d_b_f32 || !d_out_f32) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        if (n == 0) return 0;
+        const int threads = 256;
+        const int blocks = (int)((n + threads - 1) / threads);
+        residual_add_f32_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            reinterpret_cast<const float*>(d_a_f32),
+            reinterpret_cast<const float*>(d_b_f32),
+            reinterpret_cast<float*>(d_out_f32),
+            n);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_swiglu_f32(
+        M40llmCudaContext* ctx,
+        const void* d_gate_f32,
+        const void* d_up_f32,
+        void* d_out_f32,
+        size_t n) {
+        if (!ctx || !d_gate_f32 || !d_up_f32 || !d_out_f32) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        if (n == 0) return 0;
+        const int threads = 256;
+        const int blocks = (int)((n + threads - 1) / threads);
+        swiglu_f32_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            reinterpret_cast<const float*>(d_gate_f32),
+            reinterpret_cast<const float*>(d_up_f32),
+            reinterpret_cast<float*>(d_out_f32),
+            n);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -4;
         return 0;
     }
 
