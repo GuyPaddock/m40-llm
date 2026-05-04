@@ -1,0 +1,821 @@
+use super::meta::norm_weight_dtype_code;
+use super::LoadedModel;
+use crate::gguf::GgmlDType;
+#[cfg(feature = "cuda")]
+use anyhow::Context;
+use anyhow::{anyhow, Result};
+use std::ffi::c_void;
+
+impl LoadedModel {
+    pub unsafe fn forward_one_token_minimal_with_norms(
+        &self,
+        d_x_f32: *const c_void,
+        d_model: i32,
+        d_wq_f16: *const c_void,
+        d_wk_f16: *const c_void,
+        d_wv_f16: *const c_void,
+        d_wo_f16: *const c_void,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        d_w_down_f16: *const c_void,
+        hidden_dim: i32,
+        seq_id: u32,
+        seq_len: u32,
+        attn_norm_weight: Option<(*const c_void, GgmlDType)>,
+        ffn_norm_weight: Option<(*const c_void, GgmlDType)>,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if d_model <= 0 || hidden_dim <= 0 {
+            anyhow::bail!("forward_one_token_minimal: invalid dims");
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            let q_heads = self.model_config.attention_head_count;
+            let kv_heads = kv.num_heads();
+            let head_dim = kv.head_dim();
+            let kv_dim = kv_heads
+                .checked_mul(head_dim)
+                .context("KV projection dim overflow")?;
+            if q_heads == 0 || q_heads % kv_heads != 0 {
+                anyhow::bail!(
+                    "forward_one_token_minimal: query heads {} must be a multiple of kv heads {}",
+                    q_heads,
+                    kv_heads
+                );
+            }
+            if d_model as u32 != q_heads.saturating_mul(head_dim) {
+                anyhow::bail!(
+                    "forward_one_token_minimal: d_model {} != query heads {} * head_dim {}",
+                    d_model,
+                    q_heads,
+                    head_dim
+                );
+            }
+
+            // Allocate scratch buffers
+            let bytes_d = (d_model as usize) * 4;
+            let bytes_kv = (kv_dim as usize) * 4;
+            let bytes_h = (hidden_dim as usize) * 4;
+            let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
+            let dk = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dk_f32")?;
+            let dv = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dv_f32")?;
+            let datt = self.cuda.device_malloc_tagged(bytes_d, "fwd:datt_f32")?; // attention output
+            let dy_attn = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_attn_f32")?; // after out-proj
+            let dgate = self.cuda.device_malloc_tagged(bytes_h, "fwd:dgate_f32")?;
+            let dup = self.cuda.device_malloc_tagged(bytes_h, "fwd:dup_f32")?;
+            let dhid = self.cuda.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?;
+            let dy_mlp = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?;
+            let d_xn = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?; // pre-attn norm(x)
+            let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
+            let d_x1n = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?; // norm(x1)
+
+            let res = (|| -> Result<()> {
+                // Pre-norm (RMSNorm) on x -> xn
+                if let Some((d_weight, dtype)) = attn_norm_weight {
+                    self.run_rms_norm_weighted(
+                        d_x_f32,
+                        d_weight,
+                        dtype,
+                        d_xn,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm(
+                        d_x_f32,
+                        d_xn,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
+
+                // Q uses query heads; K/V use KV heads for GQA models.
+                self.qkv_project_f32xf16_gguf_f32(
+                    d_xn,
+                    1,
+                    d_model,
+                    d_wq_f16,
+                    d_model,
+                    d_wk_f16,
+                    kv_dim as i32,
+                    d_wv_f16,
+                    kv_dim as i32,
+                    dq,
+                    dk,
+                    dv,
+                )?;
+
+                let pos = seq_len.saturating_sub(1);
+                self.cuda.rope_f32_inplace(
+                    dq as *mut c_void,
+                    1,
+                    q_heads,
+                    head_dim,
+                    pos,
+                    self.model_config.rope_freq_base,
+                    self.model_config.rope_freq_scale,
+                )?;
+                self.cuda.rope_f32_inplace(
+                    dk as *mut c_void,
+                    1,
+                    kv_heads,
+                    head_dim,
+                    pos,
+                    self.model_config.rope_freq_base,
+                    self.model_config.rope_freq_scale,
+                )?;
+
+                // Append K/V for this token, then attention over last token
+                self.append_kv_token_f32(seq_id, dk as *const c_void, dv as *const c_void)?;
+
+                // Use KV cache layout to validate/run attention
+                self.run_attention(
+                    dq as *const c_void,
+                    datt,
+                    seq_id,
+                    seq_len,
+                    d_model as u32,
+                    q_heads,
+                    head_dim,
+                )?;
+
+                // Output projection of attention
+                self.out_proj_f32xf16_gguf_f32(
+                    datt as *const c_void,
+                    d_wo_f16,
+                    dy_attn,
+                    1,
+                    d_model,
+                    d_model,
+                )?;
+
+                // Residual add y_attn: x1 = x + y_attn (host fallback)
+                {
+                    let mut h_x = vec![0u8; bytes_d];
+                    let mut h_y = vec![0u8; bytes_d];
+                    self.cuda
+                        .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
+                    self.cuda.memcpy_d2h(
+                        h_y.as_mut_ptr() as *mut c_void,
+                        dy_attn as *const c_void,
+                        bytes_d,
+                    )?;
+                    let mut x = Vec::with_capacity(d_model as usize);
+                    let mut y = Vec::with_capacity(d_model as usize);
+                    for ch in h_x.chunks_exact(4) {
+                        x.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                    }
+                    for ch in h_y.chunks_exact(4) {
+                        y.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                    }
+                    let mut out = Vec::with_capacity(d_model as usize);
+                    for i in 0..(d_model as usize) {
+                        out.push(x[i] + y[i]);
+                    }
+                    let mut out_bytes = Vec::with_capacity(bytes_d);
+                    for v in &out {
+                        out_bytes.extend_from_slice(&v.to_le_bytes());
+                    }
+                    self.cuda
+                        .memcpy_h2d(d_x1, out_bytes.as_ptr() as *const c_void, bytes_d)?;
+                }
+
+                // Post-attention norm: x1n = norm(x1)
+                if let Some((d_weight, dtype)) = ffn_norm_weight {
+                    self.run_rms_norm_weighted(
+                        d_x1,
+                        d_weight,
+                        dtype,
+                        d_x1n,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm(
+                        d_x1,
+                        d_x1n,
+                        1,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
+
+                // MLP gates and up (now feed post-attn normalized x1n)
+                self.mlp_gates_f32xf16_gguf_f32(
+                    d_x1n,
+                    1,
+                    d_model,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    hidden_dim,
+                    dgate,
+                    dup,
+                )?;
+
+                // Host fallback for elementwise: hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x)
+                let mut h_gate = vec![0u8; bytes_h];
+                let mut h_up = vec![0u8; bytes_h];
+                self.cuda.memcpy_d2h(
+                    h_gate.as_mut_ptr() as *mut c_void,
+                    dgate as *const c_void,
+                    bytes_h,
+                )?;
+                self.cuda.memcpy_d2h(
+                    h_up.as_mut_ptr() as *mut c_void,
+                    dup as *const c_void,
+                    bytes_h,
+                )?;
+                let mut gate_f = Vec::with_capacity(hidden_dim as usize);
+                let mut up_f = Vec::with_capacity(hidden_dim as usize);
+                for ch in h_gate.chunks_exact(4) {
+                    gate_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                for ch in h_up.chunks_exact(4) {
+                    up_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                fn sigmoid(v: f32) -> f32 {
+                    1.0 / (1.0 + (-v).exp())
+                }
+                let mut hid_f = Vec::with_capacity(hidden_dim as usize);
+                for i in 0..(hidden_dim as usize) {
+                    let g = gate_f[i];
+                    let silu = g * sigmoid(g);
+                    hid_f.push(silu * up_f[i]);
+                }
+                // Copy hidden back to device
+                let mut h_hid_bytes = Vec::with_capacity(bytes_h);
+                for v in &hid_f {
+                    h_hid_bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                self.cuda
+                    .memcpy_h2d(dhid, h_hid_bytes.as_ptr() as *const c_void, bytes_h)?;
+
+                // Down projection
+                self.mlp_down_proj_f32xf16_gguf_f32(
+                    dhid as *const c_void,
+                    1,
+                    hidden_dim,
+                    d_w_down_f16,
+                    d_model,
+                    dy_mlp,
+                )?;
+
+                // Final residual add on host per pre-norm layout: out = x1 + y_mlp, where x1 = x + y_attn
+                let mut h_x1 = vec![0u8; bytes_d];
+                let mut h_mlp = vec![0u8; bytes_d];
+                self.cuda.memcpy_d2h(
+                    h_x1.as_mut_ptr() as *mut c_void,
+                    d_x1 as *const c_void,
+                    bytes_d,
+                )?;
+                self.cuda.memcpy_d2h(
+                    h_mlp.as_mut_ptr() as *mut c_void,
+                    dy_mlp as *const c_void,
+                    bytes_d,
+                )?;
+                let mut x1_f = Vec::with_capacity(d_model as usize);
+                let mut mlp_f = Vec::with_capacity(d_model as usize);
+                for ch in h_x1.chunks_exact(4) {
+                    x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                for ch in h_mlp.chunks_exact(4) {
+                    mlp_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+                }
+                let mut y_f = Vec::with_capacity(d_model as usize);
+                for i in 0..(d_model as usize) {
+                    y_f.push(x1_f[i] + mlp_f[i]);
+                }
+                let mut y_bytes = Vec::with_capacity(bytes_d);
+                for v in &y_f {
+                    y_bytes.extend_from_slice(&v.to_le_bytes());
+                }
+                self.cuda
+                    .memcpy_h2d(d_out_f32, y_bytes.as_ptr() as *const c_void, bytes_d)?;
+
+                Ok(())
+            })();
+
+            // Free scratch (best-effort)
+            let _ = self.cuda.device_free(dq);
+            let _ = self.cuda.device_free(dk);
+            let _ = self.cuda.device_free(dv);
+            let _ = self.cuda.device_free(datt);
+            let _ = self.cuda.device_free(dy_attn);
+            let _ = self.cuda.device_free(dgate);
+            let _ = self.cuda.device_free(dup);
+            let _ = self.cuda.device_free(dhid);
+            let _ = self.cuda.device_free(dy_mlp);
+            let _ = self.cuda.device_free(d_xn);
+            let _ = self.cuda.device_free(d_x1);
+            let _ = self.cuda.device_free(d_x1n);
+
+            res
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x_f32,
+                d_model,
+                d_wq_f16,
+                d_wk_f16,
+                d_wv_f16,
+                d_wo_f16,
+                d_w_gate_f16,
+                d_w_up_f16,
+                d_w_down_f16,
+                hidden_dim,
+                seq_id,
+                seq_len,
+                attn_norm_weight,
+                ffn_norm_weight,
+                d_out_f32,
+            );
+            Ok(())
+        }
+    }
+
+    /// Minimal forward pass for one token without learned RMSNorm weights.
+    ///
+    /// # Safety
+    /// All device pointers must be valid on this context's device.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn forward_one_token_minimal(
+        &self,
+        d_x_f32: *const c_void,
+        d_model: i32,
+        d_wq_f16: *const c_void,
+        d_wk_f16: *const c_void,
+        d_wv_f16: *const c_void,
+        d_wo_f16: *const c_void,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        d_w_down_f16: *const c_void,
+        hidden_dim: i32,
+        seq_id: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.forward_one_token_minimal_with_norms(
+            d_x_f32,
+            d_model,
+            d_wq_f16,
+            d_wk_f16,
+            d_wv_f16,
+            d_wo_f16,
+            d_w_gate_f16,
+            d_w_up_f16,
+            d_w_down_f16,
+            hidden_dim,
+            seq_id,
+            seq_len,
+            None,
+            None,
+            d_out_f32,
+        )
+    }
+
+    /// # Safety
+    pub unsafe fn run_rms_norm(
+        &self,
+        d_in: *const c_void,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda.rms_norm_f32(d_in, d_out, seq_len, dim, eps)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Device pointers must reference buffers sized for `seq_len * dim` f32 values and
+    /// a norm weight vector of `dim` F16/F32 values on the same CUDA context.
+    pub unsafe fn run_rms_norm_weighted(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        weight_dtype: GgmlDType,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        let dtype_code = norm_weight_dtype_code(weight_dtype)?;
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda
+                .rms_norm_f32_weighted(d_in, d_weight, d_out, seq_len, dim, eps, dtype_code)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, seq_len, dim, eps, dtype_code);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Applies RoPE to Q/K in-place. Buffers must be sized for `rows * num_heads * head_dim` f32 values.
+    pub unsafe fn apply_rope_f32(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda.rope_f32(
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                self.model_config.rope_freq_base,
+                self.model_config.rope_freq_scale,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_q, d_k, rows, num_heads, head_dim, past_len);
+            Ok(())
+        }
+    }
+}
+
+impl LoadedModel {
+    /// Helper to run forward_one_token_minimal using mapped layer weights.
+    /// Assumes embeddings have already produced x (f32) for the token index.
+    /// # Safety
+    /// - d_x_f32 and d_out_f32 must be valid device pointers on this model's CUDA context
+    /// - Pointers must reference buffers sized for the provided d_model and hidden dims of the mapped layer
+    pub unsafe fn forward_one_token_with_layer(
+        &self,
+        d_x_f32: *const c_void,
+        layer: usize,
+        seq_id: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let w = self.map_standard_layer(layer)?;
+        #[cfg(feature = "cuda")]
+        {
+            let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
+            let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
+            let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+            let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
+            let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
+            let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
+            let w_down_ptr = self.tensor_device_ptr("w_down", &w.w_down)?;
+            let attn_norm_ptr = w
+                .attn_norm
+                .as_ref()
+                .map(|view| {
+                    self.tensor_device_ptr("attn_norm", view)
+                        .map(|ptr| (ptr, view.dtype))
+                })
+                .transpose()?;
+            let ffn_norm_ptr = w
+                .ffn_norm
+                .as_ref()
+                .map(|view| {
+                    self.tensor_device_ptr("ffn_norm", view)
+                        .map(|ptr| (ptr, view.dtype))
+                })
+                .transpose()?;
+
+            self.forward_one_token_minimal_with_norms(
+                d_x_f32,
+                w.d_model as i32,
+                wq_ptr,
+                wk_ptr,
+                wv_ptr,
+                wo_ptr,
+                w_gate_ptr,
+                w_up_ptr,
+                w_down_ptr,
+                w.hidden_dim as i32,
+                seq_id,
+                seq_len,
+                attn_norm_ptr,
+                ffn_norm_ptr,
+                d_out_f32,
+            )?;
+
+            return Ok(());
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            use half::f16;
+            use std::slice;
+            let d_model = w.d_model;
+            let hidden_dim = w.hidden_dim;
+
+            // Read input x (f32) from host pointer
+            let x_slice = slice::from_raw_parts(d_x_f32 as *const f32, d_model);
+
+            // RMSNorm
+            let eps = 1e-6f32;
+            let mut mean_sq = 0f32;
+            for &v in x_slice {
+                mean_sq += v * v;
+            }
+            mean_sq /= d_model as f32;
+            let scale = 1.0f32 / (mean_sq + eps).sqrt();
+            let mut x_n = vec![0f32; d_model];
+            for i in 0..d_model {
+                x_n[i] = x_slice[i] * scale;
+            }
+
+            // Helper to multiply f32 row (1xK) by f16 matrix (KxN) into f32 (1xN)
+            let dot_row = |row: &[f32], t: &crate::infer::DeviceTensorView, n: usize| -> Vec<f32> {
+                let k = t.shape[0] as usize;
+                debug_assert_eq!(k, row.len());
+                let off = t.byte_offset as usize;
+                let bytes = &self.host_weights[off..off + k * n * 2];
+                let mut out = vec![0f32; n];
+                for (j, out_j) in out.iter_mut().enumerate().take(n) {
+                    let mut acc = 0f32;
+                    let mut idx = j * 2; // column-major stride over rows in row-major [k x n]
+                    for &row_val in row.iter().take(k) {
+                        let lo = bytes[idx] as u16;
+                        let hi = bytes[idx + 1] as u16;
+                        let w = f16::from_bits(lo | (hi << 8)).to_f32();
+                        acc += row_val * w;
+                        idx += n * 2;
+                    }
+                    *out_j = acc;
+                }
+                out
+            };
+
+            // Helper to multiply f32 row (1xK) by Q5_1 matrix (KxN) into f32 (1xN)
+            let dot_row_q5_1 =
+                |row: &[f32], t: &crate::infer::DeviceTensorView, n: usize| -> Vec<f32> {
+                    let k = t.shape[0] as usize;
+                    debug_assert_eq!(k, row.len());
+                    let off = t.byte_offset as usize;
+                    let mut out = vec![0f32; n];
+
+                    let blocks = k.div_ceil(32);
+                    for (j, out_j) in out.iter_mut().enumerate().take(n) {
+                        let mut acc = 0f32;
+                        for (r, &row_val) in row.iter().enumerate().take(k) {
+                            let b = r / 32;
+                            let idx = r % 32;
+                            let block_base = off + j * blocks * 6 + b * 6;
+                            let scale_bytes = &self.host_weights[block_base..block_base + 4];
+                            let scale = f32::from_le_bytes([
+                                scale_bytes[0],
+                                scale_bytes[1],
+                                scale_bytes[2],
+                                scale_bytes[3],
+                            ]);
+                            let q = self.host_weights[block_base + 4 + idx] as i8 as f32;
+                            acc += row_val * scale * q;
+                        }
+                        *out_j = acc;
+                    }
+
+                    out
+                };
+
+            // Q, K, V
+            let nq = w.wq.shape[1] as usize;
+            let nk = w.wk.shape[1] as usize;
+            let nv = w.wv.shape[1] as usize;
+            let q = if w.wq.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wq, nq)
+            } else {
+                dot_row(&x_n, &w.wq, nq)
+            };
+            let k_vec = if w.wk.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wk, nk)
+            } else {
+                dot_row(&x_n, &w.wk, nk)
+            };
+            let v_vec = if w.wv.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x_n, &w.wv, nv)
+            } else {
+                dot_row(&x_n, &w.wv, nv)
+            };
+
+            // Append KV (host path)
+            self.append_kv_token_f32_from_host(seq_id, &k_vec, &v_vec)?;
+
+            // Attention over last token using KV cache helper
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("kv_cache not allocated"))?;
+            let num_heads = kv.num_heads();
+            let head_dim = kv.head_dim();
+            let mut attn_out = vec![0u8; d_model * 4];
+            kv.attention_last_token_f32(
+                &self.cuda,
+                seq_id,
+                q.as_ptr() as *const c_void,
+                seq_len,
+                attn_out.as_mut_ptr() as *mut c_void,
+            )?;
+            let attn: Vec<f32> = attn_out
+                .chunks_exact(4)
+                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+                .collect();
+            let _ = (num_heads, head_dim); // already validated during allocation
+
+            // Out projection and residual add: x1 = x + attn·Wo
+            let no = w.wo.shape[1] as usize;
+            debug_assert_eq!(no, d_model);
+            let y_attn = if w.wo.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&attn, &w.wo, no)
+            } else {
+                dot_row(&attn, &w.wo, no)
+            };
+            // Residual add on host: x1 = x + y_attn (fallback)
+            let bytes_d = d_model * 4;
+            let mut h_x = vec![0u8; bytes_d];
+            let mut h_y_attn = vec![0u8; bytes_d];
+            self.cuda
+                .memcpy_d2h(h_x.as_mut_ptr() as *mut c_void, d_x_f32, bytes_d)?;
+            // In non-CUDA path, we don't have d_y_attn, so we use y_attn directly
+            for i in 0..y_attn.len() {
+                let bytes = y_attn[i].to_le_bytes();
+                h_y_attn[i * 4..i * 4 + 4].copy_from_slice(&bytes);
+            }
+            let mut x_f = Vec::with_capacity(d_model);
+            let mut y_attn_f = Vec::with_capacity(d_model);
+            for ch in h_x.chunks_exact(4) {
+                x_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            for ch in h_y_attn.chunks_exact(4) {
+                y_attn_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let mut x1_f = Vec::with_capacity(d_model);
+            for i in 0..d_model {
+                x1_f.push(x_f[i] + y_attn_f[i]);
+            }
+            let mut x1_bytes = Vec::with_capacity(bytes_d);
+            for v in &x1_f {
+                x1_bytes.extend_from_slice(&v.to_le_bytes());
+            }
+            self.cuda.memcpy_h2d(
+                d_x_f32 as *mut c_void,
+                x1_bytes.as_ptr() as *const c_void,
+                bytes_d,
+            )?;
+
+            // Post-attention norm
+            let mut h_x1 = vec![0u8; bytes_d];
+            self.cuda.memcpy_d2h(
+                h_x1.as_mut_ptr() as *mut c_void,
+                h_x1.as_ptr() as *const c_void,
+                bytes_d,
+            )?;
+            let mut x1_f = Vec::with_capacity(d_model);
+            for ch in h_x1.chunks_exact(4) {
+                x1_f.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+            }
+            let mut mean_sq2 = 0f32;
+            for v in &x1_f {
+                mean_sq2 += v * v;
+            }
+            mean_sq2 /= d_model as f32;
+            let scale2 = 1.0f32 / (mean_sq2 + eps).sqrt();
+            let mut x1n = vec![0f32; d_model];
+            for i in 0..d_model {
+                x1n[i] = x1_f[i] * scale2;
+            }
+
+            // MLP: gate/up -> SiLU(gate)*up -> down -> residual add with x1n
+            let h = w.w_up.shape[1] as usize;
+            debug_assert_eq!(h, hidden_dim);
+            let gate = if w.w_gate.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x1n, &w.w_gate, h)
+            } else {
+                dot_row(&x1n, &w.w_gate, h)
+            };
+            let up = if w.w_up.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&x1n, &w.w_up, h)
+            } else {
+                dot_row(&x1n, &w.w_up, h)
+            };
+            fn sigmoid(v: f32) -> f32 {
+                1.0 / (1.0 + (-v).exp())
+            }
+            let mut hidden = vec![0f32; h];
+            for i in 0..h {
+                let g = gate[i];
+                hidden[i] = (g * sigmoid(g)) * up[i];
+            }
+            let y_mlp = if w.w_down.dtype == GgmlDType::Q5_1 {
+                dot_row_q5_1(&hidden, &w.w_down, d_model)
+            } else {
+                dot_row(&hidden, &w.w_down, d_model)
+            };
+            let mut y = vec![0f32; d_model];
+            for i in 0..d_model {
+                y[i] = x1n[i] + y_mlp[i];
+            }
+
+            // Write to output pointer
+            let out_slice = slice::from_raw_parts_mut(d_out_f32 as *mut f32, d_model);
+            out_slice.copy_from_slice(&y);
+
+            // Free scratch buffers
+
+            Ok(())
+        }
+    }
+    /// Runs one token through every transformer layer.
+    ///
+    /// The current single-request server path uses KV cache sequence slots as
+    /// per-layer slots, so the cache must be allocated with at least
+    /// `model_config.block_count` batch entries.
+    ///
+    /// # Safety
+    /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
+    /// - Both buffers must contain/be sized for one f32 hidden vector of `embedding_length`.
+    pub unsafe fn forward_one_token_all_layers(
+        &self,
+        d_x_f32: *const c_void,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<usize> {
+        let layer_count = self.model_config.block_count as usize;
+        if layer_count == 0 {
+            anyhow::bail!("forward_one_token_all_layers: model has zero layers");
+        }
+        let (d_model, _) = self.validate_standard_layers()?;
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        if kv.max_batch_size() < self.model_config.block_count {
+            anyhow::bail!(
+                "kv_cache has {} slots, but full-layer forward needs {} layer slots",
+                kv.max_batch_size(),
+                self.model_config.block_count
+            );
+        }
+
+        #[cfg(feature = "cuda")]
+        {
+            if layer_count == 1 {
+                self.forward_one_token_with_layer(d_x_f32, 0, 0, seq_len, d_out_f32)?;
+                return Ok(1);
+            }
+
+            let bytes = d_model * std::mem::size_of::<f32>();
+            let scratch_a = self
+                .cuda
+                .device_malloc_tagged(bytes, "fwd_all:scratch_a_f32")?;
+            let scratch_b = self
+                .cuda
+                .device_malloc_tagged(bytes, "fwd_all:scratch_b_f32")?;
+
+            let res = (|| -> Result<usize> {
+                let mut current = d_x_f32;
+                for layer in 0..layer_count {
+                    let next = if layer + 1 == layer_count {
+                        d_out_f32
+                    } else if layer % 2 == 0 {
+                        scratch_a
+                    } else {
+                        scratch_b
+                    };
+                    self.forward_one_token_with_layer(current, layer, layer as u32, seq_len, next)?;
+                    current = next as *const c_void;
+                }
+                Ok(layer_count)
+            })();
+
+            let _ = self.cuda.device_free(scratch_a);
+            let _ = self.cuda.device_free(scratch_b);
+            return res;
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_x_f32, seq_len, d_out_f32, d_model);
+            anyhow::bail!("forward_one_token_all_layers requires CUDA device buffers")
+        }
+    }
+}
