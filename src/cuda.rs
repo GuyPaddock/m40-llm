@@ -86,6 +86,16 @@ mod ffi {
             K: i32,
         ) -> i32;
 
+        pub fn m40llm_gemm_f32xf16_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+
         pub fn m40llm_gemm_f16xf16_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f16: *const c_void,
@@ -684,6 +694,42 @@ impl CudaContext {
             );
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf16_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_a_f32`, `d_b_f16`, and `d_c_f32` must be valid device pointers on this context's device.
+    /// `d_b_f16` must be a GGUF F16 tensor with logical shape [k, n], where dimension 0 is fastest.
+    pub unsafe fn gemm_f32xf16_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf16_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xf16_gguf_f32 failed: {rc}"));
             }
             Ok(())
         }

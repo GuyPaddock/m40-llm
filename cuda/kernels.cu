@@ -618,6 +618,26 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         C[row * N + col] = acc;
     }
 
+    // Mixed GEMM for GGUF F16 tensors. GGUF stores tensor dimension 0 as the
+    // fastest-moving dimension, so a logical [K, N] weight is laid out as
+    // B[col * K + kk], not row-major B[kk * N + col].
+    __global__ void gemm_f32xf16_gguf_f32_kernel(
+        const float* __restrict__ A,  // MxK row-major activations
+        const __half* __restrict__ B, // GGUF [K,N], K-fastest
+        float* __restrict__ C,        // MxN row-major output
+        int M, int N, int K) {
+        int row = blockIdx.y * blockDim.y + threadIdx.y;
+        int col = blockIdx.x * blockDim.x + threadIdx.x;
+        if (row >= M || col >= N) return;
+        float acc = 0.0f;
+        for (int kk = 0; kk < K; ++kk) {
+            float a = A[row * K + kk];
+            float b = __half2float(B[col * K + kk]);
+            acc += a * b;
+        }
+        C[row * N + col] = acc;
+    }
+
     int m40llm_gemm_f16_storage_f32_compute(
         M40llmCudaContext* ctx,
         const void* d_A,
@@ -705,6 +725,27 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         if (err != cudaSuccess) return -3;
         return 0;
     #endif
+    }
+
+    // Expose mixed-dtype GEMM for GGUF F16 weights (dimension 0 fastest).
+    int m40llm_gemm_f32xf16_gguf_f32(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f16,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const __half* B = reinterpret_cast<const __half*>(d_B_f16);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f32xf16_gguf_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
     }
 
 

@@ -1400,7 +1400,7 @@ impl LoadedModel {
                 }
 
                 // Q uses query heads; K/V use KV heads for GQA models.
-                self.qkv_project_f32xf16_f32(
+                self.qkv_project_f32xf16_gguf_f32(
                     d_xn,
                     1,
                     d_model,
@@ -1450,7 +1450,7 @@ impl LoadedModel {
                 )?;
 
                 // Output projection of attention
-                self.out_proj_f32xf16_f32(
+                self.out_proj_f32xf16_gguf_f32(
                     datt as *const c_void,
                     d_wo_f16,
                     dy_attn,
@@ -1512,7 +1512,7 @@ impl LoadedModel {
                 }
 
                 // MLP gates and up (now feed post-attn normalized x1n)
-                self.mlp_gates_f32xf16_f32(
+                self.mlp_gates_f32xf16_gguf_f32(
                     d_x1n,
                     1,
                     d_model,
@@ -1562,7 +1562,7 @@ impl LoadedModel {
                     .memcpy_h2d(dhid, h_hid_bytes.as_ptr() as *const c_void, bytes_h)?;
 
                 // Down projection
-                self.mlp_down_proj_f32xf16_f32(
+                self.mlp_down_proj_f32xf16_gguf_f32(
                     dhid as *const c_void,
                     1,
                     hidden_dim,
@@ -1711,6 +1711,29 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// MLP projections against GGUF F16 weights with logical shapes [K,H].
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn mlp_gates_f32xf16_gguf_f32(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        h: i32,
+        d_gate_out_f32: *mut c_void,
+        d_up_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || h <= 0 {
+            anyhow::bail!("mlp_gates: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32(d_x_f32, d_w_gate_f16, d_gate_out_f32, m, h, k)
+            .with_context(|| format!("mlp gate GGUF GEMM failed: m={m} n={h} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32(d_x_f32, d_w_up_f16, d_up_out_f32, m, h, k)
+            .with_context(|| format!("mlp up GGUF GEMM failed: m={m} n={h} k={k}"))
+    }
+
+    /// # Safety
     /// Down projection: Y = H · W_down, where H is hidden f32 (MxH), W_down is f16 (H x N), output f32 (MxN)
     pub unsafe fn mlp_down_proj_f32xf16_f32(
         &self,
@@ -1726,6 +1749,24 @@ impl LoadedModel {
         }
         self.matmul_f32xf16_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
             .with_context(|| format!("mlp down GEMM failed: m={m} n={n} k={h}"))
+    }
+
+    /// # Safety
+    /// Down projection against a GGUF F16 weight with logical shape [H,N].
+    pub unsafe fn mlp_down_proj_f32xf16_gguf_f32(
+        &self,
+        d_hidden_f32: *const c_void,
+        m: i32,
+        h: i32,
+        d_w_down_f16: *const c_void,
+        n: i32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || h <= 0 || n <= 0 {
+            anyhow::bail!("mlp_down_proj: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
+            .with_context(|| format!("mlp down GGUF GEMM failed: m={m} n={n} k={h}"))
     }
 
     /// # Safety
@@ -2401,6 +2442,22 @@ impl LoadedModel {
         self.cuda
             .gemm_f32xf16_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
     }
+
+    /// # Safety
+    /// f32 × GGUF F16 → f32 GEMM. The weight tensor has logical shape [K,N]
+    /// with dimension 0 stored contiguously, as GGUF writes tensor data.
+    pub unsafe fn matmul_f32xf16_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        self.cuda
+            .gemm_f32xf16_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
 }
 
 impl LoadedModel {
@@ -2434,6 +2491,35 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// A f32 (MxK) × GGUF Wq/Wk/Wv F16 (logical KxN*, K-fastest) → Q/K/V f32.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_project_f32xf16_gguf_f32(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_wq_f16: *const c_void,
+        n_q: i32,
+        d_wk_f16: *const c_void,
+        n_k: i32,
+        d_wv_f16: *const c_void,
+        n_v: i32,
+        d_q_out_f32: *mut c_void,
+        d_k_out_f32: *mut c_void,
+        d_v_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || n_q <= 0 || n_k <= 0 || n_v <= 0 {
+            anyhow::bail!("qkv_project: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32(d_x_f32, d_wq_f16, d_q_out_f32, m, n_q, k)
+            .with_context(|| format!("Q projection GGUF GEMM failed: m={m} n={n_q} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32(d_x_f32, d_wk_f16, d_k_out_f32, m, n_k, k)
+            .with_context(|| format!("K projection GGUF GEMM failed: m={m} n={n_k} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32(d_x_f32, d_wv_f16, d_v_out_f32, m, n_v, k)
+            .with_context(|| format!("V projection GGUF GEMM failed: m={m} n={n_v} k={k}"))
+    }
+
+    /// # Safety
     /// A f32 (MxK) × W f16 (KxN) → Out f32 (MxN)
     pub unsafe fn out_proj_f32xf16_f32(
         &self,
@@ -2449,6 +2535,26 @@ impl LoadedModel {
         }
         self.matmul_f32xf16_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| format!("attention output projection GEMM failed: m={m} n={n} k={k}"))
+    }
+
+    /// # Safety
+    /// A f32 (MxK) × GGUF F16 W (logical KxN, K-fastest) → Out f32.
+    pub unsafe fn out_proj_f32xf16_gguf_f32(
+        &self,
+        d_in_f32: *const c_void,
+        d_w_out_f16: *const c_void,
+        d_out_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        if m <= 0 || n <= 0 || k <= 0 {
+            anyhow::bail!("out_proj: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
+            .with_context(|| {
+                format!("attention output projection GGUF GEMM failed: m={m} n={n} k={k}")
+            })
     }
 
     /// # Safety
@@ -2484,7 +2590,7 @@ impl LoadedModel {
         let _ = &lm;
         let bytes_logits = vocab * std::mem::size_of::<f32>();
         let d_logits = self.cuda.device_malloc(bytes_logits)?;
-        self.matmul_f32xf16_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)
+        self.matmul_f32xf16_gguf_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)
             .with_context(|| {
                 format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
             })?;
@@ -2535,7 +2641,7 @@ impl LoadedModel {
                         } else {
                             d_hidden_f32
                         };
-                    self.matmul_f32xf16_f32(
+                    self.matmul_f32xf16_gguf_f32(
                         hidden_for_logits,
                         d_w,
                         d_logits,
@@ -2580,14 +2686,14 @@ impl LoadedModel {
                 let mut logits = vec![0f32; vocab];
                 for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
                     let mut acc = 0f32;
-                    let mut idx = col * 2; // element (row=0,col) byte index within the 2-byte stream
+                    let mut idx = col * d_model * 2;
                     for &hidden_val in hidden.iter().take(d_model) {
                         let lo = w_bytes[idx] as u16;
                         let hi = w_bytes[idx + 1] as u16;
                         let bits = lo | (hi << 8);
                         let w = half::f16::from_bits(bits).to_f32();
                         acc += hidden_val * w;
-                        idx += vocab * 2; // move to next row at same column
+                        idx += 2;
                     }
                     *logit_ref = acc;
                 }
