@@ -102,6 +102,9 @@ Build the project in one of these modes:
   backtraces with those allocation logs.
 - Tensor view tracing: set `M40LLM_TENSOR_VIEW_LOG=1` to print each GGUF
   tensor-to-device pointer mapping during model load.
+- GEMM backend tracing: set `M40LLM_GEMM_LOG=1` to print one backend
+  selection line per GEMM wrapper. GGUF F16 projection weights currently use
+  the dedicated GGUF-layout CUDA kernel even when cuBLAS is linked.
 
 ## Server (feature = server)
 ```

@@ -7,6 +7,8 @@ use anyhow::Result;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
+#[cfg(feature = "cuda")]
+use std::sync::Once;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
@@ -259,6 +261,18 @@ pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "cuda")]
 fn alloc_log_enabled() -> bool {
     std::env::var("M40LLM_ALLOC_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn gemm_log_enabled() -> bool {
+    std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn log_gemm_backend_once(once: &'static Once, name: &str, backend: &str) {
+    if gemm_log_enabled() {
+        once.call_once(|| eprintln!("[cuda] {name} backend: {backend}"));
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -696,6 +710,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf16_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS first; CUDA kernel fallback if cuBLAS rejects this mixed-type call"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xf16_f32(
                 self.inner.raw.as_ptr(),
@@ -732,6 +756,12 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf16_gguf_f32",
+                "CUDA GGUF-layout kernel; cuBLAS is not used for dimension-0-fastest GGUF weights",
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xf16_gguf_f32(
                 self.inner.raw.as_ptr(),
@@ -767,6 +797,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f16xf16_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f16xf16_f32(
                 self.inner.raw.as_ptr(),
@@ -803,6 +843,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f16_storage_f32_compute",
+                if cfg!(have_cublas) {
+                    "cuBLAS"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = unsafe {
                 ffi::m40llm_gemm_f16_storage_f32_compute(
