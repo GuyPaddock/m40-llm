@@ -120,6 +120,8 @@ same non-streaming decode helper as `POST /generate`.
 - GEMM backend tracing: set `M40LLM_GEMM_LOG=1` to print one backend
   selection line per GEMM wrapper. GGUF F16 projection weights currently use
   the dedicated GGUF-layout CUDA kernel even when cuBLAS is linked.
+- Timing tracing: set `M40LLM_TIMING_LOG=1` to print per-token and per-layer
+  decode timing. This is intentionally verbose and intended for profiling runs.
 
 ## Server (feature = server)
 ```
@@ -153,6 +155,8 @@ Current M40 validation target:
 - Workspace reuse removes repeated forward scratch allocation.
 - The GQA last-token attention path has an optimized `head_dim=64` CUDA kernel;
   set `M40LLM_ATTN_LOG=1` to print attention backend selection.
+- Current timed CLI profiles point at projection and norm work as the next
+  performance target before stream separation.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

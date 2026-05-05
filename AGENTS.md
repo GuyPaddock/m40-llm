@@ -279,7 +279,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
       "priority": 6,
       "status": "todo",
       "title": "Prefill and decode stream separation",
-      "rationale": "Separate CUDA streams allow better overlap and latency hiding.",
+      "rationale": "Separate CUDA streams allow better overlap and latency hiding after projection and norm costs are reduced.",
       "scope": [
         "Introduce distinct CUDA streams for prefill and decode.",
         "Tune stream priorities where applicable."

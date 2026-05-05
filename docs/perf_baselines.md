@@ -165,3 +165,45 @@ Notes:
 - Development-build `/generate` latency improved, but remaining token latency is
   still dominated by full-layer projection work, synchronization, launch overhead,
   and host sampling/logits copyback.
+
+## 2026-05-05: TinyLlama CLI Decode Timing Profile
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Command prefix: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TIMING_LOG=1`
+- Command: `cargo run --features cuda -- generate <model> Hello --max-tokens 1 --top-k 1 --require-sm52`
+- Expected log evidence observed: `full-layer forward enabled layers=22`
+
+Selected results:
+
+| Region | Time |
+| --- | ---: |
+| `cli.generate_text_total` | 2969.878 ms |
+| `cli.decode_loop` | 2950.514 ms |
+| Prompt token 0 `forward_all_layers` | 1433.026 ms |
+| Prompt token 1 `forward_all_layers` | 1424.404 ms |
+| Prompt token 0 `logits` | 29.873 ms |
+| Prompt token 1 `logits` | 33.612 ms |
+| `logits.copy_d2h` | 0.054-0.064 ms |
+
+Steady per-layer short-context timings:
+
+| Operation | Typical time per layer |
+| --- | ---: |
+| `mlp_gate_up` | ~17.6 ms |
+| `qkv_project` | ~13.1 ms |
+| `mlp_down` | ~12.1 ms |
+| `attn_norm` | ~8.5 ms |
+| `ffn_norm` | ~8.5 ms |
+| `out_project` | ~4.4 ms |
+| `attention` | ~0.05-0.08 ms |
+
+Notes:
+
+- Projection and norm operations dominate short-context decode after the
+  optimized GQA attention kernel.
+- Logits host copyback is currently negligible compared with full-layer forward.
+- Stream separation should follow another projection/norm optimization pass,
+  unless a future profile shows synchronization overhead has become dominant.

@@ -20,6 +20,8 @@ path and its guardrails.
   `M40LLM_GEMM_LOG=1` to print backend selection.
 - GQA last-token attention uses an optimized CUDA path for `head_dim=64`; set
   `M40LLM_ATTN_LOG=1` to print backend selection.
+- `M40LLM_TIMING_LOG=1` prints per-layer decode timings for profiling. Recent
+  TinyLlama profiles show projection and norm calls dominate short-context decode.
 
 ## Guardrails
 
