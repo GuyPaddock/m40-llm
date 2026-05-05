@@ -4,6 +4,7 @@ pub mod gguf;
 pub mod infer;
 
 pub mod decode;
+pub mod generate;
 #[cfg(feature = "gguf_ext")]
 pub mod gguf_ext;
 pub mod model;

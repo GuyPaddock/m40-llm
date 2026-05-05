@@ -15,10 +15,12 @@ use tokio_stream::wrappers::ReceiverStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
+use crate::generate::{
+    decode_generated_text, generate_text, sampler_from_options, sanitize_output, GenerateOptions,
+};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
@@ -56,21 +58,6 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
-fn sanitize_output(text: &str) -> String {
-    text.chars().filter(|c| *c != '\0').collect()
-}
-
-fn decode_generated_text(
-    tokenizer: &Tokenizer,
-    ids: &[u32],
-    prompt_token_len: usize,
-) -> Result<String> {
-    let generated = ids
-        .get(prompt_token_len..)
-        .ok_or_else(|| anyhow::anyhow!("prompt token length exceeds decoded ids"))?;
-    tokenizer.decode_ignoring_specials(generated)
-}
-
 fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     let safe_chunk = GenerateStreamChunk {
         output: sanitize_output(&chunk.output),
@@ -84,30 +71,16 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     Ok(Bytes::from(buf))
 }
 
-fn sampler_from_request(req: &GenerateRequest) -> Result<Sampler> {
-    let mut cfg = SamplerConfig::default();
-    if let Some(t) = req.temperature {
-        if t <= 0.0 {
-            anyhow::bail!("temperature must be > 0");
-        }
-        cfg.temperature = t;
+fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> GenerateOptions {
+    GenerateOptions {
+        prompt: req.prompt.clone(),
+        max_tokens: req.max_tokens,
+        temperature: req.temperature,
+        top_k: req.top_k,
+        top_p: req.top_p,
+        seed: req.seed,
+        log_prefix,
     }
-    if let Some(k) = req.top_k {
-        if k == 0 {
-            anyhow::bail!("top_k must be > 0 when provided");
-        }
-        cfg.top_k = Some(k);
-    }
-    if let Some(p) = req.top_p {
-        if !(0.0 < p && p <= 1.0) {
-            anyhow::bail!("top_p must be in (0, 1]");
-        }
-        cfg.top_p = Some(p);
-    }
-    if let Some(seed) = req.seed {
-        cfg.seed = seed;
-    }
-    Ok(Sampler::new(cfg))
 }
 
 fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
@@ -166,7 +139,8 @@ mod tests {
             seed: Some(7),
             ..Default::default()
         };
-        let mut sampler = sampler_from_request(&req).expect("build sampler");
+        let mut sampler =
+            sampler_from_options(&options_from_request(&req, "test")).expect("build sampler");
         let logits = [0.2f32, 0.8, 0.1];
         // top_k=1 should force the max logit (index 1)
         for _ in 0..5 {
@@ -271,6 +245,23 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if !req.stream {
+        let generated =
+            generate_text(&state.model, options_from_request(&req, "server")).map_err(|e| {
+                eprintln!("[server] decode_loop failed: {e}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: e.to_string(),
+                    }),
+                )
+            })?;
+        return Ok(Json(GenerateResponse {
+            output: generated.output,
+        })
+        .into_response());
+    }
+
     #[cfg(feature = "cuda")]
     eprintln!(
         "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
@@ -290,7 +281,8 @@ async fn generate(
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
-    let sampler = sampler_from_request(&req).map_err(internal_error)?;
+    let sampler =
+        sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
 
     if state.model.kv_cache.is_some() {
         state.model.reset_kv_cache().map_err(internal_error)?;
