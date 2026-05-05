@@ -343,3 +343,103 @@ fn attention_last_token_cuda_gqa_parity_grid() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn attention_last_token_cuda_gqa_head64_long_parity() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 32u32;
+    let kv_heads = 4u32;
+    let head_dim = 64u32;
+    let seq_lens = [128u32, 512];
+    let max_seq_len = *seq_lens.iter().max().unwrap();
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+
+    for &seq_len in &seq_lens {
+        let kv = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+        let mut k_tokens_f32: Vec<Vec<f32>> = Vec::new();
+        let mut v_tokens_f32: Vec<Vec<f32>> = Vec::new();
+
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        for t in 0..seq_len as usize {
+            let mut k = Vec::with_capacity(kv_dim);
+            let mut v = Vec::with_capacity(kv_dim);
+            for i in 0..kv_dim {
+                k.push(((t * kv_dim + i) as f32) * 0.0003 - 0.25);
+                v.push(((t * kv_dim + (kv_dim - 1 - i)) as f32) * 0.0002 - 0.1);
+            }
+            let k_cast = cast_f32_to_f16_then_back(&k);
+            let v_cast = cast_f32_to_f16_then_back(&v);
+            k_tokens_f32.push(k_cast.clone());
+            v_tokens_f32.push(v_cast.clone());
+
+            unsafe {
+                ctx.memcpy_h2d(d_k, k_cast.as_ptr() as *const c_void, bytes)?;
+                ctx.memcpy_h2d(d_v, v_cast.as_ptr() as *const c_void, bytes)?;
+                kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            }
+        }
+
+        let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0004 - 0.2).collect();
+        let bytes_q = q_dim * std::mem::size_of::<f32>();
+        let d_q = ctx.device_malloc(bytes_q)?;
+        let d_out = ctx.device_malloc(bytes_q)?;
+        unsafe {
+            ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+            kv.attention_last_token_f32_gqa(
+                &ctx,
+                0,
+                d_q as *const c_void,
+                q_heads,
+                seq_len,
+                d_out,
+            )?;
+        }
+        let mut out_gpu = vec![0f32; q_dim];
+        unsafe {
+            ctx.memcpy_d2h(
+                out_gpu.as_mut_ptr() as *mut c_void,
+                d_out as *const c_void,
+                bytes_q,
+            )?;
+            ctx.device_free(d_q)?;
+            ctx.device_free(d_out)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+
+        let out_cpu = cpu_last_token_attention_gqa(
+            &q,
+            &k_tokens_f32,
+            &v_tokens_f32,
+            q_heads as usize,
+            kv_heads as usize,
+            head_dim as usize,
+        );
+
+        for i in 0..q_dim {
+            let diff = (out_cpu[i] - out_gpu[i]).abs();
+            assert!(
+                diff < 1e-3,
+                "GQA head64 mismatch (seq_len={}, i={}) cpu={} gpu={} diff={}",
+                seq_len,
+                i,
+                out_cpu[i],
+                out_gpu[i],
+                diff
+            );
+        }
+    }
+
+    Ok(())
+}
