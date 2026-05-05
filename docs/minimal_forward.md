@@ -27,3 +27,4 @@ path and its guardrails.
 - `tests/forward_with_layer_smoke.rs` checks CUDA forward execution and workspace reuse.
 - `tests/attention_parity_cuda_grid.rs` protects last-token attention and GQA behavior.
 - `tests/server_smoke.rs` exercises the full-layer `/generate` server path.
+- `m40-llm generate ... --require-sm52` exercises the shared non-streaming decode path from the CLI.

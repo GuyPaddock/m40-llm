@@ -85,6 +85,21 @@ Build the project in one of these modes:
   - Build: `cargo build --features cuda`
   - Test: `cargo test --features cuda`
 
+## CLI Generate
+Run one local decode loop without starting the HTTP server:
+
+```bash
+M40LLM_ENABLE_CUBLAS=1 cargo run \
+  --features cuda \
+  -- generate path/to.gguf "Hello" \
+  --max-tokens 2 \
+  --top-k 1 \
+  --require-sm52
+```
+
+The command prints generated text only; it does not echo the prompt. It uses the
+same non-streaming decode helper as `POST /generate`.
+
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.
@@ -129,6 +144,8 @@ may decode to multiple characters.
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
 - Expected log evidence: `full-layer forward enabled layers=22`
+- CLI evidence: `m40-llm generate ... --require-sm52` prints decoded text
+  while exercising the same full-layer CUDA path as non-streaming `/generate`.
 - CUDA hot path: RMSNorm, RoPE, residual adds, and SiLU/gated MLP
   activation run on device in the forward path.
 - Fresh M40 GEMM, attention, and TinyLlama `/generate` baselines: see

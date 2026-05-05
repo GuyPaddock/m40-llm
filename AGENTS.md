@@ -118,7 +118,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t23-6-autoselect-m40",
       "priority": 9,
-      "status": "in_progress",
+      "status": "done",
       "title": "Runtime auto-selection of Tesla M40",
       "rationale": "Prevents accidental arch mismatches on Maxwell.",
       "scope": [
@@ -152,7 +152,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t29-e2e-decode",
       "priority": 11,
-      "status": "todo",
+      "status": "done",
       "title": "End-to-end decode loop (prints tokens)",
       "rationale": "This is the visible success milestone.",
       "scope": [
@@ -169,7 +169,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t36-min-gguf-model",
       "priority": 12,
-      "status": "todo",
+      "status": "done",
       "title": "Minimal GGUF test model",
       "rationale": "Fast deterministic tests unblock iteration and CI.",
       "scope": [

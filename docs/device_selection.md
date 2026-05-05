@@ -1,6 +1,6 @@
 # CUDA device selection and M40 guardrails
 
-This project targets Tesla M40 (sm_52). By default, the runtime will select device 0 or respect CUDA_VISIBLE_DEVICES. Tests and benches offer helpers for explicitly selecting an M40-compatible context.
+This project targets Tesla M40 (sm_52). Runtime commands default to `device_id=-1`, which asks the CUDA layer to select an M40-compatible device when one is visible. Tests and benches offer helpers for explicitly selecting an M40-compatible context.
 
 - Runtime helper: ctx_m40() creates a CudaContext selecting a sm_52-capable device if available
 - Guard: require_sm52(ctx) will skip CUDA tests if the active device is not sm_52
