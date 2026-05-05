@@ -18,8 +18,8 @@ path and its guardrails.
 - Batch size is still effectively one request for the optimized decode path.
 - GGUF F16 projection weights use the dedicated GGUF-layout CUDA GEMM kernel; set
   `M40LLM_GEMM_LOG=1` to print backend selection.
-- The attention GQA microbenchmark shows the current attention kernel is the next
-  bottleneck to optimize.
+- GQA last-token attention uses an optimized CUDA path for `head_dim=64`; set
+  `M40LLM_ATTN_LOG=1` to print backend selection.
 
 ## Guardrails
 

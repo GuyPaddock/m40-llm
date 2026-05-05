@@ -133,9 +133,9 @@ Current M40 validation target:
   activation run on device in the forward path.
 - Fresh M40 GEMM, attention, and TinyLlama `/generate` baselines: see
   `docs/perf_baselines.md`.
-- Workspace reuse removes repeated forward scratch allocation, but the refreshed
-  `/generate` timings are essentially flat. The measured GQA attention kernel is
-  now the next concrete optimization target.
+- Workspace reuse removes repeated forward scratch allocation.
+- The GQA last-token attention path has an optimized `head_dim=64` CUDA kernel;
+  set `M40LLM_ATTN_LOG=1` to print attention backend selection.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

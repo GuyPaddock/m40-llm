@@ -130,3 +130,38 @@ Notes:
 - Workspace reuse reduced allocation churn but did not materially improve end-to-end latency.
 - The two-token sample improved slightly, while the one-token sample was effectively flat within run-to-run noise.
 - The measured attention cost is large enough to explain more of the decode latency than scratch allocation overhead.
+
+## 2026-05-04: Optimized GQA Attention Kernel
+
+Changes since earlier baselines:
+
+- `m40llm_attention_last_token_f32_gqa` now routes `head_dim=64` requests through
+  a shared-score CUDA kernel when `seq_len <= 8192`.
+- The generic GQA attention kernel remains the fallback for other head dimensions
+  and longer contexts.
+- Set `M40LLM_ATTN_LOG=1` to print which attention backend was selected.
+
+Attention refresh:
+
+| Sequence length | Previous estimate | Optimized estimate |
+| ---: | ---: | ---: |
+| 1 | 234.50 us | 10.639 us |
+| 16 | 3.5461 ms | 40.015 us |
+| 128 | 33.568 ms | 259.89 us |
+| 512 | 145.51 ms | 1.0961 ms |
+| 1024 | 293.24 ms | 2.2153 ms |
+
+TinyLlama `/generate` refresh:
+
+| Prompt | Generated tokens | Output | Previous latency | Optimized latency |
+| --- | ---: | --- | ---: | ---: |
+| `Hello` | 1 | `,` | 3.571916 s | 2.999206 s |
+| `Hello` | 2 | `, World` | 5.476869 s | 4.449623 s |
+
+Notes:
+
+- The attention microbenchmark improved by roughly two orders of magnitude at
+  practical context lengths.
+- Development-build `/generate` latency improved, but remaining token latency is
+  still dominated by full-layer projection work, synchronization, launch overhead,
+  and host sampling/logits copyback.

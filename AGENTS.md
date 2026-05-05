@@ -260,7 +260,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t31c-optimize-attn-kernel",
       "priority": 5,
-      "status": "todo",
+      "status": "done",
       "title": "Optimize GQA last-token attention kernel",
       "rationale": "The new attention benchmark shows current GQA attention dominates decode latency at practical context lengths.",
       "scope": [
