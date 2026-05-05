@@ -93,6 +93,8 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> Result<LoadedModel> {
         gguf,
         cuda,
         kv_cache: None,
+        #[cfg(feature = "cuda")]
+        forward_workspace: std::sync::Mutex::new(None),
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

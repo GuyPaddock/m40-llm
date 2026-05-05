@@ -143,6 +143,8 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: None,
+        #[cfg(feature = "cuda")]
+        forward_workspace: std::sync::Mutex::new(None),
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

@@ -128,6 +128,8 @@ fn make_model_with_layer(
         gguf,
         cuda,
         kv_cache: None,
+        #[cfg(feature = "cuda")]
+        forward_workspace: std::sync::Mutex::new(None),
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

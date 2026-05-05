@@ -10,5 +10,7 @@ mod mapping;
 mod meta;
 mod tensor_views;
 mod types;
+#[cfg(feature = "cuda")]
+mod workspace;
 
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

@@ -1,4 +1,6 @@
 use super::meta::norm_weight_dtype_code;
+#[cfg(feature = "cuda")]
+use super::workspace::ForwardWorkspacePtrs;
 use super::LoadedModel;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
@@ -7,6 +9,32 @@ use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 impl LoadedModel {
+    #[cfg(feature = "cuda")]
+    fn with_forward_workspace<R>(
+        &self,
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
+    ) -> Result<R> {
+        let mut guard = self.forward_workspace.lock().unwrap();
+        if !guard
+            .as_ref()
+            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim))
+            .unwrap_or(false)
+        {
+            if let Some(old) = guard.take() {
+                old.free(&self.cuda);
+            }
+            *guard = Some(super::workspace::ForwardWorkspace::new(
+                &self.cuda, d_model, kv_dim, hidden_dim,
+            )?);
+        }
+        let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
+        drop(guard);
+        f(ptrs)
+    }
+
     pub unsafe fn forward_one_token_minimal_with_norms(
         &self,
         d_x_f32: *const c_void,
@@ -57,190 +85,166 @@ impl LoadedModel {
                 );
             }
 
-            // Allocate scratch buffers
-            let bytes_d = (d_model as usize) * 4;
-            let bytes_kv = (kv_dim as usize) * 4;
-            let bytes_h = (hidden_dim as usize) * 4;
-            let dq = self.cuda.device_malloc_tagged(bytes_d, "fwd:dq_f32")?;
-            let dk = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dk_f32")?;
-            let dv = self.cuda.device_malloc_tagged(bytes_kv, "fwd:dv_f32")?;
-            let datt = self.cuda.device_malloc_tagged(bytes_d, "fwd:datt_f32")?; // attention output
-            let dy_attn = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_attn_f32")?; // after out-proj
-            let dgate = self.cuda.device_malloc_tagged(bytes_h, "fwd:dgate_f32")?;
-            let dup = self.cuda.device_malloc_tagged(bytes_h, "fwd:dup_f32")?;
-            let dhid = self.cuda.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?;
-            let dy_mlp = self.cuda.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?;
-            let d_xn = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?; // pre-attn norm(x)
-            let d_x1 = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?; // x + attn(xn)
-            let d_x1n = self.cuda.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?; // norm(x1)
+            self.with_forward_workspace(
+                d_model as usize,
+                kv_dim as usize,
+                hidden_dim as usize,
+                |ws| -> Result<()> {
+                    // Pre-norm (RMSNorm) on x -> xn
+                    if let Some((d_weight, dtype)) = attn_norm_weight {
+                        self.run_rms_norm_weighted(
+                            d_x_f32,
+                            d_weight,
+                            dtype,
+                            ws.d_xn,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    } else {
+                        self.run_rms_norm(
+                            d_x_f32,
+                            ws.d_xn,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    }
 
-            let res = (|| -> Result<()> {
-                // Pre-norm (RMSNorm) on x -> xn
-                if let Some((d_weight, dtype)) = attn_norm_weight {
-                    self.run_rms_norm_weighted(
+                    // Q uses query heads; K/V use KV heads for GQA models.
+                    self.qkv_project_f32xf16_gguf_f32(
+                        ws.d_xn,
+                        1,
+                        d_model,
+                        d_wq_f16,
+                        d_model,
+                        d_wk_f16,
+                        kv_dim as i32,
+                        d_wv_f16,
+                        kv_dim as i32,
+                        ws.dq,
+                        ws.dk,
+                        ws.dv,
+                    )?;
+
+                    let pos = seq_len.saturating_sub(1);
+                    self.cuda.rope_f32_inplace(
+                        ws.dq,
+                        1,
+                        q_heads,
+                        head_dim,
+                        pos,
+                        self.model_config.rope_freq_base,
+                        self.model_config.rope_freq_scale,
+                    )?;
+                    self.cuda.rope_f32_inplace(
+                        ws.dk,
+                        1,
+                        kv_heads,
+                        head_dim,
+                        pos,
+                        self.model_config.rope_freq_base,
+                        self.model_config.rope_freq_scale,
+                    )?;
+
+                    // Append K/V for this token, then attention over last token
+                    self.append_kv_token_f32(
+                        seq_id,
+                        ws.dk as *const c_void,
+                        ws.dv as *const c_void,
+                    )?;
+
+                    // Use KV cache layout to validate/run attention
+                    self.run_attention(
+                        ws.dq as *const c_void,
+                        ws.datt,
+                        seq_id,
+                        seq_len,
+                        d_model as u32,
+                        q_heads,
+                        head_dim,
+                    )?;
+
+                    // Output projection of attention
+                    self.out_proj_f32xf16_gguf_f32(
+                        ws.datt as *const c_void,
+                        d_wo_f16,
+                        ws.dy_attn,
+                        1,
+                        d_model,
+                        d_model,
+                    )?;
+
+                    // Residual add y_attn: x1 = x + y_attn.
+                    self.cuda.residual_add_f32(
                         d_x_f32,
-                        d_weight,
-                        dtype,
-                        d_xn,
-                        1,
-                        d_model as u32,
-                        self.model_config.layer_norm_epsilon,
+                        ws.dy_attn as *const c_void,
+                        ws.d_x1,
+                        d_model as usize,
                     )?;
-                } else {
-                    self.run_rms_norm(
-                        d_x_f32,
-                        d_xn,
+
+                    // Post-attention norm: x1n = norm(x1)
+                    if let Some((d_weight, dtype)) = ffn_norm_weight {
+                        self.run_rms_norm_weighted(
+                            ws.d_x1,
+                            d_weight,
+                            dtype,
+                            ws.d_x1n,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    } else {
+                        self.run_rms_norm(
+                            ws.d_x1,
+                            ws.d_x1n,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    }
+
+                    // MLP gates and up (now feed post-attn normalized x1n)
+                    self.mlp_gates_f32xf16_gguf_f32(
+                        ws.d_x1n,
                         1,
-                        d_model as u32,
-                        self.model_config.layer_norm_epsilon,
+                        d_model,
+                        d_w_gate_f16,
+                        d_w_up_f16,
+                        hidden_dim,
+                        ws.dgate,
+                        ws.dup,
                     )?;
-                }
 
-                // Q uses query heads; K/V use KV heads for GQA models.
-                self.qkv_project_f32xf16_gguf_f32(
-                    d_xn,
-                    1,
-                    d_model,
-                    d_wq_f16,
-                    d_model,
-                    d_wk_f16,
-                    kv_dim as i32,
-                    d_wv_f16,
-                    kv_dim as i32,
-                    dq,
-                    dk,
-                    dv,
-                )?;
+                    // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
+                    self.cuda.swiglu_f32(
+                        ws.dgate as *const c_void,
+                        ws.dup as *const c_void,
+                        ws.dhid,
+                        hidden_dim as usize,
+                    )?;
 
-                let pos = seq_len.saturating_sub(1);
-                self.cuda.rope_f32_inplace(
-                    dq as *mut c_void,
-                    1,
-                    q_heads,
-                    head_dim,
-                    pos,
-                    self.model_config.rope_freq_base,
-                    self.model_config.rope_freq_scale,
-                )?;
-                self.cuda.rope_f32_inplace(
-                    dk as *mut c_void,
-                    1,
-                    kv_heads,
-                    head_dim,
-                    pos,
-                    self.model_config.rope_freq_base,
-                    self.model_config.rope_freq_scale,
-                )?;
-
-                // Append K/V for this token, then attention over last token
-                self.append_kv_token_f32(seq_id, dk as *const c_void, dv as *const c_void)?;
-
-                // Use KV cache layout to validate/run attention
-                self.run_attention(
-                    dq as *const c_void,
-                    datt,
-                    seq_id,
-                    seq_len,
-                    d_model as u32,
-                    q_heads,
-                    head_dim,
-                )?;
-
-                // Output projection of attention
-                self.out_proj_f32xf16_gguf_f32(
-                    datt as *const c_void,
-                    d_wo_f16,
-                    dy_attn,
-                    1,
-                    d_model,
-                    d_model,
-                )?;
-
-                // Residual add y_attn: x1 = x + y_attn.
-                self.cuda.residual_add_f32(
-                    d_x_f32,
-                    dy_attn as *const c_void,
-                    d_x1,
-                    d_model as usize,
-                )?;
-
-                // Post-attention norm: x1n = norm(x1)
-                if let Some((d_weight, dtype)) = ffn_norm_weight {
-                    self.run_rms_norm_weighted(
-                        d_x1,
-                        d_weight,
-                        dtype,
-                        d_x1n,
+                    // Down projection
+                    self.mlp_down_proj_f32xf16_gguf_f32(
+                        ws.dhid as *const c_void,
                         1,
-                        d_model as u32,
-                        self.model_config.layer_norm_epsilon,
+                        hidden_dim,
+                        d_w_down_f16,
+                        d_model,
+                        ws.dy_mlp,
                     )?;
-                } else {
-                    self.run_rms_norm(
-                        d_x1,
-                        d_x1n,
-                        1,
-                        d_model as u32,
-                        self.model_config.layer_norm_epsilon,
+
+                    // Final residual add per pre-norm layout: out = x1 + y_mlp.
+                    self.cuda.residual_add_f32(
+                        ws.d_x1 as *const c_void,
+                        ws.dy_mlp as *const c_void,
+                        d_out_f32,
+                        d_model as usize,
                     )?;
-                }
 
-                // MLP gates and up (now feed post-attn normalized x1n)
-                self.mlp_gates_f32xf16_gguf_f32(
-                    d_x1n,
-                    1,
-                    d_model,
-                    d_w_gate_f16,
-                    d_w_up_f16,
-                    hidden_dim,
-                    dgate,
-                    dup,
-                )?;
-
-                // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
-                self.cuda.swiglu_f32(
-                    dgate as *const c_void,
-                    dup as *const c_void,
-                    dhid,
-                    hidden_dim as usize,
-                )?;
-
-                // Down projection
-                self.mlp_down_proj_f32xf16_gguf_f32(
-                    dhid as *const c_void,
-                    1,
-                    hidden_dim,
-                    d_w_down_f16,
-                    d_model,
-                    dy_mlp,
-                )?;
-
-                // Final residual add per pre-norm layout: out = x1 + y_mlp.
-                self.cuda.residual_add_f32(
-                    d_x1 as *const c_void,
-                    dy_mlp as *const c_void,
-                    d_out_f32,
-                    d_model as usize,
-                )?;
-
-                Ok(())
-            })();
-
-            // Free scratch (best-effort)
-            let _ = self.cuda.device_free(dq);
-            let _ = self.cuda.device_free(dk);
-            let _ = self.cuda.device_free(dv);
-            let _ = self.cuda.device_free(datt);
-            let _ = self.cuda.device_free(dy_attn);
-            let _ = self.cuda.device_free(dgate);
-            let _ = self.cuda.device_free(dup);
-            let _ = self.cuda.device_free(dhid);
-            let _ = self.cuda.device_free(dy_mlp);
-            let _ = self.cuda.device_free(d_xn);
-            let _ = self.cuda.device_free(d_x1);
-            let _ = self.cuda.device_free(d_x1n);
-
-            res
+                    Ok(())
+                },
+            )
         }
 
         #[cfg(not(feature = "cuda"))]
@@ -705,34 +709,26 @@ impl LoadedModel {
                 self.forward_one_token_with_layer(d_x_f32, 0, 0, seq_len, d_out_f32)?;
                 return Ok(1);
             }
+            let hidden_dim = self.model_config.feed_forward_length as usize;
+            let kv_dim = (self.model_config.attention_head_count_kv as usize)
+                .checked_mul(self.model_config.attention_key_length as usize)
+                .context("forward workspace kv dim overflow")?;
 
-            let bytes = d_model * std::mem::size_of::<f32>();
-            let scratch_a = self
-                .cuda
-                .device_malloc_tagged(bytes, "fwd_all:scratch_a_f32")?;
-            let scratch_b = self
-                .cuda
-                .device_malloc_tagged(bytes, "fwd_all:scratch_b_f32")?;
-
-            let res = (|| -> Result<usize> {
+            return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
                 for layer in 0..layer_count {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
                     } else if layer % 2 == 0 {
-                        scratch_a
+                        ws.scratch_a
                     } else {
-                        scratch_b
+                        ws.scratch_b
                     };
                     self.forward_one_token_with_layer(current, layer, layer as u32, seq_len, next)?;
                     current = next as *const c_void;
                 }
                 Ok(layer_count)
-            })();
-
-            let _ = self.cuda.device_free(scratch_a);
-            let _ = self.cuda.device_free(scratch_b);
-            return res;
+            });
         }
 
         #[cfg(not(feature = "cuda"))]

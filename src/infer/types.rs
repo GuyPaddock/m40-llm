@@ -8,6 +8,11 @@ use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 #[cfg(feature = "cuda")]
 use std::ffi::c_void;
+#[cfg(feature = "cuda")]
+use std::sync::Mutex;
+
+#[cfg(feature = "cuda")]
+use super::workspace::ForwardWorkspace;
 
 #[derive(Debug, Clone)]
 pub struct ModelConfig {
@@ -220,6 +225,8 @@ pub struct LoadedModel {
     pub gguf: GgufModel,
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
+    #[cfg(feature = "cuda")]
+    pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]
