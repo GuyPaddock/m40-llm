@@ -11,4 +11,5 @@ pub mod model;
 pub mod sampling;
 #[cfg(feature = "server")]
 pub mod server;
+pub(crate) mod timing;
 pub mod tokenizer;

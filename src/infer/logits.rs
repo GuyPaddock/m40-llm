@@ -1,4 +1,5 @@
 use super::LoadedModel;
+use crate::timing;
 use anyhow::{Context, Result};
 use std::ffi::c_void;
 
@@ -6,6 +7,7 @@ impl LoadedModel {
     /// # Safety
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
+        let total_start = std::time::Instant::now();
         let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
         #[cfg(not(feature = "cuda"))]
         let _ = &name;
@@ -19,18 +21,23 @@ impl LoadedModel {
         let _ = &lm;
         let bytes_logits = vocab * std::mem::size_of::<f32>();
         let d_logits = self.cuda.device_malloc(bytes_logits)?;
+        let gemm_start = std::time::Instant::now();
         self.matmul_f32xf16_gguf_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)
             .with_context(|| {
                 format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
             })?;
+        timing::log("logits.gpu.lm_head_gemm", gemm_start.elapsed());
         let mut host = vec![0u8; bytes_logits];
+        let copy_start = std::time::Instant::now();
         self.cuda
             .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
+        timing::log("logits.gpu.copy_d2h", copy_start.elapsed());
         let mut logits = Vec::with_capacity(vocab);
         for ch in host.chunks_exact(4) {
             logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
         }
         let _ = self.cuda.device_free(d_logits);
+        timing::log("logits.gpu.total", total_start.elapsed());
         Ok(logits)
     }
 }
@@ -40,6 +47,8 @@ impl LoadedModel {
     /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
     /// to host-side dot with per-row copies from tok_embeddings.
     pub unsafe fn logits_from_hidden(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
+        #[cfg(feature = "cuda")]
+        let total_start = std::time::Instant::now();
         if let Ok((name, lm, d_model, vocab, _)) = self.map_lm_head() {
             #[cfg(not(feature = "cuda"))]
             let _ = &name;
@@ -53,6 +62,7 @@ impl LoadedModel {
                 let result = (|| -> Result<Vec<f32>> {
                     let hidden_for_logits =
                         if let Some((norm_name, norm)) = self.map_output_norm()? {
+                            let norm_start = std::time::Instant::now();
                             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
                             d_norm_hidden = self
                                 .cuda
@@ -66,10 +76,12 @@ impl LoadedModel {
                                 d_model as u32,
                                 self.model_config.layer_norm_epsilon,
                             )?;
+                            timing::log("logits.output_norm", norm_start.elapsed());
                             d_norm_hidden as *const c_void
                         } else {
                             d_hidden_f32
                         };
+                    let gemm_start = std::time::Instant::now();
                     self.matmul_f32xf16_gguf_f32(
                         hidden_for_logits,
                         d_w,
@@ -81,12 +93,15 @@ impl LoadedModel {
                     .with_context(|| {
                         format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
                     })?;
+                    timing::log("logits.lm_head_gemm", gemm_start.elapsed());
                     let mut host = vec![0u8; bytes_logits];
+                    let copy_start = std::time::Instant::now();
                     self.cuda.memcpy_d2h(
                         host.as_mut_ptr() as *mut c_void,
                         d_logits,
                         bytes_logits,
                     )?;
+                    timing::log("logits.copy_d2h", copy_start.elapsed());
                     let mut logits = Vec::with_capacity(vocab);
                     for ch in host.chunks_exact(4) {
                         logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
@@ -97,6 +112,7 @@ impl LoadedModel {
                     let _ = self.cuda.device_free(d_norm_hidden);
                 }
                 let _ = self.cuda.device_free(d_logits);
+                timing::log("logits.total", total_start.elapsed());
                 return result;
             }
             #[cfg(not(feature = "cuda"))]
