@@ -244,7 +244,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t31b-microbench-attn",
       "priority": 4,
-      "status": "todo",
+      "status": "done",
       "title": "Attention microbenchmarks on M40",
       "rationale": "Optimization requires measurement, not guesswork.",
       "scope": [
@@ -253,13 +253,30 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
         "Capture baseline vs optimized timings."
       ],
       "acceptance": [
-        "Benchmarks run reproducibly on M40.",
-        "Results are documented and tracked over time."
+        "Benchmarks run reproducibly on M40 (`cargo bench --features cuda --bench attention`).",
+        "Results are documented and tracked in `docs/perf_baselines.md`."
+      ]
+    },
+    {
+      "id": "t31c-optimize-attn-kernel",
+      "priority": 5,
+      "status": "todo",
+      "title": "Optimize GQA last-token attention kernel",
+      "rationale": "The new attention benchmark shows current GQA attention dominates decode latency at practical context lengths.",
+      "scope": [
+        "Improve `m40llm_attention_last_token_f32_gqa` for M40.",
+        "Keep attention parity grid green.",
+        "Remeasure attention and TinyLlama `/generate` latency."
+      ],
+      "acceptance": [
+        "Attention benchmark improves materially for seq_len 128+.",
+        "CUDA attention parity tests pass.",
+        "Updated measurements are recorded in `docs/perf_baselines.md`."
       ]
     },
     {
       "id": "t33-stream-sep",
-      "priority": 5,
+      "priority": 6,
       "status": "todo",
       "title": "Prefill and decode stream separation",
       "rationale": "Separate CUDA streams allow better overlap and latency hiding.",
@@ -275,7 +292,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t32-persistent-kernel",
-      "priority": 6,
+      "priority": 7,
       "status": "todo",
       "title": "Persistent decode kernel prototype",
       "rationale": "Optional advanced optimization to reduce kernel launch overhead.",
@@ -290,13 +307,13 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t26-3-impl",
-      "priority": 7,
+      "priority": 8,
       "status": "todo",
       "title": "Remove remaining host fallbacks in forward path",
       "rationale": "Host fallbacks in hot paths negate GPU gains.",
       "scope": [
-        "CUDA RMSNorm and residual paths.",
-        "Remove unnecessary host round-trips."
+        "Audit remaining host round-trips in embedding/logits and debug fallback paths.",
+        "Keep normal full-layer decode on device except logits copyback for host sampling."
       ],
       "acceptance": [
         "Forward path runs fully on GPU in normal operation.",

@@ -131,9 +131,11 @@ Current M40 validation target:
 - Expected log evidence: `full-layer forward enabled layers=22`
 - CUDA hot path: RMSNorm, RoPE, residual adds, and SiLU/gated MLP
   activation run on device in the forward path.
-- Fresh M40 GEMM and TinyLlama `/generate` baselines: see `docs/perf_baselines.md`.
-- Next performance step: proceed to cuBLAS hardening, attention microbenchmarks,
-  streams, and persistent decode experiments.
+- Fresh M40 GEMM, attention, and TinyLlama `/generate` baselines: see
+  `docs/perf_baselines.md`.
+- Workspace reuse removes repeated forward scratch allocation, but the refreshed
+  `/generate` timings are essentially flat. The measured GQA attention kernel is
+  now the next concrete optimization target.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.
