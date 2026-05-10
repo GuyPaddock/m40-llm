@@ -291,3 +291,20 @@ Notes:
 - Remaining short-context steady-state costs are now mostly launch overhead,
   KV append, RoPE, norms, and logits/sampling overhead rather than projection
   math.
+
+## Variable-Length Batched Attention Benchmarks
+
+Benchmark scaffolding now includes `attention_last_token_f32_gqa_batched_varlen`
+with three mixed-length decode distributions:
+
+- `avg_0p6_max`: average length near 0.6 * max sequence length.
+- `skewed`: short, medium, and long KV lengths in one batch.
+- `near_uniform`: lengths close to max sequence length.
+
+Each distribution compares individual per-sequence dispatch against the packed
+batched variable-length GQA decode kernel. Record measured results here after
+running:
+
+```bash
+cargo bench --features cuda --bench attention -- --sample-size 10
+```
