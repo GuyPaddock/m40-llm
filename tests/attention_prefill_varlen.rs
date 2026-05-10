@@ -3,7 +3,9 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::infer::{BatchMetadata, BatchSequence};
+use m40_llm::infer::{
+    BatchMetadata, BatchSequence, VarlenPrefillPlan, VarlenPrefillTile, VarlenPrefillTileSelection,
+};
 use std::ffi::c_void;
 
 fn f32s_to_bytes(vals: &[f32]) -> Vec<u8> {
@@ -116,47 +118,34 @@ fn packed_varlen_prefill_gqa_matches_cpu_reference() -> Result<()> {
         .collect();
     let expected = cpu_prefill_gqa_varlen(&q, &k, &v, &meta, q_heads, kv_heads, head_dim);
 
-    let q_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.query_len).collect();
-    let kv_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.kv_len).collect();
     let bytes_q = q.len() * std::mem::size_of::<f32>();
     let bytes_kv = k.len() * std::mem::size_of::<f32>();
     let bytes_out = expected.len() * std::mem::size_of::<f32>();
-    let bytes_offsets = meta.sequences().len() * std::mem::size_of::<u32>();
+    let plan = VarlenPrefillPlan::new(&ctx, meta.clone(), head_dim as u32)?;
+    assert_eq!(plan.batch_size(), meta.sequences().len() as u32);
+    assert_eq!(
+        plan.tile_selection(),
+        VarlenPrefillTileSelection {
+            head_dim: 64,
+            max_query_len: 3,
+            max_kv_len: 5,
+            tile: VarlenPrefillTile::CONSERVATIVE_HEAD64,
+        }
+    );
 
     let d_q = ctx.device_malloc(bytes_q)?;
     let d_k = ctx.device_malloc(bytes_kv)?;
     let d_v = ctx.device_malloc(bytes_kv)?;
-    let d_q_offsets = ctx.device_malloc(bytes_offsets)?;
-    let d_kv_offsets = ctx.device_malloc(bytes_offsets)?;
-    let d_q_lens = ctx.device_malloc(bytes_offsets)?;
-    let d_kv_lens = ctx.device_malloc(bytes_offsets)?;
     let d_out = ctx.device_malloc(bytes_out)?;
 
     unsafe {
         ctx.memcpy_h2d(d_q, f32s_to_bytes(&q).as_ptr() as *const c_void, bytes_q)?;
         ctx.memcpy_h2d(d_k, f32s_to_bytes(&k).as_ptr() as *const c_void, bytes_kv)?;
         ctx.memcpy_h2d(d_v, f32s_to_bytes(&v).as_ptr() as *const c_void, bytes_kv)?;
-        ctx.memcpy_h2d(
-            d_q_offsets,
-            meta.q_offsets().as_ptr() as *const c_void,
-            bytes_offsets,
-        )?;
-        ctx.memcpy_h2d(
-            d_kv_offsets,
-            meta.kv_offsets().as_ptr() as *const c_void,
-            bytes_offsets,
-        )?;
-        ctx.memcpy_h2d(d_q_lens, q_lens.as_ptr() as *const c_void, bytes_offsets)?;
-        ctx.memcpy_h2d(d_kv_lens, kv_lens.as_ptr() as *const c_void, bytes_offsets)?;
-        ctx.attention_prefill_f32_gqa_varlen_head64(
+        plan.dispatch_head64(
             d_q as *const c_void,
             d_k as *const c_void,
             d_v as *const c_void,
-            d_q_offsets as *const u32,
-            d_kv_offsets as *const u32,
-            d_q_lens as *const u32,
-            d_kv_lens as *const u32,
-            meta.sequences().len() as u32,
             q_heads as u32,
             kv_heads as u32,
             d_out,
@@ -173,12 +162,27 @@ fn packed_varlen_prefill_gqa_matches_cpu_reference() -> Result<()> {
         ctx.device_free(d_q)?;
         ctx.device_free(d_k)?;
         ctx.device_free(d_v)?;
-        ctx.device_free(d_q_offsets)?;
-        ctx.device_free(d_kv_offsets)?;
-        ctx.device_free(d_q_lens)?;
-        ctx.device_free(d_kv_lens)?;
         ctx.device_free(d_out)?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn varlen_prefill_plan_rejects_unsupported_head_dim() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    let meta = BatchMetadata::new(vec![BatchSequence {
+        seq_len: 4,
+        query_len: 4,
+        kv_len: 4,
+    }])?;
+    let err = VarlenPrefillPlan::new(&ctx, meta, 32).unwrap_err();
+    assert!(
+        err.to_string().contains("head_dim=64 only"),
+        "unexpected error: {err}"
+    );
     Ok(())
 }

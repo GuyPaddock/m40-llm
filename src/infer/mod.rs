@@ -14,7 +14,10 @@ mod types;
 #[cfg(feature = "cuda")]
 mod workspace;
 
+#[cfg(feature = "cuda")]
+pub use batch::VarlenPrefillPlan;
 pub use batch::{
     BatchMetadata, BatchSequence, BucketStats, BucketedBatch, LengthBucket, PackedSequenceOffsets,
+    VarlenPrefillTile, VarlenPrefillTileSelection,
 };
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};
