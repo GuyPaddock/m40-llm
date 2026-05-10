@@ -99,6 +99,39 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         )?;
     }
 
+    let mut default_bytes = vec![0u8; bytes_out];
+    unsafe {
+        ctx.memcpy_d2h(
+            default_bytes.as_mut_ptr() as *mut c_void,
+            d_out_batch,
+            bytes_out,
+        )?;
+    }
+    let default = bytes_to_f32s(&default_bytes);
+
+    let d_out_ldg = ctx.device_malloc(bytes_out)?;
+    unsafe {
+        std::env::set_var("M40LLM_CACHE_EXPERIMENT", "ldg_kv");
+        let ldg_result = kv.attention_last_token_f32_gqa_batched(
+            &ctx,
+            d_seq_ids as *const u32,
+            d_seq_lens as *const u32,
+            batch_size,
+            d_q as *const c_void,
+            q_heads,
+            d_out_ldg,
+        );
+        std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
+        ldg_result?;
+        let mut ldg_bytes = vec![0u8; bytes_out];
+        ctx.memcpy_d2h(ldg_bytes.as_mut_ptr() as *mut c_void, d_out_ldg, bytes_out)?;
+        let ldg = bytes_to_f32s(&ldg_bytes);
+        for (i, (g, e)) in ldg.iter().zip(default.iter()).enumerate() {
+            let diff = (g - e).abs();
+            assert!(diff <= 1e-6, "ldg mismatch at {i}: got {g}, expected {e}");
+        }
+    }
+
     let mut expected = Vec::with_capacity(q.len());
     for (b, &seq_len) in seq_lens.iter().enumerate() {
         let q_offset = b * q_dim * std::mem::size_of::<f32>();
@@ -117,16 +150,7 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         }
     }
 
-    let mut got_bytes = vec![0u8; bytes_out];
-    unsafe {
-        ctx.memcpy_d2h(
-            got_bytes.as_mut_ptr() as *mut c_void,
-            d_out_batch,
-            bytes_out,
-        )?;
-    }
-    let got = bytes_to_f32s(&got_bytes);
-    for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+    for (i, (g, e)) in default.iter().zip(expected.iter()).enumerate() {
         let diff = (g - e).abs();
         assert!(diff <= 1e-4, "mismatch at {i}: got {g}, expected {e}");
     }
@@ -136,6 +160,7 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         ctx.device_free(d_v)?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_out_batch)?;
+        ctx.device_free(d_out_ldg)?;
         ctx.device_free(d_out_one)?;
         ctx.device_free(d_seq_ids)?;
         ctx.device_free(d_seq_lens)?;
