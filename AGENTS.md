@@ -356,8 +356,8 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
         "Batched last-token GQA attention supports mixed KV lengths for decode.",
         "Mixed-length batches avoid full max_seq padding work where possible.",
         "Packed prefill GQA attention supports mixed query/KV lengths.",
-        "Benchmarks cover skewed, 0.6*max_seq average, and near-uniform length distributions.",
-        "Remaining work: add explicit padded and bucketed baselines, then tune variable tile selection."
+        "Benchmarks cover padded, packed, and bucketed prefill dispatch for skewed, 0.6*max_seq average, and near-uniform length distributions.",
+        "Remaining work: tune variable tile selection and integrate packed prefill above the kernel/benchmark layer."
       ]
     }
   ]

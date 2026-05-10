@@ -323,14 +323,14 @@ Notes:
 - Packed prefill now has a separate baseline using
   `attention_prefill_f32_gqa_varlen`.
 
-Packed prefill distributions:
+Prefill dispatch distributions:
 
-| Distribution | Query/KV lengths | Packed varlen prefill |
-| --- | ---: | ---: |
-| `avg_0p6_max` | 384/384, 512/512, 640/640, 768/768 | 178.01 ms |
-| `skewed` | 16/16, 64/64, 256/256, 1024/1024 | 141.30 ms |
-| `near_uniform` | 896/896, 960/960, 1000/1000, 1024/1024 | 473.38 ms |
-| `prefix_query` | 16/512, 32/640, 64/768, 128/1024 | 50.506 ms |
+| Distribution | Query/KV lengths | Padded max | Packed varlen | Bucketed varlen |
+| --- | ---: | ---: | ---: | ---: |
+| `avg_0p6_max` | 384/384, 512/512, 640/640, 768/768 | 296.31 ms | 177.91 ms | 178.68 ms |
+| `skewed` | 16/16, 64/64, 256/256, 1024/1024 | 525.79 ms | 141.25 ms | 141.66 ms |
+| `near_uniform` | 896/896, 960/960, 1000/1000, 1024/1024 | 526.12 ms | 473.59 ms | 473.83 ms |
+| `prefix_query` | 16/512, 32/640, 64/768, 128/1024 | 123.86 ms | 50.564 ms | 51.276 ms |
 
 Packed prefill notes:
 
@@ -339,5 +339,9 @@ Packed prefill notes:
   per-sequence query and KV lengths.
 - The prefix-query case demonstrates the intended savings when query tokens are
   much fewer than cached KV tokens.
-- Remaining `t31e-varlen-batch` work should add explicit padded and bucketed
-  baselines, then tune tile choices for M40 occupancy and shared-memory limits.
+- Bucketed dispatch is currently neutral to slightly slower than packed dispatch
+  in this microbenchmark because the kernel already consumes true per-sequence
+  lengths and extra bucket launches dominate.
+- Remaining `t31e-varlen-batch` work should tune tile choices for M40 occupancy
+  and shared-memory limits, then integrate the packed path into higher-level
+  batched prefill instead of leaving it as an exposed kernel/benchmark.
