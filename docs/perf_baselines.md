@@ -292,7 +292,7 @@ Notes:
   KV append, RoPE, norms, and logits/sampling overhead rather than projection
   math.
 
-## Variable-Length Batched Attention Benchmarks
+## 2026-05-10: Variable-Length Batched Attention Benchmarks
 
 Benchmark scaffolding now includes `attention_last_token_f32_gqa_batched_varlen`
 with three mixed-length decode distributions:
@@ -318,8 +318,26 @@ Measured on Tesla M40:
 
 Notes:
 
-- This benchmark measures mixed-KV-length batched decode, not full prefill.
 - The current batched kernel uses one grid launch for all batch entries and
   skips invalid KV regions via per-sequence lengths.
-- Next work should add bucketed and packed prefill attention so prompt batches
-  also avoid padded-token computation.
+- Packed prefill now has a separate baseline using
+  `attention_prefill_f32_gqa_varlen`.
+
+Packed prefill distributions:
+
+| Distribution | Query/KV lengths | Packed varlen prefill |
+| --- | ---: | ---: |
+| `avg_0p6_max` | 384/384, 512/512, 640/640, 768/768 | 178.01 ms |
+| `skewed` | 16/16, 64/64, 256/256, 1024/1024 | 141.30 ms |
+| `near_uniform` | 896/896, 960/960, 1000/1000, 1024/1024 | 473.38 ms |
+| `prefix_query` | 16/512, 32/640, 64/768, 128/1024 | 50.506 ms |
+
+Packed prefill notes:
+
+- The first prefill kernel is correctness-first: one CUDA block handles one
+  sequence/query-head/query-token and skips invalid KV regions through
+  per-sequence query and KV lengths.
+- The prefix-query case demonstrates the intended savings when query tokens are
+  much fewer than cached KV tokens.
+- Remaining `t31e-varlen-batch` work should add explicit padded and bucketed
+  baselines, then tune tile choices for M40 occupancy and shared-memory limits.

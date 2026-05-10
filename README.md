@@ -162,11 +162,15 @@ Current M40 validation target:
 - Current timed CLI profiles point at batching, launch overhead, and prefill
   shape handling as the next performance targets before stream separation.
 - Variable-length batch metadata is available through `m40_llm::infer` for
-  packed token/Q/KV offsets and length buckets; CUDA kernels will consume this
-  path incrementally to avoid padded-token prefill work.
+  packed token/Q/KV offsets and length buckets; CUDA kernels consume this path
+  incrementally to avoid padded-token prefill work.
 - Batched last-token GQA attention supports packed Q/output buffers with
   per-sequence `seq_len` metadata for mixed-KV-length decode batches on
   `head_dim=64`.
+- Packed prefill GQA attention supports mixed query/KV lengths for
+  `[total_q_tokens, q_heads, 64]` Q/output and
+  `[total_kv_tokens, kv_heads, 64]` K/V buffers, with a CPU-reference parity
+  test and initial M40 benchmark baseline.
 
 Variable-length batching is inspired by Zhang and Lu's SC25 research poster,
 "An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length
