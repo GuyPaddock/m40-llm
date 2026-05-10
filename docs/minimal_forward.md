@@ -1,70 +1,32 @@
-# Minimal forward path (one layer, seq_len=1..2)
+# Minimal Forward Path
 
-Status: minimal, correct, and test‑covered. Intended for validation and wiring, not final performance.
+Status: full-layer CUDA decode is functional for TinyLlama on Tesla M40. This
+document is kept as a compact orientation note for the current one-token forward
+path and its guardrails.
 
-What it runs
-- Embedding load: FP16 row from tok_embeddings → host convert → device FP32 buffer
-- Pre‑attn RMSNorm: host fallback (operates on device buffers via copy)
-- Q/K/V projections: f32×f16→f32 GEMM
-- KV append: FP32→KV cache
-- Attention: last‑token attention against KV (CUDA path)
-- Out projection: f32×f16→f32 GEMM
-- Residual add: host fallback (x + y_attn)
-- Post‑attn RMSNorm: host fallback
-- MLP gates/up: f32×f16→f32 GEMM, then host SiLU(gate) * up
-- Down projection: f32×f16→f32 GEMM
-- Final residual add: host fallback (x1 + y_mlp)
+## What Runs On Device
 
-Assumptions/limits
-- Batch = 1, seq_len ∈ {1, 2} validated by tests
-- FP16 storage, FP32 compute; cuBLAS used if enabled via M40LLM_ENABLE_CUBLAS=1
-- KV cache must be allocated with allocate_kv_cache_with_layout so that dim = num_heads * head_dim
-- RoPE is not applied in this minimal path
-- Norm/residual/activation are currently host fallbacks to keep scope minimal
+- Embedding row load to an FP32 device buffer.
+- Weighted RMSNorm, RoPE, residual adds, and SwiGLU/gated MLP activation.
+- Q/K/V, output, MLP gate/up, MLP down, and lm_head projection GEMMs.
+- FP32 K/V projection append into the FP16 KV cache.
+- Last-token attention against the KV cache.
+- Reusable CUDA forward workspace for per-layer scratch and full-layer ping-pong buffers.
 
-Testing
-- tests/forward_parity_toy.rs constructs a tiny GGUF model with deterministic FP16 weights
-- Validates device output vs a CPU reference
-  - One‑token parity at tol ~1e-3
-  - Two‑token prefill+decode parity at tol 5e-3 (allows accumulated rounding across QKV+attn+MLP)
-- CUDA‑gated; skips gracefully when not on sm_52
+## Current Limits
 
-Next steps (tracked)
-- Optional CUDA RMSNorm/residual (t26-3-impl)
-- Device selection and guardrails documented (see docs/device_selection.md)
-- Toward full minimal forward across a layer on toy GGUF (t26-min-forward)
-# Minimal forward path (one layer, seq_len=1..2)
+- Batch size is still effectively one request for the optimized decode path.
+- GGUF F16 projection weights use the dedicated GGUF-layout CUDA GEMM kernel; set
+  `M40LLM_GEMM_LOG=1` to print backend selection.
+- GQA last-token attention uses an optimized CUDA path for `head_dim=64`; set
+  `M40LLM_ATTN_LOG=1` to print backend selection.
+- `M40LLM_TIMING_LOG=1` prints per-layer decode timings for profiling. Recent
+  TinyLlama profiles show projection and norm calls dominate short-context decode.
 
-Status: minimal, correct, and test‑covered. Intended for validation and wiring, not final performance.
+## Guardrails
 
-What it runs
-- Embedding load: FP16 row from tok_embeddings → host convert → device FP32 buffer
-- Pre‑attn RMSNorm: host fallback (operates on device buffers via copy)
-- Q/KV projections: f32×f16→f32 GEMM
-- KV append: FP32→KV cache
-- Attention: last‑token attention against KV (CUDA path)
-- Out projection: f32×f16→f32 GEMM
-- Residual add: host fallback (x + y_attn)
-- Post‑attn RMSNorm: host fallback
-- MLP gates/up: f32×f16→f32 GEMM, then host SiLU(gate) * up
-- Down projection: f32×f16→f32 GEMM
-- Final residual add: host fallback (x1 + y_mlp)
-
-Assumptions/limits
-- Batch = 1, seq_len ∈ {1, 2} validated by tests
-- FP16 storage, FP32 compute; cuBLAS used if enabled via M40LLM_ENABLE_CUBLAS=1
-- KV cache must be allocated with allocate_kv_cache_with_layout so that dim = num_heads * head_dim
-- RoPE is not applied in this minimal path
-- Norm/residual/activation are currently host fallbacks to keep scope minimal
-
-Testing
-- tests/forward_parity_toy.rs constructs a tiny GGUF model with deterministic FP16 weights
-- Validates device output vs a CPU reference
-  - One‑token parity at tol ~1e-3
-  - Two‑token prefill+decode parity at tol 5e-3 (allows accumulated rounding across QKV+attn+MLP)
-- CUDA‑gated; skips gracefully when not on sm_52
-
-Next steps (tracked)
-- Optional CUDA RMSNorm/residual (t26-3-impl)
-- Device selection and guardrails documented (see docs/device_selection.md)
-- Toward full minimal forward across a layer on toy GGUF (t26-min-forward)
+- `tests/forward_parity_toy.rs` validates toy forward parity against a CPU reference.
+- `tests/forward_with_layer_smoke.rs` checks CUDA forward execution and workspace reuse.
+- `tests/attention_parity_cuda_grid.rs` protects last-token attention and GQA behavior.
+- `tests/server_smoke.rs` exercises the full-layer `/generate` server path.
+- `m40-llm generate ... --require-sm52` exercises the shared non-streaming decode path from the CLI.

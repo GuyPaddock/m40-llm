@@ -1,4 +1,4 @@
-use m40_llm::gguf::{GgufScalar, GgufValue};
+use m40_llm::gguf::{GgmlDType, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::ModelConfig;
 use std::collections::HashMap;
 
@@ -82,6 +82,21 @@ fn model_config_respects_kv_head_override() {
     );
     let cfg = ModelConfig::from_metadata(&meta, &[]).expect("config should parse");
     assert_eq!(cfg.attention_head_count, 4);
+    assert_eq!(cfg.attention_head_count_kv, 2);
+}
+
+#[test]
+fn model_config_derives_kv_heads_from_k_tensor() {
+    let meta = base_metadata();
+    let tensors = vec![GgufTensor {
+        name: "blk.0.attn_k.weight".into(),
+        dtype: GgmlDType::F16,
+        shape: vec![16, 8],
+        offset: 0,
+    }];
+    let cfg = ModelConfig::from_metadata(&meta, &tensors).expect("config should parse");
+    assert_eq!(cfg.attention_head_count, 4);
+    assert_eq!(cfg.attention_key_length, 4);
     assert_eq!(cfg.attention_head_count_kv, 2);
 }
 

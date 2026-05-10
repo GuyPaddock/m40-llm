@@ -72,6 +72,10 @@ fn make_model_with_layer(
         "tok_embeddings.weight".into(),
         make_view(GgmlDType::F16, vec![1024, d_model as u64]),
     );
+    device_tensors.insert(
+        "output.weight".into(),
+        make_view(GgmlDType::F16, vec![d_model as u64, 1024]),
+    );
 
     let wt = if f16_weights {
         GgmlDType::F16
@@ -124,6 +128,10 @@ fn make_model_with_layer(
         gguf,
         cuda,
         kv_cache: None,
+        #[cfg(feature = "cuda")]
+        forward_workspace: std::sync::Mutex::new(None),
+        #[cfg(feature = "cuda")]
+        materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]
@@ -262,6 +270,47 @@ fn map_standard_layer_gate_shape_guard() -> Result<()> {
     let msg = format!("{err}");
     assert!(
         msg.contains("w_gate shape invalid"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[test]
+fn validate_full_layer_decode_requires_lm_head() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.allocate_kv_cache_for_layers(16)?;
+    lm.device_tensors.remove("output.weight");
+
+    let err = lm.validate_full_layer_decode().unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("lm_head tensor not found"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[test]
+fn validate_full_layer_decode_requires_layer_kv_slots() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.allocate_kv_cache(16, 0)?;
+
+    let err = lm.validate_full_layer_decode().unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("full-layer decode needs"),
         "unexpected error: {msg}"
     );
     Ok(())

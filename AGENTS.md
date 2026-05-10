@@ -8,8 +8,8 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
 ## How to Start Each Task
 1. Review `CONTRIBUTING.md` and set up the git hooks (pre-commit and commit message hooks).
 2. Ensure Cocogitto (`cog`) is installed and working.
-3. Ensure `nvcc` is available. If missing, install CUDA Toolkit compatible with Tesla M40 (up to `cuda-nvcc=12.4.*`, `cuda-cudart=12.4.*`, and `cuda-cudart-dev=12.4.*`) and modern `gcc`/`g++`.
-   - Always install CUDA Toolkit **12.4** plus cuBLAS development headers before building (use the micromamba command in `README.md`).
+3. Ensure `nvcc` is available. If missing, install a CUDA Toolkit that still supports compiling sm_52 kernels, plus cuBLAS development headers and modern `gcc`/`g++`.
+   - The micromamba CUDA **12.4** command in `README.md` is the reproducible fallback; the build also detects local `/opt/cuda` installs.
 4. If you are running in OpenHands (not Codex): Use micromamba to install packages, not apt-get.
 
 ## Commit Discipline
@@ -72,7 +72,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t26-min-forward",
       "priority": 6,
-      "status": "in_progress",
+      "status": "done",
       "title": "Minimal forward pass (prefill + decode)",
       "rationale": "This is the minimal computation needed to produce logits.",
       "scope": [
@@ -88,7 +88,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t25-rope-rmsnorm",
       "priority": 7,
-      "status": "todo",
+      "status": "done",
       "title": "RMSNorm and RoPE (GPU-first)",
       "rationale": "Keeping activations on the GPU avoids catastrophic perf loss.",
       "scope": [
@@ -118,7 +118,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t23-6-autoselect-m40",
       "priority": 9,
-      "status": "in_progress",
+      "status": "done",
       "title": "Runtime auto-selection of Tesla M40",
       "rationale": "Prevents accidental arch mismatches on Maxwell.",
       "scope": [
@@ -152,7 +152,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t29-e2e-decode",
       "priority": 11,
-      "status": "todo",
+      "status": "done",
       "title": "End-to-end decode loop (prints tokens)",
       "rationale": "This is the visible success milestone.",
       "scope": [
@@ -169,7 +169,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t36-min-gguf-model",
       "priority": 12,
-      "status": "todo",
+      "status": "done",
       "title": "Minimal GGUF test model",
       "rationale": "Fast deterministic tests unblock iteration and CI.",
       "scope": [
@@ -193,19 +193,21 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t23-cublas-gemm",
       "priority": 1,
-      "status": "in_progress",
+      "status": "done",
       "title": "cuBLAS GEMM wrappers and validation",
       "rationale": "All performance gains depend on correct and well-understood GEMM behavior on Maxwell.",
       "scope": [
         "Harden cuBLAS wrapper APIs.",
         "Validate row-major Rust layouts vs column-major cuBLAS expectations.",
         "Document lda/ldb/ldc and transposition contracts.",
-        "Basic performance sanity checks on Tesla M40."
+        "Basic performance sanity checks on Tesla M40.",
+        "Materialize hot GGUF F16 projection weights into FP32 device buffers for cublasSgemm."
       ],
       "acceptance": [
         "GEMM wrappers are documented and reused consistently.",
         "No silent shape or stride mismatches.",
-        "Measured performance is reasonable for M40-class hardware."
+        "Measured performance is reasonable for M40-class hardware.",
+        "Steady-state TinyLlama projection timings improve materially on M40."
       ]
     },
     {
@@ -244,7 +246,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t31b-microbench-attn",
       "priority": 4,
-      "status": "todo",
+      "status": "done",
       "title": "Attention microbenchmarks on M40",
       "rationale": "Optimization requires measurement, not guesswork.",
       "scope": [
@@ -253,16 +255,50 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
         "Capture baseline vs optimized timings."
       ],
       "acceptance": [
-        "Benchmarks run reproducibly on M40.",
-        "Results are documented and tracked over time."
+        "Benchmarks run reproducibly on M40 (`cargo bench --features cuda --bench attention`).",
+        "Results are documented and tracked in `docs/perf_baselines.md`."
+      ]
+    },
+    {
+      "id": "t31c-optimize-attn-kernel",
+      "priority": 5,
+      "status": "done",
+      "title": "Optimize GQA last-token attention kernel",
+      "rationale": "The new attention benchmark shows current GQA attention dominates decode latency at practical context lengths.",
+      "scope": [
+        "Improve `m40llm_attention_last_token_f32_gqa` for M40.",
+        "Keep attention parity grid green.",
+        "Remeasure attention and TinyLlama `/generate` latency."
+      ],
+      "acceptance": [
+        "Attention benchmark improves materially for seq_len 128+.",
+        "CUDA attention parity tests pass.",
+        "Updated measurements are recorded in `docs/perf_baselines.md`."
+      ]
+    },
+    {
+      "id": "t31d-optimize-rmsnorm",
+      "priority": 6,
+      "status": "done",
+      "title": "Optimize RMSNorm decode kernels",
+      "rationale": "Short-context decode profiles showed serial per-row RMSNorm consumed roughly 17 ms per layer.",
+      "scope": [
+        "Replace one-thread-per-row RMSNorm with parallel per-row reductions.",
+        "Keep weighted and unweighted RMSNorm parity tests green.",
+        "Remeasure TinyLlama CLI decode latency."
+      ],
+      "acceptance": [
+        "Norm latency is no longer a dominant short-context decode cost.",
+        "CUDA RMSNorm/RoPE tests pass.",
+        "Updated measurements are recorded in `docs/perf_baselines.md`."
       ]
     },
     {
       "id": "t33-stream-sep",
-      "priority": 5,
+      "priority": 7,
       "status": "todo",
       "title": "Prefill and decode stream separation",
-      "rationale": "Separate CUDA streams allow better overlap and latency hiding.",
+      "rationale": "Separate CUDA streams allow better overlap and latency hiding after projection and norm costs are reduced.",
       "scope": [
         "Introduce distinct CUDA streams for prefill and decode.",
         "Tune stream priorities where applicable."
@@ -275,7 +311,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t32-persistent-kernel",
-      "priority": 6,
+      "priority": 8,
       "status": "todo",
       "title": "Persistent decode kernel prototype",
       "rationale": "Optional advanced optimization to reduce kernel launch overhead.",
@@ -290,17 +326,37 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t26-3-impl",
-      "priority": 7,
+      "priority": 9,
       "status": "todo",
       "title": "Remove remaining host fallbacks in forward path",
       "rationale": "Host fallbacks in hot paths negate GPU gains.",
       "scope": [
-        "CUDA RMSNorm and residual paths.",
-        "Remove unnecessary host round-trips."
+        "Audit remaining host round-trips in embedding/logits and debug fallback paths.",
+        "Keep normal full-layer decode on device except logits copyback for host sampling."
       ],
       "acceptance": [
         "Forward path runs fully on GPU in normal operation.",
         "Parity tests remain green."
+      ]
+    },
+    {
+      "id": "t31e-varlen-batch",
+      "priority": 10,
+      "status": "in_progress",
+      "title": "Variable-length batched prefill and attention",
+      "rationale": "Batched serving should avoid padded-token computation for mixed-length requests.",
+      "scope": [
+        "Add batch metadata with valid lengths and packed offsets.",
+        "Add length buckets before fully packed variable-length attention.",
+        "Add M40-safe variable-length attention kernels without Tensor Core assumptions.",
+        "Benchmark padded, bucketed, and packed variants."
+      ],
+      "acceptance": [
+        "Batch metadata exposes valid lengths, packed offsets, and deterministic length buckets.",
+        "Batched last-token GQA attention supports mixed KV lengths for decode.",
+        "Mixed-length batches avoid full max_seq padding work where possible.",
+        "Prefill and attention operate over valid regions end-to-end.",
+        "Benchmarks cover skewed, 0.6*max_seq average, and near-uniform length distributions."
       ]
     }
   ]
@@ -375,7 +431,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t30-server",
       "priority": 5,
-      "status": "todo",
+      "status": "in_progress",
       "title": "HTTP server wired to real decode path",
       "rationale": "Server interface is required for real-world usage.",
       "scope": [

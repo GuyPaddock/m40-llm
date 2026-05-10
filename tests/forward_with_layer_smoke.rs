@@ -191,12 +191,21 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     unsafe {
         lm.forward_one_token_with_layer(d_x as *const c_void, 0, 0, 1, d_out)?;
     }
+    let bytes_after_first = m40_llm::cuda::CudaContext::total_device_bytes();
+    unsafe {
+        lm.forward_one_token_with_layer(d_out as *const c_void, 0, 0, 2, d_x)?;
+    }
+    let bytes_after_second = m40_llm::cuda::CudaContext::total_device_bytes();
+    assert_eq!(
+        bytes_after_second, bytes_after_first,
+        "forward workspace should be reused for identical dimensions"
+    );
 
     // Read back and assert finiteness
     let mut out_host = vec![0u8; d_model * 4];
     unsafe {
         lm.cuda
-            .memcpy_d2h(out_host.as_mut_ptr() as *mut c_void, d_out, d_model * 4)?;
+            .memcpy_d2h(out_host.as_mut_ptr() as *mut c_void, d_x, d_model * 4)?;
     }
     let out_vals: Vec<f32> = out_host
         .chunks_exact(4)

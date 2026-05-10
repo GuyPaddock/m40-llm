@@ -3,13 +3,15 @@
 use anyhow::Result;
 use clap::Parser;
 use m40_llm::cli::{Cli, Commands};
+use m40_llm::generate::{generate_text, GenerateOptions};
 #[cfg(not(feature = "server"))]
 #[allow(unused_imports)]
 use m40_llm::{gguf, infer, model};
+use std::fs;
 #[cfg(feature = "server")]
 use {
     m40_llm::{gguf, infer, model, server},
-    std::{fs, sync::Arc},
+    std::sync::Arc,
     tokio::net::TcpListener,
 };
 
@@ -44,6 +46,53 @@ async fn main() -> Result<()> {
                     );
                 }
             }
+        }
+        Commands::Generate {
+            model,
+            prompt,
+            max_tokens,
+            temperature,
+            top_k,
+            top_p,
+            seed,
+            device_id,
+            require_sm52,
+        } => {
+            let local = model::resolve_model_arg(&model)?;
+            let gguf_bytes = fs::read(&local.path)?;
+            let gguf_model = gguf::load_gguf(&local.path)?;
+            let mut loaded = infer::LoadedModel::from_gguf(gguf_model, gguf_bytes, device_id)?;
+
+            let props = loaded.cuda.current_device_props()?;
+            if require_sm52 && !(props.major == 5 && props.minor == 2) {
+                anyhow::bail!(
+                    "require_sm52 set but active device is '{}' sm_{}{} (id {})",
+                    props.name,
+                    props.major,
+                    props.minor,
+                    props.device_id
+                );
+            }
+            eprintln!(
+                "[cuda] device: '{}' (id {}), sm_{}{}",
+                props.name, props.device_id, props.major, props.minor
+            );
+
+            let max_len = loaded.model_config.context_length as usize;
+            loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
+            let generated = generate_text(
+                &loaded,
+                GenerateOptions {
+                    prompt,
+                    max_tokens: Some(max_tokens),
+                    temperature,
+                    top_k,
+                    top_p,
+                    seed,
+                    log_prefix: "cli",
+                },
+            )?;
+            print!("{}", generated.output);
         }
         Commands::Run {
             model,
@@ -103,9 +152,9 @@ async fn main() -> Result<()> {
                     );
                 }
 
-                // Allocate KV cache upfront using config; default to context_length when known
+                // Allocate one KV slot per layer for the single-request full-stack decode path.
                 let max_len = loaded.model_config.context_length as usize;
-                let _ = loaded.allocate_kv_cache(max_len.try_into().unwrap(), 1);
+                loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
 
                 let state = Arc::new(server::AppState { model: loaded });
                 let router = server::app_router(state);

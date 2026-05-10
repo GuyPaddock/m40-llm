@@ -64,6 +64,9 @@ where
         let next = sampler.sample(&logits)? as u32;
         ids.push(next);
         generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            eprintln!("[decode] sampled token id={next}");
+        }
         if let Some(eos) = stopping.eos_id {
             if next == eos {
                 break;

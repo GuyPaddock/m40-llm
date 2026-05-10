@@ -15,10 +15,12 @@ use tokio_stream::wrappers::ReceiverStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
+use crate::generate::{
+    decode_generated_text, generate_text, sampler_from_options, sanitize_output, GenerateOptions,
+};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::Tokenizer;
 use anyhow::Result;
 use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
@@ -56,10 +58,6 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
-fn sanitize_output(text: &str) -> String {
-    text.chars().filter(|c| *c != '\0').collect()
-}
-
 fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     let safe_chunk = GenerateStreamChunk {
         output: sanitize_output(&chunk.output),
@@ -73,30 +71,16 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     Ok(Bytes::from(buf))
 }
 
-fn sampler_from_request(req: &GenerateRequest) -> Result<Sampler> {
-    let mut cfg = SamplerConfig::default();
-    if let Some(t) = req.temperature {
-        if t <= 0.0 {
-            anyhow::bail!("temperature must be > 0");
-        }
-        cfg.temperature = t;
+fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> GenerateOptions {
+    GenerateOptions {
+        prompt: req.prompt.clone(),
+        max_tokens: req.max_tokens,
+        temperature: req.temperature,
+        top_k: req.top_k,
+        top_p: req.top_p,
+        seed: req.seed,
+        log_prefix,
     }
-    if let Some(k) = req.top_k {
-        if k == 0 {
-            anyhow::bail!("top_k must be > 0 when provided");
-        }
-        cfg.top_k = Some(k);
-    }
-    if let Some(p) = req.top_p {
-        if !(0.0 < p && p <= 1.0) {
-            anyhow::bail!("top_p must be in (0, 1]");
-        }
-        cfg.top_p = Some(p);
-    }
-    if let Some(seed) = req.seed {
-        cfg.seed = seed;
-    }
-    Ok(Sampler::new(cfg))
 }
 
 fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
@@ -106,6 +90,17 @@ fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
             error: err.to_string(),
         }),
     )
+}
+
+#[cfg(feature = "cuda")]
+fn log_top_logits(logits: &[f32], k: usize) {
+    if std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1") {
+        return;
+    }
+    let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
+    top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+    top.truncate(k);
+    eprintln!("[server] top_logits={top:?}");
 }
 
 #[cfg(test)]
@@ -144,7 +139,8 @@ mod tests {
             seed: Some(7),
             ..Default::default()
         };
-        let mut sampler = sampler_from_request(&req).expect("build sampler");
+        let mut sampler =
+            sampler_from_options(&options_from_request(&req, "test")).expect("build sampler");
         let logits = [0.2f32, 0.8, 0.1];
         // top_k=1 should force the max logit (index 1)
         for _ in 0..5 {
@@ -160,6 +156,54 @@ mod tests {
             ..Default::default()
         };
         assert!(sampler_from_request(&req).is_err());
+    }
+
+    #[test]
+    fn decode_generated_text_excludes_prompt_tokens() {
+        let tokenizer = Tokenizer::byte_level();
+        let prompt = "Hello";
+        let prompt_ids = tokenizer
+            .encode_with_specials(prompt, true, false)
+            .expect("encode prompt");
+        let mut ids = prompt_ids.clone();
+        ids.extend("ijk".bytes().map(u32::from));
+
+        let generated =
+            decode_generated_text(&tokenizer, &ids, prompt_ids.len()).expect("decode generated");
+
+        assert_eq!(generated, "ijk");
+    }
+
+    #[test]
+    fn decode_generated_text_counts_tokens_not_characters() {
+        use crate::gguf::{GgufScalar, GgufValue};
+        use std::collections::HashMap;
+
+        let mut meta = HashMap::new();
+        meta.insert(
+            "tokenizer.ggml.model".to_string(),
+            GgufValue::Scalar(GgufScalar::Str("spm".to_string())),
+        );
+        meta.insert(
+            "tokenizer.ggml.tokens".to_string(),
+            GgufValue::Array(vec![
+                GgufScalar::Str("<s>".to_string()),
+                GgufScalar::Str("▁Hello".to_string()),
+                GgufScalar::Str("ijk".to_string()),
+            ]),
+        );
+        meta.insert(
+            "tokenizer.ggml.bos_token_id".to_string(),
+            GgufValue::Scalar(GgufScalar::U32(0)),
+        );
+        let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+        let prompt_ids = vec![0, 1];
+        let ids = vec![0, 1, 2];
+
+        let generated =
+            decode_generated_text(&tokenizer, &ids, prompt_ids.len()).expect("decode generated");
+
+        assert_eq!(generated, "ijk");
     }
 }
 
@@ -201,6 +245,23 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if !req.stream {
+        let generated =
+            generate_text(&state.model, options_from_request(&req, "server")).map_err(|e| {
+                eprintln!("[server] decode_loop failed: {e}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: e.to_string(),
+                    }),
+                )
+            })?;
+        return Ok(Json(GenerateResponse {
+            output: generated.output,
+        })
+        .into_response());
+    }
+
     #[cfg(feature = "cuda")]
     eprintln!(
         "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
@@ -220,11 +281,18 @@ async fn generate(
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
-    let sampler = sampler_from_request(&req).map_err(internal_error)?;
+    let sampler =
+        sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
 
     if state.model.kv_cache.is_some() {
         state.model.reset_kv_cache().map_err(internal_error)?;
     }
+
+    #[cfg(feature = "cuda")]
+    let (full_decode_d_model, full_decode_hidden_dim) = state
+        .model
+        .validate_full_layer_decode()
+        .map_err(|e| internal_error(e.context("CUDA full-layer decode is unavailable")))?;
 
     // logits_fn that uses the minimal forward path to produce next-token logits
     let logits_fn = {
@@ -249,42 +317,58 @@ async fn generate(
                     CudaContext::total_device_bytes()
                 );
             }
-            // Determine d_model and whether we can run the minimal forward layer path
+            // Determine d_model and whether we can run the full transformer stack.
             // Try to infer d_model from embeddings or lm_head as fallback
+            #[cfg(not(feature = "cuda"))]
             let embed_names = [
                 "tok_embeddings.weight",
                 "token_embd.weight",
                 "token_embd",
                 "token_embeddings.weight",
             ];
+            #[cfg(not(feature = "cuda"))]
             let tok_opt = embed_names
                 .iter()
                 .find_map(|n| model.device_tensors.get(*n));
+            #[cfg(not(feature = "cuda"))]
             if tok_opt.is_none() {
                 eprintln!(
                     "[server] warning: no known embedding tensor found; will try lm_head only"
                 );
             }
+            #[cfg(not(feature = "cuda"))]
             let d_model_from_tok =
                 tok_opt.and_then(|t| t.shape.get(1).copied()).unwrap_or(0) as usize;
+            #[cfg(not(feature = "cuda"))]
             if let Some(t) = tok_opt {
                 eprintln!("[server] embeddings shape: {:?}", t.shape);
             }
 
-            let (d, can_forward) = match model.map_standard_layer(0) {
-                Ok(w) => {
-                    let ok = model.kv_cache.is_some();
+            #[cfg(feature = "cuda")]
+            let (d, can_forward) = {
+                eprintln!(
+                    "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                    model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
+                );
+                (full_decode_d_model, true)
+            };
+            #[cfg(not(feature = "cuda"))]
+            let (d, can_forward) = match model.validate_standard_layers() {
+                Ok((d_model, hidden_dim)) => {
+                    let ok = model.kv_cache_can_address_layers();
                     if !ok {
-                        eprintln!("[server] KV cache not available; using embeddings-only logits fallback");
+                        eprintln!(
+                            "[server] KV cache cannot address all layers; using embeddings-only logits fallback"
+                        );
                     }
                     eprintln!(
-                        "[server] mapped standard layer d_model={} hidden_dim={}",
-                        w.d_model, w.hidden_dim
+                        "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                        model.model_config.block_count, d_model, hidden_dim
                     );
-                    (w.d_model, ok)
+                    (d_model, ok)
                 }
                 Err(e) => {
-                    eprintln!("[server] map_standard_layer failed; falling back to embeddings/logits path: {e}");
+                    eprintln!("[server] validate_standard_layers failed; falling back to embeddings/logits path: {e}");
                     let d_try = if d_model_from_tok > 0 {
                         d_model_from_tok
                     } else {
@@ -353,13 +437,16 @@ async fn generate(
                                 .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
                             let result = (|| -> anyhow::Result<Vec<f32>> {
                                 unsafe {
-                                    model.forward_one_token_with_layer(
+                                    let layers = model.forward_one_token_all_layers(
                                         d_x as *const _,
-                                        0,
-                                        0,
                                         (token_idx + 1) as u32,
                                         d_out,
                                     )?;
+                                    if token_idx == start {
+                                        eprintln!(
+                                            "[server] full-layer forward enabled layers={layers}"
+                                        );
+                                    }
                                     model.logits_from_hidden(d_out as *const _)
                                 }
                             })();
@@ -377,7 +464,9 @@ async fn generate(
                         let _ = model.cuda.device_free(d_x);
                     }
 
-                    logits = Some(token_logits?);
+                    let token_logits = token_logits?;
+                    log_top_logits(&token_logits, 8);
+                    logits = Some(token_logits);
                 }
                 if can_forward {
                     processed_len = ids.len();
@@ -523,8 +612,15 @@ async fn generate(
                 };
                 ids.push(next);
                 generated.push(next);
+                #[cfg(feature = "cuda")]
+                if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+                    let text = tokenizer_stream
+                        .decode_ignoring_specials(&[next])
+                        .unwrap_or_else(|_| "<decode-error>".to_string());
+                    eprintln!("[server] sampled token id={next} text={text:?}");
+                }
 
-                match tokenizer_stream.decode_ignoring_specials(&ids) {
+                match tokenizer_stream.decode_ignoring_specials(&generated) {
                     Ok(text) => {
                         let _ = send_chunk(GenerateStreamChunk {
                             output: sanitize_output(&text),
@@ -552,7 +648,7 @@ async fn generate(
                 }
             }
 
-            let final_text = match tokenizer_stream.decode_ignoring_specials(&ids) {
+            let final_text = match tokenizer_stream.decode_ignoring_specials(&generated) {
                 Ok(t) => t,
                 Err(e) => {
                     let _ = tx
@@ -584,6 +680,19 @@ async fn generate(
         return Ok(response);
     }
 
+    let prompt_token_len = match tokenizer.encode_with_specials(&req.prompt, add_bos, false) {
+        Ok(ids) => ids.len(),
+        Err(e) => {
+            eprintln!("[server] prompt encode failed: {e}");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("encode failed: {e}"),
+                }),
+            ));
+        }
+    };
+
     let ids = match decode_loop_with(
         &tokenizer,
         &req.prompt,
@@ -603,7 +712,7 @@ async fn generate(
             ));
         }
     };
-    let text = match tokenizer.decode_ignoring_specials(&ids) {
+    let text = match decode_generated_text(&tokenizer, &ids, prompt_token_len) {
         Ok(t) => sanitize_output(&t),
         Err(e) => {
             #[cfg(feature = "cuda")]

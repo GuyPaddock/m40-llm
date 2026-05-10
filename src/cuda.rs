@@ -7,6 +7,8 @@ use anyhow::Result;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
+#[cfg(feature = "cuda")]
+use std::sync::Once;
 
 #[allow(unused_imports)]
 use std::collections::HashMap;
@@ -86,6 +88,32 @@ mod ffi {
             K: i32,
         ) -> i32;
 
+        pub fn m40llm_gemm_f32xf16_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xf32_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f32_colmajor_nt: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
+            ctx: *mut M40llmCudaContext,
+            d_B_f16: *const c_void,
+            d_B_f32_colmajor_nt: *mut c_void,
+            N: i32,
+            K: i32,
+        ) -> i32;
+
         pub fn m40llm_gemm_f16xf16_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f16: *const c_void,
@@ -104,6 +132,16 @@ mod ffi {
             dim: u32,
             eps: f32,
         ) -> i32;
+        pub fn m40llm_rms_norm_f32_weighted(
+            ctx: *mut M40llmCudaContext,
+            d_in: *const c_void,
+            d_weight: *const c_void,
+            d_out: *mut c_void,
+            rows: u32,
+            dim: u32,
+            eps: f32,
+            weight_dtype: u32,
+        ) -> i32;
 
         pub fn m40llm_rope_f32(
             ctx: *mut M40llmCudaContext,
@@ -115,6 +153,30 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+        ) -> i32;
+        pub fn m40llm_rope_f32_inplace(
+            ctx: *mut M40llmCudaContext,
+            d_x: *mut c_void,
+            rows: u32,
+            num_heads: u32,
+            head_dim: u32,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
+        pub fn m40llm_residual_add_f32(
+            ctx: *mut M40llmCudaContext,
+            d_a_f32: *const c_void,
+            d_b_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
+        ) -> i32;
+        pub fn m40llm_swiglu_f32(
+            ctx: *mut M40llmCudaContext,
+            d_gate_f32: *const c_void,
+            d_up_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: usize,
         ) -> i32;
 
         pub fn m40llm_kvcache_create(
@@ -154,6 +216,25 @@ mod ffi {
             seq_id: u32,
             d_q_f32: *const c_void,
             seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_batched(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
 
@@ -206,6 +287,18 @@ pub(crate) static TOTAL_DEVICE_BYTES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "cuda")]
 fn alloc_log_enabled() -> bool {
     std::env::var("M40LLM_ALLOC_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn gemm_log_enabled() -> bool {
+    std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn log_gemm_backend_once(once: &'static Once, name: &str, backend: &str) {
+    if gemm_log_enabled() {
+        once.call_once(|| eprintln!("[cuda] {name} backend: {backend}"));
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -643,6 +736,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf16_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS first; CUDA kernel fallback if cuBLAS rejects this mixed-type call"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xf16_f32(
                 self.inner.raw.as_ptr(),
@@ -666,6 +769,132 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// `d_a_f32`, `d_b_f16`, and `d_c_f32` must be valid device pointers on this context's device.
+    /// `d_b_f16` must be a GGUF F16 tensor with logical shape [k, n], where dimension 0 is fastest.
+    pub unsafe fn gemm_f32xf16_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf16_gguf_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS first for GGUF dimension-0-fastest weights; CUDA kernel fallback"
+                } else {
+                    "CUDA GGUF-layout kernel fallback"
+                },
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf16_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xf16_gguf_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_f32_colmajor_nt` must contain the transpose of a logical [k,n] GGUF
+    /// weight, stored as column-major [n,k]. This computes row-major C = A * B.
+    pub unsafe fn gemm_f32xf32_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf32_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS sgemm materialized-f32"
+                } else {
+                    "unavailable without cuBLAS"
+                },
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf32_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f32_colmajor_nt,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xf32_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_f16` must be a GGUF F16 tensor with logical shape [k,n], where
+    /// dimension 0 is fastest. Output must have room for n*k f32 values.
+    pub unsafe fn materialize_gguf_f16_to_f32_colmajor_nt(
+        &self,
+        d_b_f16: *const c_void,
+        d_b_f32_colmajor_nt: *mut c_void,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
+                self.inner.raw.as_ptr(),
+                d_b_f16,
+                d_b_f32_colmajor_nt,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_materialize_gguf_f16_to_f32_colmajor_nt failed: {rc}"
+                ));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_b_f16, d_b_f32_colmajor_nt, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// A f16 × B f16 → C f32 row-major GEMM. Device pointers must be valid on this context's device.
     pub unsafe fn gemm_f16xf16_f32(
         &self,
@@ -678,6 +907,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f16xf16_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f16xf16_f32(
                 self.inner.raw.as_ptr(),
@@ -714,6 +953,16 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f16_storage_f32_compute",
+                if cfg!(have_cublas) {
+                    "cuBLAS"
+                } else {
+                    "CUDA kernel fallback"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
             let rc = unsafe {
                 ffi::m40llm_gemm_f16_storage_f32_compute(
@@ -765,6 +1014,44 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// `d_in`, `d_weight`, and `d_out` must be valid device pointers. `d_weight`
+    /// must contain `dim` elements, with dtype code 0=F16 and 1=F32.
+    pub unsafe fn rms_norm_f32_weighted(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        d_out: *mut c_void,
+        rows: u32,
+        dim: u32,
+        eps: f32,
+        weight_dtype: u32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rms_norm_f32_weighted(
+                self.inner.raw.as_ptr(),
+                d_in,
+                d_weight,
+                d_out,
+                rows,
+                dim,
+                eps,
+                weight_dtype,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rms_norm_f32_weighted failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, rows, dim, eps, weight_dtype);
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// Applies in-place RoPE rotation to Q/K shaped [rows, num_heads * head_dim] (row-major f32).
     pub unsafe fn rope_f32(
         &self,
@@ -801,6 +1088,95 @@ impl CudaContext {
             let _ = (
                 d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
             );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Applies in-place RoPE rotation to a tensor shaped [rows, num_heads * head_dim] (row-major f32).
+    pub unsafe fn rope_f32_inplace(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rope_f32_inplace(
+                self.inner.raw.as_ptr(),
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_rope_f32_inplace failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_a`, `d_b`, and `d_out` must be valid device pointers to `n` f32 elements.
+    pub unsafe fn residual_add_f32(
+        &self,
+        d_a: *const c_void,
+        d_b: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_residual_add_f32(self.inner.raw.as_ptr(), d_a, d_b, d_out, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_residual_add_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a, d_b, d_out, n);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_gate`, `d_up`, and `d_out` must be valid device pointers to `n` f32 elements.
+    pub unsafe fn swiglu_f32(
+        &self,
+        d_gate: *const c_void,
+        d_up: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_swiglu_f32(self.inner.raw.as_ptr(), d_gate, d_up, d_out, n);
+            if rc != 0 {
+                return Err(anyhow!("m40llm_swiglu_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_gate, d_up, d_out, n);
             Ok(())
         }
     }
@@ -903,6 +1279,9 @@ impl KVCache {
     pub fn head_dim(&self) -> u32 {
         self.inner.head_dim
     }
+    pub fn max_batch_size(&self) -> u32 {
+        self.inner.max_batch_size
+    }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
         #[cfg(feature = "cuda")]
@@ -941,7 +1320,7 @@ struct KVCacheInner {
     #[allow(dead_code)]
     //   index(seq, token, head, dim) = base + head * head_dim + dim
     max_seq_len: u32,
-    _max_batch_size: u32,
+    max_batch_size: u32,
     num_heads: u32,
     head_dim: u32,
     #[cfg(feature = "cuda")]
@@ -973,7 +1352,7 @@ impl KVCache {
             Ok(KVCache {
                 inner: Arc::new(KVCacheInner {
                     max_seq_len,
-                    _max_batch_size: max_batch_size,
+                    max_batch_size,
                     num_heads,
                     head_dim,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
@@ -995,7 +1374,7 @@ impl KVCache {
             Ok(KVCache {
                 inner: Arc::new(KVCacheInner {
                     max_seq_len,
-                    _max_batch_size: max_batch_size,
+                    max_batch_size,
                     num_heads,
                     head_dim,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
@@ -1137,6 +1516,70 @@ impl KVCache {
         }
         Ok(())
     }
+
+    /// # Safety
+    /// `d_q_f32` and `d_out_f32` must be valid device pointers. `q_heads` must be a multiple of
+    /// this cache's KV head count.
+    pub unsafe fn attention_last_token_f32_gqa(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_attention_last_token_f32_gqa failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    /// # Safety
+    /// `d_seq_ids` and `d_seq_lens` must contain `batch_size` u32 entries.
+    /// `d_q_f32` and `d_out_f32` are packed [batch_size, q_heads, head_dim].
+    pub unsafe fn attention_last_token_f32_gqa_batched(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_batched(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_batched failed: {rc}"
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(not(feature = "cuda"))]
@@ -1226,6 +1669,25 @@ impl KVCache {
         let out_slice = unsafe { std::slice::from_raw_parts_mut(d_out_f32 as *mut f32, elems) };
         out_slice.copy_from_slice(&out);
         Ok(())
+    }
+
+    pub fn attention_last_token_f32_gqa(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if q_heads != self.inner.num_heads {
+            anyhow::bail!(
+                "host GQA attention is not implemented: q_heads={} kv_heads={}",
+                q_heads,
+                self.inner.num_heads
+            );
+        }
+        self.attention_last_token_f32(ctx, seq_id, d_q_f32, seq_len, d_out_f32)
     }
 }
 

@@ -58,6 +58,44 @@ fn sentencepiece_roundtrip_from_metadata() {
 }
 
 #[test]
+fn sentencepiece_single_token_may_decode_to_multiple_characters() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("spm".to_string())),
+    );
+    let tokens = vec!["▁Hello", "ijk"];
+    meta.insert("tokenizer.ggml.tokens".to_string(), make_array(&tokens));
+
+    let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+    let text = tokenizer.decode(&[1]).expect("decode");
+
+    assert_eq!(text, "ijk");
+}
+
+#[test]
+fn sentencepiece_encode_uses_longest_vocab_pieces() {
+    let mut meta: HashMap<String, GgufValue> = HashMap::new();
+    meta.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    let tokens = vec!["<unk>", "<s>", "</s>", "H", "e", "l", "o", "▁Hello", ","];
+    meta.insert("tokenizer.ggml.tokens".to_string(), make_array(&tokens));
+    meta.insert(
+        "tokenizer.ggml.bos_token_id".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+
+    let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
+    let ids = tokenizer
+        .encode_with_specials("Hello,", true, false)
+        .expect("encode");
+
+    assert_eq!(ids, vec![1u32, 7u32, 8u32]);
+}
+
+#[test]
 fn bpe_byte_fallback_replaces_invalid_byte_with_qmark() {
     let mut meta: HashMap<String, GgufValue> = HashMap::new();
     meta.insert(

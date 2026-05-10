@@ -27,6 +27,16 @@ fn detect_cublas_paths() -> CublasPaths {
         prefixes.push(PathBuf::from(mamba_root));
     }
 
+    let opt_cuda = PathBuf::from("/opt/cuda");
+    if opt_cuda.exists() {
+        prefixes.push(opt_cuda);
+    }
+
+    let usr_local_cuda = PathBuf::from("/usr/local/cuda");
+    if usr_local_cuda.exists() {
+        prefixes.push(usr_local_cuda);
+    }
+
     let default_mamba = PathBuf::from("/root/.local/share/mamba");
     if default_mamba.exists() {
         prefixes.push(default_mamba);
@@ -43,12 +53,10 @@ fn detect_cublas_paths() -> CublasPaths {
         lib_paths.push(prefix.join("lib"));
     }
 
-    include_paths.push(PathBuf::from("/usr/local/cuda/include"));
     include_paths.push(PathBuf::from("/usr/include"));
     include_paths.sort();
     include_paths.dedup();
 
-    lib_paths.push(PathBuf::from("/usr/local/cuda/lib64"));
     lib_paths.push(PathBuf::from("/usr/lib/x86_64-linux-gnu"));
     lib_paths.push(PathBuf::from("/usr/lib64"));
     lib_paths.sort();
@@ -119,6 +127,7 @@ fn main() {
 
     // Rebuild triggers
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_CUDA");
+    println!("cargo:rerun-if-env-changed=M40LLM_ENABLE_CUBLAS");
     println!("cargo:rerun-if-env-changed=M40LLM_SYSROOT");
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/stub.c");
