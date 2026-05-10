@@ -44,6 +44,14 @@ pub struct BucketedBatch {
     pub sequence_indices: Vec<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BucketStats {
+    pub max_query_len: u32,
+    pub max_kv_len: u32,
+    pub total_query_tokens: u32,
+    pub total_kv_tokens: u32,
+}
+
 impl BatchMetadata {
     pub fn new(sequences: Vec<BatchSequence>) -> Result<Self> {
         if sequences.is_empty() {
@@ -180,6 +188,33 @@ impl BatchMetadata {
         }
         grouped.sort_by_key(|g| g.bucket);
         grouped
+    }
+
+    pub fn bucket_stats(&self, bucket: &BucketedBatch) -> BucketStats {
+        let mut stats = BucketStats {
+            max_query_len: 0,
+            max_kv_len: 0,
+            total_query_tokens: 0,
+            total_kv_tokens: 0,
+        };
+        for &idx in &bucket.sequence_indices {
+            let seq = self.sequences[idx];
+            stats.max_query_len = stats.max_query_len.max(seq.query_len);
+            stats.max_kv_len = stats.max_kv_len.max(seq.kv_len);
+            stats.total_query_tokens = stats.total_query_tokens.saturating_add(seq.query_len);
+            stats.total_kv_tokens = stats.total_kv_tokens.saturating_add(seq.kv_len);
+        }
+        stats
+    }
+
+    pub fn bucket_sequence_indices(&self, bucket: LengthBucket) -> Vec<usize> {
+        self.sequences
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, seq)| {
+                (LengthBucket::for_len(seq.kv_len.max(seq.query_len)) == bucket).then_some(idx)
+            })
+            .collect()
     }
 }
 

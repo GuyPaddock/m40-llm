@@ -14,5 +14,7 @@ mod types;
 #[cfg(feature = "cuda")]
 mod workspace;
 
-pub use batch::{BatchMetadata, BatchSequence, BucketedBatch, LengthBucket, PackedSequenceOffsets};
+pub use batch::{
+    BatchMetadata, BatchSequence, BucketStats, BucketedBatch, LengthBucket, PackedSequenceOffsets,
+};
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};
