@@ -8,6 +8,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(all(feature = "cuda", nvcc))]
 use m40_llm::cuda::KVCache;
 #[cfg(all(feature = "cuda", nvcc))]
+use m40_llm::infer::{BatchMetadata, BatchSequence};
+#[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
 #[cfg(all(feature = "cuda", nvcc))]
@@ -240,9 +242,138 @@ fn bench_attention_last_token_gqa_batched_varlen(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attention_prefill_f32_gqa_varlen");
+
+    #[cfg(all(feature = "cuda", nvcc))]
+    {
+        let ctx = cuda_env::ctx_m40().expect("cuda context");
+        cuda_env::require_sm52(&ctx).expect("sm_52 device");
+
+        let q_heads = 32u32;
+        let kv_heads = 4u32;
+        let head_dim = 64u32;
+        let q_dim = (q_heads * head_dim) as usize;
+        let kv_dim = (kv_heads * head_dim) as usize;
+        let distributions: &[(&str, &[(u32, u32)])] = &[
+            (
+                "avg_0p6_max",
+                &[(384, 384), (512, 512), (640, 640), (768, 768)],
+            ),
+            ("skewed", &[(16, 16), (64, 64), (256, 256), (1024, 1024)]),
+            (
+                "near_uniform",
+                &[(896, 896), (960, 960), (1000, 1000), (1024, 1024)],
+            ),
+            (
+                "prefix_query",
+                &[(16, 512), (32, 640), (64, 768), (128, 1024)],
+            ),
+        ];
+
+        for (name, lens) in distributions {
+            let sequences: Vec<BatchSequence> = lens
+                .iter()
+                .map(|&(query_len, kv_len)| BatchSequence {
+                    seq_len: kv_len,
+                    query_len,
+                    kv_len,
+                })
+                .collect();
+            let meta = BatchMetadata::new(sequences).expect("batch metadata");
+            let q_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.query_len).collect();
+            let kv_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.kv_len).collect();
+            let q: Vec<f32> = (0..meta.total_q_tokens() as usize * q_dim)
+                .map(|i| ((i * 17 % 251) as f32) * 0.0011 - 0.13)
+                .collect();
+            let k: Vec<f32> = (0..meta.total_kv_tokens() as usize * kv_dim)
+                .map(|i| ((i * 23 % 263) as f32) * 0.0009 - 0.09)
+                .collect();
+            let v: Vec<f32> = (0..meta.total_kv_tokens() as usize * kv_dim)
+                .map(|i| ((i * 29 % 269) as f32) * 0.0013 - 0.17)
+                .collect();
+            let bytes_q = q.len() * std::mem::size_of::<f32>();
+            let bytes_kv = k.len() * std::mem::size_of::<f32>();
+            let bytes_out = bytes_q;
+            let bytes_offsets = meta.sequences().len() * std::mem::size_of::<u32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_k = ctx.device_malloc(bytes_kv).expect("d_k");
+            let d_v = ctx.device_malloc(bytes_kv).expect("d_v");
+            let d_q_offsets = ctx.device_malloc(bytes_offsets).expect("d_q_offsets");
+            let d_kv_offsets = ctx.device_malloc(bytes_offsets).expect("d_kv_offsets");
+            let d_q_lens = ctx.device_malloc(bytes_offsets).expect("d_q_lens");
+            let d_kv_lens = ctx.device_malloc(bytes_offsets).expect("d_kv_lens");
+            let d_out = ctx.device_malloc(bytes_out).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+                ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes_kv)
+                    .expect("copy k");
+                ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes_kv)
+                    .expect("copy v");
+                ctx.memcpy_h2d(
+                    d_q_offsets,
+                    meta.q_offsets().as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy q offsets");
+                ctx.memcpy_h2d(
+                    d_kv_offsets,
+                    meta.kv_offsets().as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy kv offsets");
+                ctx.memcpy_h2d(d_q_lens, q_lens.as_ptr() as *const c_void, bytes_offsets)
+                    .expect("copy q lens");
+                ctx.memcpy_h2d(d_kv_lens, kv_lens.as_ptr() as *const c_void, bytes_offsets)
+                    .expect("copy kv lens");
+            }
+
+            group.throughput(Throughput::Elements(meta.total_attention_cells()));
+            group.bench_function(format!("{name}_packed_varlen"), |b| {
+                b.iter(|| unsafe {
+                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                        d_q as *const c_void,
+                        d_k as *const c_void,
+                        d_v as *const c_void,
+                        d_q_offsets as *const u32,
+                        d_kv_offsets as *const u32,
+                        d_q_lens as *const u32,
+                        d_kv_lens as *const u32,
+                        meta.sequences().len() as u32,
+                        q_heads,
+                        kv_heads,
+                        d_out,
+                    )
+                    .expect("prefill attention")
+                })
+            });
+
+            unsafe {
+                ctx.device_free(d_q).expect("free d_q");
+                ctx.device_free(d_k).expect("free d_k");
+                ctx.device_free(d_v).expect("free d_v");
+                ctx.device_free(d_q_offsets).expect("free d_q_offsets");
+                ctx.device_free(d_kv_offsets).expect("free d_kv_offsets");
+                ctx.device_free(d_q_lens).expect("free d_q_lens");
+                ctx.device_free(d_kv_lens).expect("free d_kv_lens");
+                ctx.device_free(d_out).expect("free d_out");
+            }
+        }
+    }
+
+    #[cfg(not(all(feature = "cuda", nvcc)))]
+    {
+        group.bench_function("noop", |b| b.iter(|| {}));
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_attention_last_token_gqa,
-    bench_attention_last_token_gqa_batched_varlen
+    bench_attention_last_token_gqa_batched_varlen,
+    bench_attention_prefill_gqa_varlen
 );
 criterion_main!(benches);
