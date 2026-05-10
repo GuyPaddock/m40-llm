@@ -283,6 +283,8 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             let meta = BatchMetadata::new(sequences).expect("batch metadata");
             let q_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.query_len).collect();
             let kv_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.kv_len).collect();
+            let max_q_len = q_lens.iter().copied().max().expect("max q");
+            let max_kv_len = kv_lens.iter().copied().max().expect("max kv");
             let q: Vec<f32> = (0..meta.total_q_tokens() as usize * q_dim)
                 .map(|i| ((i * 17 % 251) as f32) * 0.0011 - 0.13)
                 .collect();
@@ -304,6 +306,38 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             let d_q_lens = ctx.device_malloc(bytes_offsets).expect("d_q_lens");
             let d_kv_lens = ctx.device_malloc(bytes_offsets).expect("d_kv_lens");
             let d_out = ctx.device_malloc(bytes_out).expect("d_out");
+
+            let batch_size = meta.sequences().len();
+            let padded_q: Vec<f32> = (0..batch_size * max_q_len as usize * q_dim)
+                .map(|i| ((i * 17 % 251) as f32) * 0.0011 - 0.13)
+                .collect();
+            let padded_k: Vec<f32> = (0..batch_size * max_kv_len as usize * kv_dim)
+                .map(|i| ((i * 23 % 263) as f32) * 0.0009 - 0.09)
+                .collect();
+            let padded_v: Vec<f32> = (0..batch_size * max_kv_len as usize * kv_dim)
+                .map(|i| ((i * 29 % 269) as f32) * 0.0013 - 0.17)
+                .collect();
+            let padded_q_offsets: Vec<u32> =
+                (0..batch_size).map(|idx| idx as u32 * max_q_len).collect();
+            let padded_kv_offsets: Vec<u32> =
+                (0..batch_size).map(|idx| idx as u32 * max_kv_len).collect();
+            let padded_q_lens = vec![max_q_len; batch_size];
+            let padded_kv_lens = vec![max_kv_len; batch_size];
+            let bytes_padded_q = padded_q.len() * std::mem::size_of::<f32>();
+            let bytes_padded_kv = padded_k.len() * std::mem::size_of::<f32>();
+            let bytes_padded_out = bytes_padded_q;
+            let d_padded_q = ctx.device_malloc(bytes_padded_q).expect("d_padded_q");
+            let d_padded_k = ctx.device_malloc(bytes_padded_kv).expect("d_padded_k");
+            let d_padded_v = ctx.device_malloc(bytes_padded_kv).expect("d_padded_v");
+            let d_padded_q_offsets = ctx
+                .device_malloc(bytes_offsets)
+                .expect("d_padded_q_offsets");
+            let d_padded_kv_offsets = ctx
+                .device_malloc(bytes_offsets)
+                .expect("d_padded_kv_offsets");
+            let d_padded_q_lens = ctx.device_malloc(bytes_offsets).expect("d_padded_q_lens");
+            let d_padded_kv_lens = ctx.device_malloc(bytes_offsets).expect("d_padded_kv_lens");
+            let d_padded_out = ctx.device_malloc(bytes_padded_out).expect("d_padded_out");
             unsafe {
                 ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
                     .expect("copy q");
@@ -327,7 +361,130 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                     .expect("copy q lens");
                 ctx.memcpy_h2d(d_kv_lens, kv_lens.as_ptr() as *const c_void, bytes_offsets)
                     .expect("copy kv lens");
+                ctx.memcpy_h2d(
+                    d_padded_q,
+                    padded_q.as_ptr() as *const c_void,
+                    bytes_padded_q,
+                )
+                .expect("copy padded q");
+                ctx.memcpy_h2d(
+                    d_padded_k,
+                    padded_k.as_ptr() as *const c_void,
+                    bytes_padded_kv,
+                )
+                .expect("copy padded k");
+                ctx.memcpy_h2d(
+                    d_padded_v,
+                    padded_v.as_ptr() as *const c_void,
+                    bytes_padded_kv,
+                )
+                .expect("copy padded v");
+                ctx.memcpy_h2d(
+                    d_padded_q_offsets,
+                    padded_q_offsets.as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy padded q offsets");
+                ctx.memcpy_h2d(
+                    d_padded_kv_offsets,
+                    padded_kv_offsets.as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy padded kv offsets");
+                ctx.memcpy_h2d(
+                    d_padded_q_lens,
+                    padded_q_lens.as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy padded q lens");
+                ctx.memcpy_h2d(
+                    d_padded_kv_lens,
+                    padded_kv_lens.as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy padded kv lens");
             }
+
+            struct BucketDispatch {
+                batch_size: u32,
+                d_q_offsets: *mut c_void,
+                d_kv_offsets: *mut c_void,
+                d_q_lens: *mut c_void,
+                d_kv_lens: *mut c_void,
+            }
+
+            let mut bucket_dispatches = Vec::new();
+            for bucket in meta.buckets() {
+                let q_offsets: Vec<u32> = bucket
+                    .sequence_indices
+                    .iter()
+                    .map(|&idx| meta.offsets()[idx].q_offset)
+                    .collect();
+                let kv_offsets: Vec<u32> = bucket
+                    .sequence_indices
+                    .iter()
+                    .map(|&idx| meta.offsets()[idx].kv_offset)
+                    .collect();
+                let q_lens: Vec<u32> = bucket
+                    .sequence_indices
+                    .iter()
+                    .map(|&idx| meta.sequences()[idx].query_len)
+                    .collect();
+                let kv_lens: Vec<u32> = bucket
+                    .sequence_indices
+                    .iter()
+                    .map(|&idx| meta.sequences()[idx].kv_len)
+                    .collect();
+                let bytes = q_offsets.len() * std::mem::size_of::<u32>();
+                let dispatch = BucketDispatch {
+                    batch_size: q_offsets.len() as u32,
+                    d_q_offsets: ctx.device_malloc(bytes).expect("bucket q offsets"),
+                    d_kv_offsets: ctx.device_malloc(bytes).expect("bucket kv offsets"),
+                    d_q_lens: ctx.device_malloc(bytes).expect("bucket q lens"),
+                    d_kv_lens: ctx.device_malloc(bytes).expect("bucket kv lens"),
+                };
+                unsafe {
+                    ctx.memcpy_h2d(
+                        dispatch.d_q_offsets,
+                        q_offsets.as_ptr() as *const c_void,
+                        bytes,
+                    )
+                    .expect("copy bucket q offsets");
+                    ctx.memcpy_h2d(
+                        dispatch.d_kv_offsets,
+                        kv_offsets.as_ptr() as *const c_void,
+                        bytes,
+                    )
+                    .expect("copy bucket kv offsets");
+                    ctx.memcpy_h2d(dispatch.d_q_lens, q_lens.as_ptr() as *const c_void, bytes)
+                        .expect("copy bucket q lens");
+                    ctx.memcpy_h2d(dispatch.d_kv_lens, kv_lens.as_ptr() as *const c_void, bytes)
+                        .expect("copy bucket kv lens");
+                }
+                bucket_dispatches.push(dispatch);
+            }
+
+            group.throughput(Throughput::Elements(
+                batch_size as u64 * max_q_len as u64 * max_kv_len as u64,
+            ));
+            group.bench_function(format!("{name}_padded_max"), |b| {
+                b.iter(|| unsafe {
+                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                        d_padded_q as *const c_void,
+                        d_padded_k as *const c_void,
+                        d_padded_v as *const c_void,
+                        d_padded_q_offsets as *const u32,
+                        d_padded_kv_offsets as *const u32,
+                        d_padded_q_lens as *const u32,
+                        d_padded_kv_lens as *const u32,
+                        batch_size as u32,
+                        q_heads,
+                        kv_heads,
+                        d_padded_out,
+                    )
+                    .expect("padded prefill attention")
+                })
+            });
 
             group.throughput(Throughput::Elements(meta.total_attention_cells()));
             group.bench_function(format!("{name}_packed_varlen"), |b| {
@@ -348,6 +505,26 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                     .expect("prefill attention")
                 })
             });
+            group.bench_function(format!("{name}_bucketed_varlen"), |b| {
+                b.iter(|| unsafe {
+                    for dispatch in &bucket_dispatches {
+                        ctx.attention_prefill_f32_gqa_varlen_head64(
+                            d_q as *const c_void,
+                            d_k as *const c_void,
+                            d_v as *const c_void,
+                            dispatch.d_q_offsets as *const u32,
+                            dispatch.d_kv_offsets as *const u32,
+                            dispatch.d_q_lens as *const u32,
+                            dispatch.d_kv_lens as *const u32,
+                            dispatch.batch_size,
+                            q_heads,
+                            kv_heads,
+                            d_out,
+                        )
+                        .expect("bucketed prefill attention");
+                    }
+                })
+            });
 
             unsafe {
                 ctx.device_free(d_q).expect("free d_q");
@@ -358,6 +535,28 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                 ctx.device_free(d_q_lens).expect("free d_q_lens");
                 ctx.device_free(d_kv_lens).expect("free d_kv_lens");
                 ctx.device_free(d_out).expect("free d_out");
+                ctx.device_free(d_padded_q).expect("free d_padded_q");
+                ctx.device_free(d_padded_k).expect("free d_padded_k");
+                ctx.device_free(d_padded_v).expect("free d_padded_v");
+                ctx.device_free(d_padded_q_offsets)
+                    .expect("free d_padded_q_offsets");
+                ctx.device_free(d_padded_kv_offsets)
+                    .expect("free d_padded_kv_offsets");
+                ctx.device_free(d_padded_q_lens)
+                    .expect("free d_padded_q_lens");
+                ctx.device_free(d_padded_kv_lens)
+                    .expect("free d_padded_kv_lens");
+                ctx.device_free(d_padded_out).expect("free d_padded_out");
+                for dispatch in bucket_dispatches {
+                    ctx.device_free(dispatch.d_q_offsets)
+                        .expect("free bucket q offsets");
+                    ctx.device_free(dispatch.d_kv_offsets)
+                        .expect("free bucket kv offsets");
+                    ctx.device_free(dispatch.d_q_lens)
+                        .expect("free bucket q lens");
+                    ctx.device_free(dispatch.d_kv_lens)
+                        .expect("free bucket kv lens");
+                }
             }
         }
     }
