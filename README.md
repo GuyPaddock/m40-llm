@@ -168,5 +168,11 @@ Current M40 validation target:
   per-sequence `seq_len` metadata for mixed-KV-length decode batches on
   `head_dim=64`.
 
+Variable-length batching is inspired by Zhang and Lu's SC25 research poster,
+"An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length
+Sequences" ([PDF](https://sc25.supercomputing.org/proceedings/posters/poster_files/post167s2-file2.pdf)).
+The M40 implementation adapts the high-level ideas to conventional CUDA FP32
+accumulation on Maxwell sm_52, without Tensor Core / WMMA assumptions.
+
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.
