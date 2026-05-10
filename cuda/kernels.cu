@@ -821,6 +821,94 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         }
     }
 
+    __global__ void attention_prefill_gqa_varlen_head64_kernel(
+        const float* __restrict__ Q,
+        const float* __restrict__ K,
+        const float* __restrict__ V,
+        const uint32_t* __restrict__ q_offsets,
+        const uint32_t* __restrict__ kv_offsets,
+        const uint32_t* __restrict__ q_lens,
+        const uint32_t* __restrict__ kv_lens,
+        uint32_t batch_size,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t q_idx = blockIdx.x;
+        const uint32_t qh_idx = blockIdx.y;
+        const uint32_t batch_idx = blockIdx.z;
+        const uint32_t tid = threadIdx.x;
+        if (batch_idx >= batch_size || qh_idx >= q_heads) return;
+
+        const uint32_t q_len = q_lens[batch_idx];
+        const uint32_t kv_len = kv_lens[batch_idx];
+        if (q_idx >= q_len || q_len == 0 || kv_len == 0 || q_len > kv_len) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const float inv_sqrt = 0.125f;
+        const uint32_t q_token_offset = q_offsets[batch_idx] + q_idx;
+        const uint32_t kv_offset = kv_offsets[batch_idx];
+        const uint32_t causal_end = kv_len - q_len + q_idx;
+        float* scores = shmem;
+        float* reduce = scores + kv_len;
+
+        const float* qh = Q + ((size_t)q_token_offset * (size_t)q_heads + (size_t)qh_idx) * head_dim;
+
+        float max_score_local = -1e30f;
+        for (uint32_t t = 0; t <= causal_end; ++t) {
+            const float* kh = K + ((size_t)(kv_offset + t) * (size_t)kv_heads + (size_t)kvh_idx) * head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * kh[d];
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) {
+                    reduce[tid] += reduce[tid + stride];
+                }
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[t] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t t = tid; t <= causal_end; t += blockDim.x) {
+            denom_part += expf(scores[t] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + ((size_t)q_token_offset * (size_t)q_heads + (size_t)qh_idx) * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t <= causal_end; ++t) {
+                const float* vh = V + ((size_t)(kv_offset + t) * (size_t)kv_heads + (size_t)kvh_idx) * head_dim;
+                const float p = expf(scores[t] - max_score) / denom;
+                acc += p * vh[d];
+            }
+            out_h[d] = acc;
+        }
+    }
+
     int m40llm_attention_last_token_f32(
         M40llmCudaContext* ctx,
         const M40llmKVCache* kv,
@@ -973,6 +1061,83 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
         err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -5;
+        return 0;
+    }
+
+    int m40llm_attention_prefill_f32_gqa_varlen_head64(
+        M40llmCudaContext* ctx,
+        const void* q_dev_f32,
+        const void* k_dev_f32,
+        const void* v_dev_f32,
+        const uint32_t* q_offsets_dev,
+        const uint32_t* kv_offsets_dev,
+        const uint32_t* q_lens_dev,
+        const uint32_t* kv_lens_dev,
+        uint32_t batch_size,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        void* out_dev_f32) {
+        if (!ctx || !q_dev_f32 || !k_dev_f32 || !v_dev_f32 || !q_offsets_dev || !kv_offsets_dev || !q_lens_dev || !kv_lens_dev || !out_dev_f32) return -1;
+        if (batch_size == 0) return -2;
+        if (q_heads == 0 || kv_heads == 0 || q_heads % kv_heads != 0) return -3;
+
+        static int logged = 0;
+        const char* log_env = getenv("M40LLM_ATTN_LOG");
+        if (!logged && log_env && strcmp(log_env, "1") == 0) {
+            fprintf(stderr, "[cuda] attention_prefill_gqa_varlen backend: head64 packed-f32 kernel\n");
+            logged = 1;
+        }
+
+        const int threads = 128;
+        uint32_t max_q_len_host = 0;
+        uint32_t max_kv_len_host = 0;
+        uint32_t* q_lens_host = new uint32_t[batch_size];
+        uint32_t* kv_lens_host = new uint32_t[batch_size];
+        cudaError_t err = cudaMemcpy(q_lens_host, q_lens_dev, (size_t)batch_size * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            delete[] q_lens_host;
+            delete[] kv_lens_host;
+            return -7;
+        }
+        err = cudaMemcpy(kv_lens_host, kv_lens_dev, (size_t)batch_size * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) {
+            delete[] q_lens_host;
+            delete[] kv_lens_host;
+            return -7;
+        }
+        for (uint32_t i = 0; i < batch_size; ++i) {
+            const uint32_t q_len = q_lens_host[i];
+            const uint32_t kv_len = kv_lens_host[i];
+            if (q_len == 0 || kv_len == 0 || q_len > kv_len || kv_len > 8192) {
+                delete[] q_lens_host;
+                delete[] kv_lens_host;
+                return -8;
+            }
+            if (q_len > max_q_len_host) max_q_len_host = q_len;
+            if (kv_len > max_kv_len_host) max_kv_len_host = kv_len;
+        }
+        delete[] q_lens_host;
+        delete[] kv_lens_host;
+        if (max_q_len_host == 0 || max_kv_len_host == 0 || max_kv_len_host > 8192) return -8;
+
+        dim3 grid((int)max_q_len_host, (int)q_heads, (int)batch_size);
+        const size_t shmem = ((size_t)max_kv_len_host + (size_t)threads) * sizeof(float);
+        attention_prefill_gqa_varlen_head64_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
+            reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<const float*>(k_dev_f32),
+            reinterpret_cast<const float*>(v_dev_f32),
+            q_offsets_dev,
+            kv_offsets_dev,
+            q_lens_dev,
+            kv_lens_dev,
+            batch_size,
+            q_heads,
+            kv_heads,
+            reinterpret_cast<float*>(out_dev_f32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -4;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
         if (err != cudaSuccess) return -5;
         return 0;
     }

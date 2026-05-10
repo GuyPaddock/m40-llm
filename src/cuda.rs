@@ -237,6 +237,20 @@ mod ffi {
             q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64(
+            ctx: *mut M40llmCudaContext,
+            d_q_f32: *const c_void,
+            d_k_f32: *const c_void,
+            d_v_f32: *const c_void,
+            d_q_offsets: *const u32,
+            d_kv_offsets: *const u32,
+            d_q_lens: *const u32,
+            d_kv_lens: *const u32,
+            batch_size: u32,
+            q_heads: u32,
+            kv_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
 
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
@@ -983,6 +997,67 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a, d_b, d_c, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Packed buffers must use [total_tokens, heads, 64] row-major f32 layout.
+    /// Offset/lens arrays must contain `batch_size` u32 entries.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_prefill_f32_gqa_varlen_head64(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        d_q_offsets: *const u32,
+        d_kv_offsets: *const u32,
+        d_q_lens: *const u32,
+        d_kv_lens: *const u32,
+        batch_size: u32,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64(
+                self.inner.raw.as_ptr(),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_attention_prefill_f32_gqa_varlen_head64 failed: {rc}"
+                ));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
             Ok(())
         }
     }
