@@ -139,6 +139,18 @@ int m40llm_attention_last_token_f32_gqa_batched(
     (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
 }
 
+int m40llm_attention_last_token_f32_gqa_batched_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    const uint32_t* seq_ids_dev,
+    const uint32_t* seq_lens_dev,
+    uint32_t batch_size,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
+}
+
 int m40llm_attention_prefill_f32_gqa_varlen_head64(
     M40llmCudaContext* ctx,
     const void* q_dev_f32,
@@ -153,6 +165,26 @@ int m40llm_attention_prefill_f32_gqa_varlen_head64(
     uint32_t kv_heads,
     void* out_dev_f32) {
     (void)ctx; (void)q_dev_f32; (void)k_dev_f32; (void)v_dev_f32; (void)q_offsets_dev; (void)kv_offsets_dev; (void)q_lens_dev; (void)kv_lens_dev; (void)batch_size; (void)q_heads; (void)kv_heads; (void)out_dev_f32; return -1;
+}
+
+int m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+    M40llmCudaContext* ctx,
+    const void* q_dev_f32,
+    const void* k_dev_f32,
+    const void* v_dev_f32,
+    const uint32_t* q_offsets_dev,
+    const uint32_t* kv_offsets_dev,
+    const uint32_t* q_lens_dev,
+    const uint32_t* kv_lens_dev,
+    uint32_t batch_size,
+    uint32_t q_heads,
+    uint32_t kv_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)q_dev_f32; (void)k_dev_f32; (void)v_dev_f32; (void)q_offsets_dev; (void)kv_offsets_dev; (void)q_lens_dev; (void)kv_lens_dev; (void)batch_size; (void)q_heads; (void)kv_heads; (void)out_dev_f32; return -1;
+}
+
+int m40llm_stream_synchronize(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
 }
 
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }

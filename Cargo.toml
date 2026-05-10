@@ -79,6 +79,10 @@ harness = false
 name = "rmsnorm"
 harness = false
 
+[[bench]]
+name = "stream_overlap"
+harness = false
+
 
 [[test]]
 name = "m40-llm"

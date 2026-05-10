@@ -3,6 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaStream;
 use m40_llm::infer::{
     BatchMetadata, BatchSequence, VarlenPrefillPlan, VarlenPrefillTile, VarlenPrefillTileSelection,
 };
@@ -137,6 +138,7 @@ fn packed_varlen_prefill_gqa_matches_cpu_reference() -> Result<()> {
     let d_k = ctx.device_malloc(bytes_kv)?;
     let d_v = ctx.device_malloc(bytes_kv)?;
     let d_out = ctx.device_malloc(bytes_out)?;
+    let d_out_async = ctx.device_malloc(bytes_out)?;
 
     unsafe {
         ctx.memcpy_h2d(d_q, f32s_to_bytes(&q).as_ptr() as *const c_void, bytes_q)?;
@@ -150,19 +152,40 @@ fn packed_varlen_prefill_gqa_matches_cpu_reference() -> Result<()> {
             kv_heads as u32,
             d_out,
         )?;
+        plan.dispatch_head64_async(
+            d_q as *const c_void,
+            d_k as *const c_void,
+            d_v as *const c_void,
+            q_heads as u32,
+            kv_heads as u32,
+            d_out_async,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
 
         let mut got_bytes = vec![0u8; bytes_out];
         ctx.memcpy_d2h(got_bytes.as_mut_ptr() as *mut c_void, d_out, bytes_out)?;
         let got = bytes_to_f32s(&got_bytes);
+        let mut async_bytes = vec![0u8; bytes_out];
+        ctx.memcpy_d2h(
+            async_bytes.as_mut_ptr() as *mut c_void,
+            d_out_async,
+            bytes_out,
+        )?;
+        let async_got = bytes_to_f32s(&async_bytes);
         for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
             let diff = (g - e).abs();
             assert!(diff <= 2e-4, "mismatch at {i}: got {g}, expected {e}");
+        }
+        for (i, (g, e)) in async_got.iter().zip(got.iter()).enumerate() {
+            let diff = (g - e).abs();
+            assert!(diff <= 1e-6, "async mismatch at {i}: got {g}, expected {e}");
         }
 
         ctx.device_free(d_q)?;
         ctx.device_free(d_k)?;
         ctx.device_free(d_v)?;
         ctx.device_free(d_out)?;
+        ctx.device_free(d_out_async)?;
     }
 
     Ok(())

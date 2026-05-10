@@ -409,3 +409,36 @@ Notes:
 - Future cache work should avoid more `__ldg` duplication unless a profile shows
   a stronger read-cache bottleneck. Texture-object experiments should remain
   deferred until there is a more promising target.
+
+## 2026-05-10: Prefill/Decode Stream Separation
+
+CUDA contexts now create separate non-blocking prefill and decode streams. The
+decode stream uses best-effort higher priority when the driver reports a useful
+priority range. Set `M40LLM_STREAM_LOG=1` to print the selected priorities.
+
+Async enqueue variants were added for independent variable-length prefill
+attention and batched last-token decode attention. The default CLI/server decode
+path remains synchronous; this benchmark isolates the potential overlap benefit
+without changing request scheduling semantics.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench stream_overlap -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Workload | Time estimate |
+| --- | ---: |
+| `sequential_sync` | 47.066 ms |
+| `split_async_final_sync` | 45.746 ms |
+
+Notes:
+
+- The benchmark uses independent prefill and decode attention buffers, enqueues
+  prefill on the prefill stream and decode on the decode stream, then
+  synchronizes both streams at the end.
+- This is a small isolated win, not an end-to-end server scheduling change.
+  Keep the normal generate path synchronous until a batched scheduler can avoid
+  shared KV/workspace hazards.

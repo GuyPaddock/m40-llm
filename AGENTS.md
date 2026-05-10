@@ -296,17 +296,18 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t33-stream-sep",
       "priority": 7,
-      "status": "todo",
+      "status": "done",
       "title": "Prefill and decode stream separation",
       "rationale": "Separate CUDA streams allow better overlap and latency hiding after projection and norm costs are reduced.",
       "scope": [
         "Introduce distinct CUDA streams for prefill and decode.",
-        "Tune stream priorities where applicable."
+        "Tune stream priorities where applicable.",
+        "Add async enqueue variants for independent prefill/decode attention benchmarks."
       ],
       "acceptance": [
-        "Prefill and decode run on separate streams.",
-        "No correctness regressions.",
-        "Measured latency improvement or neutrality."
+        "Prefill and decode streams are non-blocking, with best-effort decode priority.",
+        "Async prefill and decode attention paths have CUDA parity coverage.",
+        "Measured overlap benchmark improved from ~47.07 ms sequential to ~45.75 ms async final-sync on M40."
       ]
     },
     {

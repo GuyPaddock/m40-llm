@@ -219,6 +219,33 @@ impl VarlenPrefillPlan {
             d_out_f32,
         )
     }
+
+    /// # Safety
+    /// Same layout requirements as `dispatch_head64`. The call only enqueues
+    /// work on the prefill stream; synchronize before reading outputs.
+    pub unsafe fn dispatch_head64_async(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.ctx.attention_prefill_f32_gqa_varlen_head64_async(
+            d_q_f32,
+            d_k_f32,
+            d_v_f32,
+            self.d_q_offsets as *const u32,
+            self.d_kv_offsets as *const u32,
+            self.d_q_lens as *const u32,
+            self.d_kv_lens as *const u32,
+            self.batch_size(),
+            q_heads,
+            kv_heads,
+            d_out_f32,
+        )
+    }
 }
 
 #[cfg(feature = "cuda")]

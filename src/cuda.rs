@@ -60,6 +60,7 @@ mod ffi {
 
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
         pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
+        pub fn m40llm_stream_synchronize(ctx: *mut M40llmCudaContext, stream_kind: u32) -> i32;
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -237,7 +238,31 @@ mod ffi {
             q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_batched_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_prefill_f32_gqa_varlen_head64(
+            ctx: *mut M40llmCudaContext,
+            d_q_f32: *const c_void,
+            d_k_f32: *const c_void,
+            d_v_f32: *const c_void,
+            d_q_offsets: *const u32,
+            d_kv_offsets: *const u32,
+            d_q_lens: *const u32,
+            d_kv_lens: *const u32,
+            batch_size: u32,
+            q_heads: u32,
+            kv_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64_async(
             ctx: *mut M40llmCudaContext,
             d_q_f32: *const c_void,
             d_k_f32: *const c_void,
@@ -327,6 +352,22 @@ struct AllocInfo {
 pub struct CudaContext {
     #[allow(dead_code)]
     inner: Arc<CudaContextInner>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CudaStream {
+    Prefill,
+    Decode,
+}
+
+impl CudaStream {
+    #[inline]
+    fn ffi_kind(self) -> u32 {
+        match self {
+            Self::Prefill => 0,
+            Self::Decode => 1,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -432,6 +473,25 @@ impl CudaContext {
                 minor: 0,
                 device_id: self.inner.device_id,
             })
+        }
+    }
+
+    pub fn synchronize_stream(&self, stream: CudaStream) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = stream;
+            Ok(())
         }
     }
 }
@@ -1063,6 +1123,68 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// Enqueues packed prefill attention on the prefill stream and returns after
+    /// launch validation. Call `synchronize_stream(CudaStream::Prefill)` before
+    /// reading `d_out_f32` or reusing input/output buffers.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_prefill_f32_gqa_varlen_head64_async(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        d_q_offsets: *const u32,
+        d_kv_offsets: *const u32,
+        d_q_lens: *const u32,
+        d_kv_lens: *const u32,
+        batch_size: u32,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+                self.inner.raw.as_ptr(),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_attention_prefill_f32_gqa_varlen_head64_async failed: {rc}"
+                ));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_in` and `d_out` must be valid device pointers to `rows * dim` f32 elements.
     pub unsafe fn rms_norm_f32(
         &self,
@@ -1651,6 +1773,41 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!(
                 "m40llm_attention_last_token_f32_gqa_batched failed: {rc}"
+            ));
+        }
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues batched GQA decode attention on the decode stream and returns
+    /// after launch validation. Call `ctx.synchronize_stream(CudaStream::Decode)`
+    /// before reading `d_out_f32` or reusing input/output buffers.
+    pub unsafe fn attention_last_token_f32_gqa_batched_async(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_batched_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_batched_async failed: {rc}"
             ));
         }
         Ok(())

@@ -124,6 +124,8 @@ same non-streaming decode helper as `POST /generate`.
   GGUF-layout CUDA fallback.
 - Timing tracing: set `M40LLM_TIMING_LOG=1` to print per-token and per-layer
   decode timing. This is intentionally verbose and intended for profiling runs.
+- Stream tracing: set `M40LLM_STREAM_LOG=1` to print prefill/decode stream
+  creation details and best-effort priority selection.
 
 ## Server (feature = server)
 ```
@@ -171,6 +173,9 @@ Current M40 validation target:
   `[total_q_tokens, q_heads, 64]` Q/output and
   `[total_kv_tokens, kv_heads, 64]` K/V buffers, with a CPU-reference parity
   test and initial M40 benchmark baseline.
+- Prefill/decode attention can be enqueued on separate non-blocking CUDA
+  streams for benchmarked overlap experiments; the default CLI/server decode
+  path remains synchronous until a request scheduler can use this safely.
 - Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
   the first `__ldg` experiment for weighted RMSNorm; current measurements keep
   the default kernel unchanged.

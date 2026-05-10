@@ -14,6 +14,8 @@ struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
+    int prefill_priority;
+    int decode_priority;
 #ifdef M40LLM_HAVE_CUBLAS
     cublasHandle_t cublas;
 #endif
@@ -44,6 +46,18 @@ extern "C" {
         if (!ctx) return -1;
         cudaError_t set_err = cudaSetDevice(ctx->device_id);
         return set_err == cudaSuccess ? 0 : -2;
+    }
+
+    static bool stream_log_enabled() {
+        const char* env = getenv("M40LLM_STREAM_LOG");
+        return env && strcmp(env, "1") == 0;
+    }
+
+    static cudaStream_t select_stream(M40llmCudaContext* ctx, uint32_t stream_kind) {
+        if (!ctx) return nullptr;
+        if (stream_kind == 0) return ctx->prefill_stream;
+        if (stream_kind == 1) return ctx->decode_stream;
+        return nullptr;
     }
 
     static size_t m40llm_strnlen_host(const char* s, size_t max_len) {
@@ -131,9 +145,43 @@ extern "C" {
 
         M40llmCudaContext* ctx = new M40llmCudaContext();
         ctx->device_id = selected;
+        ctx->prefill_priority = 0;
+        ctx->decode_priority = 0;
 
-        cudaStreamCreate(&ctx->prefill_stream);
-        cudaStreamCreate(&ctx->decode_stream);
+        int least_priority = 0;
+        int greatest_priority = 0;
+        cudaError_t priority_err = cudaDeviceGetStreamPriorityRange(&least_priority, &greatest_priority);
+        if (priority_err == cudaSuccess) {
+            ctx->prefill_priority = least_priority;
+            ctx->decode_priority = greatest_priority;
+        }
+
+        cudaError_t stream_err = cudaStreamCreateWithPriority(
+            &ctx->prefill_stream,
+            cudaStreamNonBlocking,
+            ctx->prefill_priority);
+        if (stream_err != cudaSuccess) {
+            delete ctx;
+            return nullptr;
+        }
+        stream_err = cudaStreamCreateWithPriority(
+            &ctx->decode_stream,
+            cudaStreamNonBlocking,
+            ctx->decode_priority);
+        if (stream_err != cudaSuccess) {
+            cudaStreamDestroy(ctx->prefill_stream);
+            delete ctx;
+            return nullptr;
+        }
+
+        if (stream_log_enabled()) {
+            fprintf(stderr,
+                "[cuda] streams: prefill=nonblocking priority=%d decode=nonblocking priority=%d range=[%d,%d]\n",
+                ctx->prefill_priority,
+                ctx->decode_priority,
+                least_priority,
+                greatest_priority);
+        }
 
     #ifdef M40LLM_HAVE_CUBLAS
         if (cublasCreate(&ctx->cublas) != CUBLAS_STATUS_SUCCESS) {
@@ -146,6 +194,16 @@ extern "C" {
     #endif
 
         return ctx;
+    }
+
+    int m40llm_stream_synchronize(M40llmCudaContext* ctx, uint32_t stream_kind) {
+        if (!ctx) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaError_t err = cudaStreamSynchronize(stream);
+        if (err != cudaSuccess) return -4;
+        return 0;
     }
 
 }
@@ -1228,7 +1286,7 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         return 0;
     }
 
-    int m40llm_attention_last_token_f32_gqa_batched(
+    static int attention_last_token_f32_gqa_batched_impl(
         M40llmCudaContext* ctx,
         const M40llmKVCache* kv,
         const uint32_t* seq_ids_dev,
@@ -1236,7 +1294,8 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         uint32_t batch_size,
         const void* q_dev_f32,
         uint32_t q_heads,
-        void* out_dev_f32) {
+        void* out_dev_f32,
+        bool synchronize) {
         if (!ctx || !kv || !seq_ids_dev || !seq_lens_dev || !q_dev_f32 || !out_dev_f32) return -1;
         if (batch_size == 0) return -2;
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -3;
@@ -1318,12 +1377,56 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         }
         err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        if (err != cudaSuccess) return -5;
+        if (synchronize) {
+            err = cudaStreamSynchronize(ctx->decode_stream);
+            if (err != cudaSuccess) return -5;
+        }
         return 0;
     }
 
-    int m40llm_attention_prefill_f32_gqa_varlen_head64(
+    int m40llm_attention_last_token_f32_gqa_batched(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        const uint32_t* seq_ids_dev,
+        const uint32_t* seq_lens_dev,
+        uint32_t batch_size,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        void* out_dev_f32) {
+        return attention_last_token_f32_gqa_batched_impl(
+            ctx,
+            kv,
+            seq_ids_dev,
+            seq_lens_dev,
+            batch_size,
+            q_dev_f32,
+            q_heads,
+            out_dev_f32,
+            true);
+    }
+
+    int m40llm_attention_last_token_f32_gqa_batched_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        const uint32_t* seq_ids_dev,
+        const uint32_t* seq_lens_dev,
+        uint32_t batch_size,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        void* out_dev_f32) {
+        return attention_last_token_f32_gqa_batched_impl(
+            ctx,
+            kv,
+            seq_ids_dev,
+            seq_lens_dev,
+            batch_size,
+            q_dev_f32,
+            q_heads,
+            out_dev_f32,
+            false);
+    }
+
+    static int attention_prefill_f32_gqa_varlen_head64_impl(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -1335,7 +1438,8 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
-        void* out_dev_f32) {
+        void* out_dev_f32,
+        bool synchronize) {
         if (!ctx || !q_dev_f32 || !k_dev_f32 || !v_dev_f32 || !q_offsets_dev || !kv_offsets_dev || !q_lens_dev || !kv_lens_dev || !out_dev_f32) return -1;
         if (batch_size == 0) return -2;
         if (q_heads == 0 || kv_heads == 0 || q_heads % kv_heads != 0) return -3;
@@ -1395,9 +1499,69 @@ extern "C" int m40llm_rms_norm_f32_weighted(
             reinterpret_cast<float*>(out_dev_f32));
         err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
-        err = cudaStreamSynchronize(ctx->prefill_stream);
-        if (err != cudaSuccess) return -5;
+        if (synchronize) {
+            err = cudaStreamSynchronize(ctx->prefill_stream);
+            if (err != cudaSuccess) return -5;
+        }
         return 0;
+    }
+
+    int m40llm_attention_prefill_f32_gqa_varlen_head64(
+        M40llmCudaContext* ctx,
+        const void* q_dev_f32,
+        const void* k_dev_f32,
+        const void* v_dev_f32,
+        const uint32_t* q_offsets_dev,
+        const uint32_t* kv_offsets_dev,
+        const uint32_t* q_lens_dev,
+        const uint32_t* kv_lens_dev,
+        uint32_t batch_size,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        void* out_dev_f32) {
+        return attention_prefill_f32_gqa_varlen_head64_impl(
+            ctx,
+            q_dev_f32,
+            k_dev_f32,
+            v_dev_f32,
+            q_offsets_dev,
+            kv_offsets_dev,
+            q_lens_dev,
+            kv_lens_dev,
+            batch_size,
+            q_heads,
+            kv_heads,
+            out_dev_f32,
+            true);
+    }
+
+    int m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+        M40llmCudaContext* ctx,
+        const void* q_dev_f32,
+        const void* k_dev_f32,
+        const void* v_dev_f32,
+        const uint32_t* q_offsets_dev,
+        const uint32_t* kv_offsets_dev,
+        const uint32_t* q_lens_dev,
+        const uint32_t* kv_lens_dev,
+        uint32_t batch_size,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        void* out_dev_f32) {
+        return attention_prefill_f32_gqa_varlen_head64_impl(
+            ctx,
+            q_dev_f32,
+            k_dev_f32,
+            v_dev_f32,
+            q_offsets_dev,
+            kv_offsets_dev,
+            q_lens_dev,
+            kv_lens_dev,
+            batch_size,
+            q_heads,
+            kv_heads,
+            out_dev_f32,
+            false);
     }
 
     // FP16 storage / FP32 compute GEMM using cuBLAS when available; fallback naive CUDA kernel otherwise
