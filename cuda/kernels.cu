@@ -892,6 +892,20 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         C[row * N + col] = acc;
     }
 
+    // Materialize GGUF [K,N] F16 weights into column-major [N,K] FP32.
+    // This lets cublasSgemm compute row-major C=A*B via C_col=B^T*A^T.
+    __global__ void materialize_gguf_f16_to_f32_colmajor_nt_kernel(
+        const __half* __restrict__ B,
+        float* __restrict__ Bt,
+        int N, int K) {
+        const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        const int total = N * K;
+        if (idx >= total) return;
+        const int n = idx % N;
+        const int k = idx / N;
+        Bt[idx] = __half2float(B[n * K + k]);
+    }
+
     int m40llm_gemm_f16_storage_f32_compute(
         M40llmCudaContext* ctx,
         const void* d_A,
@@ -1019,6 +1033,55 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         err = cudaStreamSynchronize(ctx->prefill_stream);
         if (err != cudaSuccess) return -3;
         return 0;
+    }
+
+    int m40llm_gemm_f32xf32_f32(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f32_colmajor_nt,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx || !d_A_f32 || !d_B_f32_colmajor_nt || !d_C_f32) return -1;
+        if (M <= 0 || N <= 0 || K <= 0) return -2;
+#ifdef M40LLM_HAVE_CUBLAS
+        float alpha = 1.0f;
+        float beta = 0.0f;
+        cublasStatus_t st = cublasSgemm(
+            ctx->cublas,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            N, M, K,
+            &alpha,
+            reinterpret_cast<const float*>(d_B_f32_colmajor_nt), N,
+            reinterpret_cast<const float*>(d_A_f32), K,
+            &beta,
+            reinterpret_cast<float*>(d_C_f32), N);
+        if (st != CUBLAS_STATUS_SUCCESS) return -3;
+        cudaError_t err = cudaStreamSynchronize(ctx->prefill_stream);
+        return err == cudaSuccess ? 0 : -4;
+#else
+        return -5;
+#endif
+    }
+
+    int m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
+        M40llmCudaContext* ctx,
+        const void* d_B_f16,
+        void* d_B_f32_colmajor_nt,
+        int N, int K) {
+        if (!ctx || !d_B_f16 || !d_B_f32_colmajor_nt) return -1;
+        if (N <= 0 || K <= 0) return -2;
+        const int total = N * K;
+        const int threads = 256;
+        const int blocks = (total + threads - 1) / threads;
+        materialize_gguf_f16_to_f32_colmajor_nt_kernel<<<blocks, threads, 0, ctx->prefill_stream>>>(
+            reinterpret_cast<const __half*>(d_B_f16),
+            reinterpret_cast<float*>(d_B_f32_colmajor_nt),
+            N,
+            K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        return err == cudaSuccess ? 0 : -4;
     }
 
 

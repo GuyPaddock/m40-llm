@@ -248,3 +248,46 @@ Notes:
   current GGUF F16 projection path remains effectively projection-bound at the
   same timings. The next optimization target should be projection GEMM layout and
   FP32 materialization/transposition for `cublasSgemm` on sm_52.
+
+## 2026-05-09: Materialized FP32 Projection Weights
+
+Changes since the parallel RMSNorm baseline:
+
+- Hot GGUF F16 projection weights can now be materialized once into FP32
+  column-major-transposed device buffers.
+- The projection path uses `cublasSgemm` for materialized FP32 weights and keeps
+  the original GGUF-layout CUDA kernel as fallback.
+- `M40LLM_MATERIALIZE_F32_WEIGHTS=0` disables the materialized path; the default
+  is enabled when cuBLAS is available.
+
+TinyLlama CLI timing refresh:
+
+| Region | After parallel RMSNorm | After materialized FP32 projections |
+| --- | ---: | ---: |
+| `cli.generate_text_total` | 2202.864 ms | 640.907 ms |
+| `cli.decode_loop` | 2184.234 ms | 609.506 ms |
+| Prompt token 0 `forward_all_layers` | 1059.508 ms | 492.489 ms |
+| Prompt token 1 `forward_all_layers` | 1053.145 ms | 37.243 ms |
+| Prompt token 0 `logits` | 21.261 ms | 33.198 ms |
+| Prompt token 1 `logits` | 21.290 ms | 4.273 ms |
+
+Steady per-layer second-token timings:
+
+| Operation | After parallel RMSNorm | After materialized FP32 projections |
+| --- | ---: | ---: |
+| `qkv_project` | ~13.1 ms | ~0.20-0.24 ms |
+| `out_project` | ~4.4 ms | ~0.12-0.14 ms |
+| `mlp_gate_up` | ~17.6 ms | ~0.49-0.52 ms |
+| `mlp_down` | ~12.1 ms | ~0.27 ms |
+| `attn_norm` / `ffn_norm` | ~0.04-0.05 ms | ~0.04-0.06 ms |
+| `attention` | ~0.07-0.08 ms | ~0.07-0.09 ms |
+
+Notes:
+
+- First-token latency includes one-time FP32 materialization for each projection
+  tensor; later tokens reuse cached device buffers.
+- The measured device allocation total rose to roughly 6.34 GB for TinyLlama,
+  which is acceptable on the 24 GB M40 and should be guarded for larger models.
+- Remaining short-context steady-state costs are now mostly launch overhead,
+  KV append, RoPE, norms, and logits/sampling overhead rather than projection
+  math.

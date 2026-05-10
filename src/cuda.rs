@@ -97,6 +97,22 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xf32_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f32_colmajor_nt: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
+            ctx: *mut M40llmCudaContext,
+            d_B_f16: *const c_void,
+            d_B_f32_colmajor_nt: *mut c_void,
+            N: i32,
+            K: i32,
+        ) -> i32;
 
         pub fn m40llm_gemm_f16xf16_f32(
             ctx: *mut M40llmCudaContext,
@@ -784,6 +800,86 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_f32_colmajor_nt` must contain the transpose of a logical [k,n] GGUF
+    /// weight, stored as column-major [n,k]. This computes row-major C = A * B.
+    pub unsafe fn gemm_f32xf32_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf32_f32",
+                if cfg!(have_cublas) {
+                    "cuBLAS sgemm materialized-f32"
+                } else {
+                    "unavailable without cuBLAS"
+                },
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf32_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f32_colmajor_nt,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xf32_f32 failed: {rc}"));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_f16` must be a GGUF F16 tensor with logical shape [k,n], where
+    /// dimension 0 is fastest. Output must have room for n*k f32 values.
+    pub unsafe fn materialize_gguf_f16_to_f32_colmajor_nt(
+        &self,
+        d_b_f16: *const c_void,
+        d_b_f32_colmajor_nt: *mut c_void,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
+                self.inner.raw.as_ptr(),
+                d_b_f16,
+                d_b_f32_colmajor_nt,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_materialize_gguf_f16_to_f32_colmajor_nt failed: {rc}"
+                ));
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_b_f16, d_b_f32_colmajor_nt, n, k);
             Ok(())
         }
     }

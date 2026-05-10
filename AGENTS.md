@@ -193,19 +193,21 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t23-cublas-gemm",
       "priority": 1,
-      "status": "in_progress",
+      "status": "done",
       "title": "cuBLAS GEMM wrappers and validation",
       "rationale": "All performance gains depend on correct and well-understood GEMM behavior on Maxwell.",
       "scope": [
         "Harden cuBLAS wrapper APIs.",
         "Validate row-major Rust layouts vs column-major cuBLAS expectations.",
         "Document lda/ldb/ldc and transposition contracts.",
-        "Basic performance sanity checks on Tesla M40."
+        "Basic performance sanity checks on Tesla M40.",
+        "Materialize hot GGUF F16 projection weights into FP32 device buffers for cublasSgemm."
       ],
       "acceptance": [
         "GEMM wrappers are documented and reused consistently.",
         "No silent shape or stride mismatches.",
-        "Measured performance is reasonable for M40-class hardware."
+        "Measured performance is reasonable for M40-class hardware.",
+        "Steady-state TinyLlama projection timings improve materially on M40."
       ]
     },
     {
@@ -335,6 +337,24 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
       "acceptance": [
         "Forward path runs fully on GPU in normal operation.",
         "Parity tests remain green."
+      ]
+    },
+    {
+      "id": "t31e-varlen-batch",
+      "priority": 10,
+      "status": "todo",
+      "title": "Variable-length batched prefill and attention",
+      "rationale": "Batched serving should avoid padded-token computation for mixed-length requests.",
+      "scope": [
+        "Add batch metadata with valid lengths and packed offsets.",
+        "Add length buckets before fully packed variable-length attention.",
+        "Add M40-safe variable-length attention kernels without Tensor Core assumptions.",
+        "Benchmark padded, bucketed, and packed variants."
+      ],
+      "acceptance": [
+        "Mixed-length batches avoid full max_seq padding work where possible.",
+        "Prefill and attention operate over valid regions end-to-end.",
+        "Benchmarks cover skewed, 0.6*max_seq average, and near-uniform length distributions."
       ]
     }
   ]

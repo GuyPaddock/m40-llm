@@ -1,6 +1,15 @@
+#[cfg(feature = "cuda")]
+use super::types::{MaterializedWeight, MaterializedWeightKey};
 use super::LoadedModel;
 use anyhow::{Context, Result};
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+fn materialized_weights_enabled() -> bool {
+    std::env::var("M40LLM_MATERIALIZE_F32_WEIGHTS")
+        .map(|v| v != "0")
+        .unwrap_or(true)
+}
 
 impl LoadedModel {
     pub unsafe fn run_gemm(
@@ -138,8 +147,82 @@ impl LoadedModel {
         n: i32,
         k: i32,
     ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            if materialized_weights_enabled() && cfg!(have_cublas) {
+                match self.materialized_gguf_weight(d_b_f16, n, k) {
+                    Ok(d_b_f32) => {
+                        if let Err(err) = self
+                            .cuda
+                            .gemm_f32xf32_f32(d_a_f32, d_b_f32, d_c_f32, m, n, k)
+                        {
+                            if std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1") {
+                                eprintln!(
+                                    "[cuda] materialized f32 GEMM failed; falling back to GGUF F16 kernel: {err}"
+                                );
+                            }
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    Err(err) => {
+                        if std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1") {
+                            eprintln!(
+                                "[cuda] GGUF F16 weight materialization failed; falling back to GGUF F16 kernel: {err}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
         self.cuda
             .gemm_f32xf16_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
+
+    #[cfg(feature = "cuda")]
+    fn materialized_gguf_weight(
+        &self,
+        d_b_f16: *const c_void,
+        n: i32,
+        k: i32,
+    ) -> Result<*const c_void> {
+        let key = MaterializedWeightKey {
+            src: d_b_f16 as usize,
+            n,
+            k,
+        };
+
+        if let Some(existing) = self.materialized_weights.lock().unwrap().get(&key) {
+            return Ok(existing.dptr as *const c_void);
+        }
+
+        let elems = (n as usize)
+            .checked_mul(k as usize)
+            .context("materialized weight element count overflow")?;
+        let bytes = elems
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("materialized weight byte size overflow")?;
+        let dptr = self.cuda.device_malloc(bytes)?;
+        let materialize_res = unsafe {
+            self.cuda
+                .materialize_gguf_f16_to_f32_colmajor_nt(d_b_f16, dptr, n, k)
+        };
+        if let Err(err) = materialize_res {
+            unsafe {
+                let _ = self.cuda.device_free(dptr);
+            }
+            return Err(err);
+        }
+
+        let mut weights = self.materialized_weights.lock().unwrap();
+        if let Some(existing) = weights.get(&key) {
+            unsafe {
+                let _ = self.cuda.device_free(dptr);
+            }
+            return Ok(existing.dptr as *const c_void);
+        }
+        weights.insert(key, MaterializedWeight { dptr, bytes });
+        Ok(dptr as *const c_void)
     }
 }
 

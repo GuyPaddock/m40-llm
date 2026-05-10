@@ -118,9 +118,10 @@ same non-streaming decode helper as `POST /generate`.
 - Tensor view tracing: set `M40LLM_TENSOR_VIEW_LOG=1` to print each GGUF
   tensor-to-device pointer mapping during model load.
 - GEMM backend tracing: set `M40LLM_GEMM_LOG=1` to print one backend
-  selection line per GEMM wrapper. With `M40LLM_ENABLE_CUBLAS=1`, GGUF F16
-  projection weights try the cuBLAS path first and fall back to the dedicated
-  GGUF-layout CUDA kernel when needed.
+  selection line per GEMM wrapper. With `M40LLM_ENABLE_CUBLAS=1`, hot GGUF F16
+  projection weights are materialized into FP32 device buffers and routed through
+  `cublasSgemm`; set `M40LLM_MATERIALIZE_F32_WEIGHTS=0` to force the dedicated
+  GGUF-layout CUDA fallback.
 - Timing tracing: set `M40LLM_TIMING_LOG=1` to print per-token and per-layer
   decode timing. This is intentionally verbose and intended for profiling runs.
 
@@ -154,10 +155,12 @@ Current M40 validation target:
 - Fresh M40 GEMM, attention, and TinyLlama `/generate` baselines: see
   `docs/perf_baselines.md`.
 - Workspace reuse removes repeated forward scratch allocation.
+- Materialized FP32 projection weights route steady-state decode projection GEMMs
+  through `cublasSgemm`.
 - The GQA last-token attention path has an optimized `head_dim=64` CUDA kernel;
   set `M40LLM_ATTN_LOG=1` to print attention backend selection.
-- Current timed CLI profiles point at projection GEMMs as the next performance
-  target before stream separation.
+- Current timed CLI profiles point at batching, launch overhead, and prefill
+  shape handling as the next performance targets before stream separation.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

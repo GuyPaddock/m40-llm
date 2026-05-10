@@ -143,6 +143,8 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> Result<
         kv_cache: None,
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
+        #[cfg(feature = "cuda")]
+        materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

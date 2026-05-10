@@ -227,6 +227,8 @@ pub struct LoadedModel {
     pub kv_cache: Option<KVCache>,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
+    #[cfg(feature = "cuda")]
+    pub materialized_weights: Mutex<HashMap<MaterializedWeightKey, MaterializedWeight>>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]
@@ -235,6 +237,34 @@ pub struct LoadedModel {
     pub model_config: ModelConfig,
     #[cfg(feature = "gguf_ext")]
     pub typed_config: gguf_llms::model::ModelConfig,
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MaterializedWeightKey {
+    pub src: usize,
+    pub n: i32,
+    pub k: i32,
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct MaterializedWeight {
+    pub dptr: *mut c_void,
+    pub bytes: usize,
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for LoadedModel {
+    fn drop(&mut self) {
+        if let Ok(mut weights) = self.materialized_weights.lock() {
+            for (_key, weight) in weights.drain() {
+                unsafe {
+                    let _ = self.cuda.device_free(weight.dptr);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

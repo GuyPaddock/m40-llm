@@ -80,6 +80,8 @@ impl LoadedModel {
             kv_cache: None,
             #[cfg(feature = "cuda")]
             forward_workspace: std::sync::Mutex::new(None),
+            #[cfg(feature = "cuda")]
+            materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
