@@ -66,6 +66,7 @@ fn bench_attention_last_token_gqa(c: &mut Criterion) {
             }
 
             group.throughput(Throughput::Elements(seq_len as u64));
+            std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
             group.bench_with_input(
                 BenchmarkId::from_parameter(format!(
                     "q{q_heads}_kv{kv_heads}_d{head_dim}_s{seq_len}"
@@ -85,6 +86,27 @@ fn bench_attention_last_token_gqa(c: &mut Criterion) {
                     })
                 },
             );
+            std::env::set_var("M40LLM_CACHE_EXPERIMENT", "ldg_kv");
+            group.bench_with_input(
+                BenchmarkId::from_parameter(format!(
+                    "q{q_heads}_kv{kv_heads}_d{head_dim}_s{seq_len}_ldg_kv"
+                )),
+                &seq_len,
+                |b, &seq_len| {
+                    b.iter(|| unsafe {
+                        kv.attention_last_token_f32_gqa(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            d_out,
+                        )
+                        .expect("attention ldg_kv")
+                    })
+                },
+            );
+            std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
 
             unsafe {
                 ctx.device_free(d_q).expect("free d_q");
@@ -210,6 +232,7 @@ fn bench_attention_last_token_gqa_batched_varlen(c: &mut Criterion) {
                     }
                 })
             });
+            std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
             group.bench_function(format!("{name}_batched_varlen"), |b| {
                 b.iter(|| unsafe {
                     kv.attention_last_token_f32_gqa_batched(
@@ -224,6 +247,22 @@ fn bench_attention_last_token_gqa_batched_varlen(c: &mut Criterion) {
                     .expect("batched attention")
                 })
             });
+            std::env::set_var("M40LLM_CACHE_EXPERIMENT", "ldg_kv");
+            group.bench_function(format!("{name}_batched_varlen_ldg_kv"), |b| {
+                b.iter(|| unsafe {
+                    kv.attention_last_token_f32_gqa_batched(
+                        &ctx,
+                        d_seq_ids as *const u32,
+                        d_seq_lens as *const u32,
+                        batch_size,
+                        d_q as *const c_void,
+                        q_heads,
+                        d_out,
+                    )
+                    .expect("batched attention ldg_kv")
+                })
+            });
+            std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
 
             unsafe {
                 ctx.device_free(d_q).expect("free d_q");
