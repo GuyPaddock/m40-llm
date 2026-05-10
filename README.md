@@ -161,6 +161,9 @@ Current M40 validation target:
   set `M40LLM_ATTN_LOG=1` to print attention backend selection.
 - Current timed CLI profiles point at batching, launch overhead, and prefill
   shape handling as the next performance targets before stream separation.
+- Variable-length batch metadata is available through `m40_llm::infer` for
+  packed token/Q/KV offsets and length buckets; CUDA kernels will consume this
+  path incrementally to avoid padded-token prefill work.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

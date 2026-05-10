@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod batch;
 mod embeddings;
 mod forward;
 mod gemm;
@@ -13,4 +14,5 @@ mod types;
 #[cfg(feature = "cuda")]
 mod workspace;
 
+pub use batch::{BatchMetadata, BatchSequence, BucketedBatch, LengthBucket, PackedSequenceOffsets};
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};
