@@ -75,6 +75,10 @@ harness = false
 name = "attention"
 harness = false
 
+[[bench]]
+name = "rmsnorm"
+harness = false
+
 
 [[test]]
 name = "m40-llm"
