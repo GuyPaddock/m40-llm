@@ -302,9 +302,24 @@ with three mixed-length decode distributions:
 - `near_uniform`: lengths close to max sequence length.
 
 Each distribution compares individual per-sequence dispatch against the packed
-batched variable-length GQA decode kernel. Record measured results here after
-running:
+batched variable-length GQA decode kernel.
 
 ```bash
 cargo bench --features cuda --bench attention -- --sample-size 10
 ```
+
+Measured on Tesla M40:
+
+| Distribution | Lengths | Individual dispatch | Batched varlen | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `avg_0p6_max` | 384, 512, 640, 768 | 4.6016 ms | 1.5933 ms | 2.89x |
+| `skewed` | 16, 64, 256, 1024 | 2.8305 ms | 2.1325 ms | 1.33x |
+| `near_uniform` | 896, 960, 1000, 1024 | 8.6244 ms | 2.4545 ms | 3.51x |
+
+Notes:
+
+- This benchmark measures mixed-KV-length batched decode, not full prefill.
+- The current batched kernel uses one grid launch for all batch entries and
+  skips invalid KV regions via per-sequence lengths.
+- Next work should add bucketed and packed prefill attention so prompt batches
+  also avoid padded-token computation.
