@@ -281,6 +281,21 @@ mod ffi {
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
+        pub fn m40llm_persistent_decode_submit_vec(
+            ctx: *mut M40llmCudaContext,
+            d_in_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: u32,
+            scale: f32,
+            bias: f32,
+            iterations: u32,
+            out_command_id: *mut u32,
+        ) -> i32;
+        pub fn m40llm_persistent_decode_poll(
+            ctx: *mut M40llmCudaContext,
+            out_status: *mut u32,
+            out_command_id: *mut u32,
+        ) -> i32;
         // Utility conversion/dequant kernels
         pub fn m40llm_f16_to_f32(
             ctx: *mut M40llmCudaContext,
@@ -368,6 +383,31 @@ impl CudaStream {
             Self::Decode => 1,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersistentDecodeStatus {
+    Idle,
+    Pending,
+    Done,
+    Unknown(u32),
+}
+
+impl From<u32> for PersistentDecodeStatus {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::Idle,
+            1 => Self::Pending,
+            2 => Self::Done,
+            other => Self::Unknown(other),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PersistentDecodePoll {
+    pub status: PersistentDecodeStatus,
+    pub command_id: u32,
 }
 
 #[derive(Debug)]
@@ -1389,6 +1429,74 @@ impl CudaContext {
         }
         Ok(())
     }
+
+    /// # Safety
+    /// `d_in_f32` and `d_out_f32` must point to `n` f32 values on this context's device.
+    pub unsafe fn persistent_decode_submit_vec(
+        &self,
+        d_in_f32: *const c_void,
+        d_out_f32: *mut c_void,
+        n: u32,
+        scale: f32,
+        bias: f32,
+        iterations: u32,
+    ) -> Result<u32> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let mut command_id = 0u32;
+            let rc = ffi::m40llm_persistent_decode_submit_vec(
+                self.inner.raw.as_ptr(),
+                d_in_f32,
+                d_out_f32,
+                n,
+                scale,
+                bias,
+                iterations,
+                &mut command_id as *mut u32,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_persistent_decode_submit_vec failed: {rc}"));
+            }
+            Ok(command_id)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in_f32, d_out_f32, n, scale, bias, iterations);
+            Ok(0)
+        }
+    }
+
+    pub fn persistent_decode_poll(&self) -> Result<PersistentDecodePoll> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let mut status = 0u32;
+            let mut command_id = 0u32;
+            let rc = unsafe {
+                ffi::m40llm_persistent_decode_poll(
+                    self.inner.raw.as_ptr(),
+                    &mut status as *mut u32,
+                    &mut command_id as *mut u32,
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_persistent_decode_poll failed: {rc}"));
+            }
+            Ok(PersistentDecodePoll {
+                status: status.into(),
+                command_id,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Ok(PersistentDecodePoll {
+                status: PersistentDecodeStatus::Idle,
+                command_id: 0,
+            })
+        }
+    }
+
     pub fn stop_persistent_decode(&self) -> Result<()> {
         #[cfg(feature = "cuda")]
         {

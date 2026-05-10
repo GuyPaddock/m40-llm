@@ -313,16 +313,18 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t32-persistent-kernel",
       "priority": 8,
-      "status": "todo",
+      "status": "done",
       "title": "Persistent decode kernel prototype",
       "rationale": "Optional advanced optimization to reduce kernel launch overhead.",
       "scope": [
         "Prototype persistent kernel for decode loop.",
-        "Limit scope to experimentation and benchmarking."
+        "Limit scope to experimentation and benchmarking.",
+        "Use a synthetic decode-style vector command before attempting full transformer integration."
       ],
       "acceptance": [
-        "Prototype builds and runs behind a feature flag.",
-        "Performance impact is measured and documented."
+        "Prototype builds and runs behind Rust lifecycle wrappers.",
+        "CUDA lifecycle test covers start, submit, poll, and idempotent stop.",
+        "Synthetic M40 benchmark improved from ~32.3 us launch-based work to ~28.2 us persistent-worker work."
       ]
     },
     {

@@ -176,6 +176,9 @@ Current M40 validation target:
 - Prefill/decode attention can be enqueued on separate non-blocking CUDA
   streams for benchmarked overlap experiments; the default CLI/server decode
   path remains synchronous until a request scheduler can use this safely.
+- Persistent decode has an experimental synthetic worker prototype with Rust
+  lifecycle wrappers and a benchmark. It is not wired into CLI/server generation
+  yet; use it only to evaluate launch-overhead reduction candidates.
 - Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
   the first `__ldg` experiment for weighted RMSNorm; current measurements keep
   the default kernel unchanged.

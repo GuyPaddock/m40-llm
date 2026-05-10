@@ -10,12 +10,15 @@
 #include <cstdlib>
 #include "common.h"
 
+struct M40llmPersistentDecode;
+
 struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
     int prefill_priority;
     int decode_priority;
+    M40llmPersistentDecode* persistent_decode;
 #ifdef M40LLM_HAVE_CUBLAS
     cublasHandle_t cublas;
 #endif
@@ -147,6 +150,7 @@ extern "C" {
         ctx->device_id = selected;
         ctx->prefill_priority = 0;
         ctx->decode_priority = 0;
+        ctx->persistent_decode = nullptr;
 
         int least_priority = 0;
         int greatest_priority = 0;
@@ -599,15 +603,7 @@ extern "C" int m40llm_rms_norm_f32_weighted(
     }
 
 
-    void m40llm_destroy_context(M40llmCudaContext* ctx) {
-        if (!ctx) return;
-    #ifdef M40LLM_HAVE_CUBLAS
-        cublasDestroy(ctx->cublas);
-    #endif
-        cudaStreamDestroy(ctx->prefill_stream);
-        cudaStreamDestroy(ctx->decode_stream);
-        delete ctx;
-    }
+    void m40llm_destroy_context(M40llmCudaContext* ctx);
 
     int m40llm_upload_weights(
         M40llmCudaContext* ctx,
@@ -2505,6 +2501,189 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
 
 #endif // experimental block
 
-    int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
-    int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { return ctx ? 0 : -1; }
+    struct M40llmPersistentDecodeState {
+        volatile uint32_t stop;
+        volatile uint32_t command;
+        volatile uint32_t status;
+        volatile uint32_t command_id;
+        const float* in;
+        float* out;
+        uint32_t n;
+        uint32_t iterations;
+        float scale;
+        float bias;
+    };
+
+    struct M40llmPersistentDecode {
+        M40llmPersistentDecodeState* host_state;
+        M40llmPersistentDecodeState* device_state;
+        cudaStream_t stream;
+        uint32_t next_command_id;
+        bool running;
+    };
+
+    __global__ void persistent_decode_vec_kernel(M40llmPersistentDecodeState* state) {
+        while (state->stop == 0) {
+            if (state->command == 1 && state->status == 1) {
+                const float* in = state->in;
+                float* out = state->out;
+                const uint32_t n = state->n;
+                const uint32_t iterations = state->iterations == 0 ? 1 : state->iterations;
+                const float scale = state->scale;
+                const float bias = state->bias;
+
+                for (uint32_t i = threadIdx.x; i < n; i += blockDim.x) {
+                    float x = in[i];
+                    for (uint32_t it = 0; it < iterations; ++it) {
+                        x = x * scale + bias;
+                    }
+                    out[i] = x;
+                }
+                __syncthreads();
+                if (threadIdx.x == 0) {
+                    __threadfence_system();
+                    state->command = 0;
+                    state->status = 2;
+                    __threadfence_system();
+                }
+            } else {
+                for (volatile int spin = 0; spin < 64; ++spin) {}
+            }
+        }
+    }
+
+    static int persistent_decode_stop_impl(M40llmCudaContext* ctx) {
+        if (!ctx) return -1;
+        M40llmPersistentDecode* session = ctx->persistent_decode;
+        if (!session) return 0;
+        if (session->host_state) {
+            session->host_state->stop = 1;
+            __sync_synchronize();
+        }
+        if (session->running) {
+            cudaError_t err = cudaStreamSynchronize(session->stream);
+            if (err != cudaSuccess) return -2;
+            session->running = false;
+        }
+        if (session->stream) {
+            cudaStreamDestroy(session->stream);
+        }
+        if (session->host_state) {
+            cudaFreeHost(session->host_state);
+        }
+        delete session;
+        ctx->persistent_decode = nullptr;
+        return 0;
+    }
+
+    int m40llm_start_persistent_decode(M40llmCudaContext* ctx) {
+        if (!ctx) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        if (ctx->persistent_decode) return 0;
+
+        M40llmPersistentDecode* session = new M40llmPersistentDecode();
+        memset(session, 0, sizeof(M40llmPersistentDecode));
+        session->next_command_id = 1;
+
+        cudaError_t err = cudaHostAlloc(
+            reinterpret_cast<void**>(&session->host_state),
+            sizeof(M40llmPersistentDecodeState),
+            cudaHostAllocMapped);
+        if (err != cudaSuccess) {
+            delete session;
+            return -3;
+        }
+        memset(session->host_state, 0, sizeof(M40llmPersistentDecodeState));
+        err = cudaHostGetDevicePointer(
+            reinterpret_cast<void**>(&session->device_state),
+            session->host_state,
+            0);
+        if (err != cudaSuccess) {
+            cudaFreeHost(session->host_state);
+            delete session;
+            return -4;
+        }
+        err = cudaStreamCreateWithPriority(
+            &session->stream,
+            cudaStreamNonBlocking,
+            ctx->decode_priority);
+        if (err != cudaSuccess) {
+            cudaFreeHost(session->host_state);
+            delete session;
+            return -5;
+        }
+
+        persistent_decode_vec_kernel<<<1, 256, 0, session->stream>>>(session->device_state);
+        err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            cudaStreamDestroy(session->stream);
+            cudaFreeHost(session->host_state);
+            delete session;
+            return -6;
+        }
+        session->running = true;
+        ctx->persistent_decode = session;
+        return 0;
+    }
+
+    int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) {
+        return persistent_decode_stop_impl(ctx);
+    }
+
+    int m40llm_persistent_decode_submit_vec(
+        M40llmCudaContext* ctx,
+        const void* d_in_f32,
+        void* d_out_f32,
+        uint32_t n,
+        float scale,
+        float bias,
+        uint32_t iterations,
+        uint32_t* out_command_id) {
+        if (!ctx || !d_in_f32 || !d_out_f32 || !out_command_id) return -1;
+        if (n == 0) return -2;
+        if (ensure_device(ctx) != 0) return -3;
+        M40llmPersistentDecode* session = ctx->persistent_decode;
+        if (!session || !session->host_state || !session->running) return -4;
+        M40llmPersistentDecodeState* state = session->host_state;
+        if (state->status == 1 || state->command == 1) return -5;
+
+        const uint32_t command_id = session->next_command_id++;
+        state->in = reinterpret_cast<const float*>(d_in_f32);
+        state->out = reinterpret_cast<float*>(d_out_f32);
+        state->n = n;
+        state->iterations = iterations == 0 ? 1 : iterations;
+        state->scale = scale;
+        state->bias = bias;
+        state->command_id = command_id;
+        state->status = 1;
+        __sync_synchronize();
+        state->command = 1;
+        __sync_synchronize();
+        *out_command_id = command_id;
+        return 0;
+    }
+
+    int m40llm_persistent_decode_poll(
+        M40llmCudaContext* ctx,
+        uint32_t* out_status,
+        uint32_t* out_command_id) {
+        if (!ctx || !out_status || !out_command_id) return -1;
+        M40llmPersistentDecode* session = ctx->persistent_decode;
+        if (!session || !session->host_state) return -2;
+        __sync_synchronize();
+        *out_status = session->host_state->status;
+        *out_command_id = session->host_state->command_id;
+        return 0;
+    }
+
+    void m40llm_destroy_context(M40llmCudaContext* ctx) {
+        if (!ctx) return;
+        persistent_decode_stop_impl(ctx);
+    #ifdef M40LLM_HAVE_CUBLAS
+        cublasDestroy(ctx->cublas);
+    #endif
+        cudaStreamDestroy(ctx->prefill_stream);
+        cudaStreamDestroy(ctx->decode_stream);
+        delete ctx;
+    }
 } // extern "C"

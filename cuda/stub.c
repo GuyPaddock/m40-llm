@@ -189,6 +189,23 @@ int m40llm_stream_synchronize(M40llmCudaContext* ctx, uint32_t stream_kind) {
 
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
+int m40llm_persistent_decode_submit_vec(
+    M40llmCudaContext* ctx,
+    const void* d_in_f32,
+    void* d_out_f32,
+    uint32_t n,
+    float scale,
+    float bias,
+    uint32_t iterations,
+    uint32_t* out_command_id) {
+    (void)ctx; (void)d_in_f32; (void)d_out_f32; (void)n; (void)scale; (void)bias; (void)iterations; (void)out_command_id; return -1;
+}
+int m40llm_persistent_decode_poll(
+    M40llmCudaContext* ctx,
+    uint32_t* out_status,
+    uint32_t* out_command_id) {
+    (void)ctx; (void)out_status; (void)out_command_id; return -1;
+}
 
 
   int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {

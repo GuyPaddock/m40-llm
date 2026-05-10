@@ -442,3 +442,30 @@ Notes:
 - This is a small isolated win, not an end-to-end server scheduling change.
   Keep the normal generate path synchronous until a batched scheduler can avoid
   shared KV/workspace hazards.
+
+## 2026-05-10: Persistent Decode Prototype
+
+Persistent decode now has an experimental synthetic worker path. The prototype
+keeps one CUDA block resident, polls a mapped host command slot, applies a small
+decode-style vector transform to device buffers, and reports completion through
+the same command slot. It is intentionally not wired into CLI/server generation.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench persistent_decode -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Workload | Time estimate | Throughput estimate |
+| --- | ---: | ---: |
+| `launch_residual_add/2048` | 32.305 us | 63.397 Melem/s |
+| `persistent_worker/2048` | 28.239 us | 72.524 Melem/s |
+
+Notes:
+
+- This shows a small launch-overhead reduction for a synthetic workload, enough
+  to keep the persistent path as a candidate for future decode scheduling work.
+- The prototype should remain isolated until the remaining host fallbacks and
+  shared workspace/KV hazards are cleaned up.

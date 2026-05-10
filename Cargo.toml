@@ -83,6 +83,10 @@ harness = false
 name = "stream_overlap"
 harness = false
 
+[[bench]]
+name = "persistent_decode"
+harness = false
+
 
 [[test]]
 name = "m40-llm"
