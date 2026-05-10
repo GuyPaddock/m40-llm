@@ -275,6 +275,46 @@ extern "C" {
         }
     }
 
+    __global__ void rms_norm_f32_weighted_parallel_ldg(
+        const float* __restrict__ input,
+        const void* __restrict__ weight,
+        float* __restrict__ output,
+        size_t n_rows,
+        size_t row_stride,
+        float eps,
+        uint32_t weight_dtype) {
+        const size_t row = blockIdx.x;
+        if (row >= n_rows) return;
+
+        extern __shared__ float reduce[];
+        const uint32_t tid = threadIdx.x;
+        const size_t base = row * row_stride;
+
+        float ss = 0.0f;
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            const float x = __ldg(input + base + i);
+            ss += x * x;
+        }
+        reduce[tid] = ss;
+        __syncthreads();
+
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+
+        const float scale = rsqrtf(reduce[0] / static_cast<float>(row_stride) + eps);
+        const __half* w_f16 = reinterpret_cast<const __half*>(weight);
+        const float* w_f32 = reinterpret_cast<const float*>(weight);
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            const float x = __ldg(input + base + i);
+            const float w = weight_dtype == 0 ? __half2float(__ldg(w_f16 + i)) : __ldg(w_f32 + i);
+            output[base + i] = x * scale * w;
+        }
+    }
+
     __global__ void kernel_f16_to_f32(const __half* in, float* out, size_t n) {
         size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < n) {
@@ -359,14 +399,31 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         if (weight_dtype > 1) return -4;
         cudaGetLastError();
         const int threads = 256;
-        rms_norm_f32_weighted_parallel<<<rows, threads, threads * sizeof(float), ctx->decode_stream>>>(
-            reinterpret_cast<const float*>(d_input),
-            d_weight,
-            reinterpret_cast<float*>(d_output),
-            rows,
-            dim,
-            eps,
-            weight_dtype);
+        const char* cache_experiment = getenv("M40LLM_CACHE_EXPERIMENT");
+        if (cache_experiment && strcmp(cache_experiment, "ldg") == 0) {
+            static int logged_ldg = 0;
+            if (!logged_ldg) {
+                fprintf(stderr, "[cuda] rms_norm_weighted cache experiment: __ldg\n");
+                logged_ldg = 1;
+            }
+            rms_norm_f32_weighted_parallel_ldg<<<rows, threads, threads * sizeof(float), ctx->decode_stream>>>(
+                reinterpret_cast<const float*>(d_input),
+                d_weight,
+                reinterpret_cast<float*>(d_output),
+                rows,
+                dim,
+                eps,
+                weight_dtype);
+        } else {
+            rms_norm_f32_weighted_parallel<<<rows, threads, threads * sizeof(float), ctx->decode_stream>>>(
+                reinterpret_cast<const float*>(d_input),
+                d_weight,
+                reinterpret_cast<float*>(d_output),
+                rows,
+                dim,
+                eps,
+                weight_dtype);
+        }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->decode_stream);

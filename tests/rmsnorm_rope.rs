@@ -171,6 +171,66 @@ fn weighted_rms_norm_kernel_matches_cpu_f32_weight() -> Result<()> {
 }
 
 #[test]
+fn weighted_rms_norm_ldg_experiment_matches_cpu_f32_weight() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+
+    let rows = 3usize;
+    let dim = 64usize;
+    let eps = 1e-5f32;
+    let input: Vec<f32> = (0..rows * dim)
+        .map(|i| ((i * 17 % 251) as f32) * 0.01 - 1.25)
+        .collect();
+    let weight: Vec<f32> = (0..dim).map(|i| 0.75 + i as f32 * 0.003).collect();
+    let expected = cpu_rms_norm_weighted(&input, &weight, rows, dim, eps);
+
+    let input_bytes = input.len() * std::mem::size_of::<f32>();
+    let weight_bytes = weight.len() * std::mem::size_of::<f32>();
+    let d_in = ctx.device_malloc(input_bytes)?;
+    let d_weight = ctx.device_malloc(weight_bytes)?;
+    let d_out = ctx.device_malloc(input_bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_in, input.as_ptr() as *const c_void, input_bytes)?;
+        ctx.memcpy_h2d(d_weight, weight.as_ptr() as *const c_void, weight_bytes)?;
+        std::env::set_var("M40LLM_CACHE_EXPERIMENT", "ldg");
+        let result = ctx.rms_norm_f32_weighted(
+            d_in,
+            d_weight as *const c_void,
+            d_out,
+            rows as u32,
+            dim as u32,
+            eps,
+            1,
+        );
+        std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
+        result?;
+        let mut out_bytes = vec![0u8; input_bytes];
+        ctx.memcpy_d2h(out_bytes.as_mut_ptr() as *mut c_void, d_out, input_bytes)?;
+        let actual: Vec<f32> = out_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        for (i, (a, b)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (a - b).abs() < 1e-4,
+                "mismatch at {}: got {}, expected {}",
+                i,
+                a,
+                b
+            );
+        }
+    }
+    unsafe {
+        ctx.device_free(d_in)?;
+        ctx.device_free(d_weight)?;
+        ctx.device_free(d_out)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn rope_kernel_matches_cpu() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(c) => c,
