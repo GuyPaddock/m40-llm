@@ -227,6 +227,16 @@ mod ffi {
             seq_len: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_batched(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
 
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
@@ -1533,6 +1543,40 @@ impl KVCache {
         };
         if rc != 0 {
             return Err(anyhow!("m40llm_attention_last_token_f32_gqa failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    /// # Safety
+    /// `d_seq_ids` and `d_seq_lens` must contain `batch_size` u32 entries.
+    /// `d_q_f32` and `d_out_f32` are packed [batch_size, q_heads, head_dim].
+    pub unsafe fn attention_last_token_f32_gqa_batched(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_batched(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_batched failed: {rc}"
+            ));
         }
         Ok(())
     }

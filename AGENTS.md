@@ -353,6 +353,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
       ],
       "acceptance": [
         "Batch metadata exposes valid lengths, packed offsets, and deterministic length buckets.",
+        "Batched last-token GQA attention supports mixed KV lengths for decode.",
         "Mixed-length batches avoid full max_seq padding work where possible.",
         "Prefill and attention operate over valid regions end-to-end.",
         "Benchmarks cover skewed, 0.6*max_seq average, and near-uniform length distributions."

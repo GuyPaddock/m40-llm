@@ -164,6 +164,9 @@ Current M40 validation target:
 - Variable-length batch metadata is available through `m40_llm::infer` for
   packed token/Q/KV offsets and length buckets; CUDA kernels will consume this
   path incrementally to avoid padded-token prefill work.
+- Batched last-token GQA attention supports packed Q/output buffers with
+  per-sequence `seq_len` metadata for mixed-KV-length decode batches on
+  `head_dim=64`.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

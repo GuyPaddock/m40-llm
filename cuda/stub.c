@@ -127,6 +127,18 @@ int m40llm_attention_last_token_f32_gqa(
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
 }
 
+int m40llm_attention_last_token_f32_gqa_batched(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    const uint32_t* seq_ids_dev,
+    const uint32_t* seq_lens_dev,
+    uint32_t batch_size,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
+}
+
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 
