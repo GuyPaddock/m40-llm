@@ -202,6 +202,79 @@ extern "C" {
         }
     }
 
+    __global__ void rms_norm_f32_parallel(
+        const float* __restrict__ input,
+        float* __restrict__ output,
+        size_t n_rows,
+        size_t row_stride,
+        float eps) {
+        const size_t row = blockIdx.x;
+        if (row >= n_rows) return;
+
+        extern __shared__ float reduce[];
+        const uint32_t tid = threadIdx.x;
+        const size_t base = row * row_stride;
+
+        float ss = 0.0f;
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            const float x = input[base + i];
+            ss += x * x;
+        }
+        reduce[tid] = ss;
+        __syncthreads();
+
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+
+        const float scale = rsqrtf(reduce[0] / static_cast<float>(row_stride) + eps);
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            output[base + i] = input[base + i] * scale;
+        }
+    }
+
+    __global__ void rms_norm_f32_weighted_parallel(
+        const float* __restrict__ input,
+        const void* __restrict__ weight,
+        float* __restrict__ output,
+        size_t n_rows,
+        size_t row_stride,
+        float eps,
+        uint32_t weight_dtype) {
+        const size_t row = blockIdx.x;
+        if (row >= n_rows) return;
+
+        extern __shared__ float reduce[];
+        const uint32_t tid = threadIdx.x;
+        const size_t base = row * row_stride;
+
+        float ss = 0.0f;
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            const float x = input[base + i];
+            ss += x * x;
+        }
+        reduce[tid] = ss;
+        __syncthreads();
+
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+
+        const float scale = rsqrtf(reduce[0] / static_cast<float>(row_stride) + eps);
+        const __half* w_f16 = reinterpret_cast<const __half*>(weight);
+        const float* w_f32 = reinterpret_cast<const float*>(weight);
+        for (size_t i = tid; i < row_stride; i += blockDim.x) {
+            const float w = weight_dtype == 0 ? __half2float(w_f16[i]) : w_f32[i];
+            output[base + i] = input[base + i] * scale * w;
+        }
+    }
+
     __global__ void kernel_f16_to_f32(const __half* in, float* out, size_t n) {
         size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < n) {
@@ -260,7 +333,8 @@ extern "C" int m40llm_rms_norm_f32(
         float eps) {
         if (!ctx || !d_input || !d_output || dim == 0) return -1;
         cudaGetLastError();
-        rms_norm_f32<<<rows, 1, 0, ctx->decode_stream>>>(
+        const int threads = 256;
+        rms_norm_f32_parallel<<<rows, threads, threads * sizeof(float), ctx->decode_stream>>>(
             reinterpret_cast<const float*>(d_input),
             reinterpret_cast<float*>(d_output),
             rows,
@@ -284,7 +358,8 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         if (!ctx || !d_input || !d_weight || !d_output || dim == 0) return -1;
         if (weight_dtype > 1) return -4;
         cudaGetLastError();
-        rms_norm_f32_weighted<<<rows, 1, 0, ctx->decode_stream>>>(
+        const int threads = 256;
+        rms_norm_f32_weighted_parallel<<<rows, threads, threads * sizeof(float), ctx->decode_stream>>>(
             reinterpret_cast<const float*>(d_input),
             d_weight,
             reinterpret_cast<float*>(d_output),
@@ -914,6 +989,25 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         void* d_C_f32,
         int M, int N, int K) {
         if (!ctx) return -1;
+#ifdef M40LLM_HAVE_CUBLAS
+        float alpha = 1.0f;
+        float beta = 0.0f;
+        cublasStatus_t st = cublasGemmEx(
+            ctx->cublas,
+            CUBLAS_OP_T, CUBLAS_OP_N,
+            N, M, K,
+            &alpha,
+            d_B_f16, CUDA_R_16F, K,
+            d_A_f32, CUDA_R_32F, K,
+            &beta,
+            d_C_f32, CUDA_R_32F, N,
+            CUDA_R_32F,
+            CUBLAS_GEMM_DEFAULT);
+        if (st == CUBLAS_STATUS_SUCCESS) {
+            cudaError_t err = cudaStreamSynchronize(ctx->prefill_stream);
+            return err == cudaSuccess ? 0 : -3;
+        }
+#endif
         const float* A = reinterpret_cast<const float*>(d_A_f32);
         const __half* B = reinterpret_cast<const __half*>(d_B_f16);
         float* C = reinterpret_cast<float*>(d_C_f32);

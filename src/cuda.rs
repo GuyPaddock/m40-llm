@@ -760,7 +760,11 @@ impl CudaContext {
             log_gemm_backend_once(
                 &GEMM_LOG,
                 "m40llm_gemm_f32xf16_gguf_f32",
-                "CUDA GGUF-layout kernel; cuBLAS is not used for dimension-0-fastest GGUF weights",
+                if cfg!(have_cublas) {
+                    "cuBLAS first for GGUF dimension-0-fastest weights; CUDA kernel fallback"
+                } else {
+                    "CUDA GGUF-layout kernel fallback"
+                },
             );
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xf16_gguf_f32(

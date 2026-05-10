@@ -118,8 +118,9 @@ same non-streaming decode helper as `POST /generate`.
 - Tensor view tracing: set `M40LLM_TENSOR_VIEW_LOG=1` to print each GGUF
   tensor-to-device pointer mapping during model load.
 - GEMM backend tracing: set `M40LLM_GEMM_LOG=1` to print one backend
-  selection line per GEMM wrapper. GGUF F16 projection weights currently use
-  the dedicated GGUF-layout CUDA kernel even when cuBLAS is linked.
+  selection line per GEMM wrapper. With `M40LLM_ENABLE_CUBLAS=1`, GGUF F16
+  projection weights try the cuBLAS path first and fall back to the dedicated
+  GGUF-layout CUDA kernel when needed.
 - Timing tracing: set `M40LLM_TIMING_LOG=1` to print per-token and per-layer
   decode timing. This is intentionally verbose and intended for profiling runs.
 
@@ -148,15 +149,15 @@ Current M40 validation target:
 - Expected log evidence: `full-layer forward enabled layers=22`
 - CLI evidence: `m40-llm generate ... --require-sm52` prints decoded text
   while exercising the same full-layer CUDA path as non-streaming `/generate`.
-- CUDA hot path: RMSNorm, RoPE, residual adds, and SiLU/gated MLP
+- CUDA hot path: parallel RMSNorm, RoPE, residual adds, and SiLU/gated MLP
   activation run on device in the forward path.
 - Fresh M40 GEMM, attention, and TinyLlama `/generate` baselines: see
   `docs/perf_baselines.md`.
 - Workspace reuse removes repeated forward scratch allocation.
 - The GQA last-token attention path has an optimized `head_dim=64` CUDA kernel;
   set `M40LLM_ATTN_LOG=1` to print attention backend selection.
-- Current timed CLI profiles point at projection and norm work as the next
-  performance target before stream separation.
+- Current timed CLI profiles point at projection GEMMs as the next performance
+  target before stream separation.
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.

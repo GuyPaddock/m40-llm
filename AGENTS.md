@@ -8,8 +8,8 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
 ## How to Start Each Task
 1. Review `CONTRIBUTING.md` and set up the git hooks (pre-commit and commit message hooks).
 2. Ensure Cocogitto (`cog`) is installed and working.
-3. Ensure `nvcc` is available. If missing, install CUDA Toolkit compatible with Tesla M40 (up to `cuda-nvcc=12.4.*`, `cuda-cudart=12.4.*`, and `cuda-cudart-dev=12.4.*`) and modern `gcc`/`g++`.
-   - Always install CUDA Toolkit **12.4** plus cuBLAS development headers before building (use the micromamba command in `README.md`).
+3. Ensure `nvcc` is available. If missing, install a CUDA Toolkit that still supports compiling sm_52 kernels, plus cuBLAS development headers and modern `gcc`/`g++`.
+   - The micromamba CUDA **12.4** command in `README.md` is the reproducible fallback; the build also detects local `/opt/cuda` installs.
 4. If you are running in OpenHands (not Codex): Use micromamba to install packages, not apt-get.
 
 ## Commit Discipline
@@ -275,8 +275,25 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
       ]
     },
     {
-      "id": "t33-stream-sep",
+      "id": "t31d-optimize-rmsnorm",
       "priority": 6,
+      "status": "done",
+      "title": "Optimize RMSNorm decode kernels",
+      "rationale": "Short-context decode profiles showed serial per-row RMSNorm consumed roughly 17 ms per layer.",
+      "scope": [
+        "Replace one-thread-per-row RMSNorm with parallel per-row reductions.",
+        "Keep weighted and unweighted RMSNorm parity tests green.",
+        "Remeasure TinyLlama CLI decode latency."
+      ],
+      "acceptance": [
+        "Norm latency is no longer a dominant short-context decode cost.",
+        "CUDA RMSNorm/RoPE tests pass.",
+        "Updated measurements are recorded in `docs/perf_baselines.md`."
+      ]
+    },
+    {
+      "id": "t33-stream-sep",
+      "priority": 7,
       "status": "todo",
       "title": "Prefill and decode stream separation",
       "rationale": "Separate CUDA streams allow better overlap and latency hiding after projection and norm costs are reduced.",
@@ -292,7 +309,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t32-persistent-kernel",
-      "priority": 7,
+      "priority": 8,
       "status": "todo",
       "title": "Persistent decode kernel prototype",
       "rationale": "Optional advanced optimization to reduce kernel launch overhead.",
@@ -307,7 +324,7 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     },
     {
       "id": "t26-3-impl",
-      "priority": 8,
+      "priority": 9,
       "status": "todo",
       "title": "Remove remaining host fallbacks in forward path",
       "rationale": "Host fallbacks in hot paths negate GPU gains.",

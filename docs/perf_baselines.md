@@ -207,3 +207,44 @@ Notes:
 - Logits host copyback is currently negligible compared with full-layer forward.
 - Stream separation should follow another projection/norm optimization pass,
   unless a future profile shows synchronization overhead has become dominant.
+
+## 2026-05-09: Parallel RMSNorm Decode Optimization
+
+Changes since earlier baselines:
+
+- `m40llm_rms_norm_f32` and `m40llm_rms_norm_f32_weighted` now use one CUDA
+  block per row and parallel reduction across the hidden dimension.
+- The build script now detects CUDA/cuBLAS installs under `/opt/cuda`, including
+  `/opt/cuda/targets/x86_64-linux/{include,lib}`.
+- `M40LLM_ENABLE_CUBLAS` is now a build-script invalidation key, so toggling it
+  forces Cargo to re-evaluate `cfg(have_cublas)`.
+
+TinyLlama CLI timing refresh:
+
+| Region | Previous profile | After parallel RMSNorm |
+| --- | ---: | ---: |
+| `cli.generate_text_total` | 2969.878 ms | 2202.864 ms |
+| `cli.decode_loop` | 2950.514 ms | 2184.234 ms |
+| Prompt token 0 `forward_all_layers` | 1433.026 ms | 1059.508 ms |
+| Prompt token 1 `forward_all_layers` | 1424.404 ms | 1053.145 ms |
+| Prompt token 0 `logits` | 29.873 ms | 21.261 ms |
+| Prompt token 1 `logits` | 33.612 ms | 21.290 ms |
+
+Steady per-layer short-context timings:
+
+| Operation | Previous typical time | After parallel RMSNorm |
+| --- | ---: | ---: |
+| `attn_norm` | ~8.5 ms | ~0.05 ms |
+| `ffn_norm` | ~8.5 ms | ~0.04-0.05 ms |
+| `mlp_gate_up` | ~17.6 ms | ~17.6 ms |
+| `qkv_project` | ~13.1 ms | ~13.1 ms |
+| `mlp_down` | ~12.1 ms | ~12.1 ms |
+| `out_project` | ~4.4 ms | ~4.4 ms |
+
+Notes:
+
+- Norm latency is no longer a meaningful short-context bottleneck.
+- cuBLAS is now correctly detected from the local `/opt/cuda` install, but the
+  current GGUF F16 projection path remains effectively projection-bound at the
+  same timings. The next optimization target should be projection GEMM layout and
+  FP32 materialization/transposition for `cublasSgemm` on sm_52.
