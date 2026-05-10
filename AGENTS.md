@@ -373,7 +373,9 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
       "acceptance": [
         "Weighted RMSNorm has an opt-in `M40LLM_CACHE_EXPERIMENT=ldg` path with parity coverage.",
         "RMSNorm default-vs-`__ldg` benchmark results are recorded.",
-        "Remaining work: test KV-cache attention reads next; texture objects only after `__ldg` data shows a likely target."
+        "KV-cache GQA attention has an opt-in `M40LLM_CACHE_EXPERIMENT=ldg_kv` path with parity coverage.",
+        "KV-cache default-vs-`ldg_kv` benchmark results are recorded.",
+        "Remaining work: defer texture objects until profiling identifies a stronger read-cache target."
       ]
     }
   ]

@@ -372,3 +372,40 @@ Notes:
   justify changing the default kernel.
 - The next read-only cache target should be KV-cache attention reads, where the
   same K/V rows are revisited across score and value passes.
+
+## 2026-05-10: KV-Cache `__ldg` Attention Experiment
+
+Last-token GQA attention now has an opt-in `__ldg` KV-cache read experiment
+selected with `M40LLM_CACHE_EXPERIMENT=ldg_kv`. The default path is unchanged.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench attention -- attention_last_token_f32_gqa --sample-size 10
+```
+
+Single-sequence decode:
+
+| Sequence length | Default | `ldg_kv` experiment | Result |
+| ---: | ---: | ---: | --- |
+| 1 | 10.679 us | 10.712 us | neutral/slower |
+| 16 | 40.075 us | 40.148 us | neutral/slower |
+| 128 | 260.00 us | 260.37 us | neutral/slower |
+| 512 | 1.0969 ms | 1.0976 ms | neutral/slower |
+| 1024 | 2.2133 ms | 2.2136 ms | neutral/slower |
+
+Batched mixed-length decode:
+
+| Distribution | Default batched | `ldg_kv` batched | Result |
+| --- | ---: | ---: | --- |
+| `avg_0p6_max` | 1.5727 ms | 1.5753 ms | neutral/slower |
+| `skewed` | 2.1113 ms | 2.1129 ms | neutral/slower |
+| `near_uniform` | 2.4353 ms | 2.4351 ms | neutral/noise |
+
+Notes:
+
+- Keep `ldg_kv` experimental; it does not justify changing the default attention
+  kernel on these M40 measurements.
+- Future cache work should avoid more `__ldg` duplication unless a profile shows
+  a stronger read-cache bottleneck. Texture-object experiments should remain
+  deferred until there is a more promising target.

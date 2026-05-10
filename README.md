@@ -174,6 +174,9 @@ Current M40 validation target:
 - Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
   the first `__ldg` experiment for weighted RMSNorm; current measurements keep
   the default kernel unchanged.
+- `M40LLM_CACHE_EXPERIMENT=ldg_kv` enables an opt-in KV-cache `__ldg`
+  experiment for head-dim-64 GQA attention; M40 measurements also keep the
+  default attention kernels unchanged.
 
 Variable-length batching is inspired by Zhang and Lu's SC25 research poster,
 "An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length
