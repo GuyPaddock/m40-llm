@@ -171,6 +171,9 @@ Current M40 validation target:
   `[total_q_tokens, q_heads, 64]` Q/output and
   `[total_kv_tokens, kv_heads, 64]` K/V buffers, with a CPU-reference parity
   test and initial M40 benchmark baseline.
+- Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
+  the first `__ldg` experiment for weighted RMSNorm; current measurements keep
+  the default kernel unchanged.
 
 Variable-length batching is inspired by Zhang and Lu's SC25 research poster,
 "An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length

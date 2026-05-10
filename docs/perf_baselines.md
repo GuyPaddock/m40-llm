@@ -345,3 +345,30 @@ Packed prefill notes:
 - Remaining `t31e-varlen-batch` work should tune tile choices for M40 occupancy
   and shared-memory limits, then integrate the packed path into higher-level
   batched prefill instead of leaving it as an exposed kernel/benchmark.
+
+## 2026-05-10: Read-Only Cache Experiment Baseline
+
+Weighted RMSNorm now has an opt-in `__ldg` read-only cache experiment selected
+with `M40LLM_CACHE_EXPERIMENT=ldg`. The default path is unchanged.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench rmsnorm -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Shape | Default | `__ldg` experiment | Result |
+| --- | ---: | ---: | --- |
+| rows=1, dim=2048 | 13.677 us | 14.599 us | slower |
+| rows=4, dim=2048 | 13.748 us | 13.594 us | neutral/slightly faster |
+| rows=1, dim=4096 | 17.167 us | 18.778 us | slower |
+| rows=4, dim=4096 | 17.063 us | 17.807 us | slower |
+
+Notes:
+
+- Keep the `__ldg` RMSNorm path experimental; the first measurements do not
+  justify changing the default kernel.
+- The next read-only cache target should be KV-cache attention reads, where the
+  same K/V rows are revisited across score and value passes.

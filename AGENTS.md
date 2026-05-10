@@ -359,6 +359,22 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
         "Benchmarks cover padded, packed, and bucketed prefill dispatch for skewed, 0.6*max_seq average, and near-uniform length distributions.",
         "Remaining work: tune variable tile selection and integrate packed prefill above the kernel/benchmark layer."
       ]
+    },
+    {
+      "id": "t31f-readonly-cache-experiments",
+      "priority": 11,
+      "status": "in_progress",
+      "title": "Read-only cache experiments for non-GEMM paths",
+      "rationale": "M40 read-only cache and texture paths may help read-heavy kernels, but only measured wins should become defaults.",
+      "scope": [
+        "Benchmark opt-in `__ldg` and texture-cache variants for embeddings, RoPE constants, dequant tables, KV reads, norms, and activation LUTs.",
+        "Keep experiments gated until parity and performance justify default use."
+      ],
+      "acceptance": [
+        "Weighted RMSNorm has an opt-in `M40LLM_CACHE_EXPERIMENT=ldg` path with parity coverage.",
+        "RMSNorm default-vs-`__ldg` benchmark results are recorded.",
+        "Remaining work: test KV-cache attention reads next; texture objects only after `__ldg` data shows a likely target."
+      ]
     }
   ]
 },
