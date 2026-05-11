@@ -4,6 +4,43 @@ use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 impl LoadedModel {
+    pub(super) fn kv_physical_slot_for_layer_sequence(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+    ) -> Result<u32> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if layer_id >= self.model_config.block_count {
+            anyhow::bail!(
+                "KV layer_id {} out of range for {} layers",
+                layer_id,
+                self.model_config.block_count
+            );
+        }
+        if sequence_id != 0 {
+            anyhow::bail!(
+                "KV layer/sequence addressing currently supports sequence_id=0 only; got {}",
+                sequence_id
+            );
+        }
+        if kv.max_batch_size() < self.model_config.block_count {
+            anyhow::bail!(
+                "KV cache has {} physical slots, but layer-addressed decode needs {}",
+                kv.max_batch_size(),
+                self.model_config.block_count
+            );
+        }
+        Ok(layer_id)
+    }
+
+    pub fn kv_cache_can_address_layer_sequence(&self, layer_id: u32, sequence_id: u32) -> bool {
+        self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)
+            .is_ok()
+    }
+
     // Convenience: Append K/V from host FP32 slices. Copies to device then calls append.
     pub fn append_kv_token_f32_from_host(
         &self,
@@ -55,6 +92,29 @@ impl LoadedModel {
                 v_host.as_ptr() as *const c_void,
             )
         }
+    }
+
+    pub fn append_kv_token_f32_from_host_for_layer(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+        position: u32,
+        k_host: &[f32],
+        v_host: &[f32],
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if position >= kv.max_seq_len() {
+            anyhow::bail!(
+                "KV position {} out of range for max_seq_len {}",
+                position,
+                kv.max_seq_len()
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.append_kv_token_f32_from_host(physical_slot, k_host, v_host)
     }
 
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
@@ -183,6 +243,24 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA attention.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn run_attention_for_layer(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        layer_id: u32,
+        sequence_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.run_attention(d_q, d_out, physical_slot, seq_len, dim, num_heads, head_dim)
+    }
+
+    /// # Safety
     /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers containing one token's K/V in f32 layout.
     pub unsafe fn append_kv_token_f32(
         &self,
@@ -210,6 +288,32 @@ impl LoadedModel {
             let _ = (seq_id, d_k_f32, d_v_f32);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid device pointers containing one token's
+    /// K/V vectors in f32 layout for `layer_id`, `sequence_id`, and `position`.
+    pub unsafe fn append_kv_token_f32_for_layer(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+        position: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if position >= kv.max_seq_len() {
+            anyhow::bail!(
+                "KV position {} out of range for max_seq_len {}",
+                position,
+                kv.max_seq_len()
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.append_kv_token_f32(physical_slot, d_k_f32, d_v_f32)
     }
 
     pub fn run_mlp(

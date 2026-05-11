@@ -1686,6 +1686,9 @@ impl KVCache {
     pub fn max_batch_size(&self) -> u32 {
         self.inner.max_batch_size
     }
+    pub fn max_seq_len(&self) -> u32 {
+        self.inner.max_seq_len
+    }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
         #[cfg(feature = "cuda")]

@@ -503,6 +503,7 @@ impl LoadedModel {
 impl LoadedModel {
     /// Helper to run forward_one_token_minimal using mapped layer weights.
     /// Assumes embeddings have already produced x (f32) for the token index.
+    /// The KV cache is addressed explicitly as KV[layer][sequence][position].
     /// # Safety
     /// - d_x_f32 and d_out_f32 must be valid device pointers on this model's CUDA context
     /// - Pointers must reference buffers sized for the provided d_model and hidden dims of the mapped layer
@@ -510,13 +511,27 @@ impl LoadedModel {
         &self,
         d_x_f32: *const c_void,
         layer: usize,
-        seq_id: u32,
+        sequence_id: u32,
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         let w = self.map_standard_layer(layer)?;
+        let layer_id: u32 = layer
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
+        let position = seq_len.saturating_sub(1);
+        if let Some(kv) = &self.kv_cache {
+            if position >= kv.max_seq_len() {
+                anyhow::bail!(
+                    "KV position {} out of range for max_seq_len {}",
+                    position,
+                    kv.max_seq_len()
+                );
+            }
+        }
         #[cfg(feature = "cuda")]
         {
+            let kv_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
             let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
             let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
             let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
@@ -552,7 +567,7 @@ impl LoadedModel {
                 w_up_ptr,
                 w_down_ptr,
                 w.hidden_dim as i32,
-                seq_id,
+                kv_slot,
                 seq_len,
                 attn_norm_ptr,
                 ffn_norm_ptr,
@@ -658,7 +673,13 @@ impl LoadedModel {
             };
 
             // Append KV (host path)
-            self.append_kv_token_f32_from_host(seq_id, &k_vec, &v_vec)?;
+            self.append_kv_token_f32_from_host_for_layer(
+                layer_id,
+                sequence_id,
+                position,
+                &k_vec,
+                &v_vec,
+            )?;
 
             // Attention over last token using KV cache helper
             let kv = self
@@ -668,12 +689,15 @@ impl LoadedModel {
             let num_heads = kv.num_heads();
             let head_dim = kv.head_dim();
             let mut attn_out = vec![0u8; d_model * 4];
-            kv.attention_last_token_f32(
-                &self.cuda,
-                seq_id,
+            self.run_attention_for_layer(
                 q.as_ptr() as *const c_void,
-                seq_len,
                 attn_out.as_mut_ptr() as *mut c_void,
+                layer_id,
+                sequence_id,
+                seq_len,
+                d_model as u32,
+                num_heads,
+                head_dim,
             )?;
             let attn: Vec<f32> = attn_out
                 .chunks_exact(4)
@@ -786,9 +810,9 @@ impl LoadedModel {
     }
     /// Runs one token through every transformer layer.
     ///
-    /// The current single-request server path uses KV cache sequence slots as
-    /// per-layer slots, so the cache must be allocated with at least
-    /// `model_config.block_count` batch entries.
+    /// The current single-request server path uses explicit layer/sequence KV
+    /// addressing with `sequence_id=0`; internally that still maps each layer
+    /// to one physical KV slot until the cache is widened for real batching.
     ///
     /// # Safety
     /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
@@ -828,6 +852,7 @@ impl LoadedModel {
 
             return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
+                let sequence_id = 0u32;
                 for layer in 0..layer_count {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
@@ -836,7 +861,7 @@ impl LoadedModel {
                     } else {
                         ws.scratch_b
                     };
-                    self.forward_one_token_with_layer(current, layer, layer as u32, seq_len, next)?;
+                    self.forward_one_token_with_layer(current, layer, sequence_id, seq_len, next)?;
                     current = next as *const c_void;
                 }
                 Ok(layer_count)

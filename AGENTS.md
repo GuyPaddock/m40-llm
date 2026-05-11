@@ -49,8 +49,10 @@ complete.
   instrumentation, per-forward-operation profile counter deltas, HTTP generation
   serialization, and a shared CUDA `DecodeSession` for CLI/server decode with
   reusable `d_x`/`d_out` scratch. `ForwardWorkspace` and decode-session scratch
-  now use RAII `DeviceBuffer` cleanup.
-- Next: fix KV cache addressing to distinguish `layer_id` from `sequence_id`.
+  now use RAII `DeviceBuffer` cleanup. Full-layer forward now uses explicit
+  model-level KV layer/sequence addressing instead of passing `layer as seq_id`
+  directly.
+- Next: add FP32 materialization memory-budget reporting and fallback logging.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
