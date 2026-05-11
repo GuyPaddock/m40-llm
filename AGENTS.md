@@ -46,10 +46,11 @@ complete.
 
 ## Current Progress
 - Completed: warm/cold benchmark mode names, launch/sync/allocation/copy counter
-  instrumentation, per-forward-operation profile counter deltas, and HTTP
-  generation serialization.
-- Next: extract shared `DecodeSession` for CLI/server decode and move reusable
-  per-token scratch into that session.
+  instrumentation, per-forward-operation profile counter deltas, HTTP generation
+  serialization, and a shared CUDA `DecodeSession` for CLI/server decode with
+  reusable `d_x`/`d_out` scratch.
+- Next: make `ForwardWorkspace` and broader device allocations RAII-safe, then
+  fix KV cache addressing to distinguish `layer_id` from `sequence_id`.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

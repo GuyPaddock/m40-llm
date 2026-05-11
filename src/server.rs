@@ -309,25 +309,27 @@ async fn generate(
     let logits_fn = {
         let state_for_logits = state.clone();
         #[cfg(feature = "cuda")]
-        let mut step: usize = 0;
-        #[cfg(feature = "cuda")]
-        let mut processed_len: usize = 0;
+        let mut decode_session = {
+            eprintln!(
+                "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                state_for_logits.model.model_config.block_count,
+                full_decode_d_model,
+                full_decode_hidden_dim
+            );
+            crate::decode_session::DecodeSession::new(
+                &state_for_logits.model,
+                full_decode_d_model,
+                true,
+                "server",
+                "server:d_x_embed_f32",
+                "server:d_out_hidden_f32",
+            )
+            .map_err(internal_error)?
+        };
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let model = &state_for_logits.model;
             // KV cache is pre-allocated at startup on the real model instance
 
-            eprintln!("[server] logits_fn called with {} tokens", ids.len());
-            #[cfg(feature = "cuda")]
-            {
-                step += 1;
-                eprintln!(
-                    "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-                    step,
-                    std::process::id(),
-                    model.cuda.device_id(),
-                    CudaContext::total_device_bytes()
-                );
-            }
             // Determine d_model and whether we can run the full transformer stack.
             // Try to infer d_model from embeddings or lm_head as fallback
             #[cfg(not(feature = "cuda"))]
@@ -355,14 +357,6 @@ async fn generate(
                 eprintln!("[server] embeddings shape: {:?}", t.shape);
             }
 
-            #[cfg(feature = "cuda")]
-            let (d, can_forward) = {
-                eprintln!(
-                    "[server] mapped {} standard layers d_model={} hidden_dim={}",
-                    model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
-                );
-                (full_decode_d_model, true)
-            };
             #[cfg(not(feature = "cuda"))]
             let (d, can_forward) = match model.validate_standard_layers() {
                 Ok((d_model, hidden_dim)) => {
@@ -400,90 +394,16 @@ async fn generate(
                     (d_try, false)
                 }
             };
-            let bytes = d * std::mem::size_of::<f32>();
-
             #[cfg(not(feature = "cuda"))]
             {
+                let bytes = d * std::mem::size_of::<f32>();
                 let _ = (can_forward, bytes);
             }
 
             #[cfg(feature = "cuda")]
             {
-                // Last token id to embed
-                if ids.is_empty() {
-                    return Err(anyhow::anyhow!("empty ids"));
-                }
-                if processed_len > ids.len() {
-                    processed_len = 0;
-                    if model.kv_cache.is_some() {
-                        model.reset_kv_cache()?;
-                    }
-                }
-
-                let start = if can_forward {
-                    processed_len
-                } else {
-                    ids.len().saturating_sub(1)
-                };
-                let mut logits: Option<Vec<f32>> = None;
-                for token_idx in start..ids.len() {
-                    let tok_id = ids[token_idx] as u64;
-                    eprintln!("[server] token id {}", tok_id);
-
-                    // Allocate device buffer for embedding row (f32)
-                    let d_x = model
-                        .cuda
-                        .device_malloc_tagged(bytes, "server:d_x_embed_f32")?;
-
-                    let token_logits = (|| -> anyhow::Result<Vec<f32>> {
-                        // Load embedding row for the token into d_x (f32)
-                        unsafe {
-                            model.load_token_embedding_to_f32(tok_id, d_x)?;
-                        }
-
-                        // If we have layer weights and KV, run prompt tokens as prefill and sampled tokens as decode.
-                        if can_forward {
-                            let d_out = model
-                                .cuda
-                                .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
-                            let result = (|| -> anyhow::Result<Vec<f32>> {
-                                unsafe {
-                                    let layers = model.forward_one_token_all_layers(
-                                        d_x as *const _,
-                                        (token_idx + 1) as u32,
-                                        d_out,
-                                    )?;
-                                    if token_idx == start {
-                                        eprintln!(
-                                            "[server] full-layer forward enabled layers={layers}"
-                                        );
-                                    }
-                                    model.logits_from_hidden(d_out as *const _)
-                                }
-                            })();
-                            unsafe {
-                                let _ = model.cuda.device_free(d_out);
-                            }
-                            result
-                        } else {
-                            // Fallback: treat embedding as hidden and compute logits.
-                            unsafe { model.logits_from_hidden(d_x as *const _) }
-                        }
-                    })();
-
-                    unsafe {
-                        let _ = model.cuda.device_free(d_x);
-                    }
-
-                    let token_logits = token_logits?;
-                    log_top_logits(&token_logits, 8);
-                    logits = Some(token_logits);
-                }
-                if can_forward {
-                    processed_len = ids.len();
-                }
-
-                logits.ok_or_else(|| anyhow::anyhow!("no token processed for logits"))
+                let _ = model;
+                decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8))
             }
 
             #[cfg(not(feature = "cuda"))]
