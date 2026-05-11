@@ -211,11 +211,16 @@ pub struct AppState {
     pub model: LoadedModel,
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
     pub decode_batching_requested: bool,
+    pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
 }
 
 impl AppState {
     pub fn new(model: LoadedModel) -> Self {
         let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
+        let decode_sequence_pool = decode_batching_requested
+            .then(|| model.kv_cache_logical_sequence_capacity())
+            .filter(|capacity| *capacity > 0)
+            .map(crate::decode_batch::DecodeSequencePool::new);
         if decode_batching_requested {
             crate::decode_batch::maybe_log_server_batch_decode_status();
         }
@@ -223,6 +228,7 @@ impl AppState {
             model,
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
             decode_batching_requested,
+            decode_sequence_pool,
         }
     }
 }

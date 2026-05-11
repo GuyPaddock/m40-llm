@@ -10,6 +10,7 @@ use anyhow::Result;
 #[cfg(feature = "cuda")]
 pub struct DecodeSession {
     model: *const LoadedModel,
+    sequence_id: u32,
     processed_len: usize,
     can_forward: bool,
     d_x: DeviceBuffer,
@@ -34,6 +35,31 @@ impl DecodeSession {
         d_x_tag: &'static str,
         d_out_tag: &'static str,
     ) -> Result<Self> {
+        Self::new_for_sequence(
+            model,
+            0,
+            d_model,
+            can_forward,
+            log_prefix,
+            d_x_tag,
+            d_out_tag,
+        )
+    }
+
+    pub fn new_for_sequence(
+        model: &LoadedModel,
+        sequence_id: u32,
+        d_model: usize,
+        can_forward: bool,
+        log_prefix: &'static str,
+        d_x_tag: &'static str,
+        d_out_tag: &'static str,
+    ) -> Result<Self> {
+        if can_forward && !model.kv_cache_can_address_layer_sequence(0, sequence_id) {
+            anyhow::bail!(
+                "decode session sequence_id {sequence_id} is not addressable by KV cache"
+            );
+        }
         let bytes = d_model
             .checked_mul(std::mem::size_of::<f32>())
             .ok_or_else(|| anyhow::anyhow!("decode session d_model byte size overflow"))?;
@@ -75,6 +101,7 @@ impl DecodeSession {
         };
         Ok(Self {
             model: model as *const LoadedModel,
+            sequence_id,
             processed_len: 0,
             can_forward,
             d_x,
@@ -179,8 +206,9 @@ impl DecodeSession {
                 .as_ref()
                 .expect("d_out allocated when full forward is enabled")
                 .as_mut_ptr();
-            let layers = (*self.model).forward_one_token_all_layers(
+            let layers = (*self.model).forward_one_token_all_layers_for_sequence(
                 self.d_x.as_ptr(),
+                self.sequence_id,
                 (token_idx + 1) as u32,
                 d_out,
             )?;

@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 use crate::infer::{BatchMetadata, BatchSequence};
 
@@ -8,6 +10,79 @@ use crate::cuda::{CudaContext, DeviceBuffer, KVCache};
 use std::ffi::c_void;
 
 pub type DecodeRequestId = u64;
+
+#[derive(Debug, Clone)]
+pub struct DecodeSequencePool {
+    inner: Arc<Mutex<DecodeSequencePoolInner>>,
+}
+
+#[derive(Debug)]
+struct DecodeSequencePoolInner {
+    free: VecDeque<u32>,
+    capacity: u32,
+}
+
+#[derive(Debug)]
+pub struct DecodeSequenceLease {
+    sequence_id: u32,
+    inner: Option<Arc<Mutex<DecodeSequencePoolInner>>>,
+}
+
+impl DecodeSequencePool {
+    pub fn new(capacity: u32) -> Self {
+        let free = (0..capacity).collect();
+        Self {
+            inner: Arc::new(Mutex::new(DecodeSequencePoolInner { free, capacity })),
+        }
+    }
+
+    pub fn capacity(&self) -> u32 {
+        self.inner
+            .lock()
+            .expect("decode sequence pool poisoned")
+            .capacity
+    }
+
+    pub fn available(&self) -> usize {
+        self.inner
+            .lock()
+            .expect("decode sequence pool poisoned")
+            .free
+            .len()
+    }
+
+    pub fn try_lease(&self) -> Option<DecodeSequenceLease> {
+        let sequence_id = self
+            .inner
+            .lock()
+            .expect("decode sequence pool poisoned")
+            .free
+            .pop_front()?;
+        Some(DecodeSequenceLease {
+            sequence_id,
+            inner: Some(self.inner.clone()),
+        })
+    }
+}
+
+impl DecodeSequenceLease {
+    pub fn sequence_id(&self) -> u32 {
+        self.sequence_id
+    }
+}
+
+impl Drop for DecodeSequenceLease {
+    fn drop(&mut self) {
+        let Some(inner) = self.inner.take() else {
+            return;
+        };
+        inner
+            .lock()
+            .expect("decode sequence pool poisoned")
+            .free
+            .push_back(self.sequence_id);
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeRequestStatus {
@@ -261,6 +336,25 @@ impl CudaDecodeBatchPlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_sequence_pool_leases_and_returns_slots() {
+        let pool = DecodeSequencePool::new(2);
+        assert_eq!(pool.capacity(), 2);
+        assert_eq!(pool.available(), 2);
+
+        let first = pool.try_lease().expect("first sequence");
+        let second = pool.try_lease().expect("second sequence");
+        assert_eq!(first.sequence_id(), 0);
+        assert_eq!(second.sequence_id(), 1);
+        assert_eq!(pool.available(), 0);
+        assert!(pool.try_lease().is_none());
+
+        drop(first);
+        assert_eq!(pool.available(), 1);
+        let third = pool.try_lease().expect("reused sequence");
+        assert_eq!(third.sequence_id(), 0);
+    }
 
     #[test]
     fn decode_batch_keeps_active_mixed_lengths() {

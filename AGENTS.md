@@ -69,11 +69,12 @@ complete.
   host-side KV sequence length updates. Packed varlen decode scheduling now has
   a request-state `DecodeBatchPlan`, device metadata upload, and CUDA dispatch
   through the batched GQA decode attention primitive; HTTP `/generate` remains
-  serialized until model-level KV/session ownership supports multiple logical
-  sequences.
-- Next: complete the KV/session pool needed to safely enable server-side batched
-  decode requests, then integrate packed varlen prefill once decode batching is
-  correct end-to-end.
+  serialized. Model-level KV addressing now maps logical
+  `KV[layer][sequence]` onto sequence-major physical slots, and the server has a
+  small decode sequence lease pool for future batched decode scheduling.
+- Next: wire the server scheduler loop to run leased decode sessions through
+  packed varlen batched decode attention, then integrate packed varlen prefill
+  once decode batching is correct end-to-end.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

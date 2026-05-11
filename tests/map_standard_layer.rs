@@ -315,3 +315,91 @@ fn validate_full_layer_decode_requires_layer_kv_slots() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
+    let mut lm = match make_model_with_layer(2, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.allocate_kv_cache_for_layer_sequences(16, 3)?;
+
+    assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 0)?, 0);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 0)?, 2);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 1)?, 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 2)?, 8);
+
+    let err = lm
+        .kv_cache_physical_slot_for_layer_sequence(0, 3)
+        .unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("sequence_id 3 out of range"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[cfg(all(feature = "cuda", nvcc))]
+#[test]
+fn kv_layer_sequence_append_uses_distinct_physical_slots() -> Result<()> {
+    use half::f16;
+    use m40_llm::cuda::ffi_debug_read_kv_token;
+    use std::ffi::c_void;
+
+    let mut lm = match make_model_with_layer(1, 4, 8, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.allocate_kv_cache_for_layer_sequences(4, 2)?;
+    let physical_slot = lm.kv_cache_physical_slot_for_layer_sequence(1, 1)?;
+    assert_eq!(physical_slot, 3);
+
+    let k = [1.25f32, 2.5, 3.75, 5.0];
+    let v = [10.5f32, 11.5, 12.5, 13.5];
+    let bytes = k.len() * std::mem::size_of::<f32>();
+    let d_k = lm.cuda.device_malloc(bytes)?;
+    let d_v = lm.cuda.device_malloc(bytes)?;
+    unsafe {
+        lm.cuda
+            .memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+        lm.cuda
+            .memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+        lm.append_kv_token_f32_for_layer(1, 1, 0, d_k as *const c_void, d_v as *const c_void)?;
+    }
+
+    let mut k_back = vec![0u8; k.len() * std::mem::size_of::<u16>()];
+    let mut v_back = vec![0u8; v.len() * std::mem::size_of::<u16>()];
+    unsafe {
+        ffi_debug_read_kv_token(
+            &lm.cuda,
+            lm.kv_cache.as_ref().expect("kv cache"),
+            physical_slot,
+            0,
+            k_back.as_mut_ptr(),
+            v_back.as_mut_ptr(),
+        );
+    }
+
+    for (idx, expected) in k.iter().enumerate() {
+        let bits = u16::from_le_bytes([k_back[idx * 2], k_back[idx * 2 + 1]]);
+        assert_eq!(bits, f16::from_f32(*expected).to_bits());
+    }
+    for (idx, expected) in v.iter().enumerate() {
+        let bits = u16::from_le_bytes([v_back[idx * 2], v_back[idx * 2 + 1]]);
+        assert_eq!(bits, f16::from_f32(*expected).to_bits());
+    }
+
+    unsafe {
+        lm.cuda.device_free(d_k)?;
+        lm.cuda.device_free(d_v)?;
+    }
+    Ok(())
+}

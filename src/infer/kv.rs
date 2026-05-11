@@ -20,25 +20,57 @@ impl LoadedModel {
                 self.model_config.block_count
             );
         }
-        if sequence_id != 0 {
+        let layer_count = self.model_config.block_count;
+        let sequence_capacity = kv.max_batch_size() / layer_count;
+        if sequence_id >= sequence_capacity {
             anyhow::bail!(
-                "KV layer/sequence addressing currently supports sequence_id=0 only; got {}",
-                sequence_id
+                "KV sequence_id {} out of range for {} logical sequences",
+                sequence_id,
+                sequence_capacity
             );
         }
-        if kv.max_batch_size() < self.model_config.block_count {
+        if kv.max_batch_size() < layer_count {
             anyhow::bail!(
                 "KV cache has {} physical slots, but layer-addressed decode needs {}",
                 kv.max_batch_size(),
-                self.model_config.block_count
+                layer_count
             );
         }
-        Ok(layer_id)
+        let physical_slot = sequence_id
+            .checked_mul(layer_count)
+            .and_then(|base| base.checked_add(layer_id))
+            .ok_or_else(|| anyhow!("KV physical slot overflow"))?;
+        if physical_slot >= kv.max_batch_size() {
+            anyhow::bail!(
+                "KV physical slot {} out of range for {} slots",
+                physical_slot,
+                kv.max_batch_size()
+            );
+        }
+        Ok(physical_slot)
     }
 
     pub fn kv_cache_can_address_layer_sequence(&self, layer_id: u32, sequence_id: u32) -> bool {
         self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)
             .is_ok()
+    }
+
+    pub fn kv_cache_logical_sequence_capacity(&self) -> u32 {
+        self.kv_cache
+            .as_ref()
+            .and_then(|kv| {
+                let layer_count = self.model_config.block_count;
+                (layer_count > 0).then_some(kv.max_batch_size() / layer_count)
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn kv_cache_physical_slot_for_layer_sequence(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+    ) -> Result<u32> {
+        self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)
     }
 
     // Convenience: Append K/V from host FP32 slices. Copies to device then calls append.
@@ -148,11 +180,25 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache_for_layers(&mut self, max_seq_len: u32) -> Result<()> {
+        self.allocate_kv_cache_for_layer_sequences(max_seq_len, 1)
+    }
+
+    pub fn allocate_kv_cache_for_layer_sequences(
+        &mut self,
+        max_seq_len: u32,
+        max_sequences: u32,
+    ) -> Result<()> {
         let layer_count = self.model_config.block_count;
         if layer_count == 0 {
             anyhow::bail!("model_config.block_count must be > 0");
         }
-        self.allocate_kv_cache(max_seq_len, layer_count)
+        if max_sequences == 0 {
+            anyhow::bail!("max_sequences must be > 0");
+        }
+        let physical_slots = layer_count
+            .checked_mul(max_sequences)
+            .ok_or_else(|| anyhow!("KV physical slot count overflow"))?;
+        self.allocate_kv_cache(max_seq_len, physical_slots)
     }
 
     pub fn kv_cache_can_address_layers(&self) -> bool {

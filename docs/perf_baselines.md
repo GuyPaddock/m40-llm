@@ -761,9 +761,8 @@ Notes:
   `M40LLM_SERVER_BATCH_DECODE=1` logs that scheduler-level packed varlen decode
   support is present, but full HTTP request batching is intentionally not
   enabled yet.
-- The blocker is model-level KV ownership: `LoadedModel` still maps logical
-  layer/sequence addressing onto one physical sequence slot per layer and
-  currently rejects `sequence_id != 0`. Safe multi-request generation needs a
-  KV/session pool that allocates physical slots for `KV[layer][sequence]`.
+- Model-level KV ownership now supports sequence-major physical slots for
+  `KV[layer][sequence]`; safe multi-request generation still needs the server
+  scheduler loop to run leased decode sessions concurrently.
 - Packed prefill should wait until decode batching has real request/session
   ownership above this scheduler foundation.

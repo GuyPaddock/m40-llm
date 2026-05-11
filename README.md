@@ -175,9 +175,10 @@ buffers for every token.
 Forward workspace and decode-session scratch buffers are RAII-owned, so partial
 allocation failures clean up any buffers that were already allocated.
 Full-layer decode uses explicit model-level KV addressing
-`KV[layer][sequence][position][kv_head][head_dim]`; the current single-request
-backend maps `sequence_id=0` and each layer to one physical KV slot until the
-cache is widened for server batching.
+`KV[layer][sequence][position][kv_head][head_dim]`. Physical KV slots are mapped
+sequence-major as `sequence_id * block_count + layer_id`; current `/generate`
+requests still default to `sequence_id=0` and remain serialized until the server
+scheduler leases sequence/workspace slots per active request.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

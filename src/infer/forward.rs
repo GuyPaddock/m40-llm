@@ -811,9 +811,8 @@ impl LoadedModel {
     }
     /// Runs one token through every transformer layer.
     ///
-    /// The current single-request server path uses explicit layer/sequence KV
-    /// addressing with `sequence_id=0`; internally that still maps each layer
-    /// to one physical KV slot until the cache is widened for real batching.
+    /// The current single-request server path defaults to `sequence_id=0`;
+    /// batched callers can use `forward_one_token_all_layers_for_sequence`.
     ///
     /// # Safety
     /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
@@ -821,6 +820,21 @@ impl LoadedModel {
     pub unsafe fn forward_one_token_all_layers(
         &self,
         d_x_f32: *const c_void,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<usize> {
+        unsafe { self.forward_one_token_all_layers_for_sequence(d_x_f32, 0, seq_len, d_out_f32) }
+    }
+
+    /// Runs one token through every transformer layer for one logical sequence.
+    ///
+    /// # Safety
+    /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
+    /// - Both buffers must contain/be sized for one f32 hidden vector of `embedding_length`.
+    pub unsafe fn forward_one_token_all_layers_for_sequence(
+        &self,
+        d_x_f32: *const c_void,
+        sequence_id: u32,
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<usize> {
@@ -839,11 +853,12 @@ impl LoadedModel {
                 self.model_config.block_count
             );
         }
+        self.kv_physical_slot_for_layer_sequence((layer_count - 1) as u32, sequence_id)?;
 
         #[cfg(feature = "cuda")]
         {
             if layer_count == 1 {
-                self.forward_one_token_with_layer(d_x_f32, 0, 0, seq_len, d_out_f32)?;
+                self.forward_one_token_with_layer(d_x_f32, 0, sequence_id, seq_len, d_out_f32)?;
                 return Ok(1);
             }
             let hidden_dim = self.model_config.feed_forward_length as usize;
@@ -853,7 +868,6 @@ impl LoadedModel {
 
             return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
-                let sequence_id = 0u32;
                 for layer in 0..layer_count {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
