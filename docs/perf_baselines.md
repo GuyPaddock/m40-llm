@@ -538,3 +538,56 @@ Notes:
 - The zero-budget run confirms the new memory-budget fallback behaves like the
   explicit disabled-materialization mode: it preserves correctness and memory
   headroom, but is not the fast path.
+
+## 2026-05-11: Async Wrapper Launch/Sync Decode Profile
+
+This profile was taken after adding native and Rust async enqueue wrappers for
+hot CUDA kernels while keeping the normal generate path on sync compatibility
+wrappers.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 48.024 ms |
+| `cli.token.1.logits` | 4.313 ms |
+| `cli.token.1.total` | 52.446 ms |
+| `cli.generate_text_total` | 652.373 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Elapsed |
+| --- | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 5.803 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 11.467 ms |
+| `mlp_down` | 0 | 22 | 22 | 6.460 ms |
+| `out_project` | 0 | 22 | 22 | 3.051 ms |
+| `rope_qk` | 44 | 0 | 44 | 1.443 ms |
+| `kv_append` | 22 | 0 | 22 | 1.056 ms |
+| `attention` | 22 | 0 | 22 | 1.698 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 2.111 ms |
+| `residual_add` | 44 | 0 | 44 | 0.886 ms |
+| `swiglu` | 22 | 0 | 22 | 0.450 ms |
+
+Notes:
+
+- The sync compatibility path still performs one stream synchronization for
+  each hot wrapper call. The steady token had 352 stream syncs inside
+  `forward_all_layers`: 154 from materialized-FP32 cuBLAS projection calls and
+  198 from non-GEMM kernels.
+- RoPE plus KV append is visible: 66 launches, 66 stream syncs, and roughly
+  2.50 ms per steady token. This supports the next strict task, fusing K RoPE
+  with KV append, while keeping Q RoPE separate for now.
+- cuBLAS synchronization is the largest remaining sync source, so after the
+  RoPE/KV fusion task the larger scheduling lever is an async full-layer decode
+  path that reduces sync boundaries across GEMM and elementwise operations.

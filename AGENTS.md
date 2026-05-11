@@ -56,8 +56,10 @@ complete.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
-  callers.
-- Next: re-profile launch/sync counts after async/session cleanup.
+  callers. Warm second-token launch/sync profiling after async wrapper cleanup
+  is recorded in `docs/perf_baselines.md`.
+- Next: fuse RoPE + KV append if still visible; the latest profile shows it is
+  visible at roughly 66 launches/syncs and 2.50 ms per steady TinyLlama token.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
