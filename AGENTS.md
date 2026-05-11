@@ -31,17 +31,60 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
   - Projection/MLP wrappers: `tests/proj_wrappers.rs`, `tests/mlp_wrappers.rs`.
   - Forward smoke: `tests/forward_with_layer_smoke.rs`.
 
-## Phase Ordering
-- **Phase 1 (Functional, critical path):** Goal is to load a real GGUF and print decoded tokens on Tesla M40 with no silent CPU fallback.
-  - Acceptance highlights: fast-fail invalid GGUFs, logits parity across CUDA/CPU, deterministic sampler, and a CLI decode loop that visibly exercises the GPU.
-- **Phase 2 (Fast, M40 optimization):** Optimize cuBLAS wiring and attention while keeping parity grid green.
-  - Focus areas: cuBLAS GEMM wrappers (t23-cublas-gemm), full projection wiring (t23-5-integration continuation), attention parity guardrail (t23-5e-attn-green), microbenchmarks (t31b-microbench-attn), stream separation (t33-stream-sep), and persistent decode prototype (t32-persistent-kernel).
-- **Phase 3 (Infrastructure, QA, polish):** Stabilize CI, logging, and server polish.
-  - Focus areas: clippy cleanups (t23-6-warnings), CUDA benchmark unification (t23-6-benches-ctx), expanded CI matrix (t35-ci-matrix), better errors/telemetry (t34-robustness), `/generate` server parity (t30-server), prefill-vs-decode validation plan (t26-tests-plan), and completing `llm-context` indexing (t41-lc-index).
+## Active Performance Plan
+The current plan prioritizes measurement and ownership before deeper scheduling work.
+Do not integrate packed varlen attention into the server scheduler, expand persistent
+decode, or start large-model fused-dequant kernels until the prerequisite
+measurement, request/session ownership, RAII allocation, and KV addressing tasks are
+complete.
 
 ## Selecting Work
-- **Task selection rule:** when choosing work, pick the lowest-numbered unfinished task in the lowest-numbered phase.
+- **Task selection rule:** use the strict reconciled task order below. The historical
+  task JSON remains useful context, but this strict order takes precedence when the
+  two conflict.
 - Update this file (`AGENTS.md`) as you complete high-level tasks. 
+
+## Strict Reconciled Task Order
+1. Add warm/cold benchmark split.
+2. Add launch/sync/allocation/copy count instrumentation.
+3. Profile warm steady second-token decode with per-kernel launch counts.
+4. Add request-level generation serialization to protect shared workspace.
+5. Extract shared `DecodeSession` used by CLI and server.
+6. Move `d_x` and `d_out` into `DecodeSession` scratch.
+7. Make `ForwardWorkspace` / device allocations RAII-safe.
+8. Fix KV cache API/addressing to distinguish `layer_id` from `sequence_id`.
+9. Add FP32 materialization memory-budget reporting and fallback logging.
+10. Improve materialized weight cache key with tensor identity/offset/name.
+11. Move `d_logits` and `d_norm_hidden` into `DecodeSession` scratch.
+12. Add async enqueue variants for hot CUDA kernels; keep sync wrappers.
+13. Re-profile launch/sync counts after async/session cleanup.
+14. Fuse RoPE + KV append if still visible.
+15. Treat SwiGLU as already fused; remove sync/graph it before deeper fusion.
+16. Prototype CUDA Graph capture for warm one-token decode.
+17. Integrate packed varlen decode attention into the server scheduler.
+18. Integrate packed varlen prefill after decode batching is correct.
+19. Add fast-fits vs large-model backend selection.
+20. Start large-model fused-dequant projection backend.
+21. Leave `__ldg`/texture experiments off by default unless profiling reopens them.
+
+## Reconciled Phase Details
+- **Phase 0 (Measurement):** add warm/cold benchmark modes and per-token counts for
+  CUDA launches, cuBLAS calls, stream synchronizations, allocations/frees, H2D
+  copies, and D2H copies. Use env gates such as `M40LLM_LAUNCH_LOG=1`,
+  `M40LLM_SYNC_LOG=1`, and `M40LLM_ALLOC_LOG=1`.
+- **Phase 1 (Ownership):** serialize generation first, then introduce
+  `DecodeSession`, reusable token scratch, RAII `DeviceBuffer`, and explicit
+  `KV[layer][sequence][position][kv_head][head_dim]` addressing.
+- **Phase 2 (Fast-fits):** preserve materialized FP32 projection weights plus
+  cuBLAS as the TinyLlama-class backend, add materialization budget/fallback
+  logging, improve cache keys, and split sync wrappers from async enqueue wrappers.
+- **Phase 3 (Graphs):** prototype CUDA Graph capture only after stable session
+  scratch, async wrappers, stable workspace pointers, and explicit KV addressing
+  exist.
+- **Phase 4 (Scheduler):** integrate packed varlen decode first, packed prefill
+  second, and mixed prefill/decode overlap last.
+- **Phase 5 (Backends):** add fast-fits vs large-model selection before any
+  large-model fused-dequant projection backend.
 
 ## Current Tasks
 ```

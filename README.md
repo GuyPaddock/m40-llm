@@ -62,6 +62,18 @@ CI verifies two configurations:
 - Streams/Hyper‑Q: high‑priority decode stream, concurrent lower‑priority prefill
 - Read‑only (`__ldg`) and texture caches for non-GEMM ops (norms, embeddings)
 
+Current optimization order is measurement and ownership first:
+
+1. Split warm/cold benchmark modes and add launch/sync/copy/cuBLAS counters.
+2. Serialize generation and introduce request-owned decode/session scratch.
+3. Make device scratch RAII-safe and fix KV addressing to separate layer and sequence IDs.
+4. Harden the materialized FP32 cuBLAS fast-fits backend with budget/fallback logs.
+5. Remove per-kernel synchronization through async enqueue APIs, then evaluate fusion and CUDA Graphs.
+6. Integrate packed varlen server scheduling only after ownership and KV addressing are correct.
+
+Keep `__ldg`/texture experiments opt-in and off by default unless profiling
+identifies a specific read-cache bottleneck.
+
 ## Build features (Cargo)
 This project uses Cargo feature flags to switch between CPU‑only and GPU‑accelerated builds, and to include an optional HTTP server.
 
