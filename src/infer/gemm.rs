@@ -205,8 +205,13 @@ impl LoadedModel {
         k: i32,
     ) -> Result<*const c_void> {
         self.log_materialization_budget_once();
+        let (tensor_name, byte_offset, dtype, shape) = self.materialized_tensor_identity(d_b_f16);
         let key = MaterializedWeightKey {
             src: d_b_f16 as usize,
+            tensor_name: tensor_name.clone(),
+            byte_offset,
+            dtype,
+            shape,
             n,
             k,
         };
@@ -221,7 +226,7 @@ impl LoadedModel {
         let bytes = elems
             .checked_mul(std::mem::size_of::<f32>())
             .context("materialized weight byte size overflow")?;
-        let tensor_name = self.materialized_tensor_name(d_b_f16);
+        let tensor_label = tensor_name.unwrap_or_else(|| format!("ptr={d_b_f16:?}"));
         let current_bytes = self.current_materialized_f32_bytes();
         if let Some(budget) = materialized_budget_bytes() {
             let after_bytes = current_bytes
@@ -230,7 +235,7 @@ impl LoadedModel {
             if after_bytes > budget {
                 anyhow::bail!(
                     "materialized f32 budget exceeded for tensor={} bytes={} current={} budget={}",
-                    tensor_name,
+                    tensor_label,
                     bytes,
                     current_bytes,
                     budget
@@ -264,7 +269,7 @@ impl LoadedModel {
                 .unwrap_or_else(|| "unbounded".to_string());
             eprintln!(
                 "[cuda] materialized_f32_weight: tensor={} bytes={} total={} budget={}",
-                tensor_name, bytes, total, budget
+                tensor_label, bytes, total, budget
             );
         }
         Ok(dptr as *const c_void)
@@ -298,13 +303,23 @@ impl LoadedModel {
     }
 
     #[cfg(feature = "cuda")]
-    fn materialized_tensor_name(&self, d_b_f16: *const c_void) -> String {
+    fn materialized_tensor_identity(
+        &self,
+        d_b_f16: *const c_void,
+    ) -> (Option<String>, u64, GgmlDType, Vec<u64>) {
         self.device_tensors
             .iter()
             .find_map(|(name, tensor)| {
-                (tensor.dptr as *const c_void == d_b_f16).then(|| name.clone())
+                (tensor.dptr as *const c_void == d_b_f16).then(|| {
+                    (
+                        Some(name.clone()),
+                        tensor.byte_offset,
+                        tensor.dtype,
+                        tensor.shape.clone(),
+                    )
+                })
             })
-            .unwrap_or_else(|| format!("ptr={d_b_f16:?}"))
+            .unwrap_or_else(|| (None, 0, GgmlDType::Unknown(u32::MAX), Vec::new()))
     }
 
     #[cfg(feature = "cuda")]

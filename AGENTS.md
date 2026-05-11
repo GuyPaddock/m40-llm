@@ -52,8 +52,8 @@ complete.
   now use RAII `DeviceBuffer` cleanup. Full-layer forward now uses explicit
   model-level KV layer/sequence addressing instead of passing `layer as seq_id`
   directly. FP32 materialized projection weights have budget reporting and
-  over-budget fallback logging.
-- Next: improve the materialized weight cache key with tensor identity metadata.
+  over-budget fallback logging plus tensor identity metadata in the cache key.
+- Next: move `d_logits` and `d_norm_hidden` into `DecodeSession` scratch.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

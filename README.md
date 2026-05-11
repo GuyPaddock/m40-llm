@@ -135,7 +135,8 @@ same non-streaming decode helper as `POST /generate`.
   `cublasSgemm`; set `M40LLM_MATERIALIZE_F32_WEIGHTS=0` to force the dedicated
   GGUF-layout CUDA fallback. Set `M40LLM_MATERIALIZE_F32_BUDGET_MB=<mb>` to cap
   cached FP32 materialized weights; over-budget tensors fall back to the GGUF F16
-  kernel and are logged when `M40LLM_GEMM_LOG=1`.
+  kernel and are logged when `M40LLM_GEMM_LOG=1`. Cache keys include the source
+  pointer plus tensor identity metadata when a GGUF tensor view is available.
 - Timing tracing: set `M40LLM_TIMING_LOG=1` to print per-token and per-layer
   decode timing. This is intentionally verbose and intended for profiling runs.
 - Stream tracing: set `M40LLM_STREAM_LOG=1` to print prefill/decode stream

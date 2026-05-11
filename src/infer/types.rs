@@ -240,9 +240,13 @@ pub struct LoadedModel {
 }
 
 #[cfg(feature = "cuda")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MaterializedWeightKey {
     pub src: usize,
+    pub tensor_name: Option<String>,
+    pub byte_offset: u64,
+    pub dtype: GgmlDType,
+    pub shape: Vec<u64>,
     pub n: i32,
     pub k: i32,
 }
