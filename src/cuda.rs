@@ -356,6 +356,27 @@ fn log_gemm_backend_once(once: &'static Once, name: &str, backend: &str) {
 }
 
 #[cfg(feature = "cuda")]
+fn record_sync_kernel(op: &'static str) {
+    crate::profile::record_launch(op);
+    crate::profile::record_stream_sync(op);
+}
+
+#[cfg(feature = "cuda")]
+fn record_async_kernel(op: &'static str) {
+    crate::profile::record_launch(op);
+}
+
+#[cfg(feature = "cuda")]
+fn record_sync_gemm(op: &'static str) {
+    if cfg!(have_cublas) {
+        crate::profile::record_cublas_call(op);
+    } else {
+        crate::profile::record_launch(op);
+    }
+    crate::profile::record_stream_sync(op);
+}
+
+#[cfg(feature = "cuda")]
 #[derive(Debug, Clone)]
 struct AllocInfo {
     size: usize,
@@ -376,6 +397,7 @@ pub enum CudaStream {
 }
 
 impl CudaStream {
+    #[cfg(feature = "cuda")]
     #[inline]
     fn ffi_kind(self) -> u32 {
         match self {
@@ -526,6 +548,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
             }
+            crate::profile::record_stream_sync("stream_synchronize");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -568,6 +591,7 @@ impl CudaContext {
                 },
             );
         }
+        crate::profile::record_device_alloc("device_malloc", bytes);
         if alloc_log_enabled() {
             let caller = std::panic::Location::caller();
             let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
@@ -612,6 +636,7 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_device_free failed: {rc}"));
         }
+        crate::profile::record_device_free("device_free");
         // Decrement tracked total if we know this allocation size
         let mut dec = 0usize;
         let mut tag: Option<String> = None;
@@ -660,6 +685,7 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
         }
+        crate::profile::record_h2d_copy("memcpy_h2d", bytes);
         Ok(())
     }
     /// # Safety
@@ -677,6 +703,7 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
         }
+        crate::profile::record_d2h_copy("memcpy_d2h", bytes);
         Ok(())
     }
 
@@ -785,6 +812,7 @@ impl CudaContext {
                 unsafe {
                     let _ = ffi::m40llm_device_free(self.inner.raw.as_ptr(), prev.as_ptr());
                 }
+                crate::profile::record_device_free("upload_weights.free_prev");
                 eprintln!(
                     "[cuda] upload_weights: freed prev {} bytes (total={})",
                     wbytes,
@@ -809,6 +837,8 @@ impl CudaContext {
             }
             // Upload uses cudaMalloc + copy under the hood; conservatively track bytes
             TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
+            crate::profile::record_device_alloc("upload_weights", data.len());
+            crate::profile::record_h2d_copy("upload_weights", data.len());
             if let Ok(mut map) = self.inner.alloc_map.lock() {
                 map.insert(
                     d_ptr,
@@ -873,6 +903,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf16_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f32xf16_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -919,6 +950,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf16_gguf_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f32xf16_gguf_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -965,6 +997,8 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf32_f32 failed: {rc}"));
             }
+            crate::profile::record_cublas_call("gemm_f32xf32_f32");
+            crate::profile::record_stream_sync("gemm_f32xf32_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -999,6 +1033,7 @@ impl CudaContext {
                     "m40llm_materialize_gguf_f16_to_f32_colmajor_nt failed: {rc}"
                 ));
             }
+            record_sync_kernel("materialize_gguf_f16_to_f32_colmajor_nt");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1044,6 +1079,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f16xf16_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f16xf16_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1092,6 +1128,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}"));
             }
+            record_sync_gemm("gemm_f16_storage_f32_compute");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1141,6 +1178,7 @@ impl CudaContext {
                     "m40llm_attention_prefill_f32_gqa_varlen_head64 failed: {rc}"
                 ));
             }
+            record_sync_kernel("attention_prefill_f32_gqa_varlen_head64");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1203,6 +1241,7 @@ impl CudaContext {
                     "m40llm_attention_prefill_f32_gqa_varlen_head64_async failed: {rc}"
                 ));
             }
+            record_async_kernel("attention_prefill_f32_gqa_varlen_head64");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1241,6 +1280,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_rms_norm_f32 failed: {rc}"));
             }
+            record_sync_kernel("rms_norm_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1279,6 +1319,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_rms_norm_f32_weighted failed: {rc}"));
             }
+            record_sync_kernel("rms_norm_f32_weighted");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1318,6 +1359,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_rope_f32 failed: {rc}"));
             }
+            record_sync_kernel("rope_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1357,6 +1399,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_rope_f32_inplace failed: {rc}"));
             }
+            record_sync_kernel("rope_f32_inplace");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1384,6 +1427,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_residual_add_f32 failed: {rc}"));
             }
+            record_sync_kernel("residual_add_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1409,6 +1453,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_swiglu_f32 failed: {rc}"));
             }
+            record_sync_kernel("swiglu_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1426,6 +1471,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_start_persistent_decode failed: {rc}"));
             }
+            record_async_kernel("persistent_decode_start");
         }
         Ok(())
     }
@@ -1458,6 +1504,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_persistent_decode_submit_vec failed: {rc}"));
             }
+            record_async_kernel("persistent_decode_submit_vec");
             Ok(command_id)
         }
         #[cfg(not(feature = "cuda"))]
@@ -1505,6 +1552,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}"));
             }
+            crate::profile::record_stream_sync("persistent_decode_stop");
         }
         Ok(())
     }
@@ -1524,6 +1572,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
             }
+            record_sync_kernel("f16_to_f32");
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1547,6 +1596,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_q80_to_f32 failed: {rc}"));
             }
+            record_sync_kernel("q80_to_f32");
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1598,6 +1648,7 @@ impl KVCache {
             if rc != 0 {
                 return Err(anyhow!("m40llm_kvcache_reset failed: {rc}"));
             }
+            record_sync_kernel("kvcache_reset");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1765,6 +1816,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
         }
+        record_sync_kernel("kvcache_append_token");
         Ok(())
     }
 
@@ -1791,6 +1843,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token_f32 failed: {rc}"));
         }
+        record_sync_kernel("kvcache_append_token_f32");
         Ok(())
     }
 
@@ -1819,6 +1872,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_attention_last_token_f32 failed: {}", rc));
         }
+        record_sync_kernel("attention_last_token_f32");
         Ok(())
     }
 
@@ -1849,6 +1903,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_attention_last_token_f32_gqa failed: {rc}"));
         }
+        record_sync_kernel("attention_last_token_f32_gqa");
         Ok(())
     }
 
@@ -1883,6 +1938,7 @@ impl KVCache {
                 "m40llm_attention_last_token_f32_gqa_batched failed: {rc}"
             ));
         }
+        record_sync_kernel("attention_last_token_f32_gqa_batched");
         Ok(())
     }
 
@@ -1918,6 +1974,7 @@ impl KVCache {
                 "m40llm_attention_last_token_f32_gqa_batched_async failed: {rc}"
             ));
         }
+        record_async_kernel("attention_last_token_f32_gqa_batched");
         Ok(())
     }
 }
