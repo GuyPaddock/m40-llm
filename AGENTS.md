@@ -53,7 +53,9 @@ complete.
   model-level KV layer/sequence addressing instead of passing `layer as seq_id`
   directly. FP32 materialized projection weights have budget reporting and
   over-budget fallback logging plus tensor identity metadata in the cache key.
-- Next: move `d_logits` and `d_norm_hidden` into `DecodeSession` scratch.
+  `DecodeSession` now also owns reusable `d_logits` and optional
+  `d_norm_hidden` scratch for CUDA logits.
+- Next: add async enqueue variants for hot CUDA kernels while keeping sync wrappers.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

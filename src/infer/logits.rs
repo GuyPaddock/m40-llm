@@ -1,6 +1,11 @@
 use super::LoadedModel;
+#[cfg(feature = "cuda")]
+use crate::cuda::DeviceBuffer;
+#[cfg(feature = "cuda")]
 use crate::timing;
-use anyhow::{Context, Result};
+#[cfg(feature = "cuda")]
+use anyhow::Context;
+use anyhow::Result;
 use std::ffi::c_void;
 
 impl LoadedModel {
@@ -8,41 +13,98 @@ impl LoadedModel {
     /// Compute logits = H (1xD f32) × W^T (D×V f16) -> (1xV f32) using device GEMM and return host Vec<f32>.
     pub unsafe fn logits_from_hidden_gpu(&self, d_hidden_f32: *const c_void) -> Result<Vec<f32>> {
         let total_start = std::time::Instant::now();
-        let (name, lm, _d_model, _vocab, _) = self.map_lm_head()?;
-        #[cfg(not(feature = "cuda"))]
-        let _ = &name;
-        let d_model = self.model_config.embedding_length as usize;
-        let vocab = lm.shape[1] as usize;
+        let (_name, _lm, d_model, vocab, _tied) = self.map_lm_head()?;
         #[cfg(feature = "cuda")]
-        let d_w = self.tensor_device_ptr(&name, &lm)?;
-        #[cfg(not(feature = "cuda"))]
-        let d_w: *const c_void = std::ptr::null();
-        #[cfg(not(feature = "cuda"))]
-        let _ = &lm;
-        let bytes_logits = vocab * std::mem::size_of::<f32>();
-        let d_logits = self.cuda.device_malloc(bytes_logits)?;
-        let gemm_start = std::time::Instant::now();
-        self.matmul_f32xf16_gguf_f32(d_hidden_f32, d_w, d_logits, 1, vocab as i32, d_model as i32)
-            .with_context(|| {
-                format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
-            })?;
-        timing::log("logits.gpu.lm_head_gemm", gemm_start.elapsed());
-        let mut host = vec![0u8; bytes_logits];
-        let copy_start = std::time::Instant::now();
-        self.cuda
-            .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
-        timing::log("logits.gpu.copy_d2h", copy_start.elapsed());
-        let mut logits = Vec::with_capacity(vocab);
-        for ch in host.chunks_exact(4) {
-            logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+        {
+            let logits_bytes = vocab
+                .checked_mul(std::mem::size_of::<f32>())
+                .context("logits byte size overflow")?;
+            let hidden_bytes = d_model
+                .checked_mul(std::mem::size_of::<f32>())
+                .context("hidden byte size overflow")?;
+            let d_logits = DeviceBuffer::new_tagged(&self.cuda, logits_bytes, "logits:gpu_f32")?;
+            let d_norm_hidden = if self.map_output_norm()?.is_some() {
+                Some(DeviceBuffer::new_tagged(
+                    &self.cuda,
+                    hidden_bytes,
+                    "logits:gpu_norm_hidden_f32",
+                )?)
+            } else {
+                None
+            };
+            let result = self.logits_from_hidden_into(
+                d_hidden_f32,
+                d_logits.as_mut_ptr(),
+                d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+            );
+            timing::log("logits.gpu.total", total_start.elapsed());
+            return result;
         }
-        let _ = self.cuda.device_free(d_logits);
-        timing::log("logits.gpu.total", total_start.elapsed());
-        Ok(logits)
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_hidden_f32, d_model, vocab, total_start);
+            unreachable!("logits_from_hidden_gpu requires CUDA")
+        }
     }
 }
 
 impl LoadedModel {
+    /// # Safety
+    /// Reuses caller-owned device scratch for output-norm staging and logits.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn logits_from_hidden_into(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+    ) -> Result<Vec<f32>> {
+        let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
+        let d_w = self.tensor_device_ptr(&name, &lm)?;
+        let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
+            let norm_start = std::time::Instant::now();
+            let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
+            let d_norm_hidden =
+                d_norm_hidden.context("missing d_norm_hidden scratch for output norm logits")?;
+            self.run_rms_norm_weighted(
+                d_hidden_f32,
+                d_norm_w,
+                norm.dtype,
+                d_norm_hidden,
+                1,
+                d_model as u32,
+                self.model_config.layer_norm_epsilon,
+            )?;
+            timing::log("logits.output_norm", norm_start.elapsed());
+            d_norm_hidden as *const c_void
+        } else {
+            d_hidden_f32
+        };
+        let gemm_start = std::time::Instant::now();
+        self.matmul_f32xf16_gguf_f32(
+            hidden_for_logits,
+            d_w,
+            d_logits,
+            1,
+            vocab as i32,
+            d_model as i32,
+        )
+        .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
+        timing::log("logits.lm_head_gemm", gemm_start.elapsed());
+        let bytes_logits = vocab
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("logits byte size overflow")?;
+        let mut host = vec![0u8; bytes_logits];
+        let copy_start = std::time::Instant::now();
+        self.cuda
+            .memcpy_d2h(host.as_mut_ptr() as *mut c_void, d_logits, bytes_logits)?;
+        timing::log("logits.copy_d2h", copy_start.elapsed());
+        let mut logits = Vec::with_capacity(vocab);
+        for ch in host.chunks_exact(4) {
+            logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
+        }
+        Ok(logits)
+    }
+
     /// # Safety
     /// Compute logits from a device hidden state. Prefer GPU GEMM with lm_head when present; otherwise fallback
     /// to host-side dot with per-row copies from tok_embeddings.
@@ -54,64 +116,28 @@ impl LoadedModel {
             let _ = &name;
             #[cfg(feature = "cuda")]
             {
-                let d_w = self.tensor_device_ptr(&name, &lm)?;
-                let bytes_hidden = d_model * std::mem::size_of::<f32>();
-                let bytes_logits = vocab * std::mem::size_of::<f32>();
-                let mut d_norm_hidden = std::ptr::null_mut();
-                let d_logits = self.cuda.device_malloc(bytes_logits)?;
-                let result = (|| -> Result<Vec<f32>> {
-                    let hidden_for_logits =
-                        if let Some((norm_name, norm)) = self.map_output_norm()? {
-                            let norm_start = std::time::Instant::now();
-                            let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
-                            d_norm_hidden = self
-                                .cuda
-                                .device_malloc_tagged(bytes_hidden, "logits:output_norm_f32")?;
-                            self.run_rms_norm_weighted(
-                                d_hidden_f32,
-                                d_norm_w,
-                                norm.dtype,
-                                d_norm_hidden,
-                                1,
-                                d_model as u32,
-                                self.model_config.layer_norm_epsilon,
-                            )?;
-                            timing::log("logits.output_norm", norm_start.elapsed());
-                            d_norm_hidden as *const c_void
-                        } else {
-                            d_hidden_f32
-                        };
-                    let gemm_start = std::time::Instant::now();
-                    self.matmul_f32xf16_gguf_f32(
-                        hidden_for_logits,
-                        d_w,
-                        d_logits,
-                        1,
-                        vocab as i32,
-                        d_model as i32,
-                    )
-                    .with_context(|| {
-                        format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}")
-                    })?;
-                    timing::log("logits.lm_head_gemm", gemm_start.elapsed());
-                    let mut host = vec![0u8; bytes_logits];
-                    let copy_start = std::time::Instant::now();
-                    self.cuda.memcpy_d2h(
-                        host.as_mut_ptr() as *mut c_void,
-                        d_logits,
-                        bytes_logits,
-                    )?;
-                    timing::log("logits.copy_d2h", copy_start.elapsed());
-                    let mut logits = Vec::with_capacity(vocab);
-                    for ch in host.chunks_exact(4) {
-                        logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
-                    }
-                    Ok(logits)
-                })();
-                if !d_norm_hidden.is_null() {
-                    let _ = self.cuda.device_free(d_norm_hidden);
-                }
-                let _ = self.cuda.device_free(d_logits);
+                let _ = (name, lm);
+                let bytes_hidden = d_model
+                    .checked_mul(std::mem::size_of::<f32>())
+                    .context("hidden byte size overflow")?;
+                let bytes_logits = vocab
+                    .checked_mul(std::mem::size_of::<f32>())
+                    .context("logits byte size overflow")?;
+                let d_logits = DeviceBuffer::new_tagged(&self.cuda, bytes_logits, "logits:f32")?;
+                let d_norm_hidden = if self.map_output_norm()?.is_some() {
+                    Some(DeviceBuffer::new_tagged(
+                        &self.cuda,
+                        bytes_hidden,
+                        "logits:output_norm_f32",
+                    )?)
+                } else {
+                    None
+                };
+                let result = self.logits_from_hidden_into(
+                    d_hidden_f32,
+                    d_logits.as_mut_ptr(),
+                    d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+                );
                 timing::log("logits.total", total_start.elapsed());
                 return result;
             }

@@ -14,6 +14,8 @@ pub struct DecodeSession {
     can_forward: bool,
     d_x: DeviceBuffer,
     d_out: Option<DeviceBuffer>,
+    d_logits: Option<DeviceBuffer>,
+    d_norm_hidden: Option<DeviceBuffer>,
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
@@ -41,12 +43,44 @@ impl DecodeSession {
         } else {
             None
         };
+        let (d_logits, d_norm_hidden) = match model.map_lm_head() {
+            Ok((_name, _lm, lm_d_model, vocab, _tied)) => {
+                if lm_d_model != d_model {
+                    anyhow::bail!(
+                        "decode session d_model {} != lm_head d_model {}",
+                        d_model,
+                        lm_d_model
+                    );
+                }
+                let logits_bytes = vocab
+                    .checked_mul(std::mem::size_of::<f32>())
+                    .ok_or_else(|| anyhow::anyhow!("decode session logits byte size overflow"))?;
+                let d_logits = DeviceBuffer::new_tagged(
+                    &model.cuda,
+                    logits_bytes,
+                    "decode_session:logits_f32",
+                )?;
+                let d_norm_hidden = if model.map_output_norm()?.is_some() {
+                    Some(DeviceBuffer::new_tagged(
+                        &model.cuda,
+                        bytes,
+                        "decode_session:logits_norm_hidden_f32",
+                    )?)
+                } else {
+                    None
+                };
+                (Some(d_logits), d_norm_hidden)
+            }
+            Err(_) => (None, None),
+        };
         Ok(Self {
             model: model as *const LoadedModel,
             processed_len: 0,
             can_forward,
             d_x,
             d_out,
+            d_logits,
+            d_norm_hidden,
             log_prefix,
             step: 0,
             logged_full_forward: false,
@@ -163,7 +197,14 @@ impl DecodeSession {
                 self.logged_full_forward = true;
             }
             let logits_start = std::time::Instant::now();
-            let logits = (*self.model).logits_from_hidden(d_out as *const _);
+            let logits = match self.d_logits.as_ref() {
+                Some(d_logits) => (*self.model).logits_from_hidden_into(
+                    d_out as *const _,
+                    d_logits.as_mut_ptr(),
+                    self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+                ),
+                None => (*self.model).logits_from_hidden(d_out as *const _),
+            };
             timing::timing_log!(
                 logits_start.elapsed(),
                 "{}.token.{token_idx}.logits",
@@ -172,7 +213,14 @@ impl DecodeSession {
             logits
         } else {
             let logits_start = std::time::Instant::now();
-            let logits = (*self.model).logits_from_hidden(self.d_x.as_ptr());
+            let logits = match self.d_logits.as_ref() {
+                Some(d_logits) => (*self.model).logits_from_hidden_into(
+                    self.d_x.as_ptr(),
+                    d_logits.as_mut_ptr(),
+                    self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+                ),
+                None => (*self.model).logits_from_hidden(self.d_x.as_ptr()),
+            };
             timing::timing_log!(
                 logits_start.elapsed(),
                 "{}.token.{token_idx}.logits",
