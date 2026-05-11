@@ -526,6 +526,10 @@ Notes:
 
 - The shared `DecodeSession` and RAII cleanup did not introduce an obvious
   regression in the steady materialized path.
+- A follow-up `M40LLM_ALLOC_LOG=1` CLI run on 2026-05-11 confirmed
+  `decode_session:logits_f32` and `decode_session:logits_norm_hidden_f32`
+  allocate once at session start and free once at session teardown, instead of
+  reallocating in each token's logits path.
 - The materialized FP32 path remains the fast-fits backend: steady second-token
   full-layer forward was about 29x faster than the GGUF F16 fallback.
 - The default run logged an estimated 4.400 GB of F16 2D tensors eligible for
