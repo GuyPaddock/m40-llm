@@ -424,9 +424,83 @@ extern "C" {
 
     // Forward declaration
 // Declaration removed - using extern "C" version below
+extern "C" int m40llm_rms_norm_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_input,
+        void* d_output,
+        uint32_t rows,
+        uint32_t dim,
+        float eps);
+extern "C" int m40llm_rms_norm_f32_weighted_async(
+        M40llmCudaContext* ctx,
+        const void* d_input,
+        const void* d_weight,
+        void* d_output,
+        uint32_t rows,
+        uint32_t dim,
+        float eps,
+        uint32_t weight_dtype);
+int m40llm_residual_add_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_a_f32,
+        const void* d_b_f32,
+        void* d_out_f32,
+        size_t n);
+int m40llm_swiglu_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_gate_f32,
+        const void* d_up_f32,
+        void* d_out_f32,
+        size_t n);
+int m40llm_attention_last_token_f32_gqa_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        void* out_dev_f32);
+int m40llm_kvcache_append_token_f32_async(
+        M40llmCudaContext* ctx,
+        M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* k_dev_f32,
+        const void* v_dev_f32);
+int m40llm_rope_f32_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale);
+int m40llm_rope_f32_inplace_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale);
 
 // RMS Normalization (FP32)
 extern "C" int m40llm_rms_norm_f32(
+        M40llmCudaContext* ctx,
+        const void* d_input,
+        void* d_output,
+        uint32_t rows,
+        uint32_t dim,
+        float eps) {
+        int rc = m40llm_rms_norm_f32_async(ctx, d_input, d_output, rows, dim, eps);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -3;
+    }
+
+extern "C" int m40llm_rms_norm_f32_async(
         M40llmCudaContext* ctx,
         const void* d_input,
         void* d_output,
@@ -444,11 +518,26 @@ extern "C" int m40llm_rms_norm_f32(
             eps);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        return err == cudaSuccess ? 0 : -3;
+        return 0;
     }
 
 extern "C" int m40llm_rms_norm_f32_weighted(
+        M40llmCudaContext* ctx,
+        const void* d_input,
+        const void* d_weight,
+        void* d_output,
+        uint32_t rows,
+        uint32_t dim,
+        float eps,
+        uint32_t weight_dtype) {
+        int rc = m40llm_rms_norm_f32_weighted_async(
+            ctx, d_input, d_weight, d_output, rows, dim, eps, weight_dtype);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -3;
+    }
+
+extern "C" int m40llm_rms_norm_f32_weighted_async(
         M40llmCudaContext* ctx,
         const void* d_input,
         const void* d_weight,
@@ -488,8 +577,7 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        return err == cudaSuccess ? 0 : -3;
+        return 0;
     }
 
     int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {
@@ -540,6 +628,19 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         const void* d_b_f32,
         void* d_out_f32,
         size_t n) {
+        int rc = m40llm_residual_add_f32_async(ctx, d_a_f32, d_b_f32, d_out_f32, n);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_residual_add_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_a_f32,
+        const void* d_b_f32,
+        void* d_out_f32,
+        size_t n) {
         if (!ctx || !d_a_f32 || !d_b_f32 || !d_out_f32) return -1;
         if (ensure_device(ctx) != 0) return -2;
         if (n == 0) return 0;
@@ -552,12 +653,23 @@ extern "C" int m40llm_rms_norm_f32_weighted(
             n);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        if (err != cudaSuccess) return -4;
         return 0;
     }
 
     int m40llm_swiglu_f32(
+        M40llmCudaContext* ctx,
+        const void* d_gate_f32,
+        const void* d_up_f32,
+        void* d_out_f32,
+        size_t n) {
+        int rc = m40llm_swiglu_f32_async(ctx, d_gate_f32, d_up_f32, d_out_f32, n);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_swiglu_f32_async(
         M40llmCudaContext* ctx,
         const void* d_gate_f32,
         const void* d_up_f32,
@@ -575,8 +687,6 @@ extern "C" int m40llm_rms_norm_f32_weighted(
             n);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        if (err != cudaSuccess) return -4;
         return 0;
     }
 
@@ -1219,6 +1329,22 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         uint32_t q_heads,
         uint32_t seq_len,
         void* out_dev_f32) {
+        int rc = m40llm_attention_last_token_f32_gqa_async(
+            ctx, kv, seq_id, q_dev_f32, q_heads, seq_len, out_dev_f32);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -5;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        void* out_dev_f32) {
         if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
@@ -1277,8 +1403,6 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        if (err != cudaSuccess) return -5;
         return 0;
     }
 
@@ -1973,6 +2097,18 @@ extern "C" int m40llm_rms_norm_f32_weighted(
                                          uint32_t seq_id,
                                          const void* k_dev_f32,
                                          const void* v_dev_f32) {
+        int rc = m40llm_kvcache_append_token_f32_async(ctx, kv, seq_id, k_dev_f32, v_dev_f32);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -7;
+        return 0;
+    }
+
+    int m40llm_kvcache_append_token_f32_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
 
@@ -2036,8 +2172,6 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         cur_len += 1;
         err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
         if (err != cudaSuccess) return -6;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        if (err != cudaSuccess) return -7;
 
         return 0;
     }
@@ -2160,6 +2294,23 @@ extern "C" int m40llm_rms_norm_f32_weighted(
         uint32_t past_len,
         float freq_base,
         float freq_scale) {
+        int rc = m40llm_rope_f32_async(
+            ctx, q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_rope_f32_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
         if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -2170,11 +2321,26 @@ extern "C" int m40llm_rms_norm_f32_weighted(
             q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        return err == cudaSuccess ? 0 : -4;
+        return 0;
     }
 
     int m40llm_rope_f32_inplace(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale) {
+        int rc = m40llm_rope_f32_inplace_async(
+            ctx, x, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_rope_f32_inplace_async(
         M40llmCudaContext* ctx,
         float* x,
         uint32_t rows,
@@ -2193,8 +2359,7 @@ extern "C" int m40llm_rms_norm_f32_weighted(
             x, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
-        err = cudaStreamSynchronize(ctx->decode_stream);
-        return err == cudaSuccess ? 0 : -4;
+        return 0;
     }
 
     // A stub persistent decode kernel: one warp = one sequence

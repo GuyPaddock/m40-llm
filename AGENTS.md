@@ -54,8 +54,10 @@ complete.
   directly. FP32 materialized projection weights have budget reporting and
   over-budget fallback logging plus tensor identity metadata in the cache key.
   `DecodeSession` now also owns reusable `d_logits` and optional
-  `d_norm_hidden` scratch for CUDA logits.
-- Next: add async enqueue variants for hot CUDA kernels while keeping sync wrappers.
+  `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
+  enqueue variants while preserving existing sync wrappers for tests/simple
+  callers.
+- Next: re-profile launch/sync counts after async/session cleanup.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

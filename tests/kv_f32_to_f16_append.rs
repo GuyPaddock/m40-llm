@@ -4,7 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use half::f16;
-use m40_llm::cuda::{ffi_debug_read_kv_token, KVCache};
+use m40_llm::cuda::{ffi_debug_read_kv_token, CudaStream, KVCache};
 use std::ffi::c_void;
 
 fn f32s_to_f16_bits(xs: &[f32]) -> Vec<u16> {
@@ -84,7 +84,8 @@ fn test_kvcache_append_token_f32_casts_and_stores_fp16() -> Result<()> {
     unsafe {
         ctx.memcpy_h2d(k0_dev, k1_host.as_ptr() as *const c_void, k1_host.len() * 4)?;
         ctx.memcpy_h2d(v0_dev, v1_host.as_ptr() as *const c_void, v1_host.len() * 4)?;
-        kv.append_token_f32(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+        kv.append_token_f32_async(&ctx, 0, k0_dev as *const c_void, v0_dev as *const c_void)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
     }
 
     let mut k1_back = vec![0u8; bytes];

@@ -3,7 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::KVCache;
+use m40_llm::cuda::{CudaStream, KVCache};
 use std::ffi::c_void;
 
 fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
@@ -135,15 +135,31 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
     let bytes_f32 = dim * std::mem::size_of::<f32>();
     let d_q = ctx.device_malloc(bytes_f32)?;
     let d_out = ctx.device_malloc(bytes_f32)?;
+    let d_out_async = ctx.device_malloc(bytes_f32)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_f32)?;
         kv.attention_last_token_f32(&ctx, seq_id, d_q as *const c_void, seq_len, d_out)?;
+        kv.attention_last_token_f32_gqa_async(
+            &ctx,
+            seq_id,
+            d_q as *const c_void,
+            num_heads,
+            seq_len,
+            d_out_async,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
     }
     let mut out_gpu = vec![0f32; dim];
+    let mut out_gpu_async = vec![0f32; dim];
     unsafe {
         ctx.memcpy_d2h(
             out_gpu.as_mut_ptr() as *mut c_void,
             d_out as *const c_void,
+            bytes_f32,
+        )?;
+        ctx.memcpy_d2h(
+            out_gpu_async.as_mut_ptr() as *mut c_void,
+            d_out_async as *const c_void,
             bytes_f32,
         )?;
     }
@@ -170,11 +186,19 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
             b,
             diff
         );
+        assert!(
+            (out_gpu_async[i] - b).abs() < 1e-6,
+            "async GQA mismatch at {}: async={} sync={}",
+            i,
+            out_gpu_async[i],
+            b
+        );
     }
 
     unsafe {
         ctx.device_free(d_q)?;
         ctx.device_free(d_out)?;
+        ctx.device_free(d_out_async)?;
     }
     Ok(())
 }

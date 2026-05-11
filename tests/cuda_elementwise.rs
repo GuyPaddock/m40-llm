@@ -3,6 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaStream;
 use std::ffi::c_void;
 
 fn f32_bytes(values: &[f32]) -> Vec<u8> {
@@ -105,6 +106,70 @@ fn swiglu_kernel_matches_cpu() -> Result<()> {
         ctx.device_free(d_gate)?;
         ctx.device_free(d_up)?;
         ctx.device_free(d_out)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn async_elementwise_wrappers_match_cpu() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("skipping: {e}");
+        return Ok(());
+    }
+
+    let a: Vec<f32> = (0..129).map(|i| i as f32 * 0.25 - 2.0).collect();
+    let b: Vec<f32> = (0..129).map(|i| 1.5 - i as f32 * 0.125).collect();
+    let expected_add: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x + y).collect();
+    let expected_swiglu: Vec<f32> = a
+        .iter()
+        .zip(&b)
+        .map(|(g, u)| {
+            let silu = *g / (1.0 + (-*g).exp());
+            silu * u
+        })
+        .collect();
+    let bytes = a.len() * std::mem::size_of::<f32>();
+
+    let d_a = ctx.device_malloc(bytes)?;
+    let d_b = ctx.device_malloc(bytes)?;
+    let d_add = ctx.device_malloc(bytes)?;
+    let d_swiglu = ctx.device_malloc(bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_a, f32_bytes(&a).as_ptr() as *const c_void, bytes)?;
+        ctx.memcpy_h2d(d_b, f32_bytes(&b).as_ptr() as *const c_void, bytes)?;
+        ctx.residual_add_f32_async(d_a, d_b, d_add, a.len())?;
+        ctx.swiglu_f32_async(d_a, d_b, d_swiglu, a.len())?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+
+        let mut add_bytes = vec![0u8; bytes];
+        let mut swiglu_bytes = vec![0u8; bytes];
+        ctx.memcpy_d2h(add_bytes.as_mut_ptr() as *mut c_void, d_add, bytes)?;
+        ctx.memcpy_d2h(swiglu_bytes.as_mut_ptr() as *mut c_void, d_swiglu, bytes)?;
+        for (i, (got, want)) in read_f32s(add_bytes).iter().zip(&expected_add).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "async residual mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+        for (i, (got, want)) in read_f32s(swiglu_bytes)
+            .iter()
+            .zip(&expected_swiglu)
+            .enumerate()
+        {
+            assert!(
+                (got - want).abs() < 1e-5,
+                "async swiglu mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+
+        ctx.device_free(d_a)?;
+        ctx.device_free(d_b)?;
+        ctx.device_free(d_add)?;
+        ctx.device_free(d_swiglu)?;
     }
     Ok(())
 }

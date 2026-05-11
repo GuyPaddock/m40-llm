@@ -3,6 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaStream;
 use std::ffi::c_void;
 
 fn cpu_rms_norm(input: &[f32], rows: usize, dim: usize, eps: f32) -> Vec<f32> {
@@ -314,6 +315,170 @@ fn rope_kernel_matches_cpu() -> Result<()> {
     unsafe {
         ctx.device_free(d_q)?;
         ctx.device_free(d_k)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+
+    let rows = 2usize;
+    let dim = 8usize;
+    let eps = 1e-5f32;
+    let input: Vec<f32> = (0..rows * dim).map(|i| i as f32 * 0.2 - 1.0).collect();
+    let weight: Vec<f32> = (0..dim).map(|i| 0.75 + i as f32 * 0.05).collect();
+    let expected_rms = cpu_rms_norm(&input, rows, dim, eps);
+    let expected_weighted = cpu_rms_norm_weighted(&input, &weight, rows, dim, eps);
+
+    let input_bytes = input.len() * std::mem::size_of::<f32>();
+    let weight_bytes = weight.len() * std::mem::size_of::<f32>();
+    let d_in = ctx.device_malloc(input_bytes)?;
+    let d_weight = ctx.device_malloc(weight_bytes)?;
+    let d_rms = ctx.device_malloc(input_bytes)?;
+    let d_weighted = ctx.device_malloc(input_bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_in, input.as_ptr() as *const c_void, input_bytes)?;
+        ctx.memcpy_h2d(d_weight, weight.as_ptr() as *const c_void, weight_bytes)?;
+        ctx.rms_norm_f32_async(d_in, d_rms, rows as u32, dim as u32, eps)?;
+        ctx.rms_norm_f32_weighted_async(
+            d_in,
+            d_weight as *const c_void,
+            d_weighted,
+            rows as u32,
+            dim as u32,
+            eps,
+            1,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+
+        let mut rms_bytes = vec![0u8; input_bytes];
+        let mut weighted_bytes = vec![0u8; input_bytes];
+        ctx.memcpy_d2h(rms_bytes.as_mut_ptr() as *mut c_void, d_rms, input_bytes)?;
+        ctx.memcpy_d2h(
+            weighted_bytes.as_mut_ptr() as *mut c_void,
+            d_weighted,
+            input_bytes,
+        )?;
+        let actual_rms: Vec<f32> = rms_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        let actual_weighted: Vec<f32> = weighted_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        for (i, (got, want)) in actual_rms.iter().zip(&expected_rms).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "async rms mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+        for (i, (got, want)) in actual_weighted.iter().zip(&expected_weighted).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "async weighted rms mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+    }
+
+    let rope_rows = 1usize;
+    let num_heads = 2usize;
+    let head_dim = 4usize;
+    let past_len = 5usize;
+    let freq_base = 10_000.0f32;
+    let freq_scale = 1.0f32;
+    let q: Vec<f32> = (0..rope_rows * num_heads * head_dim)
+        .map(|i| i as f32 * 0.125 - 0.25)
+        .collect();
+    let k = q.clone();
+    let mut expected_q = q.clone();
+    let mut expected_k = k.clone();
+    cpu_rope(
+        &mut expected_q,
+        &mut expected_k,
+        rope_rows,
+        num_heads,
+        head_dim,
+        past_len,
+        freq_base,
+        freq_scale,
+    );
+    let rope_bytes = q.len() * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(rope_bytes)?;
+    let d_k = ctx.device_malloc(rope_bytes)?;
+    let d_x = ctx.device_malloc(rope_bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, rope_bytes)?;
+        ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, rope_bytes)?;
+        ctx.memcpy_h2d(d_x, q.as_ptr() as *const c_void, rope_bytes)?;
+        ctx.rope_f32_async(
+            d_q,
+            d_k,
+            rope_rows as u32,
+            num_heads as u32,
+            head_dim as u32,
+            past_len as u32,
+            freq_base,
+            freq_scale,
+        )?;
+        ctx.rope_f32_inplace_async(
+            d_x,
+            rope_rows as u32,
+            num_heads as u32,
+            head_dim as u32,
+            past_len as u32,
+            freq_base,
+            freq_scale,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        let mut q_bytes = vec![0u8; rope_bytes];
+        let mut k_bytes = vec![0u8; rope_bytes];
+        let mut x_bytes = vec![0u8; rope_bytes];
+        ctx.memcpy_d2h(q_bytes.as_mut_ptr() as *mut c_void, d_q, rope_bytes)?;
+        ctx.memcpy_d2h(k_bytes.as_mut_ptr() as *mut c_void, d_k, rope_bytes)?;
+        ctx.memcpy_d2h(x_bytes.as_mut_ptr() as *mut c_void, d_x, rope_bytes)?;
+        let actual_q: Vec<f32> = q_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        let actual_k: Vec<f32> = k_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        let actual_x: Vec<f32> = x_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        for (i, (got, want)) in actual_q.iter().zip(&expected_q).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "async rope q mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+        for (i, (got, want)) in actual_k.iter().zip(&expected_k).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "async rope k mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+        for (i, (got, want)) in actual_x.iter().zip(&expected_q).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "async rope inplace mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+
+        ctx.device_free(d_in)?;
+        ctx.device_free(d_weight)?;
+        ctx.device_free(d_rms)?;
+        ctx.device_free(d_weighted)?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_k)?;
+        ctx.device_free(d_x)?;
     }
     Ok(())
 }
