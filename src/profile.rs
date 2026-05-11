@@ -67,6 +67,24 @@ impl OpCounters {
             }
         }
     }
+
+    fn saturating_sub(self, rhs: Self) -> Self {
+        Self {
+            launches: self.launches.saturating_sub(rhs.launches),
+            cublas_calls: self.cublas_calls.saturating_sub(rhs.cublas_calls),
+            stream_syncs: self.stream_syncs.saturating_sub(rhs.stream_syncs),
+            device_allocs: self.device_allocs.saturating_sub(rhs.device_allocs),
+            device_frees: self.device_frees.saturating_sub(rhs.device_frees),
+            h2d_copies: self.h2d_copies.saturating_sub(rhs.h2d_copies),
+            d2h_copies: self.d2h_copies.saturating_sub(rhs.d2h_copies),
+            h2d_bytes: self.h2d_bytes.saturating_sub(rhs.h2d_bytes),
+            d2h_bytes: self.d2h_bytes.saturating_sub(rhs.d2h_bytes),
+        }
+    }
+
+    fn is_zero(self) -> bool {
+        self == Self::default()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +119,13 @@ fn sync_log_enabled() -> bool {
 
 fn copy_log_enabled() -> bool {
     std::env::var("M40LLM_COPY_LOG").ok().as_deref() == Some("1")
+}
+
+pub fn enabled() -> bool {
+    launch_log_enabled()
+        || sync_log_enabled()
+        || copy_log_enabled()
+        || std::env::var("M40LLM_PROFILE_LOG").ok().as_deref() == Some("1")
 }
 
 fn record(op: &'static str, event: ProfileEvent, bytes: u64) {
@@ -159,6 +184,40 @@ pub fn reset() {
 pub fn snapshot() -> ProfileSnapshot {
     let by_op = counters().lock().map(|map| map.clone()).unwrap_or_default();
     ProfileSnapshot { by_op }
+}
+
+pub fn snapshot_if_enabled() -> Option<ProfileSnapshot> {
+    enabled().then(snapshot)
+}
+
+pub fn log_delta(label: &str, before: Option<&ProfileSnapshot>, elapsed: std::time::Duration) {
+    if !enabled() {
+        return;
+    }
+    let Some(before) = before else {
+        return;
+    };
+    let after = snapshot();
+    let elapsed_us = elapsed.as_secs_f64() * 1_000_000.0;
+    for (op, after_counts) in after.by_op {
+        let before_counts = before.by_op.get(op).copied().unwrap_or_default();
+        let delta = after_counts.saturating_sub(before_counts);
+        if delta.is_zero() {
+            continue;
+        }
+        eprintln!(
+            "[profile] {label}: op={op} launches={} cublas_calls={} syncs={} allocs={} frees={} h2d={}({} bytes) d2h={}({} bytes) elapsed_us={elapsed_us:.3}",
+            delta.launches,
+            delta.cublas_calls,
+            delta.stream_syncs,
+            delta.device_allocs,
+            delta.device_frees,
+            delta.h2d_copies,
+            delta.h2d_bytes,
+            delta.d2h_copies,
+            delta.d2h_bytes
+        );
+    }
 }
 
 pub fn log_summary(label: &str) {

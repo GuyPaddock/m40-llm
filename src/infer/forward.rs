@@ -4,11 +4,24 @@ use super::workspace::ForwardWorkspacePtrs;
 use super::LoadedModel;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
+use crate::profile;
+#[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+fn log_profiled_op(
+    label: &str,
+    op: &str,
+    before: Option<&profile::ProfileSnapshot>,
+    elapsed: std::time::Duration,
+) {
+    timing::log(&format!("{label}.{op}"), elapsed);
+    profile::log_delta(&format!("{label}.{op}"), before, elapsed);
+}
 
 impl LoadedModel {
     #[cfg(feature = "cuda")]
@@ -94,6 +107,7 @@ impl LoadedModel {
                 |ws| -> Result<()> {
                     let label = format!("forward.layer.{seq_id}.seq_len.{seq_len}");
                     // Pre-norm (RMSNorm) on x -> xn
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = attn_norm_weight {
                         self.run_rms_norm_weighted(
@@ -114,9 +128,15 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
-                    timing::timing_log!(op_start.elapsed(), "{label}.attn_norm");
+                    log_profiled_op(
+                        &label,
+                        "attn_norm",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Q uses query heads; K/V use KV heads for GQA models.
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.qkv_project_f32xf16_gguf_f32(
                         ws.d_xn,
@@ -132,9 +152,15 @@ impl LoadedModel {
                         ws.dk,
                         ws.dv,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.qkv_project");
+                    log_profiled_op(
+                        &label,
+                        "qkv_project",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     let pos = seq_len.saturating_sub(1);
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.cuda.rope_f32_inplace(
                         ws.dq,
@@ -154,18 +180,30 @@ impl LoadedModel {
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.rope_qk");
+                    log_profiled_op(
+                        &label,
+                        "rope_qk",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Append K/V for this token, then attention over last token
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.append_kv_token_f32(
                         seq_id,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.kv_append");
+                    log_profiled_op(
+                        &label,
+                        "kv_append",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Use KV cache layout to validate/run attention
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.run_attention(
                         ws.dq as *const c_void,
@@ -176,9 +214,15 @@ impl LoadedModel {
                         q_heads,
                         head_dim,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.attention");
+                    log_profiled_op(
+                        &label,
+                        "attention",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Output projection of attention
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.out_proj_f32xf16_gguf_f32(
                         ws.datt as *const c_void,
@@ -188,9 +232,15 @@ impl LoadedModel {
                         d_model,
                         d_model,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.out_project");
+                    log_profiled_op(
+                        &label,
+                        "out_project",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Residual add y_attn: x1 = x + y_attn.
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.cuda.residual_add_f32(
                         d_x_f32,
@@ -198,9 +248,15 @@ impl LoadedModel {
                         ws.d_x1,
                         d_model as usize,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.attn_residual");
+                    log_profiled_op(
+                        &label,
+                        "attn_residual",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Post-attention norm: x1n = norm(x1)
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = ffn_norm_weight {
                         self.run_rms_norm_weighted(
@@ -221,9 +277,15 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     }
-                    timing::timing_log!(op_start.elapsed(), "{label}.ffn_norm");
+                    log_profiled_op(
+                        &label,
+                        "ffn_norm",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // MLP gates and up (now feed post-attn normalized x1n)
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.mlp_gates_f32xf16_gguf_f32(
                         ws.d_x1n,
@@ -235,9 +297,15 @@ impl LoadedModel {
                         ws.dgate,
                         ws.dup,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.mlp_gate_up");
+                    log_profiled_op(
+                        &label,
+                        "mlp_gate_up",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.cuda.swiglu_f32(
                         ws.dgate as *const c_void,
@@ -245,9 +313,15 @@ impl LoadedModel {
                         ws.dhid,
                         hidden_dim as usize,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.swiglu");
+                    log_profiled_op(
+                        &label,
+                        "swiglu",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Down projection
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.mlp_down_proj_f32xf16_gguf_f32(
                         ws.dhid as *const c_void,
@@ -257,9 +331,15 @@ impl LoadedModel {
                         d_model,
                         ws.dy_mlp,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.mlp_down");
+                    log_profiled_op(
+                        &label,
+                        "mlp_down",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
+                    let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     self.cuda.residual_add_f32(
                         ws.d_x1 as *const c_void,
@@ -267,7 +347,12 @@ impl LoadedModel {
                         d_out_f32,
                         d_model as usize,
                     )?;
-                    timing::timing_log!(op_start.elapsed(), "{label}.mlp_residual");
+                    log_profiled_op(
+                        &label,
+                        "mlp_residual",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
 
                     Ok(())
                 },

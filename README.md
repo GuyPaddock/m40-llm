@@ -141,6 +141,8 @@ same non-streaming decode helper as `POST /generate`.
 - Launch/sync/copy counters: set `M40LLM_LAUNCH_LOG=1` to log kernel launch
   and cuBLAS counter events, `M40LLM_SYNC_LOG=1` to log stream synchronization
   counter events, and `M40LLM_COPY_LOG=1` to log H2D/D2H copy counter events.
+  Set `M40LLM_PROFILE_LOG=1` to print lower-noise per-operation counter deltas
+  around forward-pass timing regions.
 
 ## Server (feature = server)
 ```
