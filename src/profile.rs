@@ -41,6 +41,7 @@ pub struct OpCounters {
     pub launches: u64,
     pub cublas_calls: u64,
     pub stream_syncs: u64,
+    pub stream_waits: u64,
     pub device_allocs: u64,
     pub device_frees: u64,
     pub h2d_copies: u64,
@@ -55,6 +56,7 @@ impl OpCounters {
             ProfileEvent::Launch => self.launches += 1,
             ProfileEvent::CublasCall => self.cublas_calls += 1,
             ProfileEvent::StreamSync => self.stream_syncs += 1,
+            ProfileEvent::StreamWait => self.stream_waits += 1,
             ProfileEvent::DeviceAlloc => self.device_allocs += 1,
             ProfileEvent::DeviceFree => self.device_frees += 1,
             ProfileEvent::H2DCopy => {
@@ -73,6 +75,7 @@ impl OpCounters {
             launches: self.launches.saturating_sub(rhs.launches),
             cublas_calls: self.cublas_calls.saturating_sub(rhs.cublas_calls),
             stream_syncs: self.stream_syncs.saturating_sub(rhs.stream_syncs),
+            stream_waits: self.stream_waits.saturating_sub(rhs.stream_waits),
             device_allocs: self.device_allocs.saturating_sub(rhs.device_allocs),
             device_frees: self.device_frees.saturating_sub(rhs.device_frees),
             h2d_copies: self.h2d_copies.saturating_sub(rhs.h2d_copies),
@@ -97,6 +100,7 @@ enum ProfileEvent {
     Launch,
     CublasCall,
     StreamSync,
+    StreamWait,
     DeviceAlloc,
     DeviceFree,
     H2DCopy,
@@ -140,6 +144,9 @@ fn record(op: &'static str, event: ProfileEvent, bytes: u64) {
         ProfileEvent::StreamSync if sync_log_enabled() => {
             eprintln!("[profile] stream_sync: {op}");
         }
+        ProfileEvent::StreamWait if sync_log_enabled() => {
+            eprintln!("[profile] stream_wait: {op}");
+        }
         ProfileEvent::H2DCopy | ProfileEvent::D2HCopy if copy_log_enabled() => {
             eprintln!("[profile] {event:?}: {op} bytes={bytes}");
         }
@@ -157,6 +164,10 @@ pub fn record_cublas_call(op: &'static str) {
 
 pub fn record_stream_sync(op: &'static str) {
     record(op, ProfileEvent::StreamSync, 0);
+}
+
+pub fn record_stream_wait(op: &'static str) {
+    record(op, ProfileEvent::StreamWait, 0);
 }
 
 pub fn record_device_alloc(op: &'static str, bytes: usize) {
@@ -206,10 +217,11 @@ pub fn log_delta(label: &str, before: Option<&ProfileSnapshot>, elapsed: std::ti
             continue;
         }
         eprintln!(
-            "[profile] {label}: op={op} launches={} cublas_calls={} syncs={} allocs={} frees={} h2d={}({} bytes) d2h={}({} bytes) elapsed_us={elapsed_us:.3}",
+            "[profile] {label}: op={op} launches={} cublas_calls={} syncs={} waits={} allocs={} frees={} h2d={}({} bytes) d2h={}({} bytes) elapsed_us={elapsed_us:.3}",
             delta.launches,
             delta.cublas_calls,
             delta.stream_syncs,
+            delta.stream_waits,
             delta.device_allocs,
             delta.device_frees,
             delta.h2d_copies,
@@ -225,10 +237,11 @@ pub fn log_summary(label: &str) {
     eprintln!("[profile] summary {label}");
     for (op, counts) in snapshot.by_op {
         eprintln!(
-            "[profile] {op}: launches={} cublas_calls={} syncs={} allocs={} frees={} h2d={}({} bytes) d2h={}({} bytes)",
+            "[profile] {op}: launches={} cublas_calls={} syncs={} waits={} allocs={} frees={} h2d={}({} bytes) d2h={}({} bytes)",
             counts.launches,
             counts.cublas_calls,
             counts.stream_syncs,
+            counts.stream_waits,
             counts.device_allocs,
             counts.device_frees,
             counts.h2d_copies,
@@ -268,10 +281,12 @@ mod tests {
         reset();
         record_launch("test.kernel");
         record_stream_sync("test.kernel");
+        record_stream_wait("test.kernel");
         record_h2d_copy("test.copy", 17);
         let snapshot = snapshot();
         assert_eq!(snapshot.by_op["test.kernel"].launches, 1);
         assert_eq!(snapshot.by_op["test.kernel"].stream_syncs, 1);
+        assert_eq!(snapshot.by_op["test.kernel"].stream_waits, 1);
         assert_eq!(snapshot.by_op["test.copy"].h2d_copies, 1);
         assert_eq!(snapshot.by_op["test.copy"].h2d_bytes, 17);
     }

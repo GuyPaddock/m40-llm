@@ -645,3 +645,55 @@ Notes:
   path around cuBLAS and elementwise kernels. The next strict task should focus
   on removing sync boundaries from already-fused SwiGLU and preparing graph or
   async full-layer scheduling rather than adding more local micro-fusions.
+
+## 2026-05-11: Async SwiGLU Stream-Wait Decode Profile
+
+This profile was taken after changing full-layer forward to enqueue SwiGLU on
+the decode stream asynchronously, then make the prefill stream wait on that
+work before the MLP down-projection GEMM consumes `dhid`.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 52.390 ms |
+| `cli.token.1.logits` | 5.573 ms |
+| `cli.token.1.total` | 58.050 ms |
+| `cli.generate_text_total` | 650.119 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 0 | 6.179 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 0 | 11.800 ms |
+| `mlp_down` | 0 | 22 | 22 | 22 | 13.477 ms |
+| `out_project` | 0 | 22 | 22 | 0 | 3.394 ms |
+| `rope_q` | 22 | 0 | 22 | 0 | 0.832 ms |
+| `kv_append_rope_k` | 22 | 0 | 22 | 0 | 1.537 ms |
+| `attention` | 22 | 0 | 22 | 0 | 1.752 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 0 | 2.210 ms |
+| `residual_add` | 44 | 0 | 44 | 0 | 1.076 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.339 ms |
+
+Notes:
+
+- SwiGLU explicit stream synchronizations dropped from 22 to 0 per steady token.
+  The required dependency is now represented as 22 stream waits in `mlp_down`,
+  because cuBLAS GEMM still runs on the prefill stream.
+- This is primarily a scheduling prerequisite for CUDA Graph capture rather than
+  a standalone latency win. The per-run timing was mixed: `swiglu` elapsed fell,
+  while `mlp_down` now includes the event wait plus normal GEMM sync cost.
+- The next strict task is to prototype CUDA Graph capture for warm one-token
+  decode now that the hot path has stable scratch buffers and explicit stream
+  dependencies.

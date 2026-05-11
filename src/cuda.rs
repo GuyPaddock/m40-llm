@@ -61,6 +61,11 @@ mod ffi {
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
         pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
         pub fn m40llm_stream_synchronize(ctx: *mut M40llmCudaContext, stream_kind: u32) -> i32;
+        pub fn m40llm_stream_wait_for_stream(
+            ctx: *mut M40llmCudaContext,
+            waiting_stream_kind: u32,
+            signal_stream_kind: u32,
+        ) -> i32;
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -613,6 +618,37 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = stream;
+            Ok(())
+        }
+    }
+
+    pub fn stream_wait_for_stream(
+        &self,
+        waiting: CudaStream,
+        signal: CudaStream,
+        op: &'static str,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_stream_wait_for_stream(
+                    self.inner.raw.as_ptr(),
+                    waiting.ffi_kind(),
+                    signal.ffi_kind(),
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_stream_wait_for_stream failed for {op}: {rc}"
+                ));
+            }
+            crate::profile::record_stream_wait(op);
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (waiting, signal, op);
             Ok(())
         }
     }

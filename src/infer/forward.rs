@@ -2,6 +2,8 @@ use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
 use super::workspace::ForwardWorkspacePtrs;
 use super::LoadedModel;
+#[cfg(feature = "cuda")]
+use crate::cuda::CudaStream;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::profile;
@@ -301,7 +303,7 @@ impl LoadedModel {
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.swiglu_f32(
+                    self.cuda.swiglu_f32_async(
                         ws.dgate as *const c_void,
                         ws.dup as *const c_void,
                         ws.dhid,
@@ -317,6 +319,11 @@ impl LoadedModel {
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "swiglu_to_mlp_down",
+                    )?;
                     self.mlp_down_proj_f32xf16_gguf_f32(
                         ws.dhid as *const c_void,
                         1,

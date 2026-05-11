@@ -36,6 +36,9 @@ int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_
 int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
     (void)ctx; (void)dst_host; (void)src_device; (void)bytes; return -1;
 }
+int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
+    (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
+}
 
 M40llmCudaContext* m40llm_create_context(int device_id) {
     (void)device_id; return (M40llmCudaContext*)0x1; // non-null stub

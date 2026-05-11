@@ -60,9 +60,11 @@ complete.
   is recorded in `docs/perf_baselines.md`. The forward path now fuses K RoPE
   with FP32-to-FP16 KV append while leaving Q RoPE separate; profiling reduced
   RoPE/KV operation groups from 66 to 44 launches/syncs per steady TinyLlama
-  token.
-- Next: treat SwiGLU as already fused; remove sync/graph it before considering
-  deeper fusion.
+  token. Full-layer forward now enqueues the already-fused SwiGLU kernel
+  asynchronously and uses an explicit decode-to-prefill stream wait before the
+  MLP down projection, removing 22 explicit SwiGLU stream synchronizations per
+  steady token.
+- Next: prototype CUDA Graph capture for warm one-token decode.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

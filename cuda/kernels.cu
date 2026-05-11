@@ -16,6 +16,7 @@ struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
     cudaStream_t decode_stream;
+    cudaEvent_t stream_bridge_event;
     int prefill_priority;
     int decode_priority;
     M40llmPersistentDecode* persistent_decode;
@@ -151,6 +152,7 @@ extern "C" {
         ctx->prefill_priority = 0;
         ctx->decode_priority = 0;
         ctx->persistent_decode = nullptr;
+        ctx->stream_bridge_event = nullptr;
 
         int least_priority = 0;
         int greatest_priority = 0;
@@ -178,6 +180,16 @@ extern "C" {
             return nullptr;
         }
 
+        cudaError_t event_err = cudaEventCreateWithFlags(
+            &ctx->stream_bridge_event,
+            cudaEventDisableTiming);
+        if (event_err != cudaSuccess) {
+            cudaStreamDestroy(ctx->prefill_stream);
+            cudaStreamDestroy(ctx->decode_stream);
+            delete ctx;
+            return nullptr;
+        }
+
         if (stream_log_enabled()) {
             fprintf(stderr,
                 "[cuda] streams: prefill=nonblocking priority=%d decode=nonblocking priority=%d range=[%d,%d]\n",
@@ -189,6 +201,7 @@ extern "C" {
 
     #ifdef M40LLM_HAVE_CUBLAS
         if (cublasCreate(&ctx->cublas) != CUBLAS_STATUS_SUCCESS) {
+            cudaEventDestroy(ctx->stream_bridge_event);
             cudaStreamDestroy(ctx->prefill_stream);
             cudaStreamDestroy(ctx->decode_stream);
             delete ctx;
@@ -207,6 +220,22 @@ extern "C" {
         if (!stream) return -3;
         cudaError_t err = cudaStreamSynchronize(stream);
         if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_stream_wait_for_stream(
+        M40llmCudaContext* ctx,
+        uint32_t waiting_stream_kind,
+        uint32_t signal_stream_kind) {
+        if (!ctx) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t waiting_stream = select_stream(ctx, waiting_stream_kind);
+        cudaStream_t signal_stream = select_stream(ctx, signal_stream_kind);
+        if (!waiting_stream || !signal_stream || !ctx->stream_bridge_event) return -3;
+        cudaError_t err = cudaEventRecord(ctx->stream_bridge_event, signal_stream);
+        if (err != cudaSuccess) return -4;
+        err = cudaStreamWaitEvent(waiting_stream, ctx->stream_bridge_event, 0);
+        if (err != cudaSuccess) return -5;
         return 0;
     }
 
@@ -2964,6 +2993,7 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
     #ifdef M40LLM_HAVE_CUBLAS
         cublasDestroy(ctx->cublas);
     #endif
+        if (ctx->stream_bridge_event) cudaEventDestroy(ctx->stream_bridge_event);
         cudaStreamDestroy(ctx->prefill_stream);
         cudaStreamDestroy(ctx->decode_stream);
         delete ctx;
