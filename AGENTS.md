@@ -63,8 +63,11 @@ complete.
   token. Full-layer forward now enqueues the already-fused SwiGLU kernel
   asynchronously and uses an explicit decode-to-prefill stream wait before the
   MLP down projection, removing 22 explicit SwiGLU stream synchronizations per
-  steady token.
-- Next: prototype CUDA Graph capture for warm one-token decode.
+  steady token. CUDA Graph capture/instantiate/launch/destroy infrastructure is
+  in place and validated with fixed-pointer decode-style async elementwise work
+  on M40; whole-token capture is still blocked by remaining sync wrappers and
+  host-side KV sequence length updates.
+- Next: integrate packed varlen decode attention into the server scheduler.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

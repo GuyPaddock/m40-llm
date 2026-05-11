@@ -11,6 +11,10 @@
 #include "common.h"
 
 struct M40llmPersistentDecode;
+struct M40llmCudaGraphExec {
+    cudaGraph_t graph;
+    cudaGraphExec_t exec;
+};
 
 struct M40llmCudaContext {
     int device_id;
@@ -237,6 +241,74 @@ extern "C" {
         err = cudaStreamWaitEvent(waiting_stream, ctx->stream_bridge_event, 0);
         if (err != cudaSuccess) return -5;
         return 0;
+    }
+
+    int m40llm_cuda_graph_begin_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+        if (!ctx) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaError_t err = cudaStreamBeginCapture(stream, cudaStreamCaptureModeRelaxed);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_cuda_graph_end_capture(
+        M40llmCudaContext* ctx,
+        uint32_t stream_kind,
+        M40llmCudaGraphExec** out_graph) {
+        if (!ctx || !out_graph) return -1;
+        *out_graph = nullptr;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+
+        cudaGraph_t graph = nullptr;
+        cudaError_t err = cudaStreamEndCapture(stream, &graph);
+        if (err != cudaSuccess) return -4;
+        if (!graph) return -5;
+
+        cudaGraphExec_t exec = nullptr;
+        err = cudaGraphInstantiate(&exec, graph, nullptr, nullptr, 0);
+        if (err != cudaSuccess) {
+            cudaGraphDestroy(graph);
+            return -6;
+        }
+
+        M40llmCudaGraphExec* wrapped = new M40llmCudaGraphExec();
+        wrapped->graph = graph;
+        wrapped->exec = exec;
+        *out_graph = wrapped;
+        return 0;
+    }
+
+    int m40llm_cuda_graph_cancel_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+        if (!ctx) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaGraph_t graph = nullptr;
+        cudaError_t err = cudaStreamEndCapture(stream, &graph);
+        if (graph) cudaGraphDestroy(graph);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_cuda_graph_launch(
+        M40llmCudaContext* ctx,
+        M40llmCudaGraphExec* graph,
+        uint32_t stream_kind) {
+        if (!ctx || !graph || !graph->exec) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaError_t err = cudaGraphLaunch(graph->exec, stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) {
+        if (!graph) return;
+        if (graph->exec) cudaGraphExecDestroy(graph->exec);
+        if (graph->graph) cudaGraphDestroy(graph->graph);
+        delete graph;
     }
 
 }

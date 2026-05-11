@@ -697,3 +697,36 @@ Notes:
 - The next strict task is to prototype CUDA Graph capture for warm one-token
   decode now that the hot path has stable scratch buffers and explicit stream
   dependencies.
+
+## 2026-05-11: CUDA Graph Capture Prototype
+
+This checkpoint added CUDA Graph capture/instantiate/launch/destroy plumbing and
+validated it with fixed-pointer decode-style async elementwise work on the M40.
+
+Validation command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise -- --nocapture --test-threads=1
+```
+
+Observed result:
+
+| Test | Result |
+| --- | --- |
+| `cuda_graph_replays_decode_elementwise_work` | pass |
+| `async_elementwise_wrappers_match_cpu` | pass |
+| `stream_wait_allows_prefill_gemm_to_consume_decode_swiglu` | pass |
+
+Notes:
+
+- The prototype captures and replays a decode-stream graph containing fixed
+  device pointers and async kernel enqueues. This validates the CUDA Graph
+  lifecycle on Tesla M40 without changing the production decode path yet.
+- Whole-token graph capture is not ready to enable: the hot path still has sync
+  compatibility wrappers around cuBLAS and other kernels, and KV append still
+  reads the sequence length through a host-side `cudaMemcpy`.
+- The next graph-specific step, when it becomes the priority again, should be to
+  make a one-layer decode subgraph fully async and device-parameterized. The
+  immediate strict-plan task now moves to packed variable-length decode
+  scheduling.

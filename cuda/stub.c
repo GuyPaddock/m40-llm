@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 typedef struct M40llmCudaContext { int device_id; } M40llmCudaContext;
+typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
@@ -39,6 +40,19 @@ int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_de
 int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
     (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
 }
+int m40llm_cuda_graph_begin_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
+}
+int m40llm_cuda_graph_end_capture(M40llmCudaContext* ctx, uint32_t stream_kind, M40llmCudaGraphExec** out_graph) {
+    (void)ctx; (void)stream_kind; (void)out_graph; return -1;
+}
+int m40llm_cuda_graph_cancel_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
+}
+int m40llm_cuda_graph_launch(M40llmCudaContext* ctx, M40llmCudaGraphExec* graph, uint32_t stream_kind) {
+    (void)ctx; (void)graph; (void)stream_kind; return -1;
+}
+void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) { (void)graph; }
 
 M40llmCudaContext* m40llm_create_context(int device_id) {
     (void)device_id; return (M40llmCudaContext*)0x1; // non-null stub

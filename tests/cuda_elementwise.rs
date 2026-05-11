@@ -197,6 +197,75 @@ fn async_elementwise_wrappers_match_cpu() -> Result<()> {
 }
 
 #[test]
+fn cuda_graph_replays_decode_elementwise_work() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("skipping: {e}");
+        return Ok(());
+    }
+
+    let a: Vec<f32> = (0..257).map(|i| i as f32 * 0.03125 - 3.0).collect();
+    let b: Vec<f32> = (0..257).map(|i| 2.0 - i as f32 * 0.015625).collect();
+    let expected_add: Vec<f32> = a.iter().zip(&b).map(|(x, y)| x + y).collect();
+    let expected_swiglu: Vec<f32> = a
+        .iter()
+        .zip(&b)
+        .map(|(g, u)| {
+            let silu = *g / (1.0 + (-*g).exp());
+            silu * u
+        })
+        .collect();
+    let bytes = a.len() * std::mem::size_of::<f32>();
+
+    let d_a = ctx.device_malloc(bytes)?;
+    let d_b = ctx.device_malloc(bytes)?;
+    let d_add = ctx.device_malloc(bytes)?;
+    let d_swiglu = ctx.device_malloc(bytes)?;
+    unsafe {
+        ctx.memcpy_h2d(d_a, f32_bytes(&a).as_ptr() as *const c_void, bytes)?;
+        ctx.memcpy_h2d(d_b, f32_bytes(&b).as_ptr() as *const c_void, bytes)?;
+
+        let graph = ctx.capture_graph(CudaStream::Decode, || {
+            ctx.residual_add_f32_async(d_a, d_b, d_add, a.len())?;
+            ctx.swiglu_f32_async(d_a, d_b, d_swiglu, a.len())
+        })?;
+        graph.launch(CudaStream::Decode)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+
+        let mut add_bytes = vec![0u8; bytes];
+        let mut swiglu_bytes = vec![0u8; bytes];
+        ctx.memcpy_d2h(add_bytes.as_mut_ptr() as *mut c_void, d_add, bytes)?;
+        ctx.memcpy_d2h(swiglu_bytes.as_mut_ptr() as *mut c_void, d_swiglu, bytes)?;
+        for (i, (got, want)) in read_f32s(add_bytes).iter().zip(&expected_add).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "graph residual mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+        for (i, (got, want)) in read_f32s(swiglu_bytes)
+            .iter()
+            .zip(&expected_swiglu)
+            .enumerate()
+        {
+            assert!(
+                (got - want).abs() < 1e-5,
+                "graph swiglu mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+
+        ctx.device_free(d_a)?;
+        ctx.device_free(d_b)?;
+        ctx.device_free(d_add)?;
+        ctx.device_free(d_swiglu)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn stream_wait_allows_prefill_gemm_to_consume_decode_swiglu() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(c) => c,

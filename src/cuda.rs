@@ -28,6 +28,10 @@ mod ffi {
     pub struct M40llmKVCache {
         _private: [u8; 0],
     }
+    #[repr(C)]
+    pub struct M40llmCudaGraphExec {
+        _private: [u8; 0],
+    }
 
     extern "C" {
         pub fn m40llm_current_device_props(
@@ -66,6 +70,25 @@ mod ffi {
             waiting_stream_kind: u32,
             signal_stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_cuda_graph_begin_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_end_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+            out_graph: *mut *mut M40llmCudaGraphExec,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_cancel_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_launch(
+            ctx: *mut M40llmCudaContext,
+            graph: *mut M40llmCudaGraphExec,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_destroy(graph: *mut M40llmCudaGraphExec);
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -454,6 +477,58 @@ impl Drop for DeviceBuffer {
     }
 }
 
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct CudaGraphExec {
+    ctx: CudaContext,
+    raw: NonNull<ffi::M40llmCudaGraphExec>,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for CudaGraphExec {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for CudaGraphExec {}
+
+#[cfg(feature = "cuda")]
+impl CudaGraphExec {
+    pub fn launch(&self, stream: CudaStream) -> Result<()> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_cuda_graph_launch(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_graph_launch failed: {rc}"));
+        }
+        crate::profile::record_launch("cuda_graph_launch");
+        Ok(())
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for CudaGraphExec {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::m40llm_cuda_graph_destroy(self.raw.as_ptr());
+        }
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+#[derive(Debug)]
+pub struct CudaGraphExec;
+
+#[cfg(not(feature = "cuda"))]
+impl CudaGraphExec {
+    pub fn launch(&self, stream: CudaStream) -> Result<()> {
+        let _ = stream;
+        anyhow::bail!("CUDA graph launch is unavailable without the cuda feature")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CudaStream {
     Prefill,
@@ -650,6 +725,63 @@ impl CudaContext {
         {
             let _ = (waiting, signal, op);
             Ok(())
+        }
+    }
+
+    pub fn capture_graph(
+        &self,
+        stream: CudaStream,
+        capture: impl FnOnce() -> Result<()>,
+    ) -> Result<CudaGraphExec> {
+        #[cfg(feature = "cuda")]
+        {
+            {
+                let _g = self.inner.lock.lock().unwrap();
+                let rc = unsafe {
+                    ffi::m40llm_cuda_graph_begin_capture(self.inner.raw.as_ptr(), stream.ffi_kind())
+                };
+                if rc != 0 {
+                    return Err(anyhow!("m40llm_cuda_graph_begin_capture failed: {rc}"));
+                }
+            }
+
+            if let Err(err) = capture() {
+                let _g = self.inner.lock.lock().unwrap();
+                unsafe {
+                    let _ = ffi::m40llm_cuda_graph_cancel_capture(
+                        self.inner.raw.as_ptr(),
+                        stream.ffi_kind(),
+                    );
+                }
+                return Err(err);
+            }
+
+            let mut out: *mut ffi::M40llmCudaGraphExec = std::ptr::null_mut();
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_cuda_graph_end_capture(
+                    self.inner.raw.as_ptr(),
+                    stream.ffi_kind(),
+                    &mut out as *mut _,
+                )
+            };
+            if rc != 0 || out.is_null() {
+                return Err(anyhow!(
+                    "m40llm_cuda_graph_end_capture failed: rc={rc}, out_null={}",
+                    out.is_null()
+                ));
+            }
+            crate::profile::record_launch("cuda_graph_instantiate");
+            Ok(CudaGraphExec {
+                ctx: self.clone(),
+                raw: NonNull::new(out).ok_or_else(|| anyhow!("graph capture returned null"))?,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = stream;
+            capture()?;
+            anyhow::bail!("CUDA graph capture is unavailable without the cuda feature")
         }
     }
 
