@@ -390,6 +390,55 @@ pub struct CudaContext {
     inner: Arc<CudaContextInner>,
 }
 
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct DeviceBuffer {
+    ctx: CudaContext,
+    ptr: NonNull<c_void>,
+    bytes: usize,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for DeviceBuffer {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for DeviceBuffer {}
+
+#[cfg(feature = "cuda")]
+impl DeviceBuffer {
+    #[track_caller]
+    pub fn new_tagged(ctx: &CudaContext, bytes: usize, tag: &str) -> Result<Self> {
+        let ptr = ctx.device_malloc_tagged(bytes, tag)?;
+        let ptr = NonNull::new(ptr)
+            .ok_or_else(|| anyhow!("device_malloc_tagged returned null for tag={tag}"))?;
+        Ok(Self {
+            ctx: ctx.clone(),
+            ptr,
+            bytes,
+        })
+    }
+
+    pub fn as_ptr(&self) -> *const c_void {
+        self.ptr.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for DeviceBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self.ctx.device_free(self.ptr.as_ptr());
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CudaStream {
     Prefill,

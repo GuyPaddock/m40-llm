@@ -169,6 +169,8 @@ concurrently; the intended replacement is a per-session workspace pool.
 The CUDA decode path uses a shared `DecodeSession` for CLI and server generation,
 reusing per-request `d_x` and `d_out` device scratch instead of allocating those
 buffers for every token.
+Forward workspace and decode-session scratch buffers are RAII-owned, so partial
+allocation failures clean up any buffers that were already allocated.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

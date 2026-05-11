@@ -1,4 +1,4 @@
-use crate::cuda::CudaContext;
+use crate::cuda::{CudaContext, DeviceBuffer};
 use anyhow::{Context, Result};
 use std::ffi::c_void;
 
@@ -7,20 +7,20 @@ pub struct ForwardWorkspace {
     d_model: usize,
     kv_dim: usize,
     hidden_dim: usize,
-    dq: *mut c_void,
-    dk: *mut c_void,
-    dv: *mut c_void,
-    datt: *mut c_void,
-    dy_attn: *mut c_void,
-    dgate: *mut c_void,
-    dup: *mut c_void,
-    dhid: *mut c_void,
-    dy_mlp: *mut c_void,
-    d_xn: *mut c_void,
-    d_x1: *mut c_void,
-    d_x1n: *mut c_void,
-    scratch_a: *mut c_void,
-    scratch_b: *mut c_void,
+    dq: DeviceBuffer,
+    dk: DeviceBuffer,
+    dv: DeviceBuffer,
+    datt: DeviceBuffer,
+    dy_attn: DeviceBuffer,
+    dgate: DeviceBuffer,
+    dup: DeviceBuffer,
+    dhid: DeviceBuffer,
+    dy_mlp: DeviceBuffer,
+    d_xn: DeviceBuffer,
+    d_x1: DeviceBuffer,
+    d_x1n: DeviceBuffer,
+    scratch_a: DeviceBuffer,
+    scratch_b: DeviceBuffer,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -68,20 +68,20 @@ impl ForwardWorkspace {
             d_model,
             kv_dim,
             hidden_dim,
-            dq: ctx.device_malloc_tagged(bytes_d, "fwd:dq_f32")?,
-            dk: ctx.device_malloc_tagged(bytes_kv, "fwd:dk_f32")?,
-            dv: ctx.device_malloc_tagged(bytes_kv, "fwd:dv_f32")?,
-            datt: ctx.device_malloc_tagged(bytes_d, "fwd:datt_f32")?,
-            dy_attn: ctx.device_malloc_tagged(bytes_d, "fwd:dy_attn_f32")?,
-            dgate: ctx.device_malloc_tagged(bytes_h, "fwd:dgate_f32")?,
-            dup: ctx.device_malloc_tagged(bytes_h, "fwd:dup_f32")?,
-            dhid: ctx.device_malloc_tagged(bytes_h, "fwd:dhid_f32")?,
-            dy_mlp: ctx.device_malloc_tagged(bytes_d, "fwd:dy_mlp_f32")?,
-            d_xn: ctx.device_malloc_tagged(bytes_d, "fwd:d_xn_f32")?,
-            d_x1: ctx.device_malloc_tagged(bytes_d, "fwd:d_x1_f32")?,
-            d_x1n: ctx.device_malloc_tagged(bytes_d, "fwd:d_x1n_f32")?,
-            scratch_a: ctx.device_malloc_tagged(bytes_d, "fwd_all:scratch_a_f32")?,
-            scratch_b: ctx.device_malloc_tagged(bytes_d, "fwd_all:scratch_b_f32")?,
+            dq: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dq_f32")?,
+            dk: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dk_f32")?,
+            dv: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dv_f32")?,
+            datt: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:datt_f32")?,
+            dy_attn: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dy_attn_f32")?,
+            dgate: DeviceBuffer::new_tagged(ctx, bytes_h, "fwd:dgate_f32")?,
+            dup: DeviceBuffer::new_tagged(ctx, bytes_h, "fwd:dup_f32")?,
+            dhid: DeviceBuffer::new_tagged(ctx, bytes_h, "fwd:dhid_f32")?,
+            dy_mlp: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dy_mlp_f32")?,
+            d_xn: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:d_xn_f32")?,
+            d_x1: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:d_x1_f32")?,
+            d_x1n: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:d_x1n_f32")?,
+            scratch_a: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd_all:scratch_a_f32")?,
+            scratch_b: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd_all:scratch_b_f32")?,
         })
     }
 
@@ -91,39 +91,24 @@ impl ForwardWorkspace {
 
     pub fn ptrs(&self) -> ForwardWorkspacePtrs {
         ForwardWorkspacePtrs {
-            dq: self.dq,
-            dk: self.dk,
-            dv: self.dv,
-            datt: self.datt,
-            dy_attn: self.dy_attn,
-            dgate: self.dgate,
-            dup: self.dup,
-            dhid: self.dhid,
-            dy_mlp: self.dy_mlp,
-            d_xn: self.d_xn,
-            d_x1: self.d_x1,
-            d_x1n: self.d_x1n,
-            scratch_a: self.scratch_a,
-            scratch_b: self.scratch_b,
+            dq: self.dq.as_mut_ptr(),
+            dk: self.dk.as_mut_ptr(),
+            dv: self.dv.as_mut_ptr(),
+            datt: self.datt.as_mut_ptr(),
+            dy_attn: self.dy_attn.as_mut_ptr(),
+            dgate: self.dgate.as_mut_ptr(),
+            dup: self.dup.as_mut_ptr(),
+            dhid: self.dhid.as_mut_ptr(),
+            dy_mlp: self.dy_mlp.as_mut_ptr(),
+            d_xn: self.d_xn.as_mut_ptr(),
+            d_x1: self.d_x1.as_mut_ptr(),
+            d_x1n: self.d_x1n.as_mut_ptr(),
+            scratch_a: self.scratch_a.as_mut_ptr(),
+            scratch_b: self.scratch_b.as_mut_ptr(),
         }
     }
 
-    pub fn free(self, ctx: &CudaContext) {
-        unsafe {
-            let _ = ctx.device_free(self.dq);
-            let _ = ctx.device_free(self.dk);
-            let _ = ctx.device_free(self.dv);
-            let _ = ctx.device_free(self.datt);
-            let _ = ctx.device_free(self.dy_attn);
-            let _ = ctx.device_free(self.dgate);
-            let _ = ctx.device_free(self.dup);
-            let _ = ctx.device_free(self.dhid);
-            let _ = ctx.device_free(self.dy_mlp);
-            let _ = ctx.device_free(self.d_xn);
-            let _ = ctx.device_free(self.d_x1);
-            let _ = ctx.device_free(self.d_x1n);
-            let _ = ctx.device_free(self.scratch_a);
-            let _ = ctx.device_free(self.scratch_b);
-        }
+    pub fn free(self, _ctx: &CudaContext) {
+        drop(self);
     }
 }

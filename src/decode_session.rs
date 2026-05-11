@@ -1,21 +1,19 @@
 #[cfg(feature = "cuda")]
-use crate::cuda::CudaContext;
+use crate::cuda::{CudaContext, DeviceBuffer};
 #[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Result;
-#[cfg(feature = "cuda")]
-use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
 pub struct DecodeSession {
     model: *const LoadedModel,
     processed_len: usize,
     can_forward: bool,
-    d_x: *mut c_void,
-    d_out: *mut c_void,
+    d_x: DeviceBuffer,
+    d_out: Option<DeviceBuffer>,
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
@@ -37,19 +35,11 @@ impl DecodeSession {
         let bytes = d_model
             .checked_mul(std::mem::size_of::<f32>())
             .ok_or_else(|| anyhow::anyhow!("decode session d_model byte size overflow"))?;
-        let d_x = model.cuda.device_malloc_tagged(bytes, d_x_tag)?;
+        let d_x = DeviceBuffer::new_tagged(&model.cuda, bytes, d_x_tag)?;
         let d_out = if can_forward {
-            match model.cuda.device_malloc_tagged(bytes, d_out_tag) {
-                Ok(ptr) => ptr,
-                Err(err) => {
-                    unsafe {
-                        let _ = model.cuda.device_free(d_x);
-                    }
-                    return Err(err);
-                }
-            }
+            Some(DeviceBuffer::new_tagged(&model.cuda, bytes, d_out_tag)?)
         } else {
-            std::ptr::null_mut()
+            None
         };
         Ok(Self {
             model: model as *const LoadedModel,
@@ -141,7 +131,7 @@ impl DecodeSession {
         start: usize,
     ) -> Result<Vec<f32>> {
         let embed_start = std::time::Instant::now();
-        (*self.model).load_token_embedding_to_f32(tok_id, self.d_x)?;
+        (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
         timing::timing_log!(
             embed_start.elapsed(),
             "{}.token.{token_idx}.embedding_load",
@@ -150,10 +140,15 @@ impl DecodeSession {
 
         if self.can_forward {
             let forward_start = std::time::Instant::now();
+            let d_out = self
+                .d_out
+                .as_ref()
+                .expect("d_out allocated when full forward is enabled")
+                .as_mut_ptr();
             let layers = (*self.model).forward_one_token_all_layers(
-                self.d_x as *const _,
+                self.d_x.as_ptr(),
                 (token_idx + 1) as u32,
-                self.d_out,
+                d_out,
             )?;
             timing::timing_log!(
                 forward_start.elapsed(),
@@ -168,7 +163,7 @@ impl DecodeSession {
                 self.logged_full_forward = true;
             }
             let logits_start = std::time::Instant::now();
-            let logits = (*self.model).logits_from_hidden(self.d_out as *const _);
+            let logits = (*self.model).logits_from_hidden(d_out as *const _);
             timing::timing_log!(
                 logits_start.elapsed(),
                 "{}.token.{token_idx}.logits",
@@ -177,28 +172,13 @@ impl DecodeSession {
             logits
         } else {
             let logits_start = std::time::Instant::now();
-            let logits = (*self.model).logits_from_hidden(self.d_x as *const _);
+            let logits = (*self.model).logits_from_hidden(self.d_x.as_ptr());
             timing::timing_log!(
                 logits_start.elapsed(),
                 "{}.token.{token_idx}.logits",
                 self.log_prefix
             );
             logits
-        }
-    }
-}
-
-#[cfg(feature = "cuda")]
-impl Drop for DecodeSession {
-    fn drop(&mut self) {
-        unsafe {
-            let model = self.model();
-            if !self.d_out.is_null() {
-                let _ = model.cuda.device_free(self.d_out);
-            }
-            if !self.d_x.is_null() {
-                let _ = model.cuda.device_free(self.d_x);
-            }
         }
     }
 }
