@@ -1,14 +1,32 @@
 #[cfg(feature = "cuda")]
 use super::types::{MaterializedWeight, MaterializedWeightKey};
 use super::LoadedModel;
+#[cfg(feature = "cuda")]
+use crate::gguf::GgmlDType;
 use anyhow::{Context, Result};
 use std::ffi::c_void;
+#[cfg(feature = "cuda")]
+use std::sync::Once;
 
 #[cfg(feature = "cuda")]
 fn materialized_weights_enabled() -> bool {
     std::env::var("M40LLM_MATERIALIZE_F32_WEIGHTS")
         .map(|v| v != "0")
         .unwrap_or(true)
+}
+
+#[cfg(feature = "cuda")]
+fn gemm_log_enabled() -> bool {
+    std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn materialized_budget_bytes() -> Option<usize> {
+    let mb = std::env::var("M40LLM_MATERIALIZE_F32_BUDGET_MB")
+        .ok()?
+        .parse::<usize>()
+        .ok()?;
+    mb.checked_mul(1024)?.checked_mul(1024)
 }
 
 impl LoadedModel {
@@ -156,7 +174,7 @@ impl LoadedModel {
                             .cuda
                             .gemm_f32xf32_f32(d_a_f32, d_b_f32, d_c_f32, m, n, k)
                         {
-                            if std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1") {
+                            if gemm_log_enabled() {
                                 eprintln!(
                                     "[cuda] materialized f32 GEMM failed; falling back to GGUF F16 kernel: {err}"
                                 );
@@ -166,7 +184,7 @@ impl LoadedModel {
                         }
                     }
                     Err(err) => {
-                        if std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1") {
+                        if gemm_log_enabled() {
                             eprintln!(
                                 "[cuda] GGUF F16 weight materialization failed; falling back to GGUF F16 kernel: {err}"
                             );
@@ -186,6 +204,7 @@ impl LoadedModel {
         n: i32,
         k: i32,
     ) -> Result<*const c_void> {
+        self.log_materialization_budget_once();
         let key = MaterializedWeightKey {
             src: d_b_f16 as usize,
             n,
@@ -202,6 +221,22 @@ impl LoadedModel {
         let bytes = elems
             .checked_mul(std::mem::size_of::<f32>())
             .context("materialized weight byte size overflow")?;
+        let tensor_name = self.materialized_tensor_name(d_b_f16);
+        let current_bytes = self.current_materialized_f32_bytes();
+        if let Some(budget) = materialized_budget_bytes() {
+            let after_bytes = current_bytes
+                .checked_add(bytes)
+                .context("materialized weight budget byte overflow")?;
+            if after_bytes > budget {
+                anyhow::bail!(
+                    "materialized f32 budget exceeded for tensor={} bytes={} current={} budget={}",
+                    tensor_name,
+                    bytes,
+                    current_bytes,
+                    budget
+                );
+            }
+        }
         let dptr = self.cuda.device_malloc(bytes)?;
         let materialize_res = unsafe {
             self.cuda
@@ -222,7 +257,72 @@ impl LoadedModel {
             return Ok(existing.dptr as *const c_void);
         }
         weights.insert(key, MaterializedWeight { dptr, bytes });
+        if gemm_log_enabled() {
+            let total = weights.values().map(|w| w.bytes).sum::<usize>();
+            let budget = materialized_budget_bytes()
+                .map(|b| b.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            eprintln!(
+                "[cuda] materialized_f32_weight: tensor={} bytes={} total={} budget={}",
+                tensor_name, bytes, total, budget
+            );
+        }
         Ok(dptr as *const c_void)
+    }
+
+    #[cfg(feature = "cuda")]
+    fn current_materialized_f32_bytes(&self) -> usize {
+        self.materialized_weights
+            .lock()
+            .unwrap()
+            .values()
+            .map(|w| w.bytes)
+            .sum()
+    }
+
+    #[cfg(feature = "cuda")]
+    fn estimated_materialized_f32_bytes(&self) -> usize {
+        self.device_tensors
+            .values()
+            .filter(|tensor| tensor.dtype == GgmlDType::F16 && tensor.shape.len() == 2)
+            .filter_map(|tensor| {
+                tensor
+                    .shape
+                    .iter()
+                    .try_fold(1usize, |acc, &dim| {
+                        acc.checked_mul(usize::try_from(dim).ok()?)
+                    })
+                    .and_then(|elems| elems.checked_mul(std::mem::size_of::<f32>()))
+            })
+            .sum()
+    }
+
+    #[cfg(feature = "cuda")]
+    fn materialized_tensor_name(&self, d_b_f16: *const c_void) -> String {
+        self.device_tensors
+            .iter()
+            .find_map(|(name, tensor)| {
+                (tensor.dptr as *const c_void == d_b_f16).then(|| name.clone())
+            })
+            .unwrap_or_else(|| format!("ptr={d_b_f16:?}"))
+    }
+
+    #[cfg(feature = "cuda")]
+    fn log_materialization_budget_once(&self) {
+        if !gemm_log_enabled() {
+            return;
+        }
+        static LOG_ONCE: Once = Once::new();
+        LOG_ONCE.call_once(|| {
+            let estimated = self.estimated_materialized_f32_bytes();
+            let budget = materialized_budget_bytes()
+                .map(|b| b.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            eprintln!(
+                "[cuda] materialized_f32_budget: estimated_f16_2d_bytes={} budget={}",
+                estimated, budget
+            );
+        });
     }
 }
 
