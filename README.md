@@ -163,6 +163,9 @@ curl -sS -X POST http://127.0.0.1:58439/generate \
 The `output` field contains generated text only; it does not echo the prompt.
 `max_tokens` counts generated token IDs, not decoded characters, so a single token
 may decode to multiple characters.
+Generation requests are serialized at the server state level for now so buffered
+and streaming `/generate` calls cannot share the same CUDA forward workspace
+concurrently; the intended replacement is a per-session workspace pool.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

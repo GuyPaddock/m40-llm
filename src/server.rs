@@ -209,6 +209,16 @@ mod tests {
 
 pub struct AppState {
     pub model: LoadedModel,
+    pub generation_lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+impl AppState {
+    pub fn new(model: LoadedModel) -> Self {
+        Self {
+            model,
+            generation_lock: Arc::new(tokio::sync::Mutex::new(())),
+        }
+    }
 }
 
 // LoadedModel contains raw device pointers behind cfg(feature = "cuda"). For Axum state,
@@ -246,6 +256,7 @@ async fn generate(
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if !req.stream {
+        let _generation_guard = state.generation_lock.clone().lock_owned().await;
         let generated =
             generate_text(&state.model, options_from_request(&req, "server")).map_err(|e| {
                 eprintln!("[server] decode_loop failed: {e}");
@@ -543,6 +554,7 @@ async fn generate(
     let base_sampler = sampler;
 
     if req.stream {
+        let generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut sampler = base_sampler.clone();
         let tokenizer_stream = tokenizer.clone();
         let prompt = req.prompt.clone();
@@ -551,6 +563,7 @@ async fn generate(
         let stopping_stream = stopping.clone();
         let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
         tokio::spawn(async move {
+            let _generation_guard = generation_guard;
             let mut ids = match tokenizer_stream.encode_with_specials(&prompt, add_bos, false) {
                 Ok(ids) => ids,
                 Err(e) => {

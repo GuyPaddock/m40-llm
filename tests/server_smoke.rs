@@ -22,7 +22,7 @@ fn server_smoke_model() -> (m40_llm::gguf::GgufModel, Vec<u8>) {
 }
 
 async fn start_test_server(model: LoadedModel) -> Result<SocketAddr> {
-    let state = Arc::new(AppState { model });
+    let state = Arc::new(AppState::new(model));
     let router = app_router(state);
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;

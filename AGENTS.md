@@ -44,6 +44,13 @@ complete.
   two conflict.
 - Update this file (`AGENTS.md`) as you complete high-level tasks. 
 
+## Current Progress
+- Completed: warm/cold benchmark mode names, launch/sync/allocation/copy counter
+  instrumentation, per-forward-operation profile counter deltas, and HTTP
+  generation serialization.
+- Next: extract shared `DecodeSession` for CLI/server decode and move reusable
+  per-token scratch into that session.
+
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
 2. Add launch/sync/allocation/copy count instrumentation.

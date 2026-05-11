@@ -156,7 +156,7 @@ async fn main() -> Result<()> {
                 let max_len = loaded.model_config.context_length as usize;
                 loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
 
-                let state = Arc::new(server::AppState { model: loaded });
+                let state = Arc::new(server::AppState::new(loaded));
                 let router = server::app_router(state);
 
                 let listener = TcpListener::bind(&addr).await?;
