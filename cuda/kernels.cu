@@ -466,6 +466,15 @@ int m40llm_kvcache_append_token_f32_async(
         uint32_t seq_id,
         const void* k_dev_f32,
         const void* v_dev_f32);
+int m40llm_kvcache_append_token_f32_rope_k_async(
+        M40llmCudaContext* ctx,
+        M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* k_dev_f32,
+        const void* v_dev_f32,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale);
 int m40llm_rope_f32_async(
         M40llmCudaContext* ctx,
         float* q,
@@ -2060,6 +2069,45 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void rope_k_append_f32_to_f16_h2_kernel(
+        const float* __restrict__ k_in,
+        const float* __restrict__ v_in,
+        __half* __restrict__ k_out,
+        __half* __restrict__ v_out,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        size_t pairs_per_token) {
+        const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
+        if (pair >= pairs_per_token) return;
+
+        const size_t i = pair * 2u;
+        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
+        const uint32_t head = (uint32_t)(i / (size_t)head_dim);
+        if (head >= num_heads) return;
+
+        const uint32_t offset_in_head = dim / 2u;
+        const float pos = static_cast<float>(past_len) * freq_scale;
+        const float theta = pos * powf(
+            freq_base,
+            -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+        const float c = cosf(theta);
+        const float s = sinf(theta);
+        const float k0 = k_in[i];
+        const float k1 = k_in[i + 1u];
+        const float v0 = v_in[i];
+        const float v1 = v_in[i + 1u];
+
+        const __half2 k_h2 = __halves2half2(
+            __float2half_rn(k0 * c - k1 * s),
+            __float2half_rn(k0 * s + k1 * c));
+        const __half2 v_h2 = __halves2half2(__float2half_rn(v0), __float2half_rn(v1));
+        reinterpret_cast<__half2*>(k_out)[pair] = k_h2;
+        reinterpret_cast<__half2*>(v_out)[pair] = v_h2;
+    }
+
     int m40llm_kvcache_append_token(M40llmCudaContext* ctx,
                                      M40llmKVCache* kv,
                                      uint32_t seq_id,
@@ -2172,6 +2220,75 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cur_len += 1;
         err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
         if (err != cudaSuccess) return -6;
+
+        return 0;
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale) {
+        int rc = m40llm_kvcache_append_token_f32_rope_k_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, past_len, freq_base, freq_scale);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -7;
+        return 0;
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale) {
+        if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
+        if (kv->head_dim % 2 != 0) return -4;
+
+        uint32_t cur_len = 0;
+        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -5;
+        if (cur_len >= kv->max_seq_len) return -6;
+
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t offset_elems = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)cur_len) * elems_per_token;
+
+        const float* k_in = reinterpret_cast<const float*>(k_dev_f32);
+        const float* v_in = reinterpret_cast<const float*>(v_dev_f32);
+        __half* k_out = kv->d_k + offset_elems;
+        __half* v_out = kv->d_v + offset_elems;
+
+        const size_t pairs_per_token = elems_per_token / 2u;
+        const int threads = 256;
+        const int blocks = (int)((pairs_per_token + threads - 1) / threads);
+        rope_k_append_f32_to_f16_h2_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            k_in,
+            v_in,
+            k_out,
+            v_out,
+            kv->num_heads,
+            kv->head_dim,
+            past_len,
+            freq_base,
+            freq_scale,
+            pairs_per_token);
+        err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "append_token_f32_rope_k kernel launch error: %s\n", cudaGetErrorString(err));
+            return -7;
+        }
+
+        cur_len += 1;
+        err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
+        if (err != cudaSuccess) return -8;
 
         return 0;
     }

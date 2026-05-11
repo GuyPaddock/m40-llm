@@ -57,9 +57,12 @@ complete.
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
   callers. Warm second-token launch/sync profiling after async wrapper cleanup
-  is recorded in `docs/perf_baselines.md`.
-- Next: fuse RoPE + KV append if still visible; the latest profile shows it is
-  visible at roughly 66 launches/syncs and 2.50 ms per steady TinyLlama token.
+  is recorded in `docs/perf_baselines.md`. The forward path now fuses K RoPE
+  with FP32-to-FP16 KV append while leaving Q RoPE separate; profiling reduced
+  RoPE/KV operation groups from 66 to 44 launches/syncs per steady TinyLlama
+  token.
+- Next: treat SwiGLU as already fused; remove sync/graph it before considering
+  deeper fusion.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

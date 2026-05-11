@@ -291,6 +291,38 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. K is RoPE-rotated for
+    /// `past_len` while appending to the FP16 KV cache.
+    pub unsafe fn append_kv_token_f32_rope_k(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k(
+                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale);
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_k_f32` and `d_v_f32` must be valid device pointers containing one token's
     /// K/V vectors in f32 layout for `layer_id`, `sequence_id`, and `position`.
     pub unsafe fn append_kv_token_f32_for_layer(

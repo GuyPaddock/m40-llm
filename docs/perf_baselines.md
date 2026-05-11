@@ -591,3 +591,57 @@ Notes:
 - cuBLAS synchronization is the largest remaining sync source, so after the
   RoPE/KV fusion task the larger scheduling lever is an async full-layer decode
   path that reduces sync boundaries across GEMM and elementwise operations.
+
+## 2026-05-11: Fused K RoPE + KV Append Decode Profile
+
+This profile was taken after replacing the forward path's separate K RoPE plus
+KV append with a fused K-RoPE/f32-to-f16 KV append kernel. Q RoPE remains a
+separate in-place operation because attention consumes Q directly.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 49.907 ms |
+| `cli.token.1.logits` | 4.749 ms |
+| `cli.token.1.total` | 54.769 ms |
+| `cli.generate_text_total` | 692.045 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Elapsed |
+| --- | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 5.896 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 11.765 ms |
+| `mlp_down` | 0 | 22 | 22 | 6.507 ms |
+| `out_project` | 0 | 22 | 22 | 3.171 ms |
+| `rope_q` | 22 | 0 | 22 | 0.809 ms |
+| `kv_append_rope_k` | 22 | 0 | 22 | 1.600 ms |
+| `attention` | 22 | 0 | 22 | 1.752 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 2.175 ms |
+| `residual_add` | 44 | 0 | 44 | 0.934 ms |
+| `swiglu` | 22 | 0 | 22 | 0.487 ms |
+
+Notes:
+
+- The fused path reduced RoPE/KV operation groups from 66 launches/syncs to 44
+  launches/syncs per steady token. The measured RoPE/KV elapsed time moved from
+  about 2.50 ms to about 2.41 ms in this run, which is a small win and within
+  expected M40 run-to-run noise.
+- The fused kernel uses one thread per RoPE pair and half2 stores for K/V cache
+  writes. A scalar first version reduced launch count but was slower, so it was
+  replaced before landing.
+- The remaining dominant synchronization source is still the sync compatibility
+  path around cuBLAS and elementwise kernels. The next strict task should focus
+  on removing sync boundaries from already-fused SwiGLU and preparing graph or
+  async full-layer scheduling rather than adding more local micro-fusions.

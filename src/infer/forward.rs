@@ -171,33 +171,27 @@ impl LoadedModel {
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
                     )?;
-                    self.cuda.rope_f32_inplace(
-                        ws.dk,
-                        1,
-                        kv_heads,
-                        head_dim,
+                    log_profiled_op(
+                        &label,
+                        "rope_q",
+                        profile_before.as_ref(),
+                        op_start.elapsed(),
+                    );
+
+                    // Append K/V for this token, rotating K into the cache.
+                    let profile_before = profile::snapshot_if_enabled();
+                    let op_start = std::time::Instant::now();
+                    self.append_kv_token_f32_rope_k(
+                        seq_id,
+                        ws.dk as *const c_void,
+                        ws.dv as *const c_void,
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
                     )?;
                     log_profiled_op(
                         &label,
-                        "rope_qk",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
-
-                    // Append K/V for this token, then attention over last token
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    self.append_kv_token_f32(
-                        seq_id,
-                        ws.dk as *const c_void,
-                        ws.dv as *const c_void,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "kv_append",
+                        "kv_append_rope_k",
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );

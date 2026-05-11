@@ -201,6 +201,16 @@ mod ffi {
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
         ) -> i32;
+        pub fn m40llm_kvcache_append_token_f32_rope_k_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev_f32: *const c_void,
+            v_dev_f32: *const c_void,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
             ctx: *mut M40llmCudaContext,
@@ -2076,6 +2086,61 @@ impl KVCache {
             ));
         }
         record_async_kernel("kvcache_append_token_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// `k_dev_f32` and `v_dev_f32` must contain one token of K/V in f32 layout.
+    /// K is RoPE-rotated for `past_len` while both K and V are converted to f16
+    /// and appended to the cache. Context/device must match.
+    pub unsafe fn append_token_f32_rope_k(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        self.append_token_f32_rope_k_async(
+            ctx, seq_id, k_dev_f32, v_dev_f32, past_len, freq_base, freq_scale,
+        )?;
+        ctx.synchronize_stream_for_op(CudaStream::Decode, "kvcache_append_token_f32_rope_k")
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and f32-to-f16 KV append on the decode stream.
+    /// Callers must synchronize before reading from the cache.
+    pub unsafe fn append_token_f32_rope_k_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_append_token_f32_rope_k_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                past_len,
+                freq_base,
+                freq_scale,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_kvcache_append_token_f32_rope_k_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("kvcache_append_token_f32_rope_k");
         Ok(())
     }
 
