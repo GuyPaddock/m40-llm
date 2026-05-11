@@ -155,7 +155,7 @@ mod tests {
             top_p: Some(1.5),
             ..Default::default()
         };
-        assert!(sampler_from_request(&req).is_err());
+        assert!(sampler_from_options(&options_from_request(&req, "test")).is_err());
     }
 
     #[test]
@@ -210,13 +210,19 @@ mod tests {
 pub struct AppState {
     pub model: LoadedModel,
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
+    pub decode_batching_requested: bool,
 }
 
 impl AppState {
     pub fn new(model: LoadedModel) -> Self {
+        let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
+        if decode_batching_requested {
+            crate::decode_batch::maybe_log_server_batch_decode_status();
+        }
         Self {
             model,
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
+            decode_batching_requested,
         }
     }
 }
@@ -255,6 +261,10 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if state.decode_batching_requested {
+        crate::decode_batch::maybe_log_server_batch_decode_status();
+    }
+
     if !req.stream {
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
         let generated =

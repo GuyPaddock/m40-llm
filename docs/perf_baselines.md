@@ -729,4 +729,41 @@ Notes:
 - The next graph-specific step, when it becomes the priority again, should be to
   make a one-layer decode subgraph fully async and device-parameterized. The
   immediate strict-plan task now moves to packed variable-length decode
-  scheduling.
+scheduling.
+
+## 2026-05-11: Packed Varlen Decode Scheduler Foundation
+
+This checkpoint adds a scheduler-facing decode batch plan for mixed-length
+last-token attention. The plan filters active requests, preserves per-request
+sequence IDs, builds `BatchMetadata` with `query_len=1`, uploads sequence IDs
+and KV lengths to device metadata buffers, and dispatches the existing batched
+GQA decode attention primitive.
+
+Validation target:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
+
+Coverage:
+
+| Path | Shape | Expected result |
+| --- | --- | --- |
+| Direct batched decode attention | `seq_lens=[1,3,5]` | matches individual decode |
+| Async batched decode attention | `seq_lens=[1,3,5]` | matches sync batched decode |
+| Scheduler-built CUDA plan | active requests with `kv_len=[1,3,5]` | matches direct batched decode |
+| Opt-in `ldg_kv` cache experiment | `seq_lens=[1,3,5]` | matches default batched decode |
+
+Notes:
+
+- `/generate` remains serialized by default. Setting
+  `M40LLM_SERVER_BATCH_DECODE=1` logs that scheduler-level packed varlen decode
+  support is present, but full HTTP request batching is intentionally not
+  enabled yet.
+- The blocker is model-level KV ownership: `LoadedModel` still maps logical
+  layer/sequence addressing onto one physical sequence slot per layer and
+  currently rejects `sequence_id != 0`. Safe multi-request generation needs a
+  KV/session pool that allocates physical slots for `KV[layer][sequence]`.
+- Packed prefill should wait until decode batching has real request/session
+  ownership above this scheduler foundation.

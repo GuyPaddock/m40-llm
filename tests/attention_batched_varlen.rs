@@ -4,6 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use m40_llm::cuda::{CudaStream, KVCache};
+use m40_llm::decode_batch::{CudaDecodeBatchPlan, DecodeBatchPlan, DecodeRequestState};
 use std::ffi::c_void;
 
 fn f32s_to_bytes(vals: &[f32]) -> Vec<u8> {
@@ -73,6 +74,7 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
     let d_q = ctx.device_malloc(bytes_q)?;
     let d_out_batch = ctx.device_malloc(bytes_out)?;
     let d_out_async = ctx.device_malloc(bytes_out)?;
+    let d_out_scheduler = ctx.device_malloc(bytes_out)?;
     let d_out_one = ctx.device_malloc(q_dim * std::mem::size_of::<f32>())?;
     let d_seq_ids = ctx.device_malloc(seq_ids.len() * std::mem::size_of::<u32>())?;
     let d_seq_lens = ctx.device_malloc(seq_lens.len() * std::mem::size_of::<u32>())?;
@@ -110,6 +112,29 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         ctx.synchronize_stream(CudaStream::Decode)?;
     }
 
+    let scheduler_plan = DecodeBatchPlan::from_requests(&[
+        DecodeRequestState::active(100, 0, 1),
+        DecodeRequestState::completed(101, 9, 7),
+        DecodeRequestState::active(102, 1, 3),
+        DecodeRequestState::cancelled(103, 10, 4),
+        DecodeRequestState::active(104, 2, 5),
+    ])?;
+    assert_eq!(scheduler_plan.metadata().total_q_tokens(), batch_size);
+    assert_eq!(
+        scheduler_plan.metadata().total_kv_tokens(),
+        seq_lens.iter().sum::<u32>()
+    );
+    let scheduler_plan = CudaDecodeBatchPlan::new(&ctx, scheduler_plan)?;
+    unsafe {
+        scheduler_plan.dispatch_attention(
+            &ctx,
+            &kv,
+            d_q as *const c_void,
+            q_heads,
+            d_out_scheduler,
+        )?;
+    }
+
     let mut default_bytes = vec![0u8; bytes_out];
     unsafe {
         ctx.memcpy_d2h(
@@ -131,6 +156,22 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
     for (i, (g, e)) in async_result.iter().zip(default.iter()).enumerate() {
         let diff = (g - e).abs();
         assert!(diff <= 1e-6, "async mismatch at {i}: got {g}, expected {e}");
+    }
+    let mut scheduler_bytes = vec![0u8; bytes_out];
+    unsafe {
+        ctx.memcpy_d2h(
+            scheduler_bytes.as_mut_ptr() as *mut c_void,
+            d_out_scheduler,
+            bytes_out,
+        )?;
+    }
+    let scheduler_result = bytes_to_f32s(&scheduler_bytes);
+    for (i, (g, e)) in scheduler_result.iter().zip(default.iter()).enumerate() {
+        let diff = (g - e).abs();
+        assert!(
+            diff <= 1e-6,
+            "scheduler mismatch at {i}: got {g}, expected {e}"
+        );
     }
 
     let d_out_ldg = ctx.device_malloc(bytes_out)?;
@@ -185,6 +226,7 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         ctx.device_free(d_q)?;
         ctx.device_free(d_out_batch)?;
         ctx.device_free(d_out_async)?;
+        ctx.device_free(d_out_scheduler)?;
         ctx.device_free(d_out_ldg)?;
         ctx.device_free(d_out_one)?;
         ctx.device_free(d_seq_ids)?;

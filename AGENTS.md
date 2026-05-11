@@ -66,8 +66,14 @@ complete.
   steady token. CUDA Graph capture/instantiate/launch/destroy infrastructure is
   in place and validated with fixed-pointer decode-style async elementwise work
   on M40; whole-token capture is still blocked by remaining sync wrappers and
-  host-side KV sequence length updates.
-- Next: integrate packed varlen decode attention into the server scheduler.
+  host-side KV sequence length updates. Packed varlen decode scheduling now has
+  a request-state `DecodeBatchPlan`, device metadata upload, and CUDA dispatch
+  through the batched GQA decode attention primitive; HTTP `/generate` remains
+  serialized until model-level KV/session ownership supports multiple logical
+  sequences.
+- Next: complete the KV/session pool needed to safely enable server-side batched
+  decode requests, then integrate packed varlen prefill once decode batching is
+  correct end-to-end.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

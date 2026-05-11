@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod cuda;
+pub mod decode_batch;
 pub mod gguf;
 pub mod infer;
 
