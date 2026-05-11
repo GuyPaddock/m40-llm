@@ -469,3 +469,68 @@ Notes:
   to keep the persistent path as a candidate for future decode scheduling work.
 - The prototype should remain isolated until the remaining host fallbacks and
   shared workspace/KV hazards are cleaned up.
+
+## 2026-05-10: Ownership Hardening and Materialization Budget Refresh
+
+This refresh was taken after request-level server serialization, shared
+`DecodeSession` scratch, RAII `DeviceBuffer` cleanup, explicit model-level KV
+layer/sequence addressing, and FP32 materialization budget/key hardening.
+
+Commands:
+
+```bash
+cargo bench --features cuda --bench gemm -- --sample-size 10
+cargo bench --features cuda --bench attention -- attention_last_token_f32_gqa --sample-size 10
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TIMING_LOG=1 \
+  M40LLM_GEMM_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+GEMM microbench, measured on Tesla M40:
+
+| Shape | Time estimate | Throughput |
+| --- | ---: | ---: |
+| `64x64x64` | 8.868 us | 3.441 GiB/s |
+| `128x128x128` | 13.161 us | 9.275 GiB/s |
+| `256x256x256` | 21.266 us | 22.961 GiB/s |
+| `512x512x512` | 97.404 us | 20.052 GiB/s |
+
+Last-token GQA attention guardrail, measured on Tesla M40:
+
+| Sequence length | Default | `ldg_kv` experiment | Result |
+| ---: | ---: | ---: | --- |
+| 1 | 11.166 us | 11.151 us | neutral/slower vs prior baseline |
+| 16 | 40.644 us | 40.709 us | neutral/slower vs prior baseline |
+| 128 | 261.58 us | 261.25 us | within noise |
+| 512 | 1.1015 ms | 1.1015 ms | within noise |
+| 1024 | 2.2223 ms | 2.2198 ms | within noise |
+
+Batched mixed-length decode guardrail:
+
+| Distribution | Individual dispatch | Batched varlen | `ldg_kv` batched |
+| --- | ---: | ---: | ---: |
+| `avg_0p6_max` | 4.5803 ms | 1.5820 ms | 1.5823 ms |
+| `skewed` | 2.8137 ms | 2.1178 ms | 2.1140 ms |
+| `near_uniform` | 8.5964 ms | 2.4362 ms | 2.4363 ms |
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Mode | `generate_text_total` | `token.0.forward_all_layers` | `token.1.forward_all_layers` | Final tracked device bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized FP32 default | 624.282 ms | 499.420 ms | 36.047 ms | 6.338 GB |
+| `M40LLM_MATERIALIZE_F32_WEIGHTS=0` | 2210.434 ms | 1056.148 ms | 1055.661 ms | 2.200 GB |
+| `M40LLM_MATERIALIZE_F32_BUDGET_MB=0` | 2218.500 ms | 1058.227 ms | 1057.396 ms | 2.200 GB |
+
+Notes:
+
+- The shared `DecodeSession` and RAII cleanup did not introduce an obvious
+  regression in the steady materialized path.
+- The materialized FP32 path remains the fast-fits backend: steady second-token
+  full-layer forward was about 29x faster than the GGUF F16 fallback.
+- The default run logged an estimated 4.400 GB of F16 2D tensors eligible for
+  materialization and materialized 4.138 GB of projection/output weights for
+  this short prompt.
+- The zero-budget run confirms the new memory-budget fallback behaves like the
+  explicit disabled-materialization mode: it preserves correctness and memory
+  headroom, but is not the fast path.
