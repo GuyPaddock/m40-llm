@@ -63,9 +63,13 @@ complete.
   token. Full-layer forward now enqueues the already-fused SwiGLU kernel
   asynchronously and uses an explicit decode-to-prefill stream wait before the
   MLP down projection, removing 22 explicit SwiGLU stream synchronizations per
-  steady token. CUDA Graph capture/instantiate/launch/destroy infrastructure is
-  in place and validated with fixed-pointer decode-style async elementwise work
-  on M40; whole-token capture is still blocked by remaining sync wrappers and
+  steady token. Full-layer forward now also uses async enqueue paths for RMSNorm,
+  Q RoPE, fused K RoPE + KV append, GQA attention, and residual adds; steady
+  TinyLlama profiling shows non-GEMM forward ops now contribute zero stream
+  synchronizations, while the remaining forward syncs are cuBLAS GEMM wrappers.
+  CUDA Graph capture/instantiate/launch/destroy infrastructure is in place and
+  validated with fixed-pointer decode-style async elementwise work on M40;
+  whole-token capture is still blocked by synchronous cuBLAS wrappers and
   host-side KV sequence length updates. Packed varlen decode scheduling now has
   a request-state `DecodeBatchPlan`, device metadata upload, and CUDA dispatch
   through the batched GQA decode attention primitive; HTTP `/generate` remains
@@ -75,9 +79,9 @@ complete.
   `/generate` requests lease per-request KV sequence slots and skip whole-cache
   resets, but request execution remains serialized until per-session CUDA
   streams/workspaces or fused batched decode scheduling are ready.
-- Next: continue reducing graph blockers by finishing async enqueue variants and
-  re-profiling launch/sync counts before removing request serialization or
-  integrating packed varlen decode into the HTTP scheduler.
+- Next: reduce the remaining graph blockers by adding async cuBLAS enqueue
+  wrappers or a one-layer graph capture path that avoids host stream
+  synchronizations around GEMM.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

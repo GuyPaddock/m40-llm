@@ -290,6 +290,58 @@ impl LoadedModel {
 
     /// # Safety
     /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA attention.
+    pub unsafe fn run_attention_async(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        seq_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
+            anyhow::bail!(
+                "run_attention: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
+        }
+        #[cfg(feature = "cuda")]
+        unsafe {
+            kv.attention_last_token_f32_gqa_async(
+                &self.cuda, seq_id, d_q, num_heads, seq_len, d_out,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            kv.attention_last_token_f32_gqa(&self.cuda, seq_id, d_q, num_heads, seq_len, d_out)
+        }
+    }
+
+    /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA attention.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn run_attention_for_layer(
         &self,
@@ -357,6 +409,38 @@ impl LoadedModel {
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
                 kv.append_token_f32_rope_k(
+                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. K is RoPE-rotated for
+    /// `past_len` while appending to the FP16 KV cache.
+    pub unsafe fn append_kv_token_f32_rope_k_async(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k_async(
                     &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
                 )
             }

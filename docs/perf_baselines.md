@@ -728,8 +728,67 @@ Notes:
   reads the sequence length through a host-side `cudaMemcpy`.
 - The next graph-specific step, when it becomes the priority again, should be to
   make a one-layer decode subgraph fully async and device-parameterized. The
-  immediate strict-plan task now moves to packed variable-length decode
-scheduling.
+  immediate strict-plan task now moves to reducing the remaining production
+  decode sync boundaries before packed variable-length decode scheduling.
+
+## 2026-05-11: Async Full-Layer Decode Boundary Profile
+
+This profile was taken after changing full-layer forward to enqueue RMSNorm,
+Q RoPE, fused K RoPE + KV append, GQA attention, and residual adds
+asynchronously. Dependencies between decode-stream kernels and prefill-stream
+cuBLAS GEMMs are now represented as explicit stream waits. The stream-wait FFI
+uses one event per dependency so alternating waits cannot reuse and overwrite a
+single bridge event.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 53.197 ms |
+| `cli.token.1.logits` | 4.559 ms |
+| `cli.token.1.total` | 57.857 ms |
+| `cli.generate_text_total` | 691.421 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 22 | 6.142 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 22 | 11.767 ms |
+| `mlp_down` | 0 | 22 | 22 | 22 | 6.711 ms |
+| `out_project` | 0 | 22 | 22 | 22 | 3.409 ms |
+| `rope_q` | 22 | 0 | 0 | 22 | 0.500 ms |
+| `kv_append_rope_k` | 22 | 0 | 0 | 0 | 0.839 ms |
+| `attention` | 22 | 0 | 0 | 0 | 0.333 ms |
+| `attn_norm` | 22 | 0 | 0 | 0 | 0.415 ms |
+| `ffn_norm` | 22 | 0 | 0 | 0 | 0.290 ms |
+| `attn_residual` | 22 | 0 | 0 | 22 | 0.507 ms |
+| `mlp_residual` | 22 | 0 | 0 | 22 | 0.501 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.325 ms |
+
+Notes:
+
+- Converted non-GEMM forward operations now contribute zero stream
+  synchronizations in the steady token. Remaining forward synchronizations are
+  the 154 materialized-FP32 cuBLAS projection calls.
+- Explicit stream waits increased because each prefill-stream GEMM boundary now
+  waits for decode-stream producers, and decode-stream consumers wait for
+  prefill-stream GEMM outputs. This is graph/scheduling groundwork, not an
+  immediate latency win.
+- Whole-token graph capture is still blocked by synchronous cuBLAS wrappers and
+  host-side KV sequence length updates. The next narrow step is to add async
+  cuBLAS enqueue wrappers or a one-layer graph capture path that can keep GEMM
+  dependencies inside capture without host stream synchronizations.
 
 ## 2026-05-11: Packed Varlen Decode Scheduler Foundation
 

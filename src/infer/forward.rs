@@ -48,9 +48,8 @@ impl LoadedModel {
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
-        let result = f(ptrs);
         drop(guard);
-        result
+        f(ptrs)
     }
 
     pub unsafe fn forward_one_token_minimal_with_norms(
@@ -113,7 +112,7 @@ impl LoadedModel {
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = attn_norm_weight {
-                        self.run_rms_norm_weighted(
+                        self.run_rms_norm_weighted_async(
                             d_x_f32,
                             d_weight,
                             dtype,
@@ -123,7 +122,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     } else {
-                        self.run_rms_norm(
+                        self.run_rms_norm_async(
                             d_x_f32,
                             ws.d_xn,
                             1,
@@ -141,6 +140,11 @@ impl LoadedModel {
                     // Q uses query heads; K/V use KV heads for GQA models.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "attn_norm_to_qkv_project",
+                    )?;
                     self.qkv_project_f32xf16_gguf_f32(
                         ws.d_xn,
                         1,
@@ -165,7 +169,12 @@ impl LoadedModel {
                     let pos = seq_len.saturating_sub(1);
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.rope_f32_inplace(
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "qkv_project_to_rope_kv",
+                    )?;
+                    self.cuda.rope_f32_inplace_async(
                         ws.dq,
                         1,
                         q_heads,
@@ -184,7 +193,7 @@ impl LoadedModel {
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.append_kv_token_f32_rope_k(
+                    self.append_kv_token_f32_rope_k_async(
                         seq_id,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,
@@ -202,7 +211,7 @@ impl LoadedModel {
                     // Use KV cache layout to validate/run attention
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.run_attention(
+                    self.run_attention_async(
                         ws.dq as *const c_void,
                         ws.datt,
                         seq_id,
@@ -221,6 +230,11 @@ impl LoadedModel {
                     // Output projection of attention
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "attention_to_out_project",
+                    )?;
                     self.out_proj_f32xf16_gguf_f32(
                         ws.datt as *const c_void,
                         d_wo_f16,
@@ -239,7 +253,12 @@ impl LoadedModel {
                     // Residual add y_attn: x1 = x + y_attn.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.residual_add_f32(
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "out_project_to_attn_residual",
+                    )?;
+                    self.cuda.residual_add_f32_async(
                         d_x_f32,
                         ws.dy_attn as *const c_void,
                         ws.d_x1,
@@ -256,7 +275,7 @@ impl LoadedModel {
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
                     if let Some((d_weight, dtype)) = ffn_norm_weight {
-                        self.run_rms_norm_weighted(
+                        self.run_rms_norm_weighted_async(
                             ws.d_x1,
                             d_weight,
                             dtype,
@@ -266,7 +285,7 @@ impl LoadedModel {
                             self.model_config.layer_norm_epsilon,
                         )?;
                     } else {
-                        self.run_rms_norm(
+                        self.run_rms_norm_async(
                             ws.d_x1,
                             ws.d_x1n,
                             1,
@@ -284,6 +303,11 @@ impl LoadedModel {
                     // MLP gates and up (now feed post-attn normalized x1n)
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "ffn_norm_to_mlp_gate_up",
+                    )?;
                     self.mlp_gates_f32xf16_gguf_f32(
                         ws.d_x1n,
                         1,
@@ -343,7 +367,12 @@ impl LoadedModel {
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.residual_add_f32(
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "mlp_down_to_mlp_residual",
+                    )?;
+                    self.cuda.residual_add_f32_async(
                         ws.d_x1 as *const c_void,
                         ws.dy_mlp as *const c_void,
                         d_out_f32,
@@ -425,6 +454,26 @@ impl LoadedModel {
     }
 
     /// # Safety
+    pub unsafe fn run_rms_norm_async(
+        &self,
+        d_in: *const c_void,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda.rms_norm_f32_async(d_in, d_out, seq_len, dim, eps)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
     pub unsafe fn run_rms_norm(
         &self,
         d_in: *const c_void,
@@ -440,6 +489,32 @@ impl LoadedModel {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_in, d_out, seq_len, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Device pointers must reference buffers sized for `seq_len * dim` f32 values and
+    /// a norm weight vector of `dim` F16/F32 values on the same CUDA context.
+    pub unsafe fn run_rms_norm_weighted_async(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        weight_dtype: GgmlDType,
+        d_out: *mut c_void,
+        seq_len: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        let dtype_code = norm_weight_dtype_code(weight_dtype)?;
+        #[cfg(feature = "cuda")]
+        {
+            self.cuda
+                .rms_norm_f32_weighted_async(d_in, d_weight, d_out, seq_len, dim, eps, dtype_code)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, seq_len, dim, eps, dtype_code);
             Ok(())
         }
     }

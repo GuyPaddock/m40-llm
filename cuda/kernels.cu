@@ -236,11 +236,21 @@ extern "C" {
         if (ensure_device(ctx) != 0) return -2;
         cudaStream_t waiting_stream = select_stream(ctx, waiting_stream_kind);
         cudaStream_t signal_stream = select_stream(ctx, signal_stream_kind);
-        if (!waiting_stream || !signal_stream || !ctx->stream_bridge_event) return -3;
-        cudaError_t err = cudaEventRecord(ctx->stream_bridge_event, signal_stream);
+        if (!waiting_stream || !signal_stream) return -3;
+        cudaEvent_t event = nullptr;
+        cudaError_t err = cudaEventCreateWithFlags(&event, cudaEventDisableTiming);
         if (err != cudaSuccess) return -4;
-        err = cudaStreamWaitEvent(waiting_stream, ctx->stream_bridge_event, 0);
-        if (err != cudaSuccess) return -5;
+        err = cudaEventRecord(event, signal_stream);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(event);
+            return -5;
+        }
+        err = cudaStreamWaitEvent(waiting_stream, event, 0);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(event);
+            return -6;
+        }
+        cudaEventDestroy(event);
         return 0;
     }
 

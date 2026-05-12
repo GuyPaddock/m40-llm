@@ -1,5 +1,7 @@
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
+use crate::cuda::CudaStream;
+#[cfg(feature = "cuda")]
 use crate::cuda::DeviceBuffer;
 #[cfg(feature = "cuda")]
 use crate::timing;
@@ -80,6 +82,11 @@ impl LoadedModel {
             d_hidden_f32
         };
         let gemm_start = std::time::Instant::now();
+        self.cuda.stream_wait_for_stream(
+            CudaStream::Prefill,
+            CudaStream::Decode,
+            "hidden_to_logits_gemm",
+        )?;
         self.matmul_f32xf16_gguf_f32(
             hidden_for_logits,
             d_w,
