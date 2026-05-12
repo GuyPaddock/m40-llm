@@ -1037,3 +1037,32 @@ Notes:
 - Device-seq-len attention intentionally starts with the generic GQA kernel.
   This keeps graph replay correctness simple; a tuned head64 device-parameter
   kernel can be added after graph-mode performance is measured.
+
+## 2026-05-12: Opt-In DecodeSession One-Layer Graph Cache
+
+`DecodeSession` now caches and replays a warmed one-layer decode CUDA Graph when
+`M40LLM_DECODE_GRAPH=1`. The graph binds stable session scratch/workspace
+pointers and uses device-resident `position` and `seq_len` parameters for Q
+RoPE, fused K RoPE + KV append, and GQA attention. Multi-layer sessions log once
+and continue using the normal async decode path.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+Result on M40: pass, including `decode_session_uses_one_layer_graph_when_enabled`
+with observed `cuda_graph_launch` profile events.
+
+Notes:
+
+- First use warms the normal one-layer path before capture so lazy workspace
+  allocation and FP32 weight materialization do not occur inside stream capture.
+- The current graph parameter update uses two small host-to-device copies before
+  graph launch. That keeps the graph topology stable; a future device-side token
+  counter can remove those copies if profiling shows they matter.
+- This is intentionally not enabled for TinyLlama-class 22-layer sessions yet.
+  The next graph step is expanding from one layer to a full-token graph once
+  pointer stability and replay behavior are validated.

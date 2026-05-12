@@ -215,6 +215,10 @@ Current M40 validation target:
 - Persistent decode has an experimental synthetic worker prototype with Rust
   lifecycle wrappers and a benchmark. It is not wired into CLI/server generation
   yet; use it only to evaluate launch-overhead reduction candidates.
+- CUDA Graph decode is opt-in with `M40LLM_DECODE_GRAPH=1`. The current
+  `DecodeSession` integration caches and replays a warmed one-layer graph using
+  device-resident position/sequence-length parameters; multi-layer models still
+  use the normal async decode path while full-token graph capture is developed.
 - Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
   the first `__ldg` experiment for weighted RMSNorm; current measurements keep
   the default kernel unchanged.

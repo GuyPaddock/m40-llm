@@ -94,10 +94,12 @@ complete.
   real model/workspace pointers, KV append, attention, and projection wrappers.
   Graph-compatible device-parameter wrappers now cover Q RoPE position and GQA
   attention sequence length, complementing the existing device-position KV
-  append API.
-- Next: decide how to cache and launch one-layer graphs in `DecodeSession`, then
-  expand toward full-token graph coverage if graph launch overhead and pointer
-  stability remain favorable.
+  append API. `DecodeSession` can now cache and replay an opt-in one-layer
+  decode CUDA Graph with `M40LLM_DECODE_GRAPH=1`; multi-layer sessions still
+  fall back to the normal async path.
+- Next: expand graph coverage beyond the one-layer `DecodeSession` cache toward
+  full-token graph capture, or first benchmark the opt-in graph path if a
+  representative one-layer fixture is available.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

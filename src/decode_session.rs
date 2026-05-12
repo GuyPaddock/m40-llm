@@ -1,11 +1,13 @@
 #[cfg(feature = "cuda")]
-use crate::cuda::{CudaContext, DeviceBuffer};
+use crate::cuda::{CudaContext, CudaGraphExec, CudaStream, DeviceBuffer};
 #[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Result;
+#[cfg(feature = "cuda")]
+use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
 pub struct DecodeSession {
@@ -17,9 +19,14 @@ pub struct DecodeSession {
     d_out: Option<DeviceBuffer>,
     d_logits: Option<DeviceBuffer>,
     d_norm_hidden: Option<DeviceBuffer>,
+    d_graph_position: Option<DeviceBuffer>,
+    d_graph_seq_len: Option<DeviceBuffer>,
+    one_layer_graph: Option<CudaGraphExec>,
+    graph_disabled: bool,
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
+    logged_graph_unsupported: bool,
 }
 
 #[cfg(feature = "cuda")]
@@ -99,6 +106,26 @@ impl DecodeSession {
             }
             Err(_) => (None, None),
         };
+        let graph_params = if can_forward && decode_graph_enabled() {
+            Some((
+                DeviceBuffer::new_tagged(
+                    &model.cuda,
+                    std::mem::size_of::<u32>(),
+                    "decode_graph:position_u32",
+                )?,
+                DeviceBuffer::new_tagged(
+                    &model.cuda,
+                    std::mem::size_of::<u32>(),
+                    "decode_graph:seq_len_u32",
+                )?,
+            ))
+        } else {
+            None
+        };
+        let (d_graph_position, d_graph_seq_len) = match graph_params {
+            Some((position, seq_len)) => (Some(position), Some(seq_len)),
+            None => (None, None),
+        };
         Ok(Self {
             model: model as *const LoadedModel,
             sequence_id,
@@ -108,9 +135,14 @@ impl DecodeSession {
             d_out,
             d_logits,
             d_norm_hidden,
+            d_graph_position,
+            d_graph_seq_len,
+            one_layer_graph: None,
+            graph_disabled: false,
             log_prefix,
             step: 0,
             logged_full_forward: false,
+            logged_graph_unsupported: false,
         })
     }
 
@@ -206,12 +238,7 @@ impl DecodeSession {
                 .as_ref()
                 .expect("d_out allocated when full forward is enabled")
                 .as_mut_ptr();
-            let layers = (*self.model).forward_one_token_all_layers_for_sequence(
-                self.d_x.as_ptr(),
-                self.sequence_id,
-                (token_idx + 1) as u32,
-                d_out,
-            )?;
+            let layers = self.forward_with_optional_graph(token_idx, d_out)?;
             timing::timing_log!(
                 forward_start.elapsed(),
                 "{}.token.{token_idx}.forward_all_layers",
@@ -257,4 +284,137 @@ impl DecodeSession {
             logits
         }
     }
+
+    unsafe fn forward_with_optional_graph(
+        &mut self,
+        token_idx: usize,
+        d_out: *mut c_void,
+    ) -> Result<usize> {
+        let seq_len = (token_idx + 1) as u32;
+        if self.graph_disabled || !decode_graph_enabled() {
+            return (*self.model).forward_one_token_all_layers_for_sequence(
+                self.d_x.as_ptr(),
+                self.sequence_id,
+                seq_len,
+                d_out,
+            );
+        }
+        if (*self.model).model_config.block_count != 1 {
+            if !self.logged_graph_unsupported {
+                eprintln!(
+                    "[{}] M40LLM_DECODE_GRAPH=1 currently supports one-layer sessions only; using normal forward",
+                    self.log_prefix
+                );
+                self.logged_graph_unsupported = true;
+            }
+            return (*self.model).forward_one_token_all_layers_for_sequence(
+                self.d_x.as_ptr(),
+                self.sequence_id,
+                seq_len,
+                d_out,
+            );
+        }
+
+        let position = token_idx as u32;
+        let d_position = self
+            .d_graph_position
+            .as_ref()
+            .expect("graph position allocated when graph is enabled");
+        let d_seq_len = self
+            .d_graph_seq_len
+            .as_ref()
+            .expect("graph seq_len allocated when graph is enabled");
+        self.upload_graph_params(position, seq_len)?;
+
+        if self.one_layer_graph.is_none() {
+            // Warm once through the normal path so lazy workspace and FP32 weight
+            // materialization do not occur inside CUDA stream capture.
+            (*self.model).forward_one_token_with_layer(
+                self.d_x.as_ptr(),
+                0,
+                self.sequence_id,
+                seq_len,
+                d_out,
+            )?;
+            let captured = (*self.model).cuda.capture_graph(CudaStream::Decode, || {
+                (*self.model).forward_one_token_with_layer_graph_params(
+                    self.d_x.as_ptr(),
+                    0,
+                    self.sequence_id,
+                    d_position.as_ptr() as *const u32,
+                    d_seq_len.as_ptr() as *const u32,
+                    d_out,
+                )
+            });
+            match captured {
+                Ok(graph) => {
+                    eprintln!("[{}] captured one-layer decode CUDA graph", self.log_prefix);
+                    self.one_layer_graph = Some(graph);
+                }
+                Err(err) => {
+                    eprintln!(
+                        "[{}] disabling one-layer decode CUDA graph after capture failure: {err:#}",
+                        self.log_prefix
+                    );
+                    self.graph_disabled = true;
+                    return Ok(1);
+                }
+            }
+        }
+
+        if let Some(graph) = &self.one_layer_graph {
+            if let Err(err) = graph.launch(CudaStream::Decode) {
+                eprintln!(
+                    "[{}] disabling one-layer decode CUDA graph after launch failure: {err:#}",
+                    self.log_prefix
+                );
+                self.graph_disabled = true;
+                return (*self.model).forward_one_token_all_layers_for_sequence(
+                    self.d_x.as_ptr(),
+                    self.sequence_id,
+                    seq_len,
+                    d_out,
+                );
+            }
+            Ok(1)
+        } else {
+            (*self.model).forward_one_token_all_layers_for_sequence(
+                self.d_x.as_ptr(),
+                self.sequence_id,
+                seq_len,
+                d_out,
+            )
+        }
+    }
+
+    fn upload_graph_params(&self, position: u32, seq_len: u32) -> Result<()> {
+        let d_position = self
+            .d_graph_position
+            .as_ref()
+            .expect("graph position allocated when graph is enabled");
+        let d_seq_len = self
+            .d_graph_seq_len
+            .as_ref()
+            .expect("graph seq_len allocated when graph is enabled");
+        unsafe {
+            self.model().cuda.memcpy_h2d(
+                d_position.as_mut_ptr(),
+                (&position as *const u32).cast::<c_void>(),
+                std::mem::size_of::<u32>(),
+            )?;
+            self.model().cuda.memcpy_h2d(
+                d_seq_len.as_mut_ptr(),
+                (&seq_len as *const u32).cast::<c_void>(),
+                std::mem::size_of::<u32>(),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn decode_graph_enabled() -> bool {
+    std::env::var("M40LLM_DECODE_GRAPH")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
 }
