@@ -917,3 +917,36 @@ This removes the previous host-side `cudaMemcpyDeviceToHost` length read from
 the production KV append path. The next graph-specific step is to capture a
 one-layer decode segment that includes async cuBLAS and a stable device position
 parameter.
+
+## 2026-05-12: One-Layer cuBLAS Graph Prototype
+
+This checkpoint validates CUDA Graph capture with materialized FP32 cuBLAS
+projection work on the Tesla M40. The test captures a one-layer-shaped prefill
+stream graph containing seven async `cublasSgemm` calls:
+
+- Q, K, V projections
+- attention output projection
+- MLP gate and up projections
+- MLP down projection
+
+The test warms cuBLAS before capture, captures the async GEMM sequence, launches
+the graph, synchronizes once at the graph boundary, and compares all projection
+outputs against CPU references.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise \
+  -- cuda_graph_replays_one_layer_projection_gemms --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- This proves async materialized cuBLAS calls can participate in CUDA Graph
+  capture on the target GPU/toolchain.
+- The prototype is still projection-only and single-stream. The next production
+  step is to capture a true one-layer decode segment that also includes
+  decode-stream elementwise/attention/KV work and cross-stream dependencies.

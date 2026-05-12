@@ -85,10 +85,12 @@ complete.
   synchronizations inside full-layer forward. KV append now has explicit-position
   and device-position async APIs; production full-layer decode uses the
   explicit-position path, which removes the prior host-side KV length D2H read
-  and updates `seq_map` on device.
-- Next: prototype a one-layer decode graph that includes cuBLAS, using the
-  device-position KV append API where graph capture needs a stable position
-  pointer.
+  and updates `seq_map` on device. A one-layer-shaped CUDA Graph prototype now
+  captures and replays seven async materialized-FP32 cuBLAS projection GEMMs on
+  M40.
+- Next: extend graph capture from projection-only cuBLAS work to a true
+  one-layer decode segment that includes decode-stream elementwise/attention/KV
+  work and cross-stream dependencies.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
