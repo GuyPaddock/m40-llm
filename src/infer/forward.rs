@@ -193,6 +193,11 @@ impl LoadedModel {
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "qkv_project_to_kv_append",
+                    )?;
                     self.append_kv_token_f32_rope_k_at_async(
                         seq_id,
                         ws.dk as *const c_void,
@@ -568,6 +573,11 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "qkv_project_to_kv_append",
+                    )?;
                     self.append_kv_token_f32_rope_k_position_dev_async(
                         seq_id,
                         ws.dk as *const c_void,
