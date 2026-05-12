@@ -115,6 +115,10 @@ same non-streaming decode helper as `POST /generate`.
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.
+- TinyLlama canary: `tests/tinyllama_generation_canary.rs` checks a deterministic
+  generated token sequence for the stock-quotes prompt when
+  `M40LLM_TINYLLAMA_CANARY_MODEL` points to a TinyLlama F16 GGUF. On the primary
+  M40 development box it also auto-detects the cached model path.
 - Minimal forward parity: see docs/minimal_forward.md and tests/forward_parity_toy.rs for CUDA‑gated toy coverage. The real server path now runs full-layer TinyLlama F16 `/generate` on M40. The CUDA forward path keeps residual adds and SwiGLU activation on device; remaining optimization work should be measured before making performance claims.
 
 

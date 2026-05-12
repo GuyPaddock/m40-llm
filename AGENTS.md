@@ -96,7 +96,10 @@ complete.
   attention sequence length, complementing the existing device-position KV
   append API. `DecodeSession` can now cache and replay an opt-in one-layer
   decode CUDA Graph with `M40LLM_DECODE_GRAPH=1`; multi-layer sessions still
-  fall back to the normal async path.
+  fall back to the normal async path. The async materialized-GEMM path briefly
+  regressed generation by letting SwiGLU read MLP gate/up outputs before the
+  prefill-stream cuBLAS work completed; `mlp_gate_up_to_swiglu` now restores the
+  decode-stream wait, and a TinyLlama token canary covers the reported prompt.
 - Next: expand graph coverage beyond the one-layer `DecodeSession` cache toward
   full-token graph capture, or first benchmark the opt-in graph path if a
   representative one-layer fixture is available.

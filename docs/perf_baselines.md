@@ -1066,3 +1066,57 @@ Notes:
 - This is intentionally not enabled for TinyLlama-class 22-layer sessions yet.
   The next graph step is expanding from one layer to a full-token graph once
   pointer stability and replay behavior are validated.
+
+## 2026-05-12: Async MLP Stream-Order Regression Canary
+
+The async materialized-GEMM path briefly regressed TinyLlama generation because
+`swiglu_f32_async` read `dgate`/`dup` on the decode stream before the async MLP
+gate/up cuBLAS calls on the prefill stream completed. The fix adds an explicit
+decode-stream wait named `mlp_gate_up_to_swiglu`.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test tinyllama_generation_canary -- --nocapture --test-threads=1
+```
+
+Result on M40: pass. The TinyLlama canary uses the stock-quotes prompt, disables
+graph mode, and asserts the exact deterministic generated token sequence:
+
+```text
+[13, 13, 29896, 29889, 22402, 385, 1409, 310, 10961, 29879,
+ 411, 1009, 5829, 29892, 1024, 29892, 322, 8666, 472, 278]
+```
+
+Corrected warm decode profile command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_DECODE_GRAPH=0 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 28.887 ms |
+| `cli.token.1.logits` | 4.511 ms |
+| `cli.token.1.total` | 33.482 ms |
+| `cli.generate_text_total` | 604.047 ms |
+
+Steady second-token notes:
+
+- Full-layer forward still has zero stream synchronizations inside the 22-layer
+  body, but now has the required 22 additional `mlp_gate_up_to_swiglu` stream
+  waits.
+- Expected steady-token projection count remains 154 async cuBLAS calls
+  (7 projections x 22 layers).
+- The corrected profile confirms the restored wait is visible in every
+  `forward.layer.N.seq_len.2.swiglu` timing region.
