@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 #[cfg(feature = "cuda")]
-use crate::cuda::CudaContext;
+use crate::cuda::{CudaContext, CudaStream};
 use crate::decode::{decode_loop_with, StoppingCriteria};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
@@ -19,6 +19,8 @@ pub struct GenerateOptions {
     pub top_p: Option<f32>,
     pub seed: Option<u64>,
     pub log_prefix: &'static str,
+    pub sequence_id: u32,
+    pub reset_kv_cache: bool,
 }
 
 impl Default for GenerateOptions {
@@ -31,6 +33,8 @@ impl Default for GenerateOptions {
             top_p: None,
             seed: None,
             log_prefix: "generate",
+            sequence_id: 0,
+            reset_kv_cache: true,
         }
     }
 }
@@ -123,7 +127,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
     let sampler = sampler_from_options(&options)?;
 
-    if model.kv_cache.is_some() {
+    if options.reset_kv_cache && model.kv_cache.is_some() {
         let reset_start = std::time::Instant::now();
         model.reset_kv_cache()?;
         timing::timing_log!(reset_start.elapsed(), "{}.kv_reset", options.log_prefix);
@@ -150,8 +154,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
             model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
         );
-        crate::decode_session::DecodeSession::new(
+        crate::decode_session::DecodeSession::new_for_sequence(
             model,
+            options.sequence_id,
             full_decode_d_model,
             true,
             log_prefix,
@@ -325,6 +330,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         "{}.output_decode",
         options.log_prefix
     );
+    #[cfg(feature = "cuda")]
+    {
+        model.cuda.synchronize_stream(CudaStream::Decode)?;
+        model.cuda.synchronize_stream(CudaStream::Prefill)?;
+    }
 
     #[cfg(feature = "cuda")]
     eprintln!(

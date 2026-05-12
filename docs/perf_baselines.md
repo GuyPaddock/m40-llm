@@ -758,11 +758,12 @@ Coverage:
 Notes:
 
 - `/generate` remains serialized by default. Setting
-  `M40LLM_SERVER_BATCH_DECODE=1` logs that scheduler-level packed varlen decode
-  support is present, but full HTTP request batching is intentionally not
-  enabled yet.
-- Model-level KV ownership now supports sequence-major physical slots for
-  `KV[layer][sequence]`; safe multi-request generation still needs the server
-  scheduler loop to run leased decode sessions concurrently.
+  `M40LLM_SERVER_BATCH_DECODE=1` enables leased per-request KV sequence slots,
+  but `/generate` remains serialized until per-session CUDA streams/workspaces
+  or full fused batched decode scheduling are ready.
+- Model-level KV ownership supports sequence-major physical slots for
+  `KV[layer][sequence]`; multi-request generation can use separate logical
+  sequences, while the server scheduler loop still needs to fuse those requests
+  into one packed batched decode dispatch.
 - Packed prefill should wait until decode batching has real request/session
   ownership above this scheduler foundation.

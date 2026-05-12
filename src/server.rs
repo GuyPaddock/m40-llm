@@ -80,6 +80,8 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         top_p: req.top_p,
         seed: req.seed,
         log_prefix,
+        sequence_id: 0,
+        reset_kv_cache: true,
     }
 }
 
@@ -90,6 +92,32 @@ fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
             error: err.to_string(),
         }),
     )
+}
+
+fn unavailable_error(message: impl Into<String>) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse {
+            error: message.into(),
+        }),
+    )
+}
+
+fn lease_decode_sequence(
+    state: &AppState,
+) -> std::result::Result<
+    Option<crate::decode_batch::DecodeSequenceLease>,
+    (StatusCode, Json<ErrorResponse>),
+> {
+    if !state.decode_batching_requested {
+        return Ok(None);
+    }
+    let pool = state.decode_sequence_pool.as_ref().ok_or_else(|| {
+        unavailable_error("decode sequence pool unavailable; allocate KV cache for layer sequences")
+    })?;
+    pool.try_lease().map(Some).ok_or_else(|| {
+        unavailable_error("all decode sequence slots are busy; retry when a request completes")
+    })
 }
 
 #[cfg(feature = "cuda")]
@@ -272,17 +300,22 @@ async fn generate(
     }
 
     if !req.stream {
+        let sequence_lease = lease_decode_sequence(&state)?;
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
-        let generated =
-            generate_text(&state.model, options_from_request(&req, "server")).map_err(|e| {
-                eprintln!("[server] decode_loop failed: {e}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: e.to_string(),
-                    }),
-                )
-            })?;
+        let mut options = options_from_request(&req, "server");
+        if let Some(lease) = sequence_lease.as_ref() {
+            options.sequence_id = lease.sequence_id();
+            options.reset_kv_cache = false;
+        }
+        let generated = generate_text(&state.model, options).map_err(|e| {
+            eprintln!("[server] decode_loop failed: {e:?}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
         return Ok(Json(GenerateResponse {
             output: generated.output,
         })
@@ -311,7 +344,14 @@ async fn generate(
     let sampler =
         sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
 
-    if state.model.kv_cache.is_some() {
+    let sequence_lease = lease_decode_sequence(&state)?;
+    #[cfg(feature = "cuda")]
+    let sequence_id = sequence_lease
+        .as_ref()
+        .map(|lease| lease.sequence_id())
+        .unwrap_or(0);
+
+    if !state.decode_batching_requested && state.model.kv_cache.is_some() {
         state.model.reset_kv_cache().map_err(internal_error)?;
     }
 
@@ -332,8 +372,9 @@ async fn generate(
                 full_decode_d_model,
                 full_decode_hidden_dim
             );
-            crate::decode_session::DecodeSession::new(
+            crate::decode_session::DecodeSession::new_for_sequence(
                 &state_for_logits.model,
+                sequence_id,
                 full_decode_d_model,
                 true,
                 "server",
@@ -500,6 +541,7 @@ async fn generate(
         let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
         tokio::spawn(async move {
             let _generation_guard = generation_guard;
+            let _sequence_lease = sequence_lease;
             let mut ids = match tokenizer_stream.encode_with_specials(&prompt, add_bos, false) {
                 Ok(ids) => ids,
                 Err(e) => {
@@ -652,7 +694,7 @@ async fn generate(
     ) {
         Ok(ids) => ids,
         Err(e) => {
-            eprintln!("[server] decode_loop failed: {e}");
+            eprintln!("[server] decode_loop failed: {e:?}");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

@@ -292,7 +292,7 @@ pub fn server_batch_decode_requested() -> bool {
 
 #[cfg(feature = "server")]
 pub fn server_batch_decode_status() -> &'static str {
-    "M40LLM_SERVER_BATCH_DECODE=1 requested; packed varlen decode scheduling is available for CUDA attention, but /generate remains serialized until model KV slots support multiple logical sequences"
+    "M40LLM_SERVER_BATCH_DECODE=1 requested; leased per-request KV sequence slots are enabled, but /generate remains serialized until per-session streams/workspaces or fused batched scheduling are ready"
 }
 
 #[cfg(feature = "server")]

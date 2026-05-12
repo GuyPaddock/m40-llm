@@ -71,10 +71,13 @@ complete.
   through the batched GQA decode attention primitive; HTTP `/generate` remains
   serialized. Model-level KV addressing now maps logical
   `KV[layer][sequence]` onto sequence-major physical slots, and the server has a
-  small decode sequence lease pool for future batched decode scheduling.
-- Next: wire the server scheduler loop to run leased decode sessions through
-  packed varlen batched decode attention, then integrate packed varlen prefill
-  once decode batching is correct end-to-end.
+  small decode sequence lease pool. With `M40LLM_SERVER_BATCH_DECODE=1`,
+  `/generate` requests lease per-request KV sequence slots and skip whole-cache
+  resets, but request execution remains serialized until per-session CUDA
+  streams/workspaces or fused batched decode scheduling are ready.
+- Next: continue reducing graph blockers by finishing async enqueue variants and
+  re-profiling launch/sync counts before removing request serialization or
+  integrating packed varlen decode into the HTTP scheduler.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

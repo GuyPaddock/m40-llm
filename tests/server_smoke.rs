@@ -8,10 +8,33 @@ use m40_llm::server::{
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 use tokio_stream::StreamExt;
 
 #[path = "common/tiny_gguf.rs"]
 mod tiny_gguf;
+
+struct EnvVarGuard {
+    key: &'static str,
+    old: Option<String>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let old = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        Self { key, old }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.old {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
 
 fn server_smoke_model() -> (m40_llm::gguf::GgufModel, Vec<u8>) {
     tiny_gguf::make_identity_tiny_gguf(tiny_gguf::TinyGgufConfig {
@@ -21,18 +44,86 @@ fn server_smoke_model() -> (m40_llm::gguf::GgufModel, Vec<u8>) {
     })
 }
 
-async fn start_test_server(model: LoadedModel) -> Result<SocketAddr> {
+#[tokio::test]
+async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_kv_cache_for_layer_sequences(16, 2)?;
+
+    let server = start_test_server(model).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "A".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "B".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+    server.shutdown().await?;
+    Ok(())
+}
+
+struct TestServer {
+    addr: SocketAddr,
+    shutdown_tx: Option<oneshot::Sender<()>>,
+    handle: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+}
+
+impl TestServer {
+    async fn shutdown(mut self) -> Result<()> {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(());
+        }
+        self.handle.await??;
+        Ok(())
+    }
+}
+
+async fn start_test_server(model: LoadedModel) -> Result<TestServer> {
     let state = Arc::new(AppState::new(model));
     let router = app_router(state);
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr: SocketAddr = listener.local_addr()?;
-    tokio::spawn(async move {
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let handle = tokio::spawn(async move {
         axum::serve(listener, router.into_make_service())
+            .with_graceful_shutdown(async {
+                let _ = shutdown_rx.await;
+            })
             .await
-            .unwrap();
     });
-    Ok(addr)
+    Ok(TestServer {
+        addr,
+        shutdown_tx: Some(shutdown_tx),
+        handle,
+    })
 }
 
 #[tokio::test]
@@ -47,11 +138,11 @@ async fn server_generate_smoke() -> Result<()> {
     // KV cache optional for non-CUDA path but harmless to allocate small
     let _ = model.allocate_kv_cache(16, 1);
 
-    let addr = start_test_server(model).await?;
+    let server = start_test_server(model).await?;
 
     // Request small generation
     let client = reqwest::Client::new();
-    let url = format!("http://{}/generate", addr);
+    let url = format!("http://{}/generate", server.addr);
     let req = GenerateRequest {
         prompt: "A".to_string(),
         max_tokens: Some(2),
@@ -65,6 +156,7 @@ async fn server_generate_smoke() -> Result<()> {
     let jr: GenerateResponse = serde_json::from_slice(&raw).unwrap();
     assert!(!jr.output.starts_with(&req.prompt));
     assert!(!jr.output.is_empty());
+    server.shutdown().await?;
     Ok(())
 }
 
@@ -79,10 +171,10 @@ async fn server_generate_streaming_nul_free() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
     let _ = model.allocate_kv_cache(16, 1);
 
-    let addr = start_test_server(model).await?;
+    let server = start_test_server(model).await?;
 
     let client = reqwest::Client::new();
-    let url = format!("http://{}/generate", addr);
+    let url = format!("http://{}/generate", server.addr);
     let req = GenerateRequest {
         prompt: "A".to_string(),
         max_tokens: Some(2),
@@ -110,5 +202,6 @@ async fn server_generate_streaming_nul_free() -> Result<()> {
     assert!(last.done);
     assert!(!last.output.is_empty());
     assert!(!last.output.starts_with(&req.prompt));
+    server.shutdown().await?;
     Ok(())
 }

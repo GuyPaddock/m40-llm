@@ -176,7 +176,7 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
 
     // Allocate KV cache with matching heads
     // Allocate KV cache with explicit heads and head_dim to match d_model
-    lm.allocate_kv_cache_with_layout(8, 1, num_heads, head_dim)?;
+    lm.allocate_kv_cache_with_layout(8, 2, num_heads, head_dim)?;
 
     // Load embedding for token 0
     let d_x = lm.cuda.device_malloc(d_model * 4)?;
@@ -194,6 +194,10 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     let bytes_after_first = m40_llm::cuda::CudaContext::total_device_bytes();
     unsafe {
         lm.forward_one_token_with_layer(d_out as *const c_void, 0, 0, 2, d_x)?;
+    }
+    unsafe {
+        lm.forward_one_token_with_layer(d_x as *const c_void, 0, 1, 1, d_out)?;
+        lm.load_token_embedding_f16_to_f32(0, d_x)?;
     }
     let bytes_after_second = m40_llm::cuda::CudaContext::total_device_bytes();
     assert_eq!(

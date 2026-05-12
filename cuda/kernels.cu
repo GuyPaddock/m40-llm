@@ -89,6 +89,7 @@ extern "C" {
     int m40llm_device_free(M40llmCudaContext* ctx, void* ptr) {
         if (!ctx) return -1;
         if (!ptr) return 0;
+        if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaFree(ptr);
         if (err != cudaSuccess) return -2;
         return 0;
@@ -692,6 +693,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
     int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {
         if (!ctx || !d_in_f16 || !d_out_f32) return -1;
+        if (ensure_device(ctx) != 0) return -4;
+        // Pointer validation should report the pointer state, not a stale
+        // asynchronous error from a prior CUDA operation in this process.
+        cudaGetLastError();
 
         // Debug: Validate pointers and alignment
         cudaError_t err;
@@ -3061,6 +3066,9 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
 
     void m40llm_destroy_context(M40llmCudaContext* ctx) {
         if (!ctx) return;
+        ensure_device(ctx);
+        if (ctx->prefill_stream) cudaStreamSynchronize(ctx->prefill_stream);
+        if (ctx->decode_stream) cudaStreamSynchronize(ctx->decode_stream);
         persistent_decode_stop_impl(ctx);
     #ifdef M40LLM_HAVE_CUBLAS
         cublasDestroy(ctx->cublas);

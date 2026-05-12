@@ -176,9 +176,12 @@ Forward workspace and decode-session scratch buffers are RAII-owned, so partial
 allocation failures clean up any buffers that were already allocated.
 Full-layer decode uses explicit model-level KV addressing
 `KV[layer][sequence][position][kv_head][head_dim]`. Physical KV slots are mapped
-sequence-major as `sequence_id * block_count + layer_id`; current `/generate`
-requests still default to `sequence_id=0` and remain serialized until the server
-scheduler leases sequence/workspace slots per active request.
+sequence-major as `sequence_id * block_count + layer_id`. Current `/generate`
+requests default to `sequence_id=0`; setting `M40LLM_SERVER_BATCH_DECODE=1`
+allocates two logical sequence slots by default, or
+`M40LLM_SERVER_BATCH_DECODE_SLOTS=N` when provided, and leases one slot per
+request. `/generate` remains serialized until per-session CUDA streams/workspaces
+or fused batched decode scheduling are ready.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

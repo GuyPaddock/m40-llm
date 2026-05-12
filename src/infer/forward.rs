@@ -48,8 +48,9 @@ impl LoadedModel {
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
+        let result = f(ptrs);
         drop(guard);
-        f(ptrs)
+        result
     }
 
     pub unsafe fn forward_one_token_minimal_with_norms(
