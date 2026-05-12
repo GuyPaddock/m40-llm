@@ -443,3 +443,77 @@ fn decode_session_uses_multilayer_graph_when_enabled() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn decode_session_graph_diagnostic_sync_records_timed_replay() -> Result<()> {
+    struct EnvGuard;
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("M40LLM_DECODE_GRAPH");
+            std::env::remove_var("M40LLM_DECODE_GRAPH_DIAG_SYNC");
+            std::env::remove_var("M40LLM_DECODE_GRAPH_DIAG_MAX_MS");
+        }
+    }
+
+    std::env::set_var("M40LLM_DECODE_GRAPH", "1");
+    std::env::set_var("M40LLM_DECODE_GRAPH_DIAG_SYNC", "1");
+    let _guard = EnvGuard;
+    profile::reset();
+
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 32,
+        d_model: 8,
+        hidden: 16,
+        head_count: 2,
+        block_count: 1,
+        context_length: 16,
+    };
+    let (gguf, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let mut lm = LoadedModel::from_gguf(gguf, weights, -1)?;
+    let head_dim = cfg.d_model as u32 / cfg.head_count;
+    lm.allocate_kv_cache_with_layout(8, 2, cfg.head_count, head_dim)?;
+
+    let mut session = DecodeSession::new_for_sequence(
+        &lm,
+        0,
+        cfg.d_model,
+        true,
+        "test_decode_graph_diag",
+        "test_decode_graph_diag:x",
+        "test_decode_graph_diag:out",
+    )?;
+    let logits = session.logits_for_ids(&[3, 4], |_| {})?;
+    assert_eq!(logits.len(), cfg.vocab);
+
+    let snapshot = profile::snapshot();
+    let timed_syncs = snapshot
+        .by_op
+        .get("cuda_graph_launch_timed_sync")
+        .map(|counts| counts.stream_syncs)
+        .unwrap_or_default();
+    assert!(
+        timed_syncs >= 2,
+        "expected timed graph launch sync for each replay, got {timed_syncs}"
+    );
+
+    let graph_waits = snapshot
+        .by_op
+        .get("hidden_to_logits_stream")
+        .map(|counts| counts.stream_waits)
+        .unwrap_or_default();
+    assert!(
+        graph_waits >= 2,
+        "expected explicit hidden->logits stream wait after graph replay, got {graph_waits}"
+    );
+
+    Ok(())
+}
