@@ -189,6 +189,18 @@ that can run head_dim=64 active requests through the packed batched GQA decode
 attention path while preserving the shared workspace generation lock. Streaming
 `/generate` remains on the previous serialized path for now.
 
+To benchmark the buffered batch-decode path on TinyLlama:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  TRIALS=3 MAX_TOKENS=2 scripts/bench_server_batch_decode.sh
+```
+
+The script compares `M40LLM_SERVER_BATCH_DECODE=0` and `1` across batch-1,
+batch-2, mixed batch-4, and skewed batch-4 buffered requests, writing detailed
+logs and `results.tsv` under `/tmp` by default.
+
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
 - Expected log evidence: `full-layer forward enabled layers=22`

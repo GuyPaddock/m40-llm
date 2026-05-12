@@ -1363,3 +1363,62 @@ Key interpretation:
   expected.
 - `ldg_kv` is now only used in last-token batched decode and provides no strong
   win or loss relative to default in this run.
+
+## 2026-05-12: TinyLlama Buffered Server Batch-Decode Benchmark
+
+This checkpoint compares buffered `/generate` with and without the queued
+batched decode scheduler. CUDA Graph replay stayed disabled because graph replay
+diagnostics showed it is slower than the normal async path.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Features: `cuda,server`
+- Command prefix: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1`
+- Benchmark script: `TRIALS=3 MAX_TOKENS=2 PORT_BASE=52680 scripts/bench_server_batch_decode.sh`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260512_183735`
+
+Each case starts a fresh server, performs one warmup request, then sends the case
+requests concurrently. Times below are means across three trials.
+
+| Case | Batch decode | Requests | Mean wall | Mean avg request latency | Mean tokens/s | HTTP |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `batch1_hello` | off | 1 | 174.0 ms | 0.164952 s | 11.495 | 3/3 ok |
+| `batch1_hello` | on | 1 | 176.0 ms | 0.167599 s | 11.364 | 3/3 ok |
+| `batch2_same` | off | 2 | 338.7 ms | 0.247982 s | 11.811 | 6/6 ok |
+| `batch2_same` | on | 2 | 287.3 ms | 0.274962 s | 13.924 | 6/6 ok |
+| `batch4_mixed` | off | 4 | 1537.0 ms | 0.913495 s | 5.205 | 12/12 ok |
+| `batch4_mixed` | on | 4 | 909.3 ms | 0.679747 s | 8.798 | 12/12 ok |
+| `batch4_skewed` | off | 4 | 2456.0 ms | 1.653452 s | 3.257 | 12/12 ok |
+| `batch4_skewed` | on | 4 | 1523.7 ms | 0.966136 s | 5.250 | 12/12 ok |
+
+Speedups from enabling `M40LLM_SERVER_BATCH_DECODE=1`:
+
+| Case | Wall-time speedup | Throughput speedup |
+| --- | ---: | ---: |
+| `batch1_hello` | 0.99x | 0.99x |
+| `batch2_same` | 1.18x | 1.18x |
+| `batch4_mixed` | 1.69x | 1.69x |
+| `batch4_skewed` | 1.61x | 1.61x |
+
+Correctness checks:
+
+- All benchmarked requests returned HTTP 200.
+- Batch scheduler logs showed distinct leased sequence IDs for concurrent
+  requests.
+- `cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1`
+  passed.
+- `M40LLM_TINYLLAMA_CANARY_MODEL=<TinyLlama path> cargo test --features cuda
+  --test tinyllama_generation_canary -- --nocapture --test-threads=1` passed.
+
+Interpretation:
+
+- The batched decode scheduler is neutral for batch size 1 and improves
+  concurrent buffered request throughput for batch sizes 2 and 4.
+- The mixed and skewed prompt cases are the important validation signal: they
+  show the scheduler can share decode work across active requests with different
+  prompt/KV lengths while preserving per-request outputs.
+- This is enough to keep moving the strict plan forward. The next task is packed
+  varlen prefill integration, starting behind an opt-in server flag or internal
+  scheduler path until correctness and perf are characterized.

@@ -121,9 +121,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   GQA decode attention primitive, and scatters per-request outputs back into
   `DecodeSession` scratch. It falls back to the prior per-request path when the
   batch is size 1 or the model cannot use the head64 batched attention kernel.
-- Next: benchmark `M40LLM_SERVER_BATCH_DECODE=1` on TinyLlama with concurrent
-  buffered requests and then integrate packed varlen prefill only after batched
-  decode correctness/perf are characterized.
+  TinyLlama concurrent buffered `/generate` benchmarking shows
+  `M40LLM_SERVER_BATCH_DECODE=1` is neutral for batch size 1 and improves
+  throughput by 1.18x for batch size 2, 1.69x for mixed batch size 4, and 1.61x
+  for skewed batch size 4, with all requests returning HTTP 200. Results and
+  validation commands are recorded in `docs/perf_baselines.md`.
+- Next: integrate packed varlen prefill behind an opt-in server/scheduler path,
+  now that batched decode correctness/perf are characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
