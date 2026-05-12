@@ -315,6 +315,57 @@ extern "C" {
         return err == cudaSuccess ? 0 : -4;
     }
 
+    int m40llm_cuda_graph_launch_timed_sync(
+        M40llmCudaContext* ctx,
+        M40llmCudaGraphExec* graph,
+        uint32_t stream_kind,
+        float* elapsed_ms) {
+        if (!ctx || !graph || !graph->exec || !elapsed_ms) return -1;
+        *elapsed_ms = 0.0f;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+
+        cudaEvent_t start = nullptr;
+        cudaEvent_t stop = nullptr;
+        cudaError_t err = cudaEventCreate(&start);
+        if (err != cudaSuccess) return -4;
+        err = cudaEventCreate(&stop);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(start);
+            return -5;
+        }
+
+        err = cudaEventRecord(start, stream);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(stop);
+            cudaEventDestroy(start);
+            return -6;
+        }
+        err = cudaGraphLaunch(graph->exec, stream);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(stop);
+            cudaEventDestroy(start);
+            return -7;
+        }
+        err = cudaEventRecord(stop, stream);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(stop);
+            cudaEventDestroy(start);
+            return -8;
+        }
+        err = cudaEventSynchronize(stop);
+        if (err != cudaSuccess) {
+            cudaEventDestroy(stop);
+            cudaEventDestroy(start);
+            return -9;
+        }
+        err = cudaEventElapsedTime(elapsed_ms, start, stop);
+        cudaEventDestroy(stop);
+        cudaEventDestroy(start);
+        return err == cudaSuccess ? 0 : -10;
+    }
+
     void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) {
         if (!graph) return;
         if (graph->exec) cudaGraphExecDestroy(graph->exec);

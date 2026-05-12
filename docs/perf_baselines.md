@@ -1234,3 +1234,42 @@ The CUDA server smoke showed two concurrent buffered requests assigned sequence
 IDs 0 and 1 and stepped alternately by the scheduler. The next scheduler task is
 to replace the per-request attention region with packed batched GQA decode
 attention while keeping the same request/session ownership model.
+
+## 2026-05-12: Decode Graph Replay Diagnostic Sync
+
+`M40LLM_DECODE_GRAPH_DIAG_SYNC=1` adds a diagnostic-only graph replay path:
+
+- records CUDA events before and after `cudaGraphLaunch`,
+- synchronizes the graph stream immediately after launch,
+- logs graph replay GPU elapsed time, and
+- inserts an explicit decode-stream event dependency before logits consumes the
+  graph output buffer.
+
+Diagnostic command on Tesla M40:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_DECODE_GRAPH=1 M40LLM_DECODE_GRAPH_DIAG_SYNC=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 4 --top-k 1 --require-sm52
+```
+
+Observed graph replay GPU elapsed time:
+
+| Token | Graph replay GPU elapsed | `forward_all_layers` | `logits` | token total |
+| --- | ---: | ---: | ---: | ---: |
+| 2 | 539.041 ms | 539.133 ms | 3.947 ms | 543.176 ms |
+| 3 | 709.210 ms | 709.280 ms | 3.979 ms | 713.334 ms |
+| 4 | 883.275 ms | 883.375 ms | 3.995 ms | 887.439 ms |
+
+Interpretation:
+
+- The previous graph benchmark's large `logits` timing was stream-completion
+  accounting: logits was waiting for slow graph replay to finish.
+- With explicit post-launch synchronization, logits/output norm returns to the
+  expected small timing, but graph replay itself is far slower than the normal
+  async path.
+- Keep `M40LLM_DECODE_GRAPH=1` experimental and off by default.
+- Do not expand graph coverage until graph replay performance is understood;
+  move the main strict plan forward to packed varlen decode scheduling.

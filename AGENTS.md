@@ -111,7 +111,10 @@ complete.
   scheduler keeps the server generation lock around each CUDA token step to
   protect shared workspace use across scheduler and streaming paths. The
   scheduler still executes one request's full CUDA forward at a time; fused
-  batched layer execution remains pending.
+  batched layer execution remains pending. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
+  now synchronizes graph replay immediately after launch and reports CUDA-event
+  GPU elapsed time; this showed the graph replay itself is slow, while
+  logits/output-norm was previously absorbing graph completion time.
 - Next: replace the scheduler's per-request attention step with the existing
   packed batched GQA decode attention primitive, while preserving the queued
   request/session ownership model.

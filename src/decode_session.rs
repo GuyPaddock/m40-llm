@@ -23,6 +23,7 @@ pub struct DecodeSession {
     d_graph_seq_len: Option<DeviceBuffer>,
     decode_graph: Option<CudaGraphExec>,
     graph_disabled: bool,
+    last_forward_used_graph: bool,
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
@@ -138,6 +139,7 @@ impl DecodeSession {
             d_graph_seq_len,
             decode_graph: None,
             graph_disabled: false,
+            last_forward_used_graph: false,
             log_prefix,
             step: 0,
             logged_full_forward: false,
@@ -250,6 +252,13 @@ impl DecodeSession {
                 self.logged_full_forward = true;
             }
             let logits_start = std::time::Instant::now();
+            if self.last_forward_used_graph {
+                (*self.model).cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Decode,
+                    "decode_graph_to_logits",
+                )?;
+            }
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(
                     d_out as *const _,
@@ -289,6 +298,7 @@ impl DecodeSession {
         d_out: *mut c_void,
     ) -> Result<usize> {
         let seq_len = (token_idx + 1) as u32;
+        self.last_forward_used_graph = false;
         if self.graph_disabled || !decode_graph_enabled() {
             return (*self.model).forward_one_token_all_layers_for_sequence(
                 self.d_x.as_ptr(),
@@ -348,7 +358,19 @@ impl DecodeSession {
         }
 
         if let Some(graph) = &self.decode_graph {
-            if let Err(err) = graph.launch(CudaStream::Decode) {
+            let launch_result = if decode_graph_diagnostic_sync_enabled() {
+                graph
+                    .launch_timed_sync(CudaStream::Decode)
+                    .map(|elapsed_ms| {
+                        eprintln!(
+                            "[{}] decode graph replay gpu_elapsed_ms={elapsed_ms:.3}",
+                            self.log_prefix
+                        );
+                    })
+            } else {
+                graph.launch(CudaStream::Decode)
+            };
+            if let Err(err) = launch_result {
                 eprintln!(
                     "[{}] disabling full-token decode CUDA graph after launch failure: {err:#}",
                     self.log_prefix
@@ -361,6 +383,7 @@ impl DecodeSession {
                     d_out,
                 );
             }
+            self.last_forward_used_graph = true;
             Ok((*self.model).model_config.block_count as usize)
         } else {
             (*self.model).forward_one_token_all_layers_for_sequence(
@@ -400,6 +423,13 @@ impl DecodeSession {
 #[cfg(feature = "cuda")]
 fn decode_graph_enabled() -> bool {
     std::env::var("M40LLM_DECODE_GRAPH")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn decode_graph_diagnostic_sync_enabled() -> bool {
+    std::env::var("M40LLM_DECODE_GRAPH_DIAG_SYNC")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }

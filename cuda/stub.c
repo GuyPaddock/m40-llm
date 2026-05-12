@@ -52,6 +52,9 @@ int m40llm_cuda_graph_cancel_capture(M40llmCudaContext* ctx, uint32_t stream_kin
 int m40llm_cuda_graph_launch(M40llmCudaContext* ctx, M40llmCudaGraphExec* graph, uint32_t stream_kind) {
     (void)ctx; (void)graph; (void)stream_kind; return -1;
 }
+int m40llm_cuda_graph_launch_timed_sync(M40llmCudaContext* ctx, M40llmCudaGraphExec* graph, uint32_t stream_kind, float* elapsed_ms) {
+    (void)ctx; (void)graph; (void)stream_kind; (void)elapsed_ms; return -1;
+}
 void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) { (void)graph; }
 
 M40llmCudaContext* m40llm_create_context(int device_id) {

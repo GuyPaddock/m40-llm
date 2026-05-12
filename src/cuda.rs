@@ -88,6 +88,12 @@ mod ffi {
             graph: *mut M40llmCudaGraphExec,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_cuda_graph_launch_timed_sync(
+            ctx: *mut M40llmCudaContext,
+            graph: *mut M40llmCudaGraphExec,
+            stream_kind: u32,
+            elapsed_ms: *mut f32,
+        ) -> i32;
         pub fn m40llm_cuda_graph_destroy(graph: *mut M40llmCudaGraphExec);
 
         pub fn m40llm_upload_weights(
@@ -546,6 +552,25 @@ impl CudaGraphExec {
         crate::profile::record_launch("cuda_graph_launch");
         Ok(())
     }
+
+    pub fn launch_timed_sync(&self, stream: CudaStream) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_graph_launch_timed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_graph_launch_timed_sync failed: {rc}"));
+        }
+        crate::profile::record_launch("cuda_graph_launch");
+        crate::profile::record_stream_sync("cuda_graph_launch_timed_sync");
+        Ok(elapsed_ms)
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -566,6 +591,11 @@ impl CudaGraphExec {
     pub fn launch(&self, stream: CudaStream) -> Result<()> {
         let _ = stream;
         anyhow::bail!("CUDA graph launch is unavailable without the cuda feature")
+    }
+
+    pub fn launch_timed_sync(&self, stream: CudaStream) -> Result<f32> {
+        let _ = stream;
+        anyhow::bail!("CUDA graph timed launch is unavailable without the cuda feature")
     }
 }
 
