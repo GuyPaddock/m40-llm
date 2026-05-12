@@ -15,6 +15,25 @@ use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy)]
+pub struct ForwardBatchItem {
+    pub d_x_f32: *mut c_void,
+    pub sequence_id: u32,
+    pub seq_len: u32,
+    pub d_out_f32: *mut c_void,
+}
+
+#[cfg(feature = "cuda")]
+unsafe fn mut_byte_offset(ptr: *mut c_void, bytes: usize) -> *mut c_void {
+    unsafe { (ptr as *mut u8).add(bytes).cast::<c_void>() }
+}
+
+#[cfg(feature = "cuda")]
+unsafe fn const_byte_offset(ptr: *const c_void, bytes: usize) -> *const c_void {
+    unsafe { (ptr as *const u8).add(bytes).cast::<c_void>() }
+}
+
+#[cfg(feature = "cuda")]
 fn log_profiled_op(
     label: &str,
     op: &str,
@@ -1449,6 +1468,427 @@ impl LoadedModel {
             let _ = (d_x_f32, seq_len, d_out_f32, d_model);
             anyhow::bail!("forward_one_token_all_layers requires CUDA device buffers")
         }
+    }
+
+    /// Runs one decode token for a batch of logical sequences.
+    ///
+    /// This path keeps projections and MLP row-batched while using the existing
+    /// packed variable-length GQA decode attention primitive for the attention
+    /// phase. It is intentionally decode-only: each item represents one query
+    /// token with its own already-appended KV length.
+    ///
+    /// # Safety
+    /// - Every pointer in `items` must be a valid device pointer on this model's CUDA context.
+    /// - Input and output buffers must each hold one f32 hidden vector.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn forward_one_token_all_layers_batched_for_sequences(
+        &self,
+        items: &[ForwardBatchItem],
+    ) -> Result<usize> {
+        if items.is_empty() {
+            anyhow::bail!("batched forward requires at least one item");
+        }
+        let layer_count = self.model_config.block_count as usize;
+        if layer_count == 0 {
+            anyhow::bail!("batched forward: model has zero layers");
+        }
+        let (d_model, hidden_dim) = self.validate_standard_layers()?;
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        if kv.head_dim() != 64 {
+            anyhow::bail!(
+                "batched decode attention currently requires head_dim=64, got {}",
+                kv.head_dim()
+            );
+        }
+        for item in items {
+            if item.seq_len == 0 {
+                anyhow::bail!("batched forward item has zero seq_len");
+            }
+            self.kv_physical_slot_for_layer_sequence((layer_count - 1) as u32, item.sequence_id)?;
+        }
+
+        let q_heads = self.model_config.attention_head_count;
+        let kv_heads = kv.num_heads();
+        let head_dim = kv.head_dim();
+        let kv_dim = kv_heads
+            .checked_mul(head_dim)
+            .context("batched forward KV projection dim overflow")? as usize;
+        if q_heads == 0 || q_heads % kv_heads != 0 {
+            anyhow::bail!(
+                "batched forward: query heads {} must be a multiple of kv heads {}",
+                q_heads,
+                kv_heads
+            );
+        }
+        if d_model as u32 != q_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "batched forward: d_model {} != query heads {} * head_dim {}",
+                d_model,
+                q_heads,
+                head_dim
+            );
+        }
+
+        let rows = items.len();
+        let bytes_d = d_model
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("batched forward d_model byte size overflow")?;
+        let bytes_kv = kv_dim
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("batched forward kv byte size overflow")?;
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
+            for layer in 0..layer_count {
+                let w = self.map_standard_layer(layer)?;
+                let layer_id: u32 = layer
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
+                let mut attention_states = Vec::with_capacity(items.len());
+                for (idx, item) in items.iter().enumerate() {
+                    let physical_slot =
+                        self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
+                    attention_states.push(crate::decode_batch::DecodeRequestState::active(
+                        idx as u64,
+                        physical_slot,
+                        item.seq_len,
+                    ));
+                }
+                let batch_plan =
+                    crate::decode_batch::DecodeBatchPlan::from_requests(&attention_states)?;
+                let cuda_plan =
+                    crate::decode_batch::CudaDecodeBatchPlan::new(&self.cuda, batch_plan)?;
+                let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
+                let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
+                let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+                let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
+                let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
+                let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
+                let w_down_ptr = self.tensor_device_ptr("w_down", &w.w_down)?;
+                let attn_norm_ptr = w
+                    .attn_norm
+                    .as_ref()
+                    .map(|view| {
+                        self.tensor_device_ptr("attn_norm", view)
+                            .map(|ptr| (ptr, view.dtype))
+                    })
+                    .transpose()?;
+                let ffn_norm_ptr = w
+                    .ffn_norm
+                    .as_ref()
+                    .map(|view| {
+                        self.tensor_device_ptr("ffn_norm", view)
+                            .map(|ptr| (ptr, view.dtype))
+                    })
+                    .transpose()?;
+
+                for (row, item) in items.iter().enumerate() {
+                    let dst = unsafe { mut_byte_offset(ws.scratch_a, row * bytes_d) };
+                    unsafe {
+                        self.cuda.memcpy_d2d_async(
+                            dst,
+                            item.d_x_f32 as *const c_void,
+                            bytes_d,
+                            CudaStream::Decode,
+                        )?;
+                    }
+                }
+
+                let label = format!("forward.batch.layer.{layer}.rows.{rows}");
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                if let Some((d_weight, dtype)) = attn_norm_ptr {
+                    self.run_rms_norm_weighted_async(
+                        ws.scratch_a,
+                        d_weight,
+                        dtype,
+                        ws.d_xn,
+                        rows as u32,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm_async(
+                        ws.scratch_a,
+                        ws.d_xn,
+                        rows as u32,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
+                log_profiled_op(
+                    &label,
+                    "attn_norm",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Prefill,
+                    CudaStream::Decode,
+                    "batch_attn_norm_to_qkv_project",
+                )?;
+                self.qkv_project_f32xf16_gguf_f32_async(
+                    ws.d_xn,
+                    rows as i32,
+                    d_model as i32,
+                    wq_ptr,
+                    d_model as i32,
+                    wk_ptr,
+                    kv_dim as i32,
+                    wv_ptr,
+                    kv_dim as i32,
+                    ws.dq,
+                    ws.dk,
+                    ws.dv,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "qkv_project",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Prefill,
+                    "batch_qkv_project_to_rope_kv",
+                )?;
+                for (row, item) in items.iter().enumerate() {
+                    let pos = item.seq_len.saturating_sub(1);
+                    let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
+                    let k_row = unsafe { const_byte_offset(ws.dk, row * bytes_kv) };
+                    let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
+                    let kv_slot =
+                        self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
+                    self.cuda.rope_f32_inplace_async(
+                        q_row,
+                        1,
+                        q_heads,
+                        head_dim,
+                        pos,
+                        self.model_config.rope_freq_base,
+                        self.model_config.rope_freq_scale,
+                    )?;
+                    self.append_kv_token_f32_rope_k_at_async(
+                        kv_slot,
+                        k_row,
+                        v_row,
+                        pos,
+                        pos,
+                        self.model_config.rope_freq_base,
+                        self.model_config.rope_freq_scale,
+                    )?;
+                }
+                log_profiled_op(
+                    &label,
+                    "rope_q_and_kv_append",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                unsafe {
+                    cuda_plan.dispatch_attention_async(
+                        &self.cuda,
+                        kv,
+                        ws.dq as *const c_void,
+                        q_heads,
+                        ws.datt,
+                    )?;
+                }
+                log_profiled_op(
+                    &label,
+                    "attention_batched",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Prefill,
+                    CudaStream::Decode,
+                    "batch_attention_to_out_project",
+                )?;
+                self.out_proj_f32xf16_gguf_f32_async(
+                    ws.datt as *const c_void,
+                    wo_ptr,
+                    ws.dy_attn,
+                    rows as i32,
+                    d_model as i32,
+                    d_model as i32,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "out_project",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Prefill,
+                    "batch_out_project_to_attn_residual",
+                )?;
+                self.cuda.residual_add_f32_async(
+                    ws.scratch_a,
+                    ws.dy_attn as *const c_void,
+                    ws.d_x1,
+                    rows * d_model,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "attn_residual",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                if let Some((d_weight, dtype)) = ffn_norm_ptr {
+                    self.run_rms_norm_weighted_async(
+                        ws.d_x1,
+                        d_weight,
+                        dtype,
+                        ws.d_x1n,
+                        rows as u32,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                } else {
+                    self.run_rms_norm_async(
+                        ws.d_x1,
+                        ws.d_x1n,
+                        rows as u32,
+                        d_model as u32,
+                        self.model_config.layer_norm_epsilon,
+                    )?;
+                }
+                log_profiled_op(
+                    &label,
+                    "ffn_norm",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Prefill,
+                    CudaStream::Decode,
+                    "batch_ffn_norm_to_mlp_gate_up",
+                )?;
+                self.mlp_gates_f32xf16_gguf_f32_async(
+                    ws.d_x1n,
+                    rows as i32,
+                    d_model as i32,
+                    w_gate_ptr,
+                    w_up_ptr,
+                    hidden_dim as i32,
+                    ws.dgate,
+                    ws.dup,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "mlp_gate_up",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Prefill,
+                    "batch_mlp_gate_up_to_swiglu",
+                )?;
+                self.cuda.swiglu_f32_async(
+                    ws.dgate as *const c_void,
+                    ws.dup as *const c_void,
+                    ws.dhid,
+                    rows * hidden_dim,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "swiglu",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Prefill,
+                    CudaStream::Decode,
+                    "batch_swiglu_to_mlp_down",
+                )?;
+                self.mlp_down_proj_f32xf16_gguf_f32_async(
+                    ws.dhid as *const c_void,
+                    rows as i32,
+                    hidden_dim as i32,
+                    w_down_ptr,
+                    d_model as i32,
+                    ws.dy_mlp,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "mlp_down",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                let profile_before = profile::snapshot_if_enabled();
+                let op_start = std::time::Instant::now();
+                self.cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Prefill,
+                    "batch_mlp_down_to_mlp_residual",
+                )?;
+                self.cuda.residual_add_f32_async(
+                    ws.d_x1 as *const c_void,
+                    ws.dy_mlp as *const c_void,
+                    ws.scratch_b,
+                    rows * d_model,
+                )?;
+                log_profiled_op(
+                    &label,
+                    "mlp_residual",
+                    profile_before.as_ref(),
+                    op_start.elapsed(),
+                );
+
+                for (row, item) in items.iter().enumerate() {
+                    let src = unsafe { const_byte_offset(ws.scratch_b, row * bytes_d) };
+                    unsafe {
+                        self.cuda.memcpy_d2d_async(
+                            item.d_out_f32,
+                            src,
+                            bytes_d,
+                            CudaStream::Decode,
+                        )?;
+                    }
+                    if layer + 1 != layer_count {
+                        unsafe {
+                            self.cuda.memcpy_d2d_async(
+                                item.d_x_f32,
+                                src,
+                                bytes_d,
+                                CudaStream::Decode,
+                            )?;
+                        }
+                    }
+                }
+            }
+            Ok(layer_count)
+        })
     }
 
     /// Runs one token through every transformer layer using device-resident

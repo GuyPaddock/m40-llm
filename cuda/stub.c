@@ -37,6 +37,9 @@ int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_
 int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
     (void)ctx; (void)dst_host; (void)src_device; (void)bytes; return -1;
 }
+int m40llm_memcpy_d2d_async(M40llmCudaContext* ctx, void* dst_device, const void* src_device, size_t bytes, uint32_t stream_kind) {
+    (void)ctx; (void)dst_device; (void)src_device; (void)bytes; (void)stream_kind; return -1;
+}
 int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
     (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
 }

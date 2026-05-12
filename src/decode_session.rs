@@ -153,6 +153,80 @@ impl DecodeSession {
         unsafe { &*self.model }
     }
 
+    pub fn processed_len(&self) -> usize {
+        self.processed_len
+    }
+
+    pub fn sequence_id(&self) -> u32 {
+        self.sequence_id
+    }
+
+    pub fn can_forward(&self) -> bool {
+        self.can_forward
+    }
+
+    pub fn forward_batch_item(&self, seq_len: u32) -> Result<crate::infer::ForwardBatchItem> {
+        let d_out = self
+            .d_out
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))?;
+        Ok(crate::infer::ForwardBatchItem {
+            d_x_f32: self.d_x.as_mut_ptr(),
+            sequence_id: self.sequence_id,
+            seq_len,
+            d_out_f32: d_out.as_mut_ptr(),
+        })
+    }
+
+    pub unsafe fn load_next_unprocessed_token(&mut self, ids: &[u32]) -> Result<Option<usize>> {
+        if self.processed_len > ids.len() {
+            self.processed_len = 0;
+            if self.model().kv_cache.is_some() {
+                self.model().reset_kv_cache()?;
+            }
+        }
+        if self.processed_len >= ids.len() {
+            return Ok(None);
+        }
+        let token_idx = self.processed_len;
+        let tok_id = ids[token_idx] as u64;
+        let embed_start = std::time::Instant::now();
+        (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        timing::timing_log!(
+            embed_start.elapsed(),
+            "{}.token.{token_idx}.embedding_load",
+            self.log_prefix
+        );
+        Ok(Some(token_idx))
+    }
+
+    pub unsafe fn logits_after_batched_forward(&mut self, token_idx: usize) -> Result<Vec<f32>> {
+        let d_out = self
+            .d_out
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))?
+            .as_mut_ptr();
+        let logits_start = std::time::Instant::now();
+        let logits = match self.d_logits.as_ref() {
+            Some(d_logits) => (*self.model).logits_from_hidden_into(
+                d_out as *const _,
+                d_logits.as_mut_ptr(),
+                self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+            ),
+            None => (*self.model).logits_from_hidden(d_out as *const _),
+        };
+        timing::timing_log!(
+            logits_start.elapsed(),
+            "{}.token.{token_idx}.logits",
+            self.log_prefix
+        );
+        logits
+    }
+
+    pub fn mark_processed_through(&mut self, processed_len: usize) {
+        self.processed_len = processed_len;
+    }
+
     pub fn logits_for_ids(
         &mut self,
         ids: &[u32],

@@ -59,6 +59,13 @@ mod ffi {
             src_device: *const c_void,
             bytes: usize,
         ) -> i32;
+        pub fn m40llm_memcpy_d2d_async(
+            ctx: *mut M40llmCudaContext,
+            dst_device: *mut c_void,
+            src_device: *const c_void,
+            bytes: usize,
+            stream_kind: u32,
+        ) -> i32;
 
         pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
 
@@ -1013,6 +1020,32 @@ impl CudaContext {
             return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
         }
         crate::profile::record_d2h_copy("memcpy_d2h", bytes);
+        Ok(())
+    }
+
+    /// # Safety
+    /// `dst_device` and `src_device` must be valid device pointers to at least
+    /// `bytes` bytes on this context's device. Regions must not overlap.
+    pub unsafe fn memcpy_d2d_async(
+        &self,
+        dst_device: *mut c_void,
+        src_device: *const c_void,
+        bytes: usize,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_memcpy_d2d_async(
+                self.inner.raw.as_ptr(),
+                dst_device,
+                src_device,
+                bytes,
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_memcpy_d2d_async failed: {rc}"));
+        }
         Ok(())
     }
 

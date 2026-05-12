@@ -76,8 +76,8 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `KV[layer][sequence]` onto sequence-major physical slots, and the server has a
   small decode sequence lease pool. With `M40LLM_SERVER_BATCH_DECODE=1`,
   `/generate` requests lease per-request KV sequence slots and skip whole-cache
-  resets, but request execution remains serialized until per-session CUDA
-  streams/workspaces or fused batched decode scheduling are ready. Materialized
+  resets; buffered scheduler ticks can now use the packed batched GQA decode
+  attention path for head_dim=64 models. Materialized
   FP32 cuBLAS projection calls now have async enqueue wrappers, and full-layer
   decode uses those wrappers with explicit stream waits; steady TinyLlama
   profiling shows projection groups issue 154 cuBLAS calls with zero stream
@@ -109,15 +109,21 @@ batched decode path before touching persistent decode or large-model fused-dequa
   builds `DecodeBatchPlan` snapshots for active mixed-length requests. The
   scheduler keeps the server generation lock around each CUDA token step to
   protect shared workspace use across scheduler and streaming paths. The
-  scheduler now steps all active requests every scheduler tick, while each request
-  still executes its own full CUDA forward path; fused batched layer execution
-  remains pending. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
+  scheduler now steps all active requests every scheduler tick and can execute
+  row-batched full-layer decode with packed GQA attention for compatible
+  head64 models. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
   now synchronizes graph replay immediately after launch and reports CUDA-event
   GPU elapsed time; this showed the graph replay itself is slow, while
-  logits/output-norm was previously absorbing graph completion time.
-- Next: replace the scheduler's per-request attention step with the existing
-  packed batched GQA decode attention primitive, while preserving the queued
-  request/session ownership model.
+  logits/output-norm was previously absorbing graph completion time. The server
+  batch scheduler now has an opt-in batched full-layer decode path for
+  head_dim=64 models: it packs active request rows into the shared forward
+  workspace, runs row-batched projections/MLP, uses the existing packed batched
+  GQA decode attention primitive, and scatters per-request outputs back into
+  `DecodeSession` scratch. It falls back to the prior per-request path when the
+  batch is size 1 or the model cannot use the head64 batched attention kernel.
+- Next: benchmark `M40LLM_SERVER_BATCH_DECODE=1` on TinyLlama with concurrent
+  buffered requests and then integrate packed varlen prefill only after batched
+  decode correctness/perf are characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

@@ -112,6 +112,26 @@ extern "C" {
         return 0;
     }
 
+    int m40llm_memcpy_d2d_async(
+        M40llmCudaContext* ctx,
+        void* dst_device,
+        const void* src_device,
+        size_t bytes,
+        uint32_t stream_kind) {
+        if (!ctx || !dst_device || !src_device) return -1;
+        if (ensure_device(ctx) != 0) return -3;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -4;
+        cudaError_t err = cudaMemcpyAsync(
+            dst_device,
+            src_device,
+            bytes,
+            cudaMemcpyDeviceToDevice,
+            stream);
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
     int m40llm_validate_device_ptr(const void* ptr) {
         if (!ptr) return -1;
         cudaPointerAttributes attr;

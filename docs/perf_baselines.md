@@ -873,12 +873,11 @@ Notes:
 
 - `/generate` remains serialized by default. Setting
   `M40LLM_SERVER_BATCH_DECODE=1` enables leased per-request KV sequence slots,
-  but `/generate` remains serialized until per-session CUDA streams/workspaces
-  or full fused batched decode scheduling are ready.
+  and the later server scheduler checkpoint adds packed batched decode attention
+  for compatible buffered requests.
 - Model-level KV ownership supports sequence-major physical slots for
   `KV[layer][sequence]`; multi-request generation can use separate logical
-  sequences, while the server scheduler loop still needs to fuse those requests
-  into one packed batched decode dispatch.
+  sequences.
 - Packed prefill should wait until decode batching has real request/session
   ownership above this scheduler foundation.
 
@@ -1212,10 +1211,7 @@ workspace use across scheduler and streaming paths.
 
 Current boundary:
 
-- The scheduler still executes one request's full CUDA forward at a time.
-- The existing packed batched GQA decode attention primitive remains validated
-  at the kernel/plan layer, but is not yet substituted into production
-  full-layer forward.
+- Superseded by the packed batched decode attention checkpoint below.
 - Streaming `/generate` remains on the previous serialized path for this slice.
 
 Validation:
@@ -1231,9 +1227,40 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 ```
 
 The CUDA server smoke showed two concurrent buffered requests assigned sequence
-IDs 0 and 1 and stepped alternately by the scheduler. The next scheduler task is
-to replace the per-request attention region with packed batched GQA decode
+IDs 0 and 1 and stepped alternately by the scheduler. The follow-up checkpoint
+below replaces the per-request attention region with packed batched GQA decode
 attention while keeping the same request/session ownership model.
+
+## 2026-05-12: Packed Batched Decode Attention in Server Scheduler
+
+`M40LLM_SERVER_BATCH_DECODE=1` now has a real batched full-layer decode path for
+head_dim=64 models. Each scheduler tick prepares one token per active request,
+packs request hidden rows into a row-aware forward workspace, runs row-batched
+projection and MLP GEMMs, applies per-row RoPE/KV append for mixed positions,
+uses `attention_last_token_f32_gqa_batched_async` for the shared decode
+attention step, and scatters rows back into each request's `DecodeSession`
+scratch before host sampling.
+
+Current boundary:
+
+- Batch size 1 and non-head64 models fall back to the previous per-request path.
+- Buffered `/generate` is covered; streaming `/generate` remains on the
+  serialized path.
+- This is a correctness/scheduler integration checkpoint; TinyLlama concurrency
+  latency measurements are still pending.
+
+Validation:
+
+```bash
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
 
 ## 2026-05-12: Decode Graph Replay Diagnostic Sync
 

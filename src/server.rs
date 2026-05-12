@@ -211,6 +211,13 @@ enum DecodeSchedulerStep {
 }
 
 #[cfg(feature = "cuda")]
+struct PreparedBatchToken {
+    request_id: crate::decode_batch::DecodeRequestId,
+    token_idx: usize,
+    item: crate::infer::ForwardBatchItem,
+}
+
+#[cfg(feature = "cuda")]
 impl DecodeSchedulerRequest {
     fn new(
         state: &AppState,
@@ -310,6 +317,55 @@ impl DecodeSchedulerRequest {
         }
     }
 
+    fn prepare_batch_token(&mut self) -> Result<Option<PreparedBatchToken>> {
+        if self.stopping.should_stop(&self.generated) {
+            return Ok(None);
+        }
+        if !self.session.can_forward() {
+            return Ok(None);
+        }
+        let Some(token_idx) = (unsafe { self.session.load_next_unprocessed_token(&self.ids)? })
+        else {
+            return Ok(None);
+        };
+        let item = self.session.forward_batch_item((token_idx + 1) as u32)?;
+        Ok(Some(PreparedBatchToken {
+            request_id: self.request_id,
+            token_idx,
+            item,
+        }))
+    }
+
+    fn finish_batch_token(&mut self, token_idx: usize) -> Result<DecodeSchedulerStep> {
+        let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
+        log_top_logits(&logits, 8);
+        self.session.mark_processed_through(token_idx + 1);
+        if self.session.processed_len() < self.ids.len() {
+            return Ok(DecodeSchedulerStep::Continue);
+        }
+        if logits.is_empty() {
+            anyhow::bail!("batched logits returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
     fn send_complete(mut self) {
         let result = decode_generated_text(&self.tokenizer, &self.ids, self.prompt_token_len)
             .map(|text| sanitize_output(&text))
@@ -333,6 +389,86 @@ impl DecodeSchedulerRequest {
             .as_ref()
             .map(|respond_to| respond_to.is_closed())
             .unwrap_or(true)
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBatchToken]) -> bool {
+    prepared.len() > 1
+        && state
+            .model
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.head_dim() == 64)
+            .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_batch_tick(
+    state: &AppState,
+    current_requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    let mut requests = current_requests;
+    let mut prepared = Vec::with_capacity(requests.len());
+    let mut fallback = false;
+    for request in &mut requests {
+        match request.prepare_batch_token() {
+            Ok(Some(token)) => prepared.push(token),
+            Ok(None) => fallback = true,
+            Err(err) => {
+                fallback = true;
+                eprintln!(
+                    "[server] scheduler request {} batch preparation failed: {err:#}",
+                    request.request_id
+                );
+                break;
+            }
+        }
+    }
+
+    if fallback || !scheduler_can_use_batched_attention(state, &prepared) {
+        for mut request in requests {
+            match request.step() {
+                Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                Err(err) => request.send_error(err),
+            }
+        }
+        return;
+    }
+
+    let items: Vec<_> = prepared.iter().map(|token| token.item).collect();
+    let forward_result = unsafe {
+        state
+            .model
+            .forward_one_token_all_layers_batched_for_sequences(&items)
+    };
+    if let Err(err) = forward_result {
+        for request in requests {
+            request.send_error(anyhow::anyhow!("batched decode forward failed: {err:#}"));
+        }
+        return;
+    }
+
+    for mut request in requests {
+        let token_idx = prepared
+            .iter()
+            .find(|token| token.request_id == request.request_id)
+            .map(|token| token.token_idx);
+        let Some(token_idx) = token_idx else {
+            let request_id = request.request_id;
+            request.send_error(anyhow::anyhow!(
+                "batched decode missing prepared token for request {}",
+                request_id
+            ));
+            continue;
+        };
+        match request.finish_batch_token(token_idx) {
+            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
     }
 }
 
@@ -376,13 +512,7 @@ async fn decode_scheduler_loop(
             let _generation_guard = state.generation_lock.lock().await;
 
             let current_requests: Vec<DecodeSchedulerRequest> = active.drain(..).collect();
-            for mut request in current_requests {
-                match request.step() {
-                    Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
-                    Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
-                    Err(err) => request.send_error(err),
-                }
-            }
+            process_scheduler_batch_tick(&state, current_requests, &mut active);
         }
 
         tokio::task::yield_now().await;

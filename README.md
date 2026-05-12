@@ -184,8 +184,10 @@ sequence-major as `sequence_id * block_count + layer_id`. Current `/generate`
 requests default to `sequence_id=0`; setting `M40LLM_SERVER_BATCH_DECODE=1`
 allocates two logical sequence slots by default, or
 `M40LLM_SERVER_BATCH_DECODE_SLOTS=N` when provided, and leases one slot per
-request. `/generate` remains serialized until per-session CUDA streams/workspaces
-or fused batched decode scheduling are ready.
+request. Buffered `/generate` requests then route through a queued scheduler
+that can run head_dim=64 active requests through the packed batched GQA decode
+attention path while preserving the shared workspace generation lock. Streaming
+`/generate` remains on the previous serialized path for now.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

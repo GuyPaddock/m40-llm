@@ -20,4 +20,6 @@ pub use batch::{
     BatchMetadata, BatchSequence, BucketStats, BucketedBatch, LengthBucket, PackedSequenceOffsets,
     VarlenPrefillTile, VarlenPrefillTileSelection,
 };
+#[cfg(feature = "cuda")]
+pub use forward::ForwardBatchItem;
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

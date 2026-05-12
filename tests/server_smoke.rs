@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use m40_llm::infer::LoadedModel;
+use m40_llm::profile;
 use m40_llm::server::{
     app_router, AppState, GenerateRequest, GenerateResponse, GenerateStreamChunk,
 };
@@ -40,6 +41,7 @@ fn server_smoke_model() -> (m40_llm::gguf::GgufModel, Vec<u8>) {
     tiny_gguf::make_identity_tiny_gguf(tiny_gguf::TinyGgufConfig {
         vocab: 128,
         d_model: 128,
+        head_count: 2,
         ..Default::default()
     })
 }
@@ -51,6 +53,7 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
         return Ok(());
     }
     let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    profile::reset();
     let (gguf, bytes) = server_smoke_model();
 
     let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
@@ -85,6 +88,16 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
     assert!(!out_a.output.is_empty());
     assert!(!out_b.output.is_empty());
+    let snapshot = profile::snapshot();
+    let batched_attention_launches = snapshot
+        .by_op
+        .get("attention_last_token_f32_gqa_batched")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_attention_launches >= 1,
+        "server batch scheduler should use packed GQA decode attention"
+    );
     server.shutdown().await?;
     Ok(())
 }
