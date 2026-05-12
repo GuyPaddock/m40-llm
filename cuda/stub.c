@@ -119,6 +119,9 @@ int m40llm_rope_f32_inplace(M40llmCudaContext* ctx, void* d_x, uint32_t rows, ui
 int m40llm_rope_f32_inplace_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_rope_f32_inplace_position_dev_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, const uint32_t* past_len_dev, float freq_base, float freq_scale) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len_dev; (void)freq_base; (void)freq_scale; return -1;
+}
 
 int m40llm_residual_add_f32(M40llmCudaContext* ctx, const void* d_a, const void* d_b, void* d_out, size_t n) {
     (void)ctx; (void)d_a; (void)d_b; (void)d_out; (void)n; return -1;
@@ -196,6 +199,16 @@ int m40llm_attention_last_token_f32_gqa_async(
     uint32_t seq_len,
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
+}
+int m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    const uint32_t* seq_len_dev,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len_dev; (void)out_dev_f32; return -1;
 }
 
 int m40llm_attention_last_token_f32_gqa_batched(

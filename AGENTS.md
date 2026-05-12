@@ -92,6 +92,9 @@ complete.
   return wait back to decode-stream elementwise work. A production one-layer
   graph smoke now captures a warmed `forward_one_token_with_layer` call using
   real model/workspace pointers, KV append, attention, and projection wrappers.
+  Graph-compatible device-parameter wrappers now cover Q RoPE position and GQA
+  attention sequence length, complementing the existing device-position KV
+  append API.
 - Next: decide how to cache and launch one-layer graphs in `DecodeSession`, then
   expand toward full-token graph coverage if graph launch overhead and pointer
   stability remain favorable.

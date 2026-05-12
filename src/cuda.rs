@@ -193,6 +193,16 @@ mod ffi {
             freq_base: f32,
             freq_scale: f32,
         ) -> i32;
+        pub fn m40llm_rope_f32_inplace_position_dev_async(
+            ctx: *mut M40llmCudaContext,
+            d_x: *mut c_void,
+            rows: u32,
+            num_heads: u32,
+            head_dim: u32,
+            past_len_dev: *const u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
         pub fn m40llm_residual_add_f32_async(
             ctx: *mut M40llmCudaContext,
             d_a_f32: *const c_void,
@@ -285,6 +295,15 @@ mod ffi {
             d_q_f32: *const c_void,
             q_heads: u32,
             seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            d_seq_len: *const u32,
             d_out_f32: *mut c_void,
         ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_batched(
@@ -1815,6 +1834,55 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// Enqueues in-place RoPE on the decode stream using a device-resident
+    /// `past_len` parameter. Callers must synchronize before reusing `d_x`.
+    pub unsafe fn rope_f32_inplace_position_dev_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rope_f32_inplace_position_dev_async(
+                self.inner.raw.as_ptr(),
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_rope_f32_inplace_position_dev_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("rope_f32_inplace_position_dev");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_a`, `d_b`, and `d_out` must be valid device pointers to `n` f32 elements.
     pub unsafe fn residual_add_f32(
         &self,
@@ -2515,6 +2583,41 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues GQA last-token attention on the decode stream using a
+    /// device-resident `seq_len` parameter. The initial implementation uses the
+    /// generic attention kernel so graph replay can vary sequence length without
+    /// host-updated kernel parameters.
+    pub unsafe fn attention_last_token_f32_gqa_seq_len_dev_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_seq_len: *const u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                d_seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_seq_len_dev_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
         Ok(())
     }
 

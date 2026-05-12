@@ -136,8 +136,15 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
     let d_q = ctx.device_malloc(bytes_f32)?;
     let d_out = ctx.device_malloc(bytes_f32)?;
     let d_out_async = ctx.device_malloc(bytes_f32)?;
+    let d_out_seq_len_dev = ctx.device_malloc(bytes_f32)?;
+    let d_seq_len = ctx.device_malloc(std::mem::size_of::<u32>())?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_f32)?;
+        ctx.memcpy_h2d(
+            d_seq_len,
+            &seq_len as *const u32 as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
         kv.attention_last_token_f32(&ctx, seq_id, d_q as *const c_void, seq_len, d_out)?;
         kv.attention_last_token_f32_gqa_async(
             &ctx,
@@ -147,10 +154,19 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
             seq_len,
             d_out_async,
         )?;
+        kv.attention_last_token_f32_gqa_seq_len_dev_async(
+            &ctx,
+            seq_id,
+            d_q as *const c_void,
+            num_heads,
+            d_seq_len as *const u32,
+            d_out_seq_len_dev,
+        )?;
         ctx.synchronize_stream(CudaStream::Decode)?;
     }
     let mut out_gpu = vec![0f32; dim];
     let mut out_gpu_async = vec![0f32; dim];
+    let mut out_gpu_seq_len_dev = vec![0f32; dim];
     unsafe {
         ctx.memcpy_d2h(
             out_gpu.as_mut_ptr() as *mut c_void,
@@ -160,6 +176,11 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
         ctx.memcpy_d2h(
             out_gpu_async.as_mut_ptr() as *mut c_void,
             d_out_async as *const c_void,
+            bytes_f32,
+        )?;
+        ctx.memcpy_d2h(
+            out_gpu_seq_len_dev.as_mut_ptr() as *mut c_void,
+            d_out_seq_len_dev as *const c_void,
             bytes_f32,
         )?;
     }
@@ -193,12 +214,21 @@ fn attention_last_token_matches_cpu_ref() -> Result<()> {
             out_gpu_async[i],
             b
         );
+        assert!(
+            (out_gpu_seq_len_dev[i] - b).abs() < 1e-6,
+            "device-seq-len GQA mismatch at {}: dev={} sync={}",
+            i,
+            out_gpu_seq_len_dev[i],
+            b
+        );
     }
 
     unsafe {
         ctx.device_free(d_q)?;
         ctx.device_free(d_out)?;
         ctx.device_free(d_out_async)?;
+        ctx.device_free(d_out_seq_len_dev)?;
+        ctx.device_free(d_seq_len)?;
     }
     Ok(())
 }

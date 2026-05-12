@@ -572,6 +572,14 @@ int m40llm_attention_last_token_f32_gqa_async(
         uint32_t q_heads,
         uint32_t seq_len,
         void* out_dev_f32);
+int m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        const uint32_t* seq_len_dev,
+        void* out_dev_f32);
 int m40llm_kvcache_append_token_f32_async(
         M40llmCudaContext* ctx,
         M40llmKVCache* kv,
@@ -623,6 +631,15 @@ int m40llm_rope_f32_inplace_async(
         uint32_t num_heads,
         uint32_t head_dim,
         uint32_t past_len,
+        float freq_base,
+        float freq_scale);
+int m40llm_rope_f32_inplace_position_dev_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
         float freq_base,
         float freq_scale);
 
@@ -969,6 +986,71 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float* __restrict__ Q,
         uint32_t seq_len,
         float* __restrict__ Out) {
+        const uint32_t qh_idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score = -1e30f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < head_dim; ++d) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            const float score = dot * inv_sqrt;
+            if (score > max_score) max_score = score;
+        }
+
+        float denom = 0.0f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < head_dim; ++d) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            denom += expf(dot * inv_sqrt - max_score);
+        }
+        denom = denom > 0.f ? denom : 1.f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = 0; d < head_dim; ++d) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                float dot = 0.0f;
+                for (uint32_t dd = 0; dd < head_dim; ++dd) {
+                    dot += qh[dd] * __half2float(K[base + dd]);
+                }
+                const float p = expf(dot * inv_sqrt - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_seq_len_dev_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t head_dim,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        const uint32_t* __restrict__ seq_len_dev,
+        float* __restrict__ Out) {
+        if (!seq_len_dev) return;
+        const uint32_t seq_len = *seq_len_dev;
+        if (seq_len == 0 || seq_len > max_seq_len) return;
+
         const uint32_t qh_idx = blockIdx.x * blockDim.x + threadIdx.x;
         if (qh_idx >= q_heads) return;
 
@@ -1545,6 +1627,32 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 reinterpret_cast<float*>(out_dev_f32)
             );
         }
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        const uint32_t* seq_len_dev,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !seq_len_dev || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -3;
+
+        const int blocks = (int)q_heads;
+        const int threads = 1;
+        attention_last_token_gqa_seq_len_dev_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->max_seq_len, q_heads, kv->num_heads, kv->head_dim, seq_id,
+            reinterpret_cast<const float*>(q_dev_f32), seq_len_dev,
+            reinterpret_cast<float*>(out_dev_f32)
+        );
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
         return 0;
@@ -2696,6 +2804,38 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         x[base + 1] = x0 * s + x1 * c;
     }
 
+    __global__ void rope_f32_inplace_position_dev_kernel(
+        float* __restrict__ x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* __restrict__ past_len_dev,
+        float freq_base,
+        float freq_scale) {
+        if (!past_len_dev) return;
+        const uint32_t past_len = *past_len_dev;
+        const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        if (pair_idx >= total_pairs) return;
+
+        const uint32_t row = pair_idx / pairs_per_row;
+        const uint32_t pair_in_row = pair_idx % pairs_per_row;
+        const uint32_t head = pair_in_row / (head_dim / 2);
+        const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
+        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        const float pos = static_cast<float>(past_len + row) * freq_scale;
+        const float theta = pos * powf(
+            freq_base,
+            -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+        const float c = cosf(theta);
+        const float s = sinf(theta);
+        const float x0 = x[base];
+        const float x1 = x[base + 1];
+        x[base] = x0 * c - x1 * s;
+        x[base + 1] = x0 * s + x1 * c;
+    }
+
     int m40llm_rope_f32(
         M40llmCudaContext* ctx,
         float* q,
@@ -2769,6 +2909,28 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_inplace_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
             x, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
+    int m40llm_rope_f32_inplace_position_dev_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
+        float freq_base,
+        float freq_scale) {
+        if (!ctx || !x || !past_len_dev || head_dim == 0 || num_heads == 0) return -1;
+        if (head_dim % 2 != 0) return -2;
+        const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
+        const uint32_t total_pairs = rows * pairs_per_row;
+        const int threads_per_block = 256;
+        const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
+        rope_f32_inplace_position_dev_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
+            x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;

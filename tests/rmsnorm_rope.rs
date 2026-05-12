@@ -411,10 +411,18 @@ fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
     let d_q = ctx.device_malloc(rope_bytes)?;
     let d_k = ctx.device_malloc(rope_bytes)?;
     let d_x = ctx.device_malloc(rope_bytes)?;
+    let d_x_position_dev = ctx.device_malloc(rope_bytes)?;
+    let d_past_len = ctx.device_malloc(std::mem::size_of::<u32>())?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, rope_bytes)?;
         ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, rope_bytes)?;
         ctx.memcpy_h2d(d_x, q.as_ptr() as *const c_void, rope_bytes)?;
+        ctx.memcpy_h2d(d_x_position_dev, q.as_ptr() as *const c_void, rope_bytes)?;
+        ctx.memcpy_h2d(
+            d_past_len,
+            &(past_len as u32) as *const u32 as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
         ctx.rope_f32_async(
             d_q,
             d_k,
@@ -434,13 +442,28 @@ fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
             freq_base,
             freq_scale,
         )?;
+        ctx.rope_f32_inplace_position_dev_async(
+            d_x_position_dev,
+            rope_rows as u32,
+            num_heads as u32,
+            head_dim as u32,
+            d_past_len as *const u32,
+            freq_base,
+            freq_scale,
+        )?;
         ctx.synchronize_stream(CudaStream::Decode)?;
         let mut q_bytes = vec![0u8; rope_bytes];
         let mut k_bytes = vec![0u8; rope_bytes];
         let mut x_bytes = vec![0u8; rope_bytes];
+        let mut x_position_dev_bytes = vec![0u8; rope_bytes];
         ctx.memcpy_d2h(q_bytes.as_mut_ptr() as *mut c_void, d_q, rope_bytes)?;
         ctx.memcpy_d2h(k_bytes.as_mut_ptr() as *mut c_void, d_k, rope_bytes)?;
         ctx.memcpy_d2h(x_bytes.as_mut_ptr() as *mut c_void, d_x, rope_bytes)?;
+        ctx.memcpy_d2h(
+            x_position_dev_bytes.as_mut_ptr() as *mut c_void,
+            d_x_position_dev,
+            rope_bytes,
+        )?;
         let actual_q: Vec<f32> = q_bytes
             .chunks_exact(4)
             .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
@@ -450,6 +473,10 @@ fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
             .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
             .collect();
         let actual_x: Vec<f32> = x_bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect();
+        let actual_x_position_dev: Vec<f32> = x_position_dev_bytes
             .chunks_exact(4)
             .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
             .collect();
@@ -471,6 +498,12 @@ fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
                 "async rope inplace mismatch at {i}: got {got}, expected {want}"
             );
         }
+        for (i, (got, want)) in actual_x_position_dev.iter().zip(&expected_q).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "device-position async rope inplace mismatch at {i}: got {got}, expected {want}"
+            );
+        }
 
         ctx.device_free(d_in)?;
         ctx.device_free(d_weight)?;
@@ -479,6 +512,8 @@ fn async_norm_and_rope_wrappers_match_cpu() -> Result<()> {
         ctx.device_free(d_q)?;
         ctx.device_free(d_k)?;
         ctx.device_free(d_x)?;
+        ctx.device_free(d_x_position_dev)?;
+        ctx.device_free(d_past_len)?;
     }
     Ok(())
 }

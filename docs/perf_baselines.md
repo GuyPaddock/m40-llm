@@ -1010,3 +1010,30 @@ Notes:
   captured and replayed. The next step is deciding how to cache and launch this
   in production sessions, then expanding from one layer toward full-token graph
   coverage.
+
+## 2026-05-12: Device-Parameter Graph Wrappers
+
+This checkpoint adds graph-compatible wrappers for per-token values that need to
+vary between graph launches:
+
+- Q RoPE can read `past_len` from a device `u32`.
+- GQA last-token attention can read `seq_len` from a device `u32`.
+- KV append already has a device-position variant from the prior checkpoint.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test rmsnorm_rope -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_last_token -- --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- Device-seq-len attention intentionally starts with the generic GQA kernel.
+  This keeps graph replay correctness simple; a tuned head64 device-parameter
+  kernel can be added after graph-mode performance is measured.
