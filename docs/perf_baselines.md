@@ -1273,3 +1273,66 @@ Interpretation:
 - Keep `M40LLM_DECODE_GRAPH=1` experimental and off by default.
 - Do not expand graph coverage until graph replay performance is understood;
   move the main strict plan forward to packed varlen decode scheduling.
+
+## 2026-05-12: Attention Bench Rebaseline (Latest Run)
+
+Command:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench attention -- --sample-size 10
+```
+
+Observations:
+
+- Full benchmark set completed successfully on Tesla M40.
+- The first few `attention_last_token_f32_gqa` cases showed unusually large variance;
+  this run is still useful for relative packed-batched comparisons, but individual
+  single-case absolute values for very short sequence lengths should be re-run in a
+  standalone bench if absolute confidence is required.
+
+### Last-token attention
+
+| Case | Throughput (ns) | Notes |
+| --- | ---: | --- |
+| `s1` | 2.6589 ms (baseline) | includes no `ldg` |
+| `s1_ldg_kv` | 1.2593 ms (median) | high variance |
+| `s16` | 1.9324 ms | no `ldg` |
+| `s16_ldg_kv` | 623.92 µs (median) | high variance |
+| `s128` | 3.4103 ms | no `ldg` |
+| `s128_ldg_kv` | 3.0305 ms | slight improvement vs no-ldg |
+| `s512` | 3.7727 ms | no `ldg` |
+| `s512_ldg_kv` | 1.2235 ms (median) | best path here |
+| `s1024` | 2.230 ms | no `ldg` |
+| `s1024_ldg_kv` | 2.2322 ms | similar |
+
+### Batched last-token decode attention (`attention_last_token_f32_gqa_batched_varlen`)
+
+All times are median reported by Criterion.
+
+| Distribution | Baseline (individual) | Packed batched | `ldg_kv` packed | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `avg_0p6_max` | 4.594 ms | 1.584 ms | 1.585 ms | 2.9x |
+| `skewed` | 2.822 ms | 2.122 ms | 2.120 ms | 1.3x |
+| `near_uniform` | 8.601 ms | 2.445 ms | 2.444 ms | 3.5x |
+
+### Prefill attention (`attention_prefill_f32_gqa_varlen`)
+
+Times are median over 10 samples for each case.
+
+| Distribution | Padded max | Packed varlen | Bucketed varlen | Best |
+| --- | ---: | ---: | ---: | --- |
+| `avg_0p6_max` | 297.29 ms | 178.34 ms | 179.08 ms | Packed 1.67x |
+| `skewed` | 526.91 ms | 141.66 ms | 142.05 ms | Packed 3.72x |
+| `near_uniform` | 527.27 ms | 474.53 ms | 474.59 ms | Packed 1.11x |
+| `prefix_query` | 123.97 ms | 50.61 ms | 51.35 ms | Packed 2.45x |
+
+Key interpretation:
+
+- Padded-varlen prefill remains the baseline; packed/bucketed variants materially
+  improve throughput on mixed and skewed workloads.
+- For near-uniform sequences, packed varlen narrows toward padded behavior, as
+  expected.
+- `ldg_kv` is now only used in last-token batched decode and provides no strong
+  win or loss relative to default in this run.
