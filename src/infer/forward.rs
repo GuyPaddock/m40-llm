@@ -34,17 +34,32 @@ impl LoadedModel {
         hidden_dim: usize,
         f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
     ) -> Result<R> {
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, 1, f)
+    }
+
+    #[cfg(feature = "cuda")]
+    fn with_forward_workspace_for_rows<R>(
+        &self,
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        rows: usize,
+        f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
+    ) -> Result<R> {
+        if rows == 0 {
+            anyhow::bail!("forward workspace row count must be positive");
+        }
         let mut guard = self.forward_workspace.lock().unwrap();
         if !guard
             .as_ref()
-            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim))
+            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim, rows))
             .unwrap_or(false)
         {
             if let Some(old) = guard.take() {
                 old.free(&self.cuda);
             }
-            *guard = Some(super::workspace::ForwardWorkspace::new(
-                &self.cuda, d_model, kv_dim, hidden_dim,
+            *guard = Some(super::workspace::ForwardWorkspace::new_with_rows(
+                &self.cuda, d_model, kv_dim, hidden_dim, rows,
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();

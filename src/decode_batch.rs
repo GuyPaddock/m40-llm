@@ -292,7 +292,7 @@ pub fn server_batch_decode_requested() -> bool {
 
 #[cfg(feature = "server")]
 pub fn server_batch_decode_status() -> &'static str {
-    "M40LLM_SERVER_BATCH_DECODE=1 requested; buffered /generate uses a queued decode scheduler with leased KV sequence slots, while fused batched layer execution remains pending"
+    "M40LLM_SERVER_BATCH_DECODE=1 requested; buffered /generate uses a queued decode scheduler with leased KV sequence slots, stepping all active requests each tick"
 }
 
 #[cfg(feature = "server")]

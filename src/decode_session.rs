@@ -252,6 +252,13 @@ impl DecodeSession {
                 self.logged_full_forward = true;
             }
             let logits_start = std::time::Instant::now();
+            if self.last_forward_used_graph {
+                self.model().cuda.stream_wait_for_stream(
+                    CudaStream::Prefill,
+                    CudaStream::Decode,
+                    "logits_wait_graph_replay",
+                )?;
+            }
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(
                     d_out as *const _,

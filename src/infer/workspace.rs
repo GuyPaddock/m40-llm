@@ -7,6 +7,7 @@ pub struct ForwardWorkspace {
     d_model: usize,
     kv_dim: usize,
     hidden_dim: usize,
+    rows: usize,
     dq: DeviceBuffer,
     dk: DeviceBuffer,
     dv: DeviceBuffer,
@@ -21,10 +22,13 @@ pub struct ForwardWorkspace {
     d_x1n: DeviceBuffer,
     scratch_a: DeviceBuffer,
     scratch_b: DeviceBuffer,
+    d_attention_seq_ids: DeviceBuffer,
+    d_attention_seq_lens: DeviceBuffer,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct ForwardWorkspacePtrs {
+    pub rows: usize,
     pub dq: *mut c_void,
     pub dk: *mut c_void,
     pub dv: *mut c_void,
@@ -39,6 +43,8 @@ pub struct ForwardWorkspacePtrs {
     pub d_x1n: *mut c_void,
     pub scratch_a: *mut c_void,
     pub scratch_b: *mut c_void,
+    pub d_attention_seq_ids: *mut c_void,
+    pub d_attention_seq_lens: *mut c_void,
 }
 
 impl ForwardWorkspace {
@@ -48,26 +54,50 @@ impl ForwardWorkspace {
         kv_dim: usize,
         hidden_dim: usize,
     ) -> Result<Self> {
+        Self::new_with_rows(ctx, d_model, kv_dim, hidden_dim, 1)
+    }
+
+    pub fn new_with_rows(
+        ctx: &CudaContext,
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        rows: usize,
+    ) -> Result<Self> {
         if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
             anyhow::bail!(
                 "ForwardWorkspace: invalid dims d_model={d_model} kv_dim={kv_dim} hidden_dim={hidden_dim}"
             );
         }
+        if rows == 0 {
+            anyhow::bail!("ForwardWorkspace: rows must be greater than zero");
+        }
 
+        let rows_u = rows;
         let bytes_d = d_model
+            .checked_mul(rows_u)
+            .context("workspace d_model bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace d_model bytes overflow")?;
         let bytes_kv = kv_dim
+            .checked_mul(rows_u)
+            .context("workspace kv bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace kv bytes overflow")?;
         let bytes_h = hidden_dim
+            .checked_mul(rows_u)
+            .context("workspace hidden bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace hidden bytes overflow")?;
+        let bytes_attention_meta = rows_u
+            .checked_mul(std::mem::size_of::<u32>())
+            .context("workspace attention metadata bytes overflow")?;
 
         Ok(Self {
             d_model,
             kv_dim,
             hidden_dim,
+            rows,
             dq: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dq_f32")?,
             dk: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dk_f32")?,
             dv: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dv_f32")?,
@@ -82,15 +112,33 @@ impl ForwardWorkspace {
             d_x1n: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:d_x1n_f32")?,
             scratch_a: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd_all:scratch_a_f32")?,
             scratch_b: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd_all:scratch_b_f32")?,
+            d_attention_seq_ids: DeviceBuffer::new_tagged(
+                ctx,
+                bytes_attention_meta,
+                "fwd:batch_attention_seq_ids",
+            )?,
+            d_attention_seq_lens: DeviceBuffer::new_tagged(
+                ctx,
+                bytes_attention_meta,
+                "fwd:batch_attention_seq_lens",
+            )?,
         })
     }
 
-    pub fn matches(&self, d_model: usize, kv_dim: usize, hidden_dim: usize) -> bool {
-        self.d_model == d_model && self.kv_dim == kv_dim && self.hidden_dim == hidden_dim
+    pub fn matches(&self, d_model: usize, kv_dim: usize, hidden_dim: usize, rows: usize) -> bool {
+        self.d_model == d_model
+            && self.kv_dim == kv_dim
+            && self.hidden_dim == hidden_dim
+            && self.rows == rows
+    }
+
+    pub fn rows(&self) -> usize {
+        self.rows
     }
 
     pub fn ptrs(&self) -> ForwardWorkspacePtrs {
         ForwardWorkspacePtrs {
+            rows: self.rows,
             dq: self.dq.as_mut_ptr(),
             dk: self.dk.as_mut_ptr(),
             dv: self.dv.as_mut_ptr(),
@@ -105,6 +153,8 @@ impl ForwardWorkspace {
             d_x1n: self.d_x1n.as_mut_ptr(),
             scratch_a: self.scratch_a.as_mut_ptr(),
             scratch_b: self.scratch_b.as_mut_ptr(),
+            d_attention_seq_ids: self.d_attention_seq_ids.as_mut_ptr(),
+            d_attention_seq_lens: self.d_attention_seq_lens.as_mut_ptr(),
         }
     }
 

@@ -32,11 +32,10 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
   - Forward smoke: `tests/forward_with_layer_smoke.rs`.
 
 ## Active Performance Plan
-The current plan prioritizes measurement and ownership before deeper scheduling work.
-Do not integrate packed varlen attention into the server scheduler, expand persistent
-decode, or start large-model fused-dequant kernels until the prerequisite
-measurement, request/session ownership, RAII allocation, and KV addressing tasks are
-complete.
+The current plan still prioritizes measurement, ownership, and correctness before deeper scheduling and backend expansion.
+Packed varlen attention integration is now moving into scheduler execution after request/session
+ownership and KV addressing are established; larger experiments should wait for a validated
+batched decode path before touching persistent decode or large-model fused-dequant.
 
 ## Selecting Work
 - **Task selection rule:** use the strict reconciled task order below. The historical
@@ -110,8 +109,9 @@ complete.
   builds `DecodeBatchPlan` snapshots for active mixed-length requests. The
   scheduler keeps the server generation lock around each CUDA token step to
   protect shared workspace use across scheduler and streaming paths. The
-  scheduler still executes one request's full CUDA forward at a time; fused
-  batched layer execution remains pending. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
+  scheduler now steps all active requests every scheduler tick, while each request
+  still executes its own full CUDA forward path; fused batched layer execution
+  remains pending. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
   now synchronizes graph replay immediately after launch and reports CUDA-event
   GPU elapsed time; this showed the graph replay itself is slow, while
   logits/output-norm was previously absorbing graph completion time.
