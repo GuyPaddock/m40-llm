@@ -99,10 +99,15 @@ complete.
   The async materialized-GEMM path briefly regressed generation by letting
   SwiGLU read MLP gate/up outputs before the prefill-stream cuBLAS work
   completed; `mlp_gate_up_to_swiglu` now restores the decode-stream wait, and a
-  TinyLlama token canary covers the reported prompt.
-- Next: benchmark opt-in full-token graph decode against the normal async path,
-  then decide whether to keep expanding graph support or move to packed varlen
-  decode scheduling.
+  TinyLlama token canary covers the reported prompt. Full-token graph replay was
+  benchmarked against the normal async path across three TinyLlama trials:
+  graph replay reduces host-side `forward_all_layers` enqueue time, but
+  end-to-end steady token latency regresses because logits/output-norm absorbs
+  much larger GPU completion time. Keep `M40LLM_DECODE_GRAPH=1` experimental and
+  off by default.
+- Next: do not expand production graph coverage yet. Either investigate graph
+  replay stream completion/accounting against logits, or move the strict plan
+  forward to packed varlen decode scheduling.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

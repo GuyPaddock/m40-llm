@@ -1163,3 +1163,39 @@ Next graph work should benchmark `M40LLM_DECODE_GRAPH=1` versus the normal async
 path for steady TinyLlama decode. If graph replay does not materially reduce
 latency, move the strict plan forward to packed varlen decode scheduling instead
 of adding more graph complexity.
+
+## 2026-05-12: Full-Token Decode Graph Benchmark
+
+Benchmark command, run three times for each graph setting on Tesla M40:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TIMING_LOG=1 \
+  M40LLM_DECODE_GRAPH={0,1} cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 4 --top-k 1 --require-sm52
+```
+
+Both modes generated the expected text:
+
+```text
+, World!
+```
+
+Median timing across steady tokens 2-4 and three trials:
+
+| Mode | `forward_all_layers` | `logits` | token total | `generate_text_total` |
+| --- | ---: | ---: | ---: | ---: |
+| `M40LLM_DECODE_GRAPH=0` | 8.386 ms | 21.295 ms | 29.833 ms | 744.079 ms |
+| `M40LLM_DECODE_GRAPH=1` | 0.095 ms | 713.868 ms | 714.058 ms | 3341.133 ms |
+
+Interpretation:
+
+- Graph replay greatly reduces host-side `forward_all_layers` enqueue time, which
+  confirms the graph launches rather than re-enqueueing every layer operation.
+- End-to-end token latency regresses by roughly 24x for steady tokens because
+  the following logits/output-norm region absorbs much larger GPU completion
+  time.
+- Keep `M40LLM_DECODE_GRAPH=1` experimental and off by default.
+- Do not expand graph coverage yet. Either investigate graph replay stream
+  completion/accounting against logits, or move the strict plan forward to real
+  packed varlen decode scheduling.
