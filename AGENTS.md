@@ -82,10 +82,13 @@ complete.
   FP32 cuBLAS projection calls now have async enqueue wrappers, and full-layer
   decode uses those wrappers with explicit stream waits; steady TinyLlama
   profiling shows projection groups issue 154 cuBLAS calls with zero stream
-  synchronizations inside full-layer forward.
-- Next: make KV length/position device-parameterized so graph capture does not
-  need host memcpy before prototyping a one-layer decode graph that includes
-  cuBLAS.
+  synchronizations inside full-layer forward. KV append now has explicit-position
+  and device-position async APIs; production full-layer decode uses the
+  explicit-position path, which removes the prior host-side KV length D2H read
+  and updates `seq_map` on device.
+- Next: prototype a one-layer decode graph that includes cuBLAS, using the
+  device-position KV append API where graph capture needs a stable position
+  pointer.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

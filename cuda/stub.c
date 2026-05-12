@@ -153,6 +153,12 @@ int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx, M40llmKVCache
 int m40llm_kvcache_append_token_f32_rope_k_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_kvcache_append_token_f32_rope_k_at_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t position, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k_position_dev_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, const uint32_t* position_dev, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position_dev; (void)freq_base; (void)freq_scale; return -1;
+}
 int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
     (void)ctx; (void)kv; return -1;
 }

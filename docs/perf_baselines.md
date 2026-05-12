@@ -881,3 +881,39 @@ Notes:
   into one packed batched decode dispatch.
 - Packed prefill should wait until decode batching has real request/session
   ownership above this scheduler foundation.
+
+## 2026-05-11: Explicit-Position KV Append
+
+This checkpoint adds graph-friendly KV append APIs for fused K RoPE plus FP32 to
+FP16 KV storage:
+
+- `m40llm_kvcache_append_token_f32_rope_k_at_async` takes an explicit token
+  position and updates `seq_map[seq_id]` on device.
+- `m40llm_kvcache_append_token_f32_rope_k_position_dev_async` reads the token
+  position from a device pointer so a captured graph can bind a stable parameter
+  address.
+- Full-layer decode now uses the explicit-position path because the Rust decode
+  loop already knows `pos = seq_len - 1`.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test kv_f32_to_f16_append -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+TinyLlama profile spot-check:
+
+```text
+forward.layer.N.seq_len.2.kv_append_rope_k:
+  op=kvcache_append_token_f32_rope_k_at
+  launches=1 syncs=0 h2d=0(0 bytes) d2h=0(0 bytes)
+```
+
+This removes the previous host-side `cudaMemcpyDeviceToHost` length read from
+the production KV append path. The next graph-specific step is to capture a
+one-layer decode segment that includes async cuBLAS and a stable device position
+parameter.

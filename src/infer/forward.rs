@@ -193,10 +193,11 @@ impl LoadedModel {
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.append_kv_token_f32_rope_k_async(
+                    self.append_kv_token_f32_rope_k_at_async(
                         seq_id,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,
+                        pos,
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,

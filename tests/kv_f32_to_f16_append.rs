@@ -244,6 +244,157 @@ fn test_kvcache_append_token_f32_rope_k_matches_separate_rope_append() -> Result
 }
 
 #[test]
+fn test_kvcache_append_token_f32_rope_k_at_uses_explicit_position() -> Result<()> {
+    let num_heads: u32 = 2;
+    let head_dim: u32 = 4;
+    let max_seq_len: u32 = 4;
+    let max_batch_size: u32 = 1;
+    let position: u32 = 2;
+    let freq_base = 10_000.0;
+    let freq_scale = 1.0;
+
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let kv = KVCache::new_with_context(&ctx, max_seq_len, max_batch_size, num_heads, head_dim)?;
+    let kv_device_position =
+        KVCache::new_with_context(&ctx, max_seq_len, max_batch_size, num_heads, head_dim)?;
+    let elems_per_token = (num_heads as usize) * (head_dim as usize);
+    let bytes_f32 = elems_per_token * std::mem::size_of::<f32>();
+
+    let k_host: Vec<f32> = (0..elems_per_token)
+        .map(|i| -1.25 + i as f32 * 0.5)
+        .collect();
+    let v_host: Vec<f32> = (0..elems_per_token)
+        .map(|i| 4.0 + i as f32 * 0.125)
+        .collect();
+
+    let k_expected_dev: *mut c_void = ctx.device_malloc(bytes_f32)?;
+    let k_append_dev: *mut c_void = ctx.device_malloc(bytes_f32)?;
+    let k_device_position_dev: *mut c_void = ctx.device_malloc(bytes_f32)?;
+    let v_dev: *mut c_void = ctx.device_malloc(bytes_f32)?;
+    let position_dev: *mut c_void = ctx.device_malloc(std::mem::size_of::<u32>())?;
+    unsafe {
+        ctx.memcpy_h2d(k_expected_dev, k_host.as_ptr() as *const c_void, bytes_f32)?;
+        ctx.memcpy_h2d(k_append_dev, k_host.as_ptr() as *const c_void, bytes_f32)?;
+        ctx.memcpy_h2d(
+            k_device_position_dev,
+            k_host.as_ptr() as *const c_void,
+            bytes_f32,
+        )?;
+        ctx.memcpy_h2d(v_dev, v_host.as_ptr() as *const c_void, bytes_f32)?;
+        ctx.memcpy_h2d(
+            position_dev,
+            &position as *const u32 as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
+        ctx.rope_f32_inplace(
+            k_expected_dev,
+            1,
+            num_heads,
+            head_dim,
+            position,
+            freq_base,
+            freq_scale,
+        )?;
+        kv.append_token_f32_rope_k_at_async(
+            &ctx,
+            0,
+            k_append_dev as *const c_void,
+            v_dev as *const c_void,
+            position,
+            position,
+            freq_base,
+            freq_scale,
+        )?;
+        kv_device_position.append_token_f32_rope_k_position_dev_async(
+            &ctx,
+            0,
+            k_device_position_dev as *const c_void,
+            v_dev as *const c_void,
+            position_dev as *const u32,
+            freq_base,
+            freq_scale,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut k_expected_host = vec![0f32; elems_per_token];
+    unsafe {
+        ctx.memcpy_d2h(
+            k_expected_host.as_mut_ptr() as *mut c_void,
+            k_expected_dev,
+            bytes_f32,
+        )?;
+    }
+
+    let bytes_f16 = elems_per_token * std::mem::size_of::<f16>();
+    let mut k_back = vec![0u8; bytes_f16];
+    let mut v_back = vec![0u8; bytes_f16];
+    let mut k_device_position_back = vec![0u8; bytes_f16];
+    let mut v_device_position_back = vec![0u8; bytes_f16];
+    unsafe {
+        ffi_debug_read_kv_token(
+            &ctx,
+            &kv,
+            0,
+            position,
+            k_back.as_mut_ptr(),
+            v_back.as_mut_ptr(),
+        );
+        ffi_debug_read_kv_token(
+            &ctx,
+            &kv_device_position,
+            0,
+            position,
+            k_device_position_back.as_mut_ptr(),
+            v_device_position_back.as_mut_ptr(),
+        );
+    }
+
+    let k_expected_bits = f32s_to_f16_bits(&k_expected_host);
+    let v_expected_bits = f32s_to_f16_bits(&v_host);
+    for i in 0..elems_per_token {
+        let k_bits = u16::from_le_bytes([k_back[2 * i], k_back[2 * i + 1]]);
+        assert_eq!(k_bits, k_expected_bits[i], "K element {i} mismatch");
+        let v_bits = u16::from_le_bytes([v_back[2 * i], v_back[2 * i + 1]]);
+        assert_eq!(v_bits, v_expected_bits[i], "V element {i} mismatch");
+        let k_device_position_bits = u16::from_le_bytes([
+            k_device_position_back[2 * i],
+            k_device_position_back[2 * i + 1],
+        ]);
+        assert_eq!(
+            k_device_position_bits, k_expected_bits[i],
+            "device-position K element {i} mismatch"
+        );
+        let v_device_position_bits = u16::from_le_bytes([
+            v_device_position_back[2 * i],
+            v_device_position_back[2 * i + 1],
+        ]);
+        assert_eq!(
+            v_device_position_bits, v_expected_bits[i],
+            "device-position V element {i} mismatch"
+        );
+    }
+
+    unsafe {
+        ctx.device_free(k_expected_dev)?;
+        ctx.device_free(k_append_dev)?;
+        ctx.device_free(k_device_position_dev)?;
+        ctx.device_free(v_dev)?;
+        ctx.device_free(position_dev)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_kvcache_reset_restarts_append_position() -> Result<()> {
     let num_heads: u32 = 1;
     let head_dim: u32 = 3;
