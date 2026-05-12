@@ -87,10 +87,12 @@ complete.
   explicit-position path, which removes the prior host-side KV length D2H read
   and updates `seq_map` on device. A one-layer-shaped CUDA Graph prototype now
   captures and replays seven async materialized-FP32 cuBLAS projection GEMMs on
-  M40.
-- Next: extend graph capture from projection-only cuBLAS work to a true
-  one-layer decode segment that includes decode-stream elementwise/attention/KV
-  work and cross-stream dependencies.
+  M40. A cross-stream graph prototype also captures the production dependency
+  topology: decode-stream elementwise work, prefill-stream async cuBLAS, and a
+  return wait back to decode-stream elementwise work.
+- Next: extend graph capture from synthetic segments to a true one-layer decode
+  slice using model/workspace pointers, KV append, attention, and projection
+  wrappers.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

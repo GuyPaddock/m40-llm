@@ -950,3 +950,30 @@ Notes:
 - The prototype is still projection-only and single-stream. The next production
   step is to capture a true one-layer decode segment that also includes
   decode-stream elementwise/attention/KV work and cross-stream dependencies.
+
+## 2026-05-12: Cross-Stream Decode Graph Prototype
+
+This checkpoint validates a graph segment with the same stream topology as the
+warm decode path:
+
+1. decode stream enqueues elementwise work,
+2. prefill stream waits and runs async materialized cuBLAS,
+3. decode stream waits and enqueues a follow-up elementwise op.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise \
+  -- cuda_graph_replays_cross_stream_decode_gemm_segment --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- CUDA graph capture can now cover the production stream dependency pattern,
+  not just isolated prefill-stream cuBLAS work.
+- This is still synthetic. The next step is to capture a real one-layer decode
+  slice using model/workspace pointers, KV append, attention, and projection
+  wrappers.

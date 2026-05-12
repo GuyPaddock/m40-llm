@@ -449,6 +449,130 @@ fn cuda_graph_replays_one_layer_projection_gemms() -> Result<()> {
 }
 
 #[test]
+fn cuda_graph_replays_cross_stream_decode_gemm_segment() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(c) => c,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("skipping: {e}");
+        return Ok(());
+    }
+
+    let (m, k, n) = (1i32, 4i32, 3i32);
+    let x = [-0.5f32, 0.75, 1.25, -1.5];
+    let residual = [0.125f32, -0.25, 0.5, 0.75];
+    let weight: Vec<f32> = (0..(n * k)).map(|i| (i as f32 * 0.0375).sin()).collect();
+    let bias = [0.25f32, -0.5, 1.0];
+
+    let mid: Vec<f32> = x.iter().zip(&residual).map(|(a, b)| a + b).collect();
+    let projected = cpu_gguf_gemm_f32(&mid, &weight, m as usize, n as usize, k as usize);
+    let expected: Vec<f32> = projected.iter().zip(&bias).map(|(a, b)| a + b).collect();
+
+    unsafe {
+        let bytes_k = k as usize * std::mem::size_of::<f32>();
+        let bytes_n = n as usize * std::mem::size_of::<f32>();
+        let weight_half = f32s_to_halves_bytes(&weight);
+        let d_x = ctx.device_malloc(bytes_k)?;
+        let d_residual = ctx.device_malloc(bytes_k)?;
+        let d_mid = ctx.device_malloc(bytes_k)?;
+        let d_weight_half = ctx.device_malloc(weight_half.len())?;
+        let d_weight_f32 = ctx.device_malloc(weight.len() * std::mem::size_of::<f32>())?;
+        let d_projected = ctx.device_malloc(bytes_n)?;
+        let d_bias = ctx.device_malloc(bytes_n)?;
+        let d_out = ctx.device_malloc(bytes_n)?;
+
+        ctx.memcpy_h2d(d_x, f32_bytes(&x).as_ptr() as *const c_void, bytes_k)?;
+        ctx.memcpy_h2d(
+            d_residual,
+            f32_bytes(&residual).as_ptr() as *const c_void,
+            bytes_k,
+        )?;
+        ctx.memcpy_h2d(
+            d_weight_half,
+            weight_half.as_ptr() as *const c_void,
+            weight_half.len(),
+        )?;
+        ctx.memcpy_h2d(d_bias, f32_bytes(&bias).as_ptr() as *const c_void, bytes_n)?;
+        ctx.materialize_gguf_f16_to_f32_colmajor_nt(
+            d_weight_half as *const c_void,
+            d_weight_f32,
+            n,
+            k,
+        )?;
+
+        ctx.gemm_f32xf32_f32_async(
+            d_x as *const c_void,
+            d_weight_f32 as *const c_void,
+            d_projected,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+
+        let graph = ctx.capture_graph(CudaStream::Decode, || {
+            ctx.residual_add_f32_async(
+                d_x as *const c_void,
+                d_residual as *const c_void,
+                d_mid,
+                k as usize,
+            )?;
+            ctx.stream_wait_for_stream(
+                CudaStream::Prefill,
+                CudaStream::Decode,
+                "graph_decode_mid_to_prefill_gemm",
+            )?;
+            ctx.gemm_f32xf32_f32_async(
+                d_mid as *const c_void,
+                d_weight_f32 as *const c_void,
+                d_projected,
+                m,
+                n,
+                k,
+            )?;
+            ctx.stream_wait_for_stream(
+                CudaStream::Decode,
+                CudaStream::Prefill,
+                "graph_prefill_gemm_to_decode_residual",
+            )?;
+            ctx.residual_add_f32_async(
+                d_projected as *const c_void,
+                d_bias as *const c_void,
+                d_out,
+                n as usize,
+            )
+        })?;
+        graph.launch(CudaStream::Decode)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+
+        let mut out_bytes = vec![0u8; bytes_n];
+        ctx.memcpy_d2h(out_bytes.as_mut_ptr() as *mut c_void, d_out, bytes_n)?;
+        for (i, (got, want)) in read_f32s(out_bytes).iter().zip(&expected).enumerate() {
+            assert!(
+                (got - want).abs() < 2e-3,
+                "cross-stream graph mismatch at {i}: got {got}, expected {want}"
+            );
+        }
+
+        for ptr in [
+            d_x,
+            d_residual,
+            d_mid,
+            d_weight_half,
+            d_weight_f32,
+            d_projected,
+            d_bias,
+            d_out,
+        ] {
+            ctx.device_free(ptr)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
 fn stream_wait_allows_prefill_gemm_to_consume_decode_swiglu() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(c) => c,
