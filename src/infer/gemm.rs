@@ -396,7 +396,7 @@ impl LoadedModel {
         self.device_tensors
             .iter()
             .find_map(|(name, tensor)| {
-                (tensor.dptr as *const c_void == d_b_f16).then(|| {
+                std::ptr::eq(tensor.dptr.cast_const(), d_b_f16).then(|| {
                     (
                         Some(name.clone()),
                         tensor.byte_offset,

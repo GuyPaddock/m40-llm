@@ -182,14 +182,20 @@ impl ModelConfig {
                 self.attention_key_length
             );
         }
-        if self.embedding_length % self.attention_head_count != 0 {
+        if !self
+            .embedding_length
+            .is_multiple_of(self.attention_head_count)
+        {
             anyhow::bail!(
                 "embedding_length {} not divisible by attention_head_count {}",
                 self.embedding_length,
                 self.attention_head_count
             );
         }
-        if self.attention_head_count % self.attention_head_count_kv != 0 {
+        if !self
+            .attention_head_count
+            .is_multiple_of(self.attention_head_count_kv)
+        {
             anyhow::bail!(
                 "attention_head_count {} not divisible by attention_head_count_kv {}",
                 self.attention_head_count,

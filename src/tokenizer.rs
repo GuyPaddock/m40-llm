@@ -382,7 +382,7 @@ impl Tokenizer {
             for i in 0..symbols.len() - 1 {
                 let pair = (symbols[i].clone(), symbols[i + 1].clone());
                 if let Some(&rank) = self.bpe_ranks.get(&pair) {
-                    if best_rank.map_or(true, |r| rank < r) {
+                    if best_rank.is_none_or(|r| rank < r) {
                         best_rank = Some(rank);
                         best_idx = i;
                     }

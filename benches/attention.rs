@@ -143,7 +143,7 @@ fn seed_kv_cache(ctx: &m40_llm::cuda::CudaContext, kv: &KVCache, seq_lens: &[u32
                     .expect("copy k");
                 ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes_kv)
                     .expect("copy v");
-                kv.append_token_f32(&ctx, seq_idx as u32, d_k as *const c_void, d_v)
+                kv.append_token_f32(ctx, seq_idx as u32, d_k as *const c_void, d_v)
                     .expect("append kv");
             }
         }
@@ -188,25 +188,19 @@ fn bench_attention_last_token_gqa_batched_varlen(c: &mut Criterion) {
             let bytes_out = bytes_q;
             let d_q = ctx.device_malloc(bytes_q).expect("d_q");
             let d_out = ctx.device_malloc(bytes_out).expect("d_out");
-            let d_seq_ids = ctx
-                .device_malloc(seq_ids.len() * std::mem::size_of::<u32>())
-                .expect("d_seq_ids");
-            let d_seq_lens = ctx
-                .device_malloc(seq_lens.len() * std::mem::size_of::<u32>())
-                .expect("d_seq_lens");
+            let seq_ids_bytes = std::mem::size_of_val(&seq_ids[..]);
+            let seq_lens_bytes = std::mem::size_of_val(*seq_lens);
+            let d_seq_ids = ctx.device_malloc(seq_ids_bytes).expect("d_seq_ids");
+            let d_seq_lens = ctx.device_malloc(seq_lens_bytes).expect("d_seq_lens");
             unsafe {
                 ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
                     .expect("copy q");
-                ctx.memcpy_h2d(
-                    d_seq_ids,
-                    seq_ids.as_ptr() as *const c_void,
-                    seq_ids.len() * std::mem::size_of::<u32>(),
-                )
-                .expect("copy seq ids");
+                ctx.memcpy_h2d(d_seq_ids, seq_ids.as_ptr() as *const c_void, seq_ids_bytes)
+                    .expect("copy seq ids");
                 ctx.memcpy_h2d(
                     d_seq_lens,
                     seq_lens.as_ptr() as *const c_void,
-                    seq_lens.len() * std::mem::size_of::<u32>(),
+                    seq_lens_bytes,
                 )
                 .expect("copy seq lens");
             }

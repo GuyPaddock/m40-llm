@@ -33,6 +33,6 @@ fi
 if [ -d "$M40_RUSTFMT_BIN" ]; then
   case ":$PATH:" in
     *":$M40_RUSTFMT_BIN:"*) ;;
-    *) export PATH="$PATH:$M40_RUSTFMT_BIN" ;;
+    *) export PATH="$M40_RUSTFMT_BIN:$PATH" ;;
   esac
 fi

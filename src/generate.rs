@@ -154,7 +154,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     );
     let max_tokens = options
         .max_tokens
-        .or_else(|| Some(model.model_config.context_length as usize))
+        .or(Some(model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
     let sampler = sampler_from_options(&options)?;

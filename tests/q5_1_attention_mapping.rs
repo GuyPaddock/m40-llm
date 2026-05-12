@@ -20,8 +20,8 @@ fn device_tensor(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
             const Q5_1_BLOCK: usize = 32;
             const Q5_1_BLOCK_BYTES: usize = 36; // 4-byte scale + 32 quantized bytes
             let n = *shape.get(1).unwrap_or(&0) as usize;
-            let rows = *shape.get(0).unwrap_or(&0) as usize;
-            let blocks = (n + Q5_1_BLOCK - 1) / Q5_1_BLOCK;
+            let rows = *shape.first().unwrap_or(&0) as usize;
+            let blocks = n.div_ceil(Q5_1_BLOCK);
             return DeviceTensorView {
                 dtype,
                 shape,
@@ -79,10 +79,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> Result<
         "llama.feed_forward_length".into(),
         GgufValue::Scalar(GgufScalar::U32(hidden_dim as u32)),
     );
-    let cuda = match m40_llm::cuda::CudaContext::new(-1) {
-        Ok(ctx) => ctx,
-        Err(e) => return Err(e),
-    };
+    let cuda = m40_llm::cuda::CudaContext::new(-1)?;
 
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
     // Embeddings: [vocab, d_model] - use F16 for embeddings

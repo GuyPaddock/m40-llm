@@ -40,7 +40,7 @@ impl LoadedModel {
                 d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
             );
             timing::log("logits.gpu.total", total_start.elapsed());
-            return result;
+            result
         }
         #[cfg(not(feature = "cuda"))]
         {

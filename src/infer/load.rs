@@ -33,13 +33,10 @@ impl LoadedModel {
             .map(|v| v != "0")
             .unwrap_or(cfg!(nvcc));
         #[cfg(feature = "cuda")]
-        let d_base = {
-            let uploaded = if use_device_weights {
-                cuda.upload_weights(&weights_bytes).ok()
-            } else {
-                None
-            };
-            uploaded
+        let d_base = if use_device_weights {
+            cuda.upload_weights(&weights_bytes).ok()
+        } else {
+            None
         };
         // Validate that all known-sized tensors fit within weights_bytes
         for t in &gguf.tensors {
@@ -47,7 +44,7 @@ impl LoadedModel {
                 let n_elems: u64 = t.shape.iter().copied().product::<u64>();
                 let n_elems: usize = usize::try_from(n_elems)
                     .context("tensor element count does not fit in usize")?;
-                let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
+                let n_blocks = n_elems.div_ceil(layout.block_elems);
                 let need = n_blocks
                     .checked_mul(layout.block_bytes)
                     .context("tensor size overflow")?;

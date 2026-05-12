@@ -1,3 +1,7 @@
+#![allow(clippy::items_after_test_module)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::too_many_arguments)]
+
 pub mod cli;
 pub mod cuda;
 pub mod decode_batch;

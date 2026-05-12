@@ -563,8 +563,8 @@ fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
     let mut k1 = matmul_gguf_native(&x1n, 1, d_model, &wk, d_model);
     let v0 = matmul_gguf_native(&x0n, 1, d_model, &wv, d_model);
     let v1 = matmul_gguf_native(&x1n, 1, d_model, &wv, d_model);
-    apply_rope_one(&mut q1, num_heads as usize, head_dim as usize, 1);
-    apply_rope_one(&mut k1, num_heads as usize, head_dim as usize, 1);
+    apply_rope_one(&mut q1, num_heads, head_dim, 1);
+    apply_rope_one(&mut k1, num_heads, head_dim, 1);
 
     let inv_sqrt = 1.0f32 / (head_dim as f32).sqrt();
     let mut context = vec![0f32; d_model];

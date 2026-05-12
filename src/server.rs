@@ -104,8 +104,7 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     };
 
     let mut buf: Vec<u8> = Vec::with_capacity(safe_chunk.output.len() + 16);
-    serde_json::to_writer(&mut buf, &safe_chunk)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    serde_json::to_writer(&mut buf, &safe_chunk).map_err(io::Error::other)?;
     buf.push(b'\n');
     Ok(Bytes::from(buf))
 }
@@ -238,7 +237,7 @@ impl DecodeSchedulerRequest {
         let prompt_token_len = ids.len();
         let max_tokens = req
             .max_tokens
-            .or_else(|| Some(state.model.model_config.context_length as usize))
+            .or(Some(state.model.model_config.context_length as usize))
             .unwrap_or(32);
         let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
         let mut options = options_from_request(&req, "server");
@@ -654,7 +653,7 @@ mod tests {
             GgufValue::Scalar(GgufScalar::U32(0)),
         );
         let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
-        let prompt_ids = vec![0, 1];
+        let prompt_ids = [0, 1];
         let ids = vec![0, 1, 2];
 
         let generated =
@@ -985,10 +984,7 @@ async fn generate(
                 Ok(ids) => ids,
                 Err(e) => {
                     let _ = tx
-                        .send(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("encode failed: {e}"),
-                        )))
+                        .send(Err(io::Error::other(format!("encode failed: {e}"))))
                         .await;
                     return;
                 }
@@ -1016,27 +1012,20 @@ async fn generate(
                 let logits = match logits_fn(&ids) {
                     Ok(logits) => logits,
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 };
                 if logits.is_empty() {
                     let _ = tx
-                        .send(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "logits_fn returned empty logits",
-                        )))
+                        .send(Err(io::Error::other("logits_fn returned empty logits")))
                         .await;
                     return;
                 }
                 let next = match sampler.sample(&logits) {
                     Ok(n) => n as u32,
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 };
@@ -1059,9 +1048,7 @@ async fn generate(
                         .await;
                     }
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 }
@@ -1081,9 +1068,7 @@ async fn generate(
             let final_text = match tokenizer_stream.decode_ignoring_specials(&generated) {
                 Ok(t) => t,
                 Err(e) => {
-                    let _ = tx
-                        .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                        .await;
+                    let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                     return;
                 }
             };

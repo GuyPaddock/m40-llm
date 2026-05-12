@@ -263,9 +263,9 @@ impl DecodeSession {
             ids.len().saturating_sub(1)
         };
         let mut logits: Option<Vec<f32>> = None;
-        for token_idx in start..ids.len() {
+        for (token_idx, &tok_id_u32) in ids.iter().enumerate().skip(start) {
             let token_start = std::time::Instant::now();
-            let tok_id = ids[token_idx] as u64;
+            let tok_id = tok_id_u32 as u64;
             eprintln!("[{}] token id {}", self.log_prefix, tok_id);
 
             let token_logits = unsafe { self.logits_for_token(tok_id, token_idx, start)? };

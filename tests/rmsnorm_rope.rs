@@ -39,6 +39,7 @@ fn cpu_rms_norm_weighted(
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cpu_rope(
     q: &mut [f32],
     k: &mut [f32],

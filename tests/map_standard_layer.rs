@@ -61,10 +61,7 @@ fn make_model_with_layer(
         "llama.vocab_size".into(),
         GgufValue::Scalar(GgufScalar::U32(1024)),
     );
-    let cuda = match m40_llm::cuda::CudaContext::new(-1) {
-        Ok(ctx) => ctx,
-        Err(e) => return Err(e),
-    };
+    let cuda = m40_llm::cuda::CudaContext::new(-1)?;
 
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
     // Embeddings: [vocab, d_model]

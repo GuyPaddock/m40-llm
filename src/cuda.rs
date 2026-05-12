@@ -1049,6 +1049,7 @@ impl CudaContext {
         Ok(())
     }
 
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         let rc = unsafe { ffi::m40llm_validate_device_ptr(ptr) };
@@ -1124,7 +1125,7 @@ impl CudaContext {
             if kv.is_null() {
                 return Err(anyhow::anyhow!("m40llm_kvcache_create returned null"));
             }
-            return Ok(kv);
+            Ok(kv)
         }
 
         #[cfg(not(feature = "cuda"))]

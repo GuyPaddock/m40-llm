@@ -146,13 +146,13 @@ impl LoadedModel {
                     // Q5_1 dequantization: shape [K, N], blocks along N
                     const Q5_1_BLOCK: usize = 32;
                     const Q5_1_BLOCK_BYTES: usize = 36; // 4-byte scale + 32 quantized bytes
-                    let blocks = (r1 + Q5_1_BLOCK - 1) / Q5_1_BLOCK;
+                    let blocks = r1.div_ceil(Q5_1_BLOCK);
                     let row_stride = blocks * Q5_1_BLOCK_BYTES;
                     let b = (token_id as usize) / 32;
                     let idx = (token_id as usize) % 32;
                     let mut out = vec![0f32; d_model];
                     let mut block_buf = [0u8; Q5_1_BLOCK_BYTES];
-                    for i in 0..d_model {
+                    for (i, out_i) in out.iter_mut().enumerate().take(d_model) {
                         let row_base = (tok.dptr as usize) + i * row_stride;
                         let blk_off = row_base + b * Q5_1_BLOCK_BYTES;
                         self.cuda.memcpy_d2h(
@@ -167,7 +167,7 @@ impl LoadedModel {
                             block_buf[3],
                         ]);
                         let q = block_buf[4 + idx] as i8 as f32;
-                        out[i] = d * q;
+                        *out_i = d * q;
                     }
                     let out_bytes = d_model * std::mem::size_of::<f32>();
                     self.cuda

@@ -314,7 +314,7 @@ fn cuda_graph_replays_one_layer_projection_gemms() -> Result<()> {
     ) -> Result<(*mut c_void, *mut c_void)> {
         let half = f32s_to_halves_bytes(weight);
         let bytes_half = half.len();
-        let bytes_f32 = weight.len() * std::mem::size_of::<f32>();
+        let bytes_f32 = std::mem::size_of_val(weight);
         let d_half = ctx.device_malloc(bytes_half)?;
         let d_f32 = ctx.device_malloc(bytes_f32)?;
         ctx.memcpy_h2d(d_half, half.as_ptr() as *const c_void, bytes_half)?;

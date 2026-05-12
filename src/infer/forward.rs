@@ -40,7 +40,7 @@ fn log_profiled_op(
     before: Option<&profile::ProfileSnapshot>,
     elapsed: std::time::Duration,
 ) {
-    timing::log(&format!("{label}.{op}"), elapsed);
+    timing::log(format!("{label}.{op}"), elapsed);
     profile::log_delta(&format!("{label}.{op}"), before, elapsed);
 }
 
@@ -120,7 +120,7 @@ impl LoadedModel {
             let kv_dim = kv_heads
                 .checked_mul(head_dim)
                 .context("KV projection dim overflow")?;
-            if q_heads == 0 || q_heads % kv_heads != 0 {
+            if q_heads == 0 || !q_heads.is_multiple_of(kv_heads) {
                 anyhow::bail!(
                     "forward_one_token_minimal: query heads {} must be a multiple of kv heads {}",
                     q_heads,
@@ -504,7 +504,7 @@ impl LoadedModel {
             let kv_dim = kv_heads
                 .checked_mul(head_dim)
                 .context("KV projection dim overflow")?;
-            if q_heads == 0 || q_heads % kv_heads != 0 {
+            if q_heads == 0 || !q_heads.is_multiple_of(kv_heads) {
                 anyhow::bail!(
                     "forward_one_token_minimal_graph_params: query heads {} must be a multiple of kv heads {}",
                     q_heads,
@@ -1068,7 +1068,7 @@ impl LoadedModel {
                 d_out_f32,
             )?;
 
-            return Ok(());
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1373,7 +1373,7 @@ impl LoadedModel {
                 d_out_f32,
             )?;
 
-            return Ok(());
+            Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1446,7 +1446,7 @@ impl LoadedModel {
                 .checked_mul(self.model_config.attention_key_length as usize)
                 .context("forward workspace kv dim overflow")?;
 
-            return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
+            self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
                 for layer in 0..layer_count {
                     let next = if layer + 1 == layer_count {
@@ -1460,7 +1460,7 @@ impl LoadedModel {
                     current = next as *const c_void;
                 }
                 Ok(layer_count)
-            });
+            })
         }
 
         #[cfg(not(feature = "cuda"))]
@@ -1515,7 +1515,7 @@ impl LoadedModel {
         let kv_dim = kv_heads
             .checked_mul(head_dim)
             .context("batched forward KV projection dim overflow")? as usize;
-        if q_heads == 0 || q_heads % kv_heads != 0 {
+        if q_heads == 0 || !q_heads.is_multiple_of(kv_heads) {
             anyhow::bail!(
                 "batched forward: query heads {} must be a multiple of kv heads {}",
                 q_heads,
@@ -1946,7 +1946,7 @@ impl LoadedModel {
                 .checked_mul(self.model_config.attention_key_length as usize)
                 .context("forward graph workspace kv dim overflow")?;
 
-            return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
+            self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
                 for layer in 0..layer_count {
                     let next = if layer + 1 == layer_count {
@@ -1967,7 +1967,7 @@ impl LoadedModel {
                     current = next as *const c_void;
                 }
                 Ok(layer_count)
-            });
+            })
         }
 
         #[cfg(not(feature = "cuda"))]
