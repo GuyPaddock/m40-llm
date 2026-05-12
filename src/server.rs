@@ -372,16 +372,20 @@ async fn decode_scheduler_loop(
         }
 
         log_decode_batch_plan(&active);
-        let _generation_guard = state.generation_lock.lock().await;
+        {
+            let _generation_guard = state.generation_lock.lock().await;
 
-        let current_requests: Vec<DecodeSchedulerRequest> = active.drain(..).collect();
-        for mut request in current_requests {
-            match request.step() {
-                Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
-                Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
-                Err(err) => request.send_error(err),
+            let current_requests: Vec<DecodeSchedulerRequest> = active.drain(..).collect();
+            for mut request in current_requests {
+                match request.step() {
+                    Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                    Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                    Err(err) => request.send_error(err),
+                }
             }
         }
+
+        tokio::task::yield_now().await;
     }
 }
 
