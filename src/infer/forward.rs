@@ -329,6 +329,11 @@ impl LoadedModel {
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "mlp_gate_up_to_swiglu",
+                    )?;
                     self.cuda.swiglu_f32_async(
                         ws.dgate as *const c_void,
                         ws.dup as *const c_void,
@@ -692,6 +697,11 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Decode,
+                        CudaStream::Prefill,
+                        "mlp_gate_up_to_swiglu",
+                    )?;
                     self.cuda.swiglu_f32_async(
                         ws.dgate as *const c_void,
                         ws.dup as *const c_void,

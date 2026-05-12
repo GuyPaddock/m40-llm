@@ -32,6 +32,7 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
         eprintln!("{}", e);
         return Ok(());
     }
+    profile::reset();
 
     // Tiny dims ensuring num_heads * head_dim = d_model
     let d_model = 8usize;
@@ -224,6 +225,16 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     for (i, v) in out_vals.iter().enumerate() {
         assert!(v.is_finite(), "non-finite at {}: {}", i, v);
     }
+    let snapshot = profile::snapshot();
+    let mlp_waits = snapshot
+        .by_op
+        .get("mlp_gate_up_to_swiglu")
+        .map(|counts| counts.stream_waits)
+        .unwrap_or_default();
+    assert!(
+        mlp_waits >= 1,
+        "forward must wait for async MLP gate/up GEMMs before SwiGLU reads their outputs"
+    );
 
     unsafe {
         lm.cuda.device_free(d_x)?;
