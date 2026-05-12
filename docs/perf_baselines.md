@@ -790,6 +790,61 @@ Notes:
   cuBLAS enqueue wrappers or a one-layer graph capture path that can keep GEMM
   dependencies inside capture without host stream synchronizations.
 
+## 2026-05-11: Async Materialized cuBLAS Decode Profile
+
+This profile was taken after adding an async cuBLAS enqueue wrapper for
+materialized FP32 GGUF projection weights and routing full-layer decode
+projections through explicit stream waits instead of per-GEMM stream
+synchronizations. Synchronous wrappers remain available for tests and simple
+callers.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 24.090 ms |
+| `cli.token.1.logits` | 4.985 ms |
+| `cli.token.1.total` | 29.140 ms |
+| `cli.generate_text_total` | 619.592 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 0 | 22 | 4.060 ms |
+| `mlp_gate_up` | 0 | 44 | 0 | 22 | 2.838 ms |
+| `mlp_down` | 0 | 22 | 0 | 22 | 2.179 ms |
+| `out_project` | 0 | 22 | 0 | 22 | 1.769 ms |
+| `rope_q` | 22 | 0 | 0 | 22 | 0.791 ms |
+| `kv_append_rope_k` | 22 | 0 | 0 | 0 | 0.611 ms |
+| `attention` | 22 | 0 | 0 | 0 | 0.235 ms |
+| `attn_norm` | 22 | 0 | 0 | 0 | 0.307 ms |
+| `ffn_norm` | 22 | 0 | 0 | 0 | 0.199 ms |
+| `attn_residual` | 22 | 0 | 0 | 22 | 0.743 ms |
+| `mlp_residual` | 22 | 0 | 0 | 22 | 0.771 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.239 ms |
+
+Notes:
+
+- Materialized projection groups still issue 154 cuBLAS calls per steady token,
+  but they now contribute zero stream synchronizations in the full-layer
+  forward profile.
+- The remaining observed synchronizations are host boundaries: output norm still
+  uses its sync compatibility wrapper, logits explicitly synchronizes before
+  D2H copyback for host sampling, and CLI shutdown synchronizes streams.
+- This clears the per-GEMM sync blocker for one-layer CUDA Graph experiments.
+  The next graph blocker is host-managed KV position/length state.
+
 ## 2026-05-11: Packed Varlen Decode Scheduler Foundation
 
 This checkpoint adds a scheduler-facing decode batch plan for mixed-length

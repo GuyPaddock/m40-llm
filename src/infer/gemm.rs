@@ -86,6 +86,29 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// Async MLP projections against GGUF F16 weights with logical shapes [K,H].
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn mlp_gates_f32xf16_gguf_f32_async(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        h: i32,
+        d_gate_out_f32: *mut c_void,
+        d_up_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || h <= 0 {
+            anyhow::bail!("mlp_gates: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_w_gate_f16, d_gate_out_f32, m, h, k)
+            .with_context(|| format!("mlp gate async GGUF GEMM failed: m={m} n={h} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_w_up_f16, d_up_out_f32, m, h, k)
+            .with_context(|| format!("mlp up async GGUF GEMM failed: m={m} n={h} k={k}"))
+    }
+
+    /// # Safety
     /// Down projection: Y = H · W_down, where H is hidden f32 (MxH), W_down is f16 (H x N), output f32 (MxN)
     pub unsafe fn mlp_down_proj_f32xf16_f32(
         &self,
@@ -119,6 +142,24 @@ impl LoadedModel {
         }
         self.matmul_f32xf16_gguf_f32(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
             .with_context(|| format!("mlp down GGUF GEMM failed: m={m} n={n} k={h}"))
+    }
+
+    /// # Safety
+    /// Async down projection against a GGUF F16 weight with logical shape [H,N].
+    pub unsafe fn mlp_down_proj_f32xf16_gguf_f32_async(
+        &self,
+        d_hidden_f32: *const c_void,
+        m: i32,
+        h: i32,
+        d_w_down_f16: *const c_void,
+        n: i32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || h <= 0 || n <= 0 {
+            anyhow::bail!("mlp_down_proj: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32_async(d_hidden_f32, d_w_down_f16, d_out_f32, m, n, h)
+            .with_context(|| format!("mlp down async GGUF GEMM failed: m={m} n={n} k={h}"))
     }
 }
 
@@ -177,6 +218,51 @@ impl LoadedModel {
                             if gemm_log_enabled() {
                                 eprintln!(
                                     "[cuda] materialized f32 GEMM failed; falling back to GGUF F16 kernel: {err}"
+                                );
+                            }
+                        } else {
+                            return Ok(());
+                        }
+                    }
+                    Err(err) => {
+                        if gemm_log_enabled() {
+                            eprintln!(
+                                "[cuda] GGUF F16 weight materialization failed; falling back to GGUF F16 kernel: {err}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        self.cuda
+            .gemm_f32xf16_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k)
+    }
+
+    /// # Safety
+    /// Async f32 × GGUF F16 → f32 GEMM when the materialized FP32 cuBLAS path is
+    /// available. If materialization or async cuBLAS enqueue fails, falls back to
+    /// the existing synchronized GGUF F16 kernel for correctness.
+    pub unsafe fn matmul_f32xf16_gguf_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            if materialized_weights_enabled() && cfg!(have_cublas) {
+                match self.materialized_gguf_weight(d_b_f16, n, k) {
+                    Ok(d_b_f32) => {
+                        if let Err(err) = self
+                            .cuda
+                            .gemm_f32xf32_f32_async(d_a_f32, d_b_f32, d_c_f32, m, n, k)
+                        {
+                            if gemm_log_enabled() {
+                                eprintln!(
+                                    "[cuda] async materialized f32 GEMM failed; falling back to GGUF F16 kernel: {err}"
                                 );
                             }
                         } else {
@@ -401,6 +487,35 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// Async f32 (MxK) × GGUF Wq/Wk/Wv F16 (logical KxN*, K-fastest) → Q/K/V f32.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_project_f32xf16_gguf_f32_async(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_wq_f16: *const c_void,
+        n_q: i32,
+        d_wk_f16: *const c_void,
+        n_k: i32,
+        d_wv_f16: *const c_void,
+        n_v: i32,
+        d_q_out_f32: *mut c_void,
+        d_k_out_f32: *mut c_void,
+        d_v_out_f32: *mut c_void,
+    ) -> Result<()> {
+        if m <= 0 || k <= 0 || n_q <= 0 || n_k <= 0 || n_v <= 0 {
+            anyhow::bail!("qkv_project: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_wq_f16, d_q_out_f32, m, n_q, k)
+            .with_context(|| format!("Q projection async GGUF GEMM failed: m={m} n={n_q} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_wk_f16, d_k_out_f32, m, n_k, k)
+            .with_context(|| format!("K projection async GGUF GEMM failed: m={m} n={n_k} k={k}"))?;
+        self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_wv_f16, d_v_out_f32, m, n_v, k)
+            .with_context(|| format!("V projection async GGUF GEMM failed: m={m} n={n_v} k={k}"))
+    }
+
+    /// # Safety
     /// A f32 (MxK) × W f16 (KxN) → Out f32 (MxN)
     pub unsafe fn out_proj_f32xf16_f32(
         &self,
@@ -435,6 +550,26 @@ impl LoadedModel {
         self.matmul_f32xf16_gguf_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| {
                 format!("attention output projection GGUF GEMM failed: m={m} n={n} k={k}")
+            })
+    }
+
+    /// # Safety
+    /// Async f32 (MxK) × GGUF F16 W (logical KxN, K-fastest) → Out f32.
+    pub unsafe fn out_proj_f32xf16_gguf_f32_async(
+        &self,
+        d_in_f32: *const c_void,
+        d_w_out_f16: *const c_void,
+        d_out_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        if m <= 0 || n <= 0 || k <= 0 {
+            anyhow::bail!("out_proj: invalid dims");
+        }
+        self.matmul_f32xf16_gguf_f32_async(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
+            .with_context(|| {
+                format!("attention output projection async GGUF GEMM failed: m={m} n={n} k={k}")
             })
     }
 

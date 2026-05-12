@@ -2027,7 +2027,27 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_gemm_f32xf32_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f32_colmajor_nt,
+        void* d_C_f32,
+        int M, int N, int K);
+
     int m40llm_gemm_f32xf32_f32(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f32_colmajor_nt,
+        void* d_C_f32,
+        int M, int N, int K) {
+        int rc = m40llm_gemm_f32xf32_f32_async(
+            ctx, d_A_f32, d_B_f32_colmajor_nt, d_C_f32, M, N, K);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->prefill_stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_gemm_f32xf32_f32_async(
         M40llmCudaContext* ctx,
         const void* d_A_f32,
         const void* d_B_f32_colmajor_nt,
@@ -2048,8 +2068,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             &beta,
             reinterpret_cast<float*>(d_C_f32), N);
         if (st != CUBLAS_STATUS_SUCCESS) return -3;
-        cudaError_t err = cudaStreamSynchronize(ctx->prefill_stream);
-        return err == cudaSuccess ? 0 : -4;
+        return 0;
 #else
         return -5;
 #endif

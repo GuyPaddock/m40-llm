@@ -87,7 +87,7 @@ impl LoadedModel {
             CudaStream::Decode,
             "hidden_to_logits_gemm",
         )?;
-        self.matmul_f32xf16_gguf_f32(
+        self.matmul_f32xf16_gguf_f32_async(
             hidden_for_logits,
             d_w,
             d_logits,
@@ -97,6 +97,7 @@ impl LoadedModel {
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
+        self.cuda.synchronize_stream(CudaStream::Prefill)?;
         let bytes_logits = vocab
             .checked_mul(std::mem::size_of::<f32>())
             .context("logits byte size overflow")?;

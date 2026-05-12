@@ -79,6 +79,10 @@ int m40llm_gemm_f32xf32_f32(M40llmCudaContext* ctx, const void* d_A_f32, const v
     (void)ctx; (void)d_A_f32; (void)d_B_f32_colmajor_nt; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
 }
 
+int m40llm_gemm_f32xf32_f32_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f32_colmajor_nt, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_f32_colmajor_nt; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+
 int m40llm_materialize_gguf_f16_to_f32_colmajor_nt(M40llmCudaContext* ctx, const void* d_B_f16, void* d_B_f32_colmajor_nt, int N, int K) {
     (void)ctx; (void)d_B_f16; (void)d_B_f32_colmajor_nt; (void)N; (void)K; return -1;
 }

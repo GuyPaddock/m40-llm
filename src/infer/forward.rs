@@ -145,7 +145,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
-                    self.qkv_project_f32xf16_gguf_f32(
+                    self.qkv_project_f32xf16_gguf_f32_async(
                         ws.d_xn,
                         1,
                         d_model,
@@ -235,7 +235,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attention_to_out_project",
                     )?;
-                    self.out_proj_f32xf16_gguf_f32(
+                    self.out_proj_f32xf16_gguf_f32_async(
                         ws.datt as *const c_void,
                         d_wo_f16,
                         ws.dy_attn,
@@ -308,7 +308,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
-                    self.mlp_gates_f32xf16_gguf_f32(
+                    self.mlp_gates_f32xf16_gguf_f32_async(
                         ws.d_x1n,
                         1,
                         d_model,
@@ -349,7 +349,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
                     )?;
-                    self.mlp_down_proj_f32xf16_gguf_f32(
+                    self.mlp_down_proj_f32xf16_gguf_f32_async(
                         ws.dhid as *const c_void,
                         1,
                         hidden_dim,

@@ -78,10 +78,14 @@ complete.
   small decode sequence lease pool. With `M40LLM_SERVER_BATCH_DECODE=1`,
   `/generate` requests lease per-request KV sequence slots and skip whole-cache
   resets, but request execution remains serialized until per-session CUDA
-  streams/workspaces or fused batched decode scheduling are ready.
-- Next: reduce the remaining graph blockers by adding async cuBLAS enqueue
-  wrappers or a one-layer graph capture path that avoids host stream
-  synchronizations around GEMM.
+  streams/workspaces or fused batched decode scheduling are ready. Materialized
+  FP32 cuBLAS projection calls now have async enqueue wrappers, and full-layer
+  decode uses those wrappers with explicit stream waits; steady TinyLlama
+  profiling shows projection groups issue 154 cuBLAS calls with zero stream
+  synchronizations inside full-layer forward.
+- Next: make KV length/position device-parameterized so graph capture does not
+  need host memcpy before prototyping a one-layer decode graph that includes
+  cuBLAS.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

@@ -126,7 +126,7 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
-        pub fn m40llm_gemm_f32xf32_f32(
+        pub fn m40llm_gemm_f32xf32_f32_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
             d_B_f32_colmajor_nt: *const c_void,
@@ -1223,8 +1223,42 @@ impl CudaContext {
                     "unavailable without cuBLAS"
                 },
             );
+            self.gemm_f32xf32_f32_async(d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k)?;
+            self.synchronize_stream_for_op(CudaStream::Prefill, "gemm_f32xf32_f32")?;
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues materialized-FP32 GEMM on the prefill stream without synchronizing.
+    pub unsafe fn gemm_f32xf32_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf32_f32_async",
+                if cfg!(have_cublas) {
+                    "cuBLAS sgemm materialized-f32 async enqueue"
+                } else {
+                    "unavailable without cuBLAS"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_gemm_f32xf32_f32(
+            let rc = ffi::m40llm_gemm_f32xf32_f32_async(
                 self.inner.raw.as_ptr(),
                 d_a_f32,
                 d_b_f32_colmajor_nt,
@@ -1234,10 +1268,9 @@ impl CudaContext {
                 k,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_gemm_f32xf32_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_gemm_f32xf32_f32_async failed: {rc}"));
             }
             crate::profile::record_cublas_call("gemm_f32xf32_f32");
-            crate::profile::record_stream_sync("gemm_f32xf32_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
