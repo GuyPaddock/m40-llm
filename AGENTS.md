@@ -104,10 +104,17 @@ complete.
   graph replay reduces host-side `forward_all_layers` enqueue time, but
   end-to-end steady token latency regresses because logits/output-norm absorbs
   much larger GPU completion time. Keep `M40LLM_DECODE_GRAPH=1` experimental and
-  off by default.
-- Next: do not expand production graph coverage yet. Either investigate graph
-  replay stream completion/accounting against logits, or move the strict plan
-  forward to packed varlen decode scheduling.
+  off by default. With `M40LLM_SERVER_BATCH_DECODE=1`, buffered `/generate`
+  requests now route through a queued decode scheduler that owns request state,
+  leases distinct KV sequence slots, steps active requests round-robin, and
+  builds `DecodeBatchPlan` snapshots for active mixed-length requests. The
+  scheduler keeps the server generation lock around each CUDA token step to
+  protect shared workspace use across scheduler and streaming paths. The
+  scheduler still executes one request's full CUDA forward at a time; fused
+  batched layer execution remains pending.
+- Next: replace the scheduler's per-request attention step with the existing
+  packed batched GQA decode attention primitive, while preserving the queued
+  request/session ownership model.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

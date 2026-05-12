@@ -1199,3 +1199,38 @@ Interpretation:
 - Do not expand graph coverage yet. Either investigate graph replay stream
   completion/accounting against logits, or move the strict plan forward to real
   packed varlen decode scheduling.
+
+## 2026-05-12: Server Decode Scheduler Skeleton
+
+`M40LLM_SERVER_BATCH_DECODE=1` now routes buffered `/generate` requests through a
+queued decode scheduler instead of serializing each whole request behind the
+HTTP handler. The scheduler owns per-request `DecodeSession` state, holds leased
+KV sequence slots for the request lifetime, steps active requests round-robin,
+builds `DecodeBatchPlan` snapshots from active mixed-length requests, and still
+uses the server generation lock around each CUDA token step to protect shared
+workspace use across scheduler and streaming paths.
+
+Current boundary:
+
+- The scheduler still executes one request's full CUDA forward at a time.
+- The existing packed batched GQA decode attention primitive remains validated
+  at the kernel/plan layer, but is not yet substituted into production
+  full-layer forward.
+- Streaming `/generate` remains on the previous serialized path for this slice.
+
+Validation:
+
+```bash
+cargo fmt --all -- --check
+cargo test --no-default-features --locked
+cargo test --no-default-features --features server --locked
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
+
+The CUDA server smoke showed two concurrent buffered requests assigned sequence
+IDs 0 and 1 and stepped alternately by the scheduler. The next scheduler task is
+to replace the per-request attention region with packed batched GQA decode
+attention while keeping the same request/session ownership model.

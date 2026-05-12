@@ -8,6 +8,8 @@ use axum::{
     Json, Router,
 };
 use bytes::Bytes;
+#[cfg(feature = "cuda")]
+use std::collections::VecDeque;
 use std::{io, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -22,11 +24,48 @@ use crate::generate::{
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
+#[cfg(feature = "cuda")]
+use anyhow::Context;
 use anyhow::Result;
 use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
 use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[cfg(feature = "cuda")]
+type SchedulerResult = std::result::Result<GenerateResponse, String>;
+
+#[cfg(feature = "cuda")]
+#[derive(Clone)]
+struct DecodeSchedulerHandle {
+    tx: mpsc::Sender<DecodeSchedulerCommand>,
+}
+
+#[cfg(feature = "cuda")]
+struct DecodeSchedulerCommand {
+    req: GenerateRequest,
+    respond_to: tokio::sync::oneshot::Sender<SchedulerResult>,
+}
+
+#[cfg(feature = "cuda")]
+impl DecodeSchedulerHandle {
+    fn start(state: Arc<AppState>) -> Self {
+        let (tx, rx) = mpsc::channel(64);
+        tokio::spawn(decode_scheduler_loop(state, rx));
+        Self { tx }
+    }
+
+    async fn generate(&self, req: GenerateRequest) -> SchedulerResult {
+        let (respond_to, response) = tokio::sync::oneshot::channel();
+        self.tx
+            .send(DecodeSchedulerCommand { req, respond_to })
+            .await
+            .map_err(|_| "decode scheduler is unavailable".to_string())?;
+        response
+            .await
+            .map_err(|_| "decode scheduler stopped before responding".to_string())?
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct GenerateRequest {
     pub prompt: String,
     pub max_tokens: Option<usize>,
@@ -129,6 +168,262 @@ fn log_top_logits(logits: &[f32], k: usize) {
     top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
     top.truncate(k);
     eprintln!("[server] top_logits={top:?}");
+}
+
+#[cfg(feature = "cuda")]
+async fn scheduler_generate(
+    state: Arc<AppState>,
+    req: GenerateRequest,
+) -> std::result::Result<GenerateResponse, (StatusCode, Json<ErrorResponse>)> {
+    let handle = state
+        .decode_scheduler
+        .get_or_init(|| async { DecodeSchedulerHandle::start(state.clone()) })
+        .await
+        .clone();
+    handle.generate(req).await.map_err(internal_error_string)
+}
+
+fn internal_error_string(message: String) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse { error: message }),
+    )
+}
+
+#[cfg(feature = "cuda")]
+struct DecodeSchedulerRequest {
+    request_id: crate::decode_batch::DecodeRequestId,
+    sequence_lease: crate::decode_batch::DecodeSequenceLease,
+    session: crate::decode_session::DecodeSession,
+    ids: Vec<u32>,
+    generated: Vec<u32>,
+    prompt_token_len: usize,
+    sampler: crate::sampling::Sampler,
+    stopping: StoppingCriteria,
+    tokenizer: Tokenizer,
+    respond_to: Option<tokio::sync::oneshot::Sender<SchedulerResult>>,
+}
+
+#[cfg(feature = "cuda")]
+enum DecodeSchedulerStep {
+    Continue,
+    Complete,
+}
+
+#[cfg(feature = "cuda")]
+impl DecodeSchedulerRequest {
+    fn new(
+        state: &AppState,
+        request_id: crate::decode_batch::DecodeRequestId,
+        req: GenerateRequest,
+    ) -> Result<Self> {
+        let sequence_lease = lease_decode_sequence(state).map_err(|(_, Json(err))| {
+            anyhow::anyhow!("decode sequence lease failed: {}", err.error)
+        })?;
+        let sequence_lease = sequence_lease
+            .ok_or_else(|| anyhow::anyhow!("decode batching requires a sequence lease"))?;
+        let tokenizer = Tokenizer::from_gguf_metadata(&state.model.gguf.metadata)
+            .unwrap_or_else(|_| Tokenizer::byte_level());
+        let add_bos = true;
+        let ids = tokenizer
+            .encode_with_specials(&req.prompt, add_bos, false)
+            .context("encode prompt")?;
+        let prompt_token_len = ids.len();
+        let max_tokens = req
+            .max_tokens
+            .or_else(|| Some(state.model.model_config.context_length as usize))
+            .unwrap_or(32);
+        let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
+        let mut options = options_from_request(&req, "server");
+        options.sequence_id = sequence_lease.sequence_id();
+        options.reset_kv_cache = false;
+        let sampler = sampler_from_options(&options)?;
+        let (d_model, hidden_dim) = state
+            .model
+            .validate_full_layer_decode()
+            .context("CUDA full-layer decode is unavailable")?;
+        eprintln!(
+            "[server] scheduler request {request_id} mapped {} standard layers d_model={} hidden_dim={} sequence_id={}",
+            state.model.model_config.block_count,
+            d_model,
+            hidden_dim,
+            sequence_lease.sequence_id()
+        );
+        let session = crate::decode_session::DecodeSession::new_for_sequence(
+            &state.model,
+            sequence_lease.sequence_id(),
+            d_model,
+            true,
+            "server",
+            "server:scheduler:d_x_embed_f32",
+            "server:scheduler:d_out_hidden_f32",
+        )?;
+        Ok(Self {
+            request_id,
+            sequence_lease,
+            session,
+            ids,
+            generated: Vec::new(),
+            prompt_token_len,
+            sampler,
+            stopping,
+            tokenizer,
+            respond_to: None,
+        })
+    }
+
+    fn state(&self) -> crate::decode_batch::DecodeRequestState {
+        crate::decode_batch::DecodeRequestState::active(
+            self.request_id,
+            self.sequence_lease.sequence_id(),
+            self.ids.len() as u32,
+        )
+    }
+
+    fn step(&mut self) -> Result<DecodeSchedulerStep> {
+        if self.stopping.should_stop(&self.generated) {
+            return Ok(DecodeSchedulerStep::Complete);
+        }
+        let logits = self
+            .session
+            .logits_for_ids(&self.ids, |logits| log_top_logits(logits, 8))?;
+        if logits.is_empty() {
+            anyhow::bail!("logits_fn returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
+    fn send_complete(mut self) {
+        let result = decode_generated_text(&self.tokenizer, &self.ids, self.prompt_token_len)
+            .map(|text| sanitize_output(&text))
+            .map(|output| GenerateResponse { output })
+            .map_err(|err| err.to_string());
+        self.send_result(result);
+    }
+
+    fn send_error(mut self, err: anyhow::Error) {
+        self.send_result(Err(format!("generation failed: {err}")));
+    }
+
+    fn send_result(&mut self, result: SchedulerResult) {
+        if let Some(respond_to) = self.respond_to.take() {
+            let _ = respond_to.send(result);
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.respond_to
+            .as_ref()
+            .map(|respond_to| respond_to.is_closed())
+            .unwrap_or(true)
+    }
+}
+
+#[cfg(feature = "cuda")]
+async fn decode_scheduler_loop(
+    state: Arc<AppState>,
+    mut rx: mpsc::Receiver<DecodeSchedulerCommand>,
+) {
+    let mut next_request_id: crate::decode_batch::DecodeRequestId = 1;
+    let mut active: VecDeque<DecodeSchedulerRequest> = VecDeque::new();
+
+    loop {
+        if active.is_empty() {
+            let Some(command) = rx.recv().await else {
+                break;
+            };
+            enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
+        }
+
+        while let Ok(command) = rx.try_recv() {
+            enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
+        }
+
+        active.retain(|request| {
+            let keep = !request.is_cancelled();
+            if !keep {
+                eprintln!(
+                    "[server] scheduler request {} cancelled",
+                    request.request_id
+                );
+            }
+            keep
+        });
+
+        if active.is_empty() {
+            continue;
+        }
+
+        log_decode_batch_plan(&active);
+
+        let Some(mut request) = active.pop_front() else {
+            continue;
+        };
+        let _generation_guard = state.generation_lock.lock().await;
+        match request.step() {
+            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn enqueue_scheduler_request(
+    state: &AppState,
+    next_request_id: &mut crate::decode_batch::DecodeRequestId,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+    command: DecodeSchedulerCommand,
+) {
+    let request_id = *next_request_id;
+    *next_request_id = next_request_id.saturating_add(1);
+    let DecodeSchedulerCommand { req, respond_to } = command;
+    match DecodeSchedulerRequest::new(state, request_id, req) {
+        Ok(mut request) => {
+            request.respond_to = Some(respond_to);
+            active.push_back(request);
+        }
+        Err(err) => {
+            let _ = respond_to.send(Err(format!("generation failed: {err}")));
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn log_decode_batch_plan(active: &VecDeque<DecodeSchedulerRequest>) {
+    let states: Vec<_> = active.iter().map(DecodeSchedulerRequest::state).collect();
+    match crate::decode_batch::DecodeBatchPlan::from_requests(&states) {
+        Ok(plan) => {
+            if std::env::var("M40LLM_SERVER_BATCH_LOG").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[server] scheduler batch_size={} sequence_ids={:?} kv_lens={:?}",
+                    plan.batch_size(),
+                    plan.sequence_ids(),
+                    plan.sequence_lens()
+                );
+            }
+        }
+        Err(err) => {
+            eprintln!("[server] scheduler batch plan failed: {err}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -240,6 +535,8 @@ pub struct AppState {
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
     pub decode_batching_requested: bool,
     pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
+    #[cfg(feature = "cuda")]
+    decode_scheduler: tokio::sync::OnceCell<DecodeSchedulerHandle>,
 }
 
 impl AppState {
@@ -257,6 +554,8 @@ impl AppState {
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
             decode_batching_requested,
             decode_sequence_pool,
+            #[cfg(feature = "cuda")]
+            decode_scheduler: tokio::sync::OnceCell::new(),
         }
     }
 }
@@ -300,6 +599,12 @@ async fn generate(
     }
 
     if !req.stream {
+        #[cfg(feature = "cuda")]
+        if state.decode_batching_requested {
+            let generated = scheduler_generate(state.clone(), req).await?;
+            return Ok(Json(generated).into_response());
+        }
+
         let sequence_lease = lease_decode_sequence(&state)?;
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut options = options_from_request(&req, "server");

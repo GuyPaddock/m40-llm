@@ -292,7 +292,7 @@ pub fn server_batch_decode_requested() -> bool {
 
 #[cfg(feature = "server")]
 pub fn server_batch_decode_status() -> &'static str {
-    "M40LLM_SERVER_BATCH_DECODE=1 requested; leased per-request KV sequence slots are enabled, but /generate remains serialized until per-session streams/workspaces or fused batched scheduling are ready"
+    "M40LLM_SERVER_BATCH_DECODE=1 requested; buffered /generate uses a queued decode scheduler with leased KV sequence slots, while fused batched layer execution remains pending"
 }
 
 #[cfg(feature = "server")]
