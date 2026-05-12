@@ -62,6 +62,13 @@ impl LoadedModel {
     ) -> Result<Vec<f32>> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
+        // Ensure any decode-stream work producing the final hidden state has
+        // completed before this path (including optional output-norm) reads it.
+        self.cuda.stream_wait_for_stream(
+            CudaStream::Prefill,
+            CudaStream::Decode,
+            "hidden_to_logits_stream",
+        )?;
         let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
             let norm_start = std::time::Instant::now();
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
@@ -82,11 +89,6 @@ impl LoadedModel {
             d_hidden_f32
         };
         let gemm_start = std::time::Instant::now();
-        self.cuda.stream_wait_for_stream(
-            CudaStream::Prefill,
-            CudaStream::Decode,
-            "hidden_to_logits_gemm",
-        )?;
         self.matmul_f32xf16_gguf_f32_async(
             hidden_for_logits,
             d_w,

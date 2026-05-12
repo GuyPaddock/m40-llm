@@ -223,6 +223,12 @@ Current M40 validation target:
   caches and replays a warmed full-token graph using device-resident
   position/sequence-length parameters; the normal async decode path remains the
   default while graph-mode performance is measured.
+- Set `M40LLM_DECODE_GRAPH_DIAG_SYNC=1` to time replay with a CUDA-event timing
+  path that synchronizes the decode stream on launch for diagnosis.
+- Set `M40LLM_DECODE_GRAPH_DIAG_MAX_MS=<float>` with
+  `M40LLM_DECODE_GRAPH_DIAG_SYNC=1` to disable graph replay automatically if a
+  timed replay exceeds the threshold; this keeps graph mode experimental and
+  prevents regressions from being treated as a win.
 - Read-only cache experiments are opt-in. `M40LLM_CACHE_EXPERIMENT=ldg` enables
   the first `__ldg` experiment for weighted RMSNorm; current measurements keep
   the default kernel unchanged.

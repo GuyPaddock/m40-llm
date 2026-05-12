@@ -252,13 +252,6 @@ impl DecodeSession {
                 self.logged_full_forward = true;
             }
             let logits_start = std::time::Instant::now();
-            if self.last_forward_used_graph {
-                (*self.model).cuda.stream_wait_for_stream(
-                    CudaStream::Decode,
-                    CudaStream::Decode,
-                    "decode_graph_to_logits",
-                )?;
-            }
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(
                     d_out as *const _,
@@ -366,6 +359,15 @@ impl DecodeSession {
                             "[{}] decode graph replay gpu_elapsed_ms={elapsed_ms:.3}",
                             self.log_prefix
                         );
+                        if let Some(max_ms) = decode_graph_diag_max_ms() {
+                            if elapsed_ms > max_ms {
+                                eprintln!(
+                                    "[{}] decode graph replay {:.3}ms exceeds diagnostic max {:.3}ms; disabling graph",
+                                    self.log_prefix, elapsed_ms, max_ms
+                                );
+                                self.graph_disabled = true;
+                            }
+                        }
                     })
             } else {
                 graph.launch(CudaStream::Decode)
@@ -432,4 +434,12 @@ fn decode_graph_diagnostic_sync_enabled() -> bool {
     std::env::var("M40LLM_DECODE_GRAPH_DIAG_SYNC")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn decode_graph_diag_max_ms() -> Option<f32> {
+    std::env::var("M40LLM_DECODE_GRAPH_DIAG_MAX_MS")
+        .ok()
+        .and_then(|value| value.parse::<f32>().ok())
+        .filter(|value| *value > 0.0)
 }
