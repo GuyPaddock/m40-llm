@@ -46,7 +46,39 @@ pub struct GeneratedText {
 }
 
 pub fn sanitize_output(text: &str) -> String {
-    text.chars().filter(|c| *c != '\0').collect()
+    let bytes = text.as_bytes();
+    let mut cleaned = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] == b'\0' {
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'<'
+            && i + 5 < bytes.len()
+            && bytes[i + 1] == b'0'
+            && (bytes[i + 2] == b'x' || bytes[i + 2] == b'X')
+            && bytes[i + 3].is_ascii_hexdigit()
+            && bytes[i + 4].is_ascii_hexdigit()
+            && bytes[i + 5] == b'>'
+        {
+            i += 6;
+            continue;
+        }
+
+        let b = bytes[i];
+        if b.is_ascii_control() && b != b'\n' && b != b'\r' && b != b'\t' {
+            i += 1;
+            continue;
+        }
+
+        cleaned.push(b);
+        i += 1;
+    }
+
+    String::from_utf8_lossy(&cleaned).into_owned()
 }
 
 pub fn decode_generated_text(
@@ -354,4 +386,22 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         output: sanitize_output(&text),
         token_ids: ids,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_output_drops_nuls_and_byte_markers() {
+        let input = "Catalog\0 yesterday \u{0003}<0xAA> Chile <0x7f>";
+        let output = sanitize_output(input);
+        assert_eq!(output, "Catalog yesterday  Chile ");
+    }
+
+    #[test]
+    fn sanitize_output_keeps_printable_text() {
+        let input = "Hello, world!";
+        assert_eq!(sanitize_output(input), "Hello, world!");
+    }
 }
