@@ -1120,3 +1120,46 @@ Steady second-token notes:
   (7 projections x 22 layers).
 - The corrected profile confirms the restored wait is visible in every
   `forward.layer.N.seq_len.2.swiglu` timing region.
+
+## 2026-05-12: Opt-In Full-Token Decode Graph Capture
+
+`DecodeSession` graph mode now captures the full all-layer decode token instead
+of only one layer. Capture still stays behind `M40LLM_DECODE_GRAPH=1` and warms
+the normal async path first so workspace allocation and FP32 weight
+materialization happen outside CUDA stream capture.
+
+Implementation notes:
+
+- `forward_one_token_all_layers_for_sequence_graph_params` mirrors the normal
+  all-layer forward loop but passes device-resident `position` and `seq_len`
+  through every layer.
+- The shared tiny GGUF fixture can now generate multi-layer test models, and the
+  CUDA smoke covers both one-layer and two-layer `DecodeSession` graph replay.
+- TinyLlama graph smoke captured all 22 layers with:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_DECODE_GRAPH=1 \
+  cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+Observed log evidence:
+
+```text
+[cli] captured full-token decode CUDA graph layers=22
+```
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Next graph work should benchmark `M40LLM_DECODE_GRAPH=1` versus the normal async
+path for steady TinyLlama decode. If graph replay does not materially reduce
+latency, move the strict plan forward to packed varlen decode scheduling instead
+of adding more graph complexity.

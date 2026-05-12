@@ -21,12 +21,11 @@ pub struct DecodeSession {
     d_norm_hidden: Option<DeviceBuffer>,
     d_graph_position: Option<DeviceBuffer>,
     d_graph_seq_len: Option<DeviceBuffer>,
-    one_layer_graph: Option<CudaGraphExec>,
+    decode_graph: Option<CudaGraphExec>,
     graph_disabled: bool,
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
-    logged_graph_unsupported: bool,
 }
 
 #[cfg(feature = "cuda")]
@@ -137,12 +136,11 @@ impl DecodeSession {
             d_norm_hidden,
             d_graph_position,
             d_graph_seq_len,
-            one_layer_graph: None,
+            decode_graph: None,
             graph_disabled: false,
             log_prefix,
             step: 0,
             logged_full_forward: false,
-            logged_graph_unsupported: false,
         })
     }
 
@@ -299,22 +297,6 @@ impl DecodeSession {
                 d_out,
             );
         }
-        if (*self.model).model_config.block_count != 1 {
-            if !self.logged_graph_unsupported {
-                eprintln!(
-                    "[{}] M40LLM_DECODE_GRAPH=1 currently supports one-layer sessions only; using normal forward",
-                    self.log_prefix
-                );
-                self.logged_graph_unsupported = true;
-            }
-            return (*self.model).forward_one_token_all_layers_for_sequence(
-                self.d_x.as_ptr(),
-                self.sequence_id,
-                seq_len,
-                d_out,
-            );
-        }
-
         let position = token_idx as u32;
         let d_position = self
             .d_graph_position
@@ -326,46 +308,49 @@ impl DecodeSession {
             .expect("graph seq_len allocated when graph is enabled");
         self.upload_graph_params(position, seq_len)?;
 
-        if self.one_layer_graph.is_none() {
+        if self.decode_graph.is_none() {
             // Warm once through the normal path so lazy workspace and FP32 weight
             // materialization do not occur inside CUDA stream capture.
-            (*self.model).forward_one_token_with_layer(
+            let warmed_layers = (*self.model).forward_one_token_all_layers_for_sequence(
                 self.d_x.as_ptr(),
-                0,
                 self.sequence_id,
                 seq_len,
                 d_out,
             )?;
             let captured = (*self.model).cuda.capture_graph(CudaStream::Decode, || {
-                (*self.model).forward_one_token_with_layer_graph_params(
-                    self.d_x.as_ptr(),
-                    0,
-                    self.sequence_id,
-                    d_position.as_ptr() as *const u32,
-                    d_seq_len.as_ptr() as *const u32,
-                    d_out,
-                )
+                (*self.model)
+                    .forward_one_token_all_layers_for_sequence_graph_params(
+                        self.d_x.as_ptr(),
+                        self.sequence_id,
+                        d_position.as_ptr() as *const u32,
+                        d_seq_len.as_ptr() as *const u32,
+                        d_out,
+                    )
+                    .map(|_| ())
             });
             match captured {
                 Ok(graph) => {
-                    eprintln!("[{}] captured one-layer decode CUDA graph", self.log_prefix);
-                    self.one_layer_graph = Some(graph);
+                    eprintln!(
+                        "[{}] captured full-token decode CUDA graph layers={warmed_layers}",
+                        self.log_prefix
+                    );
+                    self.decode_graph = Some(graph);
                 }
                 Err(err) => {
                     eprintln!(
-                        "[{}] disabling one-layer decode CUDA graph after capture failure: {err:#}",
+                        "[{}] disabling full-token decode CUDA graph after capture failure: {err:#}",
                         self.log_prefix
                     );
                     self.graph_disabled = true;
-                    return Ok(1);
+                    return Ok(warmed_layers);
                 }
             }
         }
 
-        if let Some(graph) = &self.one_layer_graph {
+        if let Some(graph) = &self.decode_graph {
             if let Err(err) = graph.launch(CudaStream::Decode) {
                 eprintln!(
-                    "[{}] disabling one-layer decode CUDA graph after launch failure: {err:#}",
+                    "[{}] disabling full-token decode CUDA graph after launch failure: {err:#}",
                     self.log_prefix
                 );
                 self.graph_disabled = true;
@@ -376,7 +361,7 @@ impl DecodeSession {
                     d_out,
                 );
             }
-            Ok(1)
+            Ok((*self.model).model_config.block_count as usize)
         } else {
             (*self.model).forward_one_token_all_layers_for_sequence(
                 self.d_x.as_ptr(),

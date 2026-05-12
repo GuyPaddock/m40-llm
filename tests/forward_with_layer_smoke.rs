@@ -260,6 +260,7 @@ fn cuda_graph_replays_forward_one_token_with_layer() -> Result<()> {
         d_model: 8,
         hidden: 16,
         head_count: 2,
+        block_count: 1,
         context_length: 16,
     };
     let (gguf, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
@@ -348,6 +349,7 @@ fn decode_session_uses_one_layer_graph_when_enabled() -> Result<()> {
         d_model: 8,
         hidden: 16,
         head_count: 2,
+        block_count: 1,
         context_length: 16,
     };
     let (gguf, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
@@ -376,6 +378,67 @@ fn decode_session_uses_one_layer_graph_when_enabled() -> Result<()> {
     assert!(
         graph_launches >= 2,
         "expected DecodeSession graph replay launches, got {graph_launches}"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn decode_session_uses_multilayer_graph_when_enabled() -> Result<()> {
+    struct EnvGuard;
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("M40LLM_DECODE_GRAPH");
+        }
+    }
+
+    std::env::set_var("M40LLM_DECODE_GRAPH", "1");
+    let _guard = EnvGuard;
+    profile::reset();
+
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 32,
+        d_model: 8,
+        hidden: 16,
+        head_count: 2,
+        block_count: 2,
+        context_length: 16,
+    };
+    let (gguf, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let mut lm = LoadedModel::from_gguf(gguf, weights, -1)?;
+    let head_dim = cfg.d_model as u32 / cfg.head_count;
+    lm.allocate_kv_cache_with_layout(8, cfg.block_count, cfg.head_count, head_dim)?;
+
+    let mut session = DecodeSession::new_for_sequence(
+        &lm,
+        0,
+        cfg.d_model,
+        true,
+        "test_decode_multilayer_graph",
+        "test_decode_multilayer_graph:x",
+        "test_decode_multilayer_graph:out",
+    )?;
+    let logits = session.logits_for_ids(&[3, 4], |_| {})?;
+    assert_eq!(logits.len(), cfg.vocab);
+
+    let snapshot = profile::snapshot();
+    let graph_launches = snapshot
+        .by_op
+        .get("cuda_graph_launch")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        graph_launches >= 2,
+        "expected multi-layer DecodeSession graph replay launches, got {graph_launches}"
     );
 
     Ok(())

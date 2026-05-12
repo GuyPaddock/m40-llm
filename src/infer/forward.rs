@@ -1425,4 +1425,99 @@ impl LoadedModel {
             anyhow::bail!("forward_one_token_all_layers requires CUDA device buffers")
         }
     }
+
+    /// Runs one token through every transformer layer using device-resident
+    /// position and sequence-length parameters for graph replay.
+    ///
+    /// # Safety
+    /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
+    /// - `d_position` and `d_seq_len` must each point to one device-resident u32.
+    /// - Both hidden buffers must be sized for one f32 hidden vector of `embedding_length`.
+    pub unsafe fn forward_one_token_all_layers_for_sequence_graph_params(
+        &self,
+        d_x_f32: *const c_void,
+        sequence_id: u32,
+        d_position: *const u32,
+        d_seq_len: *const u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<usize> {
+        if d_position.is_null() || d_seq_len.is_null() {
+            anyhow::bail!(
+                "forward_one_token_all_layers_for_sequence_graph_params: null device parameter"
+            );
+        }
+        let layer_count = self.model_config.block_count as usize;
+        if layer_count == 0 {
+            anyhow::bail!("forward_one_token_all_layers_graph_params: model has zero layers");
+        }
+        let (d_model, _) = self.validate_standard_layers()?;
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        if kv.max_batch_size() < self.model_config.block_count {
+            anyhow::bail!(
+                "kv_cache has {} slots, but full-layer graph forward needs {} layer slots",
+                kv.max_batch_size(),
+                self.model_config.block_count
+            );
+        }
+        self.kv_physical_slot_for_layer_sequence((layer_count - 1) as u32, sequence_id)?;
+
+        #[cfg(feature = "cuda")]
+        {
+            if layer_count == 1 {
+                self.forward_one_token_with_layer_graph_params(
+                    d_x_f32,
+                    0,
+                    sequence_id,
+                    d_position,
+                    d_seq_len,
+                    d_out_f32,
+                )?;
+                return Ok(1);
+            }
+            let hidden_dim = self.model_config.feed_forward_length as usize;
+            let kv_dim = (self.model_config.attention_head_count_kv as usize)
+                .checked_mul(self.model_config.attention_key_length as usize)
+                .context("forward graph workspace kv dim overflow")?;
+
+            return self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
+                let mut current = d_x_f32;
+                for layer in 0..layer_count {
+                    let next = if layer + 1 == layer_count {
+                        d_out_f32
+                    } else if layer % 2 == 0 {
+                        ws.scratch_a
+                    } else {
+                        ws.scratch_b
+                    };
+                    self.forward_one_token_with_layer_graph_params(
+                        current,
+                        layer,
+                        sequence_id,
+                        d_position,
+                        d_seq_len,
+                        next,
+                    )?;
+                    current = next as *const c_void;
+                }
+                Ok(layer_count)
+            });
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x_f32,
+                sequence_id,
+                d_position,
+                d_seq_len,
+                d_out_f32,
+                d_model,
+            );
+            anyhow::bail!(
+                "forward_one_token_all_layers_for_sequence_graph_params requires CUDA device buffers"
+            )
+        }
+    }
 }
