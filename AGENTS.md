@@ -89,10 +89,12 @@ complete.
   captures and replays seven async materialized-FP32 cuBLAS projection GEMMs on
   M40. A cross-stream graph prototype also captures the production dependency
   topology: decode-stream elementwise work, prefill-stream async cuBLAS, and a
-  return wait back to decode-stream elementwise work.
-- Next: extend graph capture from synthetic segments to a true one-layer decode
-  slice using model/workspace pointers, KV append, attention, and projection
-  wrappers.
+  return wait back to decode-stream elementwise work. A production one-layer
+  graph smoke now captures a warmed `forward_one_token_with_layer` call using
+  real model/workspace pointers, KV append, attention, and projection wrappers.
+- Next: decide how to cache and launch one-layer graphs in `DecodeSession`, then
+  expand toward full-token graph coverage if graph launch overhead and pointer
+  stability remain favorable.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

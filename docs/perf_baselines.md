@@ -977,3 +977,36 @@ Notes:
 - This is still synthetic. The next step is to capture a real one-layer decode
   slice using model/workspace pointers, KV append, attention, and projection
   wrappers.
+
+## 2026-05-12: Production One-Layer Decode Graph Smoke
+
+This checkpoint captures a real `forward_one_token_with_layer` call after
+warming the model's materialized weights and forward workspace. The graph covers
+the production one-layer decode path, including:
+
+- RMSNorm
+- async materialized projection GEMMs
+- Q RoPE
+- fused K RoPE + KV append
+- GQA attention
+- residual adds
+- SwiGLU and MLP projections
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  -- cuda_graph_replays_forward_one_token_with_layer --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- The test compares graph replay output against a normal one-layer forward on a
+  separate KV sequence.
+- This proves a warmed, fixed-shape, fixed-pointer one-layer decode graph can be
+  captured and replayed. The next step is deciding how to cache and launch this
+  in production sessions, then expanding from one layer toward full-token graph
+  coverage.

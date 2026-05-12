@@ -1,8 +1,11 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/tiny_gguf.rs"]
+mod tiny_gguf;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaStream;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use std::ffi::c_void;
@@ -223,6 +226,83 @@ fn forward_one_token_with_layer_smoke() -> Result<()> {
     unsafe {
         lm.cuda.device_free(d_x)?;
         lm.cuda.device_free(d_out)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn cuda_graph_replays_forward_one_token_with_layer() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 32,
+        d_model: 8,
+        hidden: 16,
+        head_count: 2,
+        context_length: 16,
+    };
+    let (gguf, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let mut lm = LoadedModel::from_gguf(gguf, weights, -1)?;
+    let head_dim = cfg.d_model as u32 / cfg.head_count;
+    lm.allocate_kv_cache_with_layout(8, 2, cfg.head_count, head_dim)?;
+
+    let bytes = cfg.d_model * std::mem::size_of::<f32>();
+    let d_x_normal = lm.cuda.device_malloc(bytes)?;
+    let d_x_graph = lm.cuda.device_malloc(bytes)?;
+    let d_out_normal = lm.cuda.device_malloc(bytes)?;
+    let d_out_graph = lm.cuda.device_malloc(bytes)?;
+    unsafe {
+        lm.load_token_embedding_f16_to_f32(3, d_x_normal)?;
+        lm.load_token_embedding_f16_to_f32(3, d_x_graph)?;
+
+        lm.forward_one_token_with_layer(d_x_normal as *const c_void, 0, 0, 1, d_out_normal)?;
+        lm.cuda.synchronize_stream(CudaStream::Decode)?;
+        lm.cuda.synchronize_stream(CudaStream::Prefill)?;
+
+        let graph = lm.cuda.capture_graph(CudaStream::Decode, || {
+            lm.forward_one_token_with_layer(d_x_graph as *const c_void, 0, 1, 1, d_out_graph)
+        })?;
+        graph.launch(CudaStream::Decode)?;
+        lm.cuda.synchronize_stream(CudaStream::Decode)?;
+        lm.cuda.synchronize_stream(CudaStream::Prefill)?;
+
+        let mut normal_bytes = vec![0u8; bytes];
+        let mut graph_bytes = vec![0u8; bytes];
+        lm.cuda.memcpy_d2h(
+            normal_bytes.as_mut_ptr() as *mut c_void,
+            d_out_normal,
+            bytes,
+        )?;
+        lm.cuda
+            .memcpy_d2h(graph_bytes.as_mut_ptr() as *mut c_void, d_out_graph, bytes)?;
+        for (i, (normal, graph)) in normal_bytes
+            .chunks_exact(4)
+            .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+            .zip(
+                graph_bytes
+                    .chunks_exact(4)
+                    .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]])),
+            )
+            .enumerate()
+        {
+            assert!(
+                (normal - graph).abs() < 1e-5,
+                "graph forward mismatch at {i}: normal={normal}, graph={graph}"
+            );
+        }
+
+        lm.cuda.device_free(d_x_normal)?;
+        lm.cuda.device_free(d_x_graph)?;
+        lm.cuda.device_free(d_out_normal)?;
+        lm.cuda.device_free(d_out_graph)?;
     }
 
     Ok(())
