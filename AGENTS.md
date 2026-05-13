@@ -133,13 +133,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   speedup with all HTTP requests successful.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
-  `block-summary` / `block-select-lossy` validate lossy summary attention using
-  dense KV as the backing store. M40 attention microbenchmarks at 4K/8K/16K/32K
-  are recorded in `docs/perf_baselines.md`; long-context needle retrieval is
-  covered by an env-gated smoke harness.
-- Next: if compressed KV remains a priority, add a real compressed sidecar
-  allocation/update path so lossy modes reduce actual allocated KV memory before
-  integrating with server scheduling.
+  `block-summary` / `block-select-lossy` now use a physical compressed CUDA
+  sidecar for CLI decode with a recent exact ring plus old-block mean K/V
+  summaries. M40 attention microbenchmarks at 4K/8K/16K/32K are recorded in
+  `docs/perf_baselines.md`; long-context needle retrieval is covered by an
+  env-gated smoke harness.
+- Next: keep compressed KV experimental until long-context retrieval quality is
+  measured; representative-token storage and server scheduler integration remain
+  deferred.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

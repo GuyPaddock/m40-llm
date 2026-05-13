@@ -1,6 +1,6 @@
 use super::LoadedModel;
 use crate::cuda::KVCache;
-use crate::kv_compression::{runtime_config, KvCompressMode};
+use crate::kv_compression::{runtime_config, KvCompressMode, KvCompressionConfig};
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
@@ -200,6 +200,54 @@ impl LoadedModel {
             .checked_mul(max_sequences)
             .ok_or_else(|| anyhow!("KV physical slot count overflow"))?;
         self.allocate_kv_cache(max_seq_len, physical_slots)
+    }
+
+    pub fn allocate_compressed_kv_cache_for_layers(
+        &mut self,
+        max_seq_len: u32,
+        config: &KvCompressionConfig,
+    ) -> Result<()> {
+        let layer_count = self.model_config.block_count;
+        if layer_count == 0 {
+            anyhow::bail!("model_config.block_count must be > 0");
+        }
+        if !matches!(
+            config.mode,
+            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+        ) {
+            anyhow::bail!(
+                "allocate_compressed_kv_cache_for_layers requires a lossy compressed mode"
+            );
+        }
+        config.validate()?;
+        let num_heads = self.model_config.attention_head_count_kv;
+        let head_dim = self.model_config.attention_key_length;
+        if head_dim != 64 {
+            anyhow::bail!("compressed KV cache currently requires head_dim=64");
+        }
+        let recent_window = config.recent_window.min(max_seq_len);
+        let kv = KVCache::new_compressed_with_context(
+            &self.cuda,
+            max_seq_len,
+            layer_count,
+            num_heads,
+            head_dim,
+            recent_window,
+            config.block_size,
+            config.top_blocks,
+            config.representatives,
+        )?;
+        let dense = kv.dense_equivalent_bytes();
+        let actual = kv.actual_bytes();
+        eprintln!(
+            "[kv-compress] mode={:?} dense_equivalent_bytes={} actual_allocated_bytes={} compression_ratio={:.3}",
+            config.mode,
+            dense,
+            actual,
+            if dense > 0 { actual as f64 / dense as f64 } else { 1.0 }
+        );
+        self.kv_cache = Some(kv);
+        Ok(())
     }
 
     pub fn kv_cache_can_address_layers(&self) -> bool {

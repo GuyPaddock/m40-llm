@@ -238,6 +238,17 @@ mod ffi {
             num_heads: u32,
             head_dim: u32,
         ) -> *mut M40llmKVCache;
+        pub fn m40llm_kvcache_create_compressed(
+            ctx: *mut M40llmCudaContext,
+            max_seq_len: u32,
+            max_batch_size: u32,
+            num_heads: u32,
+            head_dim: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            representatives: u32,
+        ) -> *mut M40llmKVCache;
         pub fn m40llm_kvcache_append_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -1156,6 +1167,59 @@ impl CudaContext {
         {
             let _g = self.inner.lock.lock().unwrap();
             let _ = (max_seq_len, max_batch_size, num_heads, head_dim);
+            Ok(std::ptr::null_mut())
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_compressed_kvcache(
+        &self,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        representatives: u32,
+    ) -> Result<*mut ffi::M40llmKVCache> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let kv = unsafe {
+                ffi::m40llm_kvcache_create_compressed(
+                    self.inner.raw.as_ptr(),
+                    max_seq_len,
+                    max_batch_size,
+                    num_heads,
+                    head_dim,
+                    recent_window,
+                    block_size,
+                    top_blocks,
+                    representatives,
+                )
+            };
+            if kv.is_null() {
+                return Err(anyhow::anyhow!(
+                    "m40llm_kvcache_create_compressed returned null"
+                ));
+            }
+            Ok(kv)
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let _ = (
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+            );
             Ok(std::ptr::null_mut())
         }
     }
@@ -2242,6 +2306,9 @@ impl KVCache {
     pub fn max_seq_len(&self) -> u32 {
         self.inner.max_seq_len
     }
+    pub fn is_compressed(&self) -> bool {
+        self.inner.compressed
+    }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
         #[cfg(feature = "cuda")]
@@ -2284,6 +2351,9 @@ struct KVCacheInner {
     max_batch_size: u32,
     num_heads: u32,
     head_dim: u32,
+    compressed: bool,
+    actual_bytes: usize,
+    dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
     raw: NonNull<ffi::M40llmKVCache>,
     #[cfg(not(feature = "cuda"))]
@@ -2316,6 +2386,19 @@ impl KVCache {
                     max_batch_size,
                     num_heads,
                     head_dim,
+                    compressed: false,
+                    actual_bytes: (max_seq_len as usize)
+                        * (max_batch_size as usize)
+                        * (num_heads as usize)
+                        * (head_dim as usize)
+                        * std::mem::size_of::<half::f16>()
+                        * 2,
+                    dense_equivalent_bytes: (max_seq_len as usize)
+                        * (max_batch_size as usize)
+                        * (num_heads as usize)
+                        * (head_dim as usize)
+                        * std::mem::size_of::<half::f16>()
+                        * 2,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
@@ -2338,6 +2421,9 @@ impl KVCache {
                     max_batch_size,
                     num_heads,
                     head_dim,
+                    compressed: false,
+                    actual_bytes: cap * std::mem::size_of::<half::f16>() * 2,
+                    dense_equivalent_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
                     v: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
                     len_by_seq: Mutex::new(vec![0u32; max_batch_size as usize]),
@@ -2346,6 +2432,105 @@ impl KVCache {
                 }),
             })
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_compressed_with_context(
+        ctx: &CudaContext,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        representatives: u32,
+    ) -> Result<Self> {
+        #[cfg(feature = "cuda")]
+        {
+            let raw = ctx.create_compressed_kvcache(
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+            )?;
+            let elems_per_token = (num_heads as usize) * (head_dim as usize);
+            let old_capacity = max_seq_len.saturating_sub(recent_window);
+            let max_blocks = if old_capacity == 0 {
+                1usize
+            } else {
+                (old_capacity as usize).div_ceil(block_size as usize)
+            };
+            let recent_bytes = (max_batch_size as usize)
+                * (recent_window as usize)
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let summary_f16_bytes = (max_batch_size as usize)
+                * max_blocks
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let summary_acc_bytes = (max_batch_size as usize)
+                * max_blocks
+                * elems_per_token
+                * std::mem::size_of::<f32>()
+                * 2;
+            let count_bytes = (max_batch_size as usize) * max_blocks * std::mem::size_of::<u32>();
+            let seq_map_bytes = (max_batch_size as usize) * std::mem::size_of::<u32>();
+            let actual_bytes =
+                recent_bytes + summary_f16_bytes + summary_acc_bytes + count_bytes + seq_map_bytes;
+            let dense_equivalent_bytes = (max_seq_len as usize)
+                * (max_batch_size as usize)
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            Ok(KVCache {
+                inner: Arc::new(KVCacheInner {
+                    max_seq_len,
+                    max_batch_size,
+                    num_heads,
+                    head_dim,
+                    compressed: true,
+                    actual_bytes,
+                    dense_equivalent_bytes,
+                    raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
+                    #[cfg(not(feature = "cuda"))]
+                    k: Mutex::new(Vec::new()),
+                    #[cfg(not(feature = "cuda"))]
+                    v: Mutex::new(Vec::new()),
+                    #[cfg(not(feature = "cuda"))]
+                    len_by_seq: Mutex::new(Vec::new()),
+                }),
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                ctx,
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+            );
+            anyhow::bail!("compressed KV cache requires cuda")
+        }
+    }
+
+    pub fn actual_bytes(&self) -> usize {
+        self.inner.actual_bytes
+    }
+
+    pub fn dense_equivalent_bytes(&self) -> usize {
+        self.inner.dense_equivalent_bytes
     }
 
     #[inline]

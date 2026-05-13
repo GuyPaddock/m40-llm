@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use m40_llm::cli::{Cli, Commands};
 use m40_llm::generate::{generate_text, GenerateOptions};
-use m40_llm::kv_compression::KvCompressionConfig;
+use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 #[cfg(not(feature = "server"))]
 #[allow(unused_imports)]
 use m40_llm::{gguf, infer, model};
@@ -85,7 +85,24 @@ async fn main() -> Result<()> {
             );
 
             let max_len = loaded.model_config.context_length as usize;
-            loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
+            let kv_compression = KvCompressionConfig {
+                mode: kv_compress_mode.into(),
+                recent_window: kv_recent_window,
+                block_size: kv_compress_block,
+                top_blocks: kv_compress_top_blocks,
+                representatives: kv_compress_representatives,
+            };
+            if matches!(
+                kv_compression.mode,
+                KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+            ) {
+                loaded.allocate_compressed_kv_cache_for_layers(
+                    max_len.try_into().unwrap(),
+                    &kv_compression,
+                )?;
+            } else {
+                loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
+            }
             let generated = generate_text(
                 &loaded,
                 GenerateOptions {
@@ -98,13 +115,7 @@ async fn main() -> Result<()> {
                     log_prefix: "cli",
                     sequence_id: 0,
                     reset_kv_cache: true,
-                    kv_compression: KvCompressionConfig {
-                        mode: kv_compress_mode.into(),
-                        recent_window: kv_recent_window,
-                        block_size: kv_compress_block,
-                        top_blocks: kv_compress_top_blocks,
-                        representatives: kv_compress_representatives,
-                    },
+                    kv_compression,
                 },
             )?;
             print!("{}", generated.output);

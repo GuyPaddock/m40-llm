@@ -1496,10 +1496,11 @@ sparse selection from lossy compression:
 - `block-select-lossy`: scores old summaries and attends selected summaries
   plus the exact recent window.
 
-Important limitation: this first pass keeps dense KV as the backing store for
-all modes so selection and lossy summary quality can be validated before old KV
-is physically discarded. The memory columns below therefore show both physical
-dense KV bytes and compressed-equivalent K/V bytes for the summary modes.
+Historical limitation: this first pass kept dense KV as the backing store for
+all modes so selection and lossy summary quality could be validated before old
+KV was physically discarded. The memory columns below therefore show both
+physical dense KV bytes and compressed-equivalent K/V bytes for the summary
+modes.
 
 Environment:
 
@@ -1547,6 +1548,65 @@ Interpretation:
   are trusted.
 - The dense 16K/32K baseline falls back to the generic attention path, so the
   speedups there compare against an intentionally poor current dense kernel.
-- The next step is a real compressed sidecar allocation/update path so lossy
-  modes reduce actual allocated KV memory instead of only reporting
+- A later checkpoint adds a physical compressed sidecar allocation/update path
+  so lossy modes reduce actual allocated KV memory instead of only reporting
   compressed-equivalent bytes.
+
+## 2026-05-13: Physical Compressed KV Sidecar
+
+This checkpoint changes `block-summary` and `block-select-lossy` from
+dense-backed approximation modes into physical compressed KV sidecar modes for
+CLI decode. The sidecar keeps a recent exact FP16 ring buffer, evicts older
+tokens into fixed-size block mean K/V summaries, and stores FP32 summary
+accumulators so summaries can be updated incrementally during decode.
+`off` and `block-select-exact` remain dense-backed because they are exact
+validation modes.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Features: `cuda`
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo bench --features cuda --bench attention -- attention_kv_compression_modes --sample-size 10`
+- Benchmark shape: `q_heads=32`, `kv_heads=4`, `head_dim=64`
+- Config: `recent_window=1024`, `block_size=32`, `top_blocks=16`
+
+| Context | Mode | Mean time | Tokens/sec | Dense equivalent KV | Actual allocated KV |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 4K | dense | 9.866 ms | 101.36 | 4.00 MiB | 4.00 MiB |
+| 4K | block-select-exact | 5.679 ms | 176.09 | 4.00 MiB | 4.00 MiB |
+| 4K | block-summary | 3.101 ms | 322.43 | 4.00 MiB | 1.28 MiB |
+| 4K | block-select-lossy | 3.306 ms | 302.43 | 4.00 MiB | 1.28 MiB |
+| 8K | dense | 19.697 ms | 50.77 | 8.00 MiB | 8.00 MiB |
+| 8K | block-select-exact | 8.431 ms | 118.61 | 8.00 MiB | 8.00 MiB |
+| 8K | block-summary | 3.527 ms | 283.55 | 8.00 MiB | 1.66 MiB |
+| 8K | block-select-lossy | 3.964 ms | 252.28 | 8.00 MiB | 1.66 MiB |
+| 16K | dense | 5.184 s | 0.19 | 16.00 MiB | 16.00 MiB |
+| 16K | block-select-exact | 13.855 ms | 72.18 | 16.00 MiB | 16.00 MiB |
+| 16K | block-summary | 4.316 ms | 231.70 | 16.00 MiB | 2.41 MiB |
+| 16K | block-select-lossy | 5.166 ms | 193.59 | 16.00 MiB | 2.41 MiB |
+| 32K | dense | 10.388 s | 0.10 | 32.00 MiB | 32.00 MiB |
+| 32K | block-select-exact | 24.492 ms | 40.83 | 32.00 MiB | 32.00 MiB |
+| 32K | block-summary | 5.953 ms | 168.00 | 32.00 MiB | 3.91 MiB |
+| 32K | block-select-lossy | 7.436 ms | 134.49 | 32.00 MiB | 3.91 MiB |
+
+Validation:
+
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed on M40, including the compressed recent-window parity test.
+- TinyLlama CLI smoke with `--kv-compress-mode block-summary` generated one
+  token through the GPU path and logged `actual_allocated_bytes=25234264` versus
+  `dense_equivalent_bytes=46137344` for the selected context.
+
+Interpretation:
+
+- The physical sidecar now reduces allocated KV memory for lossy modes. The
+  reported allocation includes recent exact KV, summary FP16 K/V, FP32 summary
+  accumulators, block counts, and sequence metadata.
+- `block-select-lossy` currently allocates the same sidecar as `block-summary`;
+  it reduces attended summary entries but does not yet shrink the stored summary
+  table.
+- The dense 16K/32K baseline still falls back to the generic attention path, so
+  those speedups compare against a known weak dense kernel rather than a tuned
+  long-context dense baseline.
+- Representative-token storage is still deferred; `--kv-compress-representatives`
+  is accepted but not yet used by the sidecar.

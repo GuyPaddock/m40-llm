@@ -236,6 +236,135 @@ fn attention_block_summary_lossy_is_finite_and_deterministic() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let max_seq_len = 32u32;
+    let seq_len = 8u32;
+    let recent_window = 16u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let dense = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+    let compressed = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+    )?;
+    assert!(compressed.is_compressed());
+    assert!(compressed.actual_bytes() < compressed.dense_equivalent_bytes());
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 11 + i * 3) as f32) * 0.001 - 0.05)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + kv_dim - i) as f32) * 0.0015 - 0.07)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            dense.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            compressed.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0007 - 0.02).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense = ctx.device_malloc(bytes_q)?;
+    let d_compressed = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        dense.attention_last_token_f32_gqa(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_dense,
+        )?;
+        compressed.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_compressed,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense_out = vec![0f32; q_dim];
+    let mut compressed_out = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense_out.as_mut_ptr() as *mut c_void,
+            d_dense as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            compressed_out.as_mut_ptr() as *mut c_void,
+            d_compressed as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense)?;
+        ctx.device_free(d_compressed)?;
+    }
+
+    for (idx, (&a, &b)) in dense_out.iter().zip(&compressed_out).enumerate() {
+        assert!(
+            (a - b).abs() < 1e-3,
+            "compressed recent mismatch at {idx}: dense={a} compressed={b}"
+        );
+    }
+    Ok(())
+}
+
 fn cpu_last_token_attention(
     q: &[f32],             // [num_heads*head_dim]
     k_tokens: &[Vec<f32>], // seq_len entries, each [num_heads*head_dim]

@@ -154,6 +154,49 @@ fn seed_kv_cache(ctx: &m40_llm::cuda::CudaContext, kv: &KVCache, seq_lens: &[u32
     }
 }
 
+#[cfg(all(feature = "cuda", nvcc))]
+fn seed_kv_cache_with_explicit_positions(
+    ctx: &m40_llm::cuda::CudaContext,
+    kv: &KVCache,
+    seq_len: u32,
+    kv_dim: usize,
+) {
+    let bytes_kv = kv_dim * std::mem::size_of::<f32>();
+    let d_k = ctx.device_malloc(bytes_kv).expect("d_k");
+    let d_v = ctx.device_malloc(bytes_kv).expect("d_v");
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * kv_dim + i) as f32) * 0.0003 - 0.25)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * kv_dim + (kv_dim - 1 - i)) as f32) * 0.0002 - 0.1)
+            .collect();
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes_kv)
+                .expect("copy k");
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes_kv)
+                .expect("copy v");
+            kv.append_token_f32_rope_k_at_async(
+                ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )
+            .expect("append kv");
+            ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                .expect("sync append kv");
+        }
+    }
+    unsafe {
+        ctx.device_free(d_k).expect("free d_k");
+        ctx.device_free(d_v).expect("free d_v");
+    }
+}
+
 fn bench_attention_last_token_gqa_batched_varlen(c: &mut Criterion) {
     let mut group = c.benchmark_group("attention_last_token_f32_gqa_batched_varlen");
 
@@ -621,9 +664,22 @@ fn bench_attention_kv_compression_modes(c: &mut Criterion) {
         let seq_lens = [4096u32, 8192, 16384, 32768];
 
         for seq_len in seq_lens {
-            let kv =
+            let dense_kv =
                 KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim).expect("kv cache");
-            seed_kv_cache(&ctx, &kv, &[seq_len], kv_dim);
+            seed_kv_cache_with_explicit_positions(&ctx, &dense_kv, seq_len, kv_dim);
+            let compressed_kv = KVCache::new_compressed_with_context(
+                &ctx,
+                seq_len,
+                1,
+                kv_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                0,
+            )
+            .expect("compressed kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &compressed_kv, seq_len, kv_dim);
             let q: Vec<f32> = (0..q_dim)
                 .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
                 .collect();
@@ -646,74 +702,79 @@ fn bench_attention_kv_compression_modes(c: &mut Criterion) {
                 * kv_dim
                 * std::mem::size_of::<half::f16>()
                 * 2;
+            let actual_compressed_bytes = compressed_kv.actual_bytes();
             eprintln!(
-                "[kv-compress-bench] seq_len={seq_len} dense_kv_bytes={dense_kv_bytes} block_summary_equiv_bytes={block_summary_bytes} block_select_lossy_equiv_bytes={block_select_lossy_bytes}"
+                "[kv-compress-bench] seq_len={seq_len} dense_kv_bytes={dense_kv_bytes} actual_compressed_kv_bytes={actual_compressed_bytes} block_summary_equiv_bytes={block_summary_bytes} block_select_lossy_equiv_bytes={block_select_lossy_bytes}"
             );
 
             group.throughput(Throughput::Elements(seq_len as u64));
             group.bench_function(format!("s{seq_len}_dense"), |b| {
                 b.iter(|| unsafe {
-                    kv.attention_last_token_f32_gqa(
-                        &ctx,
-                        0,
-                        d_q as *const c_void,
-                        q_heads,
-                        seq_len,
-                        d_out,
-                    )
-                    .expect("dense attention")
+                    dense_kv
+                        .attention_last_token_f32_gqa(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            d_out,
+                        )
+                        .expect("dense attention")
                 })
             });
             group.bench_function(format!("s{seq_len}_block_select_exact"), |b| {
                 b.iter(|| unsafe {
-                    kv.attention_last_token_f32_gqa_block_select_exact_async(
-                        &ctx,
-                        0,
-                        d_q as *const c_void,
-                        q_heads,
-                        seq_len,
-                        recent_window,
-                        block_size,
-                        top_blocks,
-                        d_out,
-                    )
-                    .expect("block-select-exact attention");
+                    dense_kv
+                        .attention_last_token_f32_gqa_block_select_exact_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            d_out,
+                        )
+                        .expect("block-select-exact attention");
                     ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
                         .expect("sync block-select-exact");
                 })
             });
             group.bench_function(format!("s{seq_len}_block_summary"), |b| {
                 b.iter(|| unsafe {
-                    kv.attention_last_token_f32_gqa_block_summary_lossy_async(
-                        &ctx,
-                        0,
-                        d_q as *const c_void,
-                        q_heads,
-                        seq_len,
-                        recent_window,
-                        block_size,
-                        0,
-                        d_out,
-                    )
-                    .expect("block-summary attention");
+                    compressed_kv
+                        .attention_last_token_f32_gqa_block_summary_lossy_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            0,
+                            d_out,
+                        )
+                        .expect("block-summary attention");
                     ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
                         .expect("sync block-summary");
                 })
             });
             group.bench_function(format!("s{seq_len}_block_select_lossy"), |b| {
                 b.iter(|| unsafe {
-                    kv.attention_last_token_f32_gqa_block_summary_lossy_async(
-                        &ctx,
-                        0,
-                        d_q as *const c_void,
-                        q_heads,
-                        seq_len,
-                        recent_window,
-                        block_size,
-                        top_blocks,
-                        d_out,
-                    )
-                    .expect("block-select-lossy attention");
+                    compressed_kv
+                        .attention_last_token_f32_gqa_block_summary_lossy_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            d_out,
+                        )
+                        .expect("block-select-lossy attention");
                     ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
                         .expect("sync block-select-lossy");
                 })

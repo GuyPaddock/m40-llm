@@ -1,3 +1,5 @@
+use std::sync::{Mutex, OnceLock};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KvCompressMode {
     #[default]
@@ -67,4 +69,3 @@ pub fn runtime_config() -> KvCompressionConfig {
         .expect("kv compression runtime config lock")
         .clone()
 }
-use std::sync::{Mutex, OnceLock};

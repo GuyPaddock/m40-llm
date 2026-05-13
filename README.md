@@ -127,10 +127,11 @@ default remains dense exact KV:
 exact KV available while testing whether block summaries are a useful index.
 Lossy modes are experimental and must pass long-context retrieval smoke tests
 before they should be used for quality-sensitive generation.
-The initial implementation keeps dense KV as the backing store for all modes;
-lossy modes currently validate approximate attention behavior and report
-compressed-equivalent footprint before a later sidecar path physically discards
-old exact KV.
+`block-summary` and `block-select-lossy` allocate a compressed CUDA sidecar for
+CLI decode: a configurable recent exact window plus old-block mean K/V summaries
+and summary accumulators. `off` and `block-select-exact` remain dense-backed.
+The `--kv-compress-representatives` flag is reserved for future representative
+token storage and is not yet used by the sidecar implementation.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to
