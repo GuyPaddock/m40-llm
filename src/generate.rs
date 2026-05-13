@@ -57,6 +57,16 @@ impl Default for GenerateOptions {
 pub struct GeneratedText {
     pub output: String,
     pub token_ids: Vec<u32>,
+    pub prompt_token_len: usize,
+    pub prompt_prefill_elapsed_ms: u128,
+    pub generated_decode_elapsed_ms: u128,
+    pub total_elapsed_ms: u128,
+    pub attention_compression_elapsed_ms: Option<u128>,
+}
+
+#[cfg(feature = "cuda")]
+fn decode_session_log_enabled() -> bool {
+    std::env::var("M40LLM_DECODE_SESSION_LOG").ok().as_deref() == Some("1")
 }
 
 pub fn sanitize_output(text: &str) -> String {
@@ -183,12 +193,14 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         anyhow::bail!("compressed KV cache modes require the cuda feature");
     }
     #[cfg(feature = "cuda")]
-    eprintln!(
-        "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-        std::process::id(),
-        model.cuda.device_id(),
-        CudaContext::total_device_bytes()
-    );
+    if decode_session_log_enabled() {
+        eprintln!(
+            "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+            std::process::id(),
+            model.cuda.device_id(),
+            CudaContext::total_device_bytes()
+        );
+    }
 
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
@@ -247,150 +259,169 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             "generate:d_out_hidden_f32",
         )?
     };
+    let mut logits_call_count = 0usize;
+    let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
+    let mut generated_decode_elapsed = std::time::Duration::ZERO;
     let mut logits_fn = {
-        move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
-            let logits_fn_start = std::time::Instant::now();
+        |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
+            let timed_logits_fn_start = std::time::Instant::now();
+            let result = {
+                let logits_fn_start = std::time::Instant::now();
 
-            #[cfg(not(feature = "cuda"))]
-            let embed_names = [
-                "tok_embeddings.weight",
-                "token_embd.weight",
-                "token_embd",
-                "token_embeddings.weight",
-            ];
-            #[cfg(not(feature = "cuda"))]
-            let tok_opt = embed_names
-                .iter()
-                .find_map(|name| model.device_tensors.get(*name));
-            #[cfg(not(feature = "cuda"))]
-            if tok_opt.is_none() {
-                eprintln!(
-                    "[{log_prefix}] warning: no known embedding tensor found; will try lm_head only"
-                );
-            }
-            #[cfg(not(feature = "cuda"))]
-            let d_model_from_tok = tok_opt
-                .and_then(|tensor| tensor.shape.get(1).copied())
-                .unwrap_or(0) as usize;
-            #[cfg(not(feature = "cuda"))]
-            if let Some(tensor) = tok_opt {
-                eprintln!("[{log_prefix}] embeddings shape: {:?}", tensor.shape);
-            }
-
-            #[cfg(not(feature = "cuda"))]
-            let (d, can_forward) = match model.validate_standard_layers() {
-                Ok((d_model, hidden_dim)) => {
-                    let ok = model.kv_cache_can_address_layers();
-                    if !ok {
-                        eprintln!(
-                            "[{log_prefix}] KV cache cannot address all layers; using embeddings-only logits fallback"
-                        );
-                    }
+                #[cfg(not(feature = "cuda"))]
+                let embed_names = [
+                    "tok_embeddings.weight",
+                    "token_embd.weight",
+                    "token_embd",
+                    "token_embeddings.weight",
+                ];
+                #[cfg(not(feature = "cuda"))]
+                let tok_opt = embed_names
+                    .iter()
+                    .find_map(|name| model.device_tensors.get(*name));
+                #[cfg(not(feature = "cuda"))]
+                if tok_opt.is_none() {
                     eprintln!(
-                        "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
-                        model.model_config.block_count, d_model, hidden_dim
+                        "[{log_prefix}] warning: no known embedding tensor found; will try lm_head only"
                     );
-                    (d_model, ok)
                 }
-                Err(e) => {
-                    eprintln!("[{log_prefix}] validate_standard_layers failed; falling back to embeddings/logits path: {e}");
-                    let d_try = if d_model_from_tok > 0 {
-                        d_model_from_tok
-                    } else {
-                        match model.map_lm_head() {
-                            Ok((_name, _lm, d_m, _vocab, _tied)) => {
-                                eprintln!("[{log_prefix}] derived d_model from lm_head: {}", d_m);
-                                d_m
+                #[cfg(not(feature = "cuda"))]
+                let d_model_from_tok = tok_opt
+                    .and_then(|tensor| tensor.shape.get(1).copied())
+                    .unwrap_or(0) as usize;
+                #[cfg(not(feature = "cuda"))]
+                if let Some(tensor) = tok_opt {
+                    eprintln!("[{log_prefix}] embeddings shape: {:?}", tensor.shape);
+                }
+
+                #[cfg(not(feature = "cuda"))]
+                let (d, can_forward) = match model.validate_standard_layers() {
+                    Ok((d_model, hidden_dim)) => {
+                        let ok = model.kv_cache_can_address_layers();
+                        if !ok {
+                            eprintln!(
+                                "[{log_prefix}] KV cache cannot address all layers; using embeddings-only logits fallback"
+                            );
+                        }
+                        eprintln!(
+                            "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
+                            model.model_config.block_count, d_model, hidden_dim
+                        );
+                        (d_model, ok)
+                    }
+                    Err(e) => {
+                        eprintln!("[{log_prefix}] validate_standard_layers failed; falling back to embeddings/logits path: {e}");
+                        let d_try = if d_model_from_tok > 0 {
+                            d_model_from_tok
+                        } else {
+                            match model.map_lm_head() {
+                                Ok((_name, _lm, d_m, _vocab, _tied)) => {
+                                    eprintln!(
+                                        "[{log_prefix}] derived d_model from lm_head: {}",
+                                        d_m
+                                    );
+                                    d_m
+                                }
+                                Err(e2) => {
+                                    eprintln!(
+                                        "[{log_prefix}] could not derive d_model from lm_head: {e2}"
+                                    );
+                                    0
+                                }
                             }
-                            Err(e2) => {
-                                eprintln!(
-                                    "[{log_prefix}] could not derive d_model from lm_head: {e2}"
-                                );
-                                0
+                        };
+                        if d_try == 0 {
+                            return Err(anyhow::anyhow!("could not determine d_model"));
+                        }
+                        (d_try, false)
+                    }
+                };
+                #[cfg(not(feature = "cuda"))]
+                {
+                    let bytes = d * std::mem::size_of::<f32>();
+                    let _ = (can_forward, bytes);
+                }
+
+                #[cfg(feature = "cuda")]
+                {
+                    let _ = logits_fn_start;
+                    decode_session
+                        .logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
+                }
+
+                #[cfg(not(feature = "cuda"))]
+                {
+                    use half::f16;
+                    use std::ffi::c_void;
+
+                    let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as usize;
+                    let tok = embed_names
+                        .iter()
+                        .find_map(|name| model.device_tensors.get(*name))
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("missing embeddings tensor (tried common names)")
+                        })?;
+                    if tok.shape.len() != 2 {
+                        return Err(anyhow::anyhow!("embeddings must be [vocab, d_model]"));
+                    }
+                    let vocab = tok.shape[0] as usize;
+                    if tok_id >= vocab {
+                        return Err(anyhow::anyhow!(
+                            "token id {} out of range (vocab={})",
+                            tok_id,
+                            vocab
+                        ));
+                    }
+                    let d_model = tok.shape[1] as usize;
+                    let mut hidden = vec![0f32; d_model];
+                    match tok.dtype {
+                        GgmlDType::F16 => {
+                            let row_bytes = d_model * 2;
+                            let off = tok.byte_offset as usize + tok_id * row_bytes;
+                            let row = &model.host_weights[off..off + row_bytes];
+                            for i in 0..d_model {
+                                let lo = row[2 * i] as u16;
+                                let hi = row[2 * i + 1] as u16;
+                                hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
                             }
                         }
-                    };
-                    if d_try == 0 {
-                        return Err(anyhow::anyhow!("could not determine d_model"));
+                        GgmlDType::Q8_0 => {
+                            const Q8_0_BLOCK: usize = 32;
+                            const Q8_0_BLOCK_BYTES: usize = 34;
+                            let blocks = d_model.div_ceil(Q8_0_BLOCK);
+                            let row_bytes = blocks * Q8_0_BLOCK_BYTES;
+                            let off = tok.byte_offset as usize + tok_id * row_bytes;
+                            let row = &model.host_weights[off..off + row_bytes];
+                            for i in 0..d_model {
+                                let block = i / Q8_0_BLOCK;
+                                let idx = i % Q8_0_BLOCK;
+                                let base = block * Q8_0_BLOCK_BYTES;
+                                let d_bits = u16::from_le_bytes([row[base], row[base + 1]]);
+                                let d = f16::from_bits(d_bits).to_f32();
+                                let q = row[base + 2 + idx] as i8 as f32;
+                                hidden[i] = d * q;
+                            }
+                        }
+                        _ => anyhow::bail!("unsupported embeddings dtype for host path"),
                     }
-                    (d_try, false)
+                    let result =
+                        unsafe { model.logits_from_hidden(hidden.as_ptr() as *const c_void) };
+                    timing::timing_log!(
+                        logits_fn_start.elapsed(),
+                        "{log_prefix}.logits_fn.ids_len_{}",
+                        ids.len()
+                    );
+                    result
                 }
             };
-            #[cfg(not(feature = "cuda"))]
-            {
-                let bytes = d * std::mem::size_of::<f32>();
-                let _ = (can_forward, bytes);
+            let elapsed = timed_logits_fn_start.elapsed();
+            if logits_call_count == 0 {
+                prompt_prefill_elapsed += elapsed;
+            } else {
+                generated_decode_elapsed += elapsed;
             }
-
-            #[cfg(feature = "cuda")]
-            {
-                let _ = logits_fn_start;
-                decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
-            }
-
-            #[cfg(not(feature = "cuda"))]
-            {
-                use half::f16;
-                use std::ffi::c_void;
-
-                let tok_id = *ids.last().ok_or_else(|| anyhow::anyhow!("empty ids"))? as usize;
-                let tok = embed_names
-                    .iter()
-                    .find_map(|name| model.device_tensors.get(*name))
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("missing embeddings tensor (tried common names)")
-                    })?;
-                if tok.shape.len() != 2 {
-                    return Err(anyhow::anyhow!("embeddings must be [vocab, d_model]"));
-                }
-                let vocab = tok.shape[0] as usize;
-                if tok_id >= vocab {
-                    return Err(anyhow::anyhow!(
-                        "token id {} out of range (vocab={})",
-                        tok_id,
-                        vocab
-                    ));
-                }
-                let d_model = tok.shape[1] as usize;
-                let mut hidden = vec![0f32; d_model];
-                match tok.dtype {
-                    GgmlDType::F16 => {
-                        let row_bytes = d_model * 2;
-                        let off = tok.byte_offset as usize + tok_id * row_bytes;
-                        let row = &model.host_weights[off..off + row_bytes];
-                        for i in 0..d_model {
-                            let lo = row[2 * i] as u16;
-                            let hi = row[2 * i + 1] as u16;
-                            hidden[i] = f16::from_bits(lo | (hi << 8)).to_f32();
-                        }
-                    }
-                    GgmlDType::Q8_0 => {
-                        const Q8_0_BLOCK: usize = 32;
-                        const Q8_0_BLOCK_BYTES: usize = 34;
-                        let blocks = d_model.div_ceil(Q8_0_BLOCK);
-                        let row_bytes = blocks * Q8_0_BLOCK_BYTES;
-                        let off = tok.byte_offset as usize + tok_id * row_bytes;
-                        let row = &model.host_weights[off..off + row_bytes];
-                        for i in 0..d_model {
-                            let block = i / Q8_0_BLOCK;
-                            let idx = i % Q8_0_BLOCK;
-                            let base = block * Q8_0_BLOCK_BYTES;
-                            let d_bits = u16::from_le_bytes([row[base], row[base + 1]]);
-                            let d = f16::from_bits(d_bits).to_f32();
-                            let q = row[base + 2 + idx] as i8 as f32;
-                            hidden[i] = d * q;
-                        }
-                    }
-                    _ => anyhow::bail!("unsupported embeddings dtype for host path"),
-                }
-                let result = unsafe { model.logits_from_hidden(hidden.as_ptr() as *const c_void) };
-                timing::timing_log!(
-                    logits_fn_start.elapsed(),
-                    "{log_prefix}.logits_fn.ids_len_{}",
-                    ids.len()
-                );
-                result
-            }
+            logits_call_count += 1;
+            result
         }
     };
 
@@ -420,12 +451,14 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     }
 
     #[cfg(feature = "cuda")]
-    eprintln!(
-        "[mem] (finish) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-        std::process::id(),
-        model.cuda.device_id(),
-        CudaContext::total_device_bytes()
-    );
+    if decode_session_log_enabled() {
+        eprintln!(
+            "[mem] (finish) pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+            std::process::id(),
+            model.cuda.device_id(),
+            CudaContext::total_device_bytes()
+        );
+    }
 
     timing::timing_log!(
         total_start.elapsed(),
@@ -436,6 +469,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     Ok(GeneratedText {
         output: sanitize_output(&text),
         token_ids: ids,
+        prompt_token_len,
+        prompt_prefill_elapsed_ms: prompt_prefill_elapsed.as_millis(),
+        generated_decode_elapsed_ms: generated_decode_elapsed.as_millis(),
+        total_elapsed_ms: total_start.elapsed().as_millis(),
+        attention_compression_elapsed_ms: None,
     })
 }
 

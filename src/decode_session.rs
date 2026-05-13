@@ -10,6 +10,11 @@ use anyhow::Result;
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
+fn decode_session_log_enabled() -> bool {
+    std::env::var("M40LLM_DECODE_SESSION_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
 pub struct DecodeSession {
     model: *const LoadedModel,
     sequence_id: u32,
@@ -240,19 +245,21 @@ impl DecodeSession {
         mut on_token_logits: impl FnMut(&[f32]),
     ) -> Result<Vec<f32>> {
         let logits_fn_start = std::time::Instant::now();
-        eprintln!(
-            "[{}] logits_fn called with {} tokens",
-            self.log_prefix,
-            ids.len()
-        );
         self.step += 1;
-        eprintln!(
-            "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-            self.step,
-            std::process::id(),
-            self.model().cuda.device_id(),
-            CudaContext::total_device_bytes()
-        );
+        if decode_session_log_enabled() {
+            eprintln!(
+                "[{}] logits_fn called with {} tokens",
+                self.log_prefix,
+                ids.len()
+            );
+            eprintln!(
+                "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
+                self.step,
+                std::process::id(),
+                self.model().cuda.device_id(),
+                CudaContext::total_device_bytes()
+            );
+        }
 
         if ids.is_empty() {
             anyhow::bail!("empty ids");
@@ -273,7 +280,9 @@ impl DecodeSession {
         for (token_idx, &tok_id_u32) in ids.iter().enumerate().skip(start) {
             let token_start = std::time::Instant::now();
             let tok_id = tok_id_u32 as u64;
-            eprintln!("[{}] token id {}", self.log_prefix, tok_id);
+            if decode_session_log_enabled() {
+                eprintln!("[{}] token id {}", self.log_prefix, tok_id);
+            }
 
             let token_logits = unsafe { self.logits_for_token(tok_id, token_idx, start)? };
             on_token_logits(&token_logits);

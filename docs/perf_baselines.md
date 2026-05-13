@@ -1694,3 +1694,54 @@ Interpretation:
   token-by-token and emits verbose per-token diagnostics. Quieting the harness
   and/or adding a faster prefill path should happen before making full-sweep
   quality runs routine.
+
+## 2026-05-12: Quiet KV Quality Harness Timing
+
+This checkpoint keeps the same retrieval behavior but makes the quality harness
+practical to run repeatedly. Per-token `DecodeSession` diagnostics are now gated
+behind `M40LLM_DECODE_SESSION_LOG=1`, JSONL rows include prompt/decode/total
+timing fields, and `M40LLM_KV_QUALITY_TARGETS` can run bounded target lists
+without using the full sweep.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Features: `cuda`
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf`
+- 64-token command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_TARGETS=64 M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_quiet_64.jsonl cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+- 512-token command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_TARGETS=512 M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_quiet_512.jsonl cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+
+Results:
+
+| Target | Prompt tokens | Generated tokens | Needle | Mode | Status | Prefill | Decode | Total | Output |
+| ---: | ---: | ---: | --- | --- | --- | ---: | ---: | ---: | --- |
+| 64 | 58 | 10 | old | off | pass | 3.349 s | 0.530 s | 5.900 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | old | block-select-exact | pass | 2.861 s | 0.546 s | 5.417 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | old | block-summary | pass | 2.920 s | 0.568 s | 5.509 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | old | block-select-lossy | pass | 2.928 s | 0.570 s | 5.531 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | recent | off | pass | 2.789 s | 0.531 s | 5.363 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | recent | block-select-exact | pass | 2.859 s | 0.546 s | 5.430 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | recent | block-summary | pass | 2.919 s | 0.568 s | 5.522 s | `ZXQ-NEEDLE-41729` |
+| 64 | 58 | 10 | recent | block-select-lossy | pass | 2.920 s | 0.568 s | 5.529 s | `ZXQ-NEEDLE-41729` |
+| 512 | 479 | 10 | old | off | pass | 56.059 s | 1.748 s | 59.825 s | `ZXQ-NEEDLE-41729` |
+| 512 | 479 | 10 | old | block-select-exact | pass | 57.509 s | 1.809 s | 61.355 s | `ZXQ-NEEDLE-41729` |
+| 512 | 479 | 10 | old | block-summary | pass | 62.683 s | 2.008 s | 66.728 s | `ZXQ-NEEDLE-41729` |
+| 512 | 479 | 10 | old | block-select-lossy | pass | 62.613 s | 2.012 s | 66.656 s | `ZXQ-NEEDLE-41729` |
+| 512 | 494 | 10 | recent | off | pass | 58.549 s | 1.794 s | 62.356 s | `ZXQ-NEEDLE-41729` |
+| 512 | 494 | 10 | recent | block-select-exact | pass | 60.590 s | 1.840 s | 64.423 s | `ZXQ-NEEDLE-41729` |
+| 512 | 494 | 10 | recent | block-summary | pass | 65.975 s | 2.052 s | 70.058 s | `ZXQ-NEEDLE-41729` |
+| 512 | 494 | 10 | recent | block-select-lossy | pass | 65.971 s | 2.056 s | 70.023 s | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Default output is now bounded to candidate/model lines, one line per mode run,
+  and the compact summary table. The previous per-token IDs and per-token memory
+  diagnostics are off by default.
+- The JSONL report now records actual post-prompt-format prompt token counts,
+  generated token counts, pass/fail status, full output, and timing breakdowns.
+- `attention_compression_elapsed_ms` is currently `null`; the runtime does not
+  expose a per-case attention/compression counter yet.
+- Prompt prefill dominates runtime at 512 tokens. The existing packed prefill
+  path is server/scheduler-oriented, so this checkpoint does not risk wiring it
+  into `generate_text`; the next performance task is a safe bounded/batched
+  prefill entrypoint for CLI quality runs.

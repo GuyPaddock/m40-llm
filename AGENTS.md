@@ -146,14 +146,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   wrapper, and stop criteria include both end-of-turn and end-of-text tokens.
   The GGUF loader now honors aligned tensor data offsets, including the default
   32-byte alignment when the aligned payload fits. This fixes the Llama 3.2
-  repeated-token-0/NaN-logits failure. The 64-token and 512-token old/recent KV
-  retrieval smokes now pass for dense `off`, `block-select-exact`,
-  `block-summary`, and `block-select-lossy`; the 512-token run is recorded in
-  `docs/perf_baselines.md` and took 530.99 s on M40.
-- Next: quiet and speed up the KV quality harness before making
-  `M40LLM_KV_QUALITY_FULL=1` a routine gate, then run broader 4K+ retrieval
-  sweeps before trusting lossy KV compression at long context. Otherwise proceed
-  to fast-fits vs large-model backend selection per the strict roadmap.
+  repeated-token-0/NaN-logits failure. The KV retrieval harness now defaults to
+  bounded 64/512 old/recent smoke targets, supports explicit
+  `M40LLM_KV_QUALITY_TARGETS`, gates per-token decode-session diagnostics behind
+  `M40LLM_DECODE_SESSION_LOG=1`, and emits JSONL rows with actual prompt token
+  counts, generated token counts, pass/fail status, full output, and
+  prompt/decode/total timing breakdowns. The quiet 64-token and 512-token
+  old/recent smokes pass for dense `off`, `block-select-exact`,
+  `block-summary`, and `block-select-lossy`; results are recorded in
+  `docs/perf_baselines.md`.
+- Next: add a safe bounded/batched prefill entrypoint for CLI quality runs before
+  making `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate. The current packed
+  prefill path is scheduler-oriented and was not wired into `generate_text` in
+  the quiet-harness task.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

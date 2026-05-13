@@ -1,7 +1,7 @@
 #![cfg(feature = "cuda")]
 
 use anyhow::{Context, Result};
-use m40_llm::generate::{generate_text, GenerateOptions};
+use m40_llm::generate::{generate_text, GenerateOptions, GeneratedText};
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
 use m40_llm::infer::{LoadedModel, ModelConfig};
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 const NEEDLE: &str = "ZXQ-NEEDLE-41729";
 
@@ -45,11 +44,15 @@ struct CaseRecord {
     resolved_model_path: String,
     target_tokens: usize,
     prompt_tokens: usize,
+    generated_tokens: usize,
     needle_position: String,
     mode: String,
     status: CaseStatus,
-    elapsed_ms: u128,
-    output_excerpt: String,
+    prompt_prefill_elapsed_ms: u128,
+    generated_decode_elapsed_ms: u128,
+    total_elapsed_ms: u128,
+    attention_compression_elapsed_ms: Option<u128>,
+    output: String,
     error: Option<String>,
 }
 
@@ -229,11 +232,27 @@ fn retrieval_prompt(tokenizer: &Tokenizer, target_tokens: usize, needle_position
     prompt
 }
 
-fn smoke_target_tokens() -> usize {
-    std::env::var("M40LLM_KV_QUALITY_SMOKE_TOKENS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(64)
+fn parse_target_list(value: &str) -> Result<Vec<usize>> {
+    let mut targets = Vec::new();
+    for part in value.split(',') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let target = trimmed
+            .parse::<usize>()
+            .with_context(|| format!("invalid M40LLM_KV_QUALITY_TARGETS entry '{trimmed}'"))?;
+        if target == 0 {
+            anyhow::bail!("M40LLM_KV_QUALITY_TARGETS entries must be positive");
+        }
+        targets.push(target);
+    }
+    targets.sort_unstable();
+    targets.dedup();
+    if targets.is_empty() {
+        anyhow::bail!("M40LLM_KV_QUALITY_TARGETS did not contain any target sizes");
+    }
+    Ok(targets)
 }
 
 fn retrieval_max_tokens() -> usize {
@@ -243,18 +262,38 @@ fn retrieval_max_tokens() -> usize {
         .unwrap_or(16)
 }
 
-fn target_contexts(model_context: usize, full_quality: bool) -> Vec<usize> {
+fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize>> {
     let limit = model_context.saturating_sub(128);
-    if !full_quality {
-        let smoke = smoke_target_tokens().min(limit.saturating_sub(1)).max(32);
-        return if smoke < limit {
+    if let Some(targets) = std::env::var("M40LLM_KV_QUALITY_TARGETS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    {
+        return Ok(parse_target_list(&targets)?
+            .into_iter()
+            .filter(|ctx| *ctx < limit)
+            .collect());
+    }
+
+    if let Some(smoke) = std::env::var("M40LLM_KV_QUALITY_SMOKE_TOKENS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let smoke = smoke
+            .parse::<usize>()
+            .context("invalid M40LLM_KV_QUALITY_SMOKE_TOKENS")?;
+        let smoke = smoke.min(limit.saturating_sub(1)).max(32);
+        return Ok(if smoke < limit {
             vec![smoke]
         } else {
             Vec::new()
-        };
+        });
     }
 
-    let mut contexts: Vec<usize> = [512, 1024, 2048, 4096, 8192, 16384, 32768]
+    if !full_quality {
+        return Ok([64, 512].into_iter().filter(|ctx| *ctx < limit).collect());
+    }
+
+    let mut contexts: Vec<usize> = [64, 512, 1024, 2048, 4096]
         .into_iter()
         .filter(|ctx| *ctx < limit)
         .collect();
@@ -263,7 +302,7 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Vec<usize> {
     }
     contexts.sort_unstable();
     contexts.dedup();
-    contexts
+    Ok(contexts)
 }
 
 fn prepare_kv_cache(model: &mut LoadedModel, mode: KvCompressMode) -> Result<()> {
@@ -291,16 +330,16 @@ fn run_retrieval_case(
     target_tokens: usize,
     needle_position: &str,
     mode: KvCompressMode,
-) -> Result<(String, usize)> {
+) -> Result<(GeneratedText, usize)> {
     prepare_kv_cache(model, mode)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
-    let prompt_tokens = tokenizer
+    let preformatted_prompt_tokens = tokenizer
         .encode_with_specials(&prompt, true, false)
         .context("encode retrieval prompt")?
         .len();
-    if prompt_tokens >= model.model_config.context_length as usize {
+    if preformatted_prompt_tokens >= model.model_config.context_length as usize {
         anyhow::bail!(
-            "retrieval prompt has {prompt_tokens} tokens, model context is {}",
+            "retrieval prompt has {preformatted_prompt_tokens} tokens before prompt formatting, model context is {}",
             model.model_config.context_length
         );
     }
@@ -321,7 +360,7 @@ fn run_retrieval_case(
             ..Default::default()
         },
     )?;
-    Ok((generated.output, prompt_tokens))
+    Ok((generated, preformatted_prompt_tokens))
 }
 
 fn mode_name(mode: KvCompressMode) -> &'static str {
@@ -331,11 +370,6 @@ fn mode_name(mode: KvCompressMode) -> &'static str {
         KvCompressMode::BlockSummary => "block-summary",
         KvCompressMode::BlockSelectLossy => "block-select-lossy",
     }
-}
-
-fn output_excerpt(output: &str) -> String {
-    const MAX_CHARS: usize = 240;
-    output.chars().take(MAX_CHARS).collect()
 }
 
 fn append_report(records: &[CaseRecord]) -> Result<()> {
@@ -358,14 +392,17 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} needle={} mode={} status={:?} elapsed={}ms output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
+            record.generated_tokens,
             record.needle_position,
             record.mode,
             record.status,
-            record.elapsed_ms,
-            record.output_excerpt,
+            record.prompt_prefill_elapsed_ms,
+            record.generated_decode_elapsed_ms,
+            record.total_elapsed_ms,
+            record.output,
             record.error.as_deref().unwrap_or("-")
         );
     }
@@ -381,7 +418,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         .as_ref()
         .expect("selected candidate must have config");
     let full_quality = std::env::var("M40LLM_KV_QUALITY_FULL").ok().as_deref() == Some("1");
-    let contexts = target_contexts(config.context_length as usize, full_quality);
+    let contexts = target_contexts(config.context_length as usize, full_quality)?;
     if contexts.is_empty() {
         eprintln!(
             "selected model context={} is too short for retrieval smoke",
@@ -419,8 +456,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         for needle_position in ["old", "recent"] {
             let mut dense_passed = None;
             for mode in modes {
-                let started = Instant::now();
                 let mut prompt_tokens = 0usize;
+                let mut generated_tokens = 0usize;
+                let mut prompt_prefill_elapsed_ms = 0u128;
+                let mut generated_decode_elapsed_ms = 0u128;
+                let mut total_elapsed_ms = 0u128;
+                let mut attention_compression_elapsed_ms = None;
                 let (mut status, output, error) = match run_retrieval_case(
                     &mut model,
                     &tokenizer,
@@ -428,9 +469,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     needle_position,
                     mode,
                 ) {
-                    Ok((output, tokens)) => {
-                        prompt_tokens = tokens;
-                        let passed = output.contains(NEEDLE);
+                    Ok((generated, _preformatted_prompt_tokens)) => {
+                        prompt_tokens = generated.prompt_token_len;
+                        generated_tokens = generated
+                            .token_ids
+                            .len()
+                            .saturating_sub(generated.prompt_token_len);
+                        prompt_prefill_elapsed_ms = generated.prompt_prefill_elapsed_ms;
+                        generated_decode_elapsed_ms = generated.generated_decode_elapsed_ms;
+                        total_elapsed_ms = generated.total_elapsed_ms;
+                        attention_compression_elapsed_ms =
+                            generated.attention_compression_elapsed_ms;
+                        let passed = generated.output.contains(NEEDLE);
                         if mode == KvCompressMode::Off {
                             dense_passed = Some(passed);
                         }
@@ -439,7 +489,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         } else {
                             CaseStatus::Fail
                         };
-                        (status, output, None)
+                        (status, generated.output, None)
                     }
                     Err(err) => {
                         if mode == KvCompressMode::Off {
@@ -456,11 +506,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     resolved_model_path: probe.candidate.resolved_path.display().to_string(),
                     target_tokens,
                     prompt_tokens,
+                    generated_tokens,
                     needle_position: needle_position.to_string(),
                     mode: mode_name(mode).to_string(),
                     status,
-                    elapsed_ms: started.elapsed().as_millis(),
-                    output_excerpt: output_excerpt(&output),
+                    prompt_prefill_elapsed_ms,
+                    generated_decode_elapsed_ms,
+                    total_elapsed_ms,
+                    attention_compression_elapsed_ms,
+                    output,
                     error,
                 });
             }

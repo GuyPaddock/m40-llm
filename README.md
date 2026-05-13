@@ -142,12 +142,21 @@ The quality harness in `tests/kv_compression_long_context.rs` requires an
 explicit GGUF path via
 `M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/path/to/model.gguf`; it does not scan
 local cache trees. Set `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to
-capture per-case retrieval results, and set `M40LLM_KV_QUALITY_FULL=1` only when
-you want the broader 512-to-32K context sweep instead of the short smoke target.
-Set `M40LLM_KV_QUALITY_MAX_TOKENS=<n>` if the retrieval answer needs more than
-the default 16 generated tokens. The current quality harness is intentionally
-diagnostic rather than fast; it processes prompt tokens one at a time, so run
-full long-context sweeps deliberately and record the JSONL report.
+capture per-case retrieval results. By default, the harness runs bounded 64- and
+512-token old/recent retrieval smoke cases. Use
+`M40LLM_KV_QUALITY_TARGETS=512,1024` to run an explicit target list, or set
+`M40LLM_KV_QUALITY_FULL=1` for the optional 64/512/1K/2K/4K sweep when the model
+context permits. Set `M40LLM_KV_QUALITY_MAX_TOKENS=<n>` if the retrieval answer
+needs more than the default 16 generated tokens. The JSONL report includes mode,
+prompt tokens, generated tokens, pass/fail status, prompt-prefill time,
+generated-token decode time, total elapsed time, attention/compression time when
+available, and output text. `attention_compression_elapsed_ms` is currently
+`null` because the runtime does not expose that per-case counter yet.
+`M40LLM_DECODE_SESSION_LOG=1` restores verbose per-token decode-session logs.
+The current quality harness is intentionally diagnostic rather than fast; it
+still processes prompt tokens one at a time because the existing packed prefill
+path is scheduler-oriented and is not yet safely reusable from CLI
+`generate_text`.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to
