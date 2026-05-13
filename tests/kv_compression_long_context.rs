@@ -14,17 +14,12 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 const NEEDLE: &str = "ZXQ-NEEDLE-41729";
-const CACHE_ROOTS: &[&str] = &[
-    "/mnt/array-fastest/home/guyep/.cache/huggingface/hub",
-    "/mnt/array-fastest/home/guyep/.cache/m40-llm/models",
-];
 
 #[derive(Debug, Clone)]
 struct Candidate {
     path: PathBuf,
     resolved_path: PathBuf,
     size: u64,
-    explicit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -58,18 +53,6 @@ struct CaseRecord {
     error: Option<String>,
 }
 
-fn is_candidate_path(path: &Path) -> bool {
-    let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
-        return false;
-    };
-    let lower = name.to_ascii_lowercase();
-    lower.ends_with(".gguf")
-        && !lower.starts_with("mmproj-")
-        && !lower.contains("ggml-vocab")
-        && !lower.ends_with(".gguf.inp")
-        && !lower.ends_with(".gguf.out")
-}
-
 fn resolved_size(path: &Path) -> Result<(PathBuf, u64)> {
     let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let size = fs::metadata(path)
@@ -78,39 +61,17 @@ fn resolved_size(path: &Path) -> Result<(PathBuf, u64)> {
     Ok((resolved, size))
 }
 
-fn collect_gguf_paths(root: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
-        if file_type.is_dir() {
-            collect_gguf_paths(&path, out);
-        } else if (file_type.is_file() || file_type.is_symlink()) && is_candidate_path(&path) {
-            out.push(path);
-        }
-    }
-}
-
 fn discover_candidates() -> Vec<Candidate> {
-    let mut paths = Vec::new();
-    if let Some(path) = std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL") {
-        paths.push((PathBuf::from(path), true));
-    } else {
-        let mut discovered = Vec::new();
-        for root in CACHE_ROOTS {
-            collect_gguf_paths(Path::new(root), &mut discovered);
-        }
-        for path in discovered {
-            paths.push((path, false));
-        }
-    }
+    let Some(path) = std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL") else {
+        eprintln!(
+            "set M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/path/to/model.gguf to run KV retrieval quality"
+        );
+        return Vec::new();
+    };
+    let paths = [PathBuf::from(path)];
 
     let mut candidates = Vec::new();
-    for (path, explicit) in paths {
+    for path in paths {
         if !path.exists() {
             eprintln!("GGUF candidate does not exist: {}", path.display());
             continue;
@@ -120,47 +81,11 @@ fn discover_candidates() -> Vec<Candidate> {
                 path,
                 resolved_path,
                 size,
-                explicit,
             }),
             Err(err) => eprintln!("skipping GGUF candidate {}: {err}", path.display()),
         }
     }
-    candidates.sort_by_key(candidate_rank);
-    candidates.dedup_by(|a, b| a.resolved_path == b.resolved_path);
-    if std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL").is_none() && candidates.len() > 16 {
-        candidates.truncate(16);
-    }
     candidates
-}
-
-fn candidate_rank(candidate: &Candidate) -> (u8, u8, u64) {
-    let name = candidate
-        .path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let dtype_rank = if name.contains("f16") || name.contains("bf16") {
-        0
-    } else if name.contains("q8_0") {
-        1
-    } else if name.contains("q5_1") {
-        2
-    } else if name.contains("q4") || name.contains("q5") || name.contains("q6") {
-        3
-    } else {
-        4
-    };
-    let size_rank = if candidate.size <= 16 * 1024 * 1024 * 1024 {
-        0
-    } else {
-        1
-    };
-    (
-        !candidate.explicit as u8,
-        dtype_rank + size_rank,
-        candidate.size,
-    )
 }
 
 fn dtype_summary(model: &GgufModel) -> BTreeMap<String, usize> {
@@ -208,11 +133,6 @@ fn probe_candidate(candidate: Candidate) -> CandidateProbe {
                 Ok(cfg) => {
                     if let Err(err) = tensor_dtype_supported(&model) {
                         skip_reason = Some(err.to_string());
-                    } else if !candidate.explicit && candidate.size > 16 * 1024 * 1024 * 1024 {
-                        skip_reason = Some(format!(
-                            "candidate is {:.2} GiB; quality gate caps automatic load at 16 GiB",
-                            candidate.size as f64 / 1024.0 / 1024.0 / 1024.0
-                        ));
                     } else {
                         config = Some(cfg);
                     }
@@ -238,19 +158,7 @@ fn select_candidate() -> Result<Option<CandidateProbe>> {
         return Ok(None);
     }
 
-    let mut probes: Vec<CandidateProbe> = candidates.into_iter().map(probe_candidate).collect();
-    probes.sort_by_key(|probe| {
-        let context_rank = probe
-            .config
-            .as_ref()
-            .map(|cfg| if cfg.context_length >= 4096 { 0 } else { 1 })
-            .unwrap_or(2);
-        (
-            probe.skip_reason.is_some(),
-            context_rank,
-            candidate_rank(&probe.candidate),
-        )
-    });
+    let probes: Vec<CandidateProbe> = candidates.into_iter().map(probe_candidate).collect();
 
     eprintln!("KV compression quality candidate table:");
     for probe in &probes {
@@ -465,8 +373,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         .config
         .as_ref()
         .expect("selected candidate must have config");
-    let full_quality = probe.candidate.explicit
-        || std::env::var("M40LLM_KV_QUALITY_FULL").ok().as_deref() == Some("1");
+    let full_quality = std::env::var("M40LLM_KV_QUALITY_FULL").ok().as_deref() == Some("1");
     let contexts = target_contexts(config.context_length as usize, full_quality);
     if contexts.is_empty() {
         eprintln!(

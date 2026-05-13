@@ -1614,41 +1614,40 @@ Interpretation:
 ## 2026-05-13: Compressed KV Retrieval Quality Harness
 
 This checkpoint upgrades the env-gated retrieval smoke into a diagnostic quality
-harness. It discovers local GGUF candidates under the Hugging Face and m40-llm
-cache trees, probes metadata before loading weights, and reports per-mode
-retrieval outcomes without forcing lossy modes to pass.
+harness. It probes an explicit GGUF model path before loading weights and
+reports per-mode retrieval outcomes without forcing lossy modes to pass. The
+harness no longer scans cache trees; set `M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL`
+to choose the model and `M40LLM_KV_QUALITY_FULL=1` only for the broad context
+sweep.
 
 Environment:
 
 - GPU: Tesla M40 24GB, sm_52
 - Features: `cuda`
-- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_KV_QUALITY_SMOKE_TOKENS=64 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_llama32_1b_smoke.jsonl M40LLM_KV_QUALITY_SMOKE_TOKENS=64 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
 
 Selected model:
 
 | Model | Size | Context | Reason |
 | --- | ---: | ---: | --- |
-| TinyLlama-1.1B-Chat-v1.0.f16.gguf | 2.05 GiB | 2048 | First discovered candidate supported by the current LLaMA/F16 loader |
+| Llama-3.2-1B-Instruct-f16.gguf | 2.31 GiB | 131072 | Explicit model path; supported after tied-output embedding support |
 
 Candidate probe summary:
 
-- Several larger cached GGUFs were discovered under
-  `/mnt/array-fastest/home/guyep/.cache/huggingface/hub`.
-- The current metadata parser rejected Gemma, Phi, GPT-OSS, Qwen, and several
-  other cached long-context candidates because they do not expose the LLaMA
-  metadata keys expected by `ModelConfig::from_metadata`.
-- Many remaining long-context candidates use K-quant or unknown tensor dtypes
-  that are not yet supported by the current full-layer CUDA path.
+- Cache discovery was removed from this harness to keep test startup bounded and
+  explicit. Use `M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL` to select the model.
+- The selected Llama 3.2 1B F16 model has LLaMA metadata, 128K context,
+  GQA head_dim=64, and F16/F32 tensors.
 
 Retrieval results:
 
 | Target | Needle | Mode | Status | Notes |
 | ---: | --- | --- | --- | --- |
-| 64 | old | off | fail | Dense baseline generated a partial code prefix, not the full needle |
+| 64 | old | off | fail | Dense baseline generated `!!!!!!!!`, not the needle |
 | 64 | old | block-select-exact | inconclusive | Dense baseline failed, so compression quality is not attributable |
 | 64 | old | block-summary | inconclusive | Dense baseline failed |
 | 64 | old | block-select-lossy | inconclusive | Dense baseline failed |
-| 64 | recent | off | fail | Dense baseline generated a partial code prefix, not the full needle |
+| 64 | recent | off | fail | Dense baseline generated `!!!!!!!!`, not the needle |
 | 64 | recent | block-select-exact | inconclusive | Dense baseline failed |
 | 64 | recent | block-summary | inconclusive | Dense baseline failed |
 | 64 | recent | block-select-lossy | inconclusive | Dense baseline failed |
@@ -1657,7 +1656,8 @@ Interpretation:
 
 - The harness now produces actionable pass/fail/inconclusive rows and can emit
   JSONL via `M40LLM_KV_QUALITY_REPORT=...`.
-- The current machine has cached long-context GGUFs, but none are runnable
-  through the current LLaMA/F16-oriented CUDA path.
+- The Llama 3.2 1B F16 model is runnable through full-layer CUDA decode, but its
+  dense baseline fails even the short retrieval smoke, so it is not yet a valid
+  compression-quality baseline.
 - Compressed KV remains experimental: quality is still unmeasured for a dense
   baseline that can reliably solve the retrieval prompt.
