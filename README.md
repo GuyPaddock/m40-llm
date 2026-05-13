@@ -287,11 +287,22 @@ Current M40 validation target:
   experiment for head-dim-64 GQA attention; M40 measurements also keep the
   default attention kernels unchanged.
 
-Variable-length batching is inspired by Zhang and Lu's SC25 research poster,
-"An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length
-Sequences" ([PDF](https://sc25.supercomputing.org/proceedings/posters/poster_files/post167s2-file2.pdf)).
-The M40 implementation adapts the high-level ideas to conventional CUDA FP32
-accumulation on Maxwell sm_52, without Tensor Core / WMMA assumptions.
+Variable-length batching is inspired by Zhang and Lu's SC25 research poster on
+GEMM acceleration for variable-length LLM inference. The M40 implementation
+adapts the high-level ideas to conventional CUDA FP32 accumulation on Maxwell
+sm_52, without Tensor Core / WMMA assumptions:
+
+```bibtex
+@inproceedings{zhang2025efficientgemm,
+  title        = {An Efficient GEMM Acceleration Method for LLM Inference with Variable-Length Sequences},
+  author       = {Zhang, Yu and Lu, Lu},
+  booktitle    = {Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis (SC25), Research Posters},
+  year         = {2025},
+  organization = {ACM/IEEE},
+  url          = {https://sc25.supercomputing.org/proceedings/posters/poster_files/post167s2-file2.pdf},
+  note         = {Research poster}
+}
+```
 
 ## Contributing
 See `CONTRIBUTING.md` for guidelines.
