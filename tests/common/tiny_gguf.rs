@@ -37,15 +37,24 @@ fn f16_bytes(v: f32) -> [u8; 2] {
 
 #[allow(dead_code)]
 pub fn make_identity_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
-    make_tiny_gguf(cfg, TinyOutput::Identity)
+    make_tiny_gguf(cfg, TinyOutput::Identity, false)
 }
 
 #[allow(dead_code)]
 pub fn make_ascii_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
-    make_tiny_gguf(cfg, TinyOutput::ForceToken(b'A' as usize))
+    make_tiny_gguf(cfg, TinyOutput::ForceToken(b'A' as usize), false)
 }
 
-fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8>) {
+#[allow(dead_code)]
+pub fn make_tied_identity_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
+    make_tiny_gguf(cfg, TinyOutput::Identity, true)
+}
+
+fn make_tiny_gguf(
+    cfg: TinyGgufConfig,
+    output: TinyOutput,
+    tied_output: bool,
+) -> (GgufModel, Vec<u8>) {
     assert!(cfg.vocab >= cfg.d_model);
     assert!(cfg.d_model > 0);
     assert!(cfg.hidden > 0);
@@ -108,7 +117,22 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
             });
         };
 
-    {
+    if tied_output {
+        let mut fill = |buf: &mut Vec<u8>| {
+            for col in 0..cfg.vocab {
+                for row in 0..cfg.d_model {
+                    let v = if row == col { 1.0 } else { 0.0 };
+                    buf.extend_from_slice(&f16_bytes(v));
+                }
+            }
+        };
+        add_tensor(
+            "tok_embeddings.weight",
+            GgmlDType::F16,
+            &[cfg.d_model as u64, cfg.vocab as u64],
+            &mut fill,
+        );
+    } else {
         let mut fill = |buf: &mut Vec<u8>| {
             for row in 0..cfg.vocab {
                 for col in 0..cfg.d_model {
@@ -125,7 +149,7 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
         );
     }
 
-    {
+    if !tied_output {
         let mut fill = |buf: &mut Vec<u8>| {
             for col in 0..cfg.vocab {
                 for row in 0..cfg.d_model {

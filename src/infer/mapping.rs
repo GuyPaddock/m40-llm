@@ -313,9 +313,11 @@ impl LoadedModel {
             ffn_norm,
         })
     }
-    /// Map the language modeling head (output projection) tensor if present.
+    /// Map the language modeling head (output projection) tensor.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
-    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings=false).
+    /// If absent, accepts tied F16 embeddings only when they already have the
+    /// same GGUF-native [d_model, vocab] layout expected by the projection path.
+    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings).
     pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
@@ -348,8 +350,44 @@ impl LoadedModel {
             }
             return Ok((name, t.clone(), d_model, vocab, false));
         }
+        let embedding_candidates = vec![
+            "tok_embeddings.weight".to_string(),
+            "token_embd.weight".to_string(),
+            "token_embd".to_string(),
+            "token_embeddings.weight".to_string(),
+        ];
+        if let Ok(t) = self.find_tensor_any(&embedding_candidates) {
+            let name = embedding_candidates
+                .iter()
+                .find(|candidate| self.device_tensor(candidate).is_some())
+                .context("embedding tensor name not found after candidate match")?
+                .clone();
+            if t.dtype != GgmlDType::F16 {
+                anyhow::bail!(
+                    "tied lm_head requires F16 embeddings when output head is absent; tensor {name} has {:?}",
+                    t.dtype
+                );
+            }
+            if t.shape.len() != 2 {
+                anyhow::bail!(
+                    "tied lm_head embedding shape invalid: expected [d_model, vocab], got {:?}",
+                    t.shape
+                );
+            }
+            let d_model = self.model_config.embedding_length as usize;
+            let vocab = self.model_config.vocab_size as usize;
+            if t.shape[0] as usize != d_model || t.shape[1] as usize != vocab {
+                anyhow::bail!(
+                    "tied lm_head embedding layout unsupported: expected [d_model, vocab]=[{}, {}], got {:?}",
+                    d_model,
+                    vocab,
+                    t.shape
+                );
+            }
+            return Ok((name, t.clone(), d_model, vocab, true));
+        }
         anyhow::bail!(
-            "lm_head tensor not found; expected one of {}",
+            "output projection tensor not found; expected one of {} or tied F16 embeddings in [d_model, vocab] layout",
             candidates.join(", ")
         )
     }

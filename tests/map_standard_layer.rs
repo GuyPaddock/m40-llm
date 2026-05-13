@@ -183,6 +183,67 @@ fn map_standard_layer_dtype_guard() -> Result<()> {
 }
 
 #[test]
+fn map_lm_head_prefers_dedicated_output() -> Result<()> {
+    let lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+
+    let (name, _view, d_model, vocab, tied) = lm.map_lm_head()?;
+    assert_eq!(name, "output.weight");
+    assert_eq!(d_model, 32);
+    assert_eq!(vocab, 1024);
+    assert!(!tied);
+    Ok(())
+}
+
+#[test]
+fn map_lm_head_uses_compatible_tied_embeddings() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.device_tensors.remove("output.weight");
+    lm.device_tensors
+        .get_mut("tok_embeddings.weight")
+        .expect("embedding present")
+        .shape = vec![32, 1024];
+
+    let (name, _view, d_model, vocab, tied) = lm.map_lm_head()?;
+    assert_eq!(name, "tok_embeddings.weight");
+    assert_eq!(d_model, 32);
+    assert_eq!(vocab, 1024);
+    assert!(tied);
+    Ok(())
+}
+
+#[test]
+fn map_lm_head_rejects_incompatible_tied_embedding_layout() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.device_tensors.remove("output.weight");
+
+    let err = lm.map_lm_head().unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("tied lm_head embedding layout unsupported"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[test]
 fn map_standard_layer_shape_guard_down() -> Result<()> {
     // Build valid model then corrupt w_down shape to mismatch hidden/d_model
     let mut lm = match make_model_with_layer(2, 24, 48, true) {
@@ -273,7 +334,7 @@ fn map_standard_layer_gate_shape_guard() -> Result<()> {
 }
 
 #[test]
-fn validate_full_layer_decode_requires_lm_head() -> Result<()> {
+fn validate_full_layer_decode_requires_output_projection_source() -> Result<()> {
     let mut lm = match make_model_with_layer(0, 32, 64, true) {
         Ok(lm) => lm,
         Err(e) => {
@@ -287,7 +348,7 @@ fn validate_full_layer_decode_requires_lm_head() -> Result<()> {
     let err = lm.validate_full_layer_decode().unwrap_err();
     let msg = format!("{err}");
     assert!(
-        msg.contains("lm_head tensor not found"),
+        msg.contains("tied lm_head embedding layout unsupported"),
         "unexpected error: {msg}"
     );
     Ok(())

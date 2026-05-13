@@ -403,13 +403,13 @@ impl LoadedModel {
             if head_dim != 64 {
                 anyhow::bail!("{:?} requires head_dim=64", compression.mode);
             }
-            let top_blocks = if compression.mode == KvCompressMode::BlockSummary {
-                0
-            } else {
-                compression.top_blocks
-            };
             #[cfg(feature = "cuda")]
             unsafe {
+                let top_blocks = if compression.mode == KvCompressMode::BlockSummary {
+                    0
+                } else {
+                    compression.top_blocks
+                };
                 return kv.attention_last_token_f32_gqa_block_summary_lossy_async(
                     &self.cuda,
                     seq_id,

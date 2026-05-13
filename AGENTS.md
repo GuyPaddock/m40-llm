@@ -141,9 +141,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   current machine it selects TinyLlama because cached long-context GGUFs are not
   yet supported by the LLaMA/F16-oriented loader path, and TinyLlama's dense
   baseline fails the short needle prompt, so compression quality remains
-  inconclusive.
-- Next: either add support for a cached long-context GGUF family/dtype so the
-  quality harness has a capable dense baseline, or proceed to fast-fits vs
+  inconclusive. CUDA logits now support compatible tied F16 output embeddings
+  in `[d_model, vocab]` GGUF layout, which unblocks one-token full-layer decode
+  for the cached Llama 3.2 1B Instruct F16 GGUF.
+- Next: run the retrieval quality harness against the Llama 3.2 1B Instruct
+  F16 GGUF to establish a capable dense baseline, or proceed to fast-fits vs
   large-model backend selection per the strict roadmap.
 
 ## Strict Reconciled Task Order
