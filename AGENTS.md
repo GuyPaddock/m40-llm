@@ -131,8 +131,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
   speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
   speedup with all HTTP requests successful.
-- Next: keep packed prefill opt-in while planning either mixed prefill/decode
-  overlap or broader prefill compatibility/fallback coverage.
+- Experimental KV compression modes are available for CLI decode attention:
+  `block-select-exact` keeps old exact KV while sparsifying attention, and
+  `block-summary` / `block-select-lossy` validate lossy summary attention using
+  dense KV as the backing store. M40 attention microbenchmarks at 4K/8K/16K/32K
+  are recorded in `docs/perf_baselines.md`; long-context needle retrieval is
+  covered by an env-gated smoke harness.
+- Next: if compressed KV remains a priority, add a real compressed sidecar
+  allocation/update path so lossy modes reduce actual allocated KV memory before
+  integrating with server scheduling.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

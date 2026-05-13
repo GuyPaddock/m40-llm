@@ -127,6 +127,10 @@ default remains dense exact KV:
 exact KV available while testing whether block summaries are a useful index.
 Lossy modes are experimental and must pass long-context retrieval smoke tests
 before they should be used for quality-sensitive generation.
+The initial implementation keeps dense KV as the backing store for all modes;
+lossy modes currently validate approximate attention behavior and report
+compressed-equivalent footprint before a later sidecar path physically discards
+old exact KV.
 
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.

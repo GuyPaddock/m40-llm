@@ -602,10 +602,143 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_attention_kv_compression_modes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attention_kv_compression_modes");
+
+    #[cfg(all(feature = "cuda", nvcc))]
+    {
+        let ctx = cuda_env::ctx_m40().expect("cuda context");
+        cuda_env::require_sm52(&ctx).expect("sm_52 device");
+
+        let q_heads = 32u32;
+        let kv_heads = 4u32;
+        let head_dim = 64u32;
+        let q_dim = (q_heads * head_dim) as usize;
+        let kv_dim = (kv_heads * head_dim) as usize;
+        let recent_window = 1024u32;
+        let block_size = 32u32;
+        let top_blocks = 16u32;
+        let seq_lens = [4096u32, 8192, 16384, 32768];
+
+        for seq_len in seq_lens {
+            let kv =
+                KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim).expect("kv cache");
+            seed_kv_cache(&ctx, &kv, &[seq_len], kv_dim);
+            let q: Vec<f32> = (0..q_dim)
+                .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
+                .collect();
+            let bytes_q = q_dim * std::mem::size_of::<f32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+            }
+
+            let dense_kv_bytes = seq_len as usize * kv_dim * std::mem::size_of::<half::f16>() * 2;
+            let summary_count = seq_len.saturating_sub(recent_window).div_ceil(block_size);
+            let block_summary_bytes = (recent_window as usize + summary_count as usize)
+                * kv_dim
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let block_select_lossy_bytes = (recent_window as usize
+                + top_blocks.min(summary_count) as usize)
+                * kv_dim
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            eprintln!(
+                "[kv-compress-bench] seq_len={seq_len} dense_kv_bytes={dense_kv_bytes} block_summary_equiv_bytes={block_summary_bytes} block_select_lossy_equiv_bytes={block_select_lossy_bytes}"
+            );
+
+            group.throughput(Throughput::Elements(seq_len as u64));
+            group.bench_function(format!("s{seq_len}_dense"), |b| {
+                b.iter(|| unsafe {
+                    kv.attention_last_token_f32_gqa(
+                        &ctx,
+                        0,
+                        d_q as *const c_void,
+                        q_heads,
+                        seq_len,
+                        d_out,
+                    )
+                    .expect("dense attention")
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_select_exact"), |b| {
+                b.iter(|| unsafe {
+                    kv.attention_last_token_f32_gqa_block_select_exact_async(
+                        &ctx,
+                        0,
+                        d_q as *const c_void,
+                        q_heads,
+                        seq_len,
+                        recent_window,
+                        block_size,
+                        top_blocks,
+                        d_out,
+                    )
+                    .expect("block-select-exact attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-select-exact");
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_summary"), |b| {
+                b.iter(|| unsafe {
+                    kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+                        &ctx,
+                        0,
+                        d_q as *const c_void,
+                        q_heads,
+                        seq_len,
+                        recent_window,
+                        block_size,
+                        0,
+                        d_out,
+                    )
+                    .expect("block-summary attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-summary");
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_select_lossy"), |b| {
+                b.iter(|| unsafe {
+                    kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+                        &ctx,
+                        0,
+                        d_q as *const c_void,
+                        q_heads,
+                        seq_len,
+                        recent_window,
+                        block_size,
+                        top_blocks,
+                        d_out,
+                    )
+                    .expect("block-select-lossy attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-select-lossy");
+                })
+            });
+
+            unsafe {
+                ctx.device_free(d_q).expect("free d_q");
+                ctx.device_free(d_out).expect("free d_out");
+            }
+        }
+    }
+
+    #[cfg(not(all(feature = "cuda", nvcc)))]
+    {
+        group.bench_function("noop", |b| b.iter(|| {}));
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_attention_last_token_gqa,
     bench_attention_last_token_gqa_batched_varlen,
-    bench_attention_prefill_gqa_varlen
+    bench_attention_prefill_gqa_varlen,
+    bench_attention_kv_compression_modes
 );
 criterion_main!(benches);

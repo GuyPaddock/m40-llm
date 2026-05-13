@@ -1479,3 +1479,72 @@ Interpretation:
   all prompt attention at the largest prompt length.
 - The next scheduler task is mixed prefill/decode overlap or broader prefill
   compatibility; keep this opt-in until more server workloads are characterized.
+
+## 2026-05-12: Experimental KV Compression Attention Benchmark
+
+This checkpoint adds experimental compressed-KV decode attention modes inspired
+by block summary and block-selection ideas. It deliberately separates sparse
+selection from lossy compression:
+
+- `off`: dense exact KV attention.
+- `block-select-exact`: keeps exact old KV and attends selected exact old
+  blocks plus the exact recent window.
+- `block-summary`: attends old block mean K/V summaries plus the exact recent
+  window.
+- `block-select-lossy`: scores old summaries and attends selected summaries
+  plus the exact recent window.
+
+Important limitation: this first pass keeps dense KV as the backing store for
+all modes so selection and lossy summary quality can be validated before old KV
+is physically discarded. The memory columns below therefore show both physical
+dense KV bytes and compressed-equivalent K/V bytes for the summary modes.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Features: `cuda`
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo bench --features cuda --bench attention -- attention_kv_compression_modes --sample-size 10`
+- Benchmark shape: `q_heads=32`, `kv_heads=4`, `head_dim=64`
+- Config: `recent_window=1024`, `block_size=32`, `top_blocks=16`
+
+| Context | Mode | Mean time | Tokens/sec | Dense physical KV | Compressed-equivalent KV |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 4K | dense | 8.944 ms | 111.81 | 4.00 MiB | 4.00 MiB |
+| 4K | block-select-exact | 5.395 ms | 185.36 | 4.00 MiB | 4.00 MiB |
+| 4K | block-summary | 4.639 ms | 215.56 | 4.00 MiB | 1.09 MiB |
+| 4K | block-select-lossy | 4.619 ms | 216.50 | 4.00 MiB | 1.02 MiB |
+| 8K | dense | 17.897 ms | 55.87 | 8.00 MiB | 8.00 MiB |
+| 8K | block-select-exact | 8.147 ms | 122.74 | 8.00 MiB | 8.00 MiB |
+| 8K | block-summary | 7.454 ms | 134.16 | 8.00 MiB | 1.22 MiB |
+| 8K | block-select-lossy | 7.282 ms | 137.32 | 8.00 MiB | 1.02 MiB |
+| 16K | dense | 4.983 s | 0.20 | 16.00 MiB | 16.00 MiB |
+| 16K | block-select-exact | 13.672 ms | 73.14 | 16.00 MiB | 16.00 MiB |
+| 16K | block-summary | 13.294 ms | 75.22 | 16.00 MiB | 1.47 MiB |
+| 16K | block-select-lossy | 12.819 ms | 78.01 | 16.00 MiB | 1.02 MiB |
+| 32K | dense | 10.205 s | 0.10 | 32.00 MiB | 32.00 MiB |
+| 32K | block-select-exact | 24.318 ms | 41.12 | 32.00 MiB | 32.00 MiB |
+| 32K | block-summary | 24.725 ms | 40.45 | 32.00 MiB | 1.97 MiB |
+| 32K | block-select-lossy | 23.367 ms | 42.80 | 32.00 MiB | 1.02 MiB |
+
+Validation:
+
+- `attention_block_select_exact_matches_dense_when_all_old_blocks_selected`
+  verifies exact selection matches dense attention when all old blocks are
+  selected.
+- `attention_block_summary_lossy_is_finite_and_deterministic` verifies lossy
+  summary/select outputs are finite and deterministic.
+- `long_context_needle_retrieval_quality_smoke` adds an env-gated retrieval
+  quality harness using `M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL`; no long-context
+  model was configured for this benchmark run, so retrieval quality was not
+  measured here.
+
+Interpretation:
+
+- `block-select-exact` is the useful validation baseline: it isolates whether
+  cheap block scoring selects a good sparse exact read set before lossy summaries
+  are trusted.
+- The dense 16K/32K baseline falls back to the generic attention path, so the
+  speedups there compare against an intentionally poor current dense kernel.
+- The next step is a real compressed sidecar allocation/update path so lossy
+  modes reduce actual allocated KV memory instead of only reporting
+  compressed-equivalent bytes.
