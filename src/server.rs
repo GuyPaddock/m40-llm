@@ -335,6 +335,58 @@ impl DecodeSchedulerRequest {
         }))
     }
 
+    fn is_pending_prefill(&self) -> bool {
+        self.session.can_forward()
+            && self.session.processed_len() == 0
+            && self.generated.is_empty()
+            && !self.ids.is_empty()
+            && !self.stopping.should_stop(&self.generated)
+    }
+
+    fn prefill_sequence(&self) -> Result<crate::infer::ForwardPrefillSequence<'_>> {
+        if self.prompt_token_len == 0 || self.prompt_token_len > self.ids.len() {
+            anyhow::bail!(
+                "invalid prompt token length {} for request {} with ids_len {}",
+                self.prompt_token_len,
+                self.request_id,
+                self.ids.len()
+            );
+        }
+        Ok(crate::infer::ForwardPrefillSequence {
+            token_ids: &self.ids[..self.prompt_token_len],
+            sequence_id: self.sequence_lease.sequence_id(),
+            d_out_f32: self.session.d_out_ptr()?,
+        })
+    }
+
+    fn finish_prefill(&mut self) -> Result<DecodeSchedulerStep> {
+        let token_idx = self.prompt_token_len.saturating_sub(1);
+        let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
+        log_top_logits(&logits, 8);
+        self.session.mark_processed_through(self.prompt_token_len);
+        if logits.is_empty() {
+            anyhow::bail!("batched prefill logits returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} prefill sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
     fn finish_batch_token(&mut self, token_idx: usize) -> Result<DecodeSchedulerStep> {
         let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
         log_top_logits(&logits, 8);
@@ -403,12 +455,105 @@ fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBat
 }
 
 #[cfg(feature = "cuda")]
+fn log_batch_prefill_fallback(reason: &str) {
+    if std::env::var("M40LLM_SERVER_BATCH_PREFILL_LOG")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        eprintln!("[server] packed prefill fallback: {reason}");
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn scheduler_can_use_batched_prefill(
+    state: &AppState,
+    requests: &[DecodeSchedulerRequest],
+) -> bool {
+    if !crate::decode_batch::server_batch_prefill_requested() {
+        return false;
+    }
+    if requests.len() <= 1 {
+        log_batch_prefill_fallback("batch size <= 1");
+        return false;
+    }
+    if !requests
+        .iter()
+        .all(DecodeSchedulerRequest::is_pending_prefill)
+    {
+        log_batch_prefill_fallback("not all active requests are pending prompt prefill");
+        return false;
+    }
+    if !state
+        .model
+        .kv_cache
+        .as_ref()
+        .map(|kv| kv.head_dim() == 64)
+        .unwrap_or(false)
+    {
+        log_batch_prefill_fallback("model KV head_dim is not 64");
+        return false;
+    }
+    true
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_prefill_tick(
+    state: &AppState,
+    requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    let items = match requests
+        .iter()
+        .map(DecodeSchedulerRequest::prefill_sequence)
+        .collect::<Result<Vec<_>>>()
+    {
+        Ok(items) => items,
+        Err(err) => {
+            for request in requests {
+                request.send_error(anyhow::anyhow!(
+                    "batched prefill preparation failed: {err:#}"
+                ));
+            }
+            return;
+        }
+    };
+
+    let forward_result = unsafe {
+        state
+            .model
+            .forward_prefill_all_layers_varlen_for_sequences(&items)
+    };
+    drop(items);
+
+    if let Err(err) = forward_result {
+        for request in requests {
+            request.send_error(anyhow::anyhow!("batched prefill forward failed: {err:#}"));
+        }
+        return;
+    }
+
+    for mut request in requests {
+        match request.finish_prefill() {
+            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
 fn process_scheduler_batch_tick(
     state: &AppState,
     current_requests: Vec<DecodeSchedulerRequest>,
     active: &mut VecDeque<DecodeSchedulerRequest>,
 ) {
     let mut requests = current_requests;
+    if scheduler_can_use_batched_prefill(state, &requests) {
+        process_scheduler_prefill_tick(state, requests, active);
+        return;
+    }
+
     let mut prepared = Vec::with_capacity(requests.len());
     let mut fallback = false;
     for request in &mut requests {
@@ -729,6 +874,7 @@ async fn generate(
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if state.decode_batching_requested {
         crate::decode_batch::maybe_log_server_batch_decode_status();
+        crate::decode_batch::maybe_log_server_batch_prefill_status();
     }
 
     if !req.stream {

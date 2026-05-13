@@ -21,5 +21,5 @@ pub use batch::{
     VarlenPrefillTile, VarlenPrefillTileSelection,
 };
 #[cfg(feature = "cuda")]
-pub use forward::ForwardBatchItem;
+pub use forward::{ForwardBatchItem, ForwardPrefillSequence};
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

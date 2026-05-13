@@ -1422,3 +1422,60 @@ Interpretation:
 - This is enough to keep moving the strict plan forward. The next task is packed
   varlen prefill integration, starting behind an opt-in server flag or internal
   scheduler path until correctness and perf are characterized.
+
+## 2026-05-12: TinyLlama Opt-In Packed Prefill Server Benchmark
+
+This checkpoint integrates packed variable-length prompt prefill into the
+buffered server scheduler behind `M40LLM_SERVER_BATCH_PREFILL=1`. The comparison
+below keeps `M40LLM_SERVER_BATCH_DECODE=1` enabled and toggles only packed
+prefill.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Features: `cuda,server`
+- Command prefix: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1`
+- Benchmark script: `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1" TRIALS=3 MAX_TOKENS=2 PORT_BASE=53180 scripts/bench_server_batch_decode.sh`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260512_191709`
+
+Times below are means across three trials.
+
+| Case | Packed prefill | Requests | Mean wall | Mean avg request latency | Mean tokens/s | HTTP |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `batch1_hello` | off | 1 | 175.7 ms | 0.167317 s | 11.386 | 3/3 ok |
+| `batch1_hello` | on | 1 | 176.0 ms | 0.167416 s | 11.364 | 3/3 ok |
+| `batch2_same` | off | 2 | 286.0 ms | 0.274211 s | 13.987 | 6/6 ok |
+| `batch2_same` | on | 2 | 255.7 ms | 0.243096 s | 15.646 | 6/6 ok |
+| `batch4_mixed` | off | 4 | 904.3 ms | 0.676625 s | 8.846 | 12/12 ok |
+| `batch4_mixed` | on | 4 | 481.7 ms | 0.412279 s | 16.609 | 12/12 ok |
+| `batch4_skewed` | off | 4 | 1535.7 ms | 0.975667 s | 5.211 | 12/12 ok |
+| `batch4_skewed` | on | 4 | 610.7 ms | 0.545692 s | 13.112 | 12/12 ok |
+
+Speedups from enabling `M40LLM_SERVER_BATCH_PREFILL=1` while batched decode is
+already enabled:
+
+| Case | Wall-time speedup | Throughput speedup |
+| --- | ---: | ---: |
+| `batch1_hello` | 1.00x | 1.00x |
+| `batch2_same` | 1.12x | 1.12x |
+| `batch4_mixed` | 1.88x | 1.88x |
+| `batch4_skewed` | 2.51x | 2.52x |
+
+Validation:
+
+- All benchmarked requests returned HTTP 200.
+- `forward_batched_prefill_uses_varlen_attention` compares packed prefill final
+  hidden output against sequential token prefill on a tiny CUDA model.
+- `server_smoke` now enables `M40LLM_SERVER_BATCH_PREFILL=1` and asserts that
+  server batching launches `attention_prefill_f32_gqa_varlen_head64`.
+- `attention_prefill_varlen`, `forward_with_layer_smoke`, and CUDA/server Clippy
+  passed after the integration.
+
+Interpretation:
+
+- Packed prefill is neutral for batch size 1 because the opt-in path falls back.
+- Mixed and skewed prompts benefit the most because the scheduler avoids running
+  all prompt attention at the largest prompt length.
+- The next scheduler task is mixed prefill/decode overlap or broader prefill
+  compatibility; keep this opt-in until more server workloads are characterized.

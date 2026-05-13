@@ -264,7 +264,7 @@ fn forward_batched_decode_uses_packed_attention() -> Result<()> {
         block_count: 2,
         context_length: 16,
     };
-    let (gg, weights) = tiny_gguf::make_identity_tiny_gguf(cfg);
+    let (gg, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
     let mut lm = LoadedModel::from_gguf(gg, weights, -1)?;
     lm.allocate_kv_cache_with_layout(16, 4, 2, 64)?;
 
@@ -320,6 +320,123 @@ fn forward_batched_decode_uses_packed_attention() -> Result<()> {
         lm.cuda.device_free(d_x1)?;
         lm.cuda.device_free(d_out0)?;
         lm.cuda.device_free(d_out1)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn forward_batched_prefill_uses_varlen_attention() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    profile::reset();
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 256,
+        d_model: 128,
+        hidden: 16,
+        head_count: 2,
+        block_count: 2,
+        context_length: 16,
+    };
+    let (gg, weights) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let (gg_seq, weights_seq) = tiny_gguf::make_identity_tiny_gguf(cfg);
+    let mut lm = LoadedModel::from_gguf(gg, weights, -1)?;
+    lm.allocate_kv_cache_with_layout(16, 4, 2, 64)?;
+    let mut lm_seq = LoadedModel::from_gguf(gg_seq, weights_seq, -1)?;
+    lm_seq.allocate_kv_cache_with_layout(16, 4, 2, 64)?;
+
+    let d_out0 = lm.cuda.device_malloc(128 * 4)?;
+    let d_out1 = lm.cuda.device_malloc(128 * 4)?;
+    let d_seq_x = lm_seq.cuda.device_malloc(128 * 4)?;
+    let d_seq_out0 = lm_seq.cuda.device_malloc(128 * 4)?;
+    let d_seq_out1 = lm_seq.cuda.device_malloc(128 * 4)?;
+    let seq0 = [1, 2, 3];
+    let seq1 = [4, 5];
+    unsafe {
+        lm.forward_prefill_all_layers_varlen_for_sequences(&[
+            m40_llm::infer::ForwardPrefillSequence {
+                token_ids: &seq0,
+                sequence_id: 0,
+                d_out_f32: d_out0,
+            },
+            m40_llm::infer::ForwardPrefillSequence {
+                token_ids: &seq1,
+                sequence_id: 1,
+                d_out_f32: d_out1,
+            },
+        ])?;
+        lm.cuda.synchronize_stream(CudaStream::Decode)?;
+        lm.cuda.synchronize_stream(CudaStream::Prefill)?;
+
+        for (idx, &tok) in seq0.iter().enumerate() {
+            lm_seq.load_token_embedding_f16_to_f32(tok as u64, d_seq_x)?;
+            lm_seq.forward_one_token_all_layers_for_sequence(
+                d_seq_x,
+                0,
+                (idx + 1) as u32,
+                d_seq_out0,
+            )?;
+        }
+        for (idx, &tok) in seq1.iter().enumerate() {
+            lm_seq.load_token_embedding_f16_to_f32(tok as u64, d_seq_x)?;
+            lm_seq.forward_one_token_all_layers_for_sequence(
+                d_seq_x,
+                1,
+                (idx + 1) as u32,
+                d_seq_out1,
+            )?;
+        }
+        lm_seq.cuda.synchronize_stream(CudaStream::Decode)?;
+        lm_seq.cuda.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let snapshot = profile::snapshot();
+    let prefill_attention_launches = snapshot
+        .by_op
+        .get("attention_prefill_f32_gqa_varlen_head64")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        prefill_attention_launches >= 1,
+        "batched prefill forward should use packed varlen GQA attention"
+    );
+
+    let mut out_host = vec![0u8; 128 * 4];
+    let mut seq_host = vec![0u8; 128 * 4];
+    unsafe {
+        lm.cuda
+            .memcpy_d2h(out_host.as_mut_ptr() as *mut c_void, d_out0, 128 * 4)?;
+        lm_seq
+            .cuda
+            .memcpy_d2h(seq_host.as_mut_ptr() as *mut c_void, d_seq_out0, 128 * 4)?;
+        lm.cuda.device_free(d_out0)?;
+        lm.cuda.device_free(d_out1)?;
+        lm_seq.cuda.device_free(d_seq_x)?;
+        lm_seq.cuda.device_free(d_seq_out0)?;
+        lm_seq.cuda.device_free(d_seq_out1)?;
+    }
+    let out_vals: Vec<f32> = out_host
+        .chunks_exact(4)
+        .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+        .collect();
+    assert!(out_vals.iter().all(|v| v.is_finite()));
+    let seq_vals: Vec<f32> = seq_host
+        .chunks_exact(4)
+        .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+        .collect();
+    for (idx, (packed, sequential)) in out_vals.iter().zip(seq_vals.iter()).enumerate() {
+        let diff = (packed - sequential).abs();
+        assert!(
+            diff <= 2e-3,
+            "packed prefill differs from sequential decode at {idx}: packed={packed} sequential={sequential} diff={diff}"
+        );
     }
 
     Ok(())

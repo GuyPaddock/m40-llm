@@ -188,6 +188,9 @@ request. Buffered `/generate` requests then route through a queued scheduler
 that can run head_dim=64 active requests through the packed batched GQA decode
 attention path while preserving the shared workspace generation lock. Streaming
 `/generate` remains on the previous serialized path for now.
+Set `M40LLM_SERVER_BATCH_PREFILL=1` with server batch decode to opt into packed
+variable-length prompt prefill for compatible head_dim=64 models; unsupported
+or single-request cases fall back to the normal path.
 
 To benchmark the buffered batch-decode path on TinyLlama:
 
@@ -200,6 +203,8 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 The script compares `M40LLM_SERVER_BATCH_DECODE=0` and `1` across batch-1,
 batch-2, mixed batch-4, and skewed batch-4 buffered requests, writing detailed
 logs and `results.tsv` under `/tmp` by default.
+Set `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1"` to compare batched decode with
+packed prefill disabled versus enabled.
 
 Current M40 validation target:
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`

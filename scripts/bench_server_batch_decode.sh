@@ -12,6 +12,8 @@ PORT_BASE=${PORT_BASE:-52240}
 TRIALS=${TRIALS:-3}
 MAX_TOKENS=${MAX_TOKENS:-2}
 SLOTS=${M40LLM_SERVER_BATCH_DECODE_SLOTS:-8}
+BATCH_DECODE_MODES=${BATCH_DECODE_MODES:-"0 1"}
+PREFILL_MODES=${PREFILL_MODES:-"0"}
 LOG_DIR=${LOG_DIR:-/tmp/m40llm_batch_decode_bench_$(date +%Y%m%d_%H%M%S)}
 CARGO=${CARGO:-cargo}
 CURL=${CURL:-curl}
@@ -76,13 +78,14 @@ wait_for_server() {
 
 run_case() {
   local batch_decode="$1"
-  local case_name="$2"
-  local trial="$3"
-  shift 3
+  local batch_prefill="$2"
+  local case_name="$3"
+  local trial="$4"
+  shift 4
   local prompts=("$@")
-  local port=$((PORT_BASE + batch_decode * 100 + trial))
+  local port=$((PORT_BASE + batch_decode * 100 + batch_prefill * 200 + trial))
   local addr="127.0.0.1:${port}"
-  local case_dir="${LOG_DIR}/batch${batch_decode}_${case_name}_trial${trial}"
+  local case_dir="${LOG_DIR}/decode${batch_decode}_prefill${batch_prefill}_${case_name}_trial${trial}"
   local server_log="${case_dir}/server.log"
   mkdir -p "$case_dir"
 
@@ -91,6 +94,7 @@ run_case() {
 
   M40LLM_DECODE_GRAPH=0 \
   M40LLM_SERVER_BATCH_DECODE="$batch_decode" \
+  M40LLM_SERVER_BATCH_PREFILL="$batch_prefill" \
   M40LLM_SERVER_BATCH_DECODE_SLOTS="$SLOTS" \
   M40LLM_ENABLE_NVCC="${M40LLM_ENABLE_NVCC:-1}" \
   M40LLM_ENABLE_CUBLAS="${M40LLM_ENABLE_CUBLAS:-1}" \
@@ -133,8 +137,8 @@ run_case() {
       failed=1
     fi
     time_sum=$(awk -v a="$time_sum" -v b="$time_total" 'BEGIN { printf "%.6f", a + b }')
-    printf 'detail\tbatch=%s\tcase=%s\ttrial=%s\trequest=%s\thttp=%s\ttime_total_s=%s\tprompt=%q\tresponse=%s\n' \
-      "$batch_decode" "$case_name" "$trial" "$i" "$http_code" "$time_total" "${prompts[$i]}" "$output"
+    printf 'detail\tbatch=%s\tprefill=%s\tcase=%s\ttrial=%s\trequest=%s\thttp=%s\ttime_total_s=%s\tprompt=%q\tresponse=%s\n' \
+      "$batch_decode" "$batch_prefill" "$case_name" "$trial" "$i" "$http_code" "$time_total" "${prompts[$i]}" "$output"
   done
 
   local avg_latency_s tokens_per_s
@@ -142,8 +146,8 @@ run_case() {
   tokens_per_s=$(awk -v n="${#prompts[@]}" -v mt="$MAX_TOKENS" -v ms="$wall_ms" \
     'BEGIN { if (ms > 0) printf "%.3f", (n * mt) / (ms / 1000.0); else printf "inf" }')
 
-  printf 'summary\tbatch=%s\tcase=%s\ttrial=%s\trequests=%s\tok=%s\tfailed=%s\twall_ms=%s\tavg_latency_s=%s\ttokens_per_s=%s\tlog=%s\n' \
-    "$batch_decode" "$case_name" "$trial" "${#prompts[@]}" "$ok_count" "$failed" "$wall_ms" "$avg_latency_s" "$tokens_per_s" "$case_dir"
+  printf 'summary\tbatch=%s\tprefill=%s\tcase=%s\ttrial=%s\trequests=%s\tok=%s\tfailed=%s\twall_ms=%s\tavg_latency_s=%s\ttokens_per_s=%s\tlog=%s\n' \
+    "$batch_decode" "$batch_prefill" "$case_name" "$trial" "${#prompts[@]}" "$ok_count" "$failed" "$wall_ms" "$avg_latency_s" "$tokens_per_s" "$case_dir"
 
   cleanup
   SERVER_PID=""
@@ -152,25 +156,31 @@ run_case() {
 main() {
   echo "log_dir=${LOG_DIR}"
   echo "model=${MODEL}"
-  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS}"
+  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES}"
 
-  for batch_decode in 0 1; do
-    for trial in $(seq 1 "$TRIALS"); do
-      run_case "$batch_decode" "batch1_hello" "$trial" \
-        "Hello"
-      run_case "$batch_decode" "batch2_same" "$trial" \
-        "Hello" \
-        "Hello"
-      run_case "$batch_decode" "batch4_mixed" "$trial" \
-        "Hello" \
-        "Please write a small Java program to check for stock quotes: " \
-        "Summarize CUDA streams in one sentence." \
-        "Name one benefit of batching LLM decode requests."
-      run_case "$batch_decode" "batch4_skewed" "$trial" \
-        "Hi" \
-        "Please write a small Java program to check for stock quotes: " \
-        "Explain why the Tesla M40 has no Tensor Cores and what that means for GEMM optimization." \
-        "Give a concise checklist for validating a CUDA kernel on sm_52."
+  for batch_decode in $BATCH_DECODE_MODES; do
+    for batch_prefill in $PREFILL_MODES; do
+      if [ "$batch_decode" = "0" ] && [ "$batch_prefill" = "1" ]; then
+        continue
+      fi
+
+      for trial in $(seq 1 "$TRIALS"); do
+        run_case "$batch_decode" "$batch_prefill" "batch1_hello" "$trial" \
+          "Hello"
+        run_case "$batch_decode" "$batch_prefill" "batch2_same" "$trial" \
+          "Hello" \
+          "Hello"
+        run_case "$batch_decode" "$batch_prefill" "batch4_mixed" "$trial" \
+          "Hello" \
+          "Please write a small Java program to check for stock quotes: " \
+          "Summarize CUDA streams in one sentence." \
+          "Name one benefit of batching LLM decode requests."
+        run_case "$batch_decode" "$batch_prefill" "batch4_skewed" "$trial" \
+          "Hi" \
+          "Please write a small Java program to check for stock quotes: " \
+          "Explain why the Tesla M40 has no Tensor Cores and what that means for GEMM optimization." \
+          "Give a concise checklist for validating a CUDA kernel on sm_52."
+      done
     done
   done
 }

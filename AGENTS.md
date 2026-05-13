@@ -126,8 +126,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   throughput by 1.18x for batch size 2, 1.69x for mixed batch size 4, and 1.61x
   for skewed batch size 4, with all requests returning HTTP 200. Results and
   validation commands are recorded in `docs/perf_baselines.md`.
-- Next: integrate packed varlen prefill behind an opt-in server/scheduler path,
-  now that batched decode correctness/perf are characterized.
+- Packed varlen prefill is now available behind
+  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64 buffered scheduler
+  batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
+  speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
+  speedup with all HTTP requests successful.
+- Next: keep packed prefill opt-in while planning either mixed prefill/decode
+  overlap or broader prefill compatibility/fallback coverage.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

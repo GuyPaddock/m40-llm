@@ -306,6 +306,27 @@ pub fn maybe_log_server_batch_decode_status() {
     });
 }
 
+#[cfg(feature = "server")]
+pub fn server_batch_prefill_requested() -> bool {
+    std::env::var("M40LLM_SERVER_BATCH_PREFILL").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "server")]
+pub fn server_batch_prefill_status() -> &'static str {
+    "M40LLM_SERVER_BATCH_PREFILL=1 requested; compatible buffered scheduler ticks batch initial prompt prefill with packed varlen attention"
+}
+
+#[cfg(feature = "server")]
+pub fn maybe_log_server_batch_prefill_status() {
+    if !server_batch_prefill_requested() {
+        return;
+    }
+    static LOGGED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    LOGGED.get_or_init(|| {
+        eprintln!("[server] {}", server_batch_prefill_status());
+    });
+}
+
 #[cfg(feature = "cuda")]
 impl CudaDecodeBatchPlan {
     /// # Safety

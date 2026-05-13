@@ -178,6 +178,13 @@ impl DecodeSession {
         })
     }
 
+    pub fn d_out_ptr(&self) -> Result<*mut std::ffi::c_void> {
+        self.d_out
+            .as_ref()
+            .map(DeviceBuffer::as_mut_ptr)
+            .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))
+    }
+
     pub unsafe fn load_next_unprocessed_token(&mut self, ids: &[u32]) -> Result<Option<usize>> {
         if self.processed_len > ids.len() {
             self.processed_len = 0;
