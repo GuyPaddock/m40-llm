@@ -564,7 +564,7 @@ fn representative_policy_name(policy: KvRepresentativePolicy) -> &'static str {
     }
 }
 
-fn append_report(records: &[CaseRecord]) -> Result<()> {
+fn append_report_record(record: &CaseRecord) -> Result<()> {
     let Some(path) = std::env::var_os("M40LLM_KV_QUALITY_REPORT") else {
         return Ok(());
     };
@@ -573,10 +573,8 @@ fn append_report(records: &[CaseRecord]) -> Result<()> {
         .append(true)
         .open(&path)
         .with_context(|| format!("open quality report {}", PathBuf::from(&path).display()))?;
-    for record in records {
-        serde_json::to_writer(&mut file, record)?;
-        file.write_all(b"\n")?;
-    }
+    serde_json::to_writer(&mut file, record)?;
+    file.write_all(b"\n")?;
     Ok(())
 }
 
@@ -721,7 +719,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     if mode != KvCompressMode::Off && dense_passed == Some(false) {
                         status = CaseStatus::Inconclusive;
                     }
-                    records.push(CaseRecord {
+                    let record = CaseRecord {
                         model_path: probe.candidate.path.display().to_string(),
                         resolved_model_path: probe.candidate.resolved_path.display().to_string(),
                         target_tokens,
@@ -762,14 +760,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         prefill_mode,
                         output,
                         error,
-                    });
+                    };
+                    append_report_record(&record)?;
+                    records.push(record);
                 }
             }
         }
     }
 
     print_records(&records);
-    append_report(&records)?;
     Ok(())
 }
 

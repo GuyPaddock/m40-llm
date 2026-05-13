@@ -1983,3 +1983,72 @@ Next measurement:
 - Run the bounded 1024/2048/4096 representative matrix with dense `off` as the
   reference and `last` as the first full policy. Add `stride` rows only where
   runtime is acceptable, because the 4096 cases remain expensive.
+
+## 2026-05-13: Representative KV Quality Matrix
+
+This checkpoint changes the quality harness to stream each JSONL record as soon
+as a row completes, so long 2K/4K sweeps keep partial evidence if interrupted.
+The representative matrix was then run on the Llama-3.2-1B-Instruct F16 GGUF.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 1024 `last` matrix.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 2048 `last` matrix.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 1024 `stride` comparison.
+
+Commands:
+
+- 1024 `last`: `M40LLM_KV_QUALITY_TARGETS=1024 M40LLM_KV_QUALITY_REPRESENTATIVES=0,1,2,4 M40LLM_KV_QUALITY_REP_POLICIES=last M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_reps_last_1024.jsonl`
+- 2048 `last`: `M40LLM_KV_QUALITY_TARGETS=2048 M40LLM_KV_QUALITY_REPRESENTATIVES=0,1,2,4 M40LLM_KV_QUALITY_REP_POLICIES=last M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_reps_last_2048.jsonl`
+- 1024 `stride`: `M40LLM_KV_QUALITY_TARGETS=1024 M40LLM_KV_QUALITY_REPRESENTATIVES=1,2,4 M40LLM_KV_QUALITY_REP_POLICIES=stride M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_reps_stride_1024.jsonl`
+
+Representative memory levels:
+
+| Reps | Final compressed KV | Dense-equivalent KV | Compression ratio |
+| ---: | ---: | ---: | ---: |
+| 0 | 413.2 MiB | 4096 MiB | 9.91x |
+| 1 | 540.5 MiB | 4096 MiB | 7.58x |
+| 2 | 667.7 MiB | 4096 MiB | 6.13x |
+| 4 | 922.2 MiB | 4096 MiB | 4.44x |
+
+Quality summary:
+
+| Target | Policy | Needle | Mode | Reps | Status | Output |
+| ---: | --- | --- | --- | ---: | --- | --- |
+| 1024 | last | old/recent | off | 0 | pass | `ZXQ-NEEDLE-41729` |
+| 1024 | last | old/recent | block-summary | 0/1/2/4 | pass | `ZXQ-NEEDLE-41729` |
+| 1024 | last | old/recent | block-select-lossy | 0/1/2/4 | pass | `ZXQ-NEEDLE-41729` |
+| 1024 | stride | old/recent | block-summary | 1/2/4 | pass | `ZXQ-NEEDLE-41729` |
+| 1024 | stride | old/recent | block-select-lossy | 1/2/4 | pass | `ZXQ-NEEDLE-41729` |
+| 2048 | last | old/recent | off | 0 | pass | `ZXQ-NEEDLE-41729` |
+| 2048 | last | old | block-summary | 0/1 | fail | spaces |
+| 2048 | last | old | block-summary | 2 | fail | spaces |
+| 2048 | last | old | block-summary | 4 | fail | `Question ... !` |
+| 2048 | last | old | block-select-lossy | 0/1 | fail | spaces |
+| 2048 | last | old | block-select-lossy | 2 | fail | `- ` |
+| 2048 | last | old | block-select-lossy | 4 | fail | `Question ... !` |
+| 2048 | last | recent | block-summary | 0/1/2/4 | fail | `Important secret code.` |
+| 2048 | last | recent | block-select-lossy | 0/1/2/4 | fail | `Important secret code.` |
+
+Interpretation:
+
+- Exact representatives do not recover 2048-token retrieval for this needle
+  task, even at 4 representatives per old block.
+- `stride` does not regress the already-passing 1024-token cases, but there is
+  no evidence yet that it fixes the 2048 failure; the full 2048 `stride` matrix
+  was skipped because `last` failed decisively and each 2048 matrix takes about
+  47 minutes on the M40.
+- The 4096 representative matrix was skipped because 2048 already fails for all
+  tested `last` representative counts while dense passes. Running 4096 would be
+  expensive and is unlikely to change the conclusion that summary-plus-few-reps
+  is insufficient for this retrieval task.
+- Next work should not tune representative count further. Investigate a better
+  compressed attention strategy, such as using summary scores only as an index
+  for exact block retrieval, adding more informative representatives, or
+  changing the retrieval prompt/quality harness to separate model weakness from
+  compression weakness.

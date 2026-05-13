@@ -192,10 +192,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   policies are implemented. Sequential and packed-then-compress debug snapshot
   parity passes for representative storage. A 64-token representative quality
   spot-check passed the harness but was inconclusive because dense `off` missed
-  the exact needle in that short packed-prefix case.
-- Next: run the bounded 1024/2048/4096 representative matrix, starting with the
-  `last` policy, to determine whether exact representatives recover retrieval
-  at 2K/4K and what memory ratio is acceptable.
+  the exact needle in that short packed-prefix case. The quality harness now
+  streams each JSONL row as soon as it completes. The representative matrix
+  shows 1024-token old/recent retrieval passes for `last` and `stride`, but
+  2048-token old/recent retrieval still fails for `block-summary` and
+  `block-select-lossy` at reps 0/1/2/4 with `last`, while dense `off` passes.
+  4096 representative rows were skipped because 2048 already fails decisively.
+- Next: stop increasing representative count for now. Investigate a better
+  compressed attention strategy, likely using summary scores as an index for
+  exact block retrieval or more informative representative selection, before
+  expanding compressed KV into server scheduling.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
