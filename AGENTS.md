@@ -151,14 +151,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_KV_QUALITY_TARGETS`, gates per-token decode-session diagnostics behind
   `M40LLM_DECODE_SESSION_LOG=1`, and emits JSONL rows with actual prompt token
   counts, generated token counts, pass/fail status, full output, and
-  prompt/decode/total timing breakdowns. The quiet 64-token and 512-token
-  old/recent smokes pass for dense `off`, `block-select-exact`,
+  prompt/decode/total timing breakdowns. `M40LLM_PREFILL_CHUNK_SIZE` now enables
+  an experimental CLI/test packed-prefix prefill path for dense `off` prompts
+  within the configured bound; it pre-fills the prompt prefix with packed varlen
+  prefill and computes the final prompt token through the normal one-token path.
+  Dense 512-token prefill improves from roughly 56-59 s to roughly 10 s, while
+  KV-compressed modes deliberately fall back to sequential prefill because
+  packed prefill is not yet equivalent for those cache modes. The quiet 64-token
+  and 512-token old/recent smokes pass for dense `off`, `block-select-exact`,
   `block-summary`, and `block-select-lossy`; results are recorded in
   `docs/perf_baselines.md`.
-- Next: add a safe bounded/batched prefill entrypoint for CLI quality runs before
-  making `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate. The current packed
-  prefill path is scheduler-oriented and was not wired into `generate_text` in
-  the quiet-harness task.
+- Next: design compressed-aware packed/chunked prefill before making
+  `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate, since compressed rows
+  still dominate the quality harness runtime.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

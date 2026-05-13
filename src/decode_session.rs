@@ -239,6 +239,59 @@ impl DecodeSession {
         self.processed_len = processed_len;
     }
 
+    pub fn logits_for_packed_prefix_then_ids(
+        &mut self,
+        ids: &[u32],
+        mut on_token_logits: impl FnMut(&[f32]),
+    ) -> Result<Vec<f32>> {
+        if !self.can_forward {
+            anyhow::bail!("packed prefill requires full-layer forward");
+        }
+        if ids.is_empty() {
+            anyhow::bail!("packed prefill requires non-empty ids");
+        }
+        if self.processed_len != 0 {
+            anyhow::bail!(
+                "packed prefill can only run before decode starts; processed_len={}",
+                self.processed_len
+            );
+        }
+        if ids.len() == 1 {
+            return self.logits_for_ids(ids, on_token_logits);
+        }
+        let d_out = self
+            .d_out
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))?
+            .as_mut_ptr();
+        let prefix_len = ids.len() - 1;
+        let prefill_start = std::time::Instant::now();
+        let layers = unsafe {
+            (*self.model).forward_prefill_all_layers_varlen_for_sequences(&[
+                crate::infer::ForwardPrefillSequence {
+                    token_ids: &ids[..prefix_len],
+                    sequence_id: self.sequence_id,
+                    d_out_f32: d_out,
+                },
+            ])
+        }?;
+        timing::timing_log!(
+            prefill_start.elapsed(),
+            "{}.packed_prefill.ids_len_{}",
+            self.log_prefix,
+            ids.len()
+        );
+        if !self.logged_full_forward {
+            eprintln!(
+                "[{}] packed prefix prefill enabled layers={layers}",
+                self.log_prefix
+            );
+            self.logged_full_forward = true;
+        }
+        self.processed_len = prefix_len;
+        self.logits_for_ids(ids, |logits| on_token_logits(logits))
+    }
+
     pub fn logits_for_ids(
         &mut self,
         ids: &[u32],

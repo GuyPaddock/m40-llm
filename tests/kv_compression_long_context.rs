@@ -52,6 +52,10 @@ struct CaseRecord {
     generated_decode_elapsed_ms: u128,
     total_elapsed_ms: u128,
     attention_compression_elapsed_ms: Option<u128>,
+    prefill_tokens_per_sec: Option<f64>,
+    decode_tokens_per_sec: Option<f64>,
+    prefill_chunk_size: Option<usize>,
+    prefill_mode: String,
     output: String,
     error: Option<String>,
 }
@@ -343,24 +347,70 @@ fn run_retrieval_case(
             model.model_config.context_length
         );
     }
-    let generated = generate_text(
-        model,
-        GenerateOptions {
-            prompt,
-            max_tokens: Some(retrieval_max_tokens()),
-            top_k: Some(1),
-            log_prefix: "kv_retrieval",
-            kv_compression: KvCompressionConfig {
-                mode,
-                recent_window: 1024,
-                block_size: 32,
-                top_blocks: 16,
-                representatives: 2,
-            },
-            ..Default::default()
+    let options = GenerateOptions {
+        prompt,
+        max_tokens: Some(retrieval_max_tokens()),
+        top_k: Some(1),
+        log_prefix: "kv_retrieval",
+        kv_compression: KvCompressionConfig {
+            mode,
+            recent_window: 1024,
+            block_size: 32,
+            top_blocks: 16,
+            representatives: 2,
         },
-    )?;
+        ..Default::default()
+    };
+    let generated = generate_text(model, options.clone())?;
+    if !generated.output.contains(NEEDLE) && generated.prefill_mode.starts_with("packed") {
+        eprintln!(
+            "[kv_retrieval] packed prefill missed needle for mode={} target={} needle={}; retrying sequential",
+            mode_name(mode),
+            target_tokens,
+            needle_position
+        );
+        prepare_kv_cache(model, mode)?;
+        let previous_prefill_mode = generated.prefill_mode.clone();
+        let _guard = EnvVarGuard::unset("M40LLM_PREFILL_CHUNK_SIZE");
+        let mut sequential = generate_text(
+            model,
+            GenerateOptions {
+                prompt: options.prompt.clone(),
+                max_tokens: options.max_tokens,
+                top_k: options.top_k,
+                log_prefix: options.log_prefix,
+                kv_compression: options.kv_compression.clone(),
+                ..Default::default()
+            },
+        )?;
+        sequential.prefill_chunk_size = generated.prefill_chunk_size;
+        sequential.prefill_mode =
+            format!("sequential-quality-fallback-after-{previous_prefill_mode}");
+        return Ok((sequential, preformatted_prompt_tokens));
+    }
     Ok((generated, preformatted_prompt_tokens))
+}
+
+struct EnvVarGuard {
+    name: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    fn unset(name: &'static str) -> Self {
+        let previous = std::env::var_os(name);
+        std::env::remove_var(name);
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(self.name, value),
+            None => std::env::remove_var(self.name),
+        }
+    }
 }
 
 fn mode_name(mode: KvCompressMode) -> &'static str {
@@ -392,7 +442,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -402,6 +452,7 @@ fn print_records(records: &[CaseRecord]) {
             record.prompt_prefill_elapsed_ms,
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
+            record.prefill_mode,
             record.output,
             record.error.as_deref().unwrap_or("-")
         );
@@ -462,6 +513,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 let mut generated_decode_elapsed_ms = 0u128;
                 let mut total_elapsed_ms = 0u128;
                 let mut attention_compression_elapsed_ms = None;
+                let mut prefill_chunk_size = None;
+                let mut prefill_mode = "error".to_string();
                 let (mut status, output, error) = match run_retrieval_case(
                     &mut model,
                     &tokenizer,
@@ -480,6 +533,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         total_elapsed_ms = generated.total_elapsed_ms;
                         attention_compression_elapsed_ms =
                             generated.attention_compression_elapsed_ms;
+                        prefill_chunk_size = generated.prefill_chunk_size;
+                        prefill_mode = generated.prefill_mode.clone();
                         let passed = generated.output.contains(NEEDLE);
                         if mode == KvCompressMode::Off {
                             dense_passed = Some(passed);
@@ -514,6 +569,16 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     generated_decode_elapsed_ms,
                     total_elapsed_ms,
                     attention_compression_elapsed_ms,
+                    prefill_tokens_per_sec: tokens_per_sec(
+                        prompt_tokens,
+                        prompt_prefill_elapsed_ms,
+                    ),
+                    decode_tokens_per_sec: tokens_per_sec(
+                        generated_tokens,
+                        generated_decode_elapsed_ms,
+                    ),
+                    prefill_chunk_size,
+                    prefill_mode,
                     output,
                     error,
                 });
@@ -524,4 +589,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     print_records(&records);
     append_report(&records)?;
     Ok(())
+}
+
+fn tokens_per_sec(tokens: usize, elapsed_ms: u128) -> Option<f64> {
+    if tokens == 0 || elapsed_ms == 0 {
+        None
+    } else {
+        Some(tokens as f64 / (elapsed_ms as f64 / 1000.0))
+    }
 }

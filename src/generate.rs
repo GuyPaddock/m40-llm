@@ -6,7 +6,7 @@ use crate::decode::{decode_loop_with, StoppingCriteria};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::kv_compression::{set_runtime_config, KvCompressionConfig};
+use crate::kv_compression::{set_runtime_config, KvCompressMode, KvCompressionConfig};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
 use crate::tokenizer::Tokenizer;
@@ -62,11 +62,27 @@ pub struct GeneratedText {
     pub generated_decode_elapsed_ms: u128,
     pub total_elapsed_ms: u128,
     pub attention_compression_elapsed_ms: Option<u128>,
+    pub prefill_mode: String,
+    pub prefill_chunk_size: Option<usize>,
 }
 
 #[cfg(feature = "cuda")]
 fn decode_session_log_enabled() -> bool {
     std::env::var("M40LLM_DECODE_SESSION_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn prefill_chunk_size_from_env() -> Result<Option<usize>> {
+    let Some(value) = std::env::var("M40LLM_PREFILL_CHUNK_SIZE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let parsed = value
+        .parse::<usize>()
+        .with_context(|| format!("invalid M40LLM_PREFILL_CHUNK_SIZE value '{value}'"))?;
+    Ok((parsed > 0).then_some(parsed))
 }
 
 pub fn sanitize_output(text: &str) -> String {
@@ -244,6 +260,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
 
     let log_prefix = options.log_prefix;
     #[cfg(feature = "cuda")]
+    let prefill_chunk_size = prefill_chunk_size_from_env()?;
+    #[cfg(not(feature = "cuda"))]
+    let prefill_chunk_size = None;
+    let mut prefill_mode = "sequential".to_string();
+    #[cfg(feature = "cuda")]
     let mut decode_session = {
         eprintln!(
             "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
@@ -345,8 +366,48 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 #[cfg(feature = "cuda")]
                 {
                     let _ = logits_fn_start;
-                    decode_session
-                        .logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
+                    if logits_call_count == 0 {
+                        if let Some(chunk_size) = prefill_chunk_size {
+                            let compression_allows_packed =
+                                matches!(options.kv_compression.mode, KvCompressMode::Off);
+                            if ids.len() <= chunk_size && compression_allows_packed {
+                                match decode_session
+                                    .logits_for_packed_prefix_then_ids(ids, |logits| {
+                                        log_top_logits(logits, 8, log_prefix)
+                                    }) {
+                                    Ok(logits) => {
+                                        prefill_mode = "packed-prefix".to_string();
+                                        Ok(logits)
+                                    }
+                                    Err(err) => {
+                                        eprintln!(
+                                            "[{log_prefix}] packed prefill fallback: {err:#}"
+                                        );
+                                        prefill_mode = "sequential-fallback".to_string();
+                                        decode_session.logits_for_ids(ids, |logits| {
+                                            log_top_logits(logits, 8, log_prefix)
+                                        })
+                                    }
+                                }
+                            } else {
+                                prefill_mode = if ids.len() > chunk_size {
+                                    "sequential-over-bound"
+                                } else {
+                                    "sequential-kv-compressed"
+                                }
+                                .to_string();
+                                decode_session.logits_for_ids(ids, |logits| {
+                                    log_top_logits(logits, 8, log_prefix)
+                                })
+                            }
+                        } else {
+                            decode_session
+                                .logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
+                        }
+                    } else {
+                        decode_session
+                            .logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
+                    }
                 }
 
                 #[cfg(not(feature = "cuda"))]
@@ -474,6 +535,8 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         generated_decode_elapsed_ms: generated_decode_elapsed.as_millis(),
         total_elapsed_ms: total_start.elapsed().as_millis(),
         attention_compression_elapsed_ms: None,
+        prefill_mode,
+        prefill_chunk_size,
     })
 }
 

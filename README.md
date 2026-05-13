@@ -152,11 +152,13 @@ prompt tokens, generated tokens, pass/fail status, prompt-prefill time,
 generated-token decode time, total elapsed time, attention/compression time when
 available, and output text. `attention_compression_elapsed_ms` is currently
 `null` because the runtime does not expose that per-case counter yet.
-`M40LLM_DECODE_SESSION_LOG=1` restores verbose per-token decode-session logs.
-The current quality harness is intentionally diagnostic rather than fast; it
-still processes prompt tokens one at a time because the existing packed prefill
-path is scheduler-oriented and is not yet safely reusable from CLI
-`generate_text`.
+It also includes `prefill_tokens_per_sec`, `decode_tokens_per_sec`,
+`prefill_chunk_size`, and `prefill_mode`.
+`M40LLM_PREFILL_CHUNK_SIZE=<n>` enables an experimental CLI/test packed-prefix
+prefill path for dense `off` runs when the formatted prompt length is within
+the bound. KV-compressed modes currently fall back to sequential prefill because
+packed prefill is not yet equivalent for those cache modes. Use
+`M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to

@@ -442,6 +442,77 @@ fn forward_batched_prefill_uses_varlen_attention() -> Result<()> {
     Ok(())
 }
 
+fn assert_close_logits(lhs: &[f32], rhs: &[f32], tol: f32) {
+    assert_eq!(lhs.len(), rhs.len());
+    for (idx, (a, b)) in lhs.iter().zip(rhs.iter()).enumerate() {
+        let diff = (a - b).abs();
+        assert!(
+            diff <= tol,
+            "logit mismatch at {idx}: lhs={a} rhs={b} diff={diff} tol={tol}"
+        );
+    }
+}
+
+fn run_packed_prefill_logit_parity() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 256,
+        d_model: 128,
+        hidden: 16,
+        head_count: 2,
+        block_count: 2,
+        context_length: 32,
+    };
+    let (gg_seq, weights_seq) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let (gg_packed, weights_packed) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let mut sequential = LoadedModel::from_gguf(gg_seq, weights_seq, -1)?;
+    let mut packed = LoadedModel::from_gguf(gg_packed, weights_packed, -1)?;
+    sequential.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count, 2, 64)?;
+    packed.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count, 2, 64)?;
+
+    let ids = [3, 4, 5, 6];
+    let mut sequential_session = DecodeSession::new_for_sequence(
+        &sequential,
+        0,
+        cfg.d_model,
+        true,
+        "test_seq_prefill",
+        "test_seq_prefill:x",
+        "test_seq_prefill:out",
+    )?;
+    let mut packed_session = DecodeSession::new_for_sequence(
+        &packed,
+        0,
+        cfg.d_model,
+        true,
+        "test_packed_prefill",
+        "test_packed_prefill:x",
+        "test_packed_prefill:out",
+    )?;
+    let sequential_logits = sequential_session.logits_for_ids(&ids, |_| {})?;
+    let packed_logits = packed_session.logits_for_packed_prefix_then_ids(&ids, |_| {})?;
+    sequential.cuda.synchronize_stream(CudaStream::Decode)?;
+    sequential.cuda.synchronize_stream(CudaStream::Prefill)?;
+    packed.cuda.synchronize_stream(CudaStream::Decode)?;
+    packed.cuda.synchronize_stream(CudaStream::Prefill)?;
+    assert_close_logits(&packed_logits, &sequential_logits, 2e-3);
+    assert_eq!(packed_session.processed_len(), ids.len());
+    Ok(())
+}
+
+#[test]
+fn packed_prefill_logits_match_sequential_dense() -> Result<()> {
+    run_packed_prefill_logit_parity()
+}
+
 #[test]
 fn cuda_graph_replays_forward_one_token_with_layer() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {

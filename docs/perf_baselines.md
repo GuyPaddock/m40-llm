@@ -1745,3 +1745,56 @@ Interpretation:
   path is server/scheduler-oriented, so this checkpoint does not risk wiring it
   into `generate_text`; the next performance task is a safe bounded/batched
   prefill entrypoint for CLI quality runs.
+
+## 2026-05-12: CLI/Test Packed-Prefix Prefill
+
+This checkpoint adds an opt-in CLI/test packed-prefix prefill path via
+`M40LLM_PREFILL_CHUNK_SIZE`. The path uses the existing packed varlen prefill
+primitive for the prompt prefix, then runs the final prompt token through the
+normal one-token decode path to preserve final-logits behavior. It is currently
+enabled only for dense `off`; KV-compressed modes fall back to sequential
+prefill because packed prefill is not yet equivalent for those cache modes.
+
+Validation:
+
+- `cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1`
+  passed, including dense packed-prefix-vs-sequential final-logit parity.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo fmt --all -- --check` and `cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Quality harness results:
+
+| Target | Chunk | Needle | Mode | Status | Prefill mode | Prefill | Prefill tok/s | Decode | Decode tok/s | Total |
+| ---: | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 64 | unset | old | off | pass | sequential | 3.342 s | 17.35 | 0.529 s | 18.90 | 5.896 s |
+| 64 | 64 | old | off | pass | packed-prefix | 0.872 s | 66.51 | 0.530 s | 18.87 | 3.330 s |
+| 64 | 64 | old | block-select-exact | pass | sequential-kv-compressed | 2.850 s | 20.35 | 0.545 s | 18.35 | 5.324 s |
+| 64 | 64 | old | block-summary | pass | sequential-kv-compressed | 2.913 s | 19.91 | 0.568 s | 17.61 | 5.424 s |
+| 64 | 64 | old | block-select-lossy | pass | sequential-kv-compressed | 2.912 s | 19.92 | 0.567 s | 17.64 | 5.412 s |
+| 64 | unset | recent | off | pass | sequential | 2.800 s | 20.71 | 0.531 s | 18.83 | 5.350 s |
+| 64 | 64 | recent | off | pass | packed-prefix | 0.319 s | 181.82 | 0.529 s | 18.90 | 2.785 s |
+| 64 | 64 | recent | block-select-exact | pass | sequential-kv-compressed | 2.852 s | 20.34 | 0.545 s | 18.35 | 5.338 s |
+| 64 | 64 | recent | block-summary | pass | sequential-kv-compressed | 2.917 s | 19.88 | 0.568 s | 17.61 | 5.420 s |
+| 64 | 64 | recent | block-select-lossy | pass | sequential-kv-compressed | 2.922 s | 19.85 | 0.568 s | 17.61 | 5.419 s |
+| 512 | 512 | old | off | pass | packed-prefix | 9.958 s | 48.10 | 1.753 s | 5.70 | 13.731 s |
+| 512 | 512 | old | block-select-exact | pass | sequential-kv-compressed | 57.893 s | 8.27 | 1.827 s | 5.47 | 61.735 s |
+| 512 | 512 | old | block-summary | pass | sequential-kv-compressed | 62.719 s | 7.64 | 2.009 s | 4.98 | 66.740 s |
+| 512 | 512 | old | block-select-lossy | pass | sequential-kv-compressed | 62.714 s | 7.64 | 2.008 s | 4.98 | 66.732 s |
+| 512 | 512 | recent | off | pass | packed-prefix | 9.989 s | 49.45 | 1.793 s | 5.58 | 13.777 s |
+| 512 | 512 | recent | block-select-exact | pass | sequential-kv-compressed | 61.030 s | 8.09 | 1.876 s | 5.33 | 64.903 s |
+| 512 | 512 | recent | block-summary | pass | sequential-kv-compressed | 66.367 s | 7.44 | 2.056 s | 4.86 | 70.506 s |
+| 512 | 512 | recent | block-select-lossy | pass | sequential-kv-compressed | 66.047 s | 7.48 | 2.061 s | 4.85 | 70.085 s |
+
+Interpretation:
+
+- Dense 512-token prefill improves materially: old-needle dense `off` drops from
+  56.059 s sequential to 9.958 s packed-prefix, and recent-needle dense `off`
+  drops from 58.549 s to 9.989 s.
+- The full 512 matrix still takes 437.25 s because the KV-compressed modes are
+  intentionally sequential. Earlier experiments showed packed prefill can change
+  retrieval output for compressed/exact sparse modes, so those modes are not
+  accelerated until a compressed-aware packed/chunked prefill design is added.
+- A broader 1K/2K/4K quality sweep was not run in this checkpoint because the
+  compressed rows still dominate runtime.
