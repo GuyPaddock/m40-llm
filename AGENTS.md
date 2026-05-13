@@ -160,10 +160,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   packed prefill is not yet equivalent for those cache modes. The quiet 64-token
   and 512-token old/recent smokes pass for dense `off`, `block-select-exact`,
   `block-summary`, and `block-select-lossy`; results are recorded in
-  `docs/perf_baselines.md`.
-- Next: design compressed-aware packed/chunked prefill before making
-  `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate, since compressed rows
-  still dominate the quality harness runtime.
+  `docs/perf_baselines.md`. `M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE` now
+  enables an explicit compressed-aware chunked prefill path for KV-compressed
+  quality runs. It preserves sequential token order and compressed sidecar
+  updates while skipping prefix-token logits. CUDA parity tests compare final
+  logits and compressed-KV debug snapshots for `block-summary` and
+  `block-select-lossy`. The retrieval harness passes 64-token old/recent cases
+  with `M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE=32` and 512-token old/recent
+  cases with `M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE=64` for
+  `block-select-exact`, `block-summary`, and `block-select-lossy`. The chunked
+  path improves compressed 64-token prefill to roughly 2.1 s and compressed
+  512-token prefill by roughly 6-7 s, but 512-token compressed rows still take
+  roughly 51-59 s of prefill.
+- Next: design a true compressed-aware packed prefill or scheduler path before
+  making `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

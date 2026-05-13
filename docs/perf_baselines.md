@@ -1798,3 +1798,51 @@ Interpretation:
   accelerated until a compressed-aware packed/chunked prefill design is added.
 - A broader 1K/2K/4K quality sweep was not run in this checkpoint because the
   compressed rows still dominate runtime.
+
+## 2026-05-13: Compressed-Aware Chunked Prefill Parity
+
+This checkpoint adds `M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE` as an explicit
+CLI/test opt-in for KV-compressed modes. Unlike the dense packed-prefix path, it
+does not run packed varlen prefill over compressed modes. It processes prompt
+tokens in bounded chunks while preserving sequential one-token forward order,
+absolute positions, RoPE positions, recent-ring evictions, block counts, and
+summary accumulators. Prefix-token logits are skipped; the final prompt token
+still uses the normal logits path.
+
+Validation:
+
+- `cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1`
+  passed on M40.
+- The new parity coverage compares sequential compressed prefill against
+  chunked compressed prefill for `block-summary` and `block-select-lossy`.
+- The tests compare final logits within the existing tolerance and compare CUDA
+  compressed-KV debug snapshots, including sequence length, recent-ring buffers,
+  block counts, summary accumulators, and finalized summaries.
+
+Quality harness results:
+
+| Target | Compressed chunk | Needle | Mode | Status | Prefill mode | Prefill | Prefill tok/s | Decode | Decode tok/s | Total |
+| ---: | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 64 | 32 | old | block-select-exact | pass | chunked-kv-compressed | 2.065 s | 28.09 | 0.549 s | 18.21 | 4.655 s |
+| 64 | 32 | old | block-summary | pass | chunked-kv-compressed | 2.125 s | 27.29 | 0.572 s | 17.48 | 4.748 s |
+| 64 | 32 | old | block-select-lossy | pass | chunked-kv-compressed | 2.133 s | 27.19 | 0.571 s | 17.51 | 4.767 s |
+| 64 | 32 | recent | block-select-exact | pass | chunked-kv-compressed | 2.089 s | 27.76 | 0.583 s | 17.15 | 5.546 s |
+| 64 | 32 | recent | block-summary | pass | chunked-kv-compressed | 2.150 s | 26.98 | 0.578 s | 17.30 | 5.282 s |
+| 64 | 32 | recent | block-select-lossy | pass | chunked-kv-compressed | 2.126 s | 27.28 | 0.570 s | 17.54 | 4.741 s |
+| 512 | 64 | old | block-select-exact | pass | chunked-kv-compressed | 51.065 s | 9.38 | 1.840 s | 5.43 | 55.806 s |
+| 512 | 64 | old | block-summary | pass | chunked-kv-compressed | 56.109 s | 8.54 | 2.040 s | 4.90 | 61.048 s |
+| 512 | 64 | old | block-select-lossy | pass | chunked-kv-compressed | 56.159 s | 8.53 | 2.043 s | 4.89 | 61.095 s |
+| 512 | 64 | recent | block-select-exact | pass | chunked-kv-compressed | 53.852 s | 9.17 | 1.894 s | 5.28 | 58.271 s |
+| 512 | 64 | recent | block-summary | pass | chunked-kv-compressed | 59.369 s | 8.32 | 2.090 s | 4.78 | 64.396 s |
+| 512 | 64 | recent | block-select-lossy | pass | chunked-kv-compressed | 59.262 s | 8.34 | 2.093 s | 4.78 | 64.271 s |
+
+Interpretation:
+
+- 64-token compressed prefill improves from roughly 2.85-2.92 s to roughly
+  2.07-2.15 s while preserving retrieval output.
+- 512-token compressed prefill improves only modestly compared with the prior
+  sequential rows: exact sparse rows drop by roughly 6-7 s, and lossy rows drop
+  by roughly 6-7 s but remain around 56-59 s of prefill.
+- This confirms the chunked path is behavior-preserving, but not sufficient for
+  routine 1K/2K/4K sweeps. A true compressed-aware packed prefill or scheduler
+  path is still needed for larger contexts.

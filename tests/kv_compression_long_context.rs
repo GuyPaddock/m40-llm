@@ -55,6 +55,7 @@ struct CaseRecord {
     prefill_tokens_per_sec: Option<f64>,
     decode_tokens_per_sec: Option<f64>,
     prefill_chunk_size: Option<usize>,
+    compressed_prefill_chunk_size: Option<usize>,
     prefill_mode: String,
     output: String,
     error: Option<String>,
@@ -442,7 +443,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} compressed_chunk={:?} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -453,6 +454,7 @@ fn print_records(records: &[CaseRecord]) {
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
             record.prefill_mode,
+            record.compressed_prefill_chunk_size,
             record.output,
             record.error.as_deref().unwrap_or("-")
         );
@@ -514,6 +516,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 let mut total_elapsed_ms = 0u128;
                 let mut attention_compression_elapsed_ms = None;
                 let mut prefill_chunk_size = None;
+                let mut compressed_prefill_chunk_size = None;
                 let mut prefill_mode = "error".to_string();
                 let (mut status, output, error) = match run_retrieval_case(
                     &mut model,
@@ -534,6 +537,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         attention_compression_elapsed_ms =
                             generated.attention_compression_elapsed_ms;
                         prefill_chunk_size = generated.prefill_chunk_size;
+                        compressed_prefill_chunk_size = generated.compressed_prefill_chunk_size;
                         prefill_mode = generated.prefill_mode.clone();
                         let passed = generated.output.contains(NEEDLE);
                         if mode == KvCompressMode::Off {
@@ -578,6 +582,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         generated_decode_elapsed_ms,
                     ),
                     prefill_chunk_size,
+                    compressed_prefill_chunk_size,
                     prefill_mode,
                     output,
                     error,

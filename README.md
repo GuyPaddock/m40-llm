@@ -153,11 +153,16 @@ generated-token decode time, total elapsed time, attention/compression time when
 available, and output text. `attention_compression_elapsed_ms` is currently
 `null` because the runtime does not expose that per-case counter yet.
 It also includes `prefill_tokens_per_sec`, `decode_tokens_per_sec`,
-`prefill_chunk_size`, and `prefill_mode`.
+`prefill_chunk_size`, `compressed_prefill_chunk_size`, and `prefill_mode`.
 `M40LLM_PREFILL_CHUNK_SIZE=<n>` enables an experimental CLI/test packed-prefix
 prefill path for dense `off` runs when the formatted prompt length is within
-the bound. KV-compressed modes currently fall back to sequential prefill because
-packed prefill is not yet equivalent for those cache modes. Use
+the bound. KV-compressed modes do not use that dense packed-prefix path because
+packed prefill is not yet equivalent for those cache modes. Instead,
+`M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE=<n>` enables an experimental
+compressed-aware chunked prefill path for `block-select-exact`, `block-summary`,
+and `block-select-lossy`. That path preserves sequential token order and
+compressed sidecar updates while skipping prefix-token logits; unset or `0`
+keeps the current sequential compressed prefill fallback. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on

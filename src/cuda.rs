@@ -303,6 +303,19 @@ mod ffi {
             out_k_f16: *mut c_void,
             out_v_f16: *mut c_void,
         ) -> i32;
+        pub fn m40llm_kvcache_debug_read_compressed_state(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            out_seq_len: *mut u32,
+            out_block_counts: *mut u32,
+            out_recent_k_f16: *mut c_void,
+            out_recent_v_f16: *mut c_void,
+            out_summary_k_acc: *mut f32,
+            out_summary_v_acc: *mut f32,
+            out_summary_k_f16: *mut c_void,
+            out_summary_v_f16: *mut c_void,
+        ) -> i32;
 
         pub fn m40llm_attention_last_token_f32(
             ctx: *mut M40llmCudaContext,
@@ -2288,6 +2301,22 @@ impl Drop for CudaContextInner {
     }
 }
 
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompressedKvDebugSnapshot {
+    pub seq_len: u32,
+    pub recent_window: u32,
+    pub block_size: u32,
+    pub max_blocks: u32,
+    pub block_counts: Vec<u32>,
+    pub recent_k_f16: Vec<u16>,
+    pub recent_v_f16: Vec<u16>,
+    pub summary_k_acc: Vec<f32>,
+    pub summary_v_acc: Vec<f32>,
+    pub summary_k_f16: Vec<u16>,
+    pub summary_v_f16: Vec<u16>,
+}
+
 #[derive(Debug, Clone)]
 pub struct KVCache {
     inner: Arc<KVCacheInner>,
@@ -2308,6 +2337,59 @@ impl KVCache {
     }
     pub fn is_compressed(&self) -> bool {
         self.inner.compressed
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn debug_compressed_snapshot(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+    ) -> Result<CompressedKvDebugSnapshot> {
+        if !self.inner.compressed {
+            anyhow::bail!("debug_compressed_snapshot requires compressed KV cache");
+        }
+        if seq_id >= self.inner.max_batch_size {
+            anyhow::bail!(
+                "debug_compressed_snapshot seq_id {seq_id} >= max_batch_size {}",
+                self.inner.max_batch_size
+            );
+        }
+        let elems_per_token = self.elems_per_token();
+        let recent_elems = (self.inner.recent_window as usize) * elems_per_token;
+        let summary_elems = (self.inner.max_blocks as usize) * elems_per_token;
+        let mut snapshot = CompressedKvDebugSnapshot {
+            seq_len: 0,
+            recent_window: self.inner.recent_window,
+            block_size: self.inner.block_size,
+            max_blocks: self.inner.max_blocks,
+            block_counts: vec![0; self.inner.max_blocks as usize],
+            recent_k_f16: vec![0; recent_elems],
+            recent_v_f16: vec![0; recent_elems],
+            summary_k_acc: vec![0.0; summary_elems],
+            summary_v_acc: vec![0.0; summary_elems],
+            summary_k_f16: vec![0; summary_elems],
+            summary_v_f16: vec![0; summary_elems],
+        };
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_read_compressed_state(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                &mut snapshot.seq_len as *mut u32,
+                snapshot.block_counts.as_mut_ptr(),
+                snapshot.recent_k_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.recent_v_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.summary_k_acc.as_mut_ptr(),
+                snapshot.summary_v_acc.as_mut_ptr(),
+                snapshot.summary_k_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.summary_v_f16.as_mut_ptr().cast::<c_void>(),
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_read_compressed_state failed: {rc}");
+        }
+        Ok(snapshot)
     }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
@@ -2352,6 +2434,9 @@ struct KVCacheInner {
     num_heads: u32,
     head_dim: u32,
     compressed: bool,
+    recent_window: u32,
+    block_size: u32,
+    max_blocks: u32,
     actual_bytes: usize,
     dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
@@ -2387,6 +2472,9 @@ impl KVCache {
                     num_heads,
                     head_dim,
                     compressed: false,
+                    recent_window: 0,
+                    block_size: 0,
+                    max_blocks: 0,
                     actual_bytes: (max_seq_len as usize)
                         * (max_batch_size as usize)
                         * (num_heads as usize)
@@ -2422,6 +2510,9 @@ impl KVCache {
                     num_heads,
                     head_dim,
                     compressed: false,
+                    recent_window: 0,
+                    block_size: 0,
+                    max_blocks: 0,
                     actual_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     dense_equivalent_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
@@ -2496,6 +2587,9 @@ impl KVCache {
                     num_heads,
                     head_dim,
                     compressed: true,
+                    recent_window,
+                    block_size,
+                    max_blocks: max_blocks as u32,
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),

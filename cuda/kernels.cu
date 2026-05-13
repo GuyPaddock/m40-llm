@@ -3700,6 +3700,51 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_kvcache_debug_read_compressed_state(M40llmCudaContext* ctx,
+                                                    M40llmKVCache* kv,
+                                                    uint32_t seq_id,
+                                                    uint32_t* out_seq_len,
+                                                    uint32_t* out_block_counts,
+                                                    void* out_recent_k_f16,
+                                                    void* out_recent_v_f16,
+                                                    float* out_summary_k_acc,
+                                                    float* out_summary_v_acc,
+                                                    void* out_summary_k_f16,
+                                                    void* out_summary_v_f16) {
+        (void)ctx;
+        if (!kv || !kv->compressed) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (!out_seq_len || !out_block_counts || !out_recent_k_f16 || !out_recent_v_f16 ||
+            !out_summary_k_acc || !out_summary_v_acc || !out_summary_k_f16 || !out_summary_v_f16) {
+            return -3;
+        }
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t recent_elems = (size_t)kv->recent_window * elems_per_token;
+        const size_t summary_elems = (size_t)kv->max_blocks * elems_per_token;
+        cudaError_t err = cudaMemcpy(out_seq_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -4;
+        err = cudaMemcpy(out_block_counts,
+                         kv->d_block_counts + (size_t)seq_id * (size_t)kv->max_blocks,
+                         (size_t)kv->max_blocks * sizeof(uint32_t),
+                         cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -5;
+        const size_t recent_base = (size_t)seq_id * (size_t)kv->recent_window * elems_per_token;
+        err = cudaMemcpy(out_recent_k_f16, kv->d_recent_k + recent_base, recent_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -6;
+        err = cudaMemcpy(out_recent_v_f16, kv->d_recent_v + recent_base, recent_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -7;
+        const size_t summary_base = (size_t)seq_id * (size_t)kv->max_blocks * elems_per_token;
+        err = cudaMemcpy(out_summary_k_acc, kv->d_summary_k_acc + summary_base, summary_elems * sizeof(float), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -8;
+        err = cudaMemcpy(out_summary_v_acc, kv->d_summary_v_acc + summary_base, summary_elems * sizeof(float), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -9;
+        err = cudaMemcpy(out_summary_k_f16, kv->d_summary_k + summary_base, summary_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -10;
+        err = cudaMemcpy(out_summary_v_f16, kv->d_summary_v + summary_base, summary_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -11;
+        return 0;
+    }
+
     void m40llm_kvcache_destroy(M40llmKVCache* kv) {
         if (!kv) return;
         if (kv->d_k) cudaFree(kv->d_k);

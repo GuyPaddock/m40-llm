@@ -292,6 +292,72 @@ impl DecodeSession {
         self.logits_for_ids(ids, |logits| on_token_logits(logits))
     }
 
+    pub fn logits_for_compressed_chunked_prefill_ids(
+        &mut self,
+        ids: &[u32],
+        chunk_size: usize,
+        mut on_token_logits: impl FnMut(&[f32]),
+    ) -> Result<Vec<f32>> {
+        if !self.can_forward {
+            anyhow::bail!("compressed chunked prefill requires full-layer forward");
+        }
+        if ids.is_empty() {
+            anyhow::bail!("compressed chunked prefill requires non-empty ids");
+        }
+        if chunk_size == 0 {
+            anyhow::bail!("compressed chunked prefill chunk_size must be > 0");
+        }
+        if self.processed_len != 0 {
+            anyhow::bail!(
+                "compressed chunked prefill can only run before decode starts; processed_len={}",
+                self.processed_len
+            );
+        }
+        if ids.len() == 1 {
+            return self.logits_for_ids(ids, on_token_logits);
+        }
+
+        let prefix_len = ids.len() - 1;
+        let prefill_start = std::time::Instant::now();
+        for chunk_start in (0..prefix_len).step_by(chunk_size) {
+            let chunk_end = (chunk_start + chunk_size).min(prefix_len);
+            let chunk_timer = std::time::Instant::now();
+            for (token_idx, &tok_id_u32) in ids
+                .iter()
+                .enumerate()
+                .skip(chunk_start)
+                .take(chunk_end - chunk_start)
+            {
+                unsafe {
+                    self.forward_prefill_token_without_logits(tok_id_u32 as u64, token_idx)?;
+                }
+                self.processed_len = token_idx + 1;
+            }
+            timing::timing_log!(
+                chunk_timer.elapsed(),
+                "{}.compressed_chunked_prefill.chunk_{}_{}",
+                self.log_prefix,
+                chunk_start,
+                chunk_end
+            );
+        }
+        timing::timing_log!(
+            prefill_start.elapsed(),
+            "{}.compressed_chunked_prefill.ids_len_{}_chunk_{}",
+            self.log_prefix,
+            ids.len(),
+            chunk_size
+        );
+        if !self.logged_full_forward {
+            eprintln!(
+                "[{}] compressed chunked prefill enabled chunk_size={chunk_size}",
+                self.log_prefix
+            );
+            self.logged_full_forward = true;
+        }
+        self.logits_for_ids(ids, |logits| on_token_logits(logits))
+    }
+
     pub fn logits_for_ids(
         &mut self,
         ids: &[u32],
@@ -433,6 +499,39 @@ impl DecodeSession {
             );
             logits
         }
+    }
+
+    unsafe fn forward_prefill_token_without_logits(
+        &mut self,
+        tok_id: u64,
+        token_idx: usize,
+    ) -> Result<()> {
+        let token_start = std::time::Instant::now();
+        let embed_start = std::time::Instant::now();
+        (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        timing::timing_log!(
+            embed_start.elapsed(),
+            "{}.token.{token_idx}.embedding_load",
+            self.log_prefix
+        );
+        let forward_start = std::time::Instant::now();
+        let d_out = self
+            .d_out
+            .as_ref()
+            .expect("d_out allocated when full forward is enabled")
+            .as_mut_ptr();
+        let _layers = self.forward_with_optional_graph(token_idx, d_out)?;
+        timing::timing_log!(
+            forward_start.elapsed(),
+            "{}.token.{token_idx}.forward_all_layers",
+            self.log_prefix
+        );
+        timing::timing_log!(
+            token_start.elapsed(),
+            "{}.token.{token_idx}.prefill_without_logits_total",
+            self.log_prefix
+        );
+        Ok(())
     }
 
     unsafe fn forward_with_optional_graph(
