@@ -145,7 +145,9 @@ local cache trees. Set `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to
 capture per-case retrieval results, and set `M40LLM_KV_QUALITY_FULL=1` only when
 you want the broader 512-to-32K context sweep instead of the short smoke target.
 Set `M40LLM_KV_QUALITY_MAX_TOKENS=<n>` if the retrieval answer needs more than
-the default 16 generated tokens.
+the default 16 generated tokens. The current quality harness is intentionally
+diagnostic rather than fast; it processes prompt tokens one at a time, so run
+full long-context sweeps deliberately and record the JSONL report.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to

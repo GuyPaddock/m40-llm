@@ -1664,3 +1664,33 @@ Interpretation:
   for the broader sweep.
 - The harness now uses `M40LLM_KV_QUALITY_MAX_TOKENS` with a default of 16 so
   exact-code answers are not falsely marked failed due to truncation.
+
+Follow-up 512-token retrieval validation:
+
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_SMOKE_TOKENS=512 M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_llama32_512.jsonl cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+- Result: passed on M40 in 530.99 s; report contained 8 JSONL rows.
+
+| Target | Prompt tokens | Needle | Mode | Status | Elapsed | Output |
+| ---: | ---: | --- | --- | --- | ---: | --- |
+| 512 | 469 | old | off | pass | 60.434 s | `ZXQ-NEEDLE-41729` |
+| 512 | 469 | old | block-select-exact | pass | 61.572 s | `ZXQ-NEEDLE-41729` |
+| 512 | 469 | old | block-summary | pass | 66.835 s | `ZXQ-NEEDLE-41729` |
+| 512 | 469 | old | block-select-lossy | pass | 66.863 s | `ZXQ-NEEDLE-41729` |
+| 512 | 484 | recent | off | pass | 62.582 s | `ZXQ-NEEDLE-41729` |
+| 512 | 484 | recent | block-select-exact | pass | 64.766 s | `ZXQ-NEEDLE-41729` |
+| 512 | 484 | recent | block-summary | pass | 70.251 s | `ZXQ-NEEDLE-41729` |
+| 512 | 484 | recent | block-select-lossy | pass | 70.252 s | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Dense `off` passes at 512 tokens, so this run is a valid reference-capability
+  check for the compression modes.
+- `block-select-exact` passing old/recent cases means sparse block selection did
+  not lose the needle at this context size.
+- `block-summary` and `block-select-lossy` passing old/recent cases means lossy
+  summaries are not obviously broken at this bounded context size.
+- The full 4K+ sweep remains deferred. This 512-token run already takes almost
+  nine minutes because the harness currently processes prompt tokens
+  token-by-token and emits verbose per-token diagnostics. Quieting the harness
+  and/or adding a faster prefill path should happen before making full-sweep
+  quality runs routine.

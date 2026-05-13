@@ -146,12 +146,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   wrapper, and stop criteria include both end-of-turn and end-of-text tokens.
   The GGUF loader now honors aligned tensor data offsets, including the default
   32-byte alignment when the aligned payload fits. This fixes the Llama 3.2
-  repeated-token-0/NaN-logits failure. The short 64-token old/recent KV
-  retrieval smoke now passes for dense `off`, `block-select-exact`,
-  `block-summary`, and `block-select-lossy`.
-- Next: run the broader `M40LLM_KV_QUALITY_FULL=1` retrieval sweep before
-  trusting lossy KV compression beyond smoke coverage, or proceed to fast-fits
-  vs large-model backend selection per the strict roadmap.
+  repeated-token-0/NaN-logits failure. The 64-token and 512-token old/recent KV
+  retrieval smokes now pass for dense `off`, `block-select-exact`,
+  `block-summary`, and `block-select-lossy`; the 512-token run is recorded in
+  `docs/perf_baselines.md` and took 530.99 s on M40.
+- Next: quiet and speed up the KV quality harness before making
+  `M40LLM_KV_QUALITY_FULL=1` a routine gate, then run broader 4K+ retrieval
+  sweeps before trusting lossy KV compression at long context. Otherwise proceed
+  to fast-fits vs large-model backend selection per the strict roadmap.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
