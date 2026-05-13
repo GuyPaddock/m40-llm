@@ -153,7 +153,9 @@ generated-token decode time, total elapsed time, attention/compression time when
 available, and output text. `attention_compression_elapsed_ms` is currently
 `null` because the runtime does not expose that per-case counter yet.
 It also includes `prefill_tokens_per_sec`, `decode_tokens_per_sec`,
-`prefill_chunk_size`, `compressed_prefill_chunk_size`, and `prefill_mode`.
+`prefill_chunk_size`, `compressed_prefill_chunk_size`, `prefill_mode`,
+`final_kv_allocated_bytes`, `dense_equivalent_kv_bytes`, and
+`temporary_dense_kv_bytes`.
 `M40LLM_PREFILL_CHUNK_SIZE=<n>` enables an experimental CLI/test packed-prefix
 prefill path for dense `off` runs when the formatted prompt length is within
 the bound. KV-compressed modes do not use that dense packed-prefix path because
@@ -168,6 +170,10 @@ for `block-summary` and `block-select-lossy`: it runs packed dense prefill into
 a temporary dense KV cache, builds the compressed sidecar from that cache, then
 continues decode on the final compressed cache. JSONL reports the temporary
 dense allocation as `temporary_dense_kv_bytes`. Use
+`M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP=1` to run the bounded long-context sweep
+for dense `off`, `block-summary`, and `block-select-lossy` only. That sweep
+skips `block-select-exact` by default and uses 1024/2048/4096 targets when
+`M40LLM_KV_QUALITY_TARGETS` is not set. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on

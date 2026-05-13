@@ -66,6 +66,8 @@ pub struct GeneratedText {
     pub prefill_chunk_size: Option<usize>,
     pub compressed_prefill_chunk_size: Option<usize>,
     pub temporary_dense_kv_bytes: Option<usize>,
+    pub final_kv_allocated_bytes: Option<usize>,
+    pub dense_equivalent_kv_bytes: Option<usize>,
 }
 
 #[cfg(feature = "cuda")]
@@ -642,6 +644,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         prefill_chunk_size,
         compressed_prefill_chunk_size,
         temporary_dense_kv_bytes,
+        final_kv_allocated_bytes: model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
+        dense_equivalent_kv_bytes: model
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.dense_equivalent_bytes()),
     })
 }
 

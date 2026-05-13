@@ -1894,3 +1894,53 @@ Interpretation:
   31-32 MiB for this model/prompt.
 - The remaining slow quality rows are `block-select-exact`, which stays
   sequential by design in this checkpoint.
+
+## 2026-05-13: Bounded Lossy Packed Quality Sweep
+
+This checkpoint adds `M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP=1` to run a bounded
+quality sweep over dense `off`, `block-summary`, and `block-select-lossy` only.
+It skips `block-select-exact` by default because that mode remains sequential
+diagnostic coverage. When explicit targets are not provided, the sweep runs
+1024, 2048, and 4096 token targets for old and recent needle placements. Dense
+`off` uses packed-prefix prefill, while lossy modes use packed-then-compress.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1`
+  passed.
+
+Lossy packed sweep results:
+
+| Target | Needle | Mode | Status | Prompt | Generated | Prefill | Prefill tok/s | Decode | Decode tok/s | Total | Final KV | Dense-equiv KV | Temp dense KV | Output |
+| ---: | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1024 | old | off | pass | 997 | 10 | 38.304 s | 26.03 | 3.256 s | 3.07 | 43.632 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 1024 | old | block-summary | pass | 997 | 10 | 38.154 s | 26.13 | 3.738 s | 2.68 | 43.901 s | 413.25 MiB | 4096 MiB | 31.13 MiB | `ZXQ-NEEDLE-41729` |
+| 1024 | old | block-select-lossy | pass | 997 | 10 | 38.170 s | 26.12 | 3.745 s | 2.67 | 43.952 s | 413.25 MiB | 4096 MiB | 31.13 MiB | `ZXQ-NEEDLE-41729` |
+| 1024 | recent | off | pass | 1012 | 10 | 38.919 s | 26.00 | 3.297 s | 3.03 | 44.293 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 1024 | recent | block-summary | pass | 1012 | 10 | 39.304 s | 25.75 | 3.804 s | 2.63 | 45.197 s | 413.25 MiB | 4096 MiB | 31.59 MiB | `ZXQ-NEEDLE-41729` |
+| 1024 | recent | block-select-lossy | pass | 1012 | 10 | 39.308 s | 25.75 | 3.787 s | 2.64 | 45.276 s | 413.25 MiB | 4096 MiB | 31.59 MiB | `ZXQ-NEEDLE-41729` |
+| 2048 | old | off | pass | 2019 | 10 | 150.931 s | 13.38 | 6.207 s | 1.61 | 159.286 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 2048 | old | block-summary | fail | 2019 | 3 | 151.008 s | 13.37 | 0.851 s | 3.53 | 153.061 s | 413.25 MiB | 4096 MiB | 63.06 MiB | `  ` |
+| 2048 | old | block-select-lossy | fail | 2019 | 3 | 150.934 s | 13.38 | 0.855 s | 3.51 | 153.082 s | 413.25 MiB | 4096 MiB | 63.06 MiB | `  ` |
+| 2048 | recent | off | pass | 2034 | 10 | 153.136 s | 13.28 | 6.224 s | 1.61 | 161.827 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 2048 | recent | block-summary | fail | 2034 | 5 | 153.137 s | 13.28 | 1.695 s | 2.95 | 156.251 s | 413.25 MiB | 4096 MiB | 63.53 MiB | `Important secret code.` |
+| 2048 | recent | block-select-lossy | fail | 2034 | 5 | 153.099 s | 13.29 | 1.695 s | 2.95 | 156.206 s | 413.25 MiB | 4096 MiB | 63.53 MiB | `Important secret code.` |
+| 4096 | old | off | pass | 4063 | 10 | 680.608 s | 5.97 | 12.030 s | 0.83 | 694.699 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 4096 | old | block-summary | fail | 4063 | 16 | 680.316 s | 5.97 | 6.711 s | 2.38 | 689.774 s | 413.25 MiB | 4096 MiB | 126.94 MiB | spaces |
+| 4096 | old | block-select-lossy | fail | 4063 | 16 | 680.575 s | 5.97 | 6.758 s | 2.37 | 690.058 s | 413.25 MiB | 4096 MiB | 126.94 MiB | spaces |
+| 4096 | recent | off | pass | 4078 | 10 | 685.799 s | 5.95 | 11.992 s | 0.83 | 699.800 s | 4096 MiB | 4096 MiB | - | `ZXQ-NEEDLE-41729` |
+| 4096 | recent | block-summary | fail | 4078 | 5 | 685.222 s | 5.95 | 1.793 s | 2.79 | 688.410 s | 413.25 MiB | 4096 MiB | 127.41 MiB | `Important secret code.` |
+| 4096 | recent | block-select-lossy | fail | 4078 | 5 | 685.321 s | 5.95 | 1.797 s | 2.78 | 688.513 s | 413.25 MiB | 4096 MiB | 127.41 MiB | `Important secret code.` |
+
+Interpretation:
+
+- The bounded sweep mode works and records all requested memory fields.
+- Dense `off` retrieves the needle at 1024, 2048, and 4096 with packed-prefix
+  prefill, so the prompt/task remains within model capability.
+- `block-summary` and `block-select-lossy` retrieve correctly at 1024 but fail
+  at 2048 and 4096 with the current summary-only lossy representation. This is
+  a quality limitation of the compression strategy, not a runtime failure.

@@ -57,6 +57,8 @@ struct CaseRecord {
     prefill_chunk_size: Option<usize>,
     compressed_prefill_chunk_size: Option<usize>,
     temporary_dense_kv_bytes: Option<usize>,
+    final_kv_allocated_bytes: Option<usize>,
+    dense_equivalent_kv_bytes: Option<usize>,
     prefill_mode: String,
     output: String,
     error: Option<String>,
@@ -296,6 +298,12 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
+        if lossy_packed_sweep_enabled() {
+            return Ok([1024, 2048, 4096]
+                .into_iter()
+                .filter(|ctx| *ctx < limit)
+                .collect());
+        }
         return Ok([64, 512].into_iter().filter(|ctx| *ctx < limit).collect());
     }
 
@@ -309,6 +317,29 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     contexts.sort_unstable();
     contexts.dedup();
     Ok(contexts)
+}
+
+fn lossy_packed_sweep_enabled() -> bool {
+    std::env::var("M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn quality_modes(lossy_packed_sweep: bool) -> &'static [KvCompressMode] {
+    if lossy_packed_sweep {
+        &[
+            KvCompressMode::Off,
+            KvCompressMode::BlockSummary,
+            KvCompressMode::BlockSelectLossy,
+        ]
+    } else {
+        &[
+            KvCompressMode::Off,
+            KvCompressMode::BlockSelectExact,
+            KvCompressMode::BlockSummary,
+            KvCompressMode::BlockSelectLossy,
+        ]
+    }
 }
 
 fn prepare_kv_cache(model: &mut LoadedModel, mode: KvCompressMode) -> Result<()> {
@@ -337,6 +368,27 @@ fn run_retrieval_case(
     needle_position: &str,
     mode: KvCompressMode,
 ) -> Result<(GeneratedText, usize)> {
+    let _prefill_guard = if lossy_packed_sweep_enabled() && mode == KvCompressMode::Off {
+        Some(EnvVarGuard::set(
+            "M40LLM_PREFILL_CHUNK_SIZE",
+            target_tokens.to_string(),
+        ))
+    } else {
+        None
+    };
+    let _packed_then_compress_guard = if lossy_packed_sweep_enabled()
+        && matches!(
+            mode,
+            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+        ) {
+        Some(EnvVarGuard::set(
+            "M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL",
+            "1",
+        ))
+    } else {
+        None
+    };
+
     prepare_kv_cache(model, mode)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
     let preformatted_prompt_tokens = tokenizer
@@ -364,7 +416,10 @@ fn run_retrieval_case(
         ..Default::default()
     };
     let generated = generate_text(model, options.clone())?;
-    if !generated.output.contains(NEEDLE) && generated.prefill_mode.starts_with("packed") {
+    if !lossy_packed_sweep_enabled()
+        && !generated.output.contains(NEEDLE)
+        && generated.prefill_mode.starts_with("packed")
+    {
         eprintln!(
             "[kv_retrieval] packed prefill missed needle for mode={} target={} needle={}; retrying sequential",
             mode_name(mode),
@@ -389,6 +444,7 @@ fn run_retrieval_case(
             },
         )?;
         sequential.prefill_chunk_size = generated.prefill_chunk_size;
+        sequential.temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
         sequential.prefill_mode =
             format!("sequential-quality-fallback-after-{previous_prefill_mode}");
         return Ok((sequential, preformatted_prompt_tokens));
@@ -402,6 +458,12 @@ struct EnvVarGuard {
 }
 
 impl EnvVarGuard {
+    fn set(name: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
+        let previous = std::env::var_os(name);
+        std::env::set_var(name, value);
+        Self { name, previous }
+    }
+
     fn unset(name: &'static str) -> Self {
         let previous = std::env::var_os(name);
         std::env::remove_var(name);
@@ -447,7 +509,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} compressed_chunk={:?} temp_dense_kv_bytes={:?} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -457,9 +519,12 @@ fn print_records(records: &[CaseRecord]) {
             record.prompt_prefill_elapsed_ms,
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
-            record.prefill_mode,
-            record.compressed_prefill_chunk_size,
+            record.prefill_tokens_per_sec,
+            record.decode_tokens_per_sec,
+            record.final_kv_allocated_bytes,
+            record.dense_equivalent_kv_bytes,
             record.temporary_dense_kv_bytes,
+            record.prefill_mode,
             record.output,
             record.error.as_deref().unwrap_or("-")
         );
@@ -502,18 +567,14 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
-    let modes = [
-        KvCompressMode::Off,
-        KvCompressMode::BlockSelectExact,
-        KvCompressMode::BlockSummary,
-        KvCompressMode::BlockSelectLossy,
-    ];
+    let lossy_packed_sweep = lossy_packed_sweep_enabled();
+    let modes = quality_modes(lossy_packed_sweep);
 
     let mut records = Vec::new();
     for target_tokens in contexts {
         for needle_position in ["old", "recent"] {
             let mut dense_passed = None;
-            for mode in modes {
+            for &mode in modes {
                 let mut prompt_tokens = 0usize;
                 let mut generated_tokens = 0usize;
                 let mut prompt_prefill_elapsed_ms = 0u128;
@@ -523,6 +584,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 let mut prefill_chunk_size = None;
                 let mut compressed_prefill_chunk_size = None;
                 let mut temporary_dense_kv_bytes = None;
+                let mut final_kv_allocated_bytes = None;
+                let mut dense_equivalent_kv_bytes = None;
                 let mut prefill_mode = "error".to_string();
                 let (mut status, output, error) = match run_retrieval_case(
                     &mut model,
@@ -545,6 +608,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         prefill_chunk_size = generated.prefill_chunk_size;
                         compressed_prefill_chunk_size = generated.compressed_prefill_chunk_size;
                         temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
+                        final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
+                        dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
                         prefill_mode = generated.prefill_mode.clone();
                         let passed = generated.output.contains(NEEDLE);
                         if mode == KvCompressMode::Off {
@@ -591,6 +656,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     prefill_chunk_size,
                     compressed_prefill_chunk_size,
                     temporary_dense_kv_bytes,
+                    final_kv_allocated_bytes,
+                    dense_equivalent_kv_bytes,
                     prefill_mode,
                     output,
                     error,

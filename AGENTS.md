@@ -179,10 +179,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   compressed snapshots for both modes. The 512-token old/recent rows pass with
   roughly 9.8-10.3 s prefill, and 1024-token old/recent rows pass with roughly
   38-39 s prefill. `block-select-exact` remains sequential and is now the slow
-  quality row.
-- Next: decide whether to accelerate `block-select-exact` quality sweeps with
-  dense packed-prefix prefill, or move on to 2K/4K validation for
-  `block-summary` and `block-select-lossy`.
+  quality row. `M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP=1` now runs a bounded
+  lossy-only sweep over dense `off`, `block-summary`, and `block-select-lossy`
+  with 1024/2048/4096 old/recent targets and reports final compressed KV bytes,
+  dense-equivalent KV bytes, and temporary dense KV bytes. The sweep passes at
+  1024 for lossy modes, but 2048 and 4096 lossy retrieval currently fail even
+  though dense `off` passes; this is now documented as a quality limitation, not
+  a runtime failure.
+- Next: investigate why packed-then-compress lossy retrieval fails at 2K/4K
+  while dense `off` passes.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
