@@ -144,6 +144,8 @@ explicit GGUF path via
 local cache trees. Set `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to
 capture per-case retrieval results, and set `M40LLM_KV_QUALITY_FULL=1` only when
 you want the broader 512-to-32K context sweep instead of the short smoke target.
+Set `M40LLM_KV_QUALITY_MAX_TOKENS=<n>` if the retrieval answer needs more than
+the default 16 generated tokens.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to
@@ -195,6 +197,9 @@ reproduce that architecture exactly:
   counter events, and `M40LLM_COPY_LOG=1` to log H2D/D2H copy counter events.
   Set `M40LLM_PROFILE_LOG=1` to print lower-noise per-operation counter deltas
   around forward-pass timing regions.
+- Forward finiteness diagnostics: set `M40LLM_FORWARD_FINITE_LOG=1` to
+  synchronously sample intermediate CUDA forward tensors and report non-finite
+  counts. This is very verbose and intended only for correctness debugging.
 
 ## Server (feature = server)
 ```

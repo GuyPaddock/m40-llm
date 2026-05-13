@@ -54,7 +54,52 @@ fn log_profiled_op(
     profile::log_delta(&format!("{label}.{op}"), before, elapsed);
 }
 
+#[cfg(feature = "cuda")]
+fn forward_finite_log_enabled() -> bool {
+    std::env::var("M40LLM_FORWARD_FINITE_LOG").ok().as_deref() == Some("1")
+}
+
 impl LoadedModel {
+    #[cfg(feature = "cuda")]
+    fn debug_log_device_f32_finiteness(
+        &self,
+        label: &str,
+        ptr: *const c_void,
+        len: usize,
+    ) -> Result<()> {
+        if !forward_finite_log_enabled() {
+            return Ok(());
+        }
+        self.cuda.synchronize_stream(CudaStream::Decode)?;
+        self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        let bytes = len
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("debug finiteness byte size overflow")?;
+        let mut raw = vec![0u8; bytes];
+        unsafe {
+            self.cuda
+                .memcpy_d2h(raw.as_mut_ptr() as *mut c_void, ptr, bytes)?;
+        }
+        let mut nonfinite = 0usize;
+        let mut min = f32::INFINITY;
+        let mut max = f32::NEG_INFINITY;
+        let mut first_nonfinite = None;
+        for (idx, ch) in raw.chunks_exact(4).enumerate() {
+            let value = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
+            if value.is_finite() {
+                min = min.min(value);
+                max = max.max(value);
+            } else {
+                nonfinite += 1;
+                first_nonfinite.get_or_insert((idx, value));
+            }
+        }
+        eprintln!(
+            "[cuda] finite_check {label}: len={len} nonfinite={nonfinite} first_nonfinite={first_nonfinite:?} finite_min={min:.6e} finite_max={max:.6e}"
+        );
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     fn with_forward_workspace<R>(
         &self,
@@ -180,6 +225,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attn_norm"),
+                        ws.d_xn as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Q uses query heads; K/V use KV heads for GQA models.
                     let profile_before = profile::snapshot_if_enabled();
@@ -209,6 +259,21 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.q"),
+                        ws.dq as *const c_void,
+                        d_model as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.k"),
+                        ws.dk as *const c_void,
+                        kv_dim as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.v"),
+                        ws.dv as *const c_void,
+                        kv_dim as usize,
+                    )?;
 
                     let pos = seq_len.saturating_sub(1);
                     let profile_before = profile::snapshot_if_enabled();
@@ -233,6 +298,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.rope_q"),
+                        ws.dq as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
@@ -276,6 +346,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attention"),
+                        ws.datt as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Output projection of attention
                     let profile_before = profile::snapshot_if_enabled();
@@ -299,6 +374,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.out_project"),
+                        ws.dy_attn as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Residual add y_attn: x1 = x + y_attn.
                     let profile_before = profile::snapshot_if_enabled();
@@ -320,6 +400,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attn_residual"),
+                        ws.d_x1 as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Post-attention norm: x1n = norm(x1)
                     let profile_before = profile::snapshot_if_enabled();
@@ -349,6 +434,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.ffn_norm"),
+                        ws.d_x1n as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // MLP gates and up (now feed post-attn normalized x1n)
                     let profile_before = profile::snapshot_if_enabled();
@@ -374,6 +464,16 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.gate"),
+                        ws.dgate as *const c_void,
+                        hidden_dim as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.up"),
+                        ws.dup as *const c_void,
+                        hidden_dim as usize,
+                    )?;
 
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
                     let profile_before = profile::snapshot_if_enabled();
@@ -395,6 +495,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.swiglu"),
+                        ws.dhid as *const c_void,
+                        hidden_dim as usize,
+                    )?;
 
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
@@ -418,6 +523,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.mlp_down"),
+                        ws.dy_mlp as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
                     let profile_before = profile::snapshot_if_enabled();
@@ -439,6 +549,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.mlp_residual"),
+                        d_out_f32 as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     Ok(())
                 },

@@ -236,6 +236,13 @@ fn smoke_target_tokens() -> usize {
         .unwrap_or(64)
 }
 
+fn retrieval_max_tokens() -> usize {
+    std::env::var("M40LLM_KV_QUALITY_MAX_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(16)
+}
+
 fn target_contexts(model_context: usize, full_quality: bool) -> Vec<usize> {
     let limit = model_context.saturating_sub(128);
     if !full_quality {
@@ -301,7 +308,7 @@ fn run_retrieval_case(
         model,
         GenerateOptions {
             prompt,
-            max_tokens: Some(8),
+            max_tokens: Some(retrieval_max_tokens()),
             top_k: Some(1),
             log_prefix: "kv_retrieval",
             kv_compression: KvCompressionConfig {

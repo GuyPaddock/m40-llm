@@ -1624,7 +1624,7 @@ Environment:
 
 - GPU: Tesla M40 24GB, sm_52
 - Features: `cuda`
-- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_llama32_1b_smoke.jsonl M40LLM_KV_QUALITY_SMOKE_TOKENS=64 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_SMOKE_TOKENS=64 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
 
 Selected model:
 
@@ -1643,21 +1643,24 @@ Retrieval results:
 
 | Target | Needle | Mode | Status | Notes |
 | ---: | --- | --- | --- | --- |
-| 64 | old | off | fail | Dense baseline generated `!!!!!!!!`, not the needle |
-| 64 | old | block-select-exact | inconclusive | Dense baseline failed, so compression quality is not attributable |
-| 64 | old | block-summary | inconclusive | Dense baseline failed |
-| 64 | old | block-select-lossy | inconclusive | Dense baseline failed |
-| 64 | recent | off | fail | Dense baseline generated `!!!!!!!!`, not the needle |
-| 64 | recent | block-select-exact | inconclusive | Dense baseline failed |
-| 64 | recent | block-summary | inconclusive | Dense baseline failed |
-| 64 | recent | block-select-lossy | inconclusive | Dense baseline failed |
+| 64 | old | off | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | old | block-select-exact | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | old | block-summary | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | old | block-select-lossy | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | recent | off | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | recent | block-select-exact | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | recent | block-summary | pass | Generated `ZXQ-NEEDLE-41729` |
+| 64 | recent | block-select-lossy | pass | Generated `ZXQ-NEEDLE-41729` |
 
 Interpretation:
 
-- The harness now produces actionable pass/fail/inconclusive rows and can emit
-  JSONL via `M40LLM_KV_QUALITY_REPORT=...`.
-- The Llama 3.2 1B F16 model is runnable through full-layer CUDA decode, but its
-  dense baseline fails even the short retrieval smoke, so it is not yet a valid
-  compression-quality baseline.
-- Compressed KV remains experimental: quality is still unmeasured for a dense
-  baseline that can reliably solve the retrieval prompt.
+- The earlier dense `!!!!!!!!` failure was caused by reading GGUF weights from an
+  unaligned tensor data offset. After applying the GGUF default 32-byte tensor
+  data alignment, Llama 3.2 logits are finite and the short retrieval smoke is
+  a valid compression-quality baseline.
+- `block-select-exact`, `block-summary`, and `block-select-lossy` all match the
+  dense baseline on this 64-token old/recent smoke. This is not enough evidence
+  to trust lossy compression at long context; use `M40LLM_KV_QUALITY_FULL=1`
+  for the broader sweep.
+- The harness now uses `M40LLM_KV_QUALITY_MAX_TOKENS` with a default of 16 so
+  exact-code answers are not falsely marked failed due to truncation.

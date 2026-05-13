@@ -144,13 +144,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   Llama 3 GGUF tokenizer metadata now routes through the `tiktoken` Llama 3
   encoding, auto prompt formatting applies the Llama 3 chat control-token
   wrapper, and stop criteria include both end-of-turn and end-of-text tokens.
-  A smoke run against that model now feeds correct Llama 3 chat prompt token IDs
-  but still generates repeated token `0` (`!!!!!!!!`), so the remaining dense
-  quality issue is in logits/projection/forward math rather than prompt
-  tokenization, and compressed KV quality remains inconclusive.
-- Next: fix the dense retrieval/generation quality issue for Llama 3.2 1B before
-  using it as the KV compression quality baseline, or proceed to fast-fits vs
-  large-model backend selection per the strict roadmap.
+  The GGUF loader now honors aligned tensor data offsets, including the default
+  32-byte alignment when the aligned payload fits. This fixes the Llama 3.2
+  repeated-token-0/NaN-logits failure. The short 64-token old/recent KV
+  retrieval smoke now passes for dense `off`, `block-select-exact`,
+  `block-summary`, and `block-select-lossy`.
+- Next: run the broader `M40LLM_KV_QUALITY_FULL=1` retrieval sweep before
+  trusting lossy KV compression beyond smoke coverage, or proceed to fast-fits
+  vs large-model backend selection per the strict roadmap.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
