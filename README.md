@@ -132,6 +132,18 @@ lossy modes currently validate approximate attention behavior and report
 compressed-equivalent footprint before a later sidecar path physically discards
 old exact KV.
 
+This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
+efficient million-token context intelligence, but it does not attempt to
+reproduce that architecture exactly:
+
+```bibtex
+@misc{deepseekai2026deepseekv4,
+  title={DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence},
+  author={DeepSeek-AI},
+  year={2026},
+}
+```
+
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.

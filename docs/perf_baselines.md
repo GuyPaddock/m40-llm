@@ -1483,8 +1483,10 @@ Interpretation:
 ## 2026-05-12: Experimental KV Compression Attention Benchmark
 
 This checkpoint adds experimental compressed-KV decode attention modes inspired
-by block summary and block-selection ideas. It deliberately separates sparse
-selection from lossy compression:
+by block summary and block-selection ideas from DeepSeek-AI's DeepSeek-V4 work
+on efficient million-token context intelligence. It does not attempt to
+reproduce that architecture exactly. The implementation deliberately separates
+sparse selection from lossy compression:
 
 - `off`: dense exact KV attention.
 - `block-select-exact`: keeps exact old KV and attends selected exact old
