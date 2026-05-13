@@ -97,7 +97,9 @@ async fn main() -> Result<()> {
             };
             if matches!(
                 kv_compression.mode,
-                KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+                KvCompressMode::RecentOnly
+                    | KvCompressMode::BlockSummary
+                    | KvCompressMode::BlockSelectLossy
             ) {
                 loaded.allocate_compressed_kv_cache_for_layers(
                     max_len.try_into().unwrap(),

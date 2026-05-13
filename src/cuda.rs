@@ -2,6 +2,10 @@
 #![allow(clippy::uninlined_format_args)]
 
 #[cfg(feature = "cuda")]
+use crate::kv_selection::{
+    KvAttentionGroupStats, KvAttentionTelemetrySummary, KvAttentionTopEntry,
+};
+#[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
 use std::ffi::c_void;
@@ -31,6 +35,35 @@ mod ffi {
     #[repr(C)]
     pub struct M40llmCudaGraphExec {
         _private: [u8; 0],
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct M40llmAttentionGroupStats {
+        pub prob_mass: f32,
+        pub logit_max: f32,
+        pub logit_mean: f32,
+        pub count: u32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionTopEntry {
+        pub group: u32,
+        pub block_index: u32,
+        pub token_position: u32,
+        pub score: f32,
+        pub probability: f32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionTelemetry {
+        pub recent: M40llmAttentionGroupStats,
+        pub selected_old_exact: M40llmAttentionGroupStats,
+        pub summary: M40llmAttentionGroupStats,
+        pub representatives: M40llmAttentionGroupStats,
+        pub other: M40llmAttentionGroupStats,
+        pub needle_block_mass: f32,
+        pub top_entries: [M40llmAttentionTopEntry; 8],
+        pub top_entry_count: u32,
     }
 
     extern "C" {
@@ -335,6 +368,20 @@ mod ffi {
             max_out: u32,
             out_total_old_blocks: *mut u32,
         ) -> i32;
+        pub fn m40llm_kvcache_debug_attention_telemetry(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            mode: u32,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            needle_block: u32,
+            out: *mut M40llmAttentionTelemetry,
+        ) -> i32;
         pub fn m40llm_kvcache_build_compressed_from_dense(
             ctx: *mut M40llmCudaContext,
             compressed: *mut M40llmKVCache,
@@ -390,6 +437,15 @@ mod ffi {
             recent_window: u32,
             block_size: u32,
             top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_batched(
@@ -2354,6 +2410,27 @@ pub struct KVCache {
     inner: Arc<KVCacheInner>,
 }
 
+#[cfg(feature = "cuda")]
+fn convert_group(raw: ffi::M40llmAttentionGroupStats) -> KvAttentionGroupStats {
+    KvAttentionGroupStats {
+        prob_mass: raw.prob_mass,
+        logit_max: raw.logit_max,
+        logit_mean: raw.logit_mean,
+        count: raw.count,
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn attention_group_name(group: u32) -> &'static str {
+    match group {
+        1 => "recent",
+        2 => "selected_old_exact",
+        3 => "summary",
+        4 => "representative",
+        _ => "other",
+    }
+}
+
 impl KVCache {
     pub fn num_heads(&self) -> u32 {
         self.inner.num_heads
@@ -2475,6 +2552,80 @@ impl KVCache {
         }
         blocks.truncate(count as usize);
         Ok((blocks, total_old_blocks))
+    }
+
+    #[cfg(feature = "cuda")]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn debug_attention_telemetry(
+        &self,
+        ctx: &CudaContext,
+        mode: u32,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        needle_block: Option<u32>,
+    ) -> Result<KvAttentionTelemetrySummary> {
+        let empty_entry = ffi::M40llmAttentionTopEntry {
+            group: 0,
+            block_index: u32::MAX,
+            token_position: u32::MAX,
+            score: 0.0,
+            probability: 0.0,
+        };
+        let mut raw = ffi::M40llmAttentionTelemetry {
+            recent: ffi::M40llmAttentionGroupStats::default(),
+            selected_old_exact: ffi::M40llmAttentionGroupStats::default(),
+            summary: ffi::M40llmAttentionGroupStats::default(),
+            representatives: ffi::M40llmAttentionGroupStats::default(),
+            other: ffi::M40llmAttentionGroupStats::default(),
+            needle_block_mass: -1.0,
+            top_entries: [empty_entry; 8],
+            top_entry_count: 0,
+        };
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_attention_telemetry(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                mode,
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                needle_block.unwrap_or(u32::MAX),
+                &mut raw as *mut ffi::M40llmAttentionTelemetry,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_attention_telemetry failed: {rc}");
+        }
+        let top_entry_count = raw.top_entry_count.min(raw.top_entries.len() as u32) as usize;
+        Ok(KvAttentionTelemetrySummary {
+            recent: convert_group(raw.recent),
+            selected_old_exact: convert_group(raw.selected_old_exact),
+            summary: convert_group(raw.summary),
+            representatives: convert_group(raw.representatives),
+            other: convert_group(raw.other),
+            needle_block_mass: (raw.needle_block_mass >= 0.0).then_some(raw.needle_block_mass),
+            top_entries: raw.top_entries[..top_entry_count]
+                .iter()
+                .map(|entry| KvAttentionTopEntry {
+                    group: attention_group_name(entry.group).to_string(),
+                    block_index: (entry.block_index != u32::MAX).then_some(entry.block_index),
+                    token_position: (entry.token_position != u32::MAX)
+                        .then_some(entry.token_position),
+                    score: entry.score,
+                    probability: entry.probability,
+                })
+                .collect(),
+        })
     }
 
     #[cfg(feature = "cuda")]
@@ -3202,6 +3353,39 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_block_summary_lossy");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues diagnostic compressed attention that attends only the exact recent ring.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_compressed_recent_only_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_compressed_recent_only_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_compressed_recent_only");
         Ok(())
     }
 

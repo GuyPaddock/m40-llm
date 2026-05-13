@@ -431,7 +431,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                             } else if packed_then_compress_prefill_enabled()
                                 && matches!(
                                     options.kv_compression.mode,
-                                    KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+                                    KvCompressMode::RecentOnly
+                                        | KvCompressMode::BlockSummary
+                                        | KvCompressMode::BlockSelectLossy
                                 )
                             {
                                 match decode_session

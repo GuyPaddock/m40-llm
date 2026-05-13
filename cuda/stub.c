@@ -10,6 +10,7 @@ extern "C" {
 typedef struct M40llmCudaContext { int device_id; } M40llmCudaContext;
 typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
+typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
 
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
     if (name_buf && buf_len) {
@@ -245,6 +246,16 @@ int m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks; (void)out_dev_f32; return -1;
 }
+int m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
+}
 
 int m40llm_attention_last_token_f32_gqa_batched(
     M40llmCudaContext* ctx,
@@ -275,6 +286,24 @@ int m40llm_kvcache_debug_select_old_blocks(
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len;
     (void)recent_window; (void)block_size; (void)top_blocks; (void)out_blocks_host;
     (void)out_count; (void)max_out; (void)out_total_old_blocks; return -1;
+}
+
+int m40llm_kvcache_debug_attention_telemetry(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t mode,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    uint32_t recent_window,
+    uint32_t block_size,
+    uint32_t top_blocks,
+    uint32_t needle_block,
+    M40llmAttentionTelemetry* out) {
+    (void)ctx; (void)kv; (void)mode; (void)seq_id; (void)q_dev_f32; (void)q_heads;
+    (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks;
+    (void)needle_block; (void)out; return -1;
 }
 
 int m40llm_attention_last_token_f32_gqa_batched_async(

@@ -69,6 +69,19 @@ struct CaseRecord {
     needle_block_selected: Option<bool>,
     needle_block_rank: Option<u32>,
     total_old_blocks: Option<u32>,
+    attention_recent_mass: Option<f32>,
+    attention_selected_old_exact_mass: Option<f32>,
+    attention_summary_mass: Option<f32>,
+    attention_representative_mass: Option<f32>,
+    attention_other_mass: Option<f32>,
+    attention_needle_block_mass: Option<f32>,
+    attention_recent_logit_max: Option<f32>,
+    attention_recent_logit_mean: Option<f32>,
+    attention_summary_logit_max: Option<f32>,
+    attention_summary_logit_mean: Option<f32>,
+    attention_representative_logit_max: Option<f32>,
+    attention_representative_logit_mean: Option<f32>,
+    attention_top_entries: Option<Vec<String>>,
     output: String,
     error: Option<String>,
 }
@@ -367,7 +380,10 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
     if mode == KvCompressMode::Off {
         return Ok(vec![None]);
     }
-    if mode == KvCompressMode::BlockSummary {
+    if matches!(
+        mode,
+        KvCompressMode::RecentOnly | KvCompressMode::BlockSummary
+    ) {
         return Ok(vec![Some(0)]);
     }
     let values = std::env::var("M40LLM_KV_QUALITY_TOP_BLOCKS")
@@ -451,6 +467,7 @@ fn quality_modes(
         &[
             KvCompressMode::Off,
             KvCompressMode::BlockSelectExact,
+            KvCompressMode::RecentOnly,
             KvCompressMode::BlockSummary,
             KvCompressMode::BlockSelectLossy,
         ]
@@ -464,6 +481,7 @@ fn quality_modes(
         &[
             KvCompressMode::Off,
             KvCompressMode::BlockSelectExact,
+            KvCompressMode::RecentOnly,
             KvCompressMode::BlockSummary,
             KvCompressMode::BlockSelectLossy,
         ]
@@ -487,7 +505,9 @@ fn prepare_kv_cache(
     };
     if matches!(
         mode,
-        KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+        KvCompressMode::RecentOnly
+            | KvCompressMode::BlockSummary
+            | KvCompressMode::BlockSelectLossy
     ) {
         model.allocate_compressed_kv_cache_for_layers(max_len, &config)
     } else {
@@ -520,7 +540,9 @@ fn run_retrieval_case(
     let _packed_then_compress_guard = if (lossy_packed_sweep_enabled() || exact_selection_sweep)
         && matches!(
             mode,
-            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+            KvCompressMode::RecentOnly
+                | KvCompressMode::BlockSummary
+                | KvCompressMode::BlockSelectLossy
         ) {
         Some(EnvVarGuard::set(
             "M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL",
@@ -533,6 +555,7 @@ fn run_retrieval_case(
         && matches!(
             mode,
             KvCompressMode::BlockSelectExact
+                | KvCompressMode::RecentOnly
                 | KvCompressMode::BlockSummary
                 | KvCompressMode::BlockSelectLossy
         ) {
@@ -549,6 +572,14 @@ fn run_retrieval_case(
         .len();
     let needle_block_index =
         needle_block_index(tokenizer, &prompt, preformatted_prompt_tokens, 1024, 32)?;
+    let _needle_block_guard = if let Some(block) = needle_block_index {
+        Some(EnvVarGuard::set(
+            "M40LLM_KV_TELEMETRY_NEEDLE_BLOCK",
+            block.to_string(),
+        ))
+    } else {
+        Some(EnvVarGuard::unset("M40LLM_KV_TELEMETRY_NEEDLE_BLOCK"))
+    };
     if preformatted_prompt_tokens >= model.model_config.context_length as usize {
         anyhow::bail!(
             "retrieval prompt has {preformatted_prompt_tokens} tokens before prompt formatting, model context is {}",
@@ -661,6 +692,7 @@ fn mode_name(mode: KvCompressMode) -> &'static str {
     match mode {
         KvCompressMode::Off => "off",
         KvCompressMode::BlockSelectExact => "block-select-exact",
+        KvCompressMode::RecentOnly => "recent-only",
         KvCompressMode::BlockSummary => "block-summary",
         KvCompressMode::BlockSelectLossy => "block-select-lossy",
     }
@@ -687,11 +719,30 @@ fn append_report_record(record: &CaseRecord) -> Result<()> {
     Ok(())
 }
 
+fn attention_top_entry_strings(
+    attention: &m40_llm::kv_selection::KvAttentionTelemetrySummary,
+) -> Vec<String> {
+    attention
+        .top_entries
+        .iter()
+        .map(|entry| {
+            format!(
+                "{}:block={:?}:token={:?}:score={:.4}:p={:.6}",
+                entry.group,
+                entry.block_index,
+                entry.token_position,
+                entry.score,
+                entry.probability
+            )
+        })
+        .collect()
+}
+
 fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -706,6 +757,16 @@ fn print_records(records: &[CaseRecord]) {
             record.needle_block_selected,
             record.needle_block_rank,
             record.total_old_blocks,
+            record.attention_recent_mass,
+            record.attention_selected_old_exact_mass,
+            record.attention_summary_mass,
+            record.attention_representative_mass,
+            record.attention_needle_block_mass,
+            record.attention_recent_logit_max,
+            record.attention_recent_logit_mean,
+            record.attention_summary_logit_max,
+            record.attention_summary_logit_mean,
+            record.attention_top_entries,
             record.prompt_prefill_elapsed_ms,
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
@@ -862,6 +923,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let total_old_blocks = selection_summary
                             .as_ref()
                             .map(|summary| summary.total_old_blocks);
+                        let attention = selection_summary
+                            .as_ref()
+                            .and_then(|summary| summary.attention.as_ref());
                         let record = CaseRecord {
                             model_path: probe.candidate.path.display().to_string(),
                             resolved_model_path: probe
@@ -911,6 +975,24 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             needle_block_selected,
                             needle_block_rank,
                             total_old_blocks,
+                            attention_recent_mass: attention.map(|a| a.recent.prob_mass),
+                            attention_selected_old_exact_mass: attention
+                                .map(|a| a.selected_old_exact.prob_mass),
+                            attention_summary_mass: attention.map(|a| a.summary.prob_mass),
+                            attention_representative_mass: attention
+                                .map(|a| a.representatives.prob_mass),
+                            attention_other_mass: attention.map(|a| a.other.prob_mass),
+                            attention_needle_block_mass: attention
+                                .and_then(|a| a.needle_block_mass),
+                            attention_recent_logit_max: attention.map(|a| a.recent.logit_max),
+                            attention_recent_logit_mean: attention.map(|a| a.recent.logit_mean),
+                            attention_summary_logit_max: attention.map(|a| a.summary.logit_max),
+                            attention_summary_logit_mean: attention.map(|a| a.summary.logit_mean),
+                            attention_representative_logit_max: attention
+                                .map(|a| a.representatives.logit_max),
+                            attention_representative_logit_mean: attention
+                                .map(|a| a.representatives.logit_mean),
+                            attention_top_entries: attention.map(attention_top_entry_strings),
                             output,
                             error,
                         };

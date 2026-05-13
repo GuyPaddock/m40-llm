@@ -207,8 +207,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   is selected at rank 0; for recent needles, lossy modes fail despite the target
   living in the exact recent window. Treat this as evidence that current lossy
   summaries/reps are the bottleneck rather than sparse block selection.
-- Next: do not increase representative count further. Investigate alternative
-  lossy summary designs or attention weighting/masking behavior before
+  `recent-only` is now available as a diagnostic compressed KV mode that attends
+  only the exact recent ring. The quality harness also records first-captured
+  attention group telemetry: recent mass, selected old exact mass, summary mass,
+  representative mass, needle-block mass, top attended entries, and logit
+  max/mean by group. The 2048 telemetry shows summary probability mass is near
+  zero, not excessive, and `recent-only` still fails for the 2048 recent needle
+  while dense and `block-select-exact` pass. The next diagnostic should compare
+  packed-then-compress compressed-recent logits against dense exact logits at
+  2048 and/or capture later-layer attention telemetry before changing summary
+  design.
+- Next: do not increase representative count further. Diagnose compressed
+  recent/prefill equivalence and later-layer exact-old contribution before
   expanding compressed KV into server scheduling.
 
 ## Strict Reconciled Task Order

@@ -214,10 +214,12 @@ impl LoadedModel {
         }
         if !matches!(
             config.mode,
-            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+            KvCompressMode::RecentOnly
+                | KvCompressMode::BlockSummary
+                | KvCompressMode::BlockSelectLossy
         ) {
             anyhow::bail!(
-                "allocate_compressed_kv_cache_for_layers requires a lossy compressed mode"
+                "allocate_compressed_kv_cache_for_layers requires a compressed sidecar mode"
             );
         }
         config.validate()?;
@@ -387,6 +389,22 @@ impl LoadedModel {
             #[cfg(feature = "cuda")]
             unsafe {
                 if kv_selection::enabled() {
+                    if !kv_selection::has_attention() {
+                        if let Ok(attention) = kv.debug_attention_telemetry(
+                            &self.cuda,
+                            1,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            kv_selection::needle_block(),
+                        ) {
+                            kv_selection::record_attention(attention);
+                        }
+                    }
                     if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
                         &self.cuda,
                         seq_id,
@@ -412,6 +430,32 @@ impl LoadedModel {
                     d_out,
                 );
             }
+        } else if compression.mode == KvCompressMode::RecentOnly {
+            if head_dim != 64 {
+                anyhow::bail!("recent-only requires head_dim=64");
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                if kv_selection::enabled() && !kv_selection::has_attention() {
+                    if let Ok(attention) = kv.debug_attention_telemetry(
+                        &self.cuda,
+                        2,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        0,
+                        kv_selection::needle_block(),
+                    ) {
+                        kv_selection::record_attention(attention);
+                    }
+                }
+                return kv.attention_last_token_f32_gqa_compressed_recent_only_async(
+                    &self.cuda, seq_id, d_q, num_heads, seq_len, d_out,
+                );
+            }
         } else if matches!(
             compression.mode,
             KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
@@ -427,6 +471,27 @@ impl LoadedModel {
                     compression.top_blocks
                 };
                 if kv_selection::enabled() {
+                    if !kv_selection::has_attention() {
+                        let mode_code = if compression.mode == KvCompressMode::BlockSummary {
+                            3
+                        } else {
+                            4
+                        };
+                        if let Ok(attention) = kv.debug_attention_telemetry(
+                            &self.cuda,
+                            mode_code,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            top_blocks,
+                            kv_selection::needle_block(),
+                        ) {
+                            kv_selection::record_attention(attention);
+                        }
+                    }
                     if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
                         &self.cuda,
                         seq_id,

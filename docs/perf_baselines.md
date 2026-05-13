@@ -2118,3 +2118,78 @@ Interpretation:
 - The current telemetry aggregates selected old blocks across decode attention
   calls in the row; it is intended to answer whether the needle block was ever
   selected by the scorer, not to be a per-layer ranking trace.
+
+## 2026-05-13: KV Attention Probability Telemetry
+
+This checkpoint adds a compressed `recent-only` diagnostic mode and first-token
+attention grouping telemetry to the KV quality harness. `recent-only` uses the
+physical compressed sidecar but attends only the exact recent ring, disabling old
+summaries and representatives. The telemetry captures the first attention
+candidate set observed while producing the first generated token and reports:
+
+- probability mass for recent exact tokens, selected old exact tokens, old
+  summaries, representatives, and other entries;
+- top attended entries with group, block/token, score, and probability;
+- needle-block mass when the needle is in old context;
+- pre-softmax logit max/mean for recent, summary, and representative entries.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed. The compressed recent-window parity test now also compares
+  `recent-only` against dense attention when the whole sequence fits in the
+  recent window.
+- 64-token diagnostic smoke passed with attention telemetry fields populated.
+- 1024-token diagnostic sweep passed; it remains entirely inside the 1024-token
+  recent window and therefore does not exercise old summaries.
+- 2048-token diagnostic sweep passed the harness and reproduced the known lossy
+  failures with attention telemetry.
+
+2048 diagnostic command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_QUALITY_TARGETS=2048 \
+M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=4 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-attn-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+2048 summary:
+
+| Needle | Mode | Status | Recent mass | Old exact mass | Summary mass | Needle-block mass | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| old | off | pass | - | - | - | - | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | pass | 0.999958 | 0.0000418 | 0 | 0 | `ZXQ-NEEDLE-41729` |
+| old | recent-only | fail | 1.0 | 0 | 0 | 0 | spaces |
+| old | block-summary | fail | 1.0 | 0 | 0.0000000406 | 0.000000000183 | spaces |
+| old | block-select-lossy | fail | 1.0 | 0 | 0.0000000226 | 0 | spaces |
+| recent | off | pass | - | - | - | - | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | pass | 0.999962 | 0.0000377 | 0 | - | `ZXQ-NEEDLE-41729` |
+| recent | recent-only | fail | 1.0 | 0 | 0 | - | `Important secret code.` |
+| recent | block-summary | fail | 1.0 | 0 | 0.0000000689 | - | `Important secret code.` |
+| recent | block-select-lossy | fail | 1.0 | 0 | 0.0000000537 | - | `Important secret code.` |
+
+Interpretation:
+
+- This is not an "old summaries overpower recent tokens" failure. Summary
+  entries receive almost zero probability mass in the first captured attention
+  candidate set.
+- `recent-only` fails at 2048 even for the recent needle, while dense and
+  `block-select-exact` pass. That suggests either useful old context is still
+  needed to retrieve the recent answer or packed-then-compress/recent-sidecar
+  behavior diverges in a way not covered by the short recent-window parity test.
+- `block-select-exact` passes with very small old-exact mass in the first
+  captured attention set. The first-layer telemetry alone is therefore not a
+  complete causal trace; it is a diagnostic signal to guide the next test.
+- Next work should compare compressed sidecar recent-only vs dense exact logits
+  after packed-then-compress at 2048, and/or capture attention telemetry at
+  later layers to see where exact old context contributes. Do not tune
+  representative count until this is understood.

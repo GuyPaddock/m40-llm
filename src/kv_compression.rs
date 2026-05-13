@@ -5,6 +5,7 @@ pub enum KvCompressMode {
     #[default]
     Off,
     BlockSelectExact,
+    RecentOnly,
     BlockSummary,
     BlockSelectLossy,
 }

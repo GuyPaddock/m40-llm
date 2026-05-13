@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub enum KvCompressModeArg {
     Off,
     BlockSelectExact,
+    RecentOnly,
     BlockSummary,
     BlockSelectLossy,
 }
@@ -14,6 +15,7 @@ impl From<KvCompressModeArg> for crate::kv_compression::KvCompressMode {
         match value {
             KvCompressModeArg::Off => Self::Off,
             KvCompressModeArg::BlockSelectExact => Self::BlockSelectExact,
+            KvCompressModeArg::RecentOnly => Self::RecentOnly,
             KvCompressModeArg::BlockSummary => Self::BlockSummary,
             KvCompressModeArg::BlockSelectLossy => Self::BlockSelectLossy,
         }

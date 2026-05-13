@@ -67,6 +67,29 @@ extern "C" {
         uint32_t representatives;
         uint32_t representative_policy;
     };
+    struct M40llmAttentionGroupStats {
+        float prob_mass;
+        float logit_max;
+        float logit_mean;
+        uint32_t count;
+    };
+    struct M40llmAttentionTopEntry {
+        uint32_t group;
+        uint32_t block_index;
+        uint32_t token_position;
+        float score;
+        float probability;
+    };
+    struct M40llmAttentionTelemetry {
+        M40llmAttentionGroupStats recent;
+        M40llmAttentionGroupStats selected_old_exact;
+        M40llmAttentionGroupStats summary;
+        M40llmAttentionGroupStats representatives;
+        M40llmAttentionGroupStats other;
+        float needle_block_mass;
+        M40llmAttentionTopEntry top_entries[8];
+        uint32_t top_entry_count;
+    };
     // Back-compat alias so other TU code using KVCache still compiles
     typedef M40llmKVCache KVCache;
 
@@ -1966,6 +1989,87 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_compressed_recent_only_head64_kernel(
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        uint32_t recent_window,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* reduce = scores + recent_window;
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t recent_start = seq_len - recent_count;
+        if (recent_count == 0) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t i = 0; i < recent_count; ++i) {
+            const uint32_t pos = recent_start + i;
+            const uint32_t ring = pos % recent_window;
+            const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(recent_k[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[i] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+        float denom_part = 0.0f;
+        for (uint32_t i = tid; i < recent_count; i += blockDim.x) {
+            denom_part += expf(scores[i] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t i = 0; i < recent_count; ++i) {
+                const uint32_t pos = recent_start + i;
+                const uint32_t ring = pos % recent_window;
+                const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[i] - max_score) / denom;
+                acc += p * __half2float(recent_v[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
     __global__ void attention_last_token_gqa_head64_ldg_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -2475,6 +2579,40 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             recent_window,
             block_size,
             top_blocks,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!kv->compressed) return -2;
+        if (seq_id >= kv->max_batch_size) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -4;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -5;
+        if (kv->head_dim != 64 || kv->recent_window == 0) return -6;
+        const uint32_t recent_count = seq_len < kv->recent_window ? seq_len : kv->recent_window;
+        if (recent_count == 0) return -7;
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)kv->recent_window + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_compressed_recent_only_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            kv->d_recent_k,
+            kv->d_recent_v,
+            kv->recent_window,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
             reinterpret_cast<float*>(out_dev_f32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -8;
@@ -3974,6 +4112,230 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             out_blocks_host[i] = scored[i].second;
         }
         *out_count = selected;
+        return 0;
+    }
+
+    int m40llm_kvcache_debug_attention_telemetry(M40llmCudaContext* ctx,
+                                                  const M40llmKVCache* kv,
+                                                  uint32_t mode,
+                                                  uint32_t seq_id,
+                                                  const void* q_dev_f32,
+                                                  uint32_t q_heads,
+                                                  uint32_t seq_len,
+                                                  uint32_t recent_window,
+                                                  uint32_t block_size,
+                                                  uint32_t top_blocks,
+                                                  uint32_t needle_block,
+                                                  M40llmAttentionTelemetry* out) {
+        if (!ctx || !kv || !q_dev_f32 || !out) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim != 64) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -4;
+
+        memset(out, 0, sizeof(M40llmAttentionTelemetry));
+        out->needle_block_mass = -1.0f;
+        for (uint32_t i = 0; i < 8; ++i) {
+            out->top_entries[i].block_index = 0xffffffffu;
+            out->top_entries[i].token_position = 0xffffffffu;
+        }
+
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -5;
+
+        float q[64];
+        err = cudaMemcpy(q, q_dev_f32, sizeof(q), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -6;
+
+        struct Candidate {
+            uint32_t group;
+            uint32_t block;
+            uint32_t token;
+            float score;
+            float prob;
+        };
+        std::vector<Candidate> candidates;
+        const uint32_t effective_recent = kv->compressed ? kv->recent_window : recent_window;
+        const uint32_t effective_block = kv->compressed ? kv->block_size : block_size;
+        if (effective_recent == 0 || effective_block == 0) return -7;
+        const uint32_t old_len = seq_len > effective_recent ? seq_len - effective_recent : 0;
+        const uint32_t recent_start = seq_len - (seq_len < effective_recent ? seq_len : effective_recent);
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + effective_block - 1) / effective_block;
+        const uint32_t available_blocks = kv->compressed && old_blocks > kv->max_blocks ? kv->max_blocks : old_blocks;
+        const size_t elems_per_token = (size_t)kv->num_heads * 64u;
+        const float scale = 0.125f;
+        __half k_buf[64];
+
+        auto dot_q = [&](const __half* ptr) -> float {
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) dot += q[d] * __half2float(ptr[d]);
+            return dot * scale;
+        };
+        auto dense_k_ptr = [&](uint32_t token) -> const __half* {
+            const size_t offset = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * elems_per_token;
+            return kv->d_k + offset;
+        };
+        auto recent_k_ptr = [&](uint32_t token) -> const __half* {
+            const uint32_t ring = token % kv->recent_window;
+            const size_t offset = ((size_t)seq_id * (size_t)kv->recent_window + (size_t)ring) * elems_per_token;
+            return kv->d_recent_k + offset;
+        };
+        auto copy_and_score = [&](const __half* dptr, float* score) -> int {
+            cudaError_t copy_err = cudaMemcpy(k_buf, dptr, sizeof(k_buf), cudaMemcpyDeviceToHost);
+            if (copy_err != cudaSuccess) return -1;
+            *score = dot_q(k_buf);
+            return 0;
+        };
+        auto score_dense_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            float mean_k[64] = {0.0f};
+            for (uint32_t token = start; token < end; ++token) {
+                cudaError_t copy_err = cudaMemcpy(k_buf, dense_k_ptr(token), sizeof(k_buf), cudaMemcpyDeviceToHost);
+                if (copy_err != cudaSuccess) return -1;
+                for (uint32_t d = 0; d < 64; ++d) mean_k[d] += __half2float(k_buf[d]);
+            }
+            const float inv = 1.0f / (float)(end - start);
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) dot += q[d] * mean_k[d] * inv;
+            *score = dot * scale;
+            return 0;
+        };
+        auto selected_blocks_by_score = [&](bool compressed_source) -> std::vector<uint32_t> {
+            std::vector<std::pair<float, uint32_t>> scored;
+            for (uint32_t block = 0; block < available_blocks; ++block) {
+                if (compressed_source) {
+                    const uint32_t count = kv->d_block_counts ? 1u : 0u;
+                    (void)count;
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                    float score = 0.0f;
+                    if (copy_and_score(kv->d_summary_k + offset, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else {
+                    float score = 0.0f;
+                    if (score_dense_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                }
+            }
+            std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+                if (a.first == b.first) return a.second < b.second;
+                return a.first > b.first;
+            });
+            const uint32_t take = top_blocks == 0 || top_blocks > scored.size()
+                ? (uint32_t)scored.size()
+                : top_blocks;
+            std::vector<uint32_t> selected;
+            for (uint32_t i = 0; i < take; ++i) selected.push_back(scored[i].second);
+            return selected;
+        };
+
+        if (mode == 1) {
+            if (!kv->d_k) return -8;
+            std::vector<uint32_t> selected = selected_blocks_by_score(false);
+            for (uint32_t block : selected) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                for (uint32_t token = start; token < end; ++token) {
+                    float score = 0.0f;
+                    if (copy_and_score(dense_k_ptr(token), &score) != 0) return -9;
+                    candidates.push_back({2u, block, token, score, 0.0f});
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(dense_k_ptr(token), &score) != 0) return -10;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
+        } else {
+            if (!kv->compressed) return -11;
+            if (mode == 3 || mode == 4) {
+                const uint32_t selected_top = mode == 3 ? 0u : top_blocks;
+                const uint32_t saved_top = top_blocks;
+                top_blocks = selected_top;
+                std::vector<uint32_t> selected = selected_blocks_by_score(true);
+                top_blocks = saved_top;
+                for (uint32_t block : selected) {
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                    float score = 0.0f;
+                    if (copy_and_score(kv->d_summary_k + offset, &score) != 0) return -12;
+                    candidates.push_back({3u, block, 0xffffffffu, score, 0.0f});
+                    if (kv->representatives > 0 && kv->d_rep_k && kv->d_rep_positions) {
+                        for (uint32_t r = 0; r < kv->representatives; ++r) {
+                            const size_t pos_idx = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block)
+                                * (size_t)kv->representatives + (size_t)r;
+                            uint32_t rep_pos = 0xffffffffu;
+                            err = cudaMemcpy(&rep_pos, kv->d_rep_positions + pos_idx, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+                            if (err != cudaSuccess) return -13;
+                            if (rep_pos == 0xffffffffu) continue;
+                            const size_t rep_offset = (((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block)
+                                * (size_t)kv->representatives + (size_t)r) * elems_per_token;
+                            if (copy_and_score(kv->d_rep_k + rep_offset, &score) != 0) return -14;
+                            candidates.push_back({4u, block, rep_pos, score, 0.0f});
+                        }
+                    }
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(recent_k_ptr(token), &score) != 0) return -15;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
+        }
+
+        if (candidates.empty()) return -16;
+        float max_score = -1e30f;
+        for (const Candidate& c : candidates) max_score = std::max(max_score, c.score);
+        float denom = 0.0f;
+        for (Candidate& c : candidates) {
+            c.prob = expf(c.score - max_score);
+            denom += c.prob;
+        }
+        if (denom <= 0.0f) denom = 1.0f;
+        for (Candidate& c : candidates) c.prob /= denom;
+
+        struct MutableStats {
+            float mass = 0.0f;
+            float max_logit = -1e30f;
+            float sum_logit = 0.0f;
+            uint32_t count = 0;
+        };
+        MutableStats stats[5];
+        float needle_mass = 0.0f;
+        bool have_needle = needle_block != 0xffffffffu;
+        for (const Candidate& c : candidates) {
+            const uint32_t idx = c.group <= 4 ? c.group : 0;
+            stats[idx].mass += c.prob;
+            stats[idx].max_logit = std::max(stats[idx].max_logit, c.score);
+            stats[idx].sum_logit += c.score;
+            stats[idx].count++;
+            if (have_needle && c.block == needle_block) needle_mass += c.prob;
+        }
+        auto finish = [](const MutableStats& s) -> M40llmAttentionGroupStats {
+            M40llmAttentionGroupStats out_stats;
+            out_stats.prob_mass = s.mass;
+            out_stats.logit_max = s.count ? s.max_logit : 0.0f;
+            out_stats.logit_mean = s.count ? s.sum_logit / (float)s.count : 0.0f;
+            out_stats.count = s.count;
+            return out_stats;
+        };
+        out->other = finish(stats[0]);
+        out->recent = finish(stats[1]);
+        out->selected_old_exact = finish(stats[2]);
+        out->summary = finish(stats[3]);
+        out->representatives = finish(stats[4]);
+        if (have_needle) out->needle_block_mass = needle_mass;
+
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+            if (a.prob == b.prob) return a.score > b.score;
+            return a.prob > b.prob;
+        });
+        out->top_entry_count = (uint32_t)std::min<size_t>(8, candidates.size());
+        for (uint32_t i = 0; i < out->top_entry_count; ++i) {
+            out->top_entries[i].group = candidates[i].group;
+            out->top_entries[i].block_index = candidates[i].block;
+            out->top_entries[i].token_position = candidates[i].token;
+            out->top_entries[i].score = candidates[i].score;
+            out->top_entries[i].probability = candidates[i].prob;
+        }
         return 0;
     }
 

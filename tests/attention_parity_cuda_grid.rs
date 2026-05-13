@@ -317,6 +317,7 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
     let d_q = ctx.device_malloc(bytes_q)?;
     let d_dense = ctx.device_malloc(bytes_q)?;
     let d_compressed = ctx.device_malloc(bytes_q)?;
+    let d_recent_only = ctx.device_malloc(bytes_q)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
         dense.attention_last_token_f32_gqa(
@@ -338,11 +339,20 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
             0,
             d_compressed,
         )?;
+        compressed.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_recent_only,
+        )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
     let mut dense_out = vec![0f32; q_dim];
     let mut compressed_out = vec![0f32; q_dim];
+    let mut recent_only_out = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense_out.as_mut_ptr() as *mut c_void,
@@ -354,15 +364,30 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
             d_compressed as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            recent_only_out.as_mut_ptr() as *mut c_void,
+            d_recent_only as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_compressed)?;
+        ctx.device_free(d_recent_only)?;
     }
 
-    for (idx, (&a, &b)) in dense_out.iter().zip(&compressed_out).enumerate() {
+    for (idx, ((&a, &b), &c)) in dense_out
+        .iter()
+        .zip(&compressed_out)
+        .zip(&recent_only_out)
+        .enumerate()
+    {
         assert!(
             (a - b).abs() < 1e-3,
             "compressed recent mismatch at {idx}: dense={a} compressed={b}"
+        );
+        assert!(
+            (a - c).abs() < 1e-3,
+            "recent-only mismatch at {idx}: dense={a} recent_only={c}"
         );
     }
     Ok(())

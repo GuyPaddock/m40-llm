@@ -122,7 +122,7 @@ Experimental compressed KV-cache flags are available on CLI generation, but the
 default remains dense exact KV:
 
 ```bash
---kv-compress-mode off|block-select-exact|block-summary|block-select-lossy
+--kv-compress-mode off|block-select-exact|recent-only|block-summary|block-select-lossy
 --kv-recent-window 1024
 --kv-compress-block 32
 --kv-compress-top-blocks 16
@@ -132,6 +132,9 @@ default remains dense exact KV:
 
 `block-select-exact` is the validation-first sparse selection mode: it keeps old
 exact KV available while testing whether block summaries are a useful index.
+`recent-only` is a diagnostic mode that uses the compressed sidecar but attends
+only the exact recent window; it is intended for quality-harness debugging, not
+normal generation.
 Lossy modes are experimental and must pass long-context retrieval smoke tests
 before they should be used for quality-sensitive generation.
 `block-summary` and `block-select-lossy` allocate a compressed CUDA sidecar for
@@ -187,7 +190,11 @@ while recording block-selection telemetry. `M40LLM_KV_QUALITY_TOP_BLOCKS=4,16`
 overrides the top-block counts used for exact/lossy selection. JSONL records in
 that mode include `needle_block_index`, `selected_block_indices`,
 `needle_block_selected`, `needle_block_rank`, `total_old_blocks`, and
-`top_blocks`, which separates scorer misses from lossy-summary failures.
+`top_blocks`, which separates scorer misses from lossy-summary failures. It also
+records first-captured attention telemetry fields for diagnostic rows:
+probability mass for recent, selected exact old, summary, representative, and
+other entries; top attended entries; needle-block mass when applicable; and
+recent/summary/representative pre-softmax logit stats.
 `block-select-exact` may use `M40LLM_PREFILL_CHUNK_SIZE` for packed-prefix
 prefill in this test-only diagnostic path. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
