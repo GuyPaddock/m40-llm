@@ -1,4 +1,6 @@
 #[cfg(feature = "cuda")]
+use crate::cuda::KVCache;
+#[cfg(feature = "cuda")]
 use crate::cuda::{CudaContext, CudaGraphExec, CudaStream, DeviceBuffer};
 #[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
@@ -356,6 +358,83 @@ impl DecodeSession {
             self.logged_full_forward = true;
         }
         self.logits_for_ids(ids, |logits| on_token_logits(logits))
+    }
+
+    pub fn logits_for_packed_then_compress_prefill_ids(
+        &mut self,
+        ids: &[u32],
+        mut on_token_logits: impl FnMut(&[f32]),
+    ) -> Result<(Vec<f32>, usize)> {
+        if !self.can_forward {
+            anyhow::bail!("packed-then-compress prefill requires full-layer forward");
+        }
+        if ids.is_empty() {
+            anyhow::bail!("packed-then-compress prefill requires non-empty ids");
+        }
+        if self.processed_len != 0 {
+            anyhow::bail!(
+                "packed-then-compress prefill can only run before decode starts; processed_len={}",
+                self.processed_len
+            );
+        }
+        if ids.len() == 1 {
+            let logits = self.logits_for_ids(ids, on_token_logits)?;
+            return Ok((logits, 0));
+        }
+        let active_kv = self
+            .model()
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("kv_cache is not allocated"))?;
+        if !active_kv.is_compressed() {
+            anyhow::bail!("packed-then-compress requires active compressed KV cache");
+        }
+        let prefix_len = ids.len() - 1;
+        let temp_dense_kv = KVCache::new_with_context(
+            &self.model().cuda,
+            prefix_len as u32,
+            active_kv.max_batch_size(),
+            active_kv.num_heads(),
+            active_kv.head_dim(),
+        )?;
+        let temp_dense_bytes = temp_dense_kv.actual_bytes();
+        let d_out = self
+            .d_out
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))?
+            .as_mut_ptr();
+        let prefill_start = std::time::Instant::now();
+        let layers = unsafe {
+            (*self.model).forward_prefill_all_layers_varlen_for_sequences_with_kv(
+                &[crate::infer::ForwardPrefillSequence {
+                    token_ids: &ids[..prefix_len],
+                    sequence_id: self.sequence_id,
+                    d_out_f32: d_out,
+                }],
+                &temp_dense_kv,
+            )
+        }?;
+        active_kv.build_compressed_from_dense(
+            &self.model().cuda,
+            &temp_dense_kv,
+            prefix_len as u32,
+        )?;
+        timing::timing_log!(
+            prefill_start.elapsed(),
+            "{}.packed_then_compress_prefill.ids_len_{}",
+            self.log_prefix,
+            ids.len()
+        );
+        if !self.logged_full_forward {
+            eprintln!(
+                "[{}] packed-then-compress prefill enabled layers={layers} temp_dense_kv_bytes={temp_dense_bytes}",
+                self.log_prefix
+            );
+            self.logged_full_forward = true;
+        }
+        self.processed_len = prefix_len;
+        let logits = self.logits_for_ids(ids, |logits| on_token_logits(logits))?;
+        Ok((logits, temp_dense_bytes))
     }
 
     pub fn logits_for_ids(

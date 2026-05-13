@@ -171,9 +171,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `block-select-exact`, `block-summary`, and `block-select-lossy`. The chunked
   path improves compressed 64-token prefill to roughly 2.1 s and compressed
   512-token prefill by roughly 6-7 s, but 512-token compressed rows still take
-  roughly 51-59 s of prefill.
-- Next: design a true compressed-aware packed prefill or scheduler path before
-  making `M40LLM_KV_QUALITY_FULL=1` a routine 1K/2K/4K gate.
+  roughly 51-59 s of prefill. `M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL=1` now
+  enables a faster experimental path for `block-summary` and
+  `block-select-lossy`: packed dense prefill builds a temporary dense KV cache,
+  a compression pass constructs the final compressed sidecar, and decode
+  continues on the compressed cache. CUDA parity tests compare final logits and
+  compressed snapshots for both modes. The 512-token old/recent rows pass with
+  roughly 9.8-10.3 s prefill, and 1024-token old/recent rows pass with roughly
+  38-39 s prefill. `block-select-exact` remains sequential and is now the slow
+  quality row.
+- Next: decide whether to accelerate `block-select-exact` quality sweeps with
+  dense packed-prefix prefill, or move on to 2K/4K validation for
+  `block-summary` and `block-select-lossy`.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

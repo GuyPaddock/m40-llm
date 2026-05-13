@@ -1846,3 +1846,51 @@ Interpretation:
 - This confirms the chunked path is behavior-preserving, but not sufficient for
   routine 1K/2K/4K sweeps. A true compressed-aware packed prefill or scheduler
   path is still needed for larger contexts.
+
+## 2026-05-13: Packed-Then-Compress Prefill
+
+This checkpoint adds `M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL=1` for
+`block-summary` and `block-select-lossy`. The path runs packed dense prefill
+into a temporary dense KV cache, constructs the final compressed KV sidecar from
+that dense cache, then runs the final prompt token through the normal decode
+path. Sequential and chunked compressed prefill remain the default/fallback
+paths. `block-select-exact` remains dense-backed and sequential in this
+checkpoint.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1`
+  passed, including packed-then-compress final-logit and compressed snapshot
+  parity for `block-summary` and `block-select-lossy`.
+
+Quality harness results:
+
+| Target | Needle | Mode | Status | Prefill mode | Prefill | Prefill tok/s | Decode | Decode tok/s | Total | Temp dense KV |
+| ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 64 | old | block-summary | pass | packed-then-compress | 0.626 s | 92.65 | 0.573 s | 17.45 | 3.198 s | 1.78 MiB |
+| 64 | old | block-select-lossy | pass | packed-then-compress | 0.623 s | 93.10 | 0.570 s | 17.54 | 3.182 s | 1.78 MiB |
+| 64 | recent | block-summary | pass | packed-then-compress | 0.625 s | 92.80 | 0.573 s | 17.45 | 3.270 s | 1.78 MiB |
+| 64 | recent | block-select-lossy | pass | packed-then-compress | 0.642 s | 90.34 | 0.570 s | 17.54 | 3.225 s | 1.78 MiB |
+| 512 | old | block-summary | pass | packed-then-compress | 9.762 s | 49.07 | 2.005 s | 4.99 | 13.806 s | 14.94 MiB |
+| 512 | old | block-select-lossy | pass | packed-then-compress | 9.765 s | 49.05 | 2.014 s | 4.97 | 13.869 s | 14.94 MiB |
+| 512 | recent | block-summary | pass | packed-then-compress | 10.319 s | 47.87 | 2.061 s | 4.85 | 14.452 s | 15.41 MiB |
+| 512 | recent | block-select-lossy | pass | packed-then-compress | 10.318 s | 47.88 | 2.062 s | 4.85 | 14.456 s | 15.41 MiB |
+| 1024 | old | block-summary | pass | packed-then-compress | 38.173 s | 26.12 | 3.780 s | 2.65 | 44.840 s | 31.13 MiB |
+| 1024 | old | block-select-lossy | pass | packed-then-compress | 38.197 s | 26.10 | 3.775 s | 2.65 | 44.756 s | 31.13 MiB |
+| 1024 | recent | block-summary | pass | packed-then-compress | 39.293 s | 25.76 | 3.829 s | 2.61 | 45.984 s | 31.59 MiB |
+| 1024 | recent | block-select-lossy | pass | packed-then-compress | 39.295 s | 25.75 | 3.826 s | 2.61 | 45.983 s | 31.59 MiB |
+
+Interpretation:
+
+- Packed-then-compress reduces 512-token `block-summary` and
+  `block-select-lossy` prefill from roughly 56-59 s to roughly 9.8-10.3 s while
+  preserving retrieval output.
+- 1024-token `block-summary` and `block-select-lossy` retrieval now passes in
+  roughly 45-46 s total per row; the temporary dense KV allocation is about
+  31-32 MiB for this model/prompt.
+- The remaining slow quality rows are `block-select-exact`, which stays
+  sequential by design in this checkpoint.

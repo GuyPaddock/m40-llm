@@ -4,6 +4,8 @@ use super::workspace::ForwardWorkspacePtrs;
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
+#[cfg(feature = "cuda")]
+use crate::cuda::KVCache;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
@@ -52,6 +54,38 @@ fn log_profiled_op(
 ) {
     timing::log(format!("{label}.{op}"), elapsed);
     profile::log_delta(&format!("{label}.{op}"), before, elapsed);
+}
+
+#[cfg(feature = "cuda")]
+fn kv_physical_slot_for_layer_sequence_in(
+    kv: &KVCache,
+    layer_count: u32,
+    layer_id: u32,
+    sequence_id: u32,
+) -> Result<u32> {
+    if layer_count == 0 || layer_id >= layer_count {
+        anyhow::bail!("KV layer_id {layer_id} out of range for {layer_count} layers");
+    }
+    let sequence_capacity = kv.max_batch_size() / layer_count;
+    if sequence_id >= sequence_capacity {
+        anyhow::bail!(
+            "KV sequence_id {} out of range for {} logical sequences",
+            sequence_id,
+            sequence_capacity
+        );
+    }
+    let physical_slot = sequence_id
+        .checked_mul(layer_count)
+        .and_then(|base| base.checked_add(layer_id))
+        .ok_or_else(|| anyhow!("KV physical slot overflow"))?;
+    if physical_slot >= kv.max_batch_size() {
+        anyhow::bail!(
+            "KV physical slot {} out of range for {} slots",
+            physical_slot,
+            kv.max_batch_size()
+        );
+    }
+    Ok(physical_slot)
 }
 
 #[cfg(feature = "cuda")]
@@ -2031,6 +2065,17 @@ impl LoadedModel {
         &self,
         items: &[ForwardPrefillSequence<'_>],
     ) -> Result<usize> {
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        unsafe { self.forward_prefill_all_layers_varlen_for_sequences_with_kv(items, kv) }
+    }
+
+    pub unsafe fn forward_prefill_all_layers_varlen_for_sequences_with_kv(
+        &self,
+        items: &[ForwardPrefillSequence<'_>],
+        kv: &KVCache,
+    ) -> Result<usize> {
         if items.is_empty() {
             anyhow::bail!("batched prefill requires at least one item");
         }
@@ -2039,9 +2084,6 @@ impl LoadedModel {
             anyhow::bail!("batched prefill: model has zero layers");
         }
         let (d_model, hidden_dim) = self.validate_standard_layers()?;
-        let kv = self.kv_cache.as_ref().ok_or_else(|| {
-            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
-        })?;
         if kv.head_dim() != 64 {
             anyhow::bail!(
                 "batched prefill attention currently requires head_dim=64, got {}",
@@ -2054,7 +2096,12 @@ impl LoadedModel {
             if item.token_ids.is_empty() {
                 anyhow::bail!("batched prefill item has empty prompt");
             }
-            self.kv_physical_slot_for_layer_sequence((layer_count - 1) as u32, item.sequence_id)?;
+            kv_physical_slot_for_layer_sequence_in(
+                kv,
+                layer_count as u32,
+                (layer_count - 1) as u32,
+                item.sequence_id,
+            )?;
             let len: u32 = item
                 .token_ids
                 .len()
@@ -2209,8 +2256,12 @@ impl LoadedModel {
                 )?;
                 for (seq_idx, item) in items.iter().enumerate() {
                     let q_offset = meta.offsets()[seq_idx].q_offset as usize;
-                    let kv_slot =
-                        self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
+                    let kv_slot = kv_physical_slot_for_layer_sequence_in(
+                        kv,
+                        layer_count as u32,
+                        layer_id,
+                        item.sequence_id,
+                    )?;
                     for tok_idx in 0..item.token_ids.len() {
                         let pos: u32 = tok_idx
                             .try_into()
@@ -2220,7 +2271,8 @@ impl LoadedModel {
                         let k_row_mut = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
                         let k_row = k_row_mut as *const c_void;
                         let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
-                        self.append_kv_token_f32_rope_k_at_async(
+                        kv.append_token_f32_rope_k_at_async(
+                            &self.cuda,
                             kv_slot,
                             k_row,
                             v_row,

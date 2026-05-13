@@ -3745,6 +3745,127 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    __global__ void build_compressed_recent_from_dense_kernel(
+        const __half* __restrict__ dense_k,
+        const __half* __restrict__ dense_v,
+        __half* __restrict__ recent_k,
+        __half* __restrict__ recent_v,
+        uint32_t* __restrict__ seq_map,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t seq_len,
+        size_t elems_per_token,
+        size_t total) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= total) return;
+        const size_t recent_elems = (size_t)recent_window * elems_per_token;
+        const uint32_t seq = (uint32_t)(i / recent_elems);
+        const size_t rem = i % recent_elems;
+        const uint32_t recent_idx = (uint32_t)(rem / elems_per_token);
+        const size_t elem = rem % elems_per_token;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        if (recent_idx < recent_count) {
+            const uint32_t pos = seq_len - recent_count + recent_idx;
+            const uint32_t ring = pos % recent_window;
+            const size_t dst = ((size_t)seq * (size_t)recent_window + (size_t)ring) * elems_per_token + elem;
+            const size_t src = ((size_t)seq * (size_t)max_seq_len + (size_t)pos) * elems_per_token + elem;
+            recent_k[dst] = dense_k[src];
+            recent_v[dst] = dense_v[src];
+        }
+        if (rem == 0) {
+            seq_map[seq] = seq_len;
+        }
+    }
+
+    __global__ void build_compressed_summaries_from_dense_kernel(
+        const __half* __restrict__ dense_k,
+        const __half* __restrict__ dense_v,
+        float* __restrict__ summary_k_acc,
+        float* __restrict__ summary_v_acc,
+        __half* __restrict__ summary_k,
+        __half* __restrict__ summary_v,
+        uint32_t* __restrict__ block_counts,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t max_blocks,
+        uint32_t seq_len,
+        size_t elems_per_token,
+        size_t total) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= total) return;
+        const size_t summary_elems_per_seq = (size_t)max_blocks * elems_per_token;
+        const uint32_t seq = (uint32_t)(i / summary_elems_per_seq);
+        const size_t rem = i % summary_elems_per_seq;
+        const uint32_t block = (uint32_t)(rem / elems_per_token);
+        const size_t elem = rem % elems_per_token;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        if (block >= max_blocks || block * block_size >= old_len) return;
+        const uint32_t start = block * block_size;
+        const uint32_t end = min(start + block_size, old_len);
+        float k_sum = 0.0f;
+        float v_sum = 0.0f;
+        for (uint32_t pos = start; pos < end; ++pos) {
+            const size_t src = ((size_t)seq * (size_t)max_seq_len + (size_t)pos) * elems_per_token + elem;
+            k_sum += __half2float(dense_k[src]);
+            v_sum += __half2float(dense_v[src]);
+        }
+        const uint32_t count = end - start;
+        const size_t dst = ((size_t)seq * (size_t)max_blocks + (size_t)block) * elems_per_token + elem;
+        summary_k_acc[dst] = k_sum;
+        summary_v_acc[dst] = v_sum;
+        summary_k[dst] = __float2half_rn(k_sum / (float)count);
+        summary_v[dst] = __float2half_rn(v_sum / (float)count);
+        if (elem == 0) {
+            block_counts[(size_t)seq * (size_t)max_blocks + (size_t)block] = count;
+        }
+    }
+
+    int m40llm_kvcache_build_compressed_from_dense(M40llmCudaContext* ctx,
+                                                    M40llmKVCache* compressed,
+                                                    const M40llmKVCache* dense,
+                                                    uint32_t seq_len) {
+        if (!ctx || !compressed || !dense) return -1;
+        if (!compressed->compressed || dense->compressed) return -2;
+        if (compressed->max_batch_size != dense->max_batch_size ||
+            compressed->num_heads != dense->num_heads ||
+            compressed->head_dim != dense->head_dim) return -3;
+        if (seq_len > compressed->max_seq_len || seq_len > dense->max_seq_len) return -4;
+        const size_t elems_per_token = (size_t)compressed->num_heads * (size_t)compressed->head_dim;
+        const size_t recent_elems = (size_t)compressed->max_batch_size * (size_t)compressed->recent_window * elems_per_token;
+        const size_t summary_elems = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * elems_per_token;
+        const size_t block_count_size = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * sizeof(uint32_t);
+        cudaMemsetAsync(compressed->d_recent_k, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_recent_v, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_k_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_v_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_k, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_v, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_block_counts, 0, block_count_size, ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_seq_map, 0, (size_t)compressed->max_batch_size * sizeof(uint32_t), ctx->decode_stream);
+        const int threads = 256;
+        if (recent_elems > 0) {
+            const int blocks = (int)((recent_elems + threads - 1) / threads);
+            build_compressed_recent_from_dense_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+                dense->d_k, dense->d_v, compressed->d_recent_k, compressed->d_recent_v,
+                compressed->d_seq_map, dense->max_seq_len, compressed->recent_window,
+                seq_len, elems_per_token, recent_elems);
+        }
+        if (summary_elems > 0) {
+            const int blocks = (int)((summary_elems + threads - 1) / threads);
+            build_compressed_summaries_from_dense_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+                dense->d_k, dense->d_v, compressed->d_summary_k_acc, compressed->d_summary_v_acc,
+                compressed->d_summary_k, compressed->d_summary_v, compressed->d_block_counts,
+                dense->max_seq_len, compressed->recent_window, compressed->block_size,
+                compressed->max_blocks, seq_len, elems_per_token, summary_elems);
+        }
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -5;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -6;
+        return 0;
+    }
+
     void m40llm_kvcache_destroy(M40llmKVCache* kv) {
         if (!kv) return;
         if (kv->d_k) cudaFree(kv->d_k);

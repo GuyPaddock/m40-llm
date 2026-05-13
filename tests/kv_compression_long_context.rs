@@ -56,6 +56,7 @@ struct CaseRecord {
     decode_tokens_per_sec: Option<f64>,
     prefill_chunk_size: Option<usize>,
     compressed_prefill_chunk_size: Option<usize>,
+    temporary_dense_kv_bytes: Option<usize>,
     prefill_mode: String,
     output: String,
     error: Option<String>,
@@ -372,7 +373,10 @@ fn run_retrieval_case(
         );
         prepare_kv_cache(model, mode)?;
         let previous_prefill_mode = generated.prefill_mode.clone();
-        let _guard = EnvVarGuard::unset("M40LLM_PREFILL_CHUNK_SIZE");
+        let _packed_guard = EnvVarGuard::unset("M40LLM_PREFILL_CHUNK_SIZE");
+        let _packed_then_compress_guard =
+            EnvVarGuard::unset("M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL");
+        let _compressed_chunk_guard = EnvVarGuard::unset("M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE");
         let mut sequential = generate_text(
             model,
             GenerateOptions {
@@ -443,7 +447,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} compressed_chunk={:?} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} status={:?} prefill={}ms decode={}ms total={}ms prefill_mode={} compressed_chunk={:?} temp_dense_kv_bytes={:?} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -455,6 +459,7 @@ fn print_records(records: &[CaseRecord]) {
             record.total_elapsed_ms,
             record.prefill_mode,
             record.compressed_prefill_chunk_size,
+            record.temporary_dense_kv_bytes,
             record.output,
             record.error.as_deref().unwrap_or("-")
         );
@@ -517,6 +522,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 let mut attention_compression_elapsed_ms = None;
                 let mut prefill_chunk_size = None;
                 let mut compressed_prefill_chunk_size = None;
+                let mut temporary_dense_kv_bytes = None;
                 let mut prefill_mode = "error".to_string();
                 let (mut status, output, error) = match run_retrieval_case(
                     &mut model,
@@ -538,6 +544,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             generated.attention_compression_elapsed_ms;
                         prefill_chunk_size = generated.prefill_chunk_size;
                         compressed_prefill_chunk_size = generated.compressed_prefill_chunk_size;
+                        temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
                         prefill_mode = generated.prefill_mode.clone();
                         let passed = generated.output.contains(NEEDLE);
                         if mode == KvCompressMode::Off {
@@ -583,6 +590,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     ),
                     prefill_chunk_size,
                     compressed_prefill_chunk_size,
+                    temporary_dense_kv_bytes,
                     prefill_mode,
                     output,
                     error,

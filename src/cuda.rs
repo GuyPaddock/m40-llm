@@ -316,6 +316,12 @@ mod ffi {
             out_summary_k_f16: *mut c_void,
             out_summary_v_f16: *mut c_void,
         ) -> i32;
+        pub fn m40llm_kvcache_build_compressed_from_dense(
+            ctx: *mut M40llmCudaContext,
+            compressed: *mut M40llmKVCache,
+            dense: *const M40llmKVCache,
+            seq_len: u32,
+        ) -> i32;
 
         pub fn m40llm_attention_last_token_f32(
             ctx: *mut M40llmCudaContext,
@@ -2390,6 +2396,35 @@ impl KVCache {
             anyhow::bail!("m40llm_kvcache_debug_read_compressed_state failed: {rc}");
         }
         Ok(snapshot)
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn build_compressed_from_dense(
+        &self,
+        ctx: &CudaContext,
+        dense: &KVCache,
+        seq_len: u32,
+    ) -> Result<()> {
+        if !self.inner.compressed {
+            anyhow::bail!("build_compressed_from_dense target must be compressed");
+        }
+        if dense.inner.compressed {
+            anyhow::bail!("build_compressed_from_dense source must be dense");
+        }
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_build_compressed_from_dense(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                dense.inner.raw.as_ptr(),
+                seq_len,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_build_compressed_from_dense failed: {rc}");
+        }
+        record_sync_kernel("kvcache_build_compressed_from_dense");
+        Ok(())
     }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {

@@ -162,7 +162,12 @@ packed prefill is not yet equivalent for those cache modes. Instead,
 compressed-aware chunked prefill path for `block-select-exact`, `block-summary`,
 and `block-select-lossy`. That path preserves sequential token order and
 compressed sidecar updates while skipping prefix-token logits; unset or `0`
-keeps the current sequential compressed prefill fallback. Use
+keeps the current sequential compressed prefill fallback.
+`M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL=1` enables a faster experimental path
+for `block-summary` and `block-select-lossy`: it runs packed dense prefill into
+a temporary dense KV cache, builds the compressed sidecar from that cache, then
+continues decode on the final compressed cache. JSONL reports the temporary
+dense allocation as `temporary_dense_kv_bytes`. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
