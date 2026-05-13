@@ -4,7 +4,9 @@ mod cuda_env;
 
 use anyhow::Result;
 use m40_llm::cuda::KVCache;
-use m40_llm::kv_compression::{set_runtime_config, KvCompressMode, KvCompressionConfig};
+use m40_llm::kv_compression::{
+    set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
+};
 use std::ffi::c_void;
 
 fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
@@ -267,6 +269,7 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
         block_size,
         2,
         0,
+        KvRepresentativePolicy::Last,
     )?;
     assert!(compressed.is_compressed());
     assert!(compressed.actual_bytes() < compressed.dense_equivalent_bytes());

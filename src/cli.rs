@@ -21,6 +21,21 @@ impl From<KvCompressModeArg> for crate::kv_compression::KvCompressMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KvRepresentativePolicyArg {
+    Last,
+    Stride,
+}
+
+impl From<KvRepresentativePolicyArg> for crate::kv_compression::KvRepresentativePolicy {
+    fn from(value: KvRepresentativePolicyArg) -> Self {
+        match value {
+            KvRepresentativePolicyArg::Last => Self::Last,
+            KvRepresentativePolicyArg::Stride => Self::Stride,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum PromptFormatArg {
     Auto,
     Raw,
@@ -92,8 +107,11 @@ pub enum Commands {
         #[arg(long, default_value_t = 16)]
         kv_compress_top_blocks: u32,
         /// Representative tokens retained per old block in lossy modes
-        #[arg(long, default_value_t = 2)]
+        #[arg(long, default_value_t = 0)]
         kv_compress_representatives: u32,
+        /// Representative token selection policy for lossy compressed KV modes
+        #[arg(long, value_enum, default_value_t = KvRepresentativePolicyArg::Last)]
+        kv_compress_representative_policy: KvRepresentativePolicyArg,
         /// Prompt wrapper to use before tokenization
         #[arg(long, value_enum, default_value_t = PromptFormatArg::Auto)]
         prompt_format: PromptFormatArg,
@@ -115,7 +133,7 @@ pub enum Commands {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, KvCompressModeArg, PromptFormatArg};
+    use super::{Cli, Commands, KvCompressModeArg, KvRepresentativePolicyArg, PromptFormatArg};
     use clap::Parser;
 
     #[test]
@@ -147,6 +165,7 @@ mod tests {
                 kv_compress_block,
                 kv_compress_top_blocks,
                 kv_compress_representatives,
+                kv_compress_representative_policy,
                 prompt_format,
                 ..
             } => {
@@ -160,7 +179,11 @@ mod tests {
                 assert_eq!(kv_recent_window, 1024);
                 assert_eq!(kv_compress_block, 32);
                 assert_eq!(kv_compress_top_blocks, 16);
-                assert_eq!(kv_compress_representatives, 2);
+                assert_eq!(kv_compress_representatives, 0);
+                assert_eq!(
+                    kv_compress_representative_policy,
+                    KvRepresentativePolicyArg::Last
+                );
                 assert_eq!(prompt_format, PromptFormatArg::Auto);
             }
             other => panic!("expected generate command, got {other:?}"),

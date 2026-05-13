@@ -1608,8 +1608,8 @@ Interpretation:
 - The dense 16K/32K baseline still falls back to the generic attention path, so
   those speedups compare against a known weak dense kernel rather than a tuned
   long-context dense baseline.
-- Representative-token storage is still deferred; `--kv-compress-representatives`
-  is accepted but not yet used by the sidecar.
+- Representative-token storage is now implemented in a later checkpoint and is
+  opt-in with `--kv-compress-representatives`.
 
 ## 2026-05-13: Compressed KV Retrieval Quality Harness
 
@@ -1944,3 +1944,42 @@ Interpretation:
 - `block-summary` and `block-select-lossy` retrieve correctly at 1024 but fail
   at 2048 and 4096 with the current summary-only lossy representation. This is
   a quality limitation of the compression strategy, not a runtime failure.
+
+## 2026-05-13: Compressed KV Exact Representatives
+
+This checkpoint implements opt-in exact representative K/V storage for the
+physical compressed KV sidecar. `--kv-compress-representatives N` now stores up
+to `N` exact old-token K/V entries per compressed block for `block-summary` and
+`block-select-lossy`; `--kv-compress-representative-policy last|stride` selects
+the deterministic representative policy. The default representative count is
+`0`, so this remains experimental until quality and memory tradeoffs are
+measured.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo check --features cuda --all-targets` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1`
+  passed, including sequential vs packed-then-compress debug snapshot parity
+  for `last` and `stride` representatives.
+
+64-token representative quality spot-check:
+
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf M40LLM_KV_QUALITY_TARGETS=64 M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP=1 M40LLM_KV_QUALITY_REPRESENTATIVES=0,1,2 M40LLM_KV_QUALITY_REP_POLICIES=last,stride M40LLM_KV_QUALITY_REPORT=/tmp/m40llm_kv_quality_reps_64.jsonl cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+- Result: test passed, but dense `off` missed the exact needle in this short
+  packed-prefix case, so lossy rows were correctly marked `Inconclusive`.
+  Many representative rows still generated `ZXQ-NEEDLE-41729`; this run is a
+  harness/reference limitation for 64-token packed-prefix rather than evidence
+  that representative mode fixes or breaks long-context retrieval.
+- Allocation accounting changed as expected for the Llama-3.2-1B quality model:
+  reps=0 final compressed KV was about 413.25 MiB, reps=1 about 540.5 MiB, and
+  reps=2 about 667.7 MiB against a 4096 MiB dense-equivalent KV allocation.
+
+Next measurement:
+
+- Run the bounded 1024/2048/4096 representative matrix with dense `off` as the
+  reference and `last` as the first full policy. Add `stride` rows only where
+  runtime is acceptable, because the 4096 cases remain expensive.

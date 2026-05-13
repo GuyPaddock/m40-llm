@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
             kv_compress_block,
             kv_compress_top_blocks,
             kv_compress_representatives,
+            kv_compress_representative_policy,
             prompt_format,
         } => {
             let local = model::resolve_model_arg(&model)?;
@@ -92,6 +93,7 @@ async fn main() -> Result<()> {
                 block_size: kv_compress_block,
                 top_blocks: kv_compress_top_blocks,
                 representatives: kv_compress_representatives,
+                representative_policy: kv_compress_representative_policy.into(),
             };
             if matches!(
                 kv_compression.mode,

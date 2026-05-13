@@ -145,8 +145,8 @@ int m40llm_swiglu_f32_async(M40llmCudaContext* ctx, const void* d_gate, const vo
 M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
     (void)ctx; (void)max_seq_len; (void)max_batch_size; (void)num_heads; (void)head_dim; return (M40llmKVCache*)0x1;
 }
-M40llmKVCache* m40llm_kvcache_create_compressed(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim, uint32_t recent_window, uint32_t block_size, uint32_t top_blocks, uint32_t representatives) {
-    (void)ctx; (void)max_seq_len; (void)max_batch_size; (void)num_heads; (void)head_dim; (void)recent_window; (void)block_size; (void)top_blocks; (void)representatives; return (M40llmKVCache*)0x1;
+M40llmKVCache* m40llm_kvcache_create_compressed(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim, uint32_t recent_window, uint32_t block_size, uint32_t top_blocks, uint32_t representatives, uint32_t representative_policy) {
+    (void)ctx; (void)max_seq_len; (void)max_batch_size; (void)num_heads; (void)head_dim; (void)recent_window; (void)block_size; (void)top_blocks; (void)representatives; (void)representative_policy; return (M40llmKVCache*)0x1;
 }
 int m40llm_kvcache_append_token(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev, const void* v_dev) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev; (void)v_dev; return -1;

@@ -10,6 +10,8 @@ use m40_llm::cuda::KVCache;
 #[cfg(all(feature = "cuda", nvcc))]
 use m40_llm::infer::{BatchMetadata, BatchSequence};
 #[cfg(all(feature = "cuda", nvcc))]
+use m40_llm::kv_compression::KvRepresentativePolicy;
+#[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
 #[cfg(all(feature = "cuda", nvcc))]
@@ -677,6 +679,7 @@ fn bench_attention_kv_compression_modes(c: &mut Criterion) {
                 block_size,
                 top_blocks,
                 0,
+                KvRepresentativePolicy::Last,
             )
             .expect("compressed kv cache");
             seed_kv_cache_with_explicit_positions(&ctx, &compressed_kv, seq_len, kv_dim);

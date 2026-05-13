@@ -126,7 +126,8 @@ default remains dense exact KV:
 --kv-recent-window 1024
 --kv-compress-block 32
 --kv-compress-top-blocks 16
---kv-compress-representatives 2
+--kv-compress-representatives 0
+--kv-compress-representative-policy last|stride
 ```
 
 `block-select-exact` is the validation-first sparse selection mode: it keeps old
@@ -135,9 +136,12 @@ Lossy modes are experimental and must pass long-context retrieval smoke tests
 before they should be used for quality-sensitive generation.
 `block-summary` and `block-select-lossy` allocate a compressed CUDA sidecar for
 CLI decode: a configurable recent exact window plus old-block mean K/V summaries
-and summary accumulators. `off` and `block-select-exact` remain dense-backed.
-The `--kv-compress-representatives` flag is reserved for future representative
-token storage and is not yet used by the sidecar implementation.
+and summary accumulators. `--kv-compress-representatives N` additionally stores
+up to `N` exact old-token K/V representatives per compressed block for
+`block-summary` and `block-select-lossy`; `last` keeps the last `N` old tokens
+per block and `stride` keeps approximately even per-block representatives.
+Representative storage is opt-in (`0` by default) until quality and memory
+tradeoffs are characterized. `off` and `block-select-exact` remain dense-backed.
 The quality harness in `tests/kv_compression_long_context.rs` requires an
 explicit GGUF path via
 `M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/path/to/model.gguf`; it does not scan
@@ -155,7 +159,7 @@ available, and output text. `attention_compression_elapsed_ms` is currently
 It also includes `prefill_tokens_per_sec`, `decode_tokens_per_sec`,
 `prefill_chunk_size`, `compressed_prefill_chunk_size`, `prefill_mode`,
 `final_kv_allocated_bytes`, `dense_equivalent_kv_bytes`, and
-`temporary_dense_kv_bytes`.
+`temporary_dense_kv_bytes`, representative count/policy, and compression ratio.
 `M40LLM_PREFILL_CHUNK_SIZE=<n>` enables an experimental CLI/test packed-prefix
 prefill path for dense `off` runs when the formatted prompt length is within
 the bound. KV-compressed modes do not use that dense packed-prefix path because
@@ -173,7 +177,11 @@ dense allocation as `temporary_dense_kv_bytes`. Use
 `M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP=1` to run the bounded long-context sweep
 for dense `off`, `block-summary`, and `block-select-lossy` only. That sweep
 skips `block-select-exact` by default and uses 1024/2048/4096 targets when
-`M40LLM_KV_QUALITY_TARGETS` is not set. Use
+`M40LLM_KV_QUALITY_TARGETS` is not set. In lossy packed sweeps,
+`M40LLM_KV_QUALITY_REPRESENTATIVES=0,1,2,4` controls the representative-count
+matrix and `M40LLM_KV_QUALITY_REP_POLICIES=last,stride` controls representative
+policies. If unset, the sweep covers `0,1,2,4` representatives with `last`
+policy. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on

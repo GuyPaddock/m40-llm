@@ -236,6 +236,7 @@ impl LoadedModel {
             config.block_size,
             config.top_blocks,
             config.representatives,
+            config.representative_policy,
         )?;
         let dense = kv.dense_equivalent_bytes();
         let actual = kv.actual_bytes();

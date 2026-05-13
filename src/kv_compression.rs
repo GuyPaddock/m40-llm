@@ -15,6 +15,22 @@ impl KvCompressMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KvRepresentativePolicy {
+    #[default]
+    Last,
+    Stride,
+}
+
+impl KvRepresentativePolicy {
+    pub fn as_ffi(self) -> u32 {
+        match self {
+            Self::Last => 0,
+            Self::Stride => 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KvCompressionConfig {
     pub mode: KvCompressMode,
@@ -22,6 +38,7 @@ pub struct KvCompressionConfig {
     pub block_size: u32,
     pub top_blocks: u32,
     pub representatives: u32,
+    pub representative_policy: KvRepresentativePolicy,
 }
 
 impl Default for KvCompressionConfig {
@@ -31,7 +48,8 @@ impl Default for KvCompressionConfig {
             recent_window: 1024,
             block_size: 32,
             top_blocks: 16,
-            representatives: 2,
+            representatives: 0,
+            representative_policy: KvRepresentativePolicy::Last,
         }
     }
 }

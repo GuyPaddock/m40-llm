@@ -185,9 +185,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   dense-equivalent KV bytes, and temporary dense KV bytes. The sweep passes at
   1024 for lossy modes, but 2048 and 4096 lossy retrieval currently fail even
   though dense `off` passes; this is now documented as a quality limitation, not
-  a runtime failure.
-- Next: investigate why packed-then-compress lossy retrieval fails at 2K/4K
-  while dense `off` passes.
+  a runtime failure. The compressed sidecar now supports opt-in exact
+  representatives per old block for `block-summary` and `block-select-lossy`.
+  `--kv-compress-representatives` defaults to 0 and activates physical
+  representative K/V storage when set above 0; `last` and `stride` selection
+  policies are implemented. Sequential and packed-then-compress debug snapshot
+  parity passes for representative storage. A 64-token representative quality
+  spot-check passed the harness but was inconclusive because dense `off` missed
+  the exact needle in that short packed-prefix case.
+- Next: run the bounded 1024/2048/4096 representative matrix, starting with the
+  `last` policy, to determine whether exact representatives recover retrieval
+  at 2K/4K and what memory ratio is acceptable.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

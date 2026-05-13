@@ -9,7 +9,9 @@ use m40_llm::cuda::CudaStream;
 use m40_llm::decode_session::DecodeSession;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
-use m40_llm::kv_compression::{set_runtime_config, KvCompressMode, KvCompressionConfig};
+use m40_llm::kv_compression::{
+    set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
+};
 use m40_llm::profile;
 use std::ffi::c_void;
 
@@ -537,6 +539,7 @@ fn run_compressed_chunked_prefill_logit_parity(mode: KvCompressMode) -> Result<(
         block_size: 2,
         top_blocks: 2,
         representatives: 0,
+        representative_policy: Default::default(),
     };
     set_runtime_config(config.clone());
     let _guard = ConfigGuard;
@@ -607,7 +610,11 @@ fn run_compressed_chunked_prefill_logit_parity(mode: KvCompressMode) -> Result<(
     Ok(())
 }
 
-fn run_packed_then_compress_prefill_logit_parity(mode: KvCompressMode) -> Result<()> {
+fn run_packed_then_compress_prefill_logit_parity(
+    mode: KvCompressMode,
+    representatives: u32,
+    representative_policy: KvRepresentativePolicy,
+) -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
@@ -629,7 +636,8 @@ fn run_packed_then_compress_prefill_logit_parity(mode: KvCompressMode) -> Result
         recent_window: 4,
         block_size: 2,
         top_blocks: 2,
-        representatives: 0,
+        representatives,
+        representative_policy,
     };
     set_runtime_config(config.clone());
     let _guard = ConfigGuard;
@@ -713,12 +721,56 @@ fn compressed_chunked_prefill_matches_sequential_block_select_lossy() -> Result<
 
 #[test]
 fn packed_then_compress_prefill_matches_sequential_block_summary() -> Result<()> {
-    run_packed_then_compress_prefill_logit_parity(KvCompressMode::BlockSummary)
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSummary,
+        0,
+        KvRepresentativePolicy::Last,
+    )
 }
 
 #[test]
 fn packed_then_compress_prefill_matches_sequential_block_select_lossy() -> Result<()> {
-    run_packed_then_compress_prefill_logit_parity(KvCompressMode::BlockSelectLossy)
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSelectLossy,
+        0,
+        KvRepresentativePolicy::Last,
+    )
+}
+
+#[test]
+fn packed_then_compress_prefill_matches_sequential_block_summary_last_reps() -> Result<()> {
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSummary,
+        2,
+        KvRepresentativePolicy::Last,
+    )
+}
+
+#[test]
+fn packed_then_compress_prefill_matches_sequential_block_summary_stride_reps() -> Result<()> {
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSummary,
+        2,
+        KvRepresentativePolicy::Stride,
+    )
+}
+
+#[test]
+fn packed_then_compress_prefill_matches_sequential_block_select_lossy_last_reps() -> Result<()> {
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSelectLossy,
+        2,
+        KvRepresentativePolicy::Last,
+    )
+}
+
+#[test]
+fn packed_then_compress_prefill_matches_sequential_block_select_lossy_stride_reps() -> Result<()> {
+    run_packed_then_compress_prefill_logit_parity(
+        KvCompressMode::BlockSelectLossy,
+        2,
+        KvRepresentativePolicy::Stride,
+    )
 }
 
 #[test]
