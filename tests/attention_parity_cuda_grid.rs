@@ -108,6 +108,134 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     Ok(())
 }
 
+#[test]
+fn attention_block_summary_lossy_is_finite_and_deterministic() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let seq_len = 20u32;
+    let recent_window = 4u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + i * 5) as f32).sin() * 0.02)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 19 + i * 3) as f32).cos() * 0.03)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32).sin() * 0.01).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_summary_a = ctx.device_malloc(bytes_q)?;
+    let d_summary_b = ctx.device_malloc(bytes_q)?;
+    let d_select_lossy = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_summary_a,
+        )?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_summary_b,
+        )?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            2,
+            d_select_lossy,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut summary_a = vec![0f32; q_dim];
+    let mut summary_b = vec![0f32; q_dim];
+    let mut select_lossy = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            summary_a.as_mut_ptr() as *mut c_void,
+            d_summary_a as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            summary_b.as_mut_ptr() as *mut c_void,
+            d_summary_b as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            select_lossy.as_mut_ptr() as *mut c_void,
+            d_select_lossy as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_summary_a)?;
+        ctx.device_free(d_summary_b)?;
+        ctx.device_free(d_select_lossy)?;
+    }
+
+    for idx in 0..q_dim {
+        assert!(
+            summary_a[idx].is_finite(),
+            "summary output {idx} is not finite"
+        );
+        assert!(
+            select_lossy[idx].is_finite(),
+            "select-lossy output {idx} is not finite"
+        );
+        assert!(
+            (summary_a[idx] - summary_b[idx]).abs() < 1e-6,
+            "summary output not deterministic at {idx}: {} vs {}",
+            summary_a[idx],
+            summary_b[idx]
+        );
+    }
+    Ok(())
+}
+
 fn cpu_last_token_attention(
     q: &[f32],             // [num_heads*head_dim]
     k_tokens: &[Vec<f32>], // seq_len entries, each [num_heads*head_dim]

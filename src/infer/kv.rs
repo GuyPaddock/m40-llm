@@ -348,6 +348,32 @@ impl LoadedModel {
                     d_out,
                 );
             }
+        } else if matches!(
+            compression.mode,
+            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+        ) {
+            if head_dim != 64 {
+                anyhow::bail!("{:?} requires head_dim=64", compression.mode);
+            }
+            let top_blocks = if compression.mode == KvCompressMode::BlockSummary {
+                0
+            } else {
+                compression.top_blocks
+            };
+            #[cfg(feature = "cuda")]
+            unsafe {
+                return kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    compression.block_size,
+                    top_blocks,
+                    d_out,
+                );
+            }
         } else if compression.mode.is_enabled() {
             anyhow::bail!(
                 "KV compression mode {:?} is not implemented in decode attention yet",
