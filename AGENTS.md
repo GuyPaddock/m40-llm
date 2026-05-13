@@ -136,11 +136,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA
   sidecar for CLI decode with a recent exact ring plus old-block mean K/V
   summaries. M40 attention microbenchmarks at 4K/8K/16K/32K are recorded in
-  `docs/perf_baselines.md`; long-context needle retrieval is covered by an
-  env-gated smoke harness.
-- Next: keep compressed KV experimental until long-context retrieval quality is
-  measured; representative-token storage and server scheduler integration remain
-  deferred.
+  `docs/perf_baselines.md`. The retrieval quality harness now discovers cached
+  GGUFs, probes metadata, and reports pass/fail/inconclusive rows; on the
+  current machine it selects TinyLlama because cached long-context GGUFs are not
+  yet supported by the LLaMA/F16-oriented loader path, and TinyLlama's dense
+  baseline fails the short needle prompt, so compression quality remains
+  inconclusive.
+- Next: either add support for a cached long-context GGUF family/dtype so the
+  quality harness has a capable dense baseline, or proceed to fast-fits vs
+  large-model backend selection per the strict roadmap.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

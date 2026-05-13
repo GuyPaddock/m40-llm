@@ -132,6 +132,11 @@ CLI decode: a configurable recent exact window plus old-block mean K/V summaries
 and summary accumulators. `off` and `block-select-exact` remain dense-backed.
 The `--kv-compress-representatives` flag is reserved for future representative
 token storage and is not yet used by the sidecar implementation.
+The quality harness in `tests/kv_compression_long_context.rs` can discover local
+GGUF candidates under the cache tree, or use
+`M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/path/to/model.gguf` for an explicit model.
+Set `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to capture per-case
+retrieval results.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on
 efficient million-token context intelligence, but it does not attempt to

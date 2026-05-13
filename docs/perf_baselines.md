@@ -1610,3 +1610,54 @@ Interpretation:
   long-context dense baseline.
 - Representative-token storage is still deferred; `--kv-compress-representatives`
   is accepted but not yet used by the sidecar.
+
+## 2026-05-13: Compressed KV Retrieval Quality Harness
+
+This checkpoint upgrades the env-gated retrieval smoke into a diagnostic quality
+harness. It discovers local GGUF candidates under the Hugging Face and m40-llm
+cache trees, probes metadata before loading weights, and reports per-mode
+retrieval outcomes without forcing lossy modes to pass.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Features: `cuda`
+- Command: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_KV_QUALITY_SMOKE_TOKENS=64 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+
+Selected model:
+
+| Model | Size | Context | Reason |
+| --- | ---: | ---: | --- |
+| TinyLlama-1.1B-Chat-v1.0.f16.gguf | 2.05 GiB | 2048 | First discovered candidate supported by the current LLaMA/F16 loader |
+
+Candidate probe summary:
+
+- Several larger cached GGUFs were discovered under
+  `/mnt/array-fastest/home/guyep/.cache/huggingface/hub`.
+- The current metadata parser rejected Gemma, Phi, GPT-OSS, Qwen, and several
+  other cached long-context candidates because they do not expose the LLaMA
+  metadata keys expected by `ModelConfig::from_metadata`.
+- Many remaining long-context candidates use K-quant or unknown tensor dtypes
+  that are not yet supported by the current full-layer CUDA path.
+
+Retrieval results:
+
+| Target | Needle | Mode | Status | Notes |
+| ---: | --- | --- | --- | --- |
+| 64 | old | off | fail | Dense baseline generated a partial code prefix, not the full needle |
+| 64 | old | block-select-exact | inconclusive | Dense baseline failed, so compression quality is not attributable |
+| 64 | old | block-summary | inconclusive | Dense baseline failed |
+| 64 | old | block-select-lossy | inconclusive | Dense baseline failed |
+| 64 | recent | off | fail | Dense baseline generated a partial code prefix, not the full needle |
+| 64 | recent | block-select-exact | inconclusive | Dense baseline failed |
+| 64 | recent | block-summary | inconclusive | Dense baseline failed |
+| 64 | recent | block-select-lossy | inconclusive | Dense baseline failed |
+
+Interpretation:
+
+- The harness now produces actionable pass/fail/inconclusive rows and can emit
+  JSONL via `M40LLM_KV_QUALITY_REPORT=...`.
+- The current machine has cached long-context GGUFs, but none are runnable
+  through the current LLaMA/F16-oriented CUDA path.
+- Compressed KV remains experimental: quality is still unmeasured for a dense
+  baseline that can reliably solve the retrieval prompt.

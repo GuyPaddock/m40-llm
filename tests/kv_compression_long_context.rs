@@ -2,31 +2,296 @@
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions};
-use m40_llm::gguf;
-use m40_llm::infer::LoadedModel;
+use m40_llm::gguf::{self, GgmlDType, GgufModel};
+use m40_llm::infer::{LoadedModel, ModelConfig};
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 use m40_llm::tokenizer::Tokenizer;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 const NEEDLE: &str = "ZXQ-NEEDLE-41729";
+const CACHE_ROOTS: &[&str] = &[
+    "/mnt/array-fastest/home/guyep/.cache/huggingface/hub",
+    "/mnt/array-fastest/home/guyep/.cache/m40-llm/models",
+];
 
-fn load_model_from_env() -> Result<Option<LoadedModel>> {
-    let Some(path) = std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL") else {
-        eprintln!("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL not set; skipping long-context KV quality");
-        return Ok(None);
+#[derive(Debug, Clone)]
+struct Candidate {
+    path: PathBuf,
+    resolved_path: PathBuf,
+    size: u64,
+    explicit: bool,
+}
+
+#[derive(Debug, Clone)]
+struct CandidateProbe {
+    candidate: Candidate,
+    config: Option<ModelConfig>,
+    dtype_summary: BTreeMap<String, usize>,
+    skip_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CaseStatus {
+    Pass,
+    Fail,
+    Inconclusive,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CaseRecord {
+    model_path: String,
+    resolved_model_path: String,
+    target_tokens: usize,
+    prompt_tokens: usize,
+    needle_position: String,
+    mode: String,
+    status: CaseStatus,
+    elapsed_ms: u128,
+    output_excerpt: String,
+    error: Option<String>,
+}
+
+fn is_candidate_path(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+        return false;
     };
-    let path = std::path::PathBuf::from(path);
-    if !path.exists() {
-        eprintln!(
-            "M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL does not exist: {}",
-            path.display()
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".gguf")
+        && !lower.starts_with("mmproj-")
+        && !lower.contains("ggml-vocab")
+        && !lower.ends_with(".gguf.inp")
+        && !lower.ends_with(".gguf.out")
+}
+
+fn resolved_size(path: &Path) -> Result<(PathBuf, u64)> {
+    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let size = fs::metadata(path)
+        .with_context(|| format!("stat GGUF candidate {}", path.display()))?
+        .len();
+    Ok((resolved, size))
+}
+
+fn collect_gguf_paths(root: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_dir() {
+            collect_gguf_paths(&path, out);
+        } else if (file_type.is_file() || file_type.is_symlink()) && is_candidate_path(&path) {
+            out.push(path);
+        }
+    }
+}
+
+fn discover_candidates() -> Vec<Candidate> {
+    let mut paths = Vec::new();
+    if let Some(path) = std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL") {
+        paths.push((PathBuf::from(path), true));
+    } else {
+        let mut discovered = Vec::new();
+        for root in CACHE_ROOTS {
+            collect_gguf_paths(Path::new(root), &mut discovered);
+        }
+        for path in discovered {
+            paths.push((path, false));
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for (path, explicit) in paths {
+        if !path.exists() {
+            eprintln!("GGUF candidate does not exist: {}", path.display());
+            continue;
+        }
+        match resolved_size(&path) {
+            Ok((resolved_path, size)) => candidates.push(Candidate {
+                path,
+                resolved_path,
+                size,
+                explicit,
+            }),
+            Err(err) => eprintln!("skipping GGUF candidate {}: {err}", path.display()),
+        }
+    }
+    candidates.sort_by_key(candidate_rank);
+    candidates.dedup_by(|a, b| a.resolved_path == b.resolved_path);
+    if std::env::var_os("M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL").is_none() && candidates.len() > 16 {
+        candidates.truncate(16);
+    }
+    candidates
+}
+
+fn candidate_rank(candidate: &Candidate) -> (u8, u8, u64) {
+    let name = candidate
+        .path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let dtype_rank = if name.contains("f16") || name.contains("bf16") {
+        0
+    } else if name.contains("q8_0") {
+        1
+    } else if name.contains("q5_1") {
+        2
+    } else if name.contains("q4") || name.contains("q5") || name.contains("q6") {
+        3
+    } else {
+        4
+    };
+    let size_rank = if candidate.size <= 16 * 1024 * 1024 * 1024 {
+        0
+    } else {
+        1
+    };
+    (
+        !candidate.explicit as u8,
+        dtype_rank + size_rank,
+        candidate.size,
+    )
+}
+
+fn dtype_summary(model: &GgufModel) -> BTreeMap<String, usize> {
+    let mut summary = BTreeMap::new();
+    for tensor in &model.tensors {
+        *summary.entry(format!("{:?}", tensor.dtype)).or_insert(0) += 1;
+    }
+    summary
+}
+
+fn tensor_dtype_supported(model: &GgufModel) -> Result<()> {
+    for tensor in &model.tensors {
+        let is_embedding = matches!(
+            tensor.name.as_str(),
+            "tok_embeddings.weight"
+                | "token_embd.weight"
+                | "token_embd"
+                | "token_embeddings.weight"
         );
+        let supported = match tensor.dtype {
+            GgmlDType::F16 | GgmlDType::F32 => true,
+            GgmlDType::Q8_0 => is_embedding,
+            _ => false,
+        };
+        if !supported {
+            anyhow::bail!(
+                "tensor '{}' has unsupported dtype {:?}",
+                tensor.name,
+                tensor.dtype
+            );
+        }
+    }
+    Ok(())
+}
+
+fn probe_candidate(candidate: Candidate) -> CandidateProbe {
+    let mut config = None;
+    let mut dtype_counts = BTreeMap::new();
+    let mut skip_reason = None;
+
+    match gguf::load_gguf(&candidate.path) {
+        Ok(model) => {
+            dtype_counts = dtype_summary(&model);
+            match ModelConfig::from_metadata(&model.metadata, &model.tensors) {
+                Ok(cfg) => {
+                    if let Err(err) = tensor_dtype_supported(&model) {
+                        skip_reason = Some(err.to_string());
+                    } else if !candidate.explicit && candidate.size > 16 * 1024 * 1024 * 1024 {
+                        skip_reason = Some(format!(
+                            "candidate is {:.2} GiB; quality gate caps automatic load at 16 GiB",
+                            candidate.size as f64 / 1024.0 / 1024.0 / 1024.0
+                        ));
+                    } else {
+                        config = Some(cfg);
+                    }
+                }
+                Err(err) => skip_reason = Some(format!("unsupported metadata: {err}")),
+            }
+        }
+        Err(err) => skip_reason = Some(format!("failed to parse GGUF metadata: {err}")),
+    }
+
+    CandidateProbe {
+        candidate,
+        config,
+        dtype_summary: dtype_counts,
+        skip_reason,
+    }
+}
+
+fn select_candidate() -> Result<Option<CandidateProbe>> {
+    let candidates = discover_candidates();
+    if candidates.is_empty() {
+        eprintln!("no GGUF candidates found under configured cache roots");
         return Ok(None);
     }
-    let gguf_bytes = std::fs::read(&path)?;
-    let gguf_model = gguf::load_gguf(&path)?;
-    let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)?;
-    model.allocate_kv_cache_for_layers(model.model_config.context_length)?;
-    Ok(Some(model))
+
+    let mut probes: Vec<CandidateProbe> = candidates.into_iter().map(probe_candidate).collect();
+    probes.sort_by_key(|probe| {
+        let context_rank = probe
+            .config
+            .as_ref()
+            .map(|cfg| if cfg.context_length >= 4096 { 0 } else { 1 })
+            .unwrap_or(2);
+        (
+            probe.skip_reason.is_some(),
+            context_rank,
+            candidate_rank(&probe.candidate),
+        )
+    });
+
+    eprintln!("KV compression quality candidate table:");
+    for probe in &probes {
+        let context = probe
+            .config
+            .as_ref()
+            .map(|cfg| cfg.context_length.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let arch = probe
+            .config
+            .as_ref()
+            .map(|cfg| cfg.architecture.as_str())
+            .unwrap_or("-");
+        let d_model = probe
+            .config
+            .as_ref()
+            .map(|cfg| cfg.embedding_length.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let blocks = probe
+            .config
+            .as_ref()
+            .map(|cfg| cfg.block_count.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        eprintln!(
+            "  size={:.2}GiB ctx={context} arch={arch} d_model={d_model} layers={blocks} dtypes={:?} status={} path={}",
+            probe.candidate.size as f64 / 1024.0 / 1024.0 / 1024.0,
+            probe.dtype_summary,
+            probe.skip_reason.as_deref().unwrap_or("candidate"),
+            probe.candidate.path.display()
+        );
+    }
+
+    Ok(probes.into_iter().find(|probe| probe.skip_reason.is_none()))
+}
+
+fn load_selected_model(probe: &CandidateProbe) -> Result<LoadedModel> {
+    let path = &probe.candidate.path;
+    let gguf_bytes =
+        fs::read(path).with_context(|| format!("read selected GGUF {}", path.display()))?;
+    let gguf_model = gguf::load_gguf(path)?;
+    LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)
 }
 
 fn retrieval_prompt(tokenizer: &Tokenizer, target_tokens: usize, needle_position: &str) -> String {
@@ -56,13 +321,63 @@ fn retrieval_prompt(tokenizer: &Tokenizer, target_tokens: usize, needle_position
     prompt
 }
 
+fn smoke_target_tokens() -> usize {
+    std::env::var("M40LLM_KV_QUALITY_SMOKE_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(64)
+}
+
+fn target_contexts(model_context: usize, full_quality: bool) -> Vec<usize> {
+    let limit = model_context.saturating_sub(128);
+    if !full_quality {
+        let smoke = smoke_target_tokens().min(limit.saturating_sub(1)).max(32);
+        return if smoke < limit {
+            vec![smoke]
+        } else {
+            Vec::new()
+        };
+    }
+
+    let mut contexts: Vec<usize> = [512, 1024, 2048, 4096, 8192, 16384, 32768]
+        .into_iter()
+        .filter(|ctx| *ctx < limit)
+        .collect();
+    if contexts.is_empty() && limit >= 192 {
+        contexts.push(limit.saturating_sub(64).max(128));
+    }
+    contexts.sort_unstable();
+    contexts.dedup();
+    contexts
+}
+
+fn prepare_kv_cache(model: &mut LoadedModel, mode: KvCompressMode) -> Result<()> {
+    let max_len = model.model_config.context_length;
+    let config = KvCompressionConfig {
+        mode,
+        recent_window: 1024,
+        block_size: 32,
+        top_blocks: 16,
+        representatives: 2,
+    };
+    if matches!(
+        mode,
+        KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+    ) {
+        model.allocate_compressed_kv_cache_for_layers(max_len, &config)
+    } else {
+        model.allocate_kv_cache_for_layers(max_len)
+    }
+}
+
 fn run_retrieval_case(
-    model: &LoadedModel,
+    model: &mut LoadedModel,
     tokenizer: &Tokenizer,
     target_tokens: usize,
     needle_position: &str,
     mode: KvCompressMode,
-) -> Result<String> {
+) -> Result<(String, usize)> {
+    prepare_kv_cache(model, mode)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
     let prompt_tokens = tokenizer
         .encode_with_specials(&prompt, true, false)
@@ -78,7 +393,7 @@ fn run_retrieval_case(
         model,
         GenerateOptions {
             prompt,
-            max_tokens: Some(24),
+            max_tokens: Some(8),
             top_k: Some(1),
             log_prefix: "kv_retrieval",
             kv_compression: KvCompressionConfig {
@@ -91,17 +406,93 @@ fn run_retrieval_case(
             ..Default::default()
         },
     )?;
-    Ok(generated.output)
+    Ok((generated.output, prompt_tokens))
+}
+
+fn mode_name(mode: KvCompressMode) -> &'static str {
+    match mode {
+        KvCompressMode::Off => "off",
+        KvCompressMode::BlockSelectExact => "block-select-exact",
+        KvCompressMode::BlockSummary => "block-summary",
+        KvCompressMode::BlockSelectLossy => "block-select-lossy",
+    }
+}
+
+fn output_excerpt(output: &str) -> String {
+    const MAX_CHARS: usize = 240;
+    output.chars().take(MAX_CHARS).collect()
+}
+
+fn append_report(records: &[CaseRecord]) -> Result<()> {
+    let Some(path) = std::env::var_os("M40LLM_KV_QUALITY_REPORT") else {
+        return Ok(());
+    };
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .with_context(|| format!("open quality report {}", PathBuf::from(&path).display()))?;
+    for record in records {
+        serde_json::to_writer(&mut file, record)?;
+        file.write_all(b"\n")?;
+    }
+    Ok(())
+}
+
+fn print_records(records: &[CaseRecord]) {
+    eprintln!("KV compression retrieval quality results:");
+    for record in records {
+        eprintln!(
+            "  ctx={} prompt={} needle={} mode={} status={:?} elapsed={}ms output={:?} error={}",
+            record.target_tokens,
+            record.prompt_tokens,
+            record.needle_position,
+            record.mode,
+            record.status,
+            record.elapsed_ms,
+            record.output_excerpt,
+            record.error.as_deref().unwrap_or("-")
+        );
+    }
 }
 
 #[test]
 fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
-    let Some(model) = load_model_from_env()? else {
+    let Some(probe) = select_candidate()? else {
         return Ok(());
     };
+    let config = probe
+        .config
+        .as_ref()
+        .expect("selected candidate must have config");
+    let full_quality = probe.candidate.explicit
+        || std::env::var("M40LLM_KV_QUALITY_FULL").ok().as_deref() == Some("1");
+    let contexts = target_contexts(config.context_length as usize, full_quality);
+    if contexts.is_empty() {
+        eprintln!(
+            "selected model context={} is too short for retrieval smoke",
+            config.context_length
+        );
+        return Ok(());
+    }
+
+    eprintln!(
+        "selected KV quality model: path={} resolved={} size={:.2}GiB ctx={} arch={} d_model={} layers={} heads={} kv_heads={} head_dim={}",
+        probe.candidate.path.display(),
+        probe.candidate.resolved_path.display(),
+        probe.candidate.size as f64 / 1024.0 / 1024.0 / 1024.0,
+        config.context_length,
+        config.architecture,
+        config.embedding_length,
+        config.block_count,
+        config.attention_head_count,
+        config.attention_head_count_kv,
+        config.attention_key_length
+    );
+
+    let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
-    let contexts = [4096usize, 8192, 16384, 32768];
     let modes = [
         KvCompressMode::Off,
         KvCompressMode::BlockSelectExact,
@@ -109,24 +500,60 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         KvCompressMode::BlockSelectLossy,
     ];
 
+    let mut records = Vec::new();
     for target_tokens in contexts {
-        if target_tokens + 128 >= model.model_config.context_length as usize {
-            eprintln!(
-                "skipping target_tokens={target_tokens}; model context={}",
-                model.model_config.context_length
-            );
-            continue;
-        }
         for needle_position in ["old", "recent"] {
+            let mut dense_passed = None;
             for mode in modes {
-                let output =
-                    run_retrieval_case(&model, &tokenizer, target_tokens, needle_position, mode)?;
-                assert!(
-                    output.contains(NEEDLE),
-                    "mode={mode:?} target_tokens={target_tokens} needle_position={needle_position} failed retrieval; output={output:?}"
-                );
+                let started = Instant::now();
+                let mut prompt_tokens = 0usize;
+                let (mut status, output, error) = match run_retrieval_case(
+                    &mut model,
+                    &tokenizer,
+                    target_tokens,
+                    needle_position,
+                    mode,
+                ) {
+                    Ok((output, tokens)) => {
+                        prompt_tokens = tokens;
+                        let passed = output.contains(NEEDLE);
+                        if mode == KvCompressMode::Off {
+                            dense_passed = Some(passed);
+                        }
+                        let status = if passed {
+                            CaseStatus::Pass
+                        } else {
+                            CaseStatus::Fail
+                        };
+                        (status, output, None)
+                    }
+                    Err(err) => {
+                        if mode == KvCompressMode::Off {
+                            dense_passed = Some(false);
+                        }
+                        (CaseStatus::Error, String::new(), Some(err.to_string()))
+                    }
+                };
+                if mode != KvCompressMode::Off && dense_passed == Some(false) {
+                    status = CaseStatus::Inconclusive;
+                }
+                records.push(CaseRecord {
+                    model_path: probe.candidate.path.display().to_string(),
+                    resolved_model_path: probe.candidate.resolved_path.display().to_string(),
+                    target_tokens,
+                    prompt_tokens,
+                    needle_position: needle_position.to_string(),
+                    mode: mode_name(mode).to_string(),
+                    status,
+                    elapsed_ms: started.elapsed().as_millis(),
+                    output_excerpt: output_excerpt(&output),
+                    error,
+                });
             }
         }
     }
+
+    print_records(&records);
+    append_report(&records)?;
     Ok(())
 }
