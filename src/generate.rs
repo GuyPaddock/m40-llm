@@ -11,6 +11,15 @@ use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
 use crate::tokenizer::Tokenizer;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptFormat {
+    #[default]
+    Auto,
+    Raw,
+    Llama3Chat,
+}
+
 #[derive(Debug, Clone)]
 pub struct GenerateOptions {
     pub prompt: String,
@@ -23,6 +32,7 @@ pub struct GenerateOptions {
     pub sequence_id: u32,
     pub reset_kv_cache: bool,
     pub kv_compression: KvCompressionConfig,
+    pub prompt_format: PromptFormat,
 }
 
 impl Default for GenerateOptions {
@@ -38,6 +48,7 @@ impl Default for GenerateOptions {
             sequence_id: 0,
             reset_kv_cache: true,
             kv_compression: KvCompressionConfig::default(),
+            prompt_format: PromptFormat::Auto,
         }
     }
 }
@@ -121,6 +132,37 @@ pub fn sampler_from_options(options: &GenerateOptions) -> Result<Sampler> {
     Ok(Sampler::new(cfg))
 }
 
+pub fn prepare_prompt(
+    tokenizer: &Tokenizer,
+    prompt: &str,
+    prompt_format: PromptFormat,
+) -> (String, bool) {
+    let selected = match prompt_format {
+        PromptFormat::Auto => {
+            if tokenizer.is_llama3()
+                && tokenizer.has_chat_template()
+                && !prompt.contains("<|start_header_id|>")
+            {
+                PromptFormat::Llama3Chat
+            } else {
+                PromptFormat::Raw
+            }
+        }
+        other => other,
+    };
+
+    match selected {
+        PromptFormat::Llama3Chat => (
+            format!(
+                "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                prompt.trim()
+            ),
+            false,
+        ),
+        PromptFormat::Auto | PromptFormat::Raw => (prompt.to_string(), true),
+    }
+}
+
 #[cfg(feature = "cuda")]
 fn log_top_logits(logits: &[f32], k: usize, log_prefix: &str) {
     if std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1") {
@@ -150,10 +192,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
 
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
-    let add_bos = true;
+    let (prompt, add_bos) = prepare_prompt(&tokenizer, &options.prompt, options.prompt_format);
     let encode_start = std::time::Instant::now();
     let prompt_token_len = tokenizer
-        .encode_with_specials(&options.prompt, add_bos, false)
+        .encode_with_specials(&prompt, add_bos, false)
         .context("encode prompt")?
         .len();
     timing::timing_log!(
@@ -165,7 +207,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         .max_tokens
         .or(Some(model.model_config.context_length as usize))
         .unwrap_or(32);
-    let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
+    let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
     let sampler = sampler_from_options(&options)?;
 
     if options.reset_kv_cache && model.kv_cache.is_some() {
@@ -355,7 +397,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let decode_start = std::time::Instant::now();
     let ids = decode_loop_with(
         &tokenizer,
-        &options.prompt,
+        &prompt,
         add_bos,
         sampler,
         &stopping,

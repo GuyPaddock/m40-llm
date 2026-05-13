@@ -18,7 +18,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
 use crate::generate::{
-    decode_generated_text, generate_text, sampler_from_options, sanitize_output, GenerateOptions,
+    decode_generated_text, generate_text, prepare_prompt, sampler_from_options, sanitize_output,
+    GenerateOptions, PromptFormat,
 };
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
@@ -79,6 +80,8 @@ pub struct GenerateRequest {
     pub top_p: Option<f32>,
     #[serde(default)]
     pub seed: Option<u64>,
+    #[serde(default)]
+    pub prompt_format: PromptFormat,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -121,6 +124,7 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         sequence_id: 0,
         reset_kv_cache: true,
         kv_compression: Default::default(),
+        prompt_format: req.prompt_format,
     }
 }
 
@@ -231,16 +235,16 @@ impl DecodeSchedulerRequest {
             .ok_or_else(|| anyhow::anyhow!("decode batching requires a sequence lease"))?;
         let tokenizer = Tokenizer::from_gguf_metadata(&state.model.gguf.metadata)
             .unwrap_or_else(|_| Tokenizer::byte_level());
-        let add_bos = true;
+        let (prompt, add_bos) = prepare_prompt(&tokenizer, &req.prompt, req.prompt_format);
         let ids = tokenizer
-            .encode_with_specials(&req.prompt, add_bos, false)
+            .encode_with_specials(&prompt, add_bos, false)
             .context("encode prompt")?;
         let prompt_token_len = ids.len();
         let max_tokens = req
             .max_tokens
             .or(Some(state.model.model_config.context_length as usize))
             .unwrap_or(32);
-        let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
+        let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
         let mut options = options_from_request(&req, "server");
         options.sequence_id = sequence_lease.sequence_id();
         options.reset_kv_cache = false;
@@ -920,12 +924,12 @@ async fn generate(
         Err(_) => Tokenizer::byte_level(),
     };
 
-    let eos_id = tokenizer.eos_id();
+    let (prompt, add_bos) = prepare_prompt(&tokenizer, &req.prompt, req.prompt_format);
     let max_tokens = req
         .max_tokens
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
-    let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
+    let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
     let sampler =
         sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
 
@@ -1112,14 +1116,13 @@ async fn generate(
         }
     };
 
-    let add_bos = true;
     let base_sampler = sampler;
 
     if req.stream {
         let generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut sampler = base_sampler.clone();
         let tokenizer_stream = tokenizer.clone();
-        let prompt = req.prompt.clone();
+        let prompt = prompt.clone();
         #[allow(unused_mut)]
         let mut logits_fn = logits_fn;
         let stopping_stream = stopping.clone();
@@ -1200,15 +1203,8 @@ async fn generate(
                     }
                 }
 
-                if let Some(eos) = stopping_stream.eos_id {
-                    if next == eos {
-                        break;
-                    }
-                }
-                if let Some(mt) = stopping_stream.max_tokens {
-                    if generated.len() >= mt {
-                        break;
-                    }
+                if stopping_stream.should_stop(&generated) {
+                    break;
                 }
             }
 
@@ -1242,7 +1238,7 @@ async fn generate(
         return Ok(response);
     }
 
-    let prompt_token_len = match tokenizer.encode_with_specials(&req.prompt, add_bos, false) {
+    let prompt_token_len = match tokenizer.encode_with_specials(&prompt, add_bos, false) {
         Ok(ids) => ids.len(),
         Err(e) => {
             eprintln!("[server] prompt encode failed: {e}");
@@ -1257,7 +1253,7 @@ async fn generate(
 
     let ids = match decode_loop_with(
         &tokenizer,
-        &req.prompt,
+        &prompt,
         add_bos,
         base_sampler,
         &stopping,

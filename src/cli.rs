@@ -20,6 +20,23 @@ impl From<KvCompressModeArg> for crate::kv_compression::KvCompressMode {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum PromptFormatArg {
+    Auto,
+    Raw,
+    Llama3Chat,
+}
+
+impl From<PromptFormatArg> for crate::generate::PromptFormat {
+    fn from(value: PromptFormatArg) -> Self {
+        match value {
+            PromptFormatArg::Auto => Self::Auto,
+            PromptFormatArg::Raw => Self::Raw,
+            PromptFormatArg::Llama3Chat => Self::Llama3Chat,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "m40-llm")]
 #[command(about = "M40-optimized Rust GGUF LLM server", long_about = None)]
@@ -77,6 +94,9 @@ pub enum Commands {
         /// Representative tokens retained per old block in lossy modes
         #[arg(long, default_value_t = 2)]
         kv_compress_representatives: u32,
+        /// Prompt wrapper to use before tokenization
+        #[arg(long, value_enum, default_value_t = PromptFormatArg::Auto)]
+        prompt_format: PromptFormatArg,
     },
 
     /// Run the HTTP server for a local model name or GGUF path
@@ -95,7 +115,7 @@ pub enum Commands {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, KvCompressModeArg};
+    use super::{Cli, Commands, KvCompressModeArg, PromptFormatArg};
     use clap::Parser;
 
     #[test]
@@ -127,6 +147,7 @@ mod tests {
                 kv_compress_block,
                 kv_compress_top_blocks,
                 kv_compress_representatives,
+                prompt_format,
                 ..
             } => {
                 assert_eq!(model, "tiny.gguf");
@@ -140,6 +161,7 @@ mod tests {
                 assert_eq!(kv_compress_block, 32);
                 assert_eq!(kv_compress_top_blocks, 16);
                 assert_eq!(kv_compress_representatives, 2);
+                assert_eq!(prompt_format, PromptFormatArg::Auto);
             }
             other => panic!("expected generate command, got {other:?}"),
         }

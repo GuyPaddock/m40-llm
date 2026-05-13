@@ -141,8 +141,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   metadata, and reports pass/fail/inconclusive rows. CUDA logits support
   compatible tied F16 output embeddings in `[d_model, vocab]` GGUF layout, which
   unblocks full-layer decode for the cached Llama 3.2 1B Instruct F16 GGUF.
-  A 64-token retrieval smoke against that model still fails the dense baseline
-  with `!!!!!!!!`, so compressed KV quality remains inconclusive.
+  Llama 3 GGUF tokenizer metadata now routes through the `tiktoken` Llama 3
+  encoding, auto prompt formatting applies the Llama 3 chat control-token
+  wrapper, and stop criteria include both end-of-turn and end-of-text tokens.
+  A smoke run against that model now feeds correct Llama 3 chat prompt token IDs
+  but still generates repeated token `0` (`!!!!!!!!`), so the remaining dense
+  quality issue is in logits/projection/forward math rather than prompt
+  tokenization, and compressed KV quality remains inconclusive.
 - Next: fix the dense retrieval/generation quality issue for Llama 3.2 1B before
   using it as the KV compression quality baseline, or proceed to fast-fits vs
   large-model backend selection per the strict roadmap.

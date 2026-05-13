@@ -10,11 +10,29 @@ use crate::tokenizer::Tokenizer;
 pub struct StoppingCriteria {
     pub max_tokens: Option<usize>,
     pub eos_id: Option<u32>,
+    pub stop_ids: Vec<u32>,
 }
 
 impl StoppingCriteria {
     pub fn new(max_tokens: Option<usize>, eos_id: Option<u32>) -> Self {
-        Self { max_tokens, eos_id }
+        let stop_ids = eos_id.into_iter().collect();
+        Self {
+            max_tokens,
+            eos_id,
+            stop_ids,
+        }
+    }
+
+    pub fn with_stop_ids(max_tokens: Option<usize>, stop_ids: Vec<u32>) -> Self {
+        let eos_id = stop_ids.first().copied();
+        let mut stop_ids = stop_ids;
+        stop_ids.sort_unstable();
+        stop_ids.dedup();
+        Self {
+            max_tokens,
+            eos_id,
+            stop_ids,
+        }
     }
 
     /// Returns true if generation should stop based on:
@@ -26,8 +44,8 @@ impl StoppingCriteria {
                 return true;
             }
         }
-        if let (Some(eos), Some(&last)) = (self.eos_id, generated.last()) {
-            if last == eos {
+        if let Some(&last) = generated.last() {
+            if self.stop_ids.contains(&last) {
                 return true;
             }
         }
@@ -67,10 +85,8 @@ where
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             eprintln!("[decode] sampled token id={next}");
         }
-        if let Some(eos) = stopping.eos_id {
-            if next == eos {
-                break;
-            }
+        if stopping.stop_ids.contains(&next) {
+            break;
         }
         if let Some(mt) = stopping.max_tokens {
             if generated.len() >= mt {

@@ -63,6 +63,7 @@ async fn main() -> Result<()> {
             kv_compress_block,
             kv_compress_top_blocks,
             kv_compress_representatives,
+            prompt_format,
         } => {
             let local = model::resolve_model_arg(&model)?;
             let gguf_bytes = fs::read(&local.path)?;
@@ -116,6 +117,7 @@ async fn main() -> Result<()> {
                     sequence_id: 0,
                     reset_kv_cache: true,
                     kv_compression,
+                    prompt_format: prompt_format.into(),
                 },
             )?;
             print!("{}", generated.output);

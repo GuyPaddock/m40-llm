@@ -112,6 +112,12 @@ M40LLM_ENABLE_CUBLAS=1 cargo run \
 The command prints generated text only; it does not echo the prompt. It uses the
 same non-streaming decode helper as `POST /generate`.
 
+Prompt formatting defaults to `--prompt-format auto`. For Llama 3 GGUF files
+using `tokenizer.ggml.model=gpt2` and `tokenizer.ggml.pre=llama-bpe`, auto mode
+wraps unformatted prompts in the Llama 3 chat control-token template before
+tokenization. Use `--prompt-format raw` for already-formatted prompts or
+`--prompt-format llama3-chat` to force the chat wrapper.
+
 Experimental compressed KV-cache flags are available on CLI generation, but the
 default remains dense exact KV:
 
