@@ -320,6 +320,21 @@ mod ffi {
             out_rep_v_f16: *mut c_void,
             out_rep_positions: *mut u32,
         ) -> i32;
+        pub fn m40llm_kvcache_debug_select_old_blocks(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            out_blocks_host: *mut u32,
+            out_count: *mut u32,
+            max_out: u32,
+            out_total_old_blocks: *mut u32,
+        ) -> i32;
         pub fn m40llm_kvcache_build_compressed_from_dense(
             ctx: *mut M40llmCudaContext,
             compressed: *mut M40llmKVCache,
@@ -2418,6 +2433,48 @@ impl KVCache {
             anyhow::bail!("m40llm_kvcache_debug_read_compressed_state failed: {rc}");
         }
         Ok(snapshot)
+    }
+
+    #[cfg(feature = "cuda")]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn debug_select_old_blocks(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+    ) -> Result<(Vec<u32>, u32)> {
+        const MAX_BLOCKS: u32 = 2048;
+        let mut blocks = vec![0u32; MAX_BLOCKS as usize];
+        let mut count = 0u32;
+        let mut total_old_blocks = 0u32;
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_select_old_blocks(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                blocks.as_mut_ptr(),
+                &mut count as *mut u32,
+                MAX_BLOCKS,
+                &mut total_old_blocks as *mut u32,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_select_old_blocks failed: {rc}");
+        }
+        blocks.truncate(count as usize);
+        Ok((blocks, total_old_blocks))
     }
 
     #[cfg(feature = "cuda")]

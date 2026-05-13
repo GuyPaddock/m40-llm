@@ -7,6 +7,7 @@ use crate::decode::{decode_loop_with, StoppingCriteria};
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::kv_compression::{set_runtime_config, KvCompressMode, KvCompressionConfig};
+use crate::kv_selection::{self, KvSelectionSummary};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
 use crate::tokenizer::Tokenizer;
@@ -68,6 +69,7 @@ pub struct GeneratedText {
     pub temporary_dense_kv_bytes: Option<usize>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
+    pub kv_selection: Option<KvSelectionSummary>,
 }
 
 #[cfg(feature = "cuda")]
@@ -229,6 +231,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let total_start = std::time::Instant::now();
     options.kv_compression.validate()?;
     set_runtime_config(options.kv_compression.clone());
+    kv_selection::reset();
     #[cfg(not(feature = "cuda"))]
     if options.kv_compression.mode.is_enabled() {
         anyhow::bail!("compressed KV cache modes require the cuda feature");
@@ -398,7 +401,34 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                     let _ = logits_fn_start;
                     if logits_call_count == 0 {
                         if !matches!(options.kv_compression.mode, KvCompressMode::Off) {
-                            if packed_then_compress_prefill_enabled()
+                            if matches!(
+                                options.kv_compression.mode,
+                                KvCompressMode::BlockSelectExact
+                            ) && prefill_chunk_size
+                                .is_some_and(|chunk_size| ids.len() <= chunk_size)
+                            {
+                                match decode_session
+                                    .logits_for_packed_prefix_then_ids(ids, |logits| {
+                                        log_top_logits(logits, 8, log_prefix)
+                                    }) {
+                                    Ok(logits) => {
+                                        prefill_mode =
+                                            "packed-prefix-block-select-exact".to_string();
+                                        Ok(logits)
+                                    }
+                                    Err(err) => {
+                                        eprintln!(
+                                            "[{log_prefix}] block-select-exact packed prefill fallback: {err:#}"
+                                        );
+                                        prefill_mode =
+                                            "packed-prefix-block-select-exact-fallback-sequential"
+                                                .to_string();
+                                        decode_session.logits_for_ids(ids, |logits| {
+                                            log_top_logits(logits, 8, log_prefix)
+                                        })
+                                    }
+                                }
+                            } else if packed_then_compress_prefill_enabled()
                                 && matches!(
                                     options.kv_compression.mode,
                                     KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
@@ -649,6 +679,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .kv_cache
             .as_ref()
             .map(|kv| kv.dense_equivalent_bytes()),
+        kv_selection: kv_selection::enabled()
+            .then(kv_selection::snapshot)
+            .flatten(),
     })
 }
 

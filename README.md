@@ -181,7 +181,15 @@ skips `block-select-exact` by default and uses 1024/2048/4096 targets when
 `M40LLM_KV_QUALITY_REPRESENTATIVES=0,1,2,4` controls the representative-count
 matrix and `M40LLM_KV_QUALITY_REP_POLICIES=last,stride` controls representative
 policies. If unset, the sweep covers `0,1,2,4` representatives with `last`
-policy. Use
+policy. `M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1` enables a diagnostic sweep
+that includes dense `off`, exact sparse `block-select-exact`, and lossy modes
+while recording block-selection telemetry. `M40LLM_KV_QUALITY_TOP_BLOCKS=4,16`
+overrides the top-block counts used for exact/lossy selection. JSONL records in
+that mode include `needle_block_index`, `selected_block_indices`,
+`needle_block_selected`, `needle_block_rank`, `total_old_blocks`, and
+`top_blocks`, which separates scorer misses from lossy-summary failures.
+`block-select-exact` may use `M40LLM_PREFILL_CHUNK_SIZE` for packed-prefix
+prefill in this test-only diagnostic path. Use
 `M40LLM_DECODE_SESSION_LOG=1` to restore verbose per-token decode-session logs.
 
 This experimental direction is inspired by DeepSeek's DeepSeek-V4 work on

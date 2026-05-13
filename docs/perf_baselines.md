@@ -2052,3 +2052,69 @@ Interpretation:
   for exact block retrieval, adding more informative representatives, or
   changing the retrieval prompt/quality harness to separate model weakness from
   compression weakness.
+
+## 2026-05-13: KV Block-Selection Telemetry
+
+This checkpoint adds diagnostic block-selection telemetry for compressed KV
+quality runs. `M40LLM_KV_SELECTION_TELEMETRY=1` records old block selections
+from the CUDA attention scorer, and
+`M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1` enables a bounded harness mode that
+includes dense `off`, `block-select-exact`, `block-summary`, and
+`block-select-lossy`. JSONL rows now include:
+
+- `needle_block_index`
+- `selected_block_indices`
+- `needle_block_selected`
+- `needle_block_rank`
+- `total_old_blocks`
+- `top_blocks`
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- 64-token diagnostic smoke passed with
+  `M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1 M40LLM_KV_QUALITY_TOP_BLOCKS=4`.
+- A 2048-token top-4 diagnostic passed the harness and produced old-block
+  telemetry.
+
+2048 diagnostic command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_QUALITY_TARGETS=2048 \
+M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=4 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-selection-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+Key 2048 results on Llama-3.2-1B-Instruct F16:
+
+| Needle | Mode | Top blocks | Status | Needle block selected | Needle rank | Old blocks | Output |
+| --- | --- | ---: | --- | --- | ---: | ---: | --- |
+| old | off | - | pass | - | - | - | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | 4 | pass | yes | 0 | 32 | `ZXQ-NEEDLE-41729` |
+| old | block-summary | 0 | fail | yes | 0 | 32 | spaces |
+| old | block-select-lossy | 4 | fail | yes | 0 | 32 | spaces |
+| recent | off | - | pass | - | - | - | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | 4 | pass | n/a | n/a | 32 | `ZXQ-NEEDLE-41729` |
+| recent | block-summary | 0 | fail | n/a | n/a | 32 | `Important secret code.` |
+| recent | block-select-lossy | 4 | fail | n/a | n/a | 32 | `Important secret code.` |
+
+Interpretation:
+
+- For the old-needle case, the summary scorer selected the relevant old block
+  and exact sparse attention recovered the needle, but lossy summary/reps did
+  not. That points at lossy information loss rather than block-index selection
+  failure for this prompt.
+- For recent-needle cases, the needle stays inside the exact recent window, yet
+  lossy modes still fail. This suggests the lossy summary entries can disrupt
+  retrieval even when the target token is exact.
+- The current telemetry aggregates selected old blocks across decode attention
+  calls in the row; it is intended to answer whether the needle block was ever
+  selected by the scorer, not to be a per-layer ranking trace.

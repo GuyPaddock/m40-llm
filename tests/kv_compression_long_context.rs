@@ -63,6 +63,12 @@ struct CaseRecord {
     dense_equivalent_kv_bytes: Option<usize>,
     compression_ratio: Option<f64>,
     prefill_mode: String,
+    top_blocks: Option<u32>,
+    needle_block_index: Option<u32>,
+    selected_block_indices: Option<Vec<u32>>,
+    needle_block_selected: Option<bool>,
+    needle_block_rank: Option<u32>,
+    total_old_blocks: Option<u32>,
     output: String,
     error: Option<String>,
 }
@@ -328,6 +334,57 @@ fn lossy_packed_sweep_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn exact_selection_sweep_enabled() -> bool {
+    std::env::var("M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn parse_u32_list(value: &str, var_name: &str) -> Result<Vec<u32>> {
+    let mut values = Vec::new();
+    for part in value.split(',') {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parsed = trimmed
+            .parse::<u32>()
+            .with_context(|| format!("invalid {var_name} entry '{trimmed}'"))?;
+        if parsed == 0 {
+            anyhow::bail!("{var_name} entries must be positive");
+        }
+        values.push(parsed);
+    }
+    values.sort_unstable();
+    values.dedup();
+    if values.is_empty() {
+        anyhow::bail!("{var_name} did not contain any values");
+    }
+    Ok(values)
+}
+
+fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<Vec<Option<u32>>> {
+    if mode == KvCompressMode::Off {
+        return Ok(vec![None]);
+    }
+    if mode == KvCompressMode::BlockSummary {
+        return Ok(vec![Some(0)]);
+    }
+    let values = std::env::var("M40LLM_KV_QUALITY_TOP_BLOCKS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
+        .transpose()?
+        .unwrap_or_else(|| {
+            if exact_selection_sweep {
+                vec![4, 8, 16, 32, 64]
+            } else {
+                vec![16]
+            }
+        });
+    Ok(values.into_iter().map(Some).collect())
+}
+
 #[derive(Debug, Clone, Copy)]
 struct RepresentativeCase {
     representatives: u32,
@@ -386,8 +443,18 @@ fn representative_cases(lossy_packed_sweep: bool) -> Vec<RepresentativeCase> {
     cases
 }
 
-fn quality_modes(lossy_packed_sweep: bool) -> &'static [KvCompressMode] {
-    if lossy_packed_sweep {
+fn quality_modes(
+    lossy_packed_sweep: bool,
+    exact_selection_sweep: bool,
+) -> &'static [KvCompressMode] {
+    if exact_selection_sweep {
+        &[
+            KvCompressMode::Off,
+            KvCompressMode::BlockSelectExact,
+            KvCompressMode::BlockSummary,
+            KvCompressMode::BlockSelectLossy,
+        ]
+    } else if lossy_packed_sweep {
         &[
             KvCompressMode::Off,
             KvCompressMode::BlockSummary,
@@ -407,13 +474,14 @@ fn prepare_kv_cache(
     model: &mut LoadedModel,
     mode: KvCompressMode,
     rep_case: RepresentativeCase,
+    top_blocks: u32,
 ) -> Result<()> {
     let max_len = model.model_config.context_length;
     let config = KvCompressionConfig {
         mode,
         recent_window: 1024,
         block_size: 32,
-        top_blocks: 16,
+        top_blocks,
         representatives: rep_case.representatives,
         representative_policy: rep_case.policy,
     };
@@ -434,8 +502,14 @@ fn run_retrieval_case(
     needle_position: &str,
     mode: KvCompressMode,
     rep_case: RepresentativeCase,
-) -> Result<(GeneratedText, usize)> {
-    let _prefill_guard = if lossy_packed_sweep_enabled() && mode == KvCompressMode::Off {
+    top_blocks: u32,
+) -> Result<(GeneratedText, usize, Option<u32>)> {
+    let exact_selection_sweep = exact_selection_sweep_enabled();
+    let _prefill_guard = if (lossy_packed_sweep_enabled()
+        || (exact_selection_sweep
+            && matches!(mode, KvCompressMode::Off | KvCompressMode::BlockSelectExact)))
+        && matches!(mode, KvCompressMode::Off | KvCompressMode::BlockSelectExact)
+    {
         Some(EnvVarGuard::set(
             "M40LLM_PREFILL_CHUNK_SIZE",
             target_tokens.to_string(),
@@ -443,7 +517,7 @@ fn run_retrieval_case(
     } else {
         None
     };
-    let _packed_then_compress_guard = if lossy_packed_sweep_enabled()
+    let _packed_then_compress_guard = if (lossy_packed_sweep_enabled() || exact_selection_sweep)
         && matches!(
             mode,
             KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
@@ -455,13 +529,26 @@ fn run_retrieval_case(
     } else {
         None
     };
+    let _selection_telemetry_guard = if exact_selection_sweep
+        && matches!(
+            mode,
+            KvCompressMode::BlockSelectExact
+                | KvCompressMode::BlockSummary
+                | KvCompressMode::BlockSelectLossy
+        ) {
+        Some(EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1"))
+    } else {
+        None
+    };
 
-    prepare_kv_cache(model, mode, rep_case)?;
+    prepare_kv_cache(model, mode, rep_case, top_blocks)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
     let preformatted_prompt_tokens = tokenizer
         .encode_with_specials(&prompt, true, false)
         .context("encode retrieval prompt")?
         .len();
+    let needle_block_index =
+        needle_block_index(tokenizer, &prompt, preformatted_prompt_tokens, 1024, 32)?;
     if preformatted_prompt_tokens >= model.model_config.context_length as usize {
         anyhow::bail!(
             "retrieval prompt has {preformatted_prompt_tokens} tokens before prompt formatting, model context is {}",
@@ -477,7 +564,7 @@ fn run_retrieval_case(
             mode,
             recent_window: 1024,
             block_size: 32,
-            top_blocks: 16,
+            top_blocks,
             representatives: rep_case.representatives,
             representative_policy: rep_case.policy,
         },
@@ -485,6 +572,7 @@ fn run_retrieval_case(
     };
     let generated = generate_text(model, options.clone())?;
     if !lossy_packed_sweep_enabled()
+        && !exact_selection_sweep
         && !generated.output.contains(NEEDLE)
         && generated.prefill_mode.starts_with("packed")
     {
@@ -494,7 +582,7 @@ fn run_retrieval_case(
             target_tokens,
             needle_position
         );
-        prepare_kv_cache(model, mode, rep_case)?;
+        prepare_kv_cache(model, mode, rep_case, top_blocks)?;
         let previous_prefill_mode = generated.prefill_mode.clone();
         let _packed_guard = EnvVarGuard::unset("M40LLM_PREFILL_CHUNK_SIZE");
         let _packed_then_compress_guard =
@@ -515,9 +603,30 @@ fn run_retrieval_case(
         sequential.temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
         sequential.prefill_mode =
             format!("sequential-quality-fallback-after-{previous_prefill_mode}");
-        return Ok((sequential, preformatted_prompt_tokens));
+        return Ok((sequential, preformatted_prompt_tokens, needle_block_index));
     }
-    Ok((generated, preformatted_prompt_tokens))
+    Ok((generated, preformatted_prompt_tokens, needle_block_index))
+}
+
+fn needle_block_index(
+    tokenizer: &Tokenizer,
+    prompt: &str,
+    prompt_tokens: usize,
+    recent_window: usize,
+    block_size: usize,
+) -> Result<Option<u32>> {
+    let Some(needle_byte) = prompt.find(NEEDLE) else {
+        return Ok(None);
+    };
+    let needle_token = tokenizer
+        .encode_with_specials(&prompt[..needle_byte], true, false)
+        .context("encode prompt prefix before needle")?
+        .len();
+    let old_len = prompt_tokens.saturating_sub(recent_window);
+    if needle_token >= old_len {
+        return Ok(None);
+    }
+    Ok(Some((needle_token / block_size) as u32))
 }
 
 struct EnvVarGuard {
@@ -582,7 +691,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} status={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -590,7 +699,13 @@ fn print_records(records: &[CaseRecord]) {
             record.mode,
             record.representatives,
             record.representative_policy,
+            record.top_blocks,
             record.status,
+            record.needle_block_index,
+            record.selected_block_indices,
+            record.needle_block_selected,
+            record.needle_block_rank,
+            record.total_old_blocks,
             record.prompt_prefill_elapsed_ms,
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
@@ -644,7 +759,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
     let lossy_packed_sweep = lossy_packed_sweep_enabled();
-    let modes = quality_modes(lossy_packed_sweep);
+    let exact_selection_sweep = exact_selection_sweep_enabled();
+    let modes = quality_modes(lossy_packed_sweep, exact_selection_sweep);
     let rep_cases = representative_cases(lossy_packed_sweep);
 
     let mut records = Vec::new();
@@ -661,108 +777,146 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     rep_cases.clone()
                 };
                 for rep_case in mode_rep_cases {
-                    let mut prompt_tokens = 0usize;
-                    let mut generated_tokens = 0usize;
-                    let mut prompt_prefill_elapsed_ms = 0u128;
-                    let mut generated_decode_elapsed_ms = 0u128;
-                    let mut total_elapsed_ms = 0u128;
-                    let mut attention_compression_elapsed_ms = None;
-                    let mut prefill_chunk_size = None;
-                    let mut compressed_prefill_chunk_size = None;
-                    let mut temporary_dense_kv_bytes = None;
-                    let mut final_kv_allocated_bytes = None;
-                    let mut dense_equivalent_kv_bytes = None;
-                    let mut prefill_mode = "error".to_string();
-                    let (mut status, output, error) = match run_retrieval_case(
-                        &mut model,
-                        &tokenizer,
-                        target_tokens,
-                        needle_position,
-                        mode,
-                        rep_case,
-                    ) {
-                        Ok((generated, _preformatted_prompt_tokens)) => {
-                            prompt_tokens = generated.prompt_token_len;
-                            generated_tokens = generated
-                                .token_ids
-                                .len()
-                                .saturating_sub(generated.prompt_token_len);
-                            prompt_prefill_elapsed_ms = generated.prompt_prefill_elapsed_ms;
-                            generated_decode_elapsed_ms = generated.generated_decode_elapsed_ms;
-                            total_elapsed_ms = generated.total_elapsed_ms;
-                            attention_compression_elapsed_ms =
-                                generated.attention_compression_elapsed_ms;
-                            prefill_chunk_size = generated.prefill_chunk_size;
-                            compressed_prefill_chunk_size = generated.compressed_prefill_chunk_size;
-                            temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
-                            final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
-                            dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
-                            prefill_mode = generated.prefill_mode.clone();
-                            let passed = generated.output.contains(NEEDLE);
-                            if mode == KvCompressMode::Off {
-                                dense_passed = Some(passed);
-                            }
-                            let status = if passed {
-                                CaseStatus::Pass
-                            } else {
-                                CaseStatus::Fail
-                            };
-                            (status, generated.output, None)
-                        }
-                        Err(err) => {
-                            if mode == KvCompressMode::Off {
-                                dense_passed = Some(false);
-                            }
-                            (CaseStatus::Error, String::new(), Some(err.to_string()))
-                        }
-                    };
-                    if mode != KvCompressMode::Off && dense_passed == Some(false) {
-                        status = CaseStatus::Inconclusive;
-                    }
-                    let record = CaseRecord {
-                        model_path: probe.candidate.path.display().to_string(),
-                        resolved_model_path: probe.candidate.resolved_path.display().to_string(),
-                        target_tokens,
-                        prompt_tokens,
-                        generated_tokens,
-                        needle_position: needle_position.to_string(),
-                        mode: mode_name(mode).to_string(),
-                        representatives: rep_case.representatives,
-                        representative_policy: representative_policy_name(rep_case.policy)
-                            .to_string(),
-                        status,
-                        prompt_prefill_elapsed_ms,
-                        generated_decode_elapsed_ms,
-                        total_elapsed_ms,
-                        attention_compression_elapsed_ms,
-                        prefill_tokens_per_sec: tokens_per_sec(
-                            prompt_tokens,
-                            prompt_prefill_elapsed_ms,
-                        ),
-                        decode_tokens_per_sec: tokens_per_sec(
-                            generated_tokens,
-                            generated_decode_elapsed_ms,
-                        ),
-                        prefill_chunk_size,
-                        compressed_prefill_chunk_size,
-                        temporary_dense_kv_bytes,
-                        final_kv_allocated_bytes,
-                        dense_equivalent_kv_bytes,
-                        compression_ratio: match (
-                            dense_equivalent_kv_bytes,
-                            final_kv_allocated_bytes,
+                    for top_blocks_case in top_block_cases(exact_selection_sweep, mode)? {
+                        let top_blocks = top_blocks_case.unwrap_or(16);
+                        let mut prompt_tokens = 0usize;
+                        let mut generated_tokens = 0usize;
+                        let mut prompt_prefill_elapsed_ms = 0u128;
+                        let mut generated_decode_elapsed_ms = 0u128;
+                        let mut total_elapsed_ms = 0u128;
+                        let mut attention_compression_elapsed_ms = None;
+                        let mut prefill_chunk_size = None;
+                        let mut compressed_prefill_chunk_size = None;
+                        let mut temporary_dense_kv_bytes = None;
+                        let mut final_kv_allocated_bytes = None;
+                        let mut dense_equivalent_kv_bytes = None;
+                        let mut prefill_mode = "error".to_string();
+                        let mut selection_summary = None;
+                        let mut needle_block_index = None;
+                        let (mut status, output, error) = match run_retrieval_case(
+                            &mut model,
+                            &tokenizer,
+                            target_tokens,
+                            needle_position,
+                            mode,
+                            rep_case,
+                            top_blocks,
                         ) {
-                            (Some(dense), Some(actual)) if actual > 0 => {
-                                Some(dense as f64 / actual as f64)
+                            Ok((generated, _preformatted_prompt_tokens, needle_block)) => {
+                                prompt_tokens = generated.prompt_token_len;
+                                generated_tokens = generated
+                                    .token_ids
+                                    .len()
+                                    .saturating_sub(generated.prompt_token_len);
+                                prompt_prefill_elapsed_ms = generated.prompt_prefill_elapsed_ms;
+                                generated_decode_elapsed_ms = generated.generated_decode_elapsed_ms;
+                                total_elapsed_ms = generated.total_elapsed_ms;
+                                attention_compression_elapsed_ms =
+                                    generated.attention_compression_elapsed_ms;
+                                prefill_chunk_size = generated.prefill_chunk_size;
+                                compressed_prefill_chunk_size =
+                                    generated.compressed_prefill_chunk_size;
+                                temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
+                                final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
+                                dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
+                                prefill_mode = generated.prefill_mode.clone();
+                                selection_summary = generated.kv_selection.clone();
+                                needle_block_index = needle_block;
+                                let passed = generated.output.contains(NEEDLE);
+                                if mode == KvCompressMode::Off {
+                                    dense_passed = Some(passed);
+                                }
+                                let status = if passed {
+                                    CaseStatus::Pass
+                                } else {
+                                    CaseStatus::Fail
+                                };
+                                (status, generated.output, None)
                             }
-                            _ => None,
-                        },
-                        prefill_mode,
-                        output,
-                        error,
-                    };
-                    append_report_record(&record)?;
-                    records.push(record);
+                            Err(err) => {
+                                if mode == KvCompressMode::Off {
+                                    dense_passed = Some(false);
+                                }
+                                (CaseStatus::Error, String::new(), Some(err.to_string()))
+                            }
+                        };
+                        if mode != KvCompressMode::Off && dense_passed == Some(false) {
+                            status = CaseStatus::Inconclusive;
+                        }
+                        let selected_block_indices = selection_summary
+                            .as_ref()
+                            .map(|summary| summary.selected_block_indices.clone());
+                        let needle_block_selected = needle_block_index.map(|needle| {
+                            selected_block_indices
+                                .as_ref()
+                                .is_some_and(|selected| selected.contains(&needle))
+                        });
+                        let needle_block_rank = needle_block_index.and_then(|needle| {
+                            selected_block_indices.as_ref().and_then(|selected| {
+                                selected
+                                    .iter()
+                                    .position(|block| *block == needle)
+                                    .map(|rank| rank as u32)
+                            })
+                        });
+                        let total_old_blocks = selection_summary
+                            .as_ref()
+                            .map(|summary| summary.total_old_blocks);
+                        let record = CaseRecord {
+                            model_path: probe.candidate.path.display().to_string(),
+                            resolved_model_path: probe
+                                .candidate
+                                .resolved_path
+                                .display()
+                                .to_string(),
+                            target_tokens,
+                            prompt_tokens,
+                            generated_tokens,
+                            needle_position: needle_position.to_string(),
+                            mode: mode_name(mode).to_string(),
+                            representatives: rep_case.representatives,
+                            representative_policy: representative_policy_name(rep_case.policy)
+                                .to_string(),
+                            status,
+                            prompt_prefill_elapsed_ms,
+                            generated_decode_elapsed_ms,
+                            total_elapsed_ms,
+                            attention_compression_elapsed_ms,
+                            prefill_tokens_per_sec: tokens_per_sec(
+                                prompt_tokens,
+                                prompt_prefill_elapsed_ms,
+                            ),
+                            decode_tokens_per_sec: tokens_per_sec(
+                                generated_tokens,
+                                generated_decode_elapsed_ms,
+                            ),
+                            prefill_chunk_size,
+                            compressed_prefill_chunk_size,
+                            temporary_dense_kv_bytes,
+                            final_kv_allocated_bytes,
+                            dense_equivalent_kv_bytes,
+                            compression_ratio: match (
+                                dense_equivalent_kv_bytes,
+                                final_kv_allocated_bytes,
+                            ) {
+                                (Some(dense), Some(actual)) if actual > 0 => {
+                                    Some(dense as f64 / actual as f64)
+                                }
+                                _ => None,
+                            },
+                            prefill_mode,
+                            top_blocks: top_blocks_case,
+                            needle_block_index,
+                            selected_block_indices,
+                            needle_block_selected,
+                            needle_block_rank,
+                            total_old_blocks,
+                            output,
+                            error,
+                        };
+                        append_report_record(&record)?;
+                        records.push(record);
+                    }
                 }
             }
         }

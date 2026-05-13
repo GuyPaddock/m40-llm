@@ -14,6 +14,7 @@ pub mod generate;
 #[cfg(feature = "gguf_ext")]
 pub mod gguf_ext;
 pub mod kv_compression;
+pub mod kv_selection;
 pub mod model;
 pub mod profile;
 pub mod sampling;

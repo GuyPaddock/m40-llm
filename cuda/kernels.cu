@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
+#include <vector>
 #include "common.h"
 
 struct M40llmPersistentDecode;
@@ -3890,6 +3892,88 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             err = cudaMemcpy(out_rep_positions, kv->d_rep_positions + rep_pos_base, rep_positions * sizeof(uint32_t), cudaMemcpyDeviceToHost);
             if (err != cudaSuccess) return -15;
         }
+        return 0;
+    }
+
+    int m40llm_kvcache_debug_select_old_blocks(M40llmCudaContext* ctx,
+                                                const M40llmKVCache* kv,
+                                                uint32_t seq_id,
+                                                const void* q_dev_f32,
+                                                uint32_t q_heads,
+                                                uint32_t seq_len,
+                                                uint32_t recent_window,
+                                                uint32_t block_size,
+                                                uint32_t top_blocks,
+                                                uint32_t* out_blocks_host,
+                                                uint32_t* out_count,
+                                                uint32_t max_out,
+                                                uint32_t* out_total_old_blocks) {
+        if (!ctx || !kv || !q_dev_f32 || !out_blocks_host || !out_count || !out_total_old_blocks) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim != 64) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len || block_size == 0 || max_out == 0) return -4;
+
+        const uint32_t effective_recent = kv->compressed ? kv->recent_window : recent_window;
+        const uint32_t effective_block = kv->compressed ? kv->block_size : block_size;
+        if (effective_recent == 0 || effective_block == 0) return -5;
+        const uint32_t old_len = seq_len > effective_recent ? seq_len - effective_recent : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + effective_block - 1) / effective_block;
+        *out_total_old_blocks = old_blocks;
+        *out_count = 0;
+        if (old_blocks == 0) return 0;
+
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -6;
+
+        float q[64];
+        err = cudaMemcpy(q, q_dev_f32, sizeof(q), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -7;
+
+        std::vector<std::pair<float, uint32_t>> scored;
+        scored.reserve(old_blocks);
+        __half k_buf[64];
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const float scale = 0.125f;
+
+        for (uint32_t block = 0; block < old_blocks; ++block) {
+            float score = 0.0f;
+            if (kv->compressed) {
+                const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                err = cudaMemcpy(k_buf, kv->d_summary_k + offset, sizeof(k_buf), cudaMemcpyDeviceToHost);
+                if (err != cudaSuccess) return -8;
+                for (uint32_t d = 0; d < 64; ++d) {
+                    score += q[d] * __half2float(k_buf[d]);
+                }
+            } else {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                float mean_k[64] = {0.0f};
+                for (uint32_t pos = start; pos < end; ++pos) {
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * elems_per_token;
+                    err = cudaMemcpy(k_buf, kv->d_k + offset, sizeof(k_buf), cudaMemcpyDeviceToHost);
+                    if (err != cudaSuccess) return -9;
+                    for (uint32_t d = 0; d < 64; ++d) {
+                        mean_k[d] += __half2float(k_buf[d]);
+                    }
+                }
+                const float inv_count = 1.0f / (float)(end - start);
+                for (uint32_t d = 0; d < 64; ++d) {
+                    score += q[d] * (mean_k[d] * inv_count);
+                }
+            }
+            scored.emplace_back(score * scale, block);
+        }
+
+        std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+            if (a.first == b.first) return a.second < b.second;
+            return a.first > b.first;
+        });
+        const uint32_t requested = top_blocks == 0 ? old_blocks : std::min(top_blocks, old_blocks);
+        const uint32_t selected = std::min(requested, max_out);
+        for (uint32_t i = 0; i < selected; ++i) {
+            out_blocks_host[i] = scored[i].second;
+        }
+        *out_count = selected;
         return 0;
     }
 

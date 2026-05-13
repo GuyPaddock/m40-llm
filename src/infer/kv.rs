@@ -1,6 +1,7 @@
 use super::LoadedModel;
 use crate::cuda::KVCache;
 use crate::kv_compression::{runtime_config, KvCompressMode, KvCompressionConfig};
+use crate::kv_selection;
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
@@ -385,6 +386,20 @@ impl LoadedModel {
             }
             #[cfg(feature = "cuda")]
             unsafe {
+                if kv_selection::enabled() {
+                    if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        compression.top_blocks,
+                    ) {
+                        kv_selection::record(&blocks, total_old_blocks, compression.top_blocks);
+                    }
+                }
                 return kv.attention_last_token_f32_gqa_block_select_exact_async(
                     &self.cuda,
                     seq_id,
@@ -411,6 +426,20 @@ impl LoadedModel {
                 } else {
                     compression.top_blocks
                 };
+                if kv_selection::enabled() {
+                    if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        top_blocks,
+                    ) {
+                        kv_selection::record(&blocks, total_old_blocks, top_blocks);
+                    }
+                }
                 return kv.attention_last_token_f32_gqa_block_summary_lossy_async(
                     &self.cuda,
                     seq_id,

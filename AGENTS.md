@@ -198,9 +198,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   2048-token old/recent retrieval still fails for `block-summary` and
   `block-select-lossy` at reps 0/1/2/4 with `last`, while dense `off` passes.
   4096 representative rows were skipped because 2048 already fails decisively.
-- Next: stop increasing representative count for now. Investigate a better
-  compressed attention strategy, likely using summary scores as an index for
-  exact block retrieval or more informative representative selection, before
+  `M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1` now enables a diagnostic sweep
+  with block-selection telemetry. JSONL rows include `needle_block_index`,
+  `selected_block_indices`, `needle_block_selected`, `needle_block_rank`,
+  `total_old_blocks`, and `top_blocks`. A 2048-token top-4 diagnostic on
+  Llama-3.2-1B shows dense `off` and `block-select-exact` pass, while
+  `block-summary` and `block-select-lossy` fail even when the old needle block
+  is selected at rank 0; for recent needles, lossy modes fail despite the target
+  living in the exact recent window. Treat this as evidence that current lossy
+  summaries/reps are the bottleneck rather than sparse block selection.
+- Next: do not increase representative count further. Investigate alternative
+  lossy summary designs or attention weighting/masking behavior before
   expanding compressed KV into server scheduling.
 
 ## Strict Reconciled Task Order

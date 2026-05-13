@@ -258,6 +258,25 @@ int m40llm_attention_last_token_f32_gqa_batched(
     (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
 }
 
+int m40llm_kvcache_debug_select_old_blocks(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    uint32_t recent_window,
+    uint32_t block_size,
+    uint32_t top_blocks,
+    uint32_t* out_blocks_host,
+    uint32_t* out_count,
+    uint32_t max_out,
+    uint32_t* out_total_old_blocks) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len;
+    (void)recent_window; (void)block_size; (void)top_blocks; (void)out_blocks_host;
+    (void)out_count; (void)max_out; (void)out_total_old_blocks; return -1;
+}
+
 int m40llm_attention_last_token_f32_gqa_batched_async(
     M40llmCudaContext* ctx,
     const M40llmKVCache* kv,
