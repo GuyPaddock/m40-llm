@@ -1,5 +1,24 @@
 // src/cli.rs
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KvCompressModeArg {
+    Off,
+    BlockSelectExact,
+    BlockSummary,
+    BlockSelectLossy,
+}
+
+impl From<KvCompressModeArg> for crate::kv_compression::KvCompressMode {
+    fn from(value: KvCompressModeArg) -> Self {
+        match value {
+            KvCompressModeArg::Off => Self::Off,
+            KvCompressModeArg::BlockSelectExact => Self::BlockSelectExact,
+            KvCompressModeArg::BlockSummary => Self::BlockSummary,
+            KvCompressModeArg::BlockSelectLossy => Self::BlockSelectLossy,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "m40-llm")]
@@ -43,6 +62,21 @@ pub enum Commands {
         /// If set, abort if the active device is not sm_52 (Tesla M40)
         #[arg(long, default_value_t = false)]
         require_sm52: bool,
+        /// Experimental compressed KV-cache mode
+        #[arg(long, value_enum, default_value_t = KvCompressModeArg::Off)]
+        kv_compress_mode: KvCompressModeArg,
+        /// Exact recent KV tokens to preserve in compressed modes
+        #[arg(long, default_value_t = 1024)]
+        kv_recent_window: u32,
+        /// Older-context block size for compressed KV modes
+        #[arg(long, default_value_t = 32)]
+        kv_compress_block: u32,
+        /// Number of old blocks selected by block-select modes
+        #[arg(long, default_value_t = 16)]
+        kv_compress_top_blocks: u32,
+        /// Representative tokens retained per old block in lossy modes
+        #[arg(long, default_value_t = 2)]
+        kv_compress_representatives: u32,
     },
 
     /// Run the HTTP server for a local model name or GGUF path
@@ -61,7 +95,7 @@ pub enum Commands {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands};
+    use super::{Cli, Commands, KvCompressModeArg};
     use clap::Parser;
 
     #[test]
@@ -88,6 +122,11 @@ mod tests {
                 top_k,
                 seed,
                 require_sm52,
+                kv_compress_mode,
+                kv_recent_window,
+                kv_compress_block,
+                kv_compress_top_blocks,
+                kv_compress_representatives,
                 ..
             } => {
                 assert_eq!(model, "tiny.gguf");
@@ -96,6 +135,11 @@ mod tests {
                 assert_eq!(top_k, Some(1));
                 assert_eq!(seed, Some(7));
                 assert!(require_sm52);
+                assert_eq!(kv_compress_mode, KvCompressModeArg::Off);
+                assert_eq!(kv_recent_window, 1024);
+                assert_eq!(kv_compress_block, 32);
+                assert_eq!(kv_compress_top_blocks, 16);
+                assert_eq!(kv_compress_representatives, 2);
             }
             other => panic!("expected generate command, got {other:?}"),
         }

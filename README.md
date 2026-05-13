@@ -112,6 +112,22 @@ M40LLM_ENABLE_CUBLAS=1 cargo run \
 The command prints generated text only; it does not echo the prompt. It uses the
 same non-streaming decode helper as `POST /generate`.
 
+Experimental compressed KV-cache flags are available on CLI generation, but the
+default remains dense exact KV:
+
+```bash
+--kv-compress-mode off|block-select-exact|block-summary|block-select-lossy
+--kv-recent-window 1024
+--kv-compress-block 32
+--kv-compress-top-blocks 16
+--kv-compress-representatives 2
+```
+
+`block-select-exact` is the validation-first sparse selection mode: it keeps old
+exact KV available while testing whether block summaries are a useful index.
+Lossy modes are experimental and must pass long-context retrieval smoke tests
+before they should be used for quality-sensitive generation.
+
 ## Tests
 - CPU‑only mode: `cargo test --no-default-features` runs all non‑CUDA tests.
 - CUDA mode (`--features cuda`): CUDA smoke and GEMM tests run when the environment has CUDA headers, and additional GEMM/cuBLAS tests run when the build detects `cublas_v2.h`. Tests rely on `nvcc` being present because the build fails without it when CUDA is enabled.

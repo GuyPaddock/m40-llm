@@ -6,6 +6,7 @@ use crate::decode::{decode_loop_with, StoppingCriteria};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
+use crate::kv_compression::KvCompressionConfig;
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
 use crate::tokenizer::Tokenizer;
@@ -21,6 +22,7 @@ pub struct GenerateOptions {
     pub log_prefix: &'static str,
     pub sequence_id: u32,
     pub reset_kv_cache: bool,
+    pub kv_compression: KvCompressionConfig,
 }
 
 impl Default for GenerateOptions {
@@ -35,6 +37,7 @@ impl Default for GenerateOptions {
             log_prefix: "generate",
             sequence_id: 0,
             reset_kv_cache: true,
+            kv_compression: KvCompressionConfig::default(),
         }
     }
 }
@@ -131,6 +134,11 @@ fn log_top_logits(logits: &[f32], k: usize, log_prefix: &str) {
 
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
     let total_start = std::time::Instant::now();
+    options.kv_compression.validate()?;
+    #[cfg(not(feature = "cuda"))]
+    if options.kv_compression.mode.is_enabled() {
+        anyhow::bail!("compressed KV cache modes require the cuda feature");
+    }
     #[cfg(feature = "cuda")]
     eprintln!(
         "[mem] (start) pid={} device_id={} TOTAL_DEVICE_BYTES={}",

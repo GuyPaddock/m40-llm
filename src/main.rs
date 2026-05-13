@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use m40_llm::cli::{Cli, Commands};
 use m40_llm::generate::{generate_text, GenerateOptions};
+use m40_llm::kv_compression::KvCompressionConfig;
 #[cfg(not(feature = "server"))]
 #[allow(unused_imports)]
 use m40_llm::{gguf, infer, model};
@@ -57,6 +58,11 @@ async fn main() -> Result<()> {
             seed,
             device_id,
             require_sm52,
+            kv_compress_mode,
+            kv_recent_window,
+            kv_compress_block,
+            kv_compress_top_blocks,
+            kv_compress_representatives,
         } => {
             let local = model::resolve_model_arg(&model)?;
             let gguf_bytes = fs::read(&local.path)?;
@@ -92,6 +98,13 @@ async fn main() -> Result<()> {
                     log_prefix: "cli",
                     sequence_id: 0,
                     reset_kv_cache: true,
+                    kv_compression: KvCompressionConfig {
+                        mode: kv_compress_mode.into(),
+                        recent_window: kv_recent_window,
+                        block_size: kv_compress_block,
+                        top_blocks: kv_compress_top_blocks,
+                        representatives: kv_compress_representatives,
+                    },
                 },
             )?;
             print!("{}", generated.output);

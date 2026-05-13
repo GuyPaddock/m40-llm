@@ -120,6 +120,7 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         log_prefix,
         sequence_id: 0,
         reset_kv_cache: true,
+        kv_compression: Default::default(),
     }
 }
 
