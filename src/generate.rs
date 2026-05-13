@@ -6,7 +6,7 @@ use crate::decode::{decode_loop_with, StoppingCriteria};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::kv_compression::KvCompressionConfig;
+use crate::kv_compression::{set_runtime_config, KvCompressionConfig};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
 use crate::tokenizer::Tokenizer;
@@ -135,6 +135,7 @@ fn log_top_logits(logits: &[f32], k: usize, log_prefix: &str) {
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
     let total_start = std::time::Instant::now();
     options.kv_compression.validate()?;
+    set_runtime_config(options.kv_compression.clone());
     #[cfg(not(feature = "cuda"))]
     if options.kv_compression.mode.is_enabled() {
         anyhow::bail!("compressed KV cache modes require the cuda feature");

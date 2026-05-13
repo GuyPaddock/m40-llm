@@ -319,6 +319,18 @@ mod ffi {
             d_seq_len: *const u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_batched(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -2682,6 +2694,46 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues experimental exact block-select GQA attention on the decode stream.
+    /// Full exact KV remains allocated; only the attention read set is sparse.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact");
         Ok(())
     }
 

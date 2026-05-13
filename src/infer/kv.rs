@@ -1,5 +1,6 @@
 use super::LoadedModel;
 use crate::cuda::KVCache;
+use crate::kv_compression::{runtime_config, KvCompressMode};
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
@@ -328,6 +329,31 @@ impl LoadedModel {
                 head_dim
             );
         }
+        let compression = runtime_config();
+        if compression.mode == KvCompressMode::BlockSelectExact {
+            if head_dim != 64 {
+                anyhow::bail!("block-select-exact requires head_dim=64");
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                return kv.attention_last_token_f32_gqa_block_select_exact_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    compression.block_size,
+                    compression.top_blocks,
+                    d_out,
+                );
+            }
+        } else if compression.mode.is_enabled() {
+            anyhow::bail!(
+                "KV compression mode {:?} is not implemented in decode attention yet",
+                compression.mode
+            );
+        }
         #[cfg(feature = "cuda")]
         unsafe {
             kv.attention_last_token_f32_gqa_async(
@@ -413,6 +439,83 @@ impl LoadedModel {
     ) -> Result<()> {
         let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
         self.run_attention(d_q, d_out, physical_slot, seq_len, dim, num_heads, head_dim)
+    }
+
+    /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA
+    /// attention. This experimental path keeps exact old KV and sparsifies only
+    /// the read set.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn run_attention_block_select_exact_for_layer_async(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        layer_id: u32,
+        sequence_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+    ) -> Result<()> {
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention_block_select_exact: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
+            anyhow::bail!(
+                "run_attention_block_select_exact: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        #[cfg(feature = "cuda")]
+        unsafe {
+            kv.attention_last_token_f32_gqa_block_select_exact_async(
+                &self.cuda,
+                physical_slot,
+                d_q,
+                num_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q,
+                d_out,
+                physical_slot,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+            );
+            Ok(())
+        }
     }
 
     /// # Safety

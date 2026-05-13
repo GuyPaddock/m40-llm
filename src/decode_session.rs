@@ -380,7 +380,10 @@ impl DecodeSession {
     ) -> Result<usize> {
         let seq_len = (token_idx + 1) as u32;
         self.last_forward_used_graph = false;
-        if self.graph_disabled || !decode_graph_enabled() {
+        if self.graph_disabled
+            || !decode_graph_enabled()
+            || crate::kv_compression::runtime_config().mode.is_enabled()
+        {
             return (*self.model).forward_one_token_all_layers_for_sequence(
                 self.d_x.as_ptr(),
                 self.sequence_id,

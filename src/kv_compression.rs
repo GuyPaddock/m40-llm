@@ -52,3 +52,19 @@ impl KvCompressionConfig {
         Ok(())
     }
 }
+
+static RUNTIME_CONFIG: OnceLock<Mutex<KvCompressionConfig>> = OnceLock::new();
+
+pub fn set_runtime_config(config: KvCompressionConfig) {
+    let cell = RUNTIME_CONFIG.get_or_init(|| Mutex::new(KvCompressionConfig::default()));
+    *cell.lock().expect("kv compression runtime config lock") = config;
+}
+
+pub fn runtime_config() -> KvCompressionConfig {
+    RUNTIME_CONFIG
+        .get_or_init(|| Mutex::new(KvCompressionConfig::default()))
+        .lock()
+        .expect("kv compression runtime config lock")
+        .clone()
+}
+use std::sync::{Mutex, OnceLock};
