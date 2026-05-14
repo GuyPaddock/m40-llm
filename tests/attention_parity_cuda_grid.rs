@@ -3,7 +3,8 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::KVCache;
+use half::f16;
+use m40_llm::cuda::{ffi_debug_read_kv_token, KVCache};
 use m40_llm::kv_compression::{
     set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
 };
@@ -13,6 +14,40 @@ fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
     vals.iter()
         .map(|&x| half::f16::from_f32(x).to_f32())
         .collect()
+}
+
+fn f16_words_to_f32(vals: &[u16]) -> Vec<f32> {
+    vals.iter().map(|&x| f16::from_bits(x).to_f32()).collect()
+}
+
+fn read_dense_kv_token(
+    ctx: &m40_llm::cuda::CudaContext,
+    kv: &KVCache,
+    token: u32,
+    elems_per_token: usize,
+) -> (Vec<u16>, Vec<u16>) {
+    let mut k_bytes = vec![0u8; elems_per_token * 2];
+    let mut v_bytes = vec![0u8; elems_per_token * 2];
+    let rc = unsafe {
+        ffi_debug_read_kv_token(
+            ctx,
+            kv,
+            0,
+            token,
+            k_bytes.as_mut_ptr(),
+            v_bytes.as_mut_ptr(),
+        )
+    };
+    assert_eq!(rc, 0, "ffi_debug_read_kv_token failed for token {token}");
+    let k = k_bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    let v = v_bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    (k, v)
 }
 
 #[test]
@@ -518,6 +553,233 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
             "recent-only mismatch at {idx}: dense={a} recent_only={c}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn compressed_kv_recent_ring_matches_dense_window_after_wrap() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let max_seq_len = 32u32;
+    let seq_len = 18u32;
+    let recent_window = 7u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let dense = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+    let compressed_seq = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+        KvRepresentativePolicy::Last,
+    )?;
+    let compressed_built = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+        KvRepresentativePolicy::Last,
+    )?;
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 17 + i * 5) as f32).sin() * 0.08 + (i as f32) * 0.0003)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 19 + i * 7) as f32).cos() * 0.07 - (i as f32) * 0.0002)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            dense.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            compressed_seq.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+    compressed_built.build_compressed_from_dense(&ctx, &dense, seq_len)?;
+
+    let seq_snapshot = compressed_seq.debug_compressed_snapshot(&ctx, 0)?;
+    let built_snapshot = compressed_built.debug_compressed_snapshot(&ctx, 0)?;
+    assert_eq!(seq_snapshot.seq_len, seq_len);
+    assert_eq!(built_snapshot.seq_len, seq_len);
+
+    let sampled_positions = [
+        seq_len - recent_window,
+        seq_len - recent_window + 1,
+        seq_len - 2,
+        seq_len - 1,
+    ];
+    for pos in sampled_positions {
+        let ring = (pos % recent_window) as usize;
+        let base = ring * kv_dim;
+        let (dense_k, dense_v) = read_dense_kv_token(&ctx, &dense, pos, kv_dim);
+        for i in 0..kv_dim {
+            assert_eq!(
+                seq_snapshot.recent_k_f16[base + i],
+                dense_k[i],
+                "sequential compressed K mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                seq_snapshot.recent_v_f16[base + i],
+                dense_v[i],
+                "sequential compressed V mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                built_snapshot.recent_k_f16[base + i],
+                dense_k[i],
+                "built compressed K mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                built_snapshot.recent_v_f16[base + i],
+                dense_v[i],
+                "built compressed V mismatch pos={pos} ring={ring} elem={i}"
+            );
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0009 - 0.04).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense_window = ctx.device_malloc(bytes_q)?;
+    let d_seq_recent = ctx.device_malloc(bytes_q)?;
+    let d_built_recent = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        dense.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            d_dense_window,
+        )?;
+        compressed_seq.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_seq_recent,
+        )?;
+        compressed_built.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_built_recent,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense_window = vec![0f32; q_dim];
+    let mut seq_recent = vec![0f32; q_dim];
+    let mut built_recent = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense_window.as_mut_ptr() as *mut c_void,
+            d_dense_window as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            seq_recent.as_mut_ptr() as *mut c_void,
+            d_seq_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            built_recent.as_mut_ptr() as *mut c_void,
+            d_built_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense_window)?;
+        ctx.device_free(d_seq_recent)?;
+        ctx.device_free(d_built_recent)?;
+    }
+
+    for (idx, ((&dense_val, &seq_val), &built_val)) in dense_window
+        .iter()
+        .zip(&seq_recent)
+        .zip(&built_recent)
+        .enumerate()
+    {
+        assert!(
+            (dense_val - seq_val).abs() < 1e-3,
+            "sequential compressed recent attention mismatch at {idx}: dense_window={dense_val} compressed={seq_val}"
+        );
+        assert!(
+            (dense_val - built_val).abs() < 1e-3,
+            "built compressed recent attention mismatch at {idx}: dense_window={dense_val} compressed={built_val}"
+        );
+    }
+
+    let recent_start = (seq_len - recent_window) as usize;
+    let mut recent_k = Vec::new();
+    let mut recent_v = Vec::new();
+    for pos in recent_start..seq_len as usize {
+        let (k, v) = read_dense_kv_token(&ctx, &dense, pos as u32, kv_dim);
+        recent_k.push(f16_words_to_f32(&k));
+        recent_v.push(f16_words_to_f32(&v));
+    }
+    let cpu_ref = cpu_last_token_attention_gqa(
+        &q,
+        &recent_k,
+        &recent_v,
+        q_heads as usize,
+        kv_heads as usize,
+        head_dim as usize,
+    );
+    for (idx, (&dense_val, &ref_val)) in dense_window.iter().zip(&cpu_ref).enumerate() {
+        assert!(
+            (dense_val - ref_val).abs() < 1e-3,
+            "dense recent-window CPU reference mismatch at {idx}: cuda={dense_val} cpu={ref_val}"
+        );
+    }
+
     Ok(())
 }
 

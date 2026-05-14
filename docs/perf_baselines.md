@@ -2365,3 +2365,51 @@ Interpretation:
   dense-window-vs-mode prompt max/mean diff remains large at 2048. The next
   correctness target is therefore the compressed recent-ring construction/read
   path before tuning summaries or representative counts further.
+
+## 2026-05-14: Compressed Recent-Ring Equivalence Check
+
+This checkpoint adds a focused recent-ring equivalence mode for the KV
+compression quality harness. `M40LLM_KV_RECENT_EQUIV_SEQUENTIAL=1` disables
+packed-then-compress for compressed modes and limits the mode matrix to dense
+`off`, `dense-recent-only`, compressed `recent-only`, and `block-select-exact`.
+That makes `dense-recent-only` and compressed `recent-only` comparable under the
+same sequential prefill semantics.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including `compressed_kv_recent_ring_matches_dense_window_after_wrap`.
+- 64-token and 2048-token recent-equivalence quality diagnostics passed. Reports
+  were written to `/tmp/m40llm-kv-recent-equiv-64.jsonl` and
+  `/tmp/m40llm-kv-recent-equiv-2048.jsonl`.
+
+2048 matched-sequential summary:
+
+| Needle | Mode | Status | Prefill mode | Expected rank dense/window/mode | Prompt diff vs window | Output |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| old | off | pass | packed-prefix | 1 / - / 1 | - | `ZXQ-NEEDLE-41729` |
+| old | dense-recent-only | fail | sequential-dense-recent-only | 1 / 100293 / 100293 | 0 / 0, top10=10 | `assistant...` |
+| old | recent-only | fail | sequential-kv-compressed | 1 / 100293 / 100293 | 0 / 0, top10=10 | `assistant...` |
+| old | block-select-exact | pass | packed-prefix-block-select-exact | 1 / 100293 / 1 | 19.270 / 1.892, top10=0 | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | packed-prefix | 1 / - / 1 | - | `ZXQ-NEEDLE-41729` |
+| recent | dense-recent-only | fail | sequential-dense-recent-only | 1 / 115552 / 115552 | 0 / 0, top10=10 | `assistant...` |
+| recent | recent-only | fail | sequential-kv-compressed | 1 / 115552 / 115552 | 0 / 0, top10=10 | `assistant...` |
+| recent | block-select-exact | pass | packed-prefix-block-select-exact | 1 / 115552 / 1 | 18.979 / 1.964, top10=0 | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Compressed `recent-only` exactly matches `dense-recent-only` prompt and
+  first-decode logits at 2048 when both use matching sequential prefill
+  semantics. The recent ring construction, ring slot mapping, candidate order,
+  and recent-only attention path are therefore numerically sound in this mode.
+- The earlier 2048 dense-window-vs-compressed divergence came from comparing
+  sequential dense-window against packed-then-compress compressed prefill
+  semantics, not from recent-ring indexing itself.
+- Both dense-window and compressed recent-only still fail retrieval, while full
+  dense and `block-select-exact` pass. The next architectural direction remains
+  exact selected-block retrieval or an exact-token backing store; summary-only
+  lossy KV should not be tuned further until that path is characterized.

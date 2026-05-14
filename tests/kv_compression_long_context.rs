@@ -73,6 +73,9 @@ struct CaseRecord {
     total_old_blocks: Option<u32>,
     recent_ring_absolute_start: Option<usize>,
     recent_ring_absolute_end: Option<usize>,
+    dense_window_candidate_positions: Option<Vec<usize>>,
+    compressed_recent_candidate_positions: Option<Vec<usize>>,
+    compressed_recent_ring_slots: Option<Vec<usize>>,
     needle_token_absolute_positions: Vec<usize>,
     question_token_absolute_positions: Vec<usize>,
     needle_tokens_in_recent_ring: bool,
@@ -474,6 +477,12 @@ fn exact_selection_sweep_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn recent_equivalence_sequential_enabled() -> bool {
+    std::env::var("M40LLM_KV_RECENT_EQUIV_SEQUENTIAL")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn logit_compare_enabled() -> bool {
     std::env::var("M40LLM_KV_LOGIT_COMPARE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -590,7 +599,14 @@ fn quality_modes(
     lossy_packed_sweep: bool,
     exact_selection_sweep: bool,
 ) -> &'static [KvCompressMode] {
-    if exact_selection_sweep {
+    if recent_equivalence_sequential_enabled() {
+        &[
+            KvCompressMode::Off,
+            KvCompressMode::DenseRecentOnly,
+            KvCompressMode::RecentOnly,
+            KvCompressMode::BlockSelectExact,
+        ]
+    } else if exact_selection_sweep {
         &[
             KvCompressMode::Off,
             KvCompressMode::DenseRecentOnly,
@@ -654,6 +670,7 @@ fn run_retrieval_case(
     top_blocks: u32,
 ) -> Result<(GeneratedText, usize, Option<u32>)> {
     let exact_selection_sweep = exact_selection_sweep_enabled();
+    let recent_equivalence_sequential = recent_equivalence_sequential_enabled();
     let _prefill_guard = if (lossy_packed_sweep_enabled()
         || (exact_selection_sweep
             && matches!(
@@ -675,7 +692,8 @@ fn run_retrieval_case(
     } else {
         None
     };
-    let _packed_then_compress_guard = if (lossy_packed_sweep_enabled() || exact_selection_sweep)
+    let _packed_then_compress_guard = if (lossy_packed_sweep_enabled()
+        || (exact_selection_sweep && !recent_equivalence_sequential))
         && matches!(
             mode,
             KvCompressMode::RecentOnly
@@ -914,6 +932,18 @@ fn top_token_id(logits: &[f32]) -> Option<u32> {
         .map(|(idx, _)| idx as u32)
 }
 
+fn recent_candidate_positions(start: Option<usize>, end: Option<usize>) -> Option<Vec<usize>> {
+    Some((start?..end?).collect())
+}
+
+fn recent_ring_slots(
+    start: Option<usize>,
+    end: Option<usize>,
+    recent_window: usize,
+) -> Option<Vec<usize>> {
+    Some((start?..end?).map(|pos| pos % recent_window).collect())
+}
+
 fn top_token_ids(logits: &[f32], k: usize) -> Vec<u32> {
     let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
     top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
@@ -975,8 +1005,33 @@ fn expected_token_summary(
 fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
+        let dense_candidate_summary =
+            record
+                .dense_window_candidate_positions
+                .as_ref()
+                .map(|positions| {
+                    (
+                        positions.first().copied(),
+                        positions.last().copied(),
+                        positions.len(),
+                    )
+                });
+        let compressed_candidate_summary = record
+            .compressed_recent_candidate_positions
+            .as_ref()
+            .map(|positions| {
+                (
+                    positions.first().copied(),
+                    positions.last().copied(),
+                    positions.len(),
+                )
+            });
+        let compressed_slot_summary = record
+            .compressed_recent_ring_slots
+            .as_ref()
+            .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -988,6 +1043,9 @@ fn print_records(records: &[CaseRecord]) {
             record.status,
             record.recent_ring_absolute_start,
             record.recent_ring_absolute_end,
+            dense_candidate_summary,
+            compressed_candidate_summary,
+            compressed_slot_summary,
             record.needle_token_absolute_positions,
             record.question_token_absolute_positions,
             record.needle_tokens_in_recent_ring,
@@ -1341,6 +1399,49 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             total_old_blocks,
                             recent_ring_absolute_start: position_meta.recent_ring_absolute_start,
                             recent_ring_absolute_end: position_meta.recent_ring_absolute_end,
+                            dense_window_candidate_positions: logit_compare_enabled()
+                                .then(|| {
+                                    recent_candidate_positions(
+                                        position_meta.recent_ring_absolute_start,
+                                        position_meta.recent_ring_absolute_end,
+                                    )
+                                })
+                                .flatten(),
+                            compressed_recent_candidate_positions: logit_compare_enabled()
+                                .then(|| {
+                                    if matches!(
+                                        mode,
+                                        KvCompressMode::RecentOnly
+                                            | KvCompressMode::BlockSummary
+                                            | KvCompressMode::BlockSelectLossy
+                                    ) {
+                                        recent_candidate_positions(
+                                            position_meta.recent_ring_absolute_start,
+                                            position_meta.recent_ring_absolute_end,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .flatten(),
+                            compressed_recent_ring_slots: logit_compare_enabled()
+                                .then(|| {
+                                    if matches!(
+                                        mode,
+                                        KvCompressMode::RecentOnly
+                                            | KvCompressMode::BlockSummary
+                                            | KvCompressMode::BlockSelectLossy
+                                    ) {
+                                        recent_ring_slots(
+                                            position_meta.recent_ring_absolute_start,
+                                            position_meta.recent_ring_absolute_end,
+                                            1024,
+                                        )
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .flatten(),
                             needle_token_absolute_positions: position_meta
                                 .needle_token_absolute_positions
                                 .clone(),

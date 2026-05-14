@@ -126,6 +126,18 @@ include dense-vs-mode max/mean logit differences, top-10 overlap, top token
 IDs, and the expected first answer token's rank/logit when it can be derived
 from the tokenizer. Rows after `dense-recent-only` also include dense-window-vs
 mode prompt/first-decode differences and dense-window expected-token rank/logit.
+For compressed modes, the same JSONL records include dense-window candidate
+absolute positions, compressed recent candidate absolute positions, and physical
+ring slots so recent-ring ordering can be compared directly. The stderr table
+prints concise first/last/count summaries for these arrays; use JSONL for the
+full position list.
+
+`M40LLM_KV_RECENT_EQUIV_SEQUENTIAL=1` disables packed-then-compress for
+compressed modes during exact-selection quality diagnostics. Use it when
+comparing `dense-recent-only` and compressed `recent-only` under matching
+sequential prefill semantics. In this mode the harness limits the mode matrix
+to dense `off`, `dense-recent-only`, compressed `recent-only`, and
+`block-select-exact`.
 
 JSONL rows also include absolute-position diagnostics:
 
