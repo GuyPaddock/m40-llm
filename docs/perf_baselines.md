@@ -2528,3 +2528,76 @@ Interpretation:
   performs an extra gather kernel. The useful result is data-flow correctness;
   the next performance step is persistent/reusable staging buffers, then q8
   exact-old backing that dequantizes selected blocks into those buffers.
+
+## 2026-05-14: Reusable Exact-Block Staging Workspace
+
+`M40LLM_KV_EXACT_BLOCK_STAGING=1` now allocates reusable staging buffers in
+`DecodeSession` for `block-select-exact` instead of allocating/freeing the
+compact K/V, position, and count buffers inside each attention call. Low-level
+callers can still use the older allocation-owning wrapper, but normal quality
+harness generation goes through the caller-owned workspace path.
+
+Workspace shape:
+
+- staged K buffer: `q_heads * capacity_tokens * head_dim * f16`
+- staged V buffer: same shape
+- staged absolute positions: `q_heads * capacity_tokens * u32`
+- staged counts: `q_heads * u32`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- 2048-token reusable-staged exact-block retrieval sweep passed as a test run.
+  The JSONL report was written to
+  `/tmp/m40llm-kv-exact-block-reusable-staged-2048.jsonl`.
+
+Command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
+M40LLM_KV_EXACT_BLOCK_STAGING=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4,8,16 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-reusable-staged-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+Reusable staged 2048 summary:
+
+| Needle | Top blocks | Status | Decode | Active KV tokens | Active KV all layers | Workspace reused | Workspace capacity | Workspace bytes | Workspace allocations | Output |
+| --- | ---: | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
+| old | off | pass | 6.191 s | 2019 | 63.09 MiB | no | - | - | 0 | `ZXQ-NEEDLE-41729` |
+| old | 1 | fail | 4.424 s | 1056 | 33.00 MiB | yes | 1056 | 8.38 MiB | 1 | `ZXQNEDE-417` |
+| old | 2 | pass | 6.774 s | 1088 | 34.00 MiB | yes | 1088 | 8.63 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| old | 4 | pass | 7.027 s | 1152 | 36.00 MiB | yes | 1152 | 9.14 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| old | 8 | pass | 7.567 s | 1280 | 40.00 MiB | yes | 1280 | 10.16 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 8.643 s | 1536 | 48.00 MiB | yes | 1536 | 12.19 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | 6.162 s | 2034 | 63.56 MiB | no | - | - | 0 | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 0.741 s | 1056 | 33.00 MiB | yes | 1056 | 8.38 MiB | 1 | `ZX` |
+| recent | 2 | pass | 6.808 s | 1088 | 34.00 MiB | yes | 1088 | 8.63 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | 7.069 s | 1152 | 36.00 MiB | yes | 1152 | 9.14 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| recent | 8 | pass | 7.608 s | 1280 | 40.00 MiB | yes | 1280 | 10.16 MiB | 1 | `ZXQ-NEEDLE-41729` |
+| recent | 16 | pass | 8.697 s | 1536 | 48.00 MiB | yes | 1536 | 12.19 MiB | 1 | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Reusable staging preserves the known behavior: `top_blocks=1` fails and
+  `top_blocks>=2` passes for both 2048 old and recent needles.
+- The quality harness confirms `staged_workspace_reused=true` and
+  `staged_workspace_allocations=1` for every staged row.
+- Decode time improves modestly versus the allocation-owning staged prototype
+  but remains slower than direct block-select-exact for passing rows because the
+  gather kernel still stages FP16 K/V before attention.
+- The next task should be q8 exact-old backing that dequantizes selected old
+  blocks into this reusable staging workspace.

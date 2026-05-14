@@ -118,13 +118,17 @@ compares dense `off` with `block-select-exact`, and defaults
 - `active_attended_recent_tokens`
 
 `M40LLM_KV_EXACT_BLOCK_STAGING=1` keeps `block-select-exact` semantics but
-first gathers selected exact old K/V plus recent exact K/V into temporary
-compact device buffers, then attends over that staged working set. This is a
-diagnostic bridge to a future q8 exact-old backing store; it is not expected to
-be faster while it still allocates temporary staging buffers per attention call.
-JSONL rows include:
+first gathers selected exact old K/V plus recent exact K/V into compact device
+buffers, then attends over that staged working set. `DecodeSession` allocates a
+reusable staging workspace for this mode; low-level callers without a session
+can still fall back to the older per-call temporary allocation path. This is a
+diagnostic bridge to a future q8 exact-old backing store. JSONL rows include:
 
 - `exact_block_staging_enabled`
+- `staged_workspace_reused`
+- `staged_workspace_bytes`
+- `staged_workspace_capacity_tokens`
+- `staged_workspace_allocations`
 - `staged_kv_tokens`
 - `staged_kv_bytes`
 - `staged_old_tokens`

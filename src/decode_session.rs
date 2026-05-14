@@ -1,7 +1,9 @@
 #[cfg(feature = "cuda")]
 use crate::cuda::KVCache;
 #[cfg(feature = "cuda")]
-use crate::cuda::{CudaContext, CudaGraphExec, CudaStream, DeviceBuffer};
+use crate::cuda::{
+    CudaContext, CudaGraphExec, CudaStream, DeviceBuffer, ExactBlockStagingWorkspace,
+};
 #[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
 #[cfg(feature = "cuda")]
@@ -28,6 +30,7 @@ pub struct DecodeSession {
     d_norm_hidden: Option<DeviceBuffer>,
     d_graph_position: Option<DeviceBuffer>,
     d_graph_seq_len: Option<DeviceBuffer>,
+    exact_block_staging: Option<ExactBlockStagingWorkspace>,
     decode_graph: Option<CudaGraphExec>,
     graph_disabled: bool,
     last_forward_used_graph: bool,
@@ -133,6 +136,26 @@ impl DecodeSession {
             Some((position, seq_len)) => (Some(position), Some(seq_len)),
             None => (None, None),
         };
+        let exact_block_staging = if can_forward && exact_block_staging_enabled() {
+            let kv_cfg = crate::kv_compression::runtime_config();
+            if kv_cfg.mode == crate::kv_compression::KvCompressMode::BlockSelectExact {
+                let requested_tokens = kv_cfg
+                    .recent_window
+                    .saturating_add(kv_cfg.top_blocks.saturating_mul(kv_cfg.block_size))
+                    .max(1);
+                let capacity_tokens = requested_tokens.min(model.model_config.context_length);
+                Some(ExactBlockStagingWorkspace::new(
+                    &model.cuda,
+                    model.model_config.attention_head_count,
+                    model.model_config.attention_key_length,
+                    capacity_tokens,
+                )?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ok(Self {
             model: model as *const LoadedModel,
             sequence_id,
@@ -144,6 +167,7 @@ impl DecodeSession {
             d_norm_hidden,
             d_graph_position,
             d_graph_seq_len,
+            exact_block_staging,
             decode_graph: None,
             graph_disabled: false,
             last_forward_used_graph: false,
@@ -190,6 +214,35 @@ impl DecodeSession {
             .as_ref()
             .map(DeviceBuffer::as_mut_ptr)
             .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))
+    }
+
+    pub fn exact_block_staging_workspace_bytes(&self) -> Option<usize> {
+        self.exact_block_staging
+            .as_ref()
+            .map(ExactBlockStagingWorkspace::bytes)
+    }
+
+    pub fn exact_block_staging_capacity_tokens(&self) -> Option<u32> {
+        self.exact_block_staging
+            .as_ref()
+            .map(ExactBlockStagingWorkspace::capacity_tokens)
+    }
+
+    pub fn exact_block_staging_allocations(&self) -> usize {
+        usize::from(self.exact_block_staging.is_some())
+    }
+
+    pub fn exact_block_staging_reused(&self) -> bool {
+        self.exact_block_staging.is_some()
+    }
+
+    fn with_exact_block_staging<R>(&self, f: impl FnOnce() -> Result<R>) -> Result<R> {
+        crate::infer::with_exact_block_staging(
+            self.exact_block_staging
+                .as_ref()
+                .map(ExactBlockStagingWorkspace::ptrs),
+            f,
+        )
     }
 
     pub unsafe fn load_next_unprocessed_token(&mut self, ids: &[u32]) -> Result<Option<usize>> {
@@ -624,12 +677,14 @@ impl DecodeSession {
             || !decode_graph_enabled()
             || crate::kv_compression::runtime_config().mode.is_enabled()
         {
-            return (*self.model).forward_one_token_all_layers_for_sequence(
-                self.d_x.as_ptr(),
-                self.sequence_id,
-                seq_len,
-                d_out,
-            );
+            return self.with_exact_block_staging(|| {
+                (*self.model).forward_one_token_all_layers_for_sequence(
+                    self.d_x.as_ptr(),
+                    self.sequence_id,
+                    seq_len,
+                    d_out,
+                )
+            });
         }
         let position = token_idx as u32;
         let d_position = self
@@ -645,12 +700,14 @@ impl DecodeSession {
         if self.decode_graph.is_none() {
             // Warm once through the normal path so lazy workspace and FP32 weight
             // materialization do not occur inside CUDA stream capture.
-            let warmed_layers = (*self.model).forward_one_token_all_layers_for_sequence(
-                self.d_x.as_ptr(),
-                self.sequence_id,
-                seq_len,
-                d_out,
-            )?;
+            let warmed_layers = self.with_exact_block_staging(|| {
+                (*self.model).forward_one_token_all_layers_for_sequence(
+                    self.d_x.as_ptr(),
+                    self.sequence_id,
+                    seq_len,
+                    d_out,
+                )
+            })?;
             let captured = (*self.model).cuda.capture_graph(CudaStream::Decode, || {
                 (*self.model)
                     .forward_one_token_all_layers_for_sequence_graph_params(
@@ -709,22 +766,26 @@ impl DecodeSession {
                     self.log_prefix
                 );
                 self.graph_disabled = true;
-                return (*self.model).forward_one_token_all_layers_for_sequence(
-                    self.d_x.as_ptr(),
-                    self.sequence_id,
-                    seq_len,
-                    d_out,
-                );
+                return self.with_exact_block_staging(|| {
+                    (*self.model).forward_one_token_all_layers_for_sequence(
+                        self.d_x.as_ptr(),
+                        self.sequence_id,
+                        seq_len,
+                        d_out,
+                    )
+                });
             }
             self.last_forward_used_graph = true;
             Ok((*self.model).model_config.block_count as usize)
         } else {
-            (*self.model).forward_one_token_all_layers_for_sequence(
-                self.d_x.as_ptr(),
-                self.sequence_id,
-                seq_len,
-                d_out,
-            )
+            self.with_exact_block_staging(|| {
+                (*self.model).forward_one_token_all_layers_for_sequence(
+                    self.d_x.as_ptr(),
+                    self.sequence_id,
+                    seq_len,
+                    d_out,
+                )
+            })
         }
     }
 
@@ -756,6 +817,13 @@ impl DecodeSession {
 #[cfg(feature = "cuda")]
 fn decode_graph_enabled() -> bool {
     std::env::var("M40LLM_DECODE_GRAPH")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn exact_block_staging_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }

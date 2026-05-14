@@ -213,13 +213,23 @@ batched decode path before touching persistent decode or large-model fused-dequa
   representative mass, needle-block mass, top attended entries, and logit
   max/mean by group. The 2048 telemetry shows summary probability mass is near
   zero, not excessive, and `recent-only` still fails for the 2048 recent needle
-  while dense and `block-select-exact` pass. The next diagnostic should compare
-  packed-then-compress compressed-recent logits against dense exact logits at
-  2048 and/or capture later-layer attention telemetry before changing summary
-  design.
-- Next: do not increase representative count further. Diagnose compressed
-  recent/prefill equivalence and later-layer exact-old contribution before
-  expanding compressed KV into server scheduling.
+  while dense and `block-select-exact` pass. A dense recent-window diagnostic
+  confirmed that compressed recent-only matches dense recent-window under
+  matching sequential semantics; the recent ring path is numerically sound and
+  long-context retrieval needs exact old context. `block-select-exact` is now
+  the architectural diagnostic for summary-indexed exact-block retrieval. The
+  staged exact-block prototype validates the data flow by gathering selected old
+  exact K/V plus the exact recent window into a compact working set before
+  attention. `DecodeSession` now allocates reusable exact-block staging
+  workspaces when `M40LLM_KV_EXACT_BLOCK_STAGING=1` and
+  `block-select-exact` is active; JSONL rows report
+  `staged_workspace_reused`, workspace capacity/bytes, and one allocation per
+  session. The 2048 reusable-staged sweep preserves the known pass/fail pattern:
+  `top_blocks=1` fails and `top_blocks>=2` passes for old/recent needles.
+- Next: implement q8 exact-old backing that dequantizes selected old blocks into
+  the reusable staging workspace. Do not increase representative count further,
+  tune pure summary modes, or expand compressed KV into server scheduling before
+  q8 backing is characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

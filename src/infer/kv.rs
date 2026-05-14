@@ -1,14 +1,49 @@
 use super::LoadedModel;
+#[cfg(feature = "cuda")]
+use crate::cuda::ExactBlockStagingPtrs;
 use crate::cuda::KVCache;
 use crate::kv_compression::{runtime_config, KvCompressMode, KvCompressionConfig};
 use crate::kv_selection;
 use anyhow::{anyhow, Result};
+#[cfg(feature = "cuda")]
+use std::cell::Cell;
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+thread_local! {
+    static EXACT_BLOCK_STAGING_PTRS: Cell<Option<ExactBlockStagingPtrs>> = const { Cell::new(None) };
+}
 
 fn exact_block_staging_enabled() -> bool {
     std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+pub fn with_exact_block_staging<R>(
+    staging: Option<ExactBlockStagingPtrs>,
+    f: impl FnOnce() -> Result<R>,
+) -> Result<R> {
+    struct Reset(Option<ExactBlockStagingPtrs>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            EXACT_BLOCK_STAGING_PTRS.with(|slot| slot.set(self.0));
+        }
+    }
+
+    let previous = EXACT_BLOCK_STAGING_PTRS.with(|slot| {
+        let previous = slot.get();
+        slot.set(staging);
+        previous
+    });
+    let _reset = Reset(previous);
+    f()
+}
+
+#[cfg(feature = "cuda")]
+fn current_exact_block_staging() -> Option<ExactBlockStagingPtrs> {
+    EXACT_BLOCK_STAGING_PTRS.with(Cell::get)
 }
 
 impl LoadedModel {
@@ -441,6 +476,20 @@ impl LoadedModel {
                     }
                 }
                 if exact_block_staging_enabled() {
+                    if let Some(staging) = current_exact_block_staging() {
+                        return kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                            &self.cuda,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            staging,
+                            d_out,
+                        );
+                    }
                     return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
                         &self.cuda,
                         seq_id,
@@ -696,6 +745,21 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         unsafe {
             if exact_block_staging_enabled() {
+                if let Some(staging) = current_exact_block_staging() {
+                    return kv
+                        .attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                            &self.cuda,
+                            physical_slot,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            staging,
+                            d_out,
+                        );
+                }
                 return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
                     &self.cuda,
                     physical_slot,

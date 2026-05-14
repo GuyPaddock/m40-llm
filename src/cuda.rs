@@ -449,6 +449,23 @@ mod ffi {
             top_blocks: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            staged_k_dev: *mut c_void,
+            staged_v_dev: *mut c_void,
+            staged_positions_dev: *mut c_void,
+            staged_counts_dev: *mut c_void,
+            staged_capacity_tokens: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -669,6 +686,105 @@ impl DeviceBuffer {
 
     pub fn bytes(&self) -> usize {
         self.bytes
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct ExactBlockStagingWorkspace {
+    q_heads: u32,
+    head_dim: u32,
+    capacity_tokens: u32,
+    staged_k: DeviceBuffer,
+    staged_v: DeviceBuffer,
+    staged_positions: DeviceBuffer,
+    staged_counts: DeviceBuffer,
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy)]
+pub struct ExactBlockStagingPtrs {
+    pub staged_k: *mut c_void,
+    pub staged_v: *mut c_void,
+    pub staged_positions: *mut c_void,
+    pub staged_counts: *mut c_void,
+    pub capacity_tokens: u32,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for ExactBlockStagingWorkspace {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for ExactBlockStagingWorkspace {}
+
+#[cfg(feature = "cuda")]
+impl ExactBlockStagingWorkspace {
+    pub fn new(
+        ctx: &CudaContext,
+        q_heads: u32,
+        head_dim: u32,
+        capacity_tokens: u32,
+    ) -> Result<Self> {
+        if q_heads == 0 || head_dim == 0 || capacity_tokens == 0 {
+            anyhow::bail!(
+                "ExactBlockStagingWorkspace invalid shape q_heads={q_heads} head_dim={head_dim} capacity_tokens={capacity_tokens}"
+            );
+        }
+        let elems = (q_heads as usize)
+            .checked_mul(capacity_tokens as usize)
+            .and_then(|v| v.checked_mul(head_dim as usize))
+            .ok_or_else(|| anyhow!("exact block staging element count overflow"))?;
+        let kv_bytes = elems
+            .checked_mul(std::mem::size_of::<half::f16>())
+            .ok_or_else(|| anyhow!("exact block staging K/V byte size overflow"))?;
+        let positions_bytes = (q_heads as usize)
+            .checked_mul(capacity_tokens as usize)
+            .and_then(|v| v.checked_mul(std::mem::size_of::<u32>()))
+            .ok_or_else(|| anyhow!("exact block staging positions byte size overflow"))?;
+        let counts_bytes = (q_heads as usize)
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or_else(|| anyhow!("exact block staging counts byte size overflow"))?;
+        Ok(Self {
+            q_heads,
+            head_dim,
+            capacity_tokens,
+            staged_k: DeviceBuffer::new_tagged(ctx, kv_bytes, "kv_staging:k_f16")?,
+            staged_v: DeviceBuffer::new_tagged(ctx, kv_bytes, "kv_staging:v_f16")?,
+            staged_positions: DeviceBuffer::new_tagged(
+                ctx,
+                positions_bytes,
+                "kv_staging:positions_u32",
+            )?,
+            staged_counts: DeviceBuffer::new_tagged(ctx, counts_bytes, "kv_staging:counts_u32")?,
+        })
+    }
+
+    pub fn ptrs(&self) -> ExactBlockStagingPtrs {
+        ExactBlockStagingPtrs {
+            staged_k: self.staged_k.as_mut_ptr(),
+            staged_v: self.staged_v.as_mut_ptr(),
+            staged_positions: self.staged_positions.as_mut_ptr(),
+            staged_counts: self.staged_counts.as_mut_ptr(),
+            capacity_tokens: self.capacity_tokens,
+        }
+    }
+
+    pub fn q_heads(&self) -> u32 {
+        self.q_heads
+    }
+
+    pub fn head_dim(&self) -> u32 {
+        self.head_dim
+    }
+
+    pub fn capacity_tokens(&self) -> u32 {
+        self.capacity_tokens
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.staged_k.bytes()
+            + self.staged_v.bytes()
+            + self.staged_positions.bytes()
+            + self.staged_counts.bytes()
     }
 }
 
@@ -3413,6 +3529,54 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues diagnostic staged exact block-select GQA attention using
+    /// caller-owned staging buffers. The buffers must be sized for
+    /// `q_heads * staging.capacity_tokens * 64` FP16 K/V entries, positions,
+    /// and per-query-head counts.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        staging: ExactBlockStagingPtrs,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                staging.staged_k,
+                staging.staged_v,
+                staging.staged_positions,
+                staging.staged_counts,
+                staging.capacity_tokens,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged_reuse");
         Ok(())
     }
 

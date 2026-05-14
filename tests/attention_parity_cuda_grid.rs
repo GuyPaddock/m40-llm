@@ -4,7 +4,7 @@ mod cuda_env;
 
 use anyhow::Result;
 use half::f16;
-use m40_llm::cuda::{ffi_debug_read_kv_token, KVCache};
+use m40_llm::cuda::{ffi_debug_read_kv_token, ExactBlockStagingWorkspace, KVCache};
 use m40_llm::kv_compression::{
     set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
 };
@@ -225,6 +225,9 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_dense = ctx.device_malloc(bytes_q)?;
     let d_sparse = ctx.device_malloc(bytes_q)?;
     let d_staged = ctx.device_malloc(bytes_q)?;
+    let staging_capacity_tokens = recent_window + top_blocks * block_size;
+    let staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
         kv.attention_last_token_f32_gqa(&ctx, 0, d_q as *const c_void, q_heads, seq_len, d_dense)?;
@@ -239,7 +242,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             top_blocks,
             d_sparse,
         )?;
-        kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+        kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
             &ctx,
             0,
             d_q as *const c_void,
@@ -248,6 +251,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             recent_window,
             block_size,
             top_blocks,
+            staging.ptrs(),
             d_staged,
         )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;

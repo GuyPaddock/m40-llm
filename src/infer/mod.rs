@@ -22,4 +22,6 @@ pub use batch::{
 };
 #[cfg(feature = "cuda")]
 pub use forward::{ForwardBatchItem, ForwardPrefillSequence};
+#[cfg(feature = "cuda")]
+pub use kv::with_exact_block_staging;
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

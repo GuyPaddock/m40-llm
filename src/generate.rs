@@ -69,6 +69,10 @@ pub struct GeneratedText {
     pub temporary_dense_kv_bytes: Option<usize>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
+    pub staged_workspace_reused: bool,
+    pub staged_workspace_bytes: Option<usize>,
+    pub staged_workspace_capacity_tokens: Option<u32>,
+    pub staged_workspace_allocations: usize,
     pub kv_selection: Option<KvSelectionSummary>,
     pub prompt_logits: Option<Vec<f32>>,
     pub first_decode_logits: Option<Vec<f32>>,
@@ -716,6 +720,22 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .kv_cache
             .as_ref()
             .map(|kv| kv.dense_equivalent_bytes()),
+        #[cfg(feature = "cuda")]
+        staged_workspace_reused: decode_session.exact_block_staging_reused(),
+        #[cfg(not(feature = "cuda"))]
+        staged_workspace_reused: false,
+        #[cfg(feature = "cuda")]
+        staged_workspace_bytes: decode_session.exact_block_staging_workspace_bytes(),
+        #[cfg(not(feature = "cuda"))]
+        staged_workspace_bytes: None,
+        #[cfg(feature = "cuda")]
+        staged_workspace_capacity_tokens: decode_session.exact_block_staging_capacity_tokens(),
+        #[cfg(not(feature = "cuda"))]
+        staged_workspace_capacity_tokens: None,
+        #[cfg(feature = "cuda")]
+        staged_workspace_allocations: decode_session.exact_block_staging_allocations(),
+        #[cfg(not(feature = "cuda"))]
+        staged_workspace_allocations: 0,
         kv_selection: kv_selection::enabled()
             .then(kv_selection::snapshot)
             .flatten(),
