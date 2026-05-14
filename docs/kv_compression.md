@@ -117,6 +117,21 @@ compares dense `off` with `block-select-exact`, and defaults
 - `active_attended_old_block_tokens`
 - `active_attended_recent_tokens`
 
+`M40LLM_KV_EXACT_BLOCK_STAGING=1` keeps `block-select-exact` semantics but
+first gathers selected exact old K/V plus recent exact K/V into temporary
+compact device buffers, then attends over that staged working set. This is a
+diagnostic bridge to a future q8 exact-old backing store; it is not expected to
+be faster while it still allocates temporary staging buffers per attention call.
+JSONL rows include:
+
+- `exact_block_staging_enabled`
+- `staged_kv_tokens`
+- `staged_kv_bytes`
+- `staged_old_tokens`
+- `staged_recent_tokens`
+- `staged_position_min`
+- `staged_position_max`
+
 Attention telemetry records first-captured probability mass by group:
 recent exact tokens, selected exact old tokens, old summaries, representatives,
 and other entries. It also reports top attended entries, needle-block mass when

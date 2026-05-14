@@ -224,6 +224,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_q = ctx.device_malloc(bytes_q)?;
     let d_dense = ctx.device_malloc(bytes_q)?;
     let d_sparse = ctx.device_malloc(bytes_q)?;
+    let d_staged = ctx.device_malloc(bytes_q)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
         kv.attention_last_token_f32_gqa(&ctx, 0, d_q as *const c_void, q_heads, seq_len, d_dense)?;
@@ -238,11 +239,23 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             top_blocks,
             d_sparse,
         )?;
+        kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_staged,
+        )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
     let mut dense = vec![0f32; q_dim];
     let mut sparse = vec![0f32; q_dim];
+    let mut staged = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense.as_mut_ptr() as *mut c_void,
@@ -254,15 +267,25 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             d_sparse as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            staged.as_mut_ptr() as *mut c_void,
+            d_staged as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_sparse)?;
+        ctx.device_free(d_staged)?;
     }
 
-    for (idx, (&a, &b)) in dense.iter().zip(&sparse).enumerate() {
+    for (idx, ((&a, &b), &c)) in dense.iter().zip(&sparse).zip(&staged).enumerate() {
         assert!(
             (a - b).abs() < 1e-3,
             "block-select-exact mismatch at {idx}: dense={a} sparse={b}"
+        );
+        assert!(
+            (b - c).abs() < 1e-3,
+            "staged block-select-exact mismatch at {idx}: direct={b} staged={c}"
         );
     }
 

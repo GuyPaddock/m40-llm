@@ -56,6 +56,13 @@ struct CaseRecord {
     generated_decode_elapsed_ms: u128,
     total_elapsed_ms: u128,
     attention_compression_elapsed_ms: Option<u128>,
+    exact_block_staging_enabled: bool,
+    staged_kv_tokens: Option<usize>,
+    staged_kv_bytes: Option<usize>,
+    staged_old_tokens: Option<usize>,
+    staged_recent_tokens: Option<usize>,
+    staged_position_min: Option<usize>,
+    staged_position_max: Option<usize>,
     prefill_tokens_per_sec: Option<f64>,
     decode_tokens_per_sec: Option<f64>,
     prefill_chunk_size: Option<usize>,
@@ -487,6 +494,12 @@ fn exact_selection_sweep_enabled() -> bool {
 
 fn exact_block_retrieval_sweep_enabled() -> bool {
     std::env::var("M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn exact_block_staging_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -1102,7 +1115,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} staging={} staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1151,6 +1164,13 @@ fn print_records(records: &[CaseRecord]) {
             record.needle_block_selected,
             record.needle_block_rank,
             record.total_old_blocks,
+            record.exact_block_staging_enabled,
+            record.staged_kv_tokens,
+            record.staged_kv_bytes,
+            record.staged_old_tokens,
+            record.staged_recent_tokens,
+            record.staged_position_min,
+            record.staged_position_max,
             record.active_attended_kv_tokens,
             record.active_attended_kv_bytes,
             record.active_attended_kv_bytes_all_layers,
@@ -1436,6 +1456,22 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 layer_count: config.block_count as usize,
                             },
                         );
+                        let staging_enabled = exact_block_staging_enabled()
+                            && mode == KvCompressMode::BlockSelectExact;
+                        let staged_position_min = if staging_enabled {
+                            selected_block_indices
+                                .as_ref()
+                                .and_then(|selected| selected.iter().min().copied())
+                                .map(|block| block as usize * 32)
+                                .or(position_meta.recent_ring_absolute_start)
+                        } else {
+                            None
+                        };
+                        let staged_position_max = if staging_enabled {
+                            prompt_tokens.checked_sub(1)
+                        } else {
+                            None
+                        };
                         let record = CaseRecord {
                             model_path: probe.candidate.path.display().to_string(),
                             resolved_model_path: probe
@@ -1456,6 +1492,21 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             generated_decode_elapsed_ms,
                             total_elapsed_ms,
                             attention_compression_elapsed_ms,
+                            exact_block_staging_enabled: staging_enabled,
+                            staged_kv_tokens: staging_enabled
+                                .then(|| active_kv.map(|working| working.tokens))
+                                .flatten(),
+                            staged_kv_bytes: staging_enabled
+                                .then(|| active_kv.map(|working| working.bytes_per_layer))
+                                .flatten(),
+                            staged_old_tokens: staging_enabled
+                                .then(|| active_kv.map(|working| working.old_block_tokens))
+                                .flatten(),
+                            staged_recent_tokens: staging_enabled
+                                .then(|| active_kv.map(|working| working.recent_tokens))
+                                .flatten(),
+                            staged_position_min,
+                            staged_position_max,
                             prefill_tokens_per_sec: tokens_per_sec(
                                 prompt_tokens,
                                 prompt_prefill_elapsed_ms,

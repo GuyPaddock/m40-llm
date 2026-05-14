@@ -2482,3 +2482,49 @@ Interpretation:
 - The Phase 2 memory-saving design should keep exact recent FP16 KV and summary
   index KV, replace dense old backing KV with q8 exact old KV, and stage selected
   old blocks into a compact FP16/FP32 working buffer for attention.
+
+## 2026-05-14: Staged Exact-Block Retrieval Prototype
+
+This checkpoint adds `M40LLM_KV_EXACT_BLOCK_STAGING=1`. It preserves
+`block-select-exact` semantics, but gathers the selected exact old K/V plus exact
+recent K/V into temporary compact device buffers before attention. This validates
+the working-set data flow needed for a future q8 exact-old backing store; it is
+not expected to be faster yet because the prototype allocates and frees staging
+buffers inside each attention call.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including direct-vs-staged exact-block attention parity.
+- 2048-token staged exact-block retrieval sweep passed as a test run. The JSONL
+  report was written to `/tmp/m40llm-kv-exact-block-staged-2048.jsonl`.
+
+Staged 2048 summary:
+
+| Needle | Top blocks | Status | Decode | Staged KV tokens | Staged KV / layer | Old exact tokens | Output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | --- |
+| old | 1 | fail | 3.960 s | 1056 | 2.06 MiB | 32 | `ZXQ-NDLE` |
+| old | 2 | pass | 7.268 s | 1088 | 2.12 MiB | 64 | `ZXQ-NEEDLE-41729` |
+| old | 4 | pass | 7.140 s | 1152 | 2.25 MiB | 128 | `ZXQ-NEEDLE-41729` |
+| old | 8 | pass | 7.694 s | 1280 | 2.50 MiB | 256 | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 8.851 s | 1536 | 3.00 MiB | 512 | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 0.753 s | 1056 | 2.06 MiB | 32 | `ZX` |
+| recent | 2 | pass | 6.925 s | 1088 | 2.12 MiB | 64 | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | 7.199 s | 1152 | 2.25 MiB | 128 | `ZXQ-NEEDLE-41729` |
+| recent | 8 | pass | 7.755 s | 1280 | 2.50 MiB | 256 | `ZXQ-NEEDLE-41729` |
+| recent | 16 | pass | 8.905 s | 1536 | 3.00 MiB | 512 | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Staged exact-block retrieval preserves the direct `block-select-exact`
+  pass/fail pattern at 2048: `top_blocks=1` fails and `top_blocks>=2` passes.
+- The first passing staged working set remains 1088 tokens, 2.12 MiB per layer,
+  with only 64 old exact tokens plus the 1024-token recent window.
+- Staging is slower than direct selected-block attention in this prototype
+  because it allocates/free temporary compact buffers per attention call and
+  performs an extra gather kernel. The useful result is data-flow correctness;
+  the next performance step is persistent/reusable staging buffers, then q8
+  exact-old backing that dequantizes selected blocks into those buffers.

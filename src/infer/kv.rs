@@ -5,6 +5,12 @@ use crate::kv_selection;
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
+fn exact_block_staging_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 impl LoadedModel {
     pub(super) fn kv_physical_slot_for_layer_sequence(
         &self,
@@ -434,6 +440,19 @@ impl LoadedModel {
                         kv_selection::record(&blocks, total_old_blocks, compression.top_blocks);
                     }
                 }
+                if exact_block_staging_enabled() {
+                    return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        compression.top_blocks,
+                        d_out,
+                    );
+                }
                 return kv.attention_last_token_f32_gqa_block_select_exact_async(
                     &self.cuda,
                     seq_id,
@@ -676,6 +695,19 @@ impl LoadedModel {
         let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
         #[cfg(feature = "cuda")]
         unsafe {
+            if exact_block_staging_enabled() {
+                return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+                    &self.cuda,
+                    physical_slot,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    recent_window,
+                    block_size,
+                    top_blocks,
+                    d_out,
+                );
+            }
             kv.attention_last_token_f32_gqa_block_select_exact_async(
                 &self.cuda,
                 physical_slot,
