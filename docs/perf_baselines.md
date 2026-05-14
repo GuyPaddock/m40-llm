@@ -2224,3 +2224,50 @@ Validation:
   `M40LLM_KV_LOGIT_COMPARE=1`, `M40LLM_KV_ATTENTION_CAPTURE=first`, and
   `M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1`. The JSONL report populated the
   new ring, expected-token, logit-diff, and compact attention-record fields.
+
+2048 diagnostic command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_QUALITY_TARGETS=2048 \
+M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=4 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-diagnose-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+2048 summary:
+
+| Needle | Mode | Status | Needle recent? | Question recent? | Expected rank | Prompt max/mean diff | Top-10 overlap | Output |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | --- |
+| old | off | pass | no | yes | 1 | 0 / 0 | 10 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | pass | no | yes | 1 | 3.754 / 0.520 | 8 | `ZXQ-NEEDLE-41729` |
+| old | recent-only | fail | no | yes | 100716 | 20.907 / 1.966 | 0 | spaces |
+| old | block-summary | fail | no | yes | 100930 | 20.891 / 1.965 | 0 | spaces |
+| old | block-select-lossy | fail | no | yes | 101137 | 20.894 / 1.965 | 0 | spaces |
+| recent | off | pass | yes | yes | 1 | 0 / 0 | 10 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | pass | yes | yes | 1 | 5.248 / 1.263 | 7 | `ZXQ-NEEDLE-41729` |
+| recent | recent-only | fail | yes | yes | 8 | 17.949 / 1.601 | 3 | `Important secret code.` |
+| recent | block-summary | fail | yes | yes | 8 | 17.952 / 1.603 | 3 | `Important secret code.` |
+| recent | block-select-lossy | fail | yes | yes | 8 | 17.942 / 1.602 | 3 | `Important secret code.` |
+
+Additional observations:
+
+- The old needle is outside the exact recent ring (`29..36` versus ring
+  `995..2019`), while the question is inside it. Dense and block-select-exact
+  retrieve the needle; recent-only cannot, so old exact context is required.
+- The recent needle and question are both inside the exact recent ring
+  (`2005..2012` and `2014..2022` versus ring `1010..2034`), yet recent-only
+  still fails. This points at packed-then-compress/recent-sidecar logit
+  divergence rather than old-summary interference.
+- First-captured attention still assigns essentially all probability mass to
+  recent entries in failing modes. The causal signal is the large prompt-logit
+  drift, not summary entries overpowering recent tokens in layer 0.
+- `block-select-exact` remains the passing sparse baseline. For the old needle,
+  the needle block is selected at rank 0 and exact sparse retrieval succeeds.
