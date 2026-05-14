@@ -2193,3 +2193,34 @@ Interpretation:
   after packed-then-compress at 2048, and/or capture attention telemetry at
   later layers to see where exact old context contributes. Do not tune
   representative count until this is understood.
+
+## 2026-05-14: KV Logit/Ring Diagnostics
+
+This checkpoint adds opt-in JSONL fields for dense-vs-compressed logit
+comparison and absolute token/ring positions. The intended bounded diagnostic
+run remains the 2048 old/recent retrieval sweep with dense `off`,
+`block-select-exact`, `recent-only`, `block-summary`, and `block-select-lossy`.
+
+New controls:
+
+- `M40LLM_KV_LOGIT_COMPARE=1` retains prompt logits and first decode-step logits
+  so the harness can compare each mode against dense `off`, including the
+  passing `block-select-exact` sparse baseline.
+- `M40LLM_KV_ATTENTION_CAPTURE=first|all|layer:<n>|token:<n>|layer:<n>,token:<n>`
+  selects which compressed attention telemetry calls are retained.
+
+New JSONL fields include recent-ring absolute start/end, absolute needle and
+question token positions, whether those spans are inside the recent ring, the
+derived expected first answer token ID, dense/mode rank and logit for that token,
+prompt and first-decode max/mean logit differences, and top-10 overlap.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- 64-token KV quality diagnostic smoke passed with
+  `M40LLM_KV_LOGIT_COMPARE=1`, `M40LLM_KV_ATTENTION_CAPTURE=first`, and
+  `M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1`. The JSONL report populated the
+  new ring, expected-token, logit-diff, and compact attention-record fields.

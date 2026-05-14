@@ -30,11 +30,19 @@ pub struct KvAttentionTelemetrySummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct KvAttentionTelemetryRecord {
+    pub layer: Option<u32>,
+    pub token: Option<u32>,
+    pub attention: KvAttentionTelemetrySummary,
+}
+
+#[derive(Debug, Clone)]
 pub struct KvSelectionSummary {
     pub selected_block_indices: Vec<u32>,
     pub total_old_blocks: u32,
     pub top_blocks: u32,
     pub attention: Option<KvAttentionTelemetrySummary>,
+    pub attentions: Vec<KvAttentionTelemetryRecord>,
 }
 
 #[derive(Debug, Default)]
@@ -42,7 +50,9 @@ struct KvSelectionState {
     selected: BTreeSet<u32>,
     total_old_blocks: u32,
     top_blocks: u32,
-    attention: Option<KvAttentionTelemetrySummary>,
+    attentions: Vec<KvAttentionTelemetryRecord>,
+    current_layer: Option<u32>,
+    current_token: Option<u32>,
 }
 
 static STATE: OnceLock<Mutex<KvSelectionState>> = OnceLock::new();
@@ -63,9 +73,67 @@ pub fn needle_block() -> Option<u32> {
         .and_then(|value| value.parse::<u32>().ok())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CapturePolicy {
+    First,
+    All,
+    Layer(u32),
+    Token(u32),
+    LayerToken { layer: u32, token: u32 },
+}
+
+impl CapturePolicy {
+    fn from_env() -> Self {
+        let Ok(value) = std::env::var("M40LLM_KV_ATTENTION_CAPTURE") else {
+            return Self::First;
+        };
+        let value = value.trim();
+        if value.eq_ignore_ascii_case("all") {
+            return Self::All;
+        }
+        if value.eq_ignore_ascii_case("first") || value.is_empty() {
+            return Self::First;
+        }
+        let mut layer = None;
+        let mut token = None;
+        for part in value.split(',') {
+            let Some((key, raw)) = part.trim().split_once(':') else {
+                continue;
+            };
+            match key.trim() {
+                "layer" => layer = raw.trim().parse::<u32>().ok(),
+                "token" => token = raw.trim().parse::<u32>().ok(),
+                _ => {}
+            }
+        }
+        match (layer, token) {
+            (Some(layer), Some(token)) => Self::LayerToken { layer, token },
+            (Some(layer), None) => Self::Layer(layer),
+            (None, Some(token)) => Self::Token(token),
+            (None, None) => Self::First,
+        }
+    }
+
+    fn matches(self, layer: Option<u32>, token: Option<u32>) -> bool {
+        match self {
+            Self::First | Self::All => true,
+            Self::Layer(expected) => layer == Some(expected),
+            Self::Token(expected) => token == Some(expected),
+            Self::LayerToken { layer: l, token: t } => layer == Some(l) && token == Some(t),
+        }
+    }
+}
+
 pub fn reset() {
     if let Ok(mut guard) = state().lock() {
         *guard = KvSelectionState::default();
+    }
+}
+
+pub fn set_attention_context(layer: Option<u32>, token: Option<u32>) {
+    if let Ok(mut guard) = state().lock() {
+        guard.current_layer = layer;
+        guard.current_token = token;
     }
 }
 
@@ -80,27 +148,56 @@ pub fn record(selected_blocks: &[u32], total_old_blocks: u32, top_blocks: u32) {
 pub fn has_attention() -> bool {
     state()
         .lock()
-        .map(|guard| guard.attention.is_some())
+        .map(|guard| !guard.attentions.is_empty())
+        .unwrap_or(false)
+}
+
+pub fn should_capture_attention() -> bool {
+    if !enabled() {
+        return false;
+    }
+    let policy = CapturePolicy::from_env();
+    state()
+        .lock()
+        .map(|guard| {
+            if policy == CapturePolicy::First && !guard.attentions.is_empty() {
+                return false;
+            }
+            policy.matches(guard.current_layer, guard.current_token)
+        })
         .unwrap_or(false)
 }
 
 pub fn record_attention(attention: KvAttentionTelemetrySummary) {
     if let Ok(mut guard) = state().lock() {
-        if guard.attention.is_none() {
-            guard.attention = Some(attention);
+        let policy = CapturePolicy::from_env();
+        if policy == CapturePolicy::First && !guard.attentions.is_empty() {
+            return;
         }
+        let layer = guard.current_layer;
+        let token = guard.current_token;
+        guard.attentions.push(KvAttentionTelemetryRecord {
+            layer,
+            token,
+            attention,
+        });
     }
 }
 
 pub fn snapshot() -> Option<KvSelectionSummary> {
     let guard = state().lock().ok()?;
-    if guard.total_old_blocks == 0 && guard.selected.is_empty() && guard.attention.is_none() {
+    if guard.total_old_blocks == 0 && guard.selected.is_empty() && guard.attentions.is_empty() {
         return None;
     }
+    let attention = guard
+        .attentions
+        .first()
+        .map(|record| record.attention.clone());
     Some(KvSelectionSummary {
         selected_block_indices: guard.selected.iter().copied().collect(),
         total_old_blocks: guard.total_old_blocks,
         top_blocks: guard.top_blocks,
-        attention: guard.attention.clone(),
+        attention,
+        attentions: guard.attentions.clone(),
     })
 }

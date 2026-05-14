@@ -10,6 +10,8 @@ use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
 #[cfg(feature = "cuda")]
+use crate::kv_selection;
+#[cfg(feature = "cuda")]
 use crate::profile;
 #[cfg(feature = "cuda")]
 use crate::timing;
@@ -1173,6 +1175,8 @@ impl LoadedModel {
             .try_into()
             .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
         let position = seq_len.saturating_sub(1);
+        #[cfg(feature = "cuda")]
+        kv_selection::set_attention_context(Some(layer_id), Some(position));
         if let Some(kv) = &self.kv_cache {
             if position >= kv.max_seq_len() {
                 anyhow::bail!(
@@ -1486,6 +1490,8 @@ impl LoadedModel {
         let layer_id: u32 = layer
             .try_into()
             .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
+        #[cfg(feature = "cuda")]
+        kv_selection::set_attention_context(Some(layer_id), None);
         #[cfg(feature = "cuda")]
         {
             let kv_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;

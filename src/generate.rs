@@ -70,6 +70,8 @@ pub struct GeneratedText {
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
     pub kv_selection: Option<KvSelectionSummary>,
+    pub prompt_logits: Option<Vec<f32>>,
+    pub first_decode_logits: Option<Vec<f32>>,
 }
 
 #[cfg(feature = "cuda")]
@@ -108,6 +110,12 @@ fn compressed_prefill_chunk_size_from_env() -> Result<Option<usize>> {
 #[cfg(feature = "cuda")]
 fn packed_then_compress_prefill_enabled() -> bool {
     std::env::var("M40LLM_KV_PACKED_THEN_COMPRESS_PREFILL")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn kv_logit_compare_enabled() -> bool {
+    std::env::var("M40LLM_KV_LOGIT_COMPARE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -314,6 +322,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         )?
     };
     let mut logits_call_count = 0usize;
+    let capture_logits = kv_logit_compare_enabled();
+    let mut prompt_logits_snapshot = None;
+    let mut first_decode_logits_snapshot = None;
     let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
     let mut generated_decode_elapsed = std::time::Duration::ZERO;
     let mut logits_fn = {
@@ -615,8 +626,18 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             let elapsed = timed_logits_fn_start.elapsed();
             if logits_call_count == 0 {
                 prompt_prefill_elapsed += elapsed;
+                if capture_logits {
+                    if let Ok(logits) = &result {
+                        prompt_logits_snapshot = Some(logits.clone());
+                    }
+                }
             } else {
                 generated_decode_elapsed += elapsed;
+                if capture_logits && logits_call_count == 1 {
+                    if let Ok(logits) = &result {
+                        first_decode_logits_snapshot = Some(logits.clone());
+                    }
+                }
             }
             logits_call_count += 1;
             result
@@ -684,6 +705,8 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         kv_selection: kv_selection::enabled()
             .then(kv_selection::snapshot)
             .flatten(),
+        prompt_logits: prompt_logits_snapshot,
+        first_decode_logits: first_decode_logits_snapshot,
     })
 }
 

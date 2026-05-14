@@ -389,7 +389,7 @@ impl LoadedModel {
             #[cfg(feature = "cuda")]
             unsafe {
                 if kv_selection::enabled() {
-                    if !kv_selection::has_attention() {
+                    if kv_selection::should_capture_attention() {
                         if let Ok(attention) = kv.debug_attention_telemetry(
                             &self.cuda,
                             1,
@@ -436,7 +436,7 @@ impl LoadedModel {
             }
             #[cfg(feature = "cuda")]
             unsafe {
-                if kv_selection::enabled() && !kv_selection::has_attention() {
+                if kv_selection::should_capture_attention() {
                     if let Ok(attention) = kv.debug_attention_telemetry(
                         &self.cuda,
                         2,
@@ -471,7 +471,7 @@ impl LoadedModel {
                     compression.top_blocks
                 };
                 if kv_selection::enabled() {
-                    if !kv_selection::has_attention() {
+                    if kv_selection::should_capture_attention() {
                         let mode_code = if compression.mode == KvCompressMode::BlockSummary {
                             3
                         } else {

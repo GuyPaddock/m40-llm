@@ -1,7 +1,9 @@
 #![cfg(feature = "cuda")]
 
 use anyhow::{Context, Result};
-use m40_llm::generate::{generate_text, GenerateOptions, GeneratedText};
+use m40_llm::generate::{
+    generate_text, prepare_prompt, GenerateOptions, GeneratedText, PromptFormat,
+};
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
 use m40_llm::infer::{LoadedModel, ModelConfig};
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig, KvRepresentativePolicy};
@@ -69,6 +71,27 @@ struct CaseRecord {
     needle_block_selected: Option<bool>,
     needle_block_rank: Option<u32>,
     total_old_blocks: Option<u32>,
+    recent_ring_absolute_start: Option<usize>,
+    recent_ring_absolute_end: Option<usize>,
+    needle_token_absolute_positions: Vec<usize>,
+    question_token_absolute_positions: Vec<usize>,
+    needle_tokens_in_recent_ring: bool,
+    question_tokens_in_recent_ring: bool,
+    expected_first_answer_token_id: Option<u32>,
+    expected_first_answer_token_rank_dense: Option<usize>,
+    expected_first_answer_token_rank_compressed: Option<usize>,
+    expected_first_answer_token_logit_dense: Option<f32>,
+    expected_first_answer_token_logit_compressed: Option<f32>,
+    prompt_logit_max_abs_diff: Option<f32>,
+    prompt_logit_mean_abs_diff: Option<f32>,
+    prompt_logit_top10_overlap: Option<usize>,
+    prompt_dense_top_token_id: Option<u32>,
+    prompt_compressed_top_token_id: Option<u32>,
+    first_decode_logit_max_abs_diff: Option<f32>,
+    first_decode_logit_mean_abs_diff: Option<f32>,
+    first_decode_logit_top10_overlap: Option<usize>,
+    first_decode_dense_top_token_id: Option<u32>,
+    first_decode_compressed_top_token_id: Option<u32>,
     attention_recent_mass: Option<f32>,
     attention_selected_old_exact_mass: Option<f32>,
     attention_summary_mass: Option<f32>,
@@ -82,8 +105,37 @@ struct CaseRecord {
     attention_representative_logit_max: Option<f32>,
     attention_representative_logit_mean: Option<f32>,
     attention_top_entries: Option<Vec<String>>,
+    attention_records: Option<Vec<String>>,
     output: String,
     error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PromptPositionMeta {
+    recent_ring_absolute_start: Option<usize>,
+    recent_ring_absolute_end: Option<usize>,
+    needle_token_absolute_positions: Vec<usize>,
+    question_token_absolute_positions: Vec<usize>,
+    needle_tokens_in_recent_ring: bool,
+    question_tokens_in_recent_ring: bool,
+    expected_first_answer_token_id: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+struct LogitDiffSummary {
+    max_abs_diff: f32,
+    mean_abs_diff: f32,
+    top10_overlap: usize,
+    dense_top_token_id: Option<u32>,
+    compressed_top_token_id: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+struct ExpectedTokenLogitSummary {
+    rank_dense: Option<usize>,
+    rank_compressed: Option<usize>,
+    logit_dense: Option<f32>,
+    logit_compressed: Option<f32>,
 }
 
 fn resolved_size(path: &Path) -> Result<(PathBuf, u64)> {
@@ -262,6 +314,65 @@ fn retrieval_prompt(tokenizer: &Tokenizer, target_tokens: usize, needle_position
     prompt
 }
 
+fn token_positions_for_byte_span(
+    tokenizer: &Tokenizer,
+    prompt: &str,
+    add_bos: bool,
+    start_byte: usize,
+    end_byte: usize,
+) -> Result<Vec<usize>> {
+    let start = tokenizer
+        .encode_with_specials(&prompt[..start_byte], add_bos, false)
+        .context("encode prompt prefix for token positions")?
+        .len();
+    let end = tokenizer
+        .encode_with_specials(&prompt[..end_byte], add_bos, false)
+        .context("encode prompt span end for token positions")?
+        .len();
+    Ok((start..end).collect())
+}
+
+fn prompt_position_meta(
+    tokenizer: &Tokenizer,
+    prompt: &str,
+    add_bos: bool,
+    prompt_tokens: usize,
+    recent_window: usize,
+) -> Result<PromptPositionMeta> {
+    let needle_token_absolute_positions = if let Some(start) = prompt.find(NEEDLE) {
+        token_positions_for_byte_span(tokenizer, prompt, add_bos, start, start + NEEDLE.len())?
+    } else {
+        Vec::new()
+    };
+    let question = "Question: What is the secret code?";
+    let question_token_absolute_positions = if let Some(start) = prompt.find(question) {
+        token_positions_for_byte_span(tokenizer, prompt, add_bos, start, start + question.len())?
+    } else {
+        Vec::new()
+    };
+    let recent_start = prompt_tokens.saturating_sub(recent_window);
+    let recent_end = prompt_tokens;
+    let in_recent = |positions: &[usize]| {
+        !positions.is_empty()
+            && positions
+                .iter()
+                .all(|pos| *pos >= recent_start && *pos < recent_end)
+    };
+    let expected_first_answer_token_id = tokenizer
+        .encode_with_specials(NEEDLE, false, false)
+        .ok()
+        .and_then(|ids| ids.first().copied());
+    Ok(PromptPositionMeta {
+        recent_ring_absolute_start: Some(recent_start),
+        recent_ring_absolute_end: Some(recent_end),
+        needle_tokens_in_recent_ring: in_recent(&needle_token_absolute_positions),
+        question_tokens_in_recent_ring: in_recent(&question_token_absolute_positions),
+        needle_token_absolute_positions,
+        question_token_absolute_positions,
+        expected_first_answer_token_id,
+    })
+}
+
 fn parse_target_list(value: &str) -> Result<Vec<usize>> {
     let mut targets = Vec::new();
     for part in value.split(',') {
@@ -349,6 +460,12 @@ fn lossy_packed_sweep_enabled() -> bool {
 
 fn exact_selection_sweep_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn logit_compare_enabled() -> bool {
+    std::env::var("M40LLM_KV_LOGIT_COMPARE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -566,12 +683,19 @@ fn run_retrieval_case(
 
     prepare_kv_cache(model, mode, rep_case, top_blocks)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
+    let (formatted_prompt, add_bos) = prepare_prompt(tokenizer, &prompt, PromptFormat::Auto);
     let preformatted_prompt_tokens = tokenizer
-        .encode_with_specials(&prompt, true, false)
+        .encode_with_specials(&formatted_prompt, add_bos, false)
         .context("encode retrieval prompt")?
         .len();
-    let needle_block_index =
-        needle_block_index(tokenizer, &prompt, preformatted_prompt_tokens, 1024, 32)?;
+    let needle_block_index = needle_block_index(
+        tokenizer,
+        &formatted_prompt,
+        add_bos,
+        preformatted_prompt_tokens,
+        1024,
+        32,
+    )?;
     let _needle_block_guard = if let Some(block) = needle_block_index {
         Some(EnvVarGuard::set(
             "M40LLM_KV_TELEMETRY_NEEDLE_BLOCK",
@@ -642,6 +766,7 @@ fn run_retrieval_case(
 fn needle_block_index(
     tokenizer: &Tokenizer,
     prompt: &str,
+    add_bos: bool,
     prompt_tokens: usize,
     recent_window: usize,
     block_size: usize,
@@ -650,7 +775,7 @@ fn needle_block_index(
         return Ok(None);
     };
     let needle_token = tokenizer
-        .encode_with_specials(&prompt[..needle_byte], true, false)
+        .encode_with_specials(&prompt[..needle_byte], add_bos, false)
         .context("encode prompt prefix before needle")?
         .len();
     let old_len = prompt_tokens.saturating_sub(recent_window);
@@ -738,11 +863,97 @@ fn attention_top_entry_strings(
         .collect()
 }
 
+fn attention_record_strings(summary: &m40_llm::kv_selection::KvSelectionSummary) -> Vec<String> {
+    summary
+        .attentions
+        .iter()
+        .map(|record| {
+            format!(
+                "layer={:?}:token={:?}:mass(recent={:.6},old_exact={:.6},summary={:.6},rep={:.6},other={:.6})",
+                record.layer,
+                record.token,
+                record.attention.recent.prob_mass,
+                record.attention.selected_old_exact.prob_mass,
+                record.attention.summary.prob_mass,
+                record.attention.representatives.prob_mass,
+                record.attention.other.prob_mass
+            )
+        })
+        .collect()
+}
+
+fn top_token_id(logits: &[f32]) -> Option<u32> {
+    logits
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
+        .map(|(idx, _)| idx as u32)
+}
+
+fn top_token_ids(logits: &[f32], k: usize) -> Vec<u32> {
+    let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
+    top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
+    top.truncate(k);
+    top.into_iter().map(|(idx, _)| idx as u32).collect()
+}
+
+fn logit_diff_summary(dense: &[f32], compressed: &[f32]) -> Option<LogitDiffSummary> {
+    if dense.len() != compressed.len() || dense.is_empty() {
+        return None;
+    }
+    let mut max_abs_diff = 0.0f32;
+    let mut sum_abs_diff = 0.0f64;
+    for (a, b) in dense.iter().zip(compressed.iter()) {
+        let diff = (*a - *b).abs();
+        max_abs_diff = max_abs_diff.max(diff);
+        sum_abs_diff += diff as f64;
+    }
+    let dense_top10 = top_token_ids(dense, 10);
+    let compressed_top10 = top_token_ids(compressed, 10);
+    let top10_overlap = dense_top10
+        .iter()
+        .filter(|token| compressed_top10.contains(token))
+        .count();
+    Some(LogitDiffSummary {
+        max_abs_diff,
+        mean_abs_diff: (sum_abs_diff / dense.len() as f64) as f32,
+        top10_overlap,
+        dense_top_token_id: top_token_id(dense),
+        compressed_top_token_id: top_token_id(compressed),
+    })
+}
+
+fn expected_token_summary(
+    dense: Option<&[f32]>,
+    compressed: Option<&[f32]>,
+    token_id: Option<u32>,
+) -> ExpectedTokenLogitSummary {
+    let Some(token_id) = token_id.map(|id| id as usize) else {
+        return ExpectedTokenLogitSummary {
+            rank_dense: None,
+            rank_compressed: None,
+            logit_dense: None,
+            logit_compressed: None,
+        };
+    };
+    let rank = |logits: &[f32]| -> Option<usize> {
+        let target = *logits.get(token_id)?;
+        Some(1 + logits.iter().filter(|logit| **logit > target).count())
+    };
+    ExpectedTokenLogitSummary {
+        rank_dense: dense.and_then(rank),
+        rank_compressed: compressed.and_then(rank),
+        logit_dense: dense.and_then(|logits| logits.get(token_id).copied()),
+        logit_compressed: compressed.and_then(|logits| logits.get(token_id).copied()),
+    }
+}
+
 fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},mode={:?}) expected_logit(dense={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?}) first_decode_diff(max={:?},mean={:?},top10={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -752,6 +963,23 @@ fn print_records(records: &[CaseRecord]) {
             record.representative_policy,
             record.top_blocks,
             record.status,
+            record.recent_ring_absolute_start,
+            record.recent_ring_absolute_end,
+            record.needle_token_absolute_positions,
+            record.question_token_absolute_positions,
+            record.needle_tokens_in_recent_ring,
+            record.question_tokens_in_recent_ring,
+            record.expected_first_answer_token_id,
+            record.expected_first_answer_token_rank_dense,
+            record.expected_first_answer_token_rank_compressed,
+            record.expected_first_answer_token_logit_dense,
+            record.expected_first_answer_token_logit_compressed,
+            record.prompt_logit_max_abs_diff,
+            record.prompt_logit_mean_abs_diff,
+            record.prompt_logit_top10_overlap,
+            record.first_decode_logit_max_abs_diff,
+            record.first_decode_logit_mean_abs_diff,
+            record.first_decode_logit_top10_overlap,
             record.needle_block_index,
             record.selected_block_indices,
             record.needle_block_selected,
@@ -767,6 +995,7 @@ fn print_records(records: &[CaseRecord]) {
             record.attention_summary_logit_max,
             record.attention_summary_logit_mean,
             record.attention_top_entries,
+            record.attention_records,
             record.prompt_prefill_elapsed_ms,
             record.generated_decode_elapsed_ms,
             record.total_elapsed_ms,
@@ -828,6 +1057,22 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     for target_tokens in contexts {
         for needle_position in ["old", "recent"] {
             let mut dense_passed = None;
+            let mut dense_prompt_logits: Option<Vec<f32>> = None;
+            let mut dense_first_decode_logits: Option<Vec<f32>> = None;
+            let prompt_for_meta = retrieval_prompt(&tokenizer, target_tokens, needle_position);
+            let (formatted_prompt_for_meta, add_bos_for_meta) =
+                prepare_prompt(&tokenizer, &prompt_for_meta, PromptFormat::Auto);
+            let prompt_tokens_for_meta = tokenizer
+                .encode_with_specials(&formatted_prompt_for_meta, add_bos_for_meta, false)
+                .context("encode retrieval prompt for position metadata")?
+                .len();
+            let position_meta = prompt_position_meta(
+                &tokenizer,
+                &formatted_prompt_for_meta,
+                add_bos_for_meta,
+                prompt_tokens_for_meta,
+                1024,
+            )?;
             for &mode in modes {
                 let mode_rep_cases: Vec<RepresentativeCase> = if mode == KvCompressMode::Off {
                     vec![RepresentativeCase {
@@ -854,6 +1099,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let mut prefill_mode = "error".to_string();
                         let mut selection_summary = None;
                         let mut needle_block_index = None;
+                        let mut prompt_logits = None;
+                        let mut first_decode_logits = None;
                         let (mut status, output, error) = match run_retrieval_case(
                             &mut model,
                             &tokenizer,
@@ -883,9 +1130,14 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 prefill_mode = generated.prefill_mode.clone();
                                 selection_summary = generated.kv_selection.clone();
                                 needle_block_index = needle_block;
+                                prompt_logits = generated.prompt_logits.clone();
+                                first_decode_logits = generated.first_decode_logits.clone();
                                 let passed = generated.output.contains(NEEDLE);
                                 if mode == KvCompressMode::Off {
                                     dense_passed = Some(passed);
+                                    dense_prompt_logits = generated.prompt_logits.clone();
+                                    dense_first_decode_logits =
+                                        generated.first_decode_logits.clone();
                                 }
                                 let status = if passed {
                                     CaseStatus::Pass
@@ -926,6 +1178,40 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let attention = selection_summary
                             .as_ref()
                             .and_then(|summary| summary.attention.as_ref());
+                        let prompt_logit_diff = if logit_compare_enabled() {
+                            dense_prompt_logits
+                                .as_deref()
+                                .zip(prompt_logits.as_deref())
+                                .and_then(|(dense, compressed)| {
+                                    logit_diff_summary(dense, compressed)
+                                })
+                        } else {
+                            None
+                        };
+                        let first_decode_logit_diff = if logit_compare_enabled() {
+                            dense_first_decode_logits
+                                .as_deref()
+                                .zip(first_decode_logits.as_deref())
+                                .and_then(|(dense, compressed)| {
+                                    logit_diff_summary(dense, compressed)
+                                })
+                        } else {
+                            None
+                        };
+                        let expected_token_logits = if logit_compare_enabled() {
+                            expected_token_summary(
+                                dense_prompt_logits.as_deref(),
+                                prompt_logits.as_deref(),
+                                position_meta.expected_first_answer_token_id,
+                            )
+                        } else {
+                            ExpectedTokenLogitSummary {
+                                rank_dense: None,
+                                rank_compressed: None,
+                                logit_dense: None,
+                                logit_compressed: None,
+                            }
+                        };
                         let record = CaseRecord {
                             model_path: probe.candidate.path.display().to_string(),
                             resolved_model_path: probe
@@ -975,6 +1261,58 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             needle_block_selected,
                             needle_block_rank,
                             total_old_blocks,
+                            recent_ring_absolute_start: position_meta.recent_ring_absolute_start,
+                            recent_ring_absolute_end: position_meta.recent_ring_absolute_end,
+                            needle_token_absolute_positions: position_meta
+                                .needle_token_absolute_positions
+                                .clone(),
+                            question_token_absolute_positions: position_meta
+                                .question_token_absolute_positions
+                                .clone(),
+                            needle_tokens_in_recent_ring: position_meta
+                                .needle_tokens_in_recent_ring,
+                            question_tokens_in_recent_ring: position_meta
+                                .question_tokens_in_recent_ring,
+                            expected_first_answer_token_id: position_meta
+                                .expected_first_answer_token_id,
+                            expected_first_answer_token_rank_dense: expected_token_logits
+                                .rank_dense,
+                            expected_first_answer_token_rank_compressed: expected_token_logits
+                                .rank_compressed,
+                            expected_first_answer_token_logit_dense: expected_token_logits
+                                .logit_dense,
+                            expected_first_answer_token_logit_compressed: expected_token_logits
+                                .logit_compressed,
+                            prompt_logit_max_abs_diff: prompt_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.max_abs_diff),
+                            prompt_logit_mean_abs_diff: prompt_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.mean_abs_diff),
+                            prompt_logit_top10_overlap: prompt_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.top10_overlap),
+                            prompt_dense_top_token_id: prompt_logit_diff
+                                .as_ref()
+                                .and_then(|summary| summary.dense_top_token_id),
+                            prompt_compressed_top_token_id: prompt_logit_diff
+                                .as_ref()
+                                .and_then(|summary| summary.compressed_top_token_id),
+                            first_decode_logit_max_abs_diff: first_decode_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.max_abs_diff),
+                            first_decode_logit_mean_abs_diff: first_decode_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.mean_abs_diff),
+                            first_decode_logit_top10_overlap: first_decode_logit_diff
+                                .as_ref()
+                                .map(|summary| summary.top10_overlap),
+                            first_decode_dense_top_token_id: first_decode_logit_diff
+                                .as_ref()
+                                .and_then(|summary| summary.dense_top_token_id),
+                            first_decode_compressed_top_token_id: first_decode_logit_diff
+                                .as_ref()
+                                .and_then(|summary| summary.compressed_top_token_id),
                             attention_recent_mass: attention.map(|a| a.recent.prob_mass),
                             attention_selected_old_exact_mass: attention
                                 .map(|a| a.selected_old_exact.prob_mass),
@@ -993,6 +1331,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             attention_representative_logit_mean: attention
                                 .map(|a| a.representatives.logit_mean),
                             attention_top_entries: attention.map(attention_top_entry_strings),
+                            attention_records: selection_summary
+                                .as_ref()
+                                .map(attention_record_strings),
                             output,
                             error,
                         };

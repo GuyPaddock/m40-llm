@@ -109,8 +109,27 @@ and other entries. It also reports top attended entries, needle-block mass when
 applicable, and pre-softmax logit stats for recent, summary, and representative
 groups.
 
+Set `M40LLM_KV_ATTENTION_CAPTURE=first|all|layer:<n>|token:<n>|layer:<n>,token:<n>`
+to choose which decode attention calls are retained. The default is `first`.
+Layer/token capture is diagnostic-only and can be expensive when set to `all`.
+
 In exact-selection diagnostics, `block-select-exact` may use
 `M40LLM_PREFILL_CHUNK_SIZE` for packed-prefix prefill.
+
+`M40LLM_KV_LOGIT_COMPARE=1` makes the harness retain prompt logits and first
+decode-step logits for dense `off`, `block-select-exact`, `recent-only`,
+`block-summary`, and `block-select-lossy`. JSONL rows then include dense-vs-mode
+max/mean logit differences, top-10 overlap, top token IDs, and the expected
+first answer token's rank/logit when it can be derived from the tokenizer.
+
+JSONL rows also include absolute-position diagnostics:
+
+- `recent_ring_absolute_start`
+- `recent_ring_absolute_end`
+- `needle_token_absolute_positions`
+- `question_token_absolute_positions`
+- `needle_tokens_in_recent_ring`
+- `question_tokens_in_recent_ring`
 
 ## Current Interpretation
 
