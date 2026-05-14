@@ -71,6 +71,11 @@ struct CaseRecord {
     needle_block_selected: Option<bool>,
     needle_block_rank: Option<u32>,
     total_old_blocks: Option<u32>,
+    active_attended_kv_tokens: Option<usize>,
+    active_attended_kv_bytes: Option<usize>,
+    active_attended_kv_bytes_all_layers: Option<usize>,
+    active_attended_old_block_tokens: Option<usize>,
+    active_attended_recent_tokens: Option<usize>,
     recent_ring_absolute_start: Option<usize>,
     recent_ring_absolute_end: Option<usize>,
     dense_window_candidate_positions: Option<Vec<usize>>,
@@ -444,6 +449,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
+        if exact_block_retrieval_sweep_enabled() {
+            return Ok(if 2048 < limit { vec![2048] } else { Vec::new() });
+        }
         if lossy_packed_sweep_enabled() {
             return Ok([1024, 2048, 4096]
                 .into_iter()
@@ -473,6 +481,12 @@ fn lossy_packed_sweep_enabled() -> bool {
 
 fn exact_selection_sweep_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn exact_block_retrieval_sweep_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -528,7 +542,9 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
         .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .transpose()?
         .unwrap_or_else(|| {
-            if exact_selection_sweep {
+            if exact_block_retrieval_sweep_enabled() {
+                vec![1, 2, 4, 8, 16]
+            } else if exact_selection_sweep {
                 vec![4, 8, 16, 32, 64]
             } else {
                 vec![16]
@@ -606,6 +622,8 @@ fn quality_modes(
             KvCompressMode::RecentOnly,
             KvCompressMode::BlockSelectExact,
         ]
+    } else if exact_block_retrieval_sweep_enabled() {
+        &[KvCompressMode::Off, KvCompressMode::BlockSelectExact]
     } else if exact_selection_sweep {
         &[
             KvCompressMode::Off,
@@ -669,7 +687,8 @@ fn run_retrieval_case(
     rep_case: RepresentativeCase,
     top_blocks: u32,
 ) -> Result<(GeneratedText, usize, Option<u32>)> {
-    let exact_selection_sweep = exact_selection_sweep_enabled();
+    let exact_selection_sweep =
+        exact_selection_sweep_enabled() || exact_block_retrieval_sweep_enabled();
     let recent_equivalence_sequential = recent_equivalence_sequential_enabled();
     let _prefill_guard = if (lossy_packed_sweep_enabled()
         || (exact_selection_sweep
@@ -944,6 +963,58 @@ fn recent_ring_slots(
     Some((start?..end?).map(|pos| pos % recent_window).collect())
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ActiveKvWorkingSet {
+    tokens: usize,
+    bytes_per_layer: usize,
+    bytes_all_layers: usize,
+    old_block_tokens: usize,
+    recent_tokens: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ActiveKvAccounting {
+    recent_window: usize,
+    block_size: usize,
+    kv_heads: usize,
+    head_dim: usize,
+    layer_count: usize,
+}
+
+fn active_kv_working_set(
+    mode: KvCompressMode,
+    prompt_tokens: usize,
+    top_blocks: Option<u32>,
+    accounting: ActiveKvAccounting,
+) -> Option<ActiveKvWorkingSet> {
+    if prompt_tokens == 0 || accounting.kv_heads == 0 || accounting.head_dim == 0 {
+        return None;
+    }
+    let recent_tokens = prompt_tokens.min(accounting.recent_window);
+    let old_len = prompt_tokens.saturating_sub(recent_tokens);
+    let old_block_tokens = match mode {
+        KvCompressMode::Off => old_len,
+        KvCompressMode::DenseRecentOnly | KvCompressMode::RecentOnly => 0,
+        KvCompressMode::BlockSelectExact => {
+            let old_blocks = old_len.div_ceil(accounting.block_size);
+            let selected_blocks = (top_blocks? as usize).min(old_blocks);
+            old_len.min(selected_blocks * accounting.block_size)
+        }
+        KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy => 0,
+    };
+    let tokens = recent_tokens + old_block_tokens;
+    let bytes_per_token =
+        accounting.kv_heads * accounting.head_dim * 2 * std::mem::size_of::<half::f16>();
+    let bytes_per_layer = tokens * bytes_per_token;
+    Some(ActiveKvWorkingSet {
+        tokens,
+        bytes_per_layer,
+        bytes_all_layers: bytes_per_layer * accounting.layer_count,
+        old_block_tokens,
+        recent_tokens,
+    })
+}
+
 fn top_token_ids(logits: &[f32], k: usize) -> Vec<u32> {
     let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
     top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
@@ -1031,7 +1102,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1080,6 +1151,11 @@ fn print_records(records: &[CaseRecord]) {
             record.needle_block_selected,
             record.needle_block_rank,
             record.total_old_blocks,
+            record.active_attended_kv_tokens,
+            record.active_attended_kv_bytes,
+            record.active_attended_kv_bytes_all_layers,
+            record.active_attended_old_block_tokens,
+            record.active_attended_recent_tokens,
             record.attention_recent_mass,
             record.attention_selected_old_exact_mass,
             record.attention_summary_mass,
@@ -1348,6 +1424,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 logit_compressed: None,
                             }
                         };
+                        let active_kv = active_kv_working_set(
+                            mode,
+                            prompt_tokens,
+                            top_blocks_case,
+                            ActiveKvAccounting {
+                                recent_window: 1024,
+                                block_size: 32,
+                                kv_heads: config.attention_head_count_kv as usize,
+                                head_dim: config.attention_key_length as usize,
+                                layer_count: config.block_count as usize,
+                            },
+                        );
                         let record = CaseRecord {
                             model_path: probe.candidate.path.display().to_string(),
                             resolved_model_path: probe
@@ -1397,6 +1485,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             needle_block_selected,
                             needle_block_rank,
                             total_old_blocks,
+                            active_attended_kv_tokens: active_kv.map(|working| working.tokens),
+                            active_attended_kv_bytes: active_kv
+                                .map(|working| working.bytes_per_layer),
+                            active_attended_kv_bytes_all_layers: active_kv
+                                .map(|working| working.bytes_all_layers),
+                            active_attended_old_block_tokens: active_kv
+                                .map(|working| working.old_block_tokens),
+                            active_attended_recent_tokens: active_kv
+                                .map(|working| working.recent_tokens),
                             recent_ring_absolute_start: position_meta.recent_ring_absolute_start,
                             recent_ring_absolute_end: position_meta.recent_ring_absolute_end,
                             dense_window_candidate_positions: logit_compare_enabled()

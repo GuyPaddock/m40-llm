@@ -106,6 +106,17 @@ representative policies.
 `M40LLM_KV_QUALITY_TOP_BLOCKS=4,16` overrides the top-block counts used for
 exact/lossy selection.
 
+`M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1` runs the focused summary-indexed
+exact-block diagnostic. It defaults to 2048-token old/recent retrieval cases,
+compares dense `off` with `block-select-exact`, and defaults
+`top_blocks=1,2,4,8,16`. JSONL rows include the active attended KV working set:
+
+- `active_attended_kv_tokens`
+- `active_attended_kv_bytes`
+- `active_attended_kv_bytes_all_layers`
+- `active_attended_old_block_tokens`
+- `active_attended_recent_tokens`
+
 Attention telemetry records first-captured probability mass by group:
 recent exact tokens, selected exact old tokens, old summaries, representatives,
 and other entries. It also reports top attended entries, needle-block mass when
@@ -163,3 +174,12 @@ The current quality evidence separates three concerns:
 If dense fails, the case is inconclusive for compression. If `block-select-exact`
 passes but lossy modes fail, summary scoring is not the primary bottleneck; the
 representation or mixing strategy needs work.
+
+The current architectural direction is summary-indexed exact-block retrieval:
+summaries should select old blocks, while attention consumes exact K/V for the
+selected old blocks plus the exact recent window. The Phase 1 prototype remains
+dense-backed on GPU through `block-select-exact`. A later memory-saving variant
+should replace old dense backing KV with q8 exact old KV, stage selected blocks
+into a small FP16/FP32 working buffer, and report recent exact KV, summary index
+KV, exact old backing KV, selected working-set KV, and temporary dense prefill KV
+separately.

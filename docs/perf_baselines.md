@@ -2413,3 +2413,72 @@ Interpretation:
   dense and `block-select-exact` pass. The next architectural direction remains
   exact selected-block retrieval or an exact-token backing store; summary-only
   lossy KV should not be tuned further until that path is characterized.
+
+## 2026-05-14: Summary-Indexed Exact-Block Retrieval Sweep
+
+This checkpoint adds `M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1`, a focused
+diagnostic for the architectural direction where summaries are only an index
+and attention consumes exact K/V from selected old blocks plus the exact recent
+window. The implementation uses the existing dense-backed `block-select-exact`
+path and reports active attended KV working-set size separately from resident
+dense KV allocation.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- 2048-token exact-block retrieval sweep passed as a test run. The corrected
+  JSONL report was written to `/tmp/m40llm-kv-exact-block-2048.jsonl`.
+
+Command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4,8,16 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+2048 corrected working-set summary:
+
+| Needle | Mode | Top blocks | Status | Decode | Active KV tokens | Active KV / layer | Active KV all layers | Old exact tokens | Output |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| old | off | - | pass | 6.201 s | 2019 | 3.94 MiB | 63.09 MiB | 995 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | 1 | fail | 2.982 s | 1056 | 2.06 MiB | 33.00 MiB | 32 | `ZX-NE-DED` |
+| old | block-select-exact | 2 | pass | 5.539 s | 1088 | 2.12 MiB | 34.00 MiB | 64 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | 4 | pass | 5.877 s | 1152 | 2.25 MiB | 36.00 MiB | 128 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | 8 | pass | 6.136 s | 1280 | 2.50 MiB | 40.00 MiB | 256 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | 16 | pass | 6.787 s | 1536 | 3.00 MiB | 48.00 MiB | 512 | `ZXQ-NEEDLE-41729` |
+| recent | off | - | pass | 6.290 s | 2034 | 3.97 MiB | 63.56 MiB | 1010 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | 1 | fail | 0.625 s | 1056 | 2.06 MiB | 33.00 MiB | 32 | `ZX` |
+| recent | block-select-exact | 2 | pass | 5.744 s | 1088 | 2.12 MiB | 34.00 MiB | 64 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | 4 | pass | 5.738 s | 1152 | 2.25 MiB | 36.00 MiB | 128 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | 8 | pass | 6.090 s | 1280 | 2.50 MiB | 40.00 MiB | 256 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | 16 | pass | 7.211 s | 1536 | 3.00 MiB | 48.00 MiB | 512 | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- `top_blocks=1` is insufficient even when the old-needle block is selected at
+  rank 0; one exact old block plus the recent window can produce partial
+  needle-like output but not reliable retrieval.
+- `top_blocks>=2` passes both old and recent 2048 cases. At `top_blocks=2`,
+  the active attention working set is only 1088 tokens, about 2.12 MiB per layer
+  or 34.00 MiB across the 16-layer Llama 3.2 1B model, versus 63+ MiB for full
+  dense 2048-token attention.
+- Decode timing does not improve proportionally yet because the diagnostic path
+  still uses dense-backed direct selection and the harness is prefill/model-load
+  dominated. This sweep characterizes quality and working-set size, not a final
+  optimized backing-store implementation.
+- The Phase 2 memory-saving design should keep exact recent FP16 KV and summary
+  index KV, replace dense old backing KV with q8 exact old KV, and stage selected
+  old blocks into a compact FP16/FP32 working buffer for attention.
