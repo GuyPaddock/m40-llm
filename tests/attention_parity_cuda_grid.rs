@@ -16,6 +16,134 @@ fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
 }
 
 #[test]
+fn attention_dense_recent_window_matches_reference() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 2u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let seq_len = 12u32;
+    let recent_window = 5u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+
+    let mut k_tokens = Vec::new();
+    let mut v_tokens = Vec::new();
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 29 + i * 3) as f32) * 0.001 - 0.25)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 11 + kv_dim - i) as f32) * 0.002 - 0.15)
+            .collect();
+        let k_stored = cast_f32_to_f16_then_back(&k);
+        let v_stored = cast_f32_to_f16_then_back(&v);
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+        k_tokens.push(k_stored);
+        v_tokens.push(v_stored);
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0015 - 0.12).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense = ctx.device_malloc(bytes_q)?;
+    let d_full_window = ctx.device_malloc(bytes_q)?;
+    let d_recent = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa(&ctx, 0, d_q as *const c_void, q_heads, seq_len, d_dense)?;
+        kv.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            seq_len,
+            d_full_window,
+        )?;
+        kv.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            d_recent,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense = vec![0f32; q_dim];
+    let mut full_window = vec![0f32; q_dim];
+    let mut recent = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense.as_mut_ptr() as *mut c_void,
+            d_dense as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            full_window.as_mut_ptr() as *mut c_void,
+            d_full_window as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            recent.as_mut_ptr() as *mut c_void,
+            d_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense)?;
+        ctx.device_free(d_full_window)?;
+        ctx.device_free(d_recent)?;
+    }
+
+    let start = (seq_len - recent_window) as usize;
+    let recent_ref = cpu_last_token_attention(
+        &q,
+        &k_tokens[start..],
+        &v_tokens[start..],
+        q_heads as usize,
+        head_dim as usize,
+    );
+
+    for (idx, ((&dense_val, &full_window_val), (&recent_val, &ref_val))) in dense
+        .iter()
+        .zip(&full_window)
+        .zip(recent.iter().zip(&recent_ref))
+        .enumerate()
+    {
+        assert!(
+            (dense_val - full_window_val).abs() < 1e-3,
+            "full-window dense mismatch at {idx}: dense={dense_val} window={full_window_val}"
+        );
+        assert!(
+            (recent_val - ref_val).abs() < 1e-3,
+            "recent-window reference mismatch at {idx}: cuda={recent_val} cpu={ref_val}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

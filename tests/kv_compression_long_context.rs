@@ -79,19 +79,29 @@ struct CaseRecord {
     question_tokens_in_recent_ring: bool,
     expected_first_answer_token_id: Option<u32>,
     expected_first_answer_token_rank_dense: Option<usize>,
+    expected_first_answer_token_rank_dense_window: Option<usize>,
     expected_first_answer_token_rank_compressed: Option<usize>,
     expected_first_answer_token_logit_dense: Option<f32>,
+    expected_first_answer_token_logit_dense_window: Option<f32>,
     expected_first_answer_token_logit_compressed: Option<f32>,
     prompt_logit_max_abs_diff: Option<f32>,
     prompt_logit_mean_abs_diff: Option<f32>,
     prompt_logit_top10_overlap: Option<usize>,
     prompt_dense_top_token_id: Option<u32>,
     prompt_compressed_top_token_id: Option<u32>,
+    prompt_dense_window_max_abs_diff: Option<f32>,
+    prompt_dense_window_mean_abs_diff: Option<f32>,
+    prompt_dense_window_top10_overlap: Option<usize>,
+    prompt_dense_window_top_token_id: Option<u32>,
     first_decode_logit_max_abs_diff: Option<f32>,
     first_decode_logit_mean_abs_diff: Option<f32>,
     first_decode_logit_top10_overlap: Option<usize>,
     first_decode_dense_top_token_id: Option<u32>,
     first_decode_compressed_top_token_id: Option<u32>,
+    first_decode_dense_window_max_abs_diff: Option<f32>,
+    first_decode_dense_window_mean_abs_diff: Option<f32>,
+    first_decode_dense_window_top10_overlap: Option<usize>,
+    first_decode_dense_window_top_token_id: Option<u32>,
     attention_recent_mass: Option<f32>,
     attention_selected_old_exact_mass: Option<f32>,
     attention_summary_mass: Option<f32>,
@@ -499,7 +509,7 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
     }
     if matches!(
         mode,
-        KvCompressMode::RecentOnly | KvCompressMode::BlockSummary
+        KvCompressMode::DenseRecentOnly | KvCompressMode::RecentOnly | KvCompressMode::BlockSummary
     ) {
         return Ok(vec![Some(0)]);
     }
@@ -583,6 +593,7 @@ fn quality_modes(
     if exact_selection_sweep {
         &[
             KvCompressMode::Off,
+            KvCompressMode::DenseRecentOnly,
             KvCompressMode::BlockSelectExact,
             KvCompressMode::RecentOnly,
             KvCompressMode::BlockSummary,
@@ -597,6 +608,7 @@ fn quality_modes(
     } else {
         &[
             KvCompressMode::Off,
+            KvCompressMode::DenseRecentOnly,
             KvCompressMode::BlockSelectExact,
             KvCompressMode::RecentOnly,
             KvCompressMode::BlockSummary,
@@ -644,9 +656,18 @@ fn run_retrieval_case(
     let exact_selection_sweep = exact_selection_sweep_enabled();
     let _prefill_guard = if (lossy_packed_sweep_enabled()
         || (exact_selection_sweep
-            && matches!(mode, KvCompressMode::Off | KvCompressMode::BlockSelectExact)))
-        && matches!(mode, KvCompressMode::Off | KvCompressMode::BlockSelectExact)
-    {
+            && matches!(
+                mode,
+                KvCompressMode::Off
+                    | KvCompressMode::DenseRecentOnly
+                    | KvCompressMode::BlockSelectExact
+            )))
+        && matches!(
+            mode,
+            KvCompressMode::Off
+                | KvCompressMode::DenseRecentOnly
+                | KvCompressMode::BlockSelectExact
+        ) {
         Some(EnvVarGuard::set(
             "M40LLM_PREFILL_CHUNK_SIZE",
             target_tokens.to_string(),
@@ -672,6 +693,7 @@ fn run_retrieval_case(
         && matches!(
             mode,
             KvCompressMode::BlockSelectExact
+                | KvCompressMode::DenseRecentOnly
                 | KvCompressMode::RecentOnly
                 | KvCompressMode::BlockSummary
                 | KvCompressMode::BlockSelectLossy
@@ -816,6 +838,7 @@ impl Drop for EnvVarGuard {
 fn mode_name(mode: KvCompressMode) -> &'static str {
     match mode {
         KvCompressMode::Off => "off",
+        KvCompressMode::DenseRecentOnly => "dense-recent-only",
         KvCompressMode::BlockSelectExact => "block-select-exact",
         KvCompressMode::RecentOnly => "recent-only",
         KvCompressMode::BlockSummary => "block-summary",
@@ -953,7 +976,7 @@ fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},mode={:?}) expected_logit(dense={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?}) first_decode_diff(max={:?},mean={:?},top10={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -971,15 +994,29 @@ fn print_records(records: &[CaseRecord]) {
             record.question_tokens_in_recent_ring,
             record.expected_first_answer_token_id,
             record.expected_first_answer_token_rank_dense,
+            record.expected_first_answer_token_rank_dense_window,
             record.expected_first_answer_token_rank_compressed,
             record.expected_first_answer_token_logit_dense,
+            record.expected_first_answer_token_logit_dense_window,
             record.expected_first_answer_token_logit_compressed,
             record.prompt_logit_max_abs_diff,
             record.prompt_logit_mean_abs_diff,
             record.prompt_logit_top10_overlap,
+            record.prompt_dense_top_token_id,
+            record.prompt_compressed_top_token_id,
+            record.prompt_dense_window_max_abs_diff,
+            record.prompt_dense_window_mean_abs_diff,
+            record.prompt_dense_window_top10_overlap,
+            record.prompt_dense_window_top_token_id,
             record.first_decode_logit_max_abs_diff,
             record.first_decode_logit_mean_abs_diff,
             record.first_decode_logit_top10_overlap,
+            record.first_decode_dense_top_token_id,
+            record.first_decode_compressed_top_token_id,
+            record.first_decode_dense_window_max_abs_diff,
+            record.first_decode_dense_window_mean_abs_diff,
+            record.first_decode_dense_window_top10_overlap,
+            record.first_decode_dense_window_top_token_id,
             record.needle_block_index,
             record.selected_block_indices,
             record.needle_block_selected,
@@ -1059,6 +1096,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
             let mut dense_passed = None;
             let mut dense_prompt_logits: Option<Vec<f32>> = None;
             let mut dense_first_decode_logits: Option<Vec<f32>> = None;
+            let mut dense_window_prompt_logits: Option<Vec<f32>> = None;
+            let mut dense_window_first_decode_logits: Option<Vec<f32>> = None;
             let prompt_for_meta = retrieval_prompt(&tokenizer, target_tokens, needle_position);
             let (formatted_prompt_for_meta, add_bos_for_meta) =
                 prepare_prompt(&tokenizer, &prompt_for_meta, PromptFormat::Auto);
@@ -1074,14 +1113,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 1024,
             )?;
             for &mode in modes {
-                let mode_rep_cases: Vec<RepresentativeCase> = if mode == KvCompressMode::Off {
-                    vec![RepresentativeCase {
-                        representatives: 0,
-                        policy: KvRepresentativePolicy::Last,
-                    }]
-                } else {
-                    rep_cases.clone()
-                };
+                let mode_rep_cases: Vec<RepresentativeCase> =
+                    if matches!(mode, KvCompressMode::Off | KvCompressMode::DenseRecentOnly) {
+                        vec![RepresentativeCase {
+                            representatives: 0,
+                            policy: KvRepresentativePolicy::Last,
+                        }]
+                    } else {
+                        rep_cases.clone()
+                    };
                 for rep_case in mode_rep_cases {
                     for top_blocks_case in top_block_cases(exact_selection_sweep, mode)? {
                         let top_blocks = top_blocks_case.unwrap_or(16);
@@ -1137,6 +1177,10 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     dense_passed = Some(passed);
                                     dense_prompt_logits = generated.prompt_logits.clone();
                                     dense_first_decode_logits =
+                                        generated.first_decode_logits.clone();
+                                } else if mode == KvCompressMode::DenseRecentOnly {
+                                    dense_window_prompt_logits = generated.prompt_logits.clone();
+                                    dense_window_first_decode_logits =
                                         generated.first_decode_logits.clone();
                                 }
                                 let status = if passed {
@@ -1197,6 +1241,40 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 })
                         } else {
                             None
+                        };
+                        let prompt_dense_window_diff = if logit_compare_enabled() {
+                            dense_window_prompt_logits
+                                .as_deref()
+                                .zip(prompt_logits.as_deref())
+                                .and_then(|(window, compressed)| {
+                                    logit_diff_summary(window, compressed)
+                                })
+                        } else {
+                            None
+                        };
+                        let first_decode_dense_window_diff = if logit_compare_enabled() {
+                            dense_window_first_decode_logits
+                                .as_deref()
+                                .zip(first_decode_logits.as_deref())
+                                .and_then(|(window, compressed)| {
+                                    logit_diff_summary(window, compressed)
+                                })
+                        } else {
+                            None
+                        };
+                        let expected_token_window_logits = if logit_compare_enabled() {
+                            expected_token_summary(
+                                dense_prompt_logits.as_deref(),
+                                dense_window_prompt_logits.as_deref(),
+                                position_meta.expected_first_answer_token_id,
+                            )
+                        } else {
+                            ExpectedTokenLogitSummary {
+                                rank_dense: None,
+                                rank_compressed: None,
+                                logit_dense: None,
+                                logit_compressed: None,
+                            }
                         };
                         let expected_token_logits = if logit_compare_enabled() {
                             expected_token_summary(
@@ -1277,10 +1355,14 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 .expected_first_answer_token_id,
                             expected_first_answer_token_rank_dense: expected_token_logits
                                 .rank_dense,
+                            expected_first_answer_token_rank_dense_window:
+                                expected_token_window_logits.rank_compressed,
                             expected_first_answer_token_rank_compressed: expected_token_logits
                                 .rank_compressed,
                             expected_first_answer_token_logit_dense: expected_token_logits
                                 .logit_dense,
+                            expected_first_answer_token_logit_dense_window:
+                                expected_token_window_logits.logit_compressed,
                             expected_first_answer_token_logit_compressed: expected_token_logits
                                 .logit_compressed,
                             prompt_logit_max_abs_diff: prompt_logit_diff
@@ -1298,6 +1380,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             prompt_compressed_top_token_id: prompt_logit_diff
                                 .as_ref()
                                 .and_then(|summary| summary.compressed_top_token_id),
+                            prompt_dense_window_max_abs_diff: prompt_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.max_abs_diff),
+                            prompt_dense_window_mean_abs_diff: prompt_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.mean_abs_diff),
+                            prompt_dense_window_top10_overlap: prompt_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.top10_overlap),
+                            prompt_dense_window_top_token_id: dense_window_prompt_logits
+                                .as_deref()
+                                .and_then(top_token_id),
                             first_decode_logit_max_abs_diff: first_decode_logit_diff
                                 .as_ref()
                                 .map(|summary| summary.max_abs_diff),
@@ -1313,6 +1407,19 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             first_decode_compressed_top_token_id: first_decode_logit_diff
                                 .as_ref()
                                 .and_then(|summary| summary.compressed_top_token_id),
+                            first_decode_dense_window_max_abs_diff: first_decode_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.max_abs_diff),
+                            first_decode_dense_window_mean_abs_diff: first_decode_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.mean_abs_diff),
+                            first_decode_dense_window_top10_overlap: first_decode_dense_window_diff
+                                .as_ref()
+                                .map(|summary| summary.top10_overlap),
+                            first_decode_dense_window_top_token_id:
+                                dense_window_first_decode_logits
+                                    .as_deref()
+                                    .and_then(top_token_id),
                             attention_recent_mass: attention.map(|a| a.recent.prob_mass),
                             attention_selected_old_exact_mass: attention
                                 .map(|a| a.selected_old_exact.prob_mass),

@@ -415,6 +415,16 @@ mod ffi {
             d_seq_len: *const u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_dense_recent_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -3272,6 +3282,43 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues dense GQA last-token attention restricted to the absolute
+    /// recent window `[seq_len - recent_window, seq_len)` on the decode stream.
+    /// This diagnostic path preserves absolute KV positions and requires
+    /// head_dim=64.
+    pub unsafe fn attention_last_token_f32_gqa_dense_recent_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_dense_recent_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_dense_recent_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_dense_recent");
         Ok(())
     }
 

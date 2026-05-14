@@ -423,22 +423,36 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                                         log_top_logits(logits, 8, log_prefix)
                                     }) {
                                     Ok(logits) => {
-                                        prefill_mode =
-                                            "packed-prefix-block-select-exact".to_string();
+                                        prefill_mode = format!(
+                                            "packed-prefix-{}",
+                                            match options.kv_compression.mode {
+                                                KvCompressMode::BlockSelectExact =>
+                                                    "block-select-exact",
+                                                _ => unreachable!(),
+                                            }
+                                        );
                                         Ok(logits)
                                     }
                                     Err(err) => {
                                         eprintln!(
-                                            "[{log_prefix}] block-select-exact packed prefill fallback: {err:#}"
+                                            "[{log_prefix}] dense/exact diagnostic packed prefill fallback: {err:#}"
                                         );
                                         prefill_mode =
-                                            "packed-prefix-block-select-exact-fallback-sequential"
+                                            "packed-prefix-diagnostic-fallback-sequential"
                                                 .to_string();
                                         decode_session.logits_for_ids(ids, |logits| {
                                             log_top_logits(logits, 8, log_prefix)
                                         })
                                     }
                                 }
+                            } else if matches!(
+                                options.kv_compression.mode,
+                                KvCompressMode::DenseRecentOnly
+                            ) {
+                                prefill_mode = "sequential-dense-recent-only".to_string();
+                                decode_session.logits_for_ids(ids, |logits| {
+                                    log_top_logits(logits, 8, log_prefix)
+                                })
                             } else if packed_then_compress_prefill_enabled()
                                 && matches!(
                                     options.kv_compression.mode,

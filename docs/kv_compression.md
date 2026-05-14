@@ -20,7 +20,7 @@ architecture exactly:
 CLI generation accepts:
 
 ```bash
---kv-compress-mode off|block-select-exact|recent-only|block-summary|block-select-lossy
+--kv-compress-mode off|dense-recent-only|block-select-exact|recent-only|block-summary|block-select-lossy
 --kv-recent-window 1024
 --kv-compress-block 32
 --kv-compress-top-blocks 16
@@ -29,6 +29,9 @@ CLI generation accepts:
 ```
 
 - `off`: dense exact KV.
+- `dense-recent-only`: diagnostic dense-KV sliding-window attention over the
+  same absolute recent-token range used by the compressed sidecar. It preserves
+  absolute RoPE positions and does not renumber the window.
 - `block-select-exact`: keeps old exact KV and uses block summaries only as an
   index for selecting old blocks.
 - `recent-only`: diagnostic mode that attends only to exact recent KV while
@@ -117,10 +120,12 @@ In exact-selection diagnostics, `block-select-exact` may use
 `M40LLM_PREFILL_CHUNK_SIZE` for packed-prefix prefill.
 
 `M40LLM_KV_LOGIT_COMPARE=1` makes the harness retain prompt logits and first
-decode-step logits for dense `off`, `block-select-exact`, `recent-only`,
-`block-summary`, and `block-select-lossy`. JSONL rows then include dense-vs-mode
-max/mean logit differences, top-10 overlap, top token IDs, and the expected
-first answer token's rank/logit when it can be derived from the tokenizer.
+decode-step logits for dense `off`, `dense-recent-only`, `block-select-exact`,
+`recent-only`, `block-summary`, and `block-select-lossy`. JSONL rows then
+include dense-vs-mode max/mean logit differences, top-10 overlap, top token
+IDs, and the expected first answer token's rank/logit when it can be derived
+from the tokenizer. Rows after `dense-recent-only` also include dense-window-vs
+mode prompt/first-decode differences and dense-window expected-token rank/logit.
 
 JSONL rows also include absolute-position diagnostics:
 
@@ -138,6 +143,8 @@ The current quality evidence separates three concerns:
 - Dense `off` is the reference capability check.
 - `block-select-exact` tests whether summary scoring can find the relevant old
   block while still attending exact K/V.
+- `dense-recent-only` distinguishes "the old context is genuinely needed" from
+  compressed recent-ring construction or indexing bugs.
 - `block-summary` and `block-select-lossy` test whether lossy summaries and
   representatives preserve enough information for retrieval.
 

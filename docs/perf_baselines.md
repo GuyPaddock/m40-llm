@@ -2271,3 +2271,97 @@ Additional observations:
   drift, not summary entries overpowering recent tokens in layer 0.
 - `block-select-exact` remains the passing sparse baseline. For the old needle,
   the needle block is selected at rank 0 and exact sparse retrieval succeeds.
+
+## 2026-05-14: Dense Recent-Window Diagnostic Baseline
+
+This checkpoint adds a diagnostic `dense-recent-only` KV mode. It keeps dense
+exact KV storage but restricts last-token attention to the same absolute recent
+token range used by the compressed sidecar. It preserves absolute positions and
+RoPE indexing; it does not renumber the sliding window to zero.
+
+Purpose:
+
+- Compare dense full attention (`off`) against a dense exact recent-window
+  baseline and compressed sidecar `recent-only`.
+- If dense-window and compressed-recent match but both fail, old context is
+  genuinely needed.
+- If dense-window remains close to full dense while compressed-recent diverges,
+  inspect compressed sidecar recent-ring construction/readback.
+- If dense-window fails but `block-select-exact` passes, selected old exact
+  blocks are carrying needed context.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including `attention_dense_recent_window_matches_reference`.
+- 64-token KV quality diagnostic smoke passed with `dense-recent-only` included
+  in the exact-selection sweep. The JSONL report was written to
+  `/tmp/m40llm-kv-dense-window-64.jsonl`.
+
+64-token smoke summary:
+
+| Needle | Mode | Status | Prefill mode | Prompt max/mean diff vs dense | Window max/mean diff vs mode | Output |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| old | off | pass | packed-prefix | 0 / 0 | - | `ZXQ-NEEDLE-41729` |
+| old | dense-recent-only | pass | sequential-dense-recent-only | 0.283 / 0.056 | 0 / 0 | `ZXQ-NEEDLE-41729` |
+| old | block-select-exact | pass | packed-prefix-block-select-exact | 0.645 / 0.203 | 0.567 / 0.174 | `ZXQ-NEEDLE-41729` |
+| old | recent-only | pass | packed-then-compress | 0.724 / 0.098 | 0.871 / 0.073 | `ZXQ-NEEDLE-41729` |
+| old | block-summary | pass | packed-then-compress | 3.209 / 0.415 | 3.080 / 0.400 | `ZXQ-NEEDLE-41729` |
+| old | block-select-lossy | pass | packed-then-compress | 3.161 / 0.575 | 2.961 / 0.567 | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | packed-prefix | 0 / 0 | - | `ZXQ-NEEDLE-41729` |
+| recent | dense-recent-only | pass | sequential-dense-recent-only | 0.338 / 0.033 | 0 / 0 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-exact | pass | packed-prefix-block-select-exact | 0.397 / 0.042 | 0.310 / 0.045 | `ZXQ-NEEDLE-41729` |
+| recent | recent-only | pass | packed-then-compress | 1.567 / 0.234 | 1.459 / 0.231 | `ZXQ-NEEDLE-41729` |
+| recent | block-summary | pass | packed-then-compress | 0.296 / 0.069 | 0.483 / 0.066 | `ZXQ-NEEDLE-41729` |
+| recent | block-select-lossy | pass | packed-then-compress | 0.478 / 0.113 | 0.481 / 0.111 | `ZXQ-NEEDLE-41729` |
+
+2048 diagnostic command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_QUALITY_TARGETS=2048 \
+M40LLM_KV_QUALITY_EXACT_SELECTION_SWEEP=1 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=4 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-dense-window-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+2048 summary:
+
+| Needle | Mode | Status | Needle recent? | Question recent? | Expected rank dense/window/mode | Prompt diff vs dense | Prompt diff vs window | Output |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | --- |
+| old | off | pass | no | yes | 1 / - / 1 | 0 / 0 | - | `ZXQ-NEEDLE-41729` |
+| old | dense-recent-only | fail | no | yes | 1 / 100293 / 100293 | 20.466 / 1.926 | 0 / 0 | `assistant...` |
+| old | block-select-exact | pass | no | yes | 1 / 100293 / 1 | 3.815 / 0.530 | 19.265 / 1.892 | `ZXQ-NEEDLE-41729` |
+| old | recent-only | fail | no | yes | 1 / 100293 / 99481 | 20.907 / 1.969 | 19.134 / 1.787 | spaces |
+| old | block-summary | fail | no | yes | 1 / 100293 / 100988 | 20.853 / 1.968 | 19.081 / 1.793 | spaces |
+| old | block-select-lossy | fail | no | yes | 1 / 100293 / 100964 | 20.905 / 1.966 | 19.132 / 1.793 | spaces |
+| recent | off | pass | yes | yes | 1 / - / 1 | 0 / 0 | - | `ZXQ-NEEDLE-41729` |
+| recent | dense-recent-only | fail | yes | yes | 1 / 115552 / 115552 | 18.567 / 1.910 | 0 / 0 | `assistant...` |
+| recent | block-select-exact | pass | yes | yes | 1 / 115552 / 1 | 5.242 / 1.261 | 18.979 / 1.964 | `ZXQ-NEEDLE-41729` |
+| recent | recent-only | fail | yes | yes | 1 / 115552 / 8 | 17.953 / 1.602 | 16.730 / 1.812 | `Important secret code.` |
+| recent | block-summary | fail | yes | yes | 1 / 115552 / 8 | 17.944 / 1.602 | 16.719 / 1.811 | `Important secret code.` |
+| recent | block-select-lossy | fail | yes | yes | 1 / 115552 / 8 | 17.925 / 1.600 | 16.719 / 1.808 | `Important secret code.` |
+
+Interpretation:
+
+- Dense recent-window attention fails even when the recent needle and question
+  are both inside the recent ring. That means old context outside the 1024-token
+  window is still important for this retrieval prompt, or layerwise windowing
+  changes the model state enough to lose the answer.
+- `block-select-exact` still passes for both old and recent cases. For the old
+  needle, the needle block is selected at rank 0, so exact selected old blocks
+  remain the architectural direction for preserving retrieval quality.
+- Compressed sidecar `recent-only` is not equivalent to dense-window:
+  dense-window-vs-mode prompt max/mean diff remains large at 2048. The next
+  correctness target is therefore the compressed recent-ring construction/read
+  path before tuning summaries or representative counts further.

@@ -4,6 +4,7 @@ use std::sync::{Mutex, OnceLock};
 pub enum KvCompressMode {
     #[default]
     Off,
+    DenseRecentOnly,
     BlockSelectExact,
     RecentOnly,
     BlockSummary,

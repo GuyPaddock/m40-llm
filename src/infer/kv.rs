@@ -382,7 +382,23 @@ impl LoadedModel {
             );
         }
         let compression = runtime_config();
-        if compression.mode == KvCompressMode::BlockSelectExact {
+        if compression.mode == KvCompressMode::DenseRecentOnly {
+            if head_dim != 64 {
+                anyhow::bail!("dense-recent-only requires head_dim=64");
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                return kv.attention_last_token_f32_gqa_dense_recent_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    d_out,
+                );
+            }
+        } else if compression.mode == KvCompressMode::BlockSelectExact {
             if head_dim != 64 {
                 anyhow::bail!("block-select-exact requires head_dim=64");
             }

@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum KvCompressModeArg {
     Off,
+    DenseRecentOnly,
     BlockSelectExact,
     RecentOnly,
     BlockSummary,
@@ -14,6 +15,7 @@ impl From<KvCompressModeArg> for crate::kv_compression::KvCompressMode {
     fn from(value: KvCompressModeArg) -> Self {
         match value {
             KvCompressModeArg::Off => Self::Off,
+            KvCompressModeArg::DenseRecentOnly => Self::DenseRecentOnly,
             KvCompressModeArg::BlockSelectExact => Self::BlockSelectExact,
             KvCompressModeArg::RecentOnly => Self::RecentOnly,
             KvCompressModeArg::BlockSummary => Self::BlockSummary,
