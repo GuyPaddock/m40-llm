@@ -95,12 +95,16 @@ async fn main() -> Result<()> {
                 representatives: kv_compress_representatives,
                 representative_policy: kv_compress_representative_policy.into(),
             };
-            if matches!(
+            let use_compressed_kv = matches!(
                 kv_compression.mode,
                 KvCompressMode::RecentOnly
                     | KvCompressMode::BlockSummary
                     | KvCompressMode::BlockSelectLossy
-            ) {
+            ) || (kv_compression.mode == KvCompressMode::BlockSelectExact
+                && std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
+                    .map(|value| matches!(value.as_str(), "q8" | "Q8"))
+                    .unwrap_or(false));
+            if use_compressed_kv {
                 loaded.allocate_compressed_kv_cache_for_layers(
                     max_len.try_into().unwrap(),
                     &kv_compression,

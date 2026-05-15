@@ -136,15 +136,19 @@ diagnostic bridge to a future q8 exact-old backing store. JSONL rows include:
 - `staged_position_min`
 - `staged_position_max`
 
-`M40LLM_KV_EXACT_OLD_BACKING=q8` switches the staged `block-select-exact`
-diagnostic to a q8 old-token backing store. The runtime keeps dense KV allocated
-for this prototype, builds q8 old K/V from dense KV before staged attention, and
-dequantizes selected old blocks into the reusable staging workspace. Recent
-tokens remain exact FP16. JSONL rows include:
+`M40LLM_KV_EXACT_OLD_BACKING=q8` switches staged `block-select-exact` to a
+hybrid compressed/exact layout. The runtime stores the recent window as exact
+FP16, keeps summary/index metadata for block scoring, incrementally quantizes
+tokens that age out of the recent ring into q8 old K/V, and dequantizes selected
+old blocks into the reusable staging workspace. Dense `off` remains a dense FP16
+reference path and does not allocate q8 backing just because the env var is set.
+JSONL rows include:
 
 - `exact_old_backing`
 - `q8_old_backing_bytes`
 - `q8_old_backing_scale_bytes`
+- `final_kv_allocated_bytes`
+- `dense_equivalent_kv_bytes`
 
 Attention telemetry records first-captured probability mass by group:
 recent exact tokens, selected exact old tokens, old summaries, representatives,

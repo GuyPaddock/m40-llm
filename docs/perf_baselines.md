@@ -2670,3 +2670,70 @@ Interpretation:
   from dense KV on each attention call. The next step should build/update q8 old
   backing incrementally during prefill/decode and then allow dense old backing
   to be omitted.
+
+## 2026-05-14: Incremental Q8 Exact-Old Backing
+
+`M40LLM_KV_EXACT_OLD_BACKING=q8` now uses a hybrid compressed/exact
+`block-select-exact` layout instead of dense KV plus a rebuilt q8 sidecar. Dense
+`off` remains the FP16 reference and reports no q8 allocation. The q8 path keeps
+the recent ring as exact FP16, maintains summary/index metadata, quantizes tokens
+into q8 as they age out of the recent ring, and dequantizes selected old blocks
+into the reusable staging workspace.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- 2048-token incremental q8 exact-block retrieval sweep passed as a test run.
+  The JSONL report was written to
+  `/tmp/m40llm-kv-exact-block-q8-incremental-2048.jsonl`.
+
+Command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
+M40LLM_KV_EXACT_BLOCK_STAGING=1 \
+M40LLM_KV_EXACT_OLD_BACKING=q8 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4,8,16 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-q8-incremental-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+Q8-backed staged 2048 summary:
+
+| Needle | Top blocks | Status | Decode | Final KV | Dense-equivalent KV | Active KV all layers | Q8 payload | Q8 scales | Workspace bytes | Output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| old | off | pass | 6.208 s | 4.00 GiB | 4.00 GiB | 63.09 MiB | - | - | - | `ZXQ-NEEDLE-41729` |
+| old | 1 | fail | 5.026 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | 8.38 MiB | `ZX-NE-41729` |
+| old | 2 | pass | 7.688 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | 8.63 MiB | `ZXQ-NEEDLE-41729` |
+| old | 4 | pass | 7.987 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | 9.14 MiB | `ZXQ-NEEDLE-41729` |
+| old | 8 | pass | 8.596 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | 2.00 GiB | 128.00 MiB | 10.16 MiB | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 9.834 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | 2.00 GiB | 128.00 MiB | 12.19 MiB | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | 6.226 s | 4.00 GiB | 4.00 GiB | 63.56 MiB | - | - | - | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 0.839 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | 8.38 MiB | `ZX` |
+| recent | 2 | pass | 7.717 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | 8.63 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | 8.020 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | 9.14 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 8 | pass | 8.634 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | 2.00 GiB | 128.00 MiB | 10.16 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 16 | pass | 9.879 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | 2.00 GiB | 128.00 MiB | 12.19 MiB | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Incremental q8 exact-old backing preserves the exact-block retrieval pattern:
+  `top_blocks=1` fails and `top_blocks>=2` passes for old/recent needles.
+- The final KV allocation drops from 4.00 GiB dense FP16 to 2.53 GiB for this
+  16-layer, 131K-context Llama 3.2 1B layout. This includes the exact recent
+  ring, summary/index sidecar, q8 old K/V payload, q8 scales, and seq metadata.
+- Decode is still slower than dense `off` for passing exact-block rows because
+  selected q8 old blocks are dequantized into the staged FP16 working set before
+  attention. The next optimization target is reducing q8 gather/dequant overhead
+  or avoiding the FP16 staging round trip for selected blocks.

@@ -686,12 +686,16 @@ fn prepare_kv_cache(
         representatives: rep_case.representatives,
         representative_policy: rep_case.policy,
     };
-    if matches!(
+    let use_compressed_kv = matches!(
         mode,
         KvCompressMode::RecentOnly
             | KvCompressMode::BlockSummary
             | KvCompressMode::BlockSelectLossy
-    ) {
+    ) || (mode == KvCompressMode::BlockSelectExact
+        && std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
+            .map(|value| matches!(value.as_str(), "q8" | "Q8"))
+            .unwrap_or(false));
+    if use_compressed_kv {
         model.allocate_compressed_kv_cache_for_layers(max_len, &config)
     } else {
         model.allocate_kv_cache_for_layers(max_len)

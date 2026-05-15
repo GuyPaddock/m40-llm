@@ -282,6 +282,7 @@ mod ffi {
             top_blocks: u32,
             representatives: u32,
             representative_policy: u32,
+            q8_old_backing: u32,
         ) -> *mut M40llmKVCache;
         pub fn m40llm_kvcache_append_token(
             ctx: *mut M40llmCudaContext,
@@ -735,14 +736,12 @@ pub struct ExactBlockStagingPtrs {
     pub capacity_tokens: u32,
 }
 
-#[cfg(feature = "cuda")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExactOldBacking {
     Dense,
     Q8,
 }
 
-#[cfg(feature = "cuda")]
 impl ExactOldBacking {
     pub fn from_env() -> Self {
         match std::env::var("M40LLM_KV_EXACT_OLD_BACKING").ok().as_deref() {
@@ -1463,6 +1462,7 @@ impl CudaContext {
         top_blocks: u32,
         representatives: u32,
         representative_policy: crate::kv_compression::KvRepresentativePolicy,
+        exact_old_backing: ExactOldBacking,
     ) -> Result<*mut ffi::M40llmKVCache> {
         #[cfg(feature = "cuda")]
         {
@@ -1479,6 +1479,7 @@ impl CudaContext {
                     top_blocks,
                     representatives,
                     representative_policy.as_ffi(),
+                    u32::from(exact_old_backing == ExactOldBacking::Q8),
                 )
             };
             if kv.is_null() {
@@ -1502,6 +1503,7 @@ impl CudaContext {
                 top_blocks,
                 representatives,
                 representative_policy,
+                exact_old_backing,
             );
             Ok(std::ptr::null_mut())
         }
@@ -2951,26 +2953,6 @@ impl KVCache {
         #[cfg(feature = "cuda")]
         {
             let raw = ctx.create_kvcache(max_seq_len, max_batch_size, num_heads, head_dim)?;
-            let exact_old_backing = ExactOldBacking::from_env();
-            let q8_old_backing_bytes = if exact_old_backing == ExactOldBacking::Q8 {
-                (max_seq_len as usize)
-                    * (max_batch_size as usize)
-                    * (num_heads as usize)
-                    * (head_dim as usize)
-                    * std::mem::size_of::<i8>()
-                    * 2
-            } else {
-                0
-            };
-            let q8_old_backing_scale_bytes = if exact_old_backing == ExactOldBacking::Q8 {
-                (max_seq_len as usize)
-                    * (max_batch_size as usize)
-                    * (num_heads as usize)
-                    * std::mem::size_of::<f32>()
-                    * 2
-            } else {
-                0
-            };
             Ok(KVCache {
                 inner: Arc::new(KVCacheInner {
                     max_seq_len,
@@ -2982,9 +2964,9 @@ impl KVCache {
                     block_size: 0,
                     max_blocks: 0,
                     representatives: 0,
-                    exact_old_backing: exact_old_backing.as_str().to_string(),
-                    q8_old_backing_bytes,
-                    q8_old_backing_scale_bytes,
+                    exact_old_backing: ExactOldBacking::Dense.as_str().to_string(),
+                    q8_old_backing_bytes: 0,
+                    q8_old_backing_scale_bytes: 0,
                     actual_bytes: (max_seq_len as usize)
                         * (max_batch_size as usize)
                         * (num_heads as usize)
@@ -3051,6 +3033,7 @@ impl KVCache {
         top_blocks: u32,
         representatives: u32,
         representative_policy: crate::kv_compression::KvRepresentativePolicy,
+        exact_old_backing: ExactOldBacking,
     ) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
@@ -3064,6 +3047,7 @@ impl KVCache {
                 top_blocks,
                 representatives,
                 representative_policy,
+                exact_old_backing,
             )?;
             let elems_per_token = (num_heads as usize) * (head_dim as usize);
             let old_capacity = max_seq_len.saturating_sub(recent_window);
@@ -3099,13 +3083,33 @@ impl KVCache {
                 * std::mem::size_of::<u32>();
             let count_bytes = (max_batch_size as usize) * max_blocks * std::mem::size_of::<u32>();
             let seq_map_bytes = (max_batch_size as usize) * std::mem::size_of::<u32>();
+            let q8_old_backing_bytes = if exact_old_backing == ExactOldBacking::Q8 {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<i8>()
+                    * 2
+            } else {
+                0
+            };
+            let q8_old_backing_scale_bytes = if exact_old_backing == ExactOldBacking::Q8 {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * (num_heads as usize)
+                    * std::mem::size_of::<f32>()
+                    * 2
+            } else {
+                0
+            };
             let actual_bytes = recent_bytes
                 + summary_f16_bytes
                 + summary_acc_bytes
                 + representative_bytes
                 + representative_position_bytes
                 + count_bytes
-                + seq_map_bytes;
+                + seq_map_bytes
+                + q8_old_backing_bytes
+                + q8_old_backing_scale_bytes;
             let dense_equivalent_bytes = (max_seq_len as usize)
                 * (max_batch_size as usize)
                 * elems_per_token
@@ -3122,9 +3126,9 @@ impl KVCache {
                     block_size,
                     max_blocks: max_blocks as u32,
                     representatives,
-                    exact_old_backing: "dense".to_string(),
-                    q8_old_backing_bytes: 0,
-                    q8_old_backing_scale_bytes: 0,
+                    exact_old_backing: exact_old_backing.as_str().to_string(),
+                    q8_old_backing_bytes,
+                    q8_old_backing_scale_bytes,
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
@@ -3150,6 +3154,7 @@ impl KVCache {
                 top_blocks,
                 representatives,
                 representative_policy,
+                exact_old_backing,
             );
             anyhow::bail!("compressed KV cache requires cuda")
         }

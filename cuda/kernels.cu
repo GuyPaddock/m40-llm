@@ -1851,9 +1851,71 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void quantize_evicted_recent_to_q8_old_head64_kernel(
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        int8_t* __restrict__ q8_k,
+        int8_t* __restrict__ q8_v,
+        float* __restrict__ k_scale,
+        float* __restrict__ v_scale,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t num_heads,
+        uint32_t seq_id,
+        uint32_t position) {
+        __shared__ float reduce[128];
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t head_dim = 64;
+        if (head >= num_heads || position < recent_window) return;
+        const uint32_t old_pos = position - recent_window;
+        const uint32_t ring = position % recent_window;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t recent_base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                 * elems_per_token + (size_t)head * head_dim;
+        const size_t q8_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                             * elems_per_token + (size_t)head * head_dim;
+        float local_max_k = 0.0f;
+        float local_max_v = 0.0f;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            local_max_k = fmaxf(local_max_k, fabsf(__half2float(recent_k[recent_base + d])));
+            local_max_v = fmaxf(local_max_v, fabsf(__half2float(recent_v[recent_base + d])));
+        }
+        reduce[tid] = local_max_k;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_k = reduce[0];
+        reduce[tid] = local_max_v;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_v = reduce[0];
+        const float scale_k = max_k > 0.0f ? max_k / 127.0f : 1.0f / 127.0f;
+        const float scale_v = max_v > 0.0f ? max_v / 127.0f : 1.0f / 127.0f;
+        const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                               * (size_t)num_heads + head;
+        if (tid == 0) {
+            k_scale[scale_idx] = scale_k;
+            v_scale[scale_idx] = scale_v;
+        }
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            const int kq = max(-127, min(127, (int)lrintf(__half2float(recent_k[recent_base + d]) / scale_k)));
+            const int vq = max(-127, min(127, (int)lrintf(__half2float(recent_v[recent_base + d]) / scale_v)));
+            q8_k[q8_base + d] = (int8_t)kq;
+            q8_v[q8_base + d] = (int8_t)vq;
+        }
+    }
+
     __global__ void gather_block_select_exact_q8_old_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
         const int8_t* __restrict__ q8_k,
         const int8_t* __restrict__ q8_v,
         const float* __restrict__ k_scale,
@@ -1964,18 +2026,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             if (tid == 0) {
                 staged_positions[(size_t)qh_idx * selected_capacity + idx] = t;
             }
-            const size_t src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
-                             + (size_t)kvh_idx * (size_t)head_dim;
             const size_t dst = ((size_t)qh_idx * selected_capacity + idx) * head_dim;
             const bool old_token = t < recent_start;
+            const size_t q8_src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                + (size_t)kvh_idx * (size_t)head_dim;
             const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
             const float ks = old_token ? k_scale[scale_idx] : 0.0f;
             const float vs = old_token ? v_scale[scale_idx] : 0.0f;
             for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
                 if (old_token) {
-                    staged_k[dst + d] = __float2half_rn((float)q8_k[src + d] * ks);
-                    staged_v[dst + d] = __float2half_rn((float)q8_v[src + d] * vs);
+                    staged_k[dst + d] = __float2half_rn((float)q8_k[q8_src + d] * ks);
+                    staged_v[dst + d] = __float2half_rn((float)q8_v[q8_src + d] * vs);
+                } else if (recent_k && recent_v) {
+                    const uint32_t ring = t % recent_window;
+                    const size_t recent_src = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                            * elems_per_token + (size_t)kvh_idx * (size_t)head_dim;
+                    staged_k[dst + d] = recent_k[recent_src + d];
+                    staged_v[dst + d] = recent_v[recent_src + d];
                 } else {
+                    const size_t src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t)
+                                     * elems_per_token + (size_t)kvh_idx * (size_t)head_dim;
                     staged_k[dst + d] = K[src + d];
                     staged_v[dst + d] = V[src + d];
                 }
@@ -3227,6 +3297,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
             reinterpret_cast<const __half*>(kv->d_k),
             reinterpret_cast<const __half*>(kv->d_v),
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
             kv->d_q8_old_k,
             kv->d_q8_old_v,
             kv->d_q8_old_k_scale,
@@ -3997,11 +4069,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return (size_t)max_seq_len * (size_t)max_batch_size * (size_t)num_heads * (size_t)head_dim;
     }
 
-    static bool q8_exact_old_backing_enabled() {
-        const char* env = getenv("M40LLM_KV_EXACT_OLD_BACKING");
-        return env && strcmp(env, "q8") == 0;
-    }
-
     static void init_q8_old_backing_fields(M40llmKVCache* kv) {
         kv->d_q8_old_k = nullptr;
         kv->d_q8_old_v = nullptr;
@@ -4075,11 +4142,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) { cudaFree(kv->d_k); delete kv; return nullptr; }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { cudaFree(kv->d_k); cudaFree(kv->d_v); delete kv; return nullptr; }
-        if (q8_exact_old_backing_enabled() && !allocate_q8_old_backing(kv)) {
-            m40llm_kvcache_destroy(kv);
-            return nullptr;
-        }
-
         cudaMemset(kv->d_k, 0, bytes);
         cudaMemset(kv->d_v, 0, bytes);
         cudaMemset(kv->d_seq_map, 0, seq_map_size);
@@ -4095,7 +4157,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t block_size,
                                          uint32_t top_blocks,
                                          uint32_t representatives,
-                                         uint32_t representative_policy) {
+                                         uint32_t representative_policy,
+                                         uint32_t q8_old_backing) {
         if (!ctx || recent_window == 0 || block_size == 0) return nullptr;
         if (ensure_device(ctx) != 0) return nullptr;
         M40llmKVCache* kv = new M40llmKVCache();
@@ -4154,6 +4217,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
             err = cudaMalloc(&kv->d_rep_positions, rep_position_size);
             if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        }
+        if (q8_old_backing != 0 && !allocate_q8_old_backing(kv)) {
+            m40llm_kvcache_destroy(kv);
+            return nullptr;
         }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
@@ -4642,6 +4709,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (position >= kv->max_seq_len) return -5;
         const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
         const int threads = 256;
+        if (kv->q8_old_backing && position >= kv->recent_window) {
+            quantize_evicted_recent_to_q8_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_k,
+                kv->d_recent_v,
+                kv->d_q8_old_k,
+                kv->d_q8_old_v,
+                kv->d_q8_old_k_scale,
+                kv->d_q8_old_v_scale,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                seq_id,
+                position);
+            cudaError_t q8_err = cudaGetLastError();
+            if (q8_err != cudaSuccess) {
+                fprintf(stderr, "compressed q8 old append kernel launch error: %s\n", cudaGetErrorString(q8_err));
+                return -7;
+            }
+        }
         const int blocks = (int)((elems_per_token + threads - 1) / threads);
         compressed_rope_k_append_f32_to_f16_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
             reinterpret_cast<const float*>(k_dev_f32),

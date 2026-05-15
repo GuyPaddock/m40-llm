@@ -4,7 +4,9 @@ mod cuda_env;
 
 use anyhow::Result;
 use half::f16;
-use m40_llm::cuda::{ffi_debug_read_kv_token, ExactBlockStagingWorkspace, KVCache};
+use m40_llm::cuda::{
+    ffi_debug_read_kv_token, ExactBlockStagingWorkspace, ExactOldBacking, KVCache,
+};
 use m40_llm::kv_compression::{
     set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
 };
@@ -223,6 +225,19 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let q_dim = (q_heads * head_dim) as usize;
     let kv_dim = (kv_heads * head_dim) as usize;
     let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+    let kv_q8 = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Q8,
+    )?;
 
     for t in 0..seq_len as usize {
         let k: Vec<f32> = (0..kv_dim)
@@ -237,7 +252,26 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         unsafe {
             ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
             ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
-            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            kv.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            kv_q8.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
             ctx.device_free(d_k)?;
             ctx.device_free(d_v)?;
         }
@@ -281,8 +315,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             staging.ptrs(),
             d_staged,
         )?;
-        kv.build_q8_old_from_dense(&ctx, 0, seq_len, recent_window)?;
-        kv.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
             &ctx,
             0,
             d_q as *const c_void,
@@ -517,6 +550,7 @@ fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
         2,
         0,
         KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
     )?;
     assert!(compressed.is_compressed());
     assert!(compressed.actual_bytes() < compressed.dense_equivalent_bytes());
@@ -672,6 +706,7 @@ fn compressed_kv_recent_ring_matches_dense_window_after_wrap() -> Result<()> {
         2,
         0,
         KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
     )?;
     let compressed_built = KVCache::new_compressed_with_context(
         &ctx,
@@ -684,6 +719,7 @@ fn compressed_kv_recent_ring_matches_dense_window_after_wrap() -> Result<()> {
         2,
         0,
         KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
     )?;
 
     for t in 0..seq_len as usize {

@@ -226,17 +226,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `staged_workspace_reused`, workspace capacity/bytes, and one allocation per
   session. The 2048 reusable-staged sweep preserves the known pass/fail pattern:
   `top_blocks=1` fails and `top_blocks>=2` passes for old/recent needles.
-  `M40LLM_KV_EXACT_OLD_BACKING=q8` now adds a diagnostic q8 old-token backing
-  path for staged `block-select-exact`: dense KV remains allocated, q8 old K/V is
-  rebuilt from the active dense layer slot before attention, selected old blocks
-  are dequantized into the reusable staging workspace, and recent tokens remain
-  exact FP16. A 2048 Llama-3.2-1B sweep preserves the same quality pattern
-  (`top_blocks=1` fails, `top_blocks>=2` passes) while reporting a 2.00 GiB q8
-  payload plus 128 MiB scales for the dense-equivalent old backing.
-- Next: make q8 old backing incremental/persistent so dense old backing can be
-  omitted after prefill. Do not increase representative count further, tune pure
-  summary modes, or expand compressed KV into server scheduling before q8 memory
-  savings are real and characterized.
+  `M40LLM_KV_EXACT_OLD_BACKING=q8` now uses a hybrid compressed/exact
+  `block-select-exact` layout instead of dense KV plus a rebuilt q8 sidecar:
+  dense `off` remains the FP16 reference, recent tokens stay in an exact FP16
+  ring, old tokens are quantized incrementally as they age out of the ring, and
+  selected old blocks are dequantized into the reusable staging workspace. A
+  2048 Llama-3.2-1B sweep preserves the same quality pattern (`top_blocks=1`
+  fails, `top_blocks>=2` passes) while reducing final KV allocation from
+  4.00 GiB dense-equivalent to 2.53 GiB for q8 exact-block rows.
+- Next: reduce q8 gather/dequant and FP16 staging overhead, or prototype direct
+  q8 selected-block attention. Do not increase representative count further,
+  tune pure summary modes, or expand compressed KV into server scheduling before
+  q8 exact-block cost is characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

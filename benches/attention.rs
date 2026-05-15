@@ -6,7 +6,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 #[cfg(not(all(feature = "cuda", nvcc)))]
 use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(all(feature = "cuda", nvcc))]
-use m40_llm::cuda::KVCache;
+use m40_llm::cuda::{ExactOldBacking, KVCache};
 #[cfg(all(feature = "cuda", nvcc))]
 use m40_llm::infer::{BatchMetadata, BatchSequence};
 #[cfg(all(feature = "cuda", nvcc))]
@@ -680,6 +680,7 @@ fn bench_attention_kv_compression_modes(c: &mut Criterion) {
                 top_blocks,
                 0,
                 KvRepresentativePolicy::Last,
+                ExactOldBacking::Dense,
             )
             .expect("compressed kv cache");
             seed_kv_cache_with_explicit_positions(&ctx, &compressed_kv, seq_len, kv_dim);
