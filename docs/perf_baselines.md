@@ -2831,3 +2831,59 @@ Interpretation:
   passes at `top_blocks=4` and `16` but fails at `8`. This non-monotonic quality
   behavior means the next task should investigate block selection/logit drift at
   4096 before any 8192 sweep or default-backend change.
+
+## 2026-05-15: Direct Q8 4096 Block-Selection Diagnostics
+
+The 4096 direct-q8 diagnostic sweep now records score-ranked selected blocks,
+per-selected-block first-token attention mass, candidate ordering flags, q8
+exact-old memory, active attended KV size, and dense-vs-compressed prompt/first
+decode logit differences. During this work the q8 diagnostic scorer was fixed
+to avoid dereferencing CUDA device pointers from host code; it now bulk-copies
+the old q8 K region and per-token/head scales before host-side diagnostic
+scoring. `M40LLM_KV_QUALITY_NEEDLES=old,recent` was also added as a test-only
+filter so expensive 4096 sweeps can target one placement.
+
+Reports:
+
+- `/tmp/m40llm-kv-direct-q8-4096-diagnostics-fixed.jsonl`
+- `/tmp/m40llm-kv-direct-q8-4096-recent-8-16.jsonl`
+
+Validation:
+
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- 1024-token q8-direct telemetry repro passed after the host/device pointer fix.
+- 4096 old top_blocks=4/8/16 and recent top_blocks=4/8/16 diagnostic rows were
+  captured with dense references.
+
+4096 direct-q8 diagnostic summary:
+
+| Needle | Top blocks | Status | Output | Prompt max diff | Prompt mean diff | First decode max diff | First decode mean diff | Recent mass | Old exact mass | Active old tokens | Active recent tokens | Staged bytes |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| old | off | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 0.000 | 0.000 | - | - | 3039 | 1024 | - |
+| old | 4 | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | 7.469 | 1.257 | 4.862 | 0.794 | 0.999946 | 0.000054 | 128 | 1024 | 2.25 MiB |
+| old | 8 | pass | `ZXQ-NEEDLE-41729` | 4.741 | 0.713 | 4.254 | 0.676 | 0.999918 | 0.000082 | 256 | 1024 | 2.50 MiB |
+| old | 16 | pass | `ZXQ-NEEDLE-41729` | 2.078 | 0.549 | 3.199 | 0.802 | 0.999871 | 0.000129 | 512 | 1024 | 3.00 MiB |
+| recent | off | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 0.000 | 0.000 | - | - | 3054 | 1024 | - |
+| recent | 4 | pass | `ZXQ-NEEDLE-41729` | 4.752 | 0.688 | 6.083 | 1.272 | 0.999965 | 0.000035 | 128 | 1024 | 2.25 MiB |
+| recent | 8 | fail | `ZXQ` | 3.295 | 0.684 | 5.705 | 1.006 | 0.999928 | 0.000072 | 256 | 1024 | 2.50 MiB |
+| recent | 16 | pass | `ZXQ-NEEDLE-41729` | 2.359 | 0.228 | 3.960 | 1.121 | 0.999880 | 0.000120 | 512 | 1024 | 3.00 MiB |
+
+Interpretation:
+
+- For the 4096 old-needle prompt, the needle block is selected at rank 0 even
+  when `top_blocks=4` fails. This rules out "relevant block not selected" as the
+  only failure mode.
+- For the 4096 recent-needle prompt, the needle and question are in the exact
+  recent ring, so `needle_block_index` is not applicable. The first captured
+  attention distribution still assigns more than 99.98% probability mass to the
+  exact recent ring in top_blocks=8 and top_blocks=16.
+- All exact-block diagnostic rows report non-chronological score-ranked selected
+  blocks and non-chronological candidate ordering. This matches the direct-q8
+  selection path; it should be tested against a chronological selected-block
+  attention order before broader sweeps.
+- The expected first answer token remains rank 1 in every compressed diagnostic
+  row, and the first decode top token matches dense. The top_blocks=8 recent
+  failure therefore occurs after the first answer token, not at initial answer
+  selection. The next diagnostic should capture per-generated-token logits or
+  force chronological selected-block ordering before treating the scorer itself
+  as the primary problem.

@@ -495,6 +495,32 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     Ok(contexts)
 }
 
+fn needle_positions() -> Result<Vec<&'static str>> {
+    let Some(value) = std::env::var("M40LLM_KV_QUALITY_NEEDLES")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(vec!["old", "recent"]);
+    };
+    let mut needles = Vec::new();
+    for part in value.split(',') {
+        match part.trim() {
+            "old" => needles.push("old"),
+            "recent" => needles.push("recent"),
+            "" => {}
+            other => anyhow::bail!(
+                "invalid M40LLM_KV_QUALITY_NEEDLES entry '{other}', expected old or recent"
+            ),
+        }
+    }
+    needles.sort_unstable();
+    needles.dedup();
+    if needles.is_empty() {
+        anyhow::bail!("M40LLM_KV_QUALITY_NEEDLES did not contain any values");
+    }
+    Ok(needles)
+}
+
 fn lossy_packed_sweep_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_LOSSY_PACKED_SWEEP")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -1365,10 +1391,11 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let exact_selection_sweep = exact_selection_sweep_enabled();
     let modes = quality_modes(lossy_packed_sweep, exact_selection_sweep);
     let rep_cases = representative_cases(lossy_packed_sweep);
+    let needle_positions = needle_positions()?;
 
     let mut records = Vec::new();
     for target_tokens in contexts {
-        for needle_position in ["old", "recent"] {
+        for &needle_position in &needle_positions {
             let mut dense_passed = None;
             let mut dense_prompt_logits: Option<Vec<f32>> = None;
             let mut dense_first_decode_logits: Option<Vec<f32>> = None;

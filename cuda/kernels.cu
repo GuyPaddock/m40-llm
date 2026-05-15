@@ -5216,22 +5216,42 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         std::vector<std::pair<float, uint32_t>> scored;
         scored.reserve(old_blocks);
-        __half k_buf[64];
         const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
         const float scale = 0.125f;
+        __half k_buf[64];
+        const bool use_q8_old_host =
+            kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        std::vector<int8_t> q8_old_k_host;
+        std::vector<float> q8_old_k_scale_host;
+        if (use_q8_old_host) {
+            q8_old_k_host.resize((size_t)old_len * elems_per_token);
+            q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
+            const size_t q8_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * (size_t)kv->num_heads;
+            err = cudaMemcpy(q8_old_k_host.data(),
+                             kv->d_q8_old_k + q8_base,
+                             q8_old_k_host.size() * sizeof(int8_t),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -10;
+            err = cudaMemcpy(q8_old_k_scale_host.data(),
+                             kv->d_q8_old_k_scale + scale_base,
+                             q8_old_k_scale_host.size() * sizeof(float),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -11;
+        }
 
         for (uint32_t block = 0; block < old_blocks; ++block) {
             float score = 0.0f;
-            if (kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale) {
+            if (use_q8_old_host) {
                 const uint32_t start = block * effective_block;
                 const uint32_t end = std::min(start + effective_block, old_len);
                 if (end <= start) continue;
                 for (uint32_t pos = start; pos < end; ++pos) {
-                    const size_t base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * elems_per_token;
-                    const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * (size_t)kv->num_heads;
+                    const size_t base = (size_t)pos * elems_per_token;
+                    const float q8_scale = q8_old_k_scale_host[(size_t)pos * (size_t)kv->num_heads];
                     for (uint32_t d = 0; d < 64; ++d) {
                         const __half k = __float2half_rn(
-                            (float)kv->d_q8_old_k[base + d] * kv->d_q8_old_k_scale[scale_base]);
+                            (float)q8_old_k_host[base + d] * q8_scale);
                         score += q[d] * __half2float(k);
                     }
                 }
@@ -5334,6 +5354,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const size_t elems_per_token = (size_t)kv->num_heads * 64u;
         const float scale = 0.125f;
         __half k_buf[64];
+        const bool use_q8_old_host =
+            kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        std::vector<int8_t> q8_old_k_host;
+        std::vector<float> q8_old_k_scale_host;
+        if (use_q8_old_host) {
+            q8_old_k_host.resize((size_t)old_len * elems_per_token);
+            q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
+            const size_t q8_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * (size_t)kv->num_heads;
+            err = cudaMemcpy(q8_old_k_host.data(),
+                             kv->d_q8_old_k + q8_base,
+                             q8_old_k_host.size() * sizeof(int8_t),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -20;
+            err = cudaMemcpy(q8_old_k_scale_host.data(),
+                             kv->d_q8_old_k_scale + scale_base,
+                             q8_old_k_scale_host.size() * sizeof(float),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -21;
+        }
 
         auto dot_q = [&](const __half* ptr) -> float {
             float dot = 0.0f;
@@ -5356,13 +5396,13 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return 0;
         };
         auto score_q8_token = [&](uint32_t token, float* score) -> int {
-            if (!kv->d_q8_old_k || !kv->d_q8_old_k_scale) return -1;
-            const size_t base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * elems_per_token;
-            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * (size_t)kv->num_heads;
+            if (!use_q8_old_host || token >= old_len) return -1;
+            const size_t base = (size_t)token * elems_per_token;
+            const float q8_scale = q8_old_k_scale_host[(size_t)token * (size_t)kv->num_heads];
             float dot = 0.0f;
             for (uint32_t d = 0; d < 64; ++d) {
                 const __half k = __float2half_rn(
-                    (float)kv->d_q8_old_k[base + d] * kv->d_q8_old_k_scale[scale_base]);
+                    (float)q8_old_k_host[base + d] * q8_scale);
                 dot += q[d] * __half2float(k);
             }
             *score = dot * scale;

@@ -242,12 +242,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   5.5-5.8 s for the smallest passing rows. A 4096 sweep shows direct-q8 is not
   ready as a default: old-needle retrieval requires `top_blocks>=8`, and
   recent-needle retrieval is non-monotonic (`top_blocks=4` and `16` pass while
-  `8` fails).
-- Next: investigate 4096 direct-q8 quality instability with block-selection and
-  logit-drift telemetry before any 8192 sweep or default-backend change. Do not
-  increase representative count further, tune pure summary modes, or expand
-  compressed KV into server scheduling before q8 exact-block cost is
-  characterized.
+  `8` fails). The 4096 direct-q8 diagnostics now record score-ranked selected
+  blocks, block scores/ranges, candidate-order flags, selected-block attention
+  mass, active attended KV size, and dense-vs-compressed prompt/first-decode
+  logit drift. The diagnostic q8 scorer now bulk-copies q8 old K/scales to host
+  instead of dereferencing device pointers. Results show the old-needle block is
+  selected at rank 0 even when top_blocks=4 fails, while recent top_blocks=8
+  fails after the first answer token despite first-token logits matching dense
+  at top-token level and more than 99.99% first-token attention mass on the
+  recent ring.
+- Next: test chronological selected-block candidate ordering and/or
+  per-generated-token logit telemetry for the 4096 top_blocks sensitivity before
+  any 8192 sweep or default-backend change. Do not increase representative
+  count further, tune pure summary modes, or expand compressed KV into server
+  scheduling before q8 exact-block cost is characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
