@@ -264,6 +264,32 @@ int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_a
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks; (void)staged_k_dev; (void)staged_v_dev; (void)staged_positions_dev; (void)staged_counts_dev; (void)staged_capacity_tokens; (void)out_dev_f32; return -1;
 }
+int m40llm_kvcache_build_q8_old_from_dense(
+    M40llmCudaContext* ctx,
+    M40llmKVCache* kv,
+    uint32_t seq_id,
+    uint32_t seq_len,
+    uint32_t recent_window) {
+    (void)ctx; (void)kv; (void)seq_id; (void)seq_len; (void)recent_window; return -1;
+}
+int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    uint32_t recent_window,
+    uint32_t block_size,
+    uint32_t top_blocks,
+    void* staged_k_dev,
+    void* staged_v_dev,
+    void* staged_positions_dev,
+    void* staged_counts_dev,
+    uint32_t staged_capacity_tokens,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks; (void)staged_k_dev; (void)staged_v_dev; (void)staged_positions_dev; (void)staged_counts_dev; (void)staged_capacity_tokens; (void)out_dev_f32; return -1;
+}
 int m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
     M40llmCudaContext* ctx,
     const M40llmKVCache* kv,

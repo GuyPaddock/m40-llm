@@ -69,6 +69,9 @@ pub struct GeneratedText {
     pub temporary_dense_kv_bytes: Option<usize>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
+    pub exact_old_backing: Option<String>,
+    pub q8_old_backing_bytes: Option<usize>,
+    pub q8_old_backing_scale_bytes: Option<usize>,
     pub staged_workspace_reused: bool,
     pub staged_workspace_bytes: Option<usize>,
     pub staged_workspace_capacity_tokens: Option<u32>,
@@ -720,6 +723,15 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .kv_cache
             .as_ref()
             .map(|kv| kv.dense_equivalent_bytes()),
+        exact_old_backing: model
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.exact_old_backing().to_string()),
+        q8_old_backing_bytes: model.kv_cache.as_ref().map(|kv| kv.q8_old_backing_bytes()),
+        q8_old_backing_scale_bytes: model
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.q8_old_backing_scale_bytes()),
         #[cfg(feature = "cuda")]
         staged_workspace_reused: decode_session.exact_block_staging_reused(),
         #[cfg(not(feature = "cuda"))]

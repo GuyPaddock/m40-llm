@@ -20,6 +20,12 @@ fn exact_block_staging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn q8_exact_old_backing_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
+        .map(|value| matches!(value.as_str(), "q8" | "Q8"))
+        .unwrap_or(false)
+}
+
 #[cfg(feature = "cuda")]
 pub fn with_exact_block_staging<R>(
     staging: Option<ExactBlockStagingPtrs>,
@@ -477,6 +483,26 @@ impl LoadedModel {
                 }
                 if exact_block_staging_enabled() {
                     if let Some(staging) = current_exact_block_staging() {
+                        if q8_exact_old_backing_enabled() {
+                            kv.build_q8_old_from_dense(
+                                &self.cuda,
+                                seq_id,
+                                seq_len,
+                                compression.recent_window,
+                            )?;
+                            return kv.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+                                &self.cuda,
+                                seq_id,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                compression.recent_window,
+                                compression.block_size,
+                                compression.top_blocks,
+                                staging,
+                                d_out,
+                            );
+                        }
                         return kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
                             &self.cuda,
                             seq_id,
@@ -746,6 +772,27 @@ impl LoadedModel {
         unsafe {
             if exact_block_staging_enabled() {
                 if let Some(staging) = current_exact_block_staging() {
+                    if q8_exact_old_backing_enabled() {
+                        kv.build_q8_old_from_dense(
+                            &self.cuda,
+                            physical_slot,
+                            seq_len,
+                            recent_window,
+                        )?;
+                        return kv
+                            .attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+                                &self.cuda,
+                                physical_slot,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                recent_window,
+                                block_size,
+                                top_blocks,
+                                staging,
+                                d_out,
+                            );
+                    }
                     return kv
                         .attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
                             &self.cuda,

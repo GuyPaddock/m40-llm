@@ -180,6 +180,30 @@ fn attention_dense_recent_window_matches_reference() -> Result<()> {
 
 #[test]
 fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> Result<()> {
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, previous }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.previous {
+                    Some(value) => std::env::set_var(self.key, value),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+    let _q8_env = EnvGuard::set("M40LLM_KV_EXACT_OLD_BACKING", "q8");
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
@@ -225,8 +249,11 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_dense = ctx.device_malloc(bytes_q)?;
     let d_sparse = ctx.device_malloc(bytes_q)?;
     let d_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_staged = ctx.device_malloc(bytes_q)?;
     let staging_capacity_tokens = recent_window + top_blocks * block_size;
     let staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
+    let q8_staging =
         ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
@@ -254,12 +281,26 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             staging.ptrs(),
             d_staged,
         )?;
+        kv.build_q8_old_from_dense(&ctx, 0, seq_len, recent_window)?;
+        kv.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            q8_staging.ptrs(),
+            d_q8_staged,
+        )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
     let mut dense = vec![0f32; q_dim];
     let mut sparse = vec![0f32; q_dim];
     let mut staged = vec![0f32; q_dim];
+    let mut q8_staged = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense.as_mut_ptr() as *mut c_void,
@@ -276,13 +317,25 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             d_staged as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            q8_staged.as_mut_ptr() as *mut c_void,
+            d_q8_staged as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_sparse)?;
         ctx.device_free(d_staged)?;
+        ctx.device_free(d_q8_staged)?;
     }
 
-    for (idx, ((&a, &b), &c)) in dense.iter().zip(&sparse).zip(&staged).enumerate() {
+    for (idx, (((&a, &b), &c), &q8)) in dense
+        .iter()
+        .zip(&sparse)
+        .zip(&staged)
+        .zip(&q8_staged)
+        .enumerate()
+    {
         assert!(
             (a - b).abs() < 1e-3,
             "block-select-exact mismatch at {idx}: dense={a} sparse={b}"
@@ -290,6 +343,10 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         assert!(
             (b - c).abs() < 1e-3,
             "staged block-select-exact mismatch at {idx}: direct={b} staged={c}"
+        );
+        assert!(
+            (c - q8).abs() < 2e-2,
+            "q8 staged block-select-exact mismatch at {idx}: staged={c} q8={q8}"
         );
     }
 

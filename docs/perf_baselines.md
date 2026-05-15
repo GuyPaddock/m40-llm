@@ -2601,3 +2601,72 @@ Interpretation:
   gather kernel still stages FP16 K/V before attention.
 - The next task should be q8 exact-old backing that dequantizes selected old
   blocks into this reusable staging workspace.
+
+## 2026-05-14: Q8 Exact-Old Backing Prototype
+
+`M40LLM_KV_EXACT_OLD_BACKING=q8` now switches staged `block-select-exact` to an
+experimental q8 old-token backing store. Dense KV remains allocated in this
+prototype for prompt prefill, diagnostics, and fallback; q8 old K/V is rebuilt
+from the active dense layer slot before staged attention, and selected old blocks
+are dequantized into the reusable staging workspace. Recent tokens still use
+exact FP16 KV.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including q8-old staged attention parity coverage.
+- 2048-token q8-backed staged exact-block retrieval sweep passed as a test run.
+  The JSONL report was written to
+  `/tmp/m40llm-kv-exact-block-q8-staged-2048.jsonl`.
+
+Command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
+M40LLM_KV_EXACT_BLOCK_STAGING=1 \
+M40LLM_KV_EXACT_OLD_BACKING=q8 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4,8,16 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-q8-staged-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+Q8-backed staged 2048 summary:
+
+| Needle | Top blocks | Status | Decode | Active KV tokens | Active KV all layers | Q8 payload | Q8 scales | Workspace bytes | Output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| old | off | pass | 6.245 s | 2019 | 63.09 MiB | 2.00 GiB | 128.00 MiB | - | `ZXQ-NEEDLE-41729` |
+| old | 1 | fail | 5.437 s | 1056 | 33.00 MiB | 2.00 GiB | 128.00 MiB | 8.38 MiB | `ZXQNE-41729` |
+| old | 2 | pass | 8.511 s | 1088 | 34.00 MiB | 2.00 GiB | 128.00 MiB | 8.63 MiB | `ZXQ-NEEDLE-41729` |
+| old | 4 | pass | 8.690 s | 1152 | 36.00 MiB | 2.00 GiB | 128.00 MiB | 9.14 MiB | `ZXQ-NEEDLE-41729` |
+| old | 8 | pass | 9.228 s | 1280 | 40.00 MiB | 2.00 GiB | 128.00 MiB | 10.16 MiB | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 10.472 s | 1536 | 48.00 MiB | 2.00 GiB | 128.00 MiB | 12.19 MiB | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | 6.196 s | 2034 | 63.56 MiB | 2.00 GiB | 128.00 MiB | - | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 2.743 s | 1056 | 33.00 MiB | 2.00 GiB | 128.00 MiB | 8.38 MiB | `ZX-NE` |
+| recent | 2 | pass | 8.490 s | 1088 | 34.00 MiB | 2.00 GiB | 128.00 MiB | 8.63 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | 8.875 s | 1152 | 36.00 MiB | 2.00 GiB | 128.00 MiB | 9.14 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 8 | pass | 9.287 s | 1280 | 40.00 MiB | 2.00 GiB | 128.00 MiB | 10.16 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 16 | pass | 10.602 s | 1536 | 48.00 MiB | 2.00 GiB | 128.00 MiB | 12.19 MiB | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Q8 exact-old backing preserves the staged exact-block quality pattern at 2048:
+  `top_blocks=1` fails and `top_blocks>=2` passes for old/recent needles.
+- The q8 payload plus per-token/head scales is 2.125 GiB for this dense-equivalent
+  16-layer, 131K-context Llama 3.2 1B allocation, compared with 4.00 GiB for the
+  FP16 dense KV backing. Dense KV remains allocated in this prototype, so this
+  is not yet a net memory reduction.
+- Decode is slower than reusable FP16 staging because q8 old backing is rebuilt
+  from dense KV on each attention call. The next step should build/update q8 old
+  backing incrementally during prefill/decode and then allow dense old backing
+  to be omitted.
