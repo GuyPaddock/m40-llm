@@ -2798,7 +2798,11 @@ Interpretation:
 - Passing direct-q8 rows are materially faster than staged-q8 rows from the
   prior sweep: top_blocks=2 improved from 7.688 s to 5.548 s for old and from
   7.717 s to 5.544 s for recent.
-- Dense `off` remains slightly faster than passing direct-q8 rows at this prompt
-  size, so the direct backend remains experimental. The next useful step is a
-  broader top_blocks=1,2,4,8,16 sweep and then larger contexts where dense
-  attention cost should dominate more strongly.
+- Direct-q8 top_blocks=2 and 4 are faster than dense `off` on the documented
+  generated-token decode-time basis for this 2048-token sweep: old top_blocks=2
+  is 5.548 s versus dense 6.210 s, and recent top_blocks=2 is 5.544 s versus
+  dense 6.246 s. The direct backend remains experimental because this is a
+  bounded 2048-token, top_blocks=1,2,4 sweep rather than a full top_blocks and
+  context-length characterization. The next useful step is a broader
+  top_blocks=1,2,4,8,16 sweep and then larger contexts where dense attention
+  cost should dominate more strongly.
