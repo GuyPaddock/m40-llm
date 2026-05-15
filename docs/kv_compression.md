@@ -145,10 +145,19 @@ reference path and does not allocate q8 backing just because the env var is set.
 JSONL rows include:
 
 - `exact_old_backing`
+- `exact_old_attention_backend`
 - `q8_old_backing_bytes`
 - `q8_old_backing_scale_bytes`
 - `final_kv_allocated_bytes`
 - `dense_equivalent_kv_bytes`
+
+By default, q8 exact-old attention still dequantizes selected old blocks into
+the reusable FP16 staging workspace before attention. Set
+`M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct` to use the experimental direct q8
+attention backend instead. The direct backend skips the FP16 staging buffers for
+old selected blocks and dequantizes q8 old K/V inside the attention kernel while
+preserving the staged path's FP16 rounding semantics. Keep this opt-in until the
+2048 and larger quality sweeps are characterized across more prompts.
 
 Attention telemetry records first-captured probability mass by group:
 recent exact tokens, selected exact old tokens, old summaries, representatives,

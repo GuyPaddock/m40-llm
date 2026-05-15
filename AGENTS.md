@@ -233,11 +233,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   selected old blocks are dequantized into the reusable staging workspace. A
   2048 Llama-3.2-1B sweep preserves the same quality pattern (`top_blocks=1`
   fails, `top_blocks>=2` passes) while reducing final KV allocation from
-  4.00 GiB dense-equivalent to 2.53 GiB for q8 exact-block rows.
-- Next: reduce q8 gather/dequant and FP16 staging overhead, or prototype direct
-  q8 selected-block attention. Do not increase representative count further,
-  tune pure summary modes, or expand compressed KV into server scheduling before
-  q8 exact-block cost is characterized.
+  4.00 GiB dense-equivalent to 2.53 GiB for q8 exact-block rows. An opt-in
+  `M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct` backend now skips the old-K/V FP16
+  staging round trip and dequantizes q8 old K/V inside the attention kernel
+  while preserving staged FP16 rounding semantics. A bounded 2048 sweep with
+  `top_blocks=1,2,4` preserves the same quality pattern and improves passing
+  direct-q8 decode rows versus staged-q8 from roughly 7.7-8.0 s to 5.5-5.8 s.
+- Next: run a broader top_blocks=1,2,4,8,16 direct-q8 sweep and then larger
+  4K/8K contexts before making q8-direct default. Do not increase
+  representative count further, tune pure summary modes, or expand compressed
+  KV into server scheduling before q8 exact-block cost is characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

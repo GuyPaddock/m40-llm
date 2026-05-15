@@ -70,6 +70,7 @@ pub struct GeneratedText {
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
     pub exact_old_backing: Option<String>,
+    pub exact_old_attention_backend: Option<String>,
     pub q8_old_backing_bytes: Option<usize>,
     pub q8_old_backing_scale_bytes: Option<usize>,
     pub staged_workspace_reused: bool,
@@ -112,6 +113,16 @@ fn compressed_prefill_chunk_size_from_env() -> Result<Option<usize>> {
         format!("invalid M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE value '{value}'")
     })?;
     Ok((parsed > 0).then_some(parsed))
+}
+
+fn exact_old_attention_backend_from_env() -> Option<String> {
+    match std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
+        .ok()
+        .as_deref()
+    {
+        Some("q8-direct") | Some("Q8-DIRECT") | Some("direct-q8") => Some("direct-q8".to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -727,6 +738,16 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .kv_cache
             .as_ref()
             .map(|kv| kv.exact_old_backing().to_string()),
+        exact_old_attention_backend: model.kv_cache.as_ref().and_then(|kv| {
+            if kv.exact_old_backing() == "q8" {
+                Some(
+                    exact_old_attention_backend_from_env()
+                        .unwrap_or_else(|| "staged-q8".to_string()),
+                )
+            } else {
+                None
+            }
+        }),
         q8_old_backing_bytes: model.kv_cache.as_ref().map(|kv| kv.q8_old_backing_bytes()),
         q8_old_backing_scale_bytes: model
             .kv_cache

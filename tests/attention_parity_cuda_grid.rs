@@ -284,6 +284,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_sparse = ctx.device_malloc(bytes_q)?;
     let d_staged = ctx.device_malloc(bytes_q)?;
     let d_q8_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_direct = ctx.device_malloc(bytes_q)?;
     let staging_capacity_tokens = recent_window + top_blocks * block_size;
     let staging =
         ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
@@ -327,6 +328,17 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             q8_staging.ptrs(),
             d_q8_staged,
         )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_q8_direct,
+        )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
@@ -334,6 +346,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let mut sparse = vec![0f32; q_dim];
     let mut staged = vec![0f32; q_dim];
     let mut q8_staged = vec![0f32; q_dim];
+    let mut q8_direct = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense.as_mut_ptr() as *mut c_void,
@@ -355,18 +368,25 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             d_q8_staged as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            q8_direct.as_mut_ptr() as *mut c_void,
+            d_q8_direct as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_sparse)?;
         ctx.device_free(d_staged)?;
         ctx.device_free(d_q8_staged)?;
+        ctx.device_free(d_q8_direct)?;
     }
 
-    for (idx, (((&a, &b), &c), &q8)) in dense
+    for (idx, ((((&a, &b), &c), &q8), &q8_direct)) in dense
         .iter()
         .zip(&sparse)
         .zip(&staged)
         .zip(&q8_staged)
+        .zip(&q8_direct)
         .enumerate()
     {
         assert!(
@@ -380,6 +400,68 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         assert!(
             (c - q8).abs() < 2e-2,
             "q8 staged block-select-exact mismatch at {idx}: staged={c} q8={q8}"
+        );
+        assert!(
+            (q8 - q8_direct).abs() < 1e-3,
+            "q8 direct block-select-exact mismatch at {idx}: staged={q8} direct={q8_direct}"
+        );
+    }
+
+    let partial_top_blocks = 2u32;
+    let partial_capacity_tokens = recent_window + partial_top_blocks * block_size;
+    let partial_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, partial_capacity_tokens)?;
+    let d_q_partial = ctx.device_malloc(bytes_q)?;
+    let d_q8_partial_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_partial_direct = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q_partial, q.as_ptr() as *const c_void, bytes_q)?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q_partial as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            partial_staging.ptrs(),
+            d_q8_partial_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q_partial as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            d_q8_partial_direct,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+    let mut q8_partial_staged = vec![0f32; q_dim];
+    let mut q8_partial_direct = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            q8_partial_staged.as_mut_ptr() as *mut c_void,
+            d_q8_partial_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_partial_direct.as_mut_ptr() as *mut c_void,
+            d_q8_partial_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q8_partial_staged)?;
+        ctx.device_free(d_q8_partial_direct)?;
+        ctx.device_free(d_q_partial)?;
+    }
+    for (idx, (&staged, &direct)) in q8_partial_staged.iter().zip(&q8_partial_direct).enumerate() {
+        assert!(
+            (staged - direct).abs() < 1e-3,
+            "partial q8 direct block-select-exact mismatch at {idx}: staged={staged} direct={direct}"
         );
     }
 

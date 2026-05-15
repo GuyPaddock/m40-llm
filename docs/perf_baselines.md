@@ -2737,3 +2737,68 @@ Interpretation:
   selected q8 old blocks are dequantized into the staged FP16 working set before
   attention. The next optimization target is reducing q8 gather/dequant overhead
   or avoiding the FP16 staging round trip for selected blocks.
+
+## 2026-05-14: Direct Q8 Exact-Block Attention Prototype
+
+`M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct` adds an experimental q8 exact-old
+attention backend for `block-select-exact` with
+`M40LLM_KV_EXACT_OLD_BACKING=q8`. The default q8 path still gathers selected old
+K/V into the reusable FP16 staging workspace. The direct backend skips that old
+K/V staging round trip and dequantizes q8 old K/V inside the attention kernel,
+while preserving the staged path's FP16 rounding semantics.
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `cargo check --features cuda --test attention_parity_cuda_grid --test kv_compression_long_context`
+  passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including direct-q8 vs staged-q8 parity coverage.
+- 2048-token direct-q8 exact-block retrieval sweep passed as a test run for
+  `top_blocks=1,2,4`. The JSONL report was written to
+  `/tmp/m40llm-kv-exact-block-q8-direct-fixed-2048.jsonl`.
+
+Command:
+
+```bash
+source scripts/dev-env.sh && \
+M40LLM_ENABLE_NVCC=1 \
+M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Llama-3.2-1B-Instruct-f16.gguf \
+M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
+M40LLM_KV_EXACT_BLOCK_STAGING=1 \
+M40LLM_KV_EXACT_OLD_BACKING=q8 \
+M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4 \
+M40LLM_KV_QUALITY_MAX_TOKENS=16 \
+M40LLM_KV_LOGIT_COMPARE=1 \
+M40LLM_KV_ATTENTION_CAPTURE=first \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-q8-direct-fixed-2048.jsonl \
+cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+Direct-q8 2048 summary:
+
+| Needle | Top blocks | Status | Decode | Final KV | Dense-equivalent KV | Active KV all layers | Q8 payload | Q8 scales | Output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| old | off | pass | 6.210 s | 4.00 GiB | 4.00 GiB | 63.09 MiB | - | - | `ZXQ-NEEDLE-41729` |
+| old | 1 | fail | 3.599 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | `ZX-NE-41729` |
+| old | 2 | pass | 5.548 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| old | 4 | pass | 5.808 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | 6.246 s | 4.00 GiB | 4.00 GiB | 63.56 MiB | - | - | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 0.604 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | `ZX` |
+| recent | 2 | pass | 5.544 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | 5.831 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+
+Interpretation:
+
+- Direct q8 exact-block attention preserves the incremental q8 quality pattern
+  in this bounded 2048 sweep: `top_blocks=1` fails and `top_blocks>=2` passes
+  for old/recent needles.
+- Passing direct-q8 rows are materially faster than staged-q8 rows from the
+  prior sweep: top_blocks=2 improved from 7.688 s to 5.548 s for old and from
+  7.717 s to 5.544 s for recent.
+- Dense `off` remains slightly faster than passing direct-q8 rows at this prompt
+  size, so the direct backend remains experimental. The next useful step is a
+  broader top_blocks=1,2,4,8,16 sweep and then larger contexts where dense
+  attention cost should dominate more strongly.

@@ -75,6 +75,7 @@ struct CaseRecord {
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
     exact_old_backing: Option<String>,
+    exact_old_attention_backend: Option<String>,
     q8_old_backing_bytes: Option<usize>,
     q8_old_backing_scale_bytes: Option<usize>,
     compression_ratio: Option<f64>,
@@ -1126,7 +1127,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_old_backing={:?} q8_old(bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1176,6 +1177,7 @@ fn print_records(records: &[CaseRecord]) {
             record.needle_block_rank,
             record.total_old_blocks,
             record.exact_old_backing,
+            record.exact_old_attention_backend,
             record.q8_old_backing_bytes,
             record.q8_old_backing_scale_bytes,
             record.exact_block_staging_enabled,
@@ -1309,6 +1311,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let mut final_kv_allocated_bytes = None;
                         let mut dense_equivalent_kv_bytes = None;
                         let mut exact_old_backing = None;
+                        let mut exact_old_attention_backend = None;
                         let mut q8_old_backing_bytes = None;
                         let mut q8_old_backing_scale_bytes = None;
                         let mut staged_workspace_reused = false;
@@ -1347,6 +1350,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
                                 dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
                                 exact_old_backing = generated.exact_old_backing.clone();
+                                exact_old_attention_backend =
+                                    generated.exact_old_attention_backend.clone();
                                 q8_old_backing_bytes = generated.q8_old_backing_bytes;
                                 q8_old_backing_scale_bytes = generated.q8_old_backing_scale_bytes;
                                 staged_workspace_reused = generated.staged_workspace_reused;
@@ -1559,6 +1564,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             final_kv_allocated_bytes,
                             dense_equivalent_kv_bytes,
                             exact_old_backing,
+                            exact_old_attention_backend,
                             q8_old_backing_bytes,
                             q8_old_backing_scale_bytes,
                             compression_ratio: match (

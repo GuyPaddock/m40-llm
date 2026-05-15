@@ -491,6 +491,18 @@ mod ffi {
             staged_capacity_tokens: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -3751,6 +3763,46 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged_q8_old");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues direct exact block-select GQA attention over q8 old-token
+    /// backing and FP16 recent KV without materializing staged FP16 K/V.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_q8_old_direct");
         Ok(())
     }
 
