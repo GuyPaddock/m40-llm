@@ -250,12 +250,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   selected at rank 0 even when top_blocks=4 fails, while recent top_blocks=8
   fails after the first answer token despite first-token logits matching dense
   at top-token level and more than 99.99% first-token attention mass on the
-  recent ring.
-- Next: test chronological selected-block candidate ordering and/or
-  per-generated-token logit telemetry for the 4096 top_blocks sensitivity before
-  any 8192 sweep or default-backend change. Do not increase representative
-  count further, tune pure summary modes, or expand compressed KV into server
-  scheduling before q8 exact-block cost is characterized.
+  recent ring. `M40LLM_KV_SELECTED_BLOCK_ORDER=score|chronological` now tests
+  whether selected old blocks should be laid out by score or absolute position,
+  and `M40LLM_KV_LOGIT_TRACE=1` records per-generated-token dense-vs-compressed
+  logit traces. A 4096 score-vs-chronological sweep showed identical pass/fail
+  behavior: old top_blocks=4 still fails, old top_blocks=8/16 pass, recent
+  top_blocks=4/16 pass, and recent top_blocks=8 still fails. The trace shows
+  recent top_blocks=8 diverges at generated step 2, while old top_blocks=4
+  tracks dense through `ZXQ-NEEDLE` and then repeats; selected-block ordering is
+  not the primary root cause.
+- Next: compare q8-direct against staged-q8 or FP16 block-select-exact under the
+  same selected candidates, or capture attention/logit telemetry at the actual
+  later-token divergence point. Do not run 8192, increase representative count,
+  tune pure summary modes, or expand compressed KV into server scheduling before
+  the 4096 q8 exact-block instability is explained.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

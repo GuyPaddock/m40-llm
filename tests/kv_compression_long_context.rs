@@ -2,7 +2,8 @@
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{
-    generate_text, prepare_prompt, GenerateOptions, GeneratedText, PromptFormat,
+    generate_text, prepare_prompt, GenerateOptions, GeneratedLogitTraceStep, GeneratedText,
+    PromptFormat,
 };
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
 use m40_llm::infer::{LoadedModel, ModelConfig};
@@ -86,6 +87,8 @@ struct CaseRecord {
     selected_block_score_entries: Option<Vec<String>>,
     selection_records: Option<Vec<String>>,
     selected_blocks_score_order_is_chronological: Option<bool>,
+    selected_block_order: String,
+    selected_blocks_attention_order_is_chronological: Option<bool>,
     needle_block_selected: Option<bool>,
     needle_block_rank: Option<u32>,
     total_old_blocks: Option<u32>,
@@ -146,8 +149,28 @@ struct CaseRecord {
     attention_representative_logit_mean: Option<f32>,
     attention_top_entries: Option<Vec<String>>,
     attention_records: Option<Vec<String>>,
+    generated_logit_trace: Option<Vec<GeneratedLogitTraceRecord>>,
     output: String,
     error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct GeneratedLogitTraceRecord {
+    step: usize,
+    dense_generated_token: Option<u32>,
+    compressed_generated_token: Option<u32>,
+    expected_answer_token: Option<u32>,
+    expected_token_rank_dense: Option<usize>,
+    expected_token_rank_compressed: Option<usize>,
+    expected_token_logit_dense: Option<f32>,
+    expected_token_logit_compressed: Option<f32>,
+    dense_top_token: Option<u32>,
+    compressed_top_token: Option<u32>,
+    dense_top_logit: Option<f32>,
+    compressed_top_logit: Option<f32>,
+    max_logit_diff: Option<f32>,
+    mean_logit_diff: Option<f32>,
+    top10_overlap: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -555,6 +578,16 @@ fn logit_compare_enabled() -> bool {
     std::env::var("M40LLM_KV_LOGIT_COMPARE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
+}
+
+fn selected_block_order() -> String {
+    match std::env::var("M40LLM_KV_SELECTED_BLOCK_ORDER")
+        .ok()
+        .as_deref()
+    {
+        Some("chronological") => "chronological".to_string(),
+        _ => "score".to_string(),
+    }
 }
 
 fn parse_u32_list(value: &str, var_name: &str) -> Result<Vec<u32>> {
@@ -1226,6 +1259,57 @@ fn expected_token_summary(
     }
 }
 
+fn top_token_with_logit(logits: &[f32]) -> Option<(u32, f32)> {
+    logits
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
+        .map(|(idx, logit)| (idx as u32, logit))
+}
+
+fn generated_trace_records(
+    dense: Option<&[GeneratedLogitTraceStep]>,
+    compressed: Option<&[GeneratedLogitTraceStep]>,
+    expected_token_id: Option<u32>,
+) -> Option<Vec<GeneratedLogitTraceRecord>> {
+    let compressed = compressed?;
+    let max_len = dense.map_or(compressed.len(), |dense| dense.len().max(compressed.len()));
+    let mut records = Vec::with_capacity(max_len);
+    for step in 0..max_len {
+        let dense_step = dense.and_then(|trace| trace.get(step));
+        let compressed_step = compressed.get(step);
+        let diff = dense_step
+            .zip(compressed_step)
+            .and_then(|(dense, compressed)| logit_diff_summary(&dense.logits, &compressed.logits));
+        let expected = expected_token_summary(
+            dense_step.map(|step| step.logits.as_slice()),
+            compressed_step.map(|step| step.logits.as_slice()),
+            expected_token_id,
+        );
+        let dense_top = dense_step.and_then(|step| top_token_with_logit(&step.logits));
+        let compressed_top = compressed_step.and_then(|step| top_token_with_logit(&step.logits));
+        records.push(GeneratedLogitTraceRecord {
+            step,
+            dense_generated_token: dense_step.map(|step| step.sampled_token_id),
+            compressed_generated_token: compressed_step.map(|step| step.sampled_token_id),
+            expected_answer_token: expected_token_id,
+            expected_token_rank_dense: expected.rank_dense,
+            expected_token_rank_compressed: expected.rank_compressed,
+            expected_token_logit_dense: expected.logit_dense,
+            expected_token_logit_compressed: expected.logit_compressed,
+            dense_top_token: dense_top.map(|(token, _)| token),
+            compressed_top_token: compressed_top.map(|(token, _)| token),
+            dense_top_logit: dense_top.map(|(_, logit)| logit),
+            compressed_top_logit: compressed_top.map(|(_, logit)| logit),
+            max_logit_diff: diff.as_ref().map(|summary| summary.max_abs_diff),
+            mean_logit_diff: diff.as_ref().map(|summary| summary.mean_abs_diff),
+            top10_overlap: diff.as_ref().map(|summary| summary.top10_overlap),
+        });
+    }
+    Some(records)
+}
+
 fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
@@ -1399,6 +1483,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
             let mut dense_passed = None;
             let mut dense_prompt_logits: Option<Vec<f32>> = None;
             let mut dense_first_decode_logits: Option<Vec<f32>> = None;
+            let mut dense_generated_logit_trace: Option<Vec<GeneratedLogitTraceStep>> = None;
             let mut dense_window_prompt_logits: Option<Vec<f32>> = None;
             let mut dense_window_first_decode_logits: Option<Vec<f32>> = None;
             let prompt_for_meta = retrieval_prompt(&tokenizer, target_tokens, needle_position);
@@ -1452,6 +1537,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let mut needle_block_index = None;
                         let mut prompt_logits = None;
                         let mut first_decode_logits = None;
+                        let mut generated_logit_trace_raw: Option<Vec<GeneratedLogitTraceStep>> =
+                            None;
                         let (mut status, output, error) = match run_retrieval_case(
                             &mut model,
                             &tokenizer,
@@ -1494,12 +1581,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 needle_block_index = needle_block;
                                 prompt_logits = generated.prompt_logits.clone();
                                 first_decode_logits = generated.first_decode_logits.clone();
+                                generated_logit_trace_raw = generated.generated_logit_trace.clone();
                                 let passed = generated.output.contains(NEEDLE);
                                 if mode == KvCompressMode::Off {
                                     dense_passed = Some(passed);
                                     dense_prompt_logits = generated.prompt_logits.clone();
                                     dense_first_decode_logits =
                                         generated.first_decode_logits.clone();
+                                    dense_generated_logit_trace =
+                                        generated.generated_logit_trace.clone();
                                 } else if mode == KvCompressMode::DenseRecentOnly {
                                     dense_window_prompt_logits = generated.prompt_logits.clone();
                                     dense_window_first_decode_logits =
@@ -1532,6 +1622,13 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let selected_blocks_score_order_is_chronological = selection_summary
                             .as_ref()
                             .and_then(first_selection_is_chronological);
+                        let selected_block_order = selected_block_order();
+                        let selected_blocks_attention_order_is_chronological =
+                            if selected_block_order == "chronological" {
+                                Some(true)
+                            } else {
+                                selected_blocks_score_order_is_chronological
+                            };
                         let needle_block_selected = needle_block_index.map(|needle| {
                             selected_block_indices
                                 .as_ref()
@@ -1567,6 +1664,14 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 )
                             })
                             .unwrap_or((None, None, None));
+                        let attention_candidate_order_is_chronological = if selected_block_order
+                            == "chronological"
+                            && selection_summary.is_some()
+                        {
+                            Some(true)
+                        } else {
+                            attention_candidate_order_is_chronological
+                        };
                         let prompt_logit_diff = if logit_compare_enabled() {
                             dense_prompt_logits
                                 .as_deref()
@@ -1635,6 +1740,11 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 logit_compressed: None,
                             }
                         };
+                        let generated_logit_trace = generated_trace_records(
+                            dense_generated_logit_trace.as_deref(),
+                            generated_logit_trace_raw.as_deref(),
+                            position_meta.expected_first_answer_token_id,
+                        );
                         let active_kv = active_kv_working_set(
                             mode,
                             prompt_tokens,
@@ -1735,6 +1845,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             selected_block_score_entries,
                             selection_records,
                             selected_blocks_score_order_is_chronological,
+                            selected_block_order,
+                            selected_blocks_attention_order_is_chronological,
                             needle_block_selected,
                             needle_block_rank,
                             total_old_blocks,
@@ -1896,6 +2008,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             attention_records: selection_summary
                                 .as_ref()
                                 .map(attention_record_strings),
+                            generated_logit_trace,
                             output,
                             error,
                         };

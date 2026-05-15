@@ -465,6 +465,63 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         );
     }
 
+    let _order_env = EnvGuard::set("M40LLM_KV_SELECTED_BLOCK_ORDER", "chronological");
+    let chrono_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, partial_capacity_tokens)?;
+    let d_q_chrono = ctx.device_malloc(bytes_q)?;
+    let d_q8_chrono_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_chrono_direct = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q_chrono, q.as_ptr() as *const c_void, bytes_q)?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q_chrono as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            chrono_staging.ptrs(),
+            d_q8_chrono_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q_chrono as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            d_q8_chrono_direct,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+    let mut q8_chrono_staged = vec![0f32; q_dim];
+    let mut q8_chrono_direct = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            q8_chrono_staged.as_mut_ptr() as *mut c_void,
+            d_q8_chrono_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_chrono_direct.as_mut_ptr() as *mut c_void,
+            d_q8_chrono_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q8_chrono_staged)?;
+        ctx.device_free(d_q8_chrono_direct)?;
+        ctx.device_free(d_q_chrono)?;
+    }
+    for (idx, (&staged, &direct)) in q8_chrono_staged.iter().zip(&q8_chrono_direct).enumerate() {
+        assert!(
+            (staged - direct).abs() < 1e-3,
+            "chronological q8 direct block-select-exact mismatch at {idx}: staged={staged} direct={direct}"
+        );
+    }
+
     set_runtime_config(KvCompressionConfig {
         mode: KvCompressMode::Off,
         ..Default::default()

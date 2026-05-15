@@ -2887,3 +2887,57 @@ Interpretation:
   selection. The next diagnostic should capture per-generated-token logits or
   force chronological selected-block ordering before treating the scorer itself
   as the primary problem.
+
+## 2026-05-15: 4096 Selected-Block Ordering and Logit Trace Diagnostics
+
+This checkpoint adds two diagnostic controls for exact-block retrieval:
+
+- `M40LLM_KV_SELECTED_BLOCK_ORDER=score|chronological`: keep score-based block
+  selection, but optionally sort selected old blocks by absolute position before
+  constructing attention candidates. Recent exact-ring tokens remain appended in
+  chronological order.
+- `M40LLM_KV_LOGIT_TRACE=1`: record per-generated-token logits in the
+  long-context quality harness so compressed rows can be compared against the
+  dense `off` reference after the first answer token.
+
+Reports:
+
+- `/tmp/m40llm-kv-order-trace-4096-score.jsonl`
+- `/tmp/m40llm-kv-order-trace-4096-chronological.jsonl`
+
+Validation:
+
+- `cargo check --features cuda --test kv_compression_long_context --test attention_parity_cuda_grid`
+  passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- A 1024-token trace smoke wrote JSONL with chronological ordering and
+  per-generated-token logit trace rows.
+
+4096 score-vs-chronological q8-direct summary:
+
+| Needle | Top blocks | Score order | Chronological order | Score output | Chronological output |
+| --- | ---: | --- | --- | --- | --- |
+| old | 4 | fail | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` |
+| old | 8 | pass | pass | `ZXQ-NEEDLE-41729` | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | pass | `ZXQ-NEEDLE-41729` | `ZXQ-NEEDLE-41729` |
+| recent | 4 | pass | pass | `ZXQ-NEEDLE-41729` | `ZXQ-NEEDLE-41729` |
+| recent | 8 | fail | fail | `ZXQ` | `ZXQ` |
+| recent | 16 | pass | pass | `ZXQ-NEEDLE-41729` | `ZXQ-NEEDLE-41729` |
+
+Per-generated-token trace highlights:
+
+- Recent/top_blocks=8 matches dense for generated steps 0 and 1, then diverges
+  at step 2: dense emits token `12`, while q8-direct emits EOT token `128009`.
+  The score-order and chronological-order traces are effectively identical, so
+  selected-block candidate order is not the root cause of this failure.
+- Old/top_blocks=4 matches dense through the `ZXQ-NEEDLE` prefix, then diverges
+  at step 7 and repeats `NEEDLE` tokens. Again, score and chronological ordering
+  are effectively identical.
+- The remaining 4096 instability is therefore later-token logit drift or
+  selected-context sensitivity, not a simple score-order candidate-layout bug.
+  The next diagnostic should compare q8-direct against staged-q8 or FP16
+  block-select-exact for the same selected candidates, or capture attention/logit
+  telemetry at the actual divergence token instead of only the first generated
+  token.

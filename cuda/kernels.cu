@@ -104,6 +104,25 @@ extern "C" {
         M40llmAttentionTopEntry top_entries[8];
         uint32_t top_entry_count;
     };
+
+    static uint32_t selected_block_order_from_env() {
+        const char* value = std::getenv("M40LLM_KV_SELECTED_BLOCK_ORDER");
+        if (!value || value[0] == '\0') return 0;
+        return std::strcmp(value, "chronological") == 0 ? 1u : 0u;
+    }
+
+    __device__ void sort_selected_blocks_chronological(uint32_t* blocks, uint32_t count) {
+        for (uint32_t i = 1; i < count; ++i) {
+            const uint32_t key = blocks[i];
+            uint32_t j = i;
+            while (j > 0 && blocks[j - 1] > key) {
+                blocks[j] = blocks[j - 1];
+                --j;
+            }
+            blocks[j] = key;
+        }
+    }
+
     // Back-compat alias so other TU code using KVCache still compiles
     typedef M40llmKVCache KVCache;
 
@@ -1539,6 +1558,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t recent_window,
         uint32_t block_size,
         uint32_t top_blocks,
+        uint32_t selected_block_order,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t qh_idx = blockIdx.x;
@@ -1610,6 +1630,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         uint32_t selected_count = 0;
         if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
                 if (b == 0xffffffffu) continue;
@@ -1694,6 +1717,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t block_size,
         uint32_t top_blocks,
         uint32_t selected_capacity,
+        uint32_t selected_block_order,
         __half* __restrict__ staged_k,
         __half* __restrict__ staged_v,
         uint32_t* __restrict__ staged_positions,
@@ -1765,6 +1789,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         uint32_t selected_count = 0;
         if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
                 if (b == 0xffffffffu) continue;
@@ -1939,6 +1966,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t block_size,
         uint32_t top_blocks,
         uint32_t selected_capacity,
+        uint32_t selected_block_order,
         __half* __restrict__ staged_k,
         __half* __restrict__ staged_v,
         uint32_t* __restrict__ staged_positions,
@@ -2012,6 +2040,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         uint32_t selected_count = 0;
         if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
                 if (b == 0xffffffffu) continue;
@@ -2151,6 +2182,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t block_size,
         uint32_t top_blocks,
         uint32_t selected_capacity,
+        uint32_t selected_block_order,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t qh_idx = blockIdx.x;
@@ -2222,6 +2254,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         uint32_t selected_count = 0;
         if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
                 if (b == 0xffffffffu) continue;
@@ -3261,6 +3296,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
         const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const uint32_t selected_block_order = selected_block_order_from_env();
         const int blocks = (int)q_heads;
         const int threads = 128;
         const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
@@ -3276,6 +3312,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             recent_window,
             block_size,
             selected_old_blocks,
+            selected_block_order,
             reinterpret_cast<float*>(out_dev_f32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -8;
@@ -3415,6 +3452,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
+        const uint32_t selected_block_order = selected_block_order_from_env();
         __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
         __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
         uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
@@ -3436,6 +3474,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             block_size,
             selected_old_blocks,
             selected_capacity,
+            selected_block_order,
             staged_k,
             staged_v,
             staged_positions,
@@ -3489,6 +3528,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
+        const uint32_t selected_block_order = selected_block_order_from_env();
         __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
         __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
         uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
@@ -3516,6 +3556,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             block_size,
             selected_old_blocks,
             selected_capacity,
+            selected_block_order,
             staged_k,
             staged_v,
             staged_positions,
@@ -3562,6 +3603,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
         const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const uint32_t selected_block_order = selected_block_order_from_env();
 
         const int blocks = (int)q_heads;
         const int threads = 128;
@@ -3585,6 +3627,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             block_size,
             selected_old_blocks,
             selected_capacity,
+            selected_block_order,
             reinterpret_cast<float*>(out_dev_f32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -8;
@@ -5465,6 +5508,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 : top_blocks;
             std::vector<uint32_t> selected;
             for (uint32_t i = 0; i < take; ++i) selected.push_back(scored[i].second);
+            if (selected_block_order_from_env() == 1u) {
+                std::sort(selected.begin(), selected.end());
+            }
             return selected;
         };
 

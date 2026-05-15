@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 
 #[cfg(feature = "cuda")]
 use crate::cuda::{CudaContext, CudaStream};
-use crate::decode::{decode_loop_with, StoppingCriteria};
+use crate::decode::StoppingCriteria;
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
@@ -80,6 +80,14 @@ pub struct GeneratedText {
     pub kv_selection: Option<KvSelectionSummary>,
     pub prompt_logits: Option<Vec<f32>>,
     pub first_decode_logits: Option<Vec<f32>>,
+    pub generated_logit_trace: Option<Vec<GeneratedLogitTraceStep>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GeneratedLogitTraceStep {
+    pub step: usize,
+    pub sampled_token_id: u32,
+    pub logits: Vec<f32>,
 }
 
 #[cfg(feature = "cuda")]
@@ -134,6 +142,12 @@ fn packed_then_compress_prefill_enabled() -> bool {
 
 fn kv_logit_compare_enabled() -> bool {
     std::env::var("M40LLM_KV_LOGIT_COMPARE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn kv_logit_trace_enabled() -> bool {
+    std::env::var("M40LLM_KV_LOGIT_TRACE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -290,7 +304,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         .or(Some(model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
-    let sampler = sampler_from_options(&options)?;
+    let mut sampler = sampler_from_options(&options)?;
 
     if options.reset_kv_cache && model.kv_cache.is_some() {
         let reset_start = std::time::Instant::now();
@@ -341,8 +355,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     };
     let mut logits_call_count = 0usize;
     let capture_logits = kv_logit_compare_enabled();
+    let capture_logit_trace = kv_logit_trace_enabled();
     let mut prompt_logits_snapshot = None;
     let mut first_decode_logits_snapshot = None;
+    let mut generated_logit_trace = Vec::new();
     let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
     let mut generated_decode_elapsed = std::time::Duration::ZERO;
     let mut logits_fn = {
@@ -677,15 +693,48 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     };
 
     let decode_start = std::time::Instant::now();
-    let ids = decode_loop_with(
-        &tokenizer,
-        &prompt,
-        add_bos,
-        sampler,
-        &stopping,
-        &mut logits_fn,
-    )
-    .context("generation failed")?;
+    let mut ids = tokenizer
+        .encode_with_specials(&prompt, add_bos, false)
+        .context("encode prompt for decode")?;
+    let start_len = ids.len();
+    let mut generated = Vec::new();
+    loop {
+        if stopping.should_stop(&generated) {
+            break;
+        }
+        let logits = logits_fn(&ids).context("generation failed")?;
+        if logits.is_empty() {
+            anyhow::bail!("logits_fn returned empty logits");
+        }
+        let next = sampler.sample(&logits)? as u32;
+        if capture_logit_trace {
+            generated_logit_trace.push(GeneratedLogitTraceStep {
+                step: generated.len(),
+                sampled_token_id: next,
+                logits: logits.clone(),
+            });
+        }
+        ids.push(next);
+        generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            eprintln!("[decode] sampled token id={next}");
+        }
+        if stopping.stop_ids.contains(&next) {
+            break;
+        }
+        if let Some(mt) = stopping.max_tokens {
+            if generated.len() >= mt {
+                break;
+            }
+        }
+        if stopping.max_tokens.is_none()
+            && stopping.eos_id.is_none()
+            && generated.len() > 4 * (start_len.max(1))
+            && generated.len() > 4096
+        {
+            anyhow::bail!("decode loop refused to continue without stopping criteria");
+        }
+    }
     timing::timing_log!(decode_start.elapsed(), "{}.decode_loop", options.log_prefix);
     let output_decode_start = std::time::Instant::now();
     let text =
@@ -774,6 +823,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .flatten(),
         prompt_logits: prompt_logits_snapshot,
         first_decode_logits: first_decode_logits_snapshot,
+        generated_logit_trace: capture_logit_trace.then_some(generated_logit_trace),
     })
 }
 
