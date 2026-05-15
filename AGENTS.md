@@ -237,12 +237,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct` backend now skips the old-K/V FP16
   staging round trip and dequantizes q8 old K/V inside the attention kernel
   while preserving staged FP16 rounding semantics. A bounded 2048 sweep with
-  `top_blocks=1,2,4` preserves the same quality pattern and improves passing
-  direct-q8 decode rows versus staged-q8 from roughly 7.7-8.0 s to 5.5-5.8 s.
-- Next: run a broader top_blocks=1,2,4,8,16 direct-q8 sweep and then larger
-  4K/8K contexts before making q8-direct default. Do not increase
-  representative count further, tune pure summary modes, or expand compressed
-  KV into server scheduling before q8 exact-block cost is characterized.
+  `top_blocks=1,2,4,8,16` preserves the same quality pattern and improves
+  passing direct-q8 decode rows versus staged-q8 from roughly 7.7-8.0 s to
+  5.5-5.8 s for the smallest passing rows. A 4096 sweep shows direct-q8 is not
+  ready as a default: old-needle retrieval requires `top_blocks>=8`, and
+  recent-needle retrieval is non-monotonic (`top_blocks=4` and `16` pass while
+  `8` fails).
+- Next: investigate 4096 direct-q8 quality instability with block-selection and
+  logit-drift telemetry before any 8192 sweep or default-backend change. Do not
+  increase representative count further, tune pure summary modes, or expand
+  compressed KV into server scheduling before q8 exact-block cost is
+  characterized.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

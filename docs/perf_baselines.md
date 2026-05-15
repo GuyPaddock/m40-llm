@@ -2755,8 +2755,11 @@ Validation:
 - `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
   passed, including direct-q8 vs staged-q8 parity coverage.
 - 2048-token direct-q8 exact-block retrieval sweep passed as a test run for
-  `top_blocks=1,2,4`. The JSONL report was written to
-  `/tmp/m40llm-kv-exact-block-q8-direct-fixed-2048.jsonl`.
+  `top_blocks=1,2,4,8,16`. The JSONL report was written to
+  `/tmp/m40llm-kv-exact-block-q8-direct-full-2048.jsonl`.
+- 4096-token direct-q8 exact-block retrieval sweep passed as a test run, but
+  revealed quality-sensitive and non-monotonic top-block behavior. The JSONL
+  report was written to `/tmp/m40llm-kv-exact-block-q8-direct-4096.jsonl`.
 
 Command:
 
@@ -2769,11 +2772,11 @@ M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP=1 \
 M40LLM_KV_EXACT_BLOCK_STAGING=1 \
 M40LLM_KV_EXACT_OLD_BACKING=q8 \
 M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct \
-M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4 \
+M40LLM_KV_QUALITY_TOP_BLOCKS=1,2,4,8,16 \
 M40LLM_KV_QUALITY_MAX_TOKENS=16 \
 M40LLM_KV_LOGIT_COMPARE=1 \
 M40LLM_KV_ATTENTION_CAPTURE=first \
-M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-q8-direct-fixed-2048.jsonl \
+M40LLM_KV_QUALITY_REPORT=/tmp/m40llm-kv-exact-block-q8-direct-full-2048.jsonl \
 cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
 ```
 
@@ -2785,24 +2788,46 @@ Direct-q8 2048 summary:
 | old | 1 | fail | 3.599 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | `ZX-NE-41729` |
 | old | 2 | pass | 5.548 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
 | old | 4 | pass | 5.808 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| old | 8 | pass | 6.332 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 7.416 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
 | recent | off | pass | 6.246 s | 4.00 GiB | 4.00 GiB | 63.56 MiB | - | - | `ZXQ-NEEDLE-41729` |
 | recent | 1 | fail | 0.604 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | 2.00 GiB | 128.00 MiB | `ZX` |
 | recent | 2 | pass | 5.544 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
 | recent | 4 | pass | 5.831 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 8 | pass | 6.368 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 16 | pass | 7.457 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | 2.00 GiB | 128.00 MiB | `ZXQ-NEEDLE-41729` |
+
+Direct-q8 4096 summary:
+
+| Needle | Top blocks | Status | Decode | Final KV | Dense-equivalent KV | Active KV all layers | Output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | --- |
+| old | off | pass | 12.108 s | 4.00 GiB | 4.00 GiB | 126.97 MiB | `ZXQ-NEEDLE-41729` |
+| old | 1 | fail | 7.475 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | `ZXQ-Needle-41729` |
+| old | 2 | fail | 14.303 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | `ZXNEEDLEXENELXENELXENELXENEL` |
+| old | 4 | fail | 14.727 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` |
+| old | 8 | pass | 9.407 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | `ZXQ-NEEDLE-41729` |
+| old | 16 | pass | 10.532 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | off | pass | 12.125 s | 4.00 GiB | 4.00 GiB | 127.44 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 1 | fail | 14.100 s | 2.53 GiB | 4.00 GiB | 33.00 MiB | `ZX-7: 1\\nQ: 2\\nQ: 3` |
+| recent | 2 | fail | 14.324 s | 2.53 GiB | 4.00 GiB | 34.00 MiB | `ZX-NEEDLE-41729\\nQ\\nX\\nZ\\nN` |
+| recent | 4 | pass | 8.861 s | 2.53 GiB | 4.00 GiB | 36.00 MiB | `ZXQ-NEEDLE-41729` |
+| recent | 8 | fail | 2.087 s | 2.53 GiB | 4.00 GiB | 40.00 MiB | `ZXQ` |
+| recent | 16 | pass | 10.557 s | 2.53 GiB | 4.00 GiB | 48.00 MiB | `ZXQ-NEEDLE-41729` |
 
 Interpretation:
 
 - Direct q8 exact-block attention preserves the incremental q8 quality pattern
-  in this bounded 2048 sweep: `top_blocks=1` fails and `top_blocks>=2` passes
-  for old/recent needles.
+  at 2048: `top_blocks=1` fails and `top_blocks>=2` passes for old/recent
+  needles.
 - Passing direct-q8 rows are materially faster than staged-q8 rows from the
   prior sweep: top_blocks=2 improved from 7.688 s to 5.548 s for old and from
   7.717 s to 5.544 s for recent.
 - Direct-q8 top_blocks=2 and 4 are faster than dense `off` on the documented
   generated-token decode-time basis for this 2048-token sweep: old top_blocks=2
   is 5.548 s versus dense 6.210 s, and recent top_blocks=2 is 5.544 s versus
-  dense 6.246 s. The direct backend remains experimental because this is a
-  bounded 2048-token, top_blocks=1,2,4 sweep rather than a full top_blocks and
-  context-length characterization. The next useful step is a broader
-  top_blocks=1,2,4,8,16 sweep and then larger contexts where dense attention
-  cost should dominate more strongly.
+  dense 6.246 s.
+- At 4096, direct-q8 remains useful but not stable enough to make default:
+  old-needle retrieval requires `top_blocks>=8`, while recent-needle retrieval
+  passes at `top_blocks=4` and `16` but fails at `8`. This non-monotonic quality
+  behavior means the next task should investigate block selection/logit drift at
+  4096 before any 8192 sweep or default-backend change.
