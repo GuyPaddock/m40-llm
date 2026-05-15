@@ -10,6 +10,33 @@ pub struct KvAttentionGroupStats {
 }
 
 #[derive(Debug, Clone)]
+pub struct KvSelectedBlock {
+    pub rank: u32,
+    pub block_index: u32,
+    pub score: f32,
+    pub absolute_start: u32,
+    pub absolute_end: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct KvSelectionRecord {
+    pub layer: Option<u32>,
+    pub token: Option<u32>,
+    pub selected_blocks: Vec<KvSelectedBlock>,
+    pub total_old_blocks: u32,
+    pub top_blocks: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct KvAttentionBlockMass {
+    pub block_index: u32,
+    pub prob_mass: f32,
+    pub logit_max: f32,
+    pub logit_mean: f32,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone)]
 pub struct KvAttentionTopEntry {
     pub group: String,
     pub block_index: Option<u32>,
@@ -26,6 +53,7 @@ pub struct KvAttentionTelemetrySummary {
     pub representatives: KvAttentionGroupStats,
     pub other: KvAttentionGroupStats,
     pub needle_block_mass: Option<f32>,
+    pub selected_block_masses: Vec<KvAttentionBlockMass>,
     pub top_entries: Vec<KvAttentionTopEntry>,
 }
 
@@ -41,6 +69,7 @@ pub struct KvSelectionSummary {
     pub selected_block_indices: Vec<u32>,
     pub total_old_blocks: u32,
     pub top_blocks: u32,
+    pub selection_records: Vec<KvSelectionRecord>,
     pub attention: Option<KvAttentionTelemetrySummary>,
     pub attentions: Vec<KvAttentionTelemetryRecord>,
 }
@@ -48,6 +77,7 @@ pub struct KvSelectionSummary {
 #[derive(Debug, Default)]
 struct KvSelectionState {
     selected: BTreeSet<u32>,
+    selection_records: Vec<KvSelectionRecord>,
     total_old_blocks: u32,
     top_blocks: u32,
     attentions: Vec<KvAttentionTelemetryRecord>,
@@ -138,10 +168,41 @@ pub fn set_attention_context(layer: Option<u32>, token: Option<u32>) {
 }
 
 pub fn record(selected_blocks: &[u32], total_old_blocks: u32, top_blocks: u32) {
+    let scored: Vec<KvSelectedBlock> = selected_blocks
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(rank, block_index)| KvSelectedBlock {
+            rank: rank as u32,
+            block_index,
+            score: 0.0,
+            absolute_start: 0,
+            absolute_end: 0,
+        })
+        .collect();
+    record_scored(scored, total_old_blocks, top_blocks);
+}
+
+pub fn record_scored(
+    selected_blocks: Vec<KvSelectedBlock>,
+    total_old_blocks: u32,
+    top_blocks: u32,
+) {
     if let Ok(mut guard) = state().lock() {
         guard.total_old_blocks = guard.total_old_blocks.max(total_old_blocks);
         guard.top_blocks = guard.top_blocks.max(top_blocks);
-        guard.selected.extend(selected_blocks.iter().copied());
+        for block in &selected_blocks {
+            guard.selected.insert(block.block_index);
+        }
+        let layer = guard.current_layer;
+        let token = guard.current_token;
+        guard.selection_records.push(KvSelectionRecord {
+            layer,
+            token,
+            selected_blocks,
+            total_old_blocks,
+            top_blocks,
+        });
     }
 }
 
@@ -197,6 +258,7 @@ pub fn snapshot() -> Option<KvSelectionSummary> {
         selected_block_indices: guard.selected.iter().copied().collect(),
         total_old_blocks: guard.total_old_blocks,
         top_blocks: guard.top_blocks,
+        selection_records: guard.selection_records.clone(),
         attention,
         attentions: guard.attentions.clone(),
     })

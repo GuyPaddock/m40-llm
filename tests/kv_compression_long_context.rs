@@ -83,6 +83,9 @@ struct CaseRecord {
     top_blocks: Option<u32>,
     needle_block_index: Option<u32>,
     selected_block_indices: Option<Vec<u32>>,
+    selected_block_score_entries: Option<Vec<String>>,
+    selection_records: Option<Vec<String>>,
+    selected_blocks_score_order_is_chronological: Option<bool>,
     needle_block_selected: Option<bool>,
     needle_block_rank: Option<u32>,
     total_old_blocks: Option<u32>,
@@ -96,6 +99,9 @@ struct CaseRecord {
     dense_window_candidate_positions: Option<Vec<usize>>,
     compressed_recent_candidate_positions: Option<Vec<usize>>,
     compressed_recent_ring_slots: Option<Vec<usize>>,
+    attention_candidate_position_min: Option<u32>,
+    attention_candidate_position_max: Option<u32>,
+    attention_candidate_order_is_chronological: Option<bool>,
     needle_token_absolute_positions: Vec<usize>,
     question_token_absolute_positions: Vec<usize>,
     needle_tokens_in_recent_ring: bool,
@@ -131,6 +137,7 @@ struct CaseRecord {
     attention_representative_mass: Option<f32>,
     attention_other_mass: Option<f32>,
     attention_needle_block_mass: Option<f32>,
+    attention_selected_block_masses: Option<Vec<String>>,
     attention_recent_logit_max: Option<f32>,
     attention_recent_logit_mean: Option<f32>,
     attention_summary_logit_max: Option<f32>,
@@ -948,6 +955,101 @@ fn attention_top_entry_strings(
         .collect()
 }
 
+fn selected_block_entry_strings(
+    summary: &m40_llm::kv_selection::KvSelectionSummary,
+) -> Vec<String> {
+    summary
+        .selection_records
+        .iter()
+        .flat_map(|record| {
+            record.selected_blocks.iter().map(move |block| {
+                format!(
+                    "layer={:?}:token={:?}:rank={}:block={}:score={:.6}:range={}..{}",
+                    record.layer,
+                    record.token,
+                    block.rank,
+                    block.block_index,
+                    block.score,
+                    block.absolute_start,
+                    block.absolute_end
+                )
+            })
+        })
+        .collect()
+}
+
+fn selection_record_strings(summary: &m40_llm::kv_selection::KvSelectionSummary) -> Vec<String> {
+    summary
+        .selection_records
+        .iter()
+        .map(|record| {
+            let blocks = record
+                .selected_blocks
+                .iter()
+                .map(|block| {
+                    format!(
+                        "{}@{:.4}[{}..{}]",
+                        block.block_index, block.score, block.absolute_start, block.absolute_end
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "layer={:?}:token={:?}:top_blocks={}:total_old_blocks={}:blocks={}",
+                record.layer, record.token, record.top_blocks, record.total_old_blocks, blocks
+            )
+        })
+        .collect()
+}
+
+fn first_selection_is_chronological(
+    summary: &m40_llm::kv_selection::KvSelectionSummary,
+) -> Option<bool> {
+    let first = summary.selection_records.first()?;
+    Some(
+        first
+            .selected_blocks
+            .windows(2)
+            .all(|pair| pair[0].block_index <= pair[1].block_index),
+    )
+}
+
+fn attention_block_mass_strings(
+    attention: &m40_llm::kv_selection::KvAttentionTelemetrySummary,
+) -> Vec<String> {
+    attention
+        .selected_block_masses
+        .iter()
+        .map(|mass| {
+            format!(
+                "block={}:mass={:.6}:logit_max={:.4}:logit_mean={:.4}:count={}",
+                mass.block_index, mass.prob_mass, mass.logit_max, mass.logit_mean, mass.count
+            )
+        })
+        .collect()
+}
+
+fn first_attention_candidate_bounds(
+    summary: &m40_llm::kv_selection::KvSelectionSummary,
+    recent_start: Option<usize>,
+    recent_end: Option<usize>,
+) -> (Option<u32>, Option<u32>, Option<bool>) {
+    let Some(record) = summary.selection_records.first() else {
+        return (None, None, None);
+    };
+    let mut min_pos: Option<u32> = None;
+    let mut max_pos: Option<u32> = None;
+    for block in &record.selected_blocks {
+        min_pos = Some(min_pos.map_or(block.absolute_start, |pos| pos.min(block.absolute_start)));
+        max_pos = Some(max_pos.map_or(block.absolute_end, |pos| pos.max(block.absolute_end)));
+    }
+    if let (Some(start), Some(end)) = (recent_start, recent_end) {
+        min_pos = Some(min_pos.map_or(start as u32, |pos| pos.min(start as u32)));
+        max_pos = Some(max_pos.map_or(end as u32, |pos| pos.max(end as u32)));
+    }
+    (min_pos, max_pos, first_selection_is_chronological(summary))
+}
+
 fn attention_record_strings(summary: &m40_llm::kv_selection::KvSelectionSummary) -> Vec<String> {
     summary
         .attentions
@@ -1396,6 +1498,13 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let selected_block_indices = selection_summary
                             .as_ref()
                             .map(|summary| summary.selected_block_indices.clone());
+                        let selected_block_score_entries =
+                            selection_summary.as_ref().map(selected_block_entry_strings);
+                        let selection_records =
+                            selection_summary.as_ref().map(selection_record_strings);
+                        let selected_blocks_score_order_is_chronological = selection_summary
+                            .as_ref()
+                            .and_then(first_selection_is_chronological);
                         let needle_block_selected = needle_block_index.map(|needle| {
                             selected_block_indices
                                 .as_ref()
@@ -1415,6 +1524,22 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         let attention = selection_summary
                             .as_ref()
                             .and_then(|summary| summary.attention.as_ref());
+                        let attention_selected_block_masses =
+                            attention.map(attention_block_mass_strings);
+                        let (
+                            attention_candidate_position_min,
+                            attention_candidate_position_max,
+                            attention_candidate_order_is_chronological,
+                        ) = selection_summary
+                            .as_ref()
+                            .map(|summary| {
+                                first_attention_candidate_bounds(
+                                    summary,
+                                    position_meta.recent_ring_absolute_start,
+                                    position_meta.recent_ring_absolute_end,
+                                )
+                            })
+                            .unwrap_or((None, None, None));
                         let prompt_logit_diff = if logit_compare_enabled() {
                             dense_prompt_logits
                                 .as_deref()
@@ -1580,6 +1705,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             top_blocks: top_blocks_case,
                             needle_block_index,
                             selected_block_indices,
+                            selected_block_score_entries,
+                            selection_records,
+                            selected_blocks_score_order_is_chronological,
                             needle_block_selected,
                             needle_block_rank,
                             total_old_blocks,
@@ -1637,6 +1765,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     }
                                 })
                                 .flatten(),
+                            attention_candidate_position_min,
+                            attention_candidate_position_max,
+                            attention_candidate_order_is_chronological,
                             needle_token_absolute_positions: position_meta
                                 .needle_token_absolute_positions
                                 .clone(),
@@ -1725,6 +1856,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             attention_other_mass: attention.map(|a| a.other.prob_mass),
                             attention_needle_block_mass: attention
                                 .and_then(|a| a.needle_block_mass),
+                            attention_selected_block_masses,
                             attention_recent_logit_max: attention.map(|a| a.recent.logit_max),
                             attention_recent_logit_mean: attention.map(|a| a.recent.logit_mean),
                             attention_summary_logit_max: attention.map(|a| a.summary.logit_max),

@@ -55,6 +55,15 @@ mod ffi {
     }
     #[repr(C)]
     #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionBlockMass {
+        pub block_index: u32,
+        pub prob_mass: f32,
+        pub logit_max: f32,
+        pub logit_mean: f32,
+        pub count: u32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
     pub struct M40llmAttentionTelemetry {
         pub recent: M40llmAttentionGroupStats,
         pub selected_old_exact: M40llmAttentionGroupStats,
@@ -62,6 +71,8 @@ mod ffi {
         pub representatives: M40llmAttentionGroupStats,
         pub other: M40llmAttentionGroupStats,
         pub needle_block_mass: f32,
+        pub selected_block_masses: [M40llmAttentionBlockMass; 64],
+        pub selected_block_mass_count: u32,
         pub top_entries: [M40llmAttentionTopEntry; 8],
         pub top_entry_count: u32,
     }
@@ -365,6 +376,9 @@ mod ffi {
             block_size: u32,
             top_blocks: u32,
             out_blocks_host: *mut u32,
+            out_scores_host: *mut f32,
+            out_start_host: *mut u32,
+            out_end_host: *mut u32,
             out_count: *mut u32,
             max_out: u32,
             out_total_old_blocks: *mut u32,
@@ -2724,9 +2738,12 @@ impl KVCache {
         recent_window: u32,
         block_size: u32,
         top_blocks: u32,
-    ) -> Result<(Vec<u32>, u32)> {
+    ) -> Result<(Vec<crate::kv_selection::KvSelectedBlock>, u32)> {
         const MAX_BLOCKS: u32 = 2048;
         let mut blocks = vec![0u32; MAX_BLOCKS as usize];
+        let mut scores = vec![0f32; MAX_BLOCKS as usize];
+        let mut starts = vec![0u32; MAX_BLOCKS as usize];
+        let mut ends = vec![0u32; MAX_BLOCKS as usize];
         let mut count = 0u32;
         let mut total_old_blocks = 0u32;
         let _g = ctx.inner.lock.lock().unwrap();
@@ -2742,6 +2759,9 @@ impl KVCache {
                 block_size,
                 top_blocks,
                 blocks.as_mut_ptr(),
+                scores.as_mut_ptr(),
+                starts.as_mut_ptr(),
+                ends.as_mut_ptr(),
                 &mut count as *mut u32,
                 MAX_BLOCKS,
                 &mut total_old_blocks as *mut u32,
@@ -2750,8 +2770,16 @@ impl KVCache {
         if rc != 0 {
             anyhow::bail!("m40llm_kvcache_debug_select_old_blocks failed: {rc}");
         }
-        blocks.truncate(count as usize);
-        Ok((blocks, total_old_blocks))
+        let selected = (0..count as usize)
+            .map(|idx| crate::kv_selection::KvSelectedBlock {
+                rank: idx as u32,
+                block_index: blocks[idx],
+                score: scores[idx],
+                absolute_start: starts[idx],
+                absolute_end: ends[idx],
+            })
+            .collect();
+        Ok((selected, total_old_blocks))
     }
 
     #[cfg(feature = "cuda")]
@@ -2776,6 +2804,13 @@ impl KVCache {
             score: 0.0,
             probability: 0.0,
         };
+        let empty_block_mass = ffi::M40llmAttentionBlockMass {
+            block_index: u32::MAX,
+            prob_mass: 0.0,
+            logit_max: 0.0,
+            logit_mean: 0.0,
+            count: 0,
+        };
         let mut raw = ffi::M40llmAttentionTelemetry {
             recent: ffi::M40llmAttentionGroupStats::default(),
             selected_old_exact: ffi::M40llmAttentionGroupStats::default(),
@@ -2783,6 +2818,8 @@ impl KVCache {
             representatives: ffi::M40llmAttentionGroupStats::default(),
             other: ffi::M40llmAttentionGroupStats::default(),
             needle_block_mass: -1.0,
+            selected_block_masses: [empty_block_mass; 64],
+            selected_block_mass_count: 0,
             top_entries: [empty_entry; 8],
             top_entry_count: 0,
         };
@@ -2814,6 +2851,18 @@ impl KVCache {
             representatives: convert_group(raw.representatives),
             other: convert_group(raw.other),
             needle_block_mass: (raw.needle_block_mass >= 0.0).then_some(raw.needle_block_mass),
+            selected_block_masses: raw.selected_block_masses
+                [..raw.selected_block_mass_count.min(64) as usize]
+                .iter()
+                .filter(|mass| mass.block_index != u32::MAX)
+                .map(|mass| crate::kv_selection::KvAttentionBlockMass {
+                    block_index: mass.block_index,
+                    prob_mass: mass.prob_mass,
+                    logit_max: mass.logit_max,
+                    logit_mean: mass.logit_mean,
+                    count: mass.count,
+                })
+                .collect(),
             top_entries: raw.top_entries[..top_entry_count]
                 .iter()
                 .map(|entry| KvAttentionTopEntry {

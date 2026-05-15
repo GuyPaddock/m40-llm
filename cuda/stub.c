@@ -350,12 +350,16 @@ int m40llm_kvcache_debug_select_old_blocks(
     uint32_t block_size,
     uint32_t top_blocks,
     uint32_t* out_blocks_host,
+    float* out_scores_host,
+    uint32_t* out_start_host,
+    uint32_t* out_end_host,
     uint32_t* out_count,
     uint32_t max_out,
     uint32_t* out_total_old_blocks) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len;
     (void)recent_window; (void)block_size; (void)top_blocks; (void)out_blocks_host;
-    (void)out_count; (void)max_out; (void)out_total_old_blocks; return -1;
+    (void)out_scores_host; (void)out_start_host; (void)out_end_host; (void)out_count;
+    (void)max_out; (void)out_total_old_blocks; return -1;
 }
 
 int m40llm_kvcache_debug_attention_telemetry(

@@ -85,6 +85,13 @@ extern "C" {
         float score;
         float probability;
     };
+    struct M40llmAttentionBlockMass {
+        uint32_t block_index;
+        float prob_mass;
+        float logit_max;
+        float logit_mean;
+        uint32_t count;
+    };
     struct M40llmAttentionTelemetry {
         M40llmAttentionGroupStats recent;
         M40llmAttentionGroupStats selected_old_exact;
@@ -92,6 +99,8 @@ extern "C" {
         M40llmAttentionGroupStats representatives;
         M40llmAttentionGroupStats other;
         float needle_block_mass;
+        M40llmAttentionBlockMass selected_block_masses[64];
+        uint32_t selected_block_mass_count;
         M40llmAttentionTopEntry top_entries[8];
         uint32_t top_entry_count;
     };
@@ -5174,13 +5183,17 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                                 uint32_t q_heads,
                                                 uint32_t seq_len,
                                                 uint32_t recent_window,
-                                                uint32_t block_size,
-                                                uint32_t top_blocks,
-                                                uint32_t* out_blocks_host,
-                                                uint32_t* out_count,
-                                                uint32_t max_out,
-                                                uint32_t* out_total_old_blocks) {
-        if (!ctx || !kv || !q_dev_f32 || !out_blocks_host || !out_count || !out_total_old_blocks) return -1;
+                                                  uint32_t block_size,
+                                                  uint32_t top_blocks,
+                                                  uint32_t* out_blocks_host,
+                                                  float* out_scores_host,
+                                                  uint32_t* out_start_host,
+                                                  uint32_t* out_end_host,
+                                                  uint32_t* out_count,
+                                                  uint32_t max_out,
+                                                  uint32_t* out_total_old_blocks) {
+        if (!ctx || !kv || !q_dev_f32 || !out_blocks_host || !out_scores_host ||
+            !out_start_host || !out_end_host || !out_count || !out_total_old_blocks) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim != 64) return -3;
         if (seq_len == 0 || seq_len > kv->max_seq_len || block_size == 0 || max_out == 0) return -4;
@@ -5209,7 +5222,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         for (uint32_t block = 0; block < old_blocks; ++block) {
             float score = 0.0f;
-            if (kv->compressed) {
+            if (kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                if (end <= start) continue;
+                for (uint32_t pos = start; pos < end; ++pos) {
+                    const size_t base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * elems_per_token;
+                    const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * (size_t)kv->num_heads;
+                    for (uint32_t d = 0; d < 64; ++d) {
+                        const __half k = __float2half_rn(
+                            (float)kv->d_q8_old_k[base + d] * kv->d_q8_old_k_scale[scale_base]);
+                        score += q[d] * __half2float(k);
+                    }
+                }
+                score /= (float)(end - start);
+            } else if (kv->compressed) {
                 const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
                 err = cudaMemcpy(k_buf, kv->d_summary_k + offset, sizeof(k_buf), cudaMemcpyDeviceToHost);
                 if (err != cudaSuccess) return -8;
@@ -5243,7 +5270,13 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t requested = top_blocks == 0 ? old_blocks : std::min(top_blocks, old_blocks);
         const uint32_t selected = std::min(requested, max_out);
         for (uint32_t i = 0; i < selected; ++i) {
-            out_blocks_host[i] = scored[i].second;
+            const uint32_t block = scored[i].second;
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            out_blocks_host[i] = block;
+            out_scores_host[i] = scored[i].first;
+            out_start_host[i] = start;
+            out_end_host[i] = end;
         }
         *out_count = selected;
         return 0;
@@ -5271,6 +5304,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         for (uint32_t i = 0; i < 8; ++i) {
             out->top_entries[i].block_index = 0xffffffffu;
             out->top_entries[i].token_position = 0xffffffffu;
+        }
+        for (uint32_t i = 0; i < 64; ++i) {
+            out->selected_block_masses[i].block_index = 0xffffffffu;
         }
 
         cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
@@ -5319,6 +5355,32 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             *score = dot_q(k_buf);
             return 0;
         };
+        auto score_q8_token = [&](uint32_t token, float* score) -> int {
+            if (!kv->d_q8_old_k || !kv->d_q8_old_k_scale) return -1;
+            const size_t base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * elems_per_token;
+            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * (size_t)kv->num_heads;
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) {
+                const __half k = __float2half_rn(
+                    (float)kv->d_q8_old_k[base + d] * kv->d_q8_old_k_scale[scale_base]);
+                dot += q[d] * __half2float(k);
+            }
+            *score = dot * scale;
+            return 0;
+        };
+        auto score_q8_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            if (end <= start) return -1;
+            float sum = 0.0f;
+            for (uint32_t token = start; token < end; ++token) {
+                float token_score = 0.0f;
+                if (score_q8_token(token, &token_score) != 0) return -1;
+                sum += token_score;
+            }
+            *score = sum / (float)(end - start);
+            return 0;
+        };
         auto score_dense_block_mean = [&](uint32_t block, float* score) -> int {
             const uint32_t start = block * effective_block;
             const uint32_t end = std::min(start + effective_block, old_len);
@@ -5334,10 +5396,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             *score = dot * scale;
             return 0;
         };
-        auto selected_blocks_by_score = [&](bool compressed_source) -> std::vector<uint32_t> {
+        auto selected_blocks_by_score = [&](bool compressed_source, bool q8_source) -> std::vector<uint32_t> {
             std::vector<std::pair<float, uint32_t>> scored;
             for (uint32_t block = 0; block < available_blocks; ++block) {
-                if (compressed_source) {
+                if (q8_source) {
+                    float score = 0.0f;
+                    if (score_q8_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else if (compressed_source) {
                     const uint32_t count = kv->d_block_counts ? 1u : 0u;
                     (void)count;
                     const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
@@ -5364,7 +5430,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         if (mode == 1) {
             if (!kv->d_k) return -8;
-            std::vector<uint32_t> selected = selected_blocks_by_score(false);
+            std::vector<uint32_t> selected = selected_blocks_by_score(false, false);
             for (uint32_t block : selected) {
                 const uint32_t start = block * effective_block;
                 const uint32_t end = std::min(start + effective_block, old_len);
@@ -5379,13 +5445,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 if (copy_and_score(dense_k_ptr(token), &score) != 0) return -10;
                 candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
             }
+        } else if (mode == 5) {
+            if (!kv->compressed || !kv->q8_old_backing || !kv->d_q8_old_k ||
+                !kv->d_q8_old_v || !kv->d_q8_old_k_scale || !kv->d_q8_old_v_scale) return -17;
+            std::vector<uint32_t> selected = selected_blocks_by_score(false, true);
+            for (uint32_t block : selected) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                for (uint32_t token = start; token < end; ++token) {
+                    float score = 0.0f;
+                    if (score_q8_token(token, &score) != 0) return -18;
+                    candidates.push_back({2u, block, token, score, 0.0f});
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(recent_k_ptr(token), &score) != 0) return -19;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
         } else {
             if (!kv->compressed) return -11;
             if (mode == 3 || mode == 4) {
                 const uint32_t selected_top = mode == 3 ? 0u : top_blocks;
                 const uint32_t saved_top = top_blocks;
                 top_blocks = selected_top;
-                std::vector<uint32_t> selected = selected_blocks_by_score(true);
+                std::vector<uint32_t> selected = selected_blocks_by_score(true, false);
                 top_blocks = saved_top;
                 for (uint32_t block : selected) {
                     const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
@@ -5433,6 +5517,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             uint32_t count = 0;
         };
         MutableStats stats[5];
+        std::vector<MutableStats> block_stats(available_blocks);
         float needle_mass = 0.0f;
         bool have_needle = needle_block != 0xffffffffu;
         for (const Candidate& c : candidates) {
@@ -5442,6 +5527,13 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             stats[idx].sum_logit += c.score;
             stats[idx].count++;
             if (have_needle && c.block == needle_block) needle_mass += c.prob;
+            if (c.group == 2u && c.block < block_stats.size()) {
+                MutableStats& b = block_stats[c.block];
+                b.mass += c.prob;
+                b.max_logit = std::max(b.max_logit, c.score);
+                b.sum_logit += c.score;
+                b.count++;
+            }
         }
         auto finish = [](const MutableStats& s) -> M40llmAttentionGroupStats {
             M40llmAttentionGroupStats out_stats;
@@ -5457,6 +5549,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         out->summary = finish(stats[3]);
         out->representatives = finish(stats[4]);
         if (have_needle) out->needle_block_mass = needle_mass;
+        for (uint32_t block = 0;
+             block < block_stats.size() && out->selected_block_mass_count < 64;
+             ++block) {
+            const MutableStats& b = block_stats[block];
+            if (b.count == 0) continue;
+            M40llmAttentionBlockMass& dst =
+                out->selected_block_masses[out->selected_block_mass_count++];
+            dst.block_index = block;
+            dst.prob_mass = b.mass;
+            dst.logit_max = b.max_logit;
+            dst.logit_mean = b.sum_logit / (float)b.count;
+            dst.count = b.count;
+        }
 
         std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
             if (a.prob == b.prob) return a.score > b.score;

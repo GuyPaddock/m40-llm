@@ -467,9 +467,10 @@ impl LoadedModel {
             unsafe {
                 if kv_selection::enabled() {
                     if kv_selection::should_capture_attention() {
+                        let attention_mode = if q8_exact_old_backing_enabled() { 5 } else { 1 };
                         if let Ok(attention) = kv.debug_attention_telemetry(
                             &self.cuda,
-                            1,
+                            attention_mode,
                             seq_id,
                             d_q,
                             num_heads,
@@ -492,7 +493,11 @@ impl LoadedModel {
                         compression.block_size,
                         compression.top_blocks,
                     ) {
-                        kv_selection::record(&blocks, total_old_blocks, compression.top_blocks);
+                        kv_selection::record_scored(
+                            blocks,
+                            total_old_blocks,
+                            compression.top_blocks,
+                        );
                     }
                 }
                 if q8_exact_old_backing_enabled() && q8_direct_exact_old_attention_enabled() {
@@ -654,7 +659,7 @@ impl LoadedModel {
                         compression.block_size,
                         top_blocks,
                     ) {
-                        kv_selection::record(&blocks, total_old_blocks, top_blocks);
+                        kv_selection::record_scored(blocks, total_old_blocks, top_blocks);
                     }
                 }
                 return kv.attention_last_token_f32_gqa_block_summary_lossy_async(
