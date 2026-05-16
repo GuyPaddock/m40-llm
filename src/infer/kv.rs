@@ -223,6 +223,7 @@ impl LoadedModel {
         if head_dim == 0 {
             anyhow::bail!("attention_key_length must be > 0");
         }
+        self.kv_cache = None;
         let kv = KVCache::new_with_context(
             &self.cuda,
             max_seq_len,
@@ -289,6 +290,7 @@ impl LoadedModel {
             anyhow::bail!("compressed KV cache currently requires head_dim=64");
         }
         let recent_window = config.recent_window.min(max_seq_len);
+        self.kv_cache = None;
         let kv = KVCache::new_compressed_with_context(
             &self.cuda,
             max_seq_len,
@@ -332,6 +334,7 @@ impl LoadedModel {
         if num_heads == 0 || head_dim == 0 {
             anyhow::bail!("allocate_kv_cache_with_layout: invalid layout");
         }
+        self.kv_cache = None;
         let kv = KVCache::new_with_context(
             &self.cuda,
             max_seq_len,

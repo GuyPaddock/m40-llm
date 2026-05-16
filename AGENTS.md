@@ -258,12 +258,22 @@ batched decode path before touching persistent decode or large-model fused-dequa
   top_blocks=4/16 pass, and recent top_blocks=8 still fails. The trace shows
   recent top_blocks=8 diverges at generated step 2, while old top_blocks=4
   tracks dense through `ZXQ-NEEDLE` and then repeats; selected-block ordering is
-  not the primary root cause.
-- Next: compare q8-direct against staged-q8 or FP16 block-select-exact under the
-  same selected candidates, or capture attention/logit telemetry at the actual
-  later-token divergence point. Do not run 8192, increase representative count,
-  tune pure summary modes, or expand compressed KV into server scheduling before
-  the 4096 q8 exact-block instability is explained.
+  not the primary root cause. `M40LLM_KV_Q8_DRIFT_DIAG=1` now compares dense
+  `off`, FP16 exact selected blocks, staged-q8, and direct-q8 for the known 4096
+  failures. KV cache reallocation now drops the previous cache before allocating
+  the replacement, avoiding transient double-allocation when the harness
+  switches backends. The 4096 diagnostic shows old/top_blocks=4 passes with
+  FP16 exact selected blocks but fails with staged-q8 and direct-q8, isolating
+  that failure to q8 quantization/dequant drift. Recent/top_blocks=8 fails with
+  FP16 exact, staged-q8, and direct-q8, isolating that failure to
+  selected-context sensitivity at that top-block count. Direct-q8 matches
+  staged-q8 in both rows, so it is not currently worse than staged q8 in these
+  diagnostics.
+- Next: avoid 8192 and server integration until exact-block quality is more
+  stable. Evaluate q8 quality at higher top_blocks and/or improve exact-old
+  representation quality, such as per-channel/group q8 or mixed precision for
+  high-sensitivity selected blocks. Do not increase representative count or tune
+  pure summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

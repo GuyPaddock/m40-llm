@@ -159,6 +159,18 @@ old selected blocks and dequantizes q8 old K/V inside the attention kernel while
 preserving the staged path's FP16 rounding semantics. Keep this opt-in until the
 2048 and larger quality sweeps are characterized across more prompts.
 
+`M40LLM_KV_Q8_DRIFT_DIAG=1` runs a narrow exact-block backend comparison in the
+quality harness. It defaults to 4096-token prompts and limits the mode matrix to
+dense `off` plus `block-select-exact`. For `block-select-exact`, it runs:
+
+- `fp16-exact`: dense/FP16 exact old backing.
+- `staged-q8`: q8 old backing dequantized into FP16 staging.
+- `direct-q8`: q8 old backing dequantized inside the attention kernel.
+
+The diagnostic focuses on the known failing rows by default: old needle with
+`top_blocks=4` and recent needle with `top_blocks=8`. JSONL rows include
+`exact_block_backend_variant` to distinguish these cases.
+
 Attention telemetry records first-captured probability mass by group:
 recent exact tokens, selected exact old tokens, old summaries, representatives,
 and other entries. It also reports top attended entries, needle-block mass when
@@ -184,6 +196,12 @@ absolute positions, compressed recent candidate absolute positions, and physical
 ring slots so recent-ring ordering can be compared directly. The stderr table
 prints concise first/last/count summaries for these arrays; use JSONL for the
 full position list.
+
+`M40LLM_KV_LOGIT_TRACE=1` records per-generated-token logits. In those trace
+rows, `expected_answer_token` is only first-answer-token metadata. Use
+`dense_reference_token` and its rank/logit fields as the per-step dense
+reference. Trace rows also report EOT token `128009` rank/logit so premature
+end-of-turn drift can be diagnosed.
 
 `M40LLM_KV_RECENT_EQUIV_SEQUENTIAL=1` disables packed-then-compress for
 compressed modes during exact-selection quality diagnostics. Use it when

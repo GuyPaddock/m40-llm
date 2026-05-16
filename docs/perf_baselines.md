@@ -2,6 +2,63 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-15: 4096 Q8 Drift vs Selected-Context Diagnostic
+
+This checkpoint adds `M40LLM_KV_Q8_DRIFT_DIAG=1`, a narrow quality-harness mode
+that compares dense `off`, FP16 exact selected blocks, staged-q8 exact blocks,
+and direct-q8 exact blocks for the known 4096 failures. The harness now reports
+`exact_block_backend_variant` and per-token trace fields for the dense reference
+token and EOT token `128009`. `expected_answer_token` remains first-answer-token
+metadata only.
+
+During this work, KV cache reallocation was changed to drop the previous cache
+before constructing its replacement. This prevents transient double-allocation
+when the harness switches between dense FP16 and compressed q8 backends in one
+process.
+
+Reports:
+
+- `/tmp/m40llm-kv-q8-drift-4096-old-v3.jsonl`
+- `/tmp/m40llm-kv-q8-drift-4096-recent-v1.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `M40LLM_KV_Q8_DRIFT_DIAG=1` 64-token smoke passed for old/recent and all
+  exact-block backend variants.
+
+4096 q8 drift diagnostic summary:
+
+| Needle | Backend | Top blocks | Status | Output | Prompt max diff | First decode max diff | Trace note |
+| --- | --- | ---: | --- | --- | ---: | ---: | --- |
+| old | dense off | - | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | reference |
+| old | fp16-exact | 4 | pass | `ZXQ-NEEDLE-41729` | 6.314 | 10.049 | selected context is sufficient |
+| old | staged-q8 | 4 | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | 7.469 | 4.862 | diverges at generated step 7 |
+| old | direct-q8 | 4 | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | 7.469 | 4.862 | matches staged-q8 failure |
+| recent | dense off | - | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | reference |
+| recent | fp16-exact | 8 | fail | `ZXQ` | 3.279 | 5.711 | emits EOT at generated step 2 |
+| recent | staged-q8 | 8 | fail | `ZXQ` | 3.295 | 5.705 | matches FP16 failure |
+| recent | direct-q8 | 8 | fail | `ZXQ` | 3.295 | 5.705 | matches staged-q8 failure |
+
+Interpretation:
+
+- Old/top_blocks=4: FP16 exact selected-block attention passes while both q8
+  variants fail. This isolates the old/top4 failure to q8 quantization/dequant
+  drift, not selected-context insufficiency or a direct-q8-specific kernel bug.
+- Recent/top_blocks=8: FP16 exact, staged-q8, and direct-q8 all fail the same
+  way (`ZXQ`, then EOT at generated step 2), while dense `off` passes. This
+  isolates recent/top8 to selected-context sensitivity at that top-block count,
+  not q8 drift.
+- Direct-q8 matches staged-q8 in both failing rows, so direct q8 attention does
+  not currently appear worse than the staged q8 path for these diagnostics.
+- The next experiment should not tune lossy summaries or representatives. For
+  exact-block retrieval, evaluate q8 quality at higher top_blocks or improve the
+  exact-old representation, such as per-channel/group q8 or mixed precision for
+  high-sensitivity blocks.
+
 ## 2026-05-15: 4096 Selected-Block Ordering and Logit Trace Diagnostics
 
 This checkpoint adds two diagnostic controls for exact-block retrieval:

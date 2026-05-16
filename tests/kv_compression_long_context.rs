@@ -77,6 +77,7 @@ struct CaseRecord {
     dense_equivalent_kv_bytes: Option<usize>,
     exact_old_backing: Option<String>,
     exact_old_attention_backend: Option<String>,
+    exact_block_backend_variant: Option<String>,
     q8_old_backing_bytes: Option<usize>,
     q8_old_backing_scale_bytes: Option<usize>,
     compression_ratio: Option<f64>,
@@ -159,11 +160,21 @@ struct GeneratedLogitTraceRecord {
     step: usize,
     dense_generated_token: Option<u32>,
     compressed_generated_token: Option<u32>,
+    dense_reference_token: Option<u32>,
+    dense_reference_token_rank_dense: Option<usize>,
+    dense_reference_token_rank_compressed: Option<usize>,
+    dense_reference_token_logit_dense: Option<f32>,
+    dense_reference_token_logit_compressed: Option<f32>,
     expected_answer_token: Option<u32>,
     expected_token_rank_dense: Option<usize>,
     expected_token_rank_compressed: Option<usize>,
     expected_token_logit_dense: Option<f32>,
     expected_token_logit_compressed: Option<f32>,
+    eot_token: u32,
+    eot_token_rank_dense: Option<usize>,
+    eot_token_rank_compressed: Option<usize>,
+    eot_token_logit_dense: Option<f32>,
+    eot_token_logit_compressed: Option<f32>,
     dense_top_token: Option<u32>,
     compressed_top_token: Option<u32>,
     dense_top_logit: Option<f32>,
@@ -494,6 +505,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
+        if q8_drift_diagnostic_enabled() {
+            return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
+        }
         if exact_block_retrieval_sweep_enabled() {
             return Ok(if 2048 < limit { vec![2048] } else { Vec::new() });
         }
@@ -558,6 +572,12 @@ fn exact_selection_sweep_enabled() -> bool {
 
 fn exact_block_retrieval_sweep_enabled() -> bool {
     std::env::var("M40LLM_KV_EXACT_BLOCK_RETRIEVAL_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn q8_drift_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_Q8_DRIFT_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -629,7 +649,9 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
         .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .transpose()?
         .unwrap_or_else(|| {
-            if exact_block_retrieval_sweep_enabled() {
+            if q8_drift_diagnostic_enabled() {
+                vec![4, 8]
+            } else if exact_block_retrieval_sweep_enabled() {
                 vec![1, 2, 4, 8, 16]
             } else if exact_selection_sweep {
                 vec![4, 8, 16, 32, 64]
@@ -638,6 +660,66 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
             }
         });
     Ok(values.into_iter().map(Some).collect())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ExactBlockBackendCase {
+    variant: Option<&'static str>,
+    exact_old_backing: Option<&'static str>,
+    exact_old_attention: Option<&'static str>,
+    staging: Option<&'static str>,
+}
+
+fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase> {
+    if q8_drift_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+        vec![
+            ExactBlockBackendCase {
+                variant: Some("fp16-exact"),
+                exact_old_backing: None,
+                exact_old_attention: None,
+                staging: None,
+            },
+            ExactBlockBackendCase {
+                variant: Some("staged-q8"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                staging: Some("1"),
+            },
+            ExactBlockBackendCase {
+                variant: Some("direct-q8"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: Some("q8-direct"),
+                staging: Some("1"),
+            },
+        ]
+    } else {
+        vec![ExactBlockBackendCase {
+            variant: None,
+            exact_old_backing: None,
+            exact_old_attention: None,
+            staging: None,
+        }]
+    }
+}
+
+fn apply_exact_block_backend_case(case: ExactBlockBackendCase) -> Vec<EnvVarGuard> {
+    let mut guards = Vec::new();
+    if let Some(value) = case.exact_old_backing {
+        guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_OLD_BACKING", value));
+    } else if q8_drift_diagnostic_enabled() {
+        guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_OLD_BACKING"));
+    }
+    if let Some(value) = case.exact_old_attention {
+        guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_OLD_ATTENTION", value));
+    } else if q8_drift_diagnostic_enabled() {
+        guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_OLD_ATTENTION"));
+    }
+    if let Some(value) = case.staging {
+        guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_BLOCK_STAGING", value));
+    } else if q8_drift_diagnostic_enabled() {
+        guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_BLOCK_STAGING"));
+    }
+    guards
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -709,7 +791,7 @@ fn quality_modes(
             KvCompressMode::RecentOnly,
             KvCompressMode::BlockSelectExact,
         ]
-    } else if exact_block_retrieval_sweep_enabled() {
+    } else if q8_drift_diagnostic_enabled() || exact_block_retrieval_sweep_enabled() {
         &[KvCompressMode::Off, KvCompressMode::BlockSelectExact]
     } else if exact_selection_sweep {
         &[
@@ -778,8 +860,9 @@ fn run_retrieval_case(
     rep_case: RepresentativeCase,
     top_blocks: u32,
 ) -> Result<(GeneratedText, usize, Option<u32>)> {
-    let exact_selection_sweep =
-        exact_selection_sweep_enabled() || exact_block_retrieval_sweep_enabled();
+    let exact_selection_sweep = exact_selection_sweep_enabled()
+        || exact_block_retrieval_sweep_enabled()
+        || q8_drift_diagnostic_enabled();
     let recent_equivalence_sequential = recent_equivalence_sequential_enabled();
     let _prefill_guard = if (lossy_packed_sweep_enabled()
         || (exact_selection_sweep
@@ -1287,17 +1370,39 @@ fn generated_trace_records(
             compressed_step.map(|step| step.logits.as_slice()),
             expected_token_id,
         );
+        let dense_reference_token = dense_step.map(|step| step.sampled_token_id);
+        let dense_reference = expected_token_summary(
+            dense_step.map(|step| step.logits.as_slice()),
+            compressed_step.map(|step| step.logits.as_slice()),
+            dense_reference_token,
+        );
+        let eot_token = 128009u32;
+        let eot = expected_token_summary(
+            dense_step.map(|step| step.logits.as_slice()),
+            compressed_step.map(|step| step.logits.as_slice()),
+            Some(eot_token),
+        );
         let dense_top = dense_step.and_then(|step| top_token_with_logit(&step.logits));
         let compressed_top = compressed_step.and_then(|step| top_token_with_logit(&step.logits));
         records.push(GeneratedLogitTraceRecord {
             step,
             dense_generated_token: dense_step.map(|step| step.sampled_token_id),
             compressed_generated_token: compressed_step.map(|step| step.sampled_token_id),
+            dense_reference_token,
+            dense_reference_token_rank_dense: dense_reference.rank_dense,
+            dense_reference_token_rank_compressed: dense_reference.rank_compressed,
+            dense_reference_token_logit_dense: dense_reference.logit_dense,
+            dense_reference_token_logit_compressed: dense_reference.logit_compressed,
             expected_answer_token: expected_token_id,
             expected_token_rank_dense: expected.rank_dense,
             expected_token_rank_compressed: expected.rank_compressed,
             expected_token_logit_dense: expected.logit_dense,
             expected_token_logit_compressed: expected.logit_compressed,
+            eot_token,
+            eot_token_rank_dense: eot.rank_dense,
+            eot_token_rank_compressed: eot.rank_compressed,
+            eot_token_logit_dense: eot.logit_dense,
+            eot_token_logit_compressed: eot.logit_compressed,
             dense_top_token: dense_top.map(|(token, _)| token),
             compressed_top_token: compressed_top.map(|(token, _)| token),
             dense_top_logit: dense_top.map(|(_, logit)| logit),
@@ -1339,7 +1444,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1388,6 +1493,7 @@ fn print_records(records: &[CaseRecord]) {
             record.needle_block_selected,
             record.needle_block_rank,
             record.total_old_blocks,
+            record.exact_block_backend_variant,
             record.exact_old_backing,
             record.exact_old_attention_backend,
             record.q8_old_backing_bytes,
@@ -1472,7 +1578,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
     let lossy_packed_sweep = lossy_packed_sweep_enabled();
-    let exact_selection_sweep = exact_selection_sweep_enabled();
+    let exact_selection_sweep = exact_selection_sweep_enabled() || q8_drift_diagnostic_enabled();
     let modes = quality_modes(lossy_packed_sweep, exact_selection_sweep);
     let rep_cases = representative_cases(lossy_packed_sweep);
     let needle_positions = needle_positions()?;
@@ -1512,508 +1618,533 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                     };
                 for rep_case in mode_rep_cases {
                     for top_blocks_case in top_block_cases(exact_selection_sweep, mode)? {
-                        let top_blocks = top_blocks_case.unwrap_or(16);
-                        let mut prompt_tokens = 0usize;
-                        let mut generated_tokens = 0usize;
-                        let mut prompt_prefill_elapsed_ms = 0u128;
-                        let mut generated_decode_elapsed_ms = 0u128;
-                        let mut total_elapsed_ms = 0u128;
-                        let mut attention_compression_elapsed_ms = None;
-                        let mut prefill_chunk_size = None;
-                        let mut compressed_prefill_chunk_size = None;
-                        let mut temporary_dense_kv_bytes = None;
-                        let mut final_kv_allocated_bytes = None;
-                        let mut dense_equivalent_kv_bytes = None;
-                        let mut exact_old_backing = None;
-                        let mut exact_old_attention_backend = None;
-                        let mut q8_old_backing_bytes = None;
-                        let mut q8_old_backing_scale_bytes = None;
-                        let mut staged_workspace_reused = false;
-                        let mut staged_workspace_bytes = None;
-                        let mut staged_workspace_capacity_tokens = None;
-                        let mut staged_workspace_allocations = 0usize;
-                        let mut prefill_mode = "error".to_string();
-                        let mut selection_summary = None;
-                        let mut needle_block_index = None;
-                        let mut prompt_logits = None;
-                        let mut first_decode_logits = None;
-                        let mut generated_logit_trace_raw: Option<Vec<GeneratedLogitTraceStep>> =
-                            None;
-                        let (mut status, output, error) = match run_retrieval_case(
-                            &mut model,
-                            &tokenizer,
-                            target_tokens,
-                            needle_position,
-                            mode,
-                            rep_case,
-                            top_blocks,
-                        ) {
-                            Ok((generated, _preformatted_prompt_tokens, needle_block)) => {
-                                prompt_tokens = generated.prompt_token_len;
-                                generated_tokens = generated
-                                    .token_ids
-                                    .len()
-                                    .saturating_sub(generated.prompt_token_len);
-                                prompt_prefill_elapsed_ms = generated.prompt_prefill_elapsed_ms;
-                                generated_decode_elapsed_ms = generated.generated_decode_elapsed_ms;
-                                total_elapsed_ms = generated.total_elapsed_ms;
-                                attention_compression_elapsed_ms =
-                                    generated.attention_compression_elapsed_ms;
-                                prefill_chunk_size = generated.prefill_chunk_size;
-                                compressed_prefill_chunk_size =
-                                    generated.compressed_prefill_chunk_size;
-                                temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
-                                final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
-                                dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
-                                exact_old_backing = generated.exact_old_backing.clone();
-                                exact_old_attention_backend =
-                                    generated.exact_old_attention_backend.clone();
-                                q8_old_backing_bytes = generated.q8_old_backing_bytes;
-                                q8_old_backing_scale_bytes = generated.q8_old_backing_scale_bytes;
-                                staged_workspace_reused = generated.staged_workspace_reused;
-                                staged_workspace_bytes = generated.staged_workspace_bytes;
-                                staged_workspace_capacity_tokens =
-                                    generated.staged_workspace_capacity_tokens;
-                                staged_workspace_allocations =
-                                    generated.staged_workspace_allocations;
-                                prefill_mode = generated.prefill_mode.clone();
-                                selection_summary = generated.kv_selection.clone();
-                                needle_block_index = needle_block;
-                                prompt_logits = generated.prompt_logits.clone();
-                                first_decode_logits = generated.first_decode_logits.clone();
-                                generated_logit_trace_raw = generated.generated_logit_trace.clone();
-                                let passed = generated.output.contains(NEEDLE);
-                                if mode == KvCompressMode::Off {
-                                    dense_passed = Some(passed);
-                                    dense_prompt_logits = generated.prompt_logits.clone();
-                                    dense_first_decode_logits =
-                                        generated.first_decode_logits.clone();
-                                    dense_generated_logit_trace =
-                                        generated.generated_logit_trace.clone();
-                                } else if mode == KvCompressMode::DenseRecentOnly {
-                                    dense_window_prompt_logits = generated.prompt_logits.clone();
-                                    dense_window_first_decode_logits =
-                                        generated.first_decode_logits.clone();
-                                }
-                                let status = if passed {
-                                    CaseStatus::Pass
-                                } else {
-                                    CaseStatus::Fail
-                                };
-                                (status, generated.output, None)
-                            }
-                            Err(err) => {
-                                if mode == KvCompressMode::Off {
-                                    dense_passed = Some(false);
-                                }
-                                (CaseStatus::Error, String::new(), Some(err.to_string()))
-                            }
-                        };
-                        if mode != KvCompressMode::Off && dense_passed == Some(false) {
-                            status = CaseStatus::Inconclusive;
-                        }
-                        let selected_block_indices = selection_summary
-                            .as_ref()
-                            .map(|summary| summary.selected_block_indices.clone());
-                        let selected_block_score_entries =
-                            selection_summary.as_ref().map(selected_block_entry_strings);
-                        let selection_records =
-                            selection_summary.as_ref().map(selection_record_strings);
-                        let selected_blocks_score_order_is_chronological = selection_summary
-                            .as_ref()
-                            .and_then(first_selection_is_chronological);
-                        let selected_block_order = selected_block_order();
-                        let selected_blocks_attention_order_is_chronological =
-                            if selected_block_order == "chronological" {
-                                Some(true)
-                            } else {
-                                selected_blocks_score_order_is_chronological
-                            };
-                        let needle_block_selected = needle_block_index.map(|needle| {
-                            selected_block_indices
-                                .as_ref()
-                                .is_some_and(|selected| selected.contains(&needle))
-                        });
-                        let needle_block_rank = needle_block_index.and_then(|needle| {
-                            selected_block_indices.as_ref().and_then(|selected| {
-                                selected
-                                    .iter()
-                                    .position(|block| *block == needle)
-                                    .map(|rank| rank as u32)
-                            })
-                        });
-                        let total_old_blocks = selection_summary
-                            .as_ref()
-                            .map(|summary| summary.total_old_blocks);
-                        let attention = selection_summary
-                            .as_ref()
-                            .and_then(|summary| summary.attention.as_ref());
-                        let attention_selected_block_masses =
-                            attention.map(attention_block_mass_strings);
-                        let (
-                            attention_candidate_position_min,
-                            attention_candidate_position_max,
-                            attention_candidate_order_is_chronological,
-                        ) = selection_summary
-                            .as_ref()
-                            .map(|summary| {
-                                first_attention_candidate_bounds(
-                                    summary,
-                                    position_meta.recent_ring_absolute_start,
-                                    position_meta.recent_ring_absolute_end,
-                                )
-                            })
-                            .unwrap_or((None, None, None));
-                        let attention_candidate_order_is_chronological = if selected_block_order
-                            == "chronological"
-                            && selection_summary.is_some()
+                        if q8_drift_diagnostic_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && !matches!(
+                                (needle_position, top_blocks_case),
+                                ("old", Some(4)) | ("recent", Some(8))
+                            )
                         {
-                            Some(true)
-                        } else {
-                            attention_candidate_order_is_chronological
-                        };
-                        let prompt_logit_diff = if logit_compare_enabled() {
-                            dense_prompt_logits
-                                .as_deref()
-                                .zip(prompt_logits.as_deref())
-                                .and_then(|(dense, compressed)| {
-                                    logit_diff_summary(dense, compressed)
-                                })
-                        } else {
-                            None
-                        };
-                        let first_decode_logit_diff = if logit_compare_enabled() {
-                            dense_first_decode_logits
-                                .as_deref()
-                                .zip(first_decode_logits.as_deref())
-                                .and_then(|(dense, compressed)| {
-                                    logit_diff_summary(dense, compressed)
-                                })
-                        } else {
-                            None
-                        };
-                        let prompt_dense_window_diff = if logit_compare_enabled() {
-                            dense_window_prompt_logits
-                                .as_deref()
-                                .zip(prompt_logits.as_deref())
-                                .and_then(|(window, compressed)| {
-                                    logit_diff_summary(window, compressed)
-                                })
-                        } else {
-                            None
-                        };
-                        let first_decode_dense_window_diff = if logit_compare_enabled() {
-                            dense_window_first_decode_logits
-                                .as_deref()
-                                .zip(first_decode_logits.as_deref())
-                                .and_then(|(window, compressed)| {
-                                    logit_diff_summary(window, compressed)
-                                })
-                        } else {
-                            None
-                        };
-                        let expected_token_window_logits = if logit_compare_enabled() {
-                            expected_token_summary(
-                                dense_prompt_logits.as_deref(),
-                                dense_window_prompt_logits.as_deref(),
-                                position_meta.expected_first_answer_token_id,
-                            )
-                        } else {
-                            ExpectedTokenLogitSummary {
-                                rank_dense: None,
-                                rank_compressed: None,
-                                logit_dense: None,
-                                logit_compressed: None,
-                            }
-                        };
-                        let expected_token_logits = if logit_compare_enabled() {
-                            expected_token_summary(
-                                dense_prompt_logits.as_deref(),
-                                prompt_logits.as_deref(),
-                                position_meta.expected_first_answer_token_id,
-                            )
-                        } else {
-                            ExpectedTokenLogitSummary {
-                                rank_dense: None,
-                                rank_compressed: None,
-                                logit_dense: None,
-                                logit_compressed: None,
-                            }
-                        };
-                        let generated_logit_trace = generated_trace_records(
-                            dense_generated_logit_trace.as_deref(),
-                            generated_logit_trace_raw.as_deref(),
-                            position_meta.expected_first_answer_token_id,
-                        );
-                        let active_kv = active_kv_working_set(
-                            mode,
-                            prompt_tokens,
-                            top_blocks_case,
-                            ActiveKvAccounting {
-                                recent_window: 1024,
-                                block_size: 32,
-                                kv_heads: config.attention_head_count_kv as usize,
-                                head_dim: config.attention_key_length as usize,
-                                layer_count: config.block_count as usize,
-                            },
-                        );
-                        let staging_enabled = exact_block_staging_enabled()
-                            && mode == KvCompressMode::BlockSelectExact;
-                        let staged_position_min = if staging_enabled {
-                            selected_block_indices
-                                .as_ref()
-                                .and_then(|selected| selected.iter().min().copied())
-                                .map(|block| block as usize * 32)
-                                .or(position_meta.recent_ring_absolute_start)
-                        } else {
-                            None
-                        };
-                        let staged_position_max = if staging_enabled {
-                            prompt_tokens.checked_sub(1)
-                        } else {
-                            None
-                        };
-                        let record = CaseRecord {
-                            model_path: probe.candidate.path.display().to_string(),
-                            resolved_model_path: probe
-                                .candidate
-                                .resolved_path
-                                .display()
-                                .to_string(),
-                            target_tokens,
-                            prompt_tokens,
-                            generated_tokens,
-                            needle_position: needle_position.to_string(),
-                            mode: mode_name(mode).to_string(),
-                            representatives: rep_case.representatives,
-                            representative_policy: representative_policy_name(rep_case.policy)
-                                .to_string(),
-                            status,
-                            prompt_prefill_elapsed_ms,
-                            generated_decode_elapsed_ms,
-                            total_elapsed_ms,
-                            attention_compression_elapsed_ms,
-                            exact_block_staging_enabled: staging_enabled,
-                            staged_workspace_reused,
-                            staged_workspace_bytes,
-                            staged_workspace_capacity_tokens,
-                            staged_workspace_allocations,
-                            staged_kv_tokens: staging_enabled
-                                .then(|| active_kv.map(|working| working.tokens))
-                                .flatten(),
-                            staged_kv_bytes: staging_enabled
-                                .then(|| active_kv.map(|working| working.bytes_per_layer))
-                                .flatten(),
-                            staged_old_tokens: staging_enabled
-                                .then(|| active_kv.map(|working| working.old_block_tokens))
-                                .flatten(),
-                            staged_recent_tokens: staging_enabled
-                                .then(|| active_kv.map(|working| working.recent_tokens))
-                                .flatten(),
-                            staged_position_min,
-                            staged_position_max,
-                            prefill_tokens_per_sec: tokens_per_sec(
-                                prompt_tokens,
-                                prompt_prefill_elapsed_ms,
-                            ),
-                            decode_tokens_per_sec: tokens_per_sec(
-                                generated_tokens,
-                                generated_decode_elapsed_ms,
-                            ),
-                            prefill_chunk_size,
-                            compressed_prefill_chunk_size,
-                            temporary_dense_kv_bytes,
-                            final_kv_allocated_bytes,
-                            dense_equivalent_kv_bytes,
-                            exact_old_backing,
-                            exact_old_attention_backend,
-                            q8_old_backing_bytes,
-                            q8_old_backing_scale_bytes,
-                            compression_ratio: match (
-                                dense_equivalent_kv_bytes,
-                                final_kv_allocated_bytes,
+                            continue;
+                        }
+                        for backend_case in exact_block_backend_cases(mode) {
+                            let _backend_guards = apply_exact_block_backend_case(backend_case);
+                            let exact_block_backend_variant =
+                                backend_case.variant.map(str::to_string);
+                            let top_blocks = top_blocks_case.unwrap_or(16);
+                            let mut prompt_tokens = 0usize;
+                            let mut generated_tokens = 0usize;
+                            let mut prompt_prefill_elapsed_ms = 0u128;
+                            let mut generated_decode_elapsed_ms = 0u128;
+                            let mut total_elapsed_ms = 0u128;
+                            let mut attention_compression_elapsed_ms = None;
+                            let mut prefill_chunk_size = None;
+                            let mut compressed_prefill_chunk_size = None;
+                            let mut temporary_dense_kv_bytes = None;
+                            let mut final_kv_allocated_bytes = None;
+                            let mut dense_equivalent_kv_bytes = None;
+                            let mut exact_old_backing = None;
+                            let mut exact_old_attention_backend = None;
+                            let mut q8_old_backing_bytes = None;
+                            let mut q8_old_backing_scale_bytes = None;
+                            let mut staged_workspace_reused = false;
+                            let mut staged_workspace_bytes = None;
+                            let mut staged_workspace_capacity_tokens = None;
+                            let mut staged_workspace_allocations = 0usize;
+                            let mut prefill_mode = "error".to_string();
+                            let mut selection_summary = None;
+                            let mut needle_block_index = None;
+                            let mut prompt_logits = None;
+                            let mut first_decode_logits = None;
+                            let mut generated_logit_trace_raw: Option<
+                                Vec<GeneratedLogitTraceStep>,
+                            > = None;
+                            let (mut status, output, error) = match run_retrieval_case(
+                                &mut model,
+                                &tokenizer,
+                                target_tokens,
+                                needle_position,
+                                mode,
+                                rep_case,
+                                top_blocks,
                             ) {
-                                (Some(dense), Some(actual)) if actual > 0 => {
-                                    Some(dense as f64 / actual as f64)
+                                Ok((generated, _preformatted_prompt_tokens, needle_block)) => {
+                                    prompt_tokens = generated.prompt_token_len;
+                                    generated_tokens = generated
+                                        .token_ids
+                                        .len()
+                                        .saturating_sub(generated.prompt_token_len);
+                                    prompt_prefill_elapsed_ms = generated.prompt_prefill_elapsed_ms;
+                                    generated_decode_elapsed_ms =
+                                        generated.generated_decode_elapsed_ms;
+                                    total_elapsed_ms = generated.total_elapsed_ms;
+                                    attention_compression_elapsed_ms =
+                                        generated.attention_compression_elapsed_ms;
+                                    prefill_chunk_size = generated.prefill_chunk_size;
+                                    compressed_prefill_chunk_size =
+                                        generated.compressed_prefill_chunk_size;
+                                    temporary_dense_kv_bytes = generated.temporary_dense_kv_bytes;
+                                    final_kv_allocated_bytes = generated.final_kv_allocated_bytes;
+                                    dense_equivalent_kv_bytes = generated.dense_equivalent_kv_bytes;
+                                    exact_old_backing = generated.exact_old_backing.clone();
+                                    exact_old_attention_backend =
+                                        generated.exact_old_attention_backend.clone();
+                                    q8_old_backing_bytes = generated.q8_old_backing_bytes;
+                                    q8_old_backing_scale_bytes =
+                                        generated.q8_old_backing_scale_bytes;
+                                    staged_workspace_reused = generated.staged_workspace_reused;
+                                    staged_workspace_bytes = generated.staged_workspace_bytes;
+                                    staged_workspace_capacity_tokens =
+                                        generated.staged_workspace_capacity_tokens;
+                                    staged_workspace_allocations =
+                                        generated.staged_workspace_allocations;
+                                    prefill_mode = generated.prefill_mode.clone();
+                                    selection_summary = generated.kv_selection.clone();
+                                    needle_block_index = needle_block;
+                                    prompt_logits = generated.prompt_logits.clone();
+                                    first_decode_logits = generated.first_decode_logits.clone();
+                                    generated_logit_trace_raw =
+                                        generated.generated_logit_trace.clone();
+                                    let passed = generated.output.contains(NEEDLE);
+                                    if mode == KvCompressMode::Off {
+                                        dense_passed = Some(passed);
+                                        dense_prompt_logits = generated.prompt_logits.clone();
+                                        dense_first_decode_logits =
+                                            generated.first_decode_logits.clone();
+                                        dense_generated_logit_trace =
+                                            generated.generated_logit_trace.clone();
+                                    } else if mode == KvCompressMode::DenseRecentOnly {
+                                        dense_window_prompt_logits =
+                                            generated.prompt_logits.clone();
+                                        dense_window_first_decode_logits =
+                                            generated.first_decode_logits.clone();
+                                    }
+                                    let status = if passed {
+                                        CaseStatus::Pass
+                                    } else {
+                                        CaseStatus::Fail
+                                    };
+                                    (status, generated.output, None)
                                 }
-                                _ => None,
-                            },
-                            prefill_mode,
-                            top_blocks: top_blocks_case,
-                            needle_block_index,
-                            selected_block_indices,
-                            selected_block_score_entries,
-                            selection_records,
-                            selected_blocks_score_order_is_chronological,
-                            selected_block_order,
-                            selected_blocks_attention_order_is_chronological,
-                            needle_block_selected,
-                            needle_block_rank,
-                            total_old_blocks,
-                            active_attended_kv_tokens: active_kv.map(|working| working.tokens),
-                            active_attended_kv_bytes: active_kv
-                                .map(|working| working.bytes_per_layer),
-                            active_attended_kv_bytes_all_layers: active_kv
-                                .map(|working| working.bytes_all_layers),
-                            active_attended_old_block_tokens: active_kv
-                                .map(|working| working.old_block_tokens),
-                            active_attended_recent_tokens: active_kv
-                                .map(|working| working.recent_tokens),
-                            recent_ring_absolute_start: position_meta.recent_ring_absolute_start,
-                            recent_ring_absolute_end: position_meta.recent_ring_absolute_end,
-                            dense_window_candidate_positions: logit_compare_enabled()
-                                .then(|| {
-                                    recent_candidate_positions(
+                                Err(err) => {
+                                    if mode == KvCompressMode::Off {
+                                        dense_passed = Some(false);
+                                    }
+                                    (CaseStatus::Error, String::new(), Some(err.to_string()))
+                                }
+                            };
+                            if mode != KvCompressMode::Off && dense_passed == Some(false) {
+                                status = CaseStatus::Inconclusive;
+                            }
+                            let selected_block_indices = selection_summary
+                                .as_ref()
+                                .map(|summary| summary.selected_block_indices.clone());
+                            let selected_block_score_entries =
+                                selection_summary.as_ref().map(selected_block_entry_strings);
+                            let selection_records =
+                                selection_summary.as_ref().map(selection_record_strings);
+                            let selected_blocks_score_order_is_chronological = selection_summary
+                                .as_ref()
+                                .and_then(first_selection_is_chronological);
+                            let selected_block_order = selected_block_order();
+                            let selected_blocks_attention_order_is_chronological =
+                                if selected_block_order == "chronological" {
+                                    Some(true)
+                                } else {
+                                    selected_blocks_score_order_is_chronological
+                                };
+                            let needle_block_selected = needle_block_index.map(|needle| {
+                                selected_block_indices
+                                    .as_ref()
+                                    .is_some_and(|selected| selected.contains(&needle))
+                            });
+                            let needle_block_rank = needle_block_index.and_then(|needle| {
+                                selected_block_indices.as_ref().and_then(|selected| {
+                                    selected
+                                        .iter()
+                                        .position(|block| *block == needle)
+                                        .map(|rank| rank as u32)
+                                })
+                            });
+                            let total_old_blocks = selection_summary
+                                .as_ref()
+                                .map(|summary| summary.total_old_blocks);
+                            let attention = selection_summary
+                                .as_ref()
+                                .and_then(|summary| summary.attention.as_ref());
+                            let attention_selected_block_masses =
+                                attention.map(attention_block_mass_strings);
+                            let (
+                                attention_candidate_position_min,
+                                attention_candidate_position_max,
+                                attention_candidate_order_is_chronological,
+                            ) = selection_summary
+                                .as_ref()
+                                .map(|summary| {
+                                    first_attention_candidate_bounds(
+                                        summary,
                                         position_meta.recent_ring_absolute_start,
                                         position_meta.recent_ring_absolute_end,
                                     )
                                 })
-                                .flatten(),
-                            compressed_recent_candidate_positions: logit_compare_enabled()
-                                .then(|| {
-                                    if matches!(
-                                        mode,
-                                        KvCompressMode::RecentOnly
-                                            | KvCompressMode::BlockSummary
-                                            | KvCompressMode::BlockSelectLossy
-                                    ) {
+                                .unwrap_or((None, None, None));
+                            let attention_candidate_order_is_chronological = if selected_block_order
+                                == "chronological"
+                                && selection_summary.is_some()
+                            {
+                                Some(true)
+                            } else {
+                                attention_candidate_order_is_chronological
+                            };
+                            let prompt_logit_diff = if logit_compare_enabled() {
+                                dense_prompt_logits
+                                    .as_deref()
+                                    .zip(prompt_logits.as_deref())
+                                    .and_then(|(dense, compressed)| {
+                                        logit_diff_summary(dense, compressed)
+                                    })
+                            } else {
+                                None
+                            };
+                            let first_decode_logit_diff = if logit_compare_enabled() {
+                                dense_first_decode_logits
+                                    .as_deref()
+                                    .zip(first_decode_logits.as_deref())
+                                    .and_then(|(dense, compressed)| {
+                                        logit_diff_summary(dense, compressed)
+                                    })
+                            } else {
+                                None
+                            };
+                            let prompt_dense_window_diff = if logit_compare_enabled() {
+                                dense_window_prompt_logits
+                                    .as_deref()
+                                    .zip(prompt_logits.as_deref())
+                                    .and_then(|(window, compressed)| {
+                                        logit_diff_summary(window, compressed)
+                                    })
+                            } else {
+                                None
+                            };
+                            let first_decode_dense_window_diff = if logit_compare_enabled() {
+                                dense_window_first_decode_logits
+                                    .as_deref()
+                                    .zip(first_decode_logits.as_deref())
+                                    .and_then(|(window, compressed)| {
+                                        logit_diff_summary(window, compressed)
+                                    })
+                            } else {
+                                None
+                            };
+                            let expected_token_window_logits = if logit_compare_enabled() {
+                                expected_token_summary(
+                                    dense_prompt_logits.as_deref(),
+                                    dense_window_prompt_logits.as_deref(),
+                                    position_meta.expected_first_answer_token_id,
+                                )
+                            } else {
+                                ExpectedTokenLogitSummary {
+                                    rank_dense: None,
+                                    rank_compressed: None,
+                                    logit_dense: None,
+                                    logit_compressed: None,
+                                }
+                            };
+                            let expected_token_logits = if logit_compare_enabled() {
+                                expected_token_summary(
+                                    dense_prompt_logits.as_deref(),
+                                    prompt_logits.as_deref(),
+                                    position_meta.expected_first_answer_token_id,
+                                )
+                            } else {
+                                ExpectedTokenLogitSummary {
+                                    rank_dense: None,
+                                    rank_compressed: None,
+                                    logit_dense: None,
+                                    logit_compressed: None,
+                                }
+                            };
+                            let generated_logit_trace = generated_trace_records(
+                                dense_generated_logit_trace.as_deref(),
+                                generated_logit_trace_raw.as_deref(),
+                                position_meta.expected_first_answer_token_id,
+                            );
+                            let active_kv = active_kv_working_set(
+                                mode,
+                                prompt_tokens,
+                                top_blocks_case,
+                                ActiveKvAccounting {
+                                    recent_window: 1024,
+                                    block_size: 32,
+                                    kv_heads: config.attention_head_count_kv as usize,
+                                    head_dim: config.attention_key_length as usize,
+                                    layer_count: config.block_count as usize,
+                                },
+                            );
+                            let staging_enabled = exact_block_staging_enabled()
+                                && mode == KvCompressMode::BlockSelectExact;
+                            let staged_position_min = if staging_enabled {
+                                selected_block_indices
+                                    .as_ref()
+                                    .and_then(|selected| selected.iter().min().copied())
+                                    .map(|block| block as usize * 32)
+                                    .or(position_meta.recent_ring_absolute_start)
+                            } else {
+                                None
+                            };
+                            let staged_position_max = if staging_enabled {
+                                prompt_tokens.checked_sub(1)
+                            } else {
+                                None
+                            };
+                            let record = CaseRecord {
+                                model_path: probe.candidate.path.display().to_string(),
+                                resolved_model_path: probe
+                                    .candidate
+                                    .resolved_path
+                                    .display()
+                                    .to_string(),
+                                target_tokens,
+                                prompt_tokens,
+                                generated_tokens,
+                                needle_position: needle_position.to_string(),
+                                mode: mode_name(mode).to_string(),
+                                representatives: rep_case.representatives,
+                                representative_policy: representative_policy_name(rep_case.policy)
+                                    .to_string(),
+                                status,
+                                prompt_prefill_elapsed_ms,
+                                generated_decode_elapsed_ms,
+                                total_elapsed_ms,
+                                attention_compression_elapsed_ms,
+                                exact_block_staging_enabled: staging_enabled,
+                                staged_workspace_reused,
+                                staged_workspace_bytes,
+                                staged_workspace_capacity_tokens,
+                                staged_workspace_allocations,
+                                staged_kv_tokens: staging_enabled
+                                    .then(|| active_kv.map(|working| working.tokens))
+                                    .flatten(),
+                                staged_kv_bytes: staging_enabled
+                                    .then(|| active_kv.map(|working| working.bytes_per_layer))
+                                    .flatten(),
+                                staged_old_tokens: staging_enabled
+                                    .then(|| active_kv.map(|working| working.old_block_tokens))
+                                    .flatten(),
+                                staged_recent_tokens: staging_enabled
+                                    .then(|| active_kv.map(|working| working.recent_tokens))
+                                    .flatten(),
+                                staged_position_min,
+                                staged_position_max,
+                                prefill_tokens_per_sec: tokens_per_sec(
+                                    prompt_tokens,
+                                    prompt_prefill_elapsed_ms,
+                                ),
+                                decode_tokens_per_sec: tokens_per_sec(
+                                    generated_tokens,
+                                    generated_decode_elapsed_ms,
+                                ),
+                                prefill_chunk_size,
+                                compressed_prefill_chunk_size,
+                                temporary_dense_kv_bytes,
+                                final_kv_allocated_bytes,
+                                dense_equivalent_kv_bytes,
+                                exact_old_backing,
+                                exact_old_attention_backend,
+                                exact_block_backend_variant,
+                                q8_old_backing_bytes,
+                                q8_old_backing_scale_bytes,
+                                compression_ratio: match (
+                                    dense_equivalent_kv_bytes,
+                                    final_kv_allocated_bytes,
+                                ) {
+                                    (Some(dense), Some(actual)) if actual > 0 => {
+                                        Some(dense as f64 / actual as f64)
+                                    }
+                                    _ => None,
+                                },
+                                prefill_mode,
+                                top_blocks: top_blocks_case,
+                                needle_block_index,
+                                selected_block_indices,
+                                selected_block_score_entries,
+                                selection_records,
+                                selected_blocks_score_order_is_chronological,
+                                selected_block_order,
+                                selected_blocks_attention_order_is_chronological,
+                                needle_block_selected,
+                                needle_block_rank,
+                                total_old_blocks,
+                                active_attended_kv_tokens: active_kv.map(|working| working.tokens),
+                                active_attended_kv_bytes: active_kv
+                                    .map(|working| working.bytes_per_layer),
+                                active_attended_kv_bytes_all_layers: active_kv
+                                    .map(|working| working.bytes_all_layers),
+                                active_attended_old_block_tokens: active_kv
+                                    .map(|working| working.old_block_tokens),
+                                active_attended_recent_tokens: active_kv
+                                    .map(|working| working.recent_tokens),
+                                recent_ring_absolute_start: position_meta
+                                    .recent_ring_absolute_start,
+                                recent_ring_absolute_end: position_meta.recent_ring_absolute_end,
+                                dense_window_candidate_positions: logit_compare_enabled()
+                                    .then(|| {
                                         recent_candidate_positions(
                                             position_meta.recent_ring_absolute_start,
                                             position_meta.recent_ring_absolute_end,
                                         )
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .flatten(),
-                            compressed_recent_ring_slots: logit_compare_enabled()
-                                .then(|| {
-                                    if matches!(
-                                        mode,
-                                        KvCompressMode::RecentOnly
-                                            | KvCompressMode::BlockSummary
-                                            | KvCompressMode::BlockSelectLossy
-                                    ) {
-                                        recent_ring_slots(
-                                            position_meta.recent_ring_absolute_start,
-                                            position_meta.recent_ring_absolute_end,
-                                            1024,
-                                        )
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .flatten(),
-                            attention_candidate_position_min,
-                            attention_candidate_position_max,
-                            attention_candidate_order_is_chronological,
-                            needle_token_absolute_positions: position_meta
-                                .needle_token_absolute_positions
-                                .clone(),
-                            question_token_absolute_positions: position_meta
-                                .question_token_absolute_positions
-                                .clone(),
-                            needle_tokens_in_recent_ring: position_meta
-                                .needle_tokens_in_recent_ring,
-                            question_tokens_in_recent_ring: position_meta
-                                .question_tokens_in_recent_ring,
-                            expected_first_answer_token_id: position_meta
-                                .expected_first_answer_token_id,
-                            expected_first_answer_token_rank_dense: expected_token_logits
-                                .rank_dense,
-                            expected_first_answer_token_rank_dense_window:
-                                expected_token_window_logits.rank_compressed,
-                            expected_first_answer_token_rank_compressed: expected_token_logits
-                                .rank_compressed,
-                            expected_first_answer_token_logit_dense: expected_token_logits
-                                .logit_dense,
-                            expected_first_answer_token_logit_dense_window:
-                                expected_token_window_logits.logit_compressed,
-                            expected_first_answer_token_logit_compressed: expected_token_logits
-                                .logit_compressed,
-                            prompt_logit_max_abs_diff: prompt_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.max_abs_diff),
-                            prompt_logit_mean_abs_diff: prompt_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.mean_abs_diff),
-                            prompt_logit_top10_overlap: prompt_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.top10_overlap),
-                            prompt_dense_top_token_id: prompt_logit_diff
-                                .as_ref()
-                                .and_then(|summary| summary.dense_top_token_id),
-                            prompt_compressed_top_token_id: prompt_logit_diff
-                                .as_ref()
-                                .and_then(|summary| summary.compressed_top_token_id),
-                            prompt_dense_window_max_abs_diff: prompt_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.max_abs_diff),
-                            prompt_dense_window_mean_abs_diff: prompt_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.mean_abs_diff),
-                            prompt_dense_window_top10_overlap: prompt_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.top10_overlap),
-                            prompt_dense_window_top_token_id: dense_window_prompt_logits
-                                .as_deref()
-                                .and_then(top_token_id),
-                            first_decode_logit_max_abs_diff: first_decode_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.max_abs_diff),
-                            first_decode_logit_mean_abs_diff: first_decode_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.mean_abs_diff),
-                            first_decode_logit_top10_overlap: first_decode_logit_diff
-                                .as_ref()
-                                .map(|summary| summary.top10_overlap),
-                            first_decode_dense_top_token_id: first_decode_logit_diff
-                                .as_ref()
-                                .and_then(|summary| summary.dense_top_token_id),
-                            first_decode_compressed_top_token_id: first_decode_logit_diff
-                                .as_ref()
-                                .and_then(|summary| summary.compressed_top_token_id),
-                            first_decode_dense_window_max_abs_diff: first_decode_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.max_abs_diff),
-                            first_decode_dense_window_mean_abs_diff: first_decode_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.mean_abs_diff),
-                            first_decode_dense_window_top10_overlap: first_decode_dense_window_diff
-                                .as_ref()
-                                .map(|summary| summary.top10_overlap),
-                            first_decode_dense_window_top_token_id:
-                                dense_window_first_decode_logits
+                                    })
+                                    .flatten(),
+                                compressed_recent_candidate_positions: logit_compare_enabled()
+                                    .then(|| {
+                                        if matches!(
+                                            mode,
+                                            KvCompressMode::RecentOnly
+                                                | KvCompressMode::BlockSummary
+                                                | KvCompressMode::BlockSelectLossy
+                                        ) {
+                                            recent_candidate_positions(
+                                                position_meta.recent_ring_absolute_start,
+                                                position_meta.recent_ring_absolute_end,
+                                            )
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .flatten(),
+                                compressed_recent_ring_slots: logit_compare_enabled()
+                                    .then(|| {
+                                        if matches!(
+                                            mode,
+                                            KvCompressMode::RecentOnly
+                                                | KvCompressMode::BlockSummary
+                                                | KvCompressMode::BlockSelectLossy
+                                        ) {
+                                            recent_ring_slots(
+                                                position_meta.recent_ring_absolute_start,
+                                                position_meta.recent_ring_absolute_end,
+                                                1024,
+                                            )
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .flatten(),
+                                attention_candidate_position_min,
+                                attention_candidate_position_max,
+                                attention_candidate_order_is_chronological,
+                                needle_token_absolute_positions: position_meta
+                                    .needle_token_absolute_positions
+                                    .clone(),
+                                question_token_absolute_positions: position_meta
+                                    .question_token_absolute_positions
+                                    .clone(),
+                                needle_tokens_in_recent_ring: position_meta
+                                    .needle_tokens_in_recent_ring,
+                                question_tokens_in_recent_ring: position_meta
+                                    .question_tokens_in_recent_ring,
+                                expected_first_answer_token_id: position_meta
+                                    .expected_first_answer_token_id,
+                                expected_first_answer_token_rank_dense: expected_token_logits
+                                    .rank_dense,
+                                expected_first_answer_token_rank_dense_window:
+                                    expected_token_window_logits.rank_compressed,
+                                expected_first_answer_token_rank_compressed: expected_token_logits
+                                    .rank_compressed,
+                                expected_first_answer_token_logit_dense: expected_token_logits
+                                    .logit_dense,
+                                expected_first_answer_token_logit_dense_window:
+                                    expected_token_window_logits.logit_compressed,
+                                expected_first_answer_token_logit_compressed: expected_token_logits
+                                    .logit_compressed,
+                                prompt_logit_max_abs_diff: prompt_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.max_abs_diff),
+                                prompt_logit_mean_abs_diff: prompt_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.mean_abs_diff),
+                                prompt_logit_top10_overlap: prompt_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.top10_overlap),
+                                prompt_dense_top_token_id: prompt_logit_diff
+                                    .as_ref()
+                                    .and_then(|summary| summary.dense_top_token_id),
+                                prompt_compressed_top_token_id: prompt_logit_diff
+                                    .as_ref()
+                                    .and_then(|summary| summary.compressed_top_token_id),
+                                prompt_dense_window_max_abs_diff: prompt_dense_window_diff
+                                    .as_ref()
+                                    .map(|summary| summary.max_abs_diff),
+                                prompt_dense_window_mean_abs_diff: prompt_dense_window_diff
+                                    .as_ref()
+                                    .map(|summary| summary.mean_abs_diff),
+                                prompt_dense_window_top10_overlap: prompt_dense_window_diff
+                                    .as_ref()
+                                    .map(|summary| summary.top10_overlap),
+                                prompt_dense_window_top_token_id: dense_window_prompt_logits
                                     .as_deref()
                                     .and_then(top_token_id),
-                            attention_recent_mass: attention.map(|a| a.recent.prob_mass),
-                            attention_selected_old_exact_mass: attention
-                                .map(|a| a.selected_old_exact.prob_mass),
-                            attention_summary_mass: attention.map(|a| a.summary.prob_mass),
-                            attention_representative_mass: attention
-                                .map(|a| a.representatives.prob_mass),
-                            attention_other_mass: attention.map(|a| a.other.prob_mass),
-                            attention_needle_block_mass: attention
-                                .and_then(|a| a.needle_block_mass),
-                            attention_selected_block_masses,
-                            attention_recent_logit_max: attention.map(|a| a.recent.logit_max),
-                            attention_recent_logit_mean: attention.map(|a| a.recent.logit_mean),
-                            attention_summary_logit_max: attention.map(|a| a.summary.logit_max),
-                            attention_summary_logit_mean: attention.map(|a| a.summary.logit_mean),
-                            attention_representative_logit_max: attention
-                                .map(|a| a.representatives.logit_max),
-                            attention_representative_logit_mean: attention
-                                .map(|a| a.representatives.logit_mean),
-                            attention_top_entries: attention.map(attention_top_entry_strings),
-                            attention_records: selection_summary
-                                .as_ref()
-                                .map(attention_record_strings),
-                            generated_logit_trace,
-                            output,
-                            error,
-                        };
-                        append_report_record(&record)?;
-                        records.push(record);
+                                first_decode_logit_max_abs_diff: first_decode_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.max_abs_diff),
+                                first_decode_logit_mean_abs_diff: first_decode_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.mean_abs_diff),
+                                first_decode_logit_top10_overlap: first_decode_logit_diff
+                                    .as_ref()
+                                    .map(|summary| summary.top10_overlap),
+                                first_decode_dense_top_token_id: first_decode_logit_diff
+                                    .as_ref()
+                                    .and_then(|summary| summary.dense_top_token_id),
+                                first_decode_compressed_top_token_id: first_decode_logit_diff
+                                    .as_ref()
+                                    .and_then(|summary| summary.compressed_top_token_id),
+                                first_decode_dense_window_max_abs_diff:
+                                    first_decode_dense_window_diff
+                                        .as_ref()
+                                        .map(|summary| summary.max_abs_diff),
+                                first_decode_dense_window_mean_abs_diff:
+                                    first_decode_dense_window_diff
+                                        .as_ref()
+                                        .map(|summary| summary.mean_abs_diff),
+                                first_decode_dense_window_top10_overlap:
+                                    first_decode_dense_window_diff
+                                        .as_ref()
+                                        .map(|summary| summary.top10_overlap),
+                                first_decode_dense_window_top_token_id:
+                                    dense_window_first_decode_logits
+                                        .as_deref()
+                                        .and_then(top_token_id),
+                                attention_recent_mass: attention.map(|a| a.recent.prob_mass),
+                                attention_selected_old_exact_mass: attention
+                                    .map(|a| a.selected_old_exact.prob_mass),
+                                attention_summary_mass: attention.map(|a| a.summary.prob_mass),
+                                attention_representative_mass: attention
+                                    .map(|a| a.representatives.prob_mass),
+                                attention_other_mass: attention.map(|a| a.other.prob_mass),
+                                attention_needle_block_mass: attention
+                                    .and_then(|a| a.needle_block_mass),
+                                attention_selected_block_masses,
+                                attention_recent_logit_max: attention.map(|a| a.recent.logit_max),
+                                attention_recent_logit_mean: attention.map(|a| a.recent.logit_mean),
+                                attention_summary_logit_max: attention.map(|a| a.summary.logit_max),
+                                attention_summary_logit_mean: attention
+                                    .map(|a| a.summary.logit_mean),
+                                attention_representative_logit_max: attention
+                                    .map(|a| a.representatives.logit_max),
+                                attention_representative_logit_mean: attention
+                                    .map(|a| a.representatives.logit_mean),
+                                attention_top_entries: attention.map(attention_top_entry_strings),
+                                attention_records: selection_summary
+                                    .as_ref()
+                                    .map(attention_record_strings),
+                                generated_logit_trace,
+                                output,
+                                error,
+                            };
+                            append_report_record(&record)?;
+                            records.push(record);
+                        }
                     }
                 }
             }
