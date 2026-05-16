@@ -280,13 +280,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   old/recent top_blocks=2 regressions pass for FP16-K/FP16-V, FP16-K/q8-V, and
   FP16-K/q4-V. The fragile 4096 old/top_blocks=4 case also passes with
   FP16-K/q4-V, but q4 V shows materially larger logit drift than q8 V. The
-  4096 recent top_blocks=4/8/16 q4 matrix is still pending.
+  4096 recent top_blocks=4/8/16 matrix shows q4 V matches the FP16
+  selected-context pass/fail pattern: top_blocks=4 and 16 pass for FP16 V, q8
+  V, and q4 V, while top_blocks=8 fails for all three and emits EOT at generated
+  step 2. Treat that top_blocks=8 row as selected-context sensitivity rather
+  than a V-quantization-specific failure.
 - Next: avoid 8192 and server integration until exact-block quality is more
-  stable. Focus on K-side exact-old representation quality, such as grouped or
-  per-channel q8 for K, mixed FP16-K/q8-V backing for high-sensitivity blocks,
-  or block promotion policies. Also finish the q4 V 4096 recent/top_blocks
-  4/8/16 matrix and top-block robustness diagnostic before any 8192 sweep. Do
-  not increase representative count or tune pure summary modes for this path.
+  stable. Prototype a deployable mixed exact-old backing that keeps K in FP16 or
+  a K-preserving grouped format and stores V in q4, without the current
+  diagnostic q8 V plus dense-shadow overhead. Also investigate top-block
+  robustness or block promotion for the non-monotonic top_blocks=8 selected
+  context failure before any 8192 sweep. Do not increase representative count or
+  tune pure summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

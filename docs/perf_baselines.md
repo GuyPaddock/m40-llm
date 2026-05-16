@@ -16,6 +16,7 @@ Reports:
 - `/tmp/m40-q4-v-2048-old.jsonl`
 - `/tmp/m40-q4-v-2048-recent.jsonl`
 - `/tmp/m40-q4-v-4096-old.jsonl`
+- `/tmp/m40-q4-v-4096-recent.jsonl`
 
 Validation:
 
@@ -24,9 +25,9 @@ Validation:
 - `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
 - `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
   passed.
-- Completed requested 2048 old/recent top_blocks=2 regressions and the fragile
-  4096 old top_blocks=4 case. The 4096 recent top_blocks=4/8/16 sweep remains
-  to run because it is another long hardware matrix.
+- Completed requested 2048 old/recent top_blocks=2 regressions, the fragile
+  4096 old top_blocks=4 case, and the 4096 recent top_blocks=4/8/16 robustness
+  matrix. The 4096 recent matrix took 7063.46 s on the M40.
 
 Summary:
 
@@ -41,6 +42,15 @@ Summary:
 | 4096 old | FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 9.87 s |
 | 4096 old | FP16 K + q8 V | 4 | pass | `ZXQ-NEEDLE-41729` | 0.098 | 0.084 | 10 | 12.66 s |
 | 4096 old | FP16 K + q4 V | 4 | pass | `ZXQ-NEEDLE-41729` | 1.687 | 3.490 | 9 | 12.50 s |
+| 4096 recent | FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 9.80 s |
+| 4096 recent | FP16 K + q8 V | 4 | pass | `ZXQ-NEEDLE-41729` | 2.398 | 0.230 | 10 | 12.89 s |
+| 4096 recent | FP16 K + q4 V | 4 | pass | `ZXQ-NEEDLE-41729` | 4.397 | 4.480 | 6 | 12.62 s |
+| 4096 recent | FP16 K + FP16 V | 8 | fail | `ZXQ` | 0.000 | 0.000 | 10 | 2.25 s |
+| 4096 recent | FP16 K + q8 V | 8 | fail | `ZXQ` | 0.069 | 0.055 | 10 | 2.99 s |
+| 4096 recent | FP16 K + q4 V | 8 | fail | `ZXQ` | 2.282 | 1.580 | 9 | 3.01 s |
+| 4096 recent | FP16 K + FP16 V | 16 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 11.02 s |
+| 4096 recent | FP16 K + q8 V | 16 | pass | `ZXQ-NEEDLE-41729` | 0.068 | 0.063 | 10 | 15.06 s |
+| 4096 recent | FP16 K + q4 V | 16 | pass | `ZXQ-NEEDLE-41729` | 0.841 | 0.835 | 10 | 15.00 s |
 
 Memory accounting notes:
 
@@ -53,14 +63,18 @@ Memory accounting notes:
 
 Interpretation:
 
-- FP16-K/q4-V passes the fragile 4096 old/top4 case, so q4 V is a plausible
-  candidate for the exact-old V backing when K remains FP16.
+- FP16-K/q4-V passes every 4096 recent row where FP16-K/FP16-V passes
+  (`top_blocks=4` and `16`) and fails only where the FP16 selected-context
+  baseline also fails (`top_blocks=8`). The `top_blocks=8` failure emits EOT at
+  generated step 2 with EOT rank 1/logit 17.23 for q4 V, matching the selected
+  context failure pattern rather than a q4-specific regression.
 - q4 V introduces much larger logit drift than q8 V, especially at 4096
-  old/top4 and 2048 recent/top2, so q8 V remains the safer compression floor
-  until the 4096 recent top_blocks=4/8/16 matrix is run.
-- The next decision point is 4096 recent robustness. If q4 V passes those rows,
-  design a deployable mixed backing that stores FP16/group-quantized K plus q4
-  V without the diagnostic q8 and dense-shadow overhead.
+  old/top4 and 4096 recent/top4, but the retrieval output remains stable when
+  the selected context itself is sufficient. This makes FP16-K/q4-V a plausible
+  deployable mixed-backing candidate.
+- The next design step is to remove the diagnostic overhead and prototype a real
+  mixed exact-old backing that stores K in FP16 or a K-preserving grouped format
+  and V in q4, without allocating q8 V and dense-shadow buffers.
 
 ## 2026-05-16: 4096 Q8 K/V Precision Split Diagnostic
 
