@@ -275,12 +275,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   Treat this as evidence that q8 K/scoring precision is the primary old/top4
   failure source; V quantization alone did not fail in that diagnostic. The
   dense shadow is diagnostic overhead, not a deployable memory-saving backend.
+  `M40LLM_KV_Q4_V_DIAG=1` now tests FP16-K/q4-V staged exact-block retrieval
+  with packed signed q4 old V plus FP32 per-token/per-head V scales. The 2048
+  old/recent top_blocks=2 regressions pass for FP16-K/FP16-V, FP16-K/q8-V, and
+  FP16-K/q4-V. The fragile 4096 old/top_blocks=4 case also passes with
+  FP16-K/q4-V, but q4 V shows materially larger logit drift than q8 V. The
+  4096 recent top_blocks=4/8/16 q4 matrix is still pending.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Focus on K-side exact-old representation quality, such as grouped or
   per-channel q8 for K, mixed FP16-K/q8-V backing for high-sensitivity blocks,
-  or block promotion policies. Also finish the top-block robustness diagnostic
-  for recent/top_blocks=4/8/16 before any 8192 sweep. Do not increase
-  representative count or tune pure summary modes for this path.
+  or block promotion policies. Also finish the q4 V 4096 recent/top_blocks
+  4/8/16 matrix and top-block robustness diagnostic before any 8192 sweep. Do
+  not increase representative count or tune pure summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

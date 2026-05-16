@@ -2986,6 +2986,8 @@ struct KVCacheInner {
     exact_old_backing: String,
     q8_old_backing_bytes: usize,
     q8_old_backing_scale_bytes: usize,
+    q4_old_v_payload_bytes: usize,
+    q4_old_v_scale_bytes: usize,
     actual_bytes: usize,
     dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
@@ -3028,6 +3030,8 @@ impl KVCache {
                     exact_old_backing: ExactOldBacking::Dense.as_str().to_string(),
                     q8_old_backing_bytes: 0,
                     q8_old_backing_scale_bytes: 0,
+                    q4_old_v_payload_bytes: 0,
+                    q4_old_v_scale_bytes: 0,
                     actual_bytes: (max_seq_len as usize)
                         * (max_batch_size as usize)
                         * (num_heads as usize)
@@ -3070,6 +3074,8 @@ impl KVCache {
                     exact_old_backing: "dense".to_string(),
                     q8_old_backing_bytes: 0,
                     q8_old_backing_scale_bytes: 0,
+                    q4_old_v_payload_bytes: 0,
+                    q4_old_v_scale_bytes: 0,
                     actual_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     dense_equivalent_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
@@ -3175,6 +3181,23 @@ impl KVCache {
             } else {
                 0
             };
+            let q4_v_diag = std::env::var("M40LLM_KV_Q4_V_DIAG")
+                .map(|value| value == "1")
+                .unwrap_or(false);
+            let q4_old_v_payload_bytes = if exact_old_backing == ExactOldBacking::Q8 && q4_v_diag {
+                (max_seq_len as usize) * (max_batch_size as usize) * elems_per_token / 2
+                    * std::mem::size_of::<u8>()
+            } else {
+                0
+            };
+            let q4_old_v_scale_bytes = if exact_old_backing == ExactOldBacking::Q8 && q4_v_diag {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * (num_heads as usize)
+                    * std::mem::size_of::<f32>()
+            } else {
+                0
+            };
             let actual_bytes = recent_bytes
                 + summary_f16_bytes
                 + summary_acc_bytes
@@ -3184,7 +3207,9 @@ impl KVCache {
                 + seq_map_bytes
                 + q8_old_backing_bytes
                 + q8_old_backing_scale_bytes
-                + q8_dense_shadow_bytes;
+                + q8_dense_shadow_bytes
+                + q4_old_v_payload_bytes
+                + q4_old_v_scale_bytes;
             let dense_equivalent_bytes = (max_seq_len as usize)
                 * (max_batch_size as usize)
                 * elems_per_token
@@ -3204,6 +3229,8 @@ impl KVCache {
                     exact_old_backing: exact_old_backing.as_str().to_string(),
                     q8_old_backing_bytes,
                     q8_old_backing_scale_bytes,
+                    q4_old_v_payload_bytes,
+                    q4_old_v_scale_bytes,
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
@@ -3253,6 +3280,14 @@ impl KVCache {
 
     pub fn q8_old_backing_scale_bytes(&self) -> usize {
         self.inner.q8_old_backing_scale_bytes
+    }
+
+    pub fn q4_old_v_payload_bytes(&self) -> usize {
+        self.inner.q4_old_v_payload_bytes
+    }
+
+    pub fn q4_old_v_scale_bytes(&self) -> usize {
+        self.inner.q4_old_v_scale_bytes
     }
 
     #[inline]

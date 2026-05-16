@@ -80,6 +80,8 @@ struct CaseRecord {
     exact_block_backend_variant: Option<String>,
     q8_old_backing_bytes: Option<usize>,
     q8_old_backing_scale_bytes: Option<usize>,
+    q4_old_v_payload_bytes: Option<usize>,
+    q4_old_v_scale_bytes: Option<usize>,
     compression_ratio: Option<f64>,
     prefill_mode: String,
     top_blocks: Option<u32>,
@@ -505,6 +507,12 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
+        if q4_v_diagnostic_enabled() {
+            return Ok([2048, 4096]
+                .into_iter()
+                .filter(|ctx| *ctx < limit)
+                .collect());
+        }
         if exact_q8_diagnostic_enabled() {
             return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
         }
@@ -588,6 +596,12 @@ fn q8_precision_split_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn q4_v_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_Q4_V_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn top_block_robustness_diagnostic_enabled() -> bool {
     std::env::var("M40LLM_KV_TOP_BLOCK_ROBUSTNESS_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -597,6 +611,7 @@ fn top_block_robustness_diagnostic_enabled() -> bool {
 fn exact_q8_diagnostic_enabled() -> bool {
     q8_drift_diagnostic_enabled()
         || q8_precision_split_diagnostic_enabled()
+        || q4_v_diagnostic_enabled()
         || top_block_robustness_diagnostic_enabled()
 }
 
@@ -613,9 +628,10 @@ fn recent_equivalence_sequential_enabled() -> bool {
 }
 
 fn logit_compare_enabled() -> bool {
-    std::env::var("M40LLM_KV_LOGIT_COMPARE")
-        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
-        .unwrap_or(false)
+    q4_v_diagnostic_enabled()
+        || std::env::var("M40LLM_KV_LOGIT_COMPARE")
+            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+            .unwrap_or(false)
 }
 
 fn selected_block_order() -> String {
@@ -667,7 +683,9 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
         .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .transpose()?
         .unwrap_or_else(|| {
-            if q8_precision_split_diagnostic_enabled() {
+            if q4_v_diagnostic_enabled() {
+                vec![2, 4, 8, 16]
+            } else if q8_precision_split_diagnostic_enabled() {
                 vec![4]
             } else if top_block_robustness_diagnostic_enabled() {
                 vec![4, 8, 16]
@@ -695,7 +713,34 @@ struct ExactBlockBackendCase {
 }
 
 fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase> {
-    if q8_precision_split_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+    if q4_v_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+        vec![
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-fp16-v"),
+                exact_old_backing: None,
+                exact_old_attention: None,
+                exact_old_precision: None,
+                q8_dense_shadow: false,
+                staging: None,
+            },
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-q8-v"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                exact_old_precision: Some("fp16-k-q8-v"),
+                q8_dense_shadow: true,
+                staging: Some("1"),
+            },
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-q4-v"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                exact_old_precision: Some("fp16-k-q4-v"),
+                q8_dense_shadow: true,
+                staging: Some("1"),
+            },
+        ]
+    } else if q8_precision_split_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
         vec![
             ExactBlockBackendCase {
                 variant: Some("fp16-k-fp16-v"),
@@ -792,6 +837,9 @@ fn apply_exact_block_backend_case(case: ExactBlockBackendCase) -> Vec<EnvVarGuar
         guards.push(EnvVarGuard::set("M40LLM_KV_Q8_DENSE_SHADOW", "1"));
     } else if exact_q8_diagnostic_enabled() {
         guards.push(EnvVarGuard::unset("M40LLM_KV_Q8_DENSE_SHADOW"));
+    }
+    if matches!(case.exact_old_precision, Some("fp16-k-q4-v")) {
+        guards.push(EnvVarGuard::set("M40LLM_KV_Q4_V_DIAG", "1"));
     }
     if let Some(value) = case.staging {
         guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_BLOCK_STAGING", value));
@@ -992,6 +1040,10 @@ fn run_retrieval_case(
     } else {
         None
     };
+    let _logit_compare_guard =
+        q4_v_diagnostic_enabled().then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
+    let _logit_trace_guard =
+        q4_v_diagnostic_enabled().then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1"));
 
     prepare_kv_cache(model, mode, rep_case, top_blocks)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
@@ -1523,7 +1575,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) q4_v(payload_bytes={:?},scale_bytes={:?}) staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1577,6 +1629,8 @@ fn print_records(records: &[CaseRecord]) {
             record.exact_old_attention_backend,
             record.q8_old_backing_bytes,
             record.q8_old_backing_scale_bytes,
+            record.q4_old_v_payload_bytes,
+            record.q4_old_v_scale_bytes,
             record.exact_block_staging_enabled,
             record.staged_workspace_reused,
             record.staged_workspace_bytes,
@@ -1671,6 +1725,10 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
             let mut dense_generated_logit_trace: Option<Vec<GeneratedLogitTraceStep>> = None;
             let mut dense_window_prompt_logits: Option<Vec<f32>> = None;
             let mut dense_window_first_decode_logits: Option<Vec<f32>> = None;
+            let mut exact_reference_prompt_logits: Option<Vec<f32>> = None;
+            let mut exact_reference_first_decode_logits: Option<Vec<f32>> = None;
+            let mut exact_reference_generated_logit_trace: Option<Vec<GeneratedLogitTraceStep>> =
+                None;
             let prompt_for_meta = retrieval_prompt(&tokenizer, target_tokens, needle_position);
             let (formatted_prompt_for_meta, add_bos_for_meta) =
                 prepare_prompt(&tokenizer, &prompt_for_meta, PromptFormat::Auto);
@@ -1724,6 +1782,20 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         {
                             continue;
                         }
+                        if q4_v_diagnostic_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && !matches!(
+                                (target_tokens, needle_position, top_blocks_case),
+                                (2048, "old", Some(2))
+                                    | (2048, "recent", Some(2))
+                                    | (4096, "old", Some(4))
+                                    | (4096, "recent", Some(4))
+                                    | (4096, "recent", Some(8))
+                                    | (4096, "recent", Some(16))
+                            )
+                        {
+                            continue;
+                        }
                         for backend_case in exact_block_backend_cases(mode) {
                             let _backend_guards = apply_exact_block_backend_case(backend_case);
                             let exact_block_backend_variant =
@@ -1744,6 +1816,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             let mut exact_old_attention_backend = None;
                             let mut q8_old_backing_bytes = None;
                             let mut q8_old_backing_scale_bytes = None;
+                            let mut q4_old_v_payload_bytes = None;
+                            let mut q4_old_v_scale_bytes = None;
                             let mut staged_workspace_reused = false;
                             let mut staged_workspace_bytes = None;
                             let mut staged_workspace_capacity_tokens = None;
@@ -1789,6 +1863,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     q8_old_backing_bytes = generated.q8_old_backing_bytes;
                                     q8_old_backing_scale_bytes =
                                         generated.q8_old_backing_scale_bytes;
+                                    q4_old_v_payload_bytes = generated.q4_old_v_payload_bytes;
+                                    q4_old_v_scale_bytes = generated.q4_old_v_scale_bytes;
                                     staged_workspace_reused = generated.staged_workspace_reused;
                                     staged_workspace_bytes = generated.staged_workspace_bytes;
                                     staged_workspace_capacity_tokens =
@@ -1815,6 +1891,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                             generated.prompt_logits.clone();
                                         dense_window_first_decode_logits =
                                             generated.first_decode_logits.clone();
+                                    }
+                                    if q4_v_diagnostic_enabled()
+                                        && mode == KvCompressMode::BlockSelectExact
+                                        && exact_block_backend_variant.as_deref()
+                                            == Some("fp16-k-fp16-v")
+                                    {
+                                        exact_reference_prompt_logits =
+                                            generated.prompt_logits.clone();
+                                        exact_reference_first_decode_logits =
+                                            generated.first_decode_logits.clone();
+                                        exact_reference_generated_logit_trace =
+                                            generated.generated_logit_trace.clone();
                                     }
                                     let status = if passed {
                                         CaseStatus::Pass
@@ -1894,22 +1982,26 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 attention_candidate_order_is_chronological
                             };
                             let prompt_logit_diff = if logit_compare_enabled() {
-                                dense_prompt_logits
-                                    .as_deref()
-                                    .zip(prompt_logits.as_deref())
-                                    .and_then(|(dense, compressed)| {
-                                        logit_diff_summary(dense, compressed)
-                                    })
+                                let reference = if q4_v_diagnostic_enabled() {
+                                    exact_reference_prompt_logits.as_deref()
+                                } else {
+                                    dense_prompt_logits.as_deref()
+                                };
+                                reference.zip(prompt_logits.as_deref()).and_then(
+                                    |(dense, compressed)| logit_diff_summary(dense, compressed),
+                                )
                             } else {
                                 None
                             };
                             let first_decode_logit_diff = if logit_compare_enabled() {
-                                dense_first_decode_logits
-                                    .as_deref()
-                                    .zip(first_decode_logits.as_deref())
-                                    .and_then(|(dense, compressed)| {
-                                        logit_diff_summary(dense, compressed)
-                                    })
+                                let reference = if q4_v_diagnostic_enabled() {
+                                    exact_reference_first_decode_logits.as_deref()
+                                } else {
+                                    dense_first_decode_logits.as_deref()
+                                };
+                                reference.zip(first_decode_logits.as_deref()).and_then(
+                                    |(dense, compressed)| logit_diff_summary(dense, compressed),
+                                )
                             } else {
                                 None
                             };
@@ -1948,8 +2040,13 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 }
                             };
                             let expected_token_logits = if logit_compare_enabled() {
+                                let reference = if q4_v_diagnostic_enabled() {
+                                    exact_reference_prompt_logits.as_deref()
+                                } else {
+                                    dense_prompt_logits.as_deref()
+                                };
                                 expected_token_summary(
-                                    dense_prompt_logits.as_deref(),
+                                    reference,
                                     prompt_logits.as_deref(),
                                     position_meta.expected_first_answer_token_id,
                                 )
@@ -1962,7 +2059,11 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 }
                             };
                             let generated_logit_trace = generated_trace_records(
-                                dense_generated_logit_trace.as_deref(),
+                                if q4_v_diagnostic_enabled() {
+                                    exact_reference_generated_logit_trace.as_deref()
+                                } else {
+                                    dense_generated_logit_trace.as_deref()
+                                },
                                 generated_logit_trace_raw.as_deref(),
                                 position_meta.expected_first_answer_token_id,
                             );
@@ -2051,6 +2152,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 exact_block_backend_variant,
                                 q8_old_backing_bytes,
                                 q8_old_backing_scale_bytes,
+                                q4_old_v_payload_bytes,
+                                q4_old_v_scale_bytes,
                                 compression_ratio: match (
                                     dense_equivalent_kv_bytes,
                                     final_kv_allocated_bytes,

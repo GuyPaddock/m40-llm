@@ -2,6 +2,66 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: Diagnostic FP16-K + Q4-V Exact-Block KV
+
+This checkpoint adds `M40LLM_KV_Q4_V_DIAG=1`, a harness-only diagnostic for
+testing whether selected old V can be compressed below q8 while keeping old K in
+FP16. The implementation keeps old K in a diagnostic FP16 dense shadow for
+block scoring and staged K, stores old V in packed signed q4 form with FP32
+per-token/per-head scales, and dequantizes q4 V into the existing staged FP16
+exact-block workspace. It is not a default backend and does not quantize K.
+
+Reports:
+
+- `/tmp/m40-q4-v-2048-old.jsonl`
+- `/tmp/m40-q4-v-2048-recent.jsonl`
+- `/tmp/m40-q4-v-4096-old.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- Completed requested 2048 old/recent top_blocks=2 regressions and the fragile
+  4096 old top_blocks=4 case. The 4096 recent top_blocks=4/8/16 sweep remains
+  to run because it is another long hardware matrix.
+
+Summary:
+
+| Target | Backend | Top blocks | Status | Output | Prompt max diff vs FP16 exact | First decode max diff | Top-10 overlap | Decode |
+| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: |
+| 2048 old | FP16 K + FP16 V | 2 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 5.46 s |
+| 2048 old | FP16 K + q8 V | 2 | pass | `ZXQ-NEEDLE-41729` | 0.087 | 0.091 | 10 | 8.99 s |
+| 2048 old | FP16 K + q4 V | 2 | pass | `ZXQ-NEEDLE-41729` | 0.982 | 1.425 | 8 | 9.05 s |
+| 2048 recent | FP16 K + FP16 V | 2 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 5.57 s |
+| 2048 recent | FP16 K + q8 V | 2 | pass | `ZXQ-NEEDLE-41729` | 2.660 | 1.727 | 10 | 9.02 s |
+| 2048 recent | FP16 K + q4 V | 2 | pass | `ZXQ-NEEDLE-41729` | 3.310 | 1.787 | 10 | 8.96 s |
+| 4096 old | FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 0.000 | 0.000 | 10 | 9.87 s |
+| 4096 old | FP16 K + q8 V | 4 | pass | `ZXQ-NEEDLE-41729` | 0.098 | 0.084 | 10 | 12.66 s |
+| 4096 old | FP16 K + q4 V | 4 | pass | `ZXQ-NEEDLE-41729` | 1.687 | 3.490 | 9 | 12.50 s |
+
+Memory accounting notes:
+
+- Diagnostic q4 rows report `q4_v_payload_bytes=536870912` and
+  `q4_v_scale_bytes=67108864` for the current max-context allocation.
+- `final_kv_allocated_bytes` for q4 rows is intentionally inflated because the
+  diagnostic still allocates q8 K/V backing plus the FP16 dense shadow while
+  testing q4 V source behavior. Treat those rows as quality/precision evidence,
+  not a deployable memory footprint.
+
+Interpretation:
+
+- FP16-K/q4-V passes the fragile 4096 old/top4 case, so q4 V is a plausible
+  candidate for the exact-old V backing when K remains FP16.
+- q4 V introduces much larger logit drift than q8 V, especially at 4096
+  old/top4 and 2048 recent/top2, so q8 V remains the safer compression floor
+  until the 4096 recent top_blocks=4/8/16 matrix is run.
+- The next decision point is 4096 recent robustness. If q4 V passes those rows,
+  design a deployable mixed backing that stores FP16/group-quantized K plus q4
+  V without the diagnostic q8 and dense-shadow overhead.
+
 ## 2026-05-16: 4096 Q8 K/V Precision Split Diagnostic
 
 This checkpoint adds `M40LLM_KV_Q8_PRECISION_SPLIT_DIAG=1`, a narrow
