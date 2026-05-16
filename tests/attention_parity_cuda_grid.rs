@@ -238,6 +238,24 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         KvRepresentativePolicy::Last,
         ExactOldBacking::Q8,
     )?;
+    let kv_mixed = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Fp16KQ4V,
+    )?;
+    assert_eq!(kv_mixed.q8_old_backing_bytes(), 0);
+    assert_eq!(kv_mixed.q8_old_backing_scale_bytes(), 0);
+    assert!(kv_mixed.old_k_fp16_bytes() > 0);
+    assert!(kv_mixed.q4_old_v_payload_bytes() > 0);
+    assert!(kv_mixed.q4_old_v_scale_bytes() > 0);
 
     for t in 0..seq_len as usize {
         let k: Vec<f32> = (0..kv_dim)
@@ -272,6 +290,16 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
                 10000.0,
                 0.0,
             )?;
+            kv_mixed.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
             ctx.device_free(d_k)?;
             ctx.device_free(d_v)?;
         }
@@ -285,10 +313,13 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_staged = ctx.device_malloc(bytes_q)?;
     let d_q8_staged = ctx.device_malloc(bytes_q)?;
     let d_q8_direct = ctx.device_malloc(bytes_q)?;
+    let d_mixed_staged = ctx.device_malloc(bytes_q)?;
     let staging_capacity_tokens = recent_window + top_blocks * block_size;
     let staging =
         ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
     let q8_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
+    let mixed_staging =
         ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
     unsafe {
         ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
@@ -339,6 +370,19 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             top_blocks,
             d_q8_direct,
         )?;
+        kv_mixed
+            .attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                &ctx,
+                0,
+                d_q as *const c_void,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                mixed_staging.ptrs(),
+                d_mixed_staged,
+            )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
@@ -347,6 +391,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let mut staged = vec![0f32; q_dim];
     let mut q8_staged = vec![0f32; q_dim];
     let mut q8_direct = vec![0f32; q_dim];
+    let mut mixed_staged = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense.as_mut_ptr() as *mut c_void,
@@ -373,20 +418,27 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             d_q8_direct as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            mixed_staged.as_mut_ptr() as *mut c_void,
+            d_mixed_staged as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_sparse)?;
         ctx.device_free(d_staged)?;
         ctx.device_free(d_q8_staged)?;
         ctx.device_free(d_q8_direct)?;
+        ctx.device_free(d_mixed_staged)?;
     }
 
-    for (idx, ((((&a, &b), &c), &q8), &q8_direct)) in dense
+    for (idx, (((((&a, &b), &c), &q8), &q8_direct), &mixed)) in dense
         .iter()
         .zip(&sparse)
         .zip(&staged)
         .zip(&q8_staged)
         .zip(&q8_direct)
+        .zip(&mixed_staged)
         .enumerate()
     {
         assert!(
@@ -404,6 +456,10 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         assert!(
             (q8 - q8_direct).abs() < 1e-3,
             "q8 direct block-select-exact mismatch at {idx}: staged={q8} direct={q8_direct}"
+        );
+        assert!(
+            (c - mixed).abs() < 5e-2,
+            "fp16-k/q4-v staged block-select-exact mismatch at {idx}: staged={c} mixed={mixed}"
         );
     }
 

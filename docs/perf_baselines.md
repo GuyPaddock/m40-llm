@@ -2,6 +2,66 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: Deployable FP16-K + Q4-V Exact-Old KV
+
+This checkpoint adds `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v` for
+`block-select-exact`. Unlike the earlier q4 diagnostic, this mode does not
+allocate q8 old K/V buffers and does not allocate a dense FP16 shadow. Recent
+K/V stay FP16, old K is stored as FP16, old V is stored as packed signed q4 with
+FP32 per-token/per-head scales, and selected old blocks are dequantized into the
+reusable exact-block staging workspace.
+
+Reports:
+
+- `/tmp/m40-mixed-q4-v-2048-fixed.jsonl`
+- `/tmp/m40-mixed-q4-v-4096.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed with mixed-backend parity coverage.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 2048 old/recent top_blocks=2 matrix and the 4096 old/top4 plus
+  4096 recent/top4/top8/top16 matrix.
+
+Summary:
+
+| Target | Backend | Top blocks | Status | Output | Final KV | Dense equiv | Old K FP16 | Old V q4 payload | Old V q4 scales | Recent FP16 | Summary/index | Active KV all layers | Decode |
+| --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2048 old | dense off | - | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 63.1 MiB | 6.20 s |
+| 2048 old | FP16 K + FP16 V | 2 | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 34.0 MiB | 5.67 s |
+| 2048 old | FP16 K + q4 V | 2 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 34.0 MiB | 9.00 s |
+| 2048 recent | dense off | - | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 63.6 MiB | 6.20 s |
+| 2048 recent | FP16 K + FP16 V | 2 | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 34.0 MiB | 5.65 s |
+| 2048 recent | FP16 K + q4 V | 2 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 34.0 MiB | 9.05 s |
+| 4096 old | dense off | - | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 127.0 MiB | 12.07 s |
+| 4096 old | FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 36.0 MiB | 9.82 s |
+| 4096 old | FP16 K + q4 V | 4 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 36.0 MiB | 12.59 s |
+| 4096 recent | dense off | - | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 127.4 MiB | 12.19 s |
+| 4096 recent | FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 36.0 MiB | 9.69 s |
+| 4096 recent | FP16 K + q4 V | 4 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 36.0 MiB | 12.76 s |
+| 4096 recent | FP16 K + FP16 V | 8 | fail | `ZXQ` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 40.0 MiB | 2.25 s |
+| 4096 recent | FP16 K + q4 V | 8 | fail | `ZXQ` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 40.0 MiB | 3.01 s |
+| 4096 recent | FP16 K + FP16 V | 16 | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | 0 | 0 | 0 | 0 | 0 | 48.0 MiB | 10.89 s |
+| 4096 recent | FP16 K + q4 V | 16 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 2.00 GiB | 512 MiB | 64 MiB | 32 MiB | 381 MiB | 48.0 MiB | 15.16 s |
+
+Interpretation:
+
+- Deployable FP16-K/q4-V preserves the FP16 selected-context pass/fail pattern:
+  2048 old/recent top2 pass, 4096 old top4 passes, 4096 recent top4/top16 pass,
+  and 4096 recent top8 still fails because the FP16 selected-context baseline
+  also fails.
+- The real mixed backing reduces final KV allocation from 4.00 GiB to 2.97 GiB
+  for this Llama-3.2-1B max-context allocation. It removes the diagnostic q8
+  and dense-shadow overhead from the earlier q4 experiment.
+- Decode is slower than FP16 selected-block staging because q4 V is dequantized
+  into the FP16 staging workspace. The next optimization should target q4 gather
+  and dequant staging, or a direct attention path that reads FP16 K and q4 V
+  without materializing old V into staging.
+
 ## 2026-05-16: Diagnostic FP16-K + Q4-V Exact-Block KV
 
 This checkpoint adds `M40LLM_KV_Q4_V_DIAG=1`, a harness-only diagnostic for

@@ -26,6 +26,12 @@ fn q8_exact_old_backing_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn fp16_k_q4_v_exact_old_backing_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
+        .map(|value| matches!(value.as_str(), "fp16-k-q4-v" | "FP16-K-Q4-V"))
+        .unwrap_or(false)
+}
+
 fn q8_direct_exact_old_attention_enabled() -> bool {
     std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
         .map(|value| matches!(value.as_str(), "q8-direct" | "Q8-DIRECT" | "direct-q8"))
@@ -269,6 +275,10 @@ impl LoadedModel {
         let exact_old_backing =
             if config.mode == KvCompressMode::BlockSelectExact && q8_exact_old_backing_enabled() {
                 ExactOldBacking::Q8
+            } else if config.mode == KvCompressMode::BlockSelectExact
+                && fp16_k_q4_v_exact_old_backing_enabled()
+            {
+                ExactOldBacking::Fp16KQ4V
             } else {
                 ExactOldBacking::Dense
             };
@@ -277,7 +287,7 @@ impl LoadedModel {
             KvCompressMode::RecentOnly
                 | KvCompressMode::BlockSummary
                 | KvCompressMode::BlockSelectLossy
-        ) && exact_old_backing != ExactOldBacking::Q8
+        ) && matches!(exact_old_backing, ExactOldBacking::Dense)
         {
             anyhow::bail!(
                 "allocate_compressed_kv_cache_for_layers requires a compressed sidecar mode"
@@ -470,7 +480,13 @@ impl LoadedModel {
             unsafe {
                 if kv_selection::enabled() {
                     if kv_selection::should_capture_attention() {
-                        let attention_mode = if q8_exact_old_backing_enabled() { 5 } else { 1 };
+                        let attention_mode = if q8_exact_old_backing_enabled()
+                            || fp16_k_q4_v_exact_old_backing_enabled()
+                        {
+                            5
+                        } else {
+                            1
+                        };
                         if let Ok(attention) = kv.debug_attention_telemetry(
                             &self.cuda,
                             attention_mode,
@@ -548,6 +564,20 @@ impl LoadedModel {
                                 d_out,
                             );
                         }
+                        if fp16_k_q4_v_exact_old_backing_enabled() {
+                            return kv.attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                                &self.cuda,
+                                seq_id,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                compression.recent_window,
+                                compression.block_size,
+                                compression.top_blocks,
+                                staging,
+                                d_out,
+                            );
+                        }
                         return kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
                             &self.cuda,
                             seq_id,
@@ -575,7 +605,7 @@ impl LoadedModel {
                 }
                 if kv.is_compressed() {
                     anyhow::bail!(
-                        "q8 block-select-exact compressed KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
+                        "compressed block-select-exact KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
                     );
                 }
                 return kv.attention_last_token_f32_gqa_block_select_exact_async(
@@ -861,6 +891,21 @@ impl LoadedModel {
                                 d_out,
                             );
                     }
+                    if fp16_k_q4_v_exact_old_backing_enabled() {
+                        return kv
+                            .attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                                &self.cuda,
+                                physical_slot,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                recent_window,
+                                block_size,
+                                top_blocks,
+                                staging,
+                                d_out,
+                            );
+                    }
                     return kv
                         .attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
                             &self.cuda,
@@ -889,7 +934,7 @@ impl LoadedModel {
             }
             if kv.is_compressed() {
                 anyhow::bail!(
-                    "q8 block-select-exact compressed KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
+                    "compressed block-select-exact KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
                 );
             }
             kv.attention_last_token_f32_gqa_block_select_exact_async(

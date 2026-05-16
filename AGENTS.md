@@ -284,14 +284,21 @@ batched decode path before touching persistent decode or large-model fused-dequa
   selected-context pass/fail pattern: top_blocks=4 and 16 pass for FP16 V, q8
   V, and q4 V, while top_blocks=8 fails for all three and emits EOT at generated
   step 2. Treat that top_blocks=8 row as selected-context sensitivity rather
-  than a V-quantization-specific failure.
+  than a V-quantization-specific failure. `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+  now implements the deployable mixed exact-old layout without q8 old K/V or
+  dense-shadow allocations: recent K/V stay FP16, old K is FP16, old V is packed
+  signed q4 with FP32 per-token/per-head scales, and selected blocks dequantize
+  into the reusable staging workspace. The 2048 old/recent top_blocks=2 matrix
+  and 4096 old/top4 plus recent/top4/top8/top16 matrix pass with the expected
+  FP16 selected-context pass/fail pattern. Final KV allocation drops from 4.00
+  GiB dense-equivalent to 2.97 GiB for the Llama-3.2-1B max-context allocation.
 - Next: avoid 8192 and server integration until exact-block quality is more
-  stable. Prototype a deployable mixed exact-old backing that keeps K in FP16 or
-  a K-preserving grouped format and stores V in q4, without the current
-  diagnostic q8 V plus dense-shadow overhead. Also investigate top-block
-  robustness or block promotion for the non-monotonic top_blocks=8 selected
-  context failure before any 8192 sweep. Do not increase representative count or
-  tune pure summary modes for this path.
+  stable. Optimize the deployable mixed backing's q4 V staging/dequant overhead,
+  or prototype a direct FP16-K/q4-V attention path that avoids materializing old
+  V into FP16 staging. Also investigate top-block robustness or block promotion
+  for the non-monotonic top_blocks=8 selected-context failure before any 8192
+  sweep. Do not increase representative count or tune pure summary modes for
+  this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

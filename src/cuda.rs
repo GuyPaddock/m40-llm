@@ -293,7 +293,7 @@ mod ffi {
             top_blocks: u32,
             representatives: u32,
             representative_policy: u32,
-            q8_old_backing: u32,
+            exact_old_backing: u32,
         ) -> *mut M40llmKVCache;
         pub fn m40llm_kvcache_append_token(
             ctx: *mut M40llmCudaContext,
@@ -489,6 +489,23 @@ mod ffi {
             recent_window: u32,
         ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            staged_k_dev: *mut c_void,
+            staged_v_dev: *mut c_void,
+            staged_positions_dev: *mut c_void,
+            staged_counts_dev: *mut c_void,
+            staged_capacity_tokens: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
             seq_id: u32,
@@ -766,12 +783,14 @@ pub struct ExactBlockStagingPtrs {
 pub enum ExactOldBacking {
     Dense,
     Q8,
+    Fp16KQ4V,
 }
 
 impl ExactOldBacking {
     pub fn from_env() -> Self {
         match std::env::var("M40LLM_KV_EXACT_OLD_BACKING").ok().as_deref() {
             Some("q8") | Some("Q8") => Self::Q8,
+            Some("fp16-k-q4-v") | Some("FP16-K-Q4-V") => Self::Fp16KQ4V,
             _ => Self::Dense,
         }
     }
@@ -780,6 +799,15 @@ impl ExactOldBacking {
         match self {
             Self::Dense => "dense",
             Self::Q8 => "q8",
+            Self::Fp16KQ4V => "fp16-k-q4-v",
+        }
+    }
+
+    pub fn as_ffi(self) -> u32 {
+        match self {
+            Self::Dense => 0,
+            Self::Q8 => 1,
+            Self::Fp16KQ4V => 2,
         }
     }
 }
@@ -1505,7 +1533,7 @@ impl CudaContext {
                     top_blocks,
                     representatives,
                     representative_policy.as_ffi(),
-                    u32::from(exact_old_backing == ExactOldBacking::Q8),
+                    exact_old_backing.as_ffi(),
                 )
             };
             if kv.is_null() {
@@ -2986,8 +3014,11 @@ struct KVCacheInner {
     exact_old_backing: String,
     q8_old_backing_bytes: usize,
     q8_old_backing_scale_bytes: usize,
+    old_k_fp16_bytes: usize,
     q4_old_v_payload_bytes: usize,
     q4_old_v_scale_bytes: usize,
+    recent_fp16_bytes: usize,
+    summary_index_bytes: usize,
     actual_bytes: usize,
     dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
@@ -3030,8 +3061,11 @@ impl KVCache {
                     exact_old_backing: ExactOldBacking::Dense.as_str().to_string(),
                     q8_old_backing_bytes: 0,
                     q8_old_backing_scale_bytes: 0,
+                    old_k_fp16_bytes: 0,
                     q4_old_v_payload_bytes: 0,
                     q4_old_v_scale_bytes: 0,
+                    recent_fp16_bytes: 0,
+                    summary_index_bytes: 0,
                     actual_bytes: (max_seq_len as usize)
                         * (max_batch_size as usize)
                         * (num_heads as usize)
@@ -3074,8 +3108,11 @@ impl KVCache {
                     exact_old_backing: "dense".to_string(),
                     q8_old_backing_bytes: 0,
                     q8_old_backing_scale_bytes: 0,
+                    old_k_fp16_bytes: 0,
                     q4_old_v_payload_bytes: 0,
                     q4_old_v_scale_bytes: 0,
+                    recent_fp16_bytes: 0,
+                    summary_index_bytes: 0,
                     actual_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     dense_equivalent_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
@@ -3168,6 +3205,14 @@ impl KVCache {
             } else {
                 0
             };
+            let old_k_fp16_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<half::f16>()
+            } else {
+                0
+            };
             let q8_dense_shadow_bytes = if exact_old_backing == ExactOldBacking::Q8
                 && std::env::var("M40LLM_KV_Q8_DENSE_SHADOW")
                     .map(|value| value == "1")
@@ -3184,13 +3229,17 @@ impl KVCache {
             let q4_v_diag = std::env::var("M40LLM_KV_Q4_V_DIAG")
                 .map(|value| value == "1")
                 .unwrap_or(false);
-            let q4_old_v_payload_bytes = if exact_old_backing == ExactOldBacking::Q8 && q4_v_diag {
+            let q4_old_v_payload_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V
+                || (exact_old_backing == ExactOldBacking::Q8 && q4_v_diag)
+            {
                 (max_seq_len as usize) * (max_batch_size as usize) * elems_per_token / 2
                     * std::mem::size_of::<u8>()
             } else {
                 0
             };
-            let q4_old_v_scale_bytes = if exact_old_backing == ExactOldBacking::Q8 && q4_v_diag {
+            let q4_old_v_scale_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V
+                || (exact_old_backing == ExactOldBacking::Q8 && q4_v_diag)
+            {
                 (max_seq_len as usize)
                     * (max_batch_size as usize)
                     * (num_heads as usize)
@@ -3198,16 +3247,18 @@ impl KVCache {
             } else {
                 0
             };
-            let actual_bytes = recent_bytes
-                + summary_f16_bytes
+            let summary_index_bytes = summary_f16_bytes
                 + summary_acc_bytes
                 + representative_bytes
                 + representative_position_bytes
                 + count_bytes
-                + seq_map_bytes
+                + seq_map_bytes;
+            let actual_bytes = recent_bytes
+                + summary_index_bytes
                 + q8_old_backing_bytes
                 + q8_old_backing_scale_bytes
                 + q8_dense_shadow_bytes
+                + old_k_fp16_bytes
                 + q4_old_v_payload_bytes
                 + q4_old_v_scale_bytes;
             let dense_equivalent_bytes = (max_seq_len as usize)
@@ -3229,8 +3280,11 @@ impl KVCache {
                     exact_old_backing: exact_old_backing.as_str().to_string(),
                     q8_old_backing_bytes,
                     q8_old_backing_scale_bytes,
+                    old_k_fp16_bytes,
                     q4_old_v_payload_bytes,
                     q4_old_v_scale_bytes,
+                    recent_fp16_bytes: recent_bytes,
+                    summary_index_bytes,
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
@@ -3282,12 +3336,24 @@ impl KVCache {
         self.inner.q8_old_backing_scale_bytes
     }
 
+    pub fn old_k_fp16_bytes(&self) -> usize {
+        self.inner.old_k_fp16_bytes
+    }
+
     pub fn q4_old_v_payload_bytes(&self) -> usize {
         self.inner.q4_old_v_payload_bytes
     }
 
     pub fn q4_old_v_scale_bytes(&self) -> usize {
         self.inner.q4_old_v_scale_bytes
+    }
+
+    pub fn recent_fp16_bytes(&self) -> usize {
+        self.inner.recent_fp16_bytes
+    }
+
+    pub fn summary_index_bytes(&self) -> usize {
+        self.inner.summary_index_bytes
     }
 
     #[inline]
@@ -3861,6 +3927,54 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged_q8_old");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues staged exact block-select GQA attention using FP16 old K,
+    /// q4 old V, and FP16 recent KV.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        staging: ExactBlockStagingPtrs,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                staging.staged_k,
+                staging.staged_v,
+                staging.staged_positions,
+                staging.staged_counts,
+                staging.capacity_tokens,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async failed: {rc}"
+            ));
+        }
+        record_async_kernel(
+            "attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old",
+        );
         Ok(())
     }
 

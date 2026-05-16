@@ -102,7 +102,9 @@ async fn main() -> Result<()> {
                     | KvCompressMode::BlockSelectLossy
             ) || (kv_compression.mode == KvCompressMode::BlockSelectExact
                 && std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
-                    .map(|value| matches!(value.as_str(), "q8" | "Q8"))
+                    .map(|value| {
+                        matches!(value.as_str(), "q8" | "Q8" | "fp16-k-q4-v" | "FP16-K-Q4-V")
+                    })
                     .unwrap_or(false));
             if use_compressed_kv {
                 loaded.allocate_compressed_kv_cache_for_layers(

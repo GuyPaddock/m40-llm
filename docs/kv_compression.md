@@ -148,8 +148,21 @@ JSONL rows include:
 - `exact_old_attention_backend`
 - `q8_old_backing_bytes`
 - `q8_old_backing_scale_bytes`
+- `old_k_fp16_bytes`
+- `q4_old_v_payload_bytes`
+- `q4_old_v_scale_bytes`
+- `recent_fp16_bytes`
+- `summary_index_bytes`
 - `final_kv_allocated_bytes`
 - `dense_equivalent_kv_bytes`
+
+`M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v` switches staged
+`block-select-exact` to the deployable mixed exact-old layout. The runtime keeps
+the exact recent ring in FP16, stores old K in FP16, stores old V as packed
+signed q4 with FP32 per-token/per-head scales, and keeps the same summary/index
+metadata for selecting old blocks. This mode does not allocate q8 old K/V and
+does not allocate the diagnostic dense FP16 shadow. It currently dequantizes
+selected q4 V into the reusable FP16 staging workspace before attention.
 
 By default, q8 exact-old attention still dequantizes selected old blocks into
 the reusable FP16 staging workspace before attention. Set

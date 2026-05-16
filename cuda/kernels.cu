@@ -59,6 +59,7 @@ extern "C" {
         int8_t* d_q8_old_v;
         float* d_q8_old_k_scale;
         float* d_q8_old_v_scale;
+        __half* d_fp16_old_k;
         uint8_t* d_q4_old_v;
         float* d_q4_old_v_scale;
         uint32_t max_seq_len;
@@ -73,6 +74,7 @@ extern "C" {
         uint32_t representatives;
         uint32_t representative_policy;
         uint32_t q8_old_backing;
+        uint32_t fp16_k_q4_v_old_backing;
         uint32_t q4_old_v_backing;
     };
     struct M40llmAttentionGroupStats {
@@ -1979,6 +1981,30 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void copy_evicted_recent_k_to_fp16_old_head64_kernel(
+        const __half* __restrict__ recent_k,
+        __half* __restrict__ old_k,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t num_heads,
+        uint32_t seq_id,
+        uint32_t position) {
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t head_dim = 64;
+        if (head >= num_heads || position < recent_window) return;
+        const uint32_t old_pos = position - recent_window;
+        const uint32_t ring = position % recent_window;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t recent_base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                 * elems_per_token + (size_t)head * head_dim;
+        const size_t old_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                              * elems_per_token + (size_t)head * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            old_k[old_base + d] = recent_k[recent_base + d];
+        }
+    }
+
     __device__ __forceinline__ uint8_t pack_q4_pair(float a, float b, float scale) {
         const int qa = max(-7, min(7, (int)lrintf(a / scale)));
         const int qb = max(-7, min(7, (int)lrintf(b / scale)));
@@ -2100,7 +2126,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
                                    + (size_t)kvh_idx * (size_t)head_dim;
                 const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
-                const float ks = k_scale[scale_idx];
+                const float ks = old_k_source == 1u ? 0.0f : k_scale[scale_idx];
                 for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
                     const float k_val = old_k_source == 1u && K
                         ? __half2float(K[base + d])
@@ -2172,8 +2198,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                 * ((size_t)kv_heads * (size_t)(head_dim / 2u))
                                 + (size_t)kvh_idx * (size_t)(head_dim / 2u);
             const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
-            const float ks = old_token ? k_scale[scale_idx] : 0.0f;
-            const float vs = old_token ? v_scale[scale_idx] : 0.0f;
+            const float ks = old_token && old_k_source != 1u ? k_scale[scale_idx] : 0.0f;
+            const float vs = old_token && old_v_source == 0u ? v_scale[scale_idx] : 0.0f;
             const float q4_vs = old_token && q4_v_scale ? q4_v_scale[scale_idx] : 0.0f;
             for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
                 if (old_token) {
@@ -3696,6 +3722,91 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        uint32_t staged_capacity_tokens,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!staged_k_dev || !staged_v_dev || !staged_positions_dev || !staged_counts_dev) return -14;
+        if (!kv->fp16_k_q4_v_old_backing || !kv->d_fp16_old_k ||
+            !kv->q4_old_v_backing || !kv->d_q4_old_v || !kv->d_q4_old_v_scale) return -16;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        if (selected_capacity > staged_capacity_tokens) return -15;
+
+        __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
+        __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
+        uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
+        uint32_t* staged_counts = reinterpret_cast<uint32_t*>(staged_counts_dev);
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
+            kv->d_fp16_old_k,
+            nullptr,
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            kv->d_q4_old_v,
+            kv->d_q4_old_v_scale,
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            selected_old_blocks,
+            selected_capacity,
+            selected_block_order_from_env(),
+            1u,
+            2u,
+            staged_k,
+            staged_v,
+            staged_positions,
+            staged_counts);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -12;
+
+        const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+            staged_k,
+            staged_v,
+            staged_counts,
+            selected_capacity,
+            q_heads,
+            reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<float*>(out_dev_f32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -13;
+        return 0;
+    }
+
     int m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
         M40llmCudaContext* ctx,
         const M40llmKVCache* kv,
@@ -4492,9 +4603,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         kv->d_q8_old_v = nullptr;
         kv->d_q8_old_k_scale = nullptr;
         kv->d_q8_old_v_scale = nullptr;
+        kv->d_fp16_old_k = nullptr;
         kv->d_q4_old_v = nullptr;
         kv->d_q4_old_v_scale = nullptr;
         kv->q8_old_backing = 0;
+        kv->fp16_k_q4_v_old_backing = 0;
         kv->q4_old_v_backing = 0;
     }
 
@@ -4518,6 +4631,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cudaMemset(kv->d_q8_old_k_scale, 0, vectors * sizeof(float));
         cudaMemset(kv->d_q8_old_v_scale, 0, vectors * sizeof(float));
         kv->q8_old_backing = 1;
+        return true;
+    }
+
+    static bool allocate_fp16_old_k_backing(M40llmKVCache* kv) {
+        const size_t elems = kv_storage_elems(
+            kv->max_seq_len,
+            kv->max_batch_size,
+            kv->num_heads,
+            kv->head_dim);
+        cudaError_t err = cudaMalloc(&kv->d_fp16_old_k, elems * sizeof(__half));
+        if (err != cudaSuccess) return false;
+        cudaMemset(kv->d_fp16_old_k, 0, elems * sizeof(__half));
+        kv->fp16_k_q4_v_old_backing = 1;
         return true;
     }
 
@@ -4596,7 +4722,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t top_blocks,
                                          uint32_t representatives,
                                          uint32_t representative_policy,
-                                         uint32_t q8_old_backing) {
+                                         uint32_t exact_old_backing) {
         if (!ctx || recent_window == 0 || block_size == 0) return nullptr;
         if (ensure_device(ctx) != 0) return nullptr;
         M40llmKVCache* kv = new M40llmKVCache();
@@ -4656,15 +4782,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             err = cudaMalloc(&kv->d_rep_positions, rep_position_size);
             if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
         }
-        if (q8_old_backing != 0 && !allocate_q8_old_backing(kv)) {
+        if (exact_old_backing == 1u && !allocate_q8_old_backing(kv)) {
             m40llm_kvcache_destroy(kv);
             return nullptr;
         }
-        if (q8_old_backing != 0 && q4_old_v_diag_from_env() && !allocate_q4_old_v_backing(kv)) {
+        if (exact_old_backing == 2u && (!allocate_fp16_old_k_backing(kv) || !allocate_q4_old_v_backing(kv))) {
             m40llm_kvcache_destroy(kv);
             return nullptr;
         }
-        if (q8_old_backing != 0 && q8_dense_shadow_from_env()) {
+        if (exact_old_backing == 1u && q4_old_v_diag_from_env() && !allocate_q4_old_v_backing(kv)) {
+            m40llm_kvcache_destroy(kv);
+            return nullptr;
+        }
+        if (exact_old_backing == 1u && q8_dense_shadow_from_env()) {
             const size_t dense_elems = kv_storage_elems(max_seq_len, max_batch_size, num_heads, head_dim);
             const size_t dense_bytes = dense_elems * sizeof(__half);
             err = cudaMalloc(&kv->d_k, dense_bytes);
@@ -5196,6 +5326,35 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 }
             }
         }
+        if (kv->fp16_k_q4_v_old_backing && position >= kv->recent_window) {
+            copy_evicted_recent_k_to_fp16_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_k,
+                kv->d_fp16_old_k,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                seq_id,
+                position);
+            cudaError_t old_k_err = cudaGetLastError();
+            if (old_k_err != cudaSuccess) {
+                fprintf(stderr, "compressed fp16 old K append kernel launch error: %s\n", cudaGetErrorString(old_k_err));
+                return -10;
+            }
+            quantize_evicted_recent_v_to_q4_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_v,
+                kv->d_q4_old_v,
+                kv->d_q4_old_v_scale,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                seq_id,
+                position);
+            cudaError_t q4_err = cudaGetLastError();
+            if (q4_err != cudaSuccess) {
+                fprintf(stderr, "compressed fp16-k/q4-v old append kernel launch error: %s\n", cudaGetErrorString(q4_err));
+                return -11;
+            }
+        }
         if (kv->d_k && kv->d_v) {
             const size_t pairs_per_token = elems_per_token / 2u;
             const int shadow_blocks = (int)((pairs_per_token + threads - 1) / threads);
@@ -5320,6 +5479,27 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 cudaMemsetAsync(kv->d_rep_k, 0, rep_elems * sizeof(__half), ctx->decode_stream);
                 cudaMemsetAsync(kv->d_rep_v, 0, rep_elems * sizeof(__half), ctx->decode_stream);
                 cudaMemsetAsync(kv->d_rep_positions, 0xff, rep_position_size, ctx->decode_stream);
+            }
+            if (kv->d_fp16_old_k) {
+                const size_t old_k_elems = kv_storage_elems(
+                    kv->max_seq_len,
+                    kv->max_batch_size,
+                    kv->num_heads,
+                    kv->head_dim);
+                cudaMemsetAsync(kv->d_fp16_old_k, 0, old_k_elems * sizeof(__half), ctx->decode_stream);
+            }
+            if (kv->d_q4_old_v) {
+                const size_t q4_elems = (size_t)kv->max_seq_len
+                    * (size_t)kv->max_batch_size
+                    * (size_t)kv->num_heads
+                    * (size_t)(kv->head_dim / 2u);
+                cudaMemsetAsync(kv->d_q4_old_v, 0, q4_elems * sizeof(uint8_t), ctx->decode_stream);
+            }
+            if (kv->d_q4_old_v_scale) {
+                const size_t q4_scales = (size_t)kv->max_seq_len
+                    * (size_t)kv->max_batch_size
+                    * (size_t)kv->num_heads;
+                cudaMemsetAsync(kv->d_q4_old_v_scale, 0, q4_scales * sizeof(float), ctx->decode_stream);
             }
         }
         err = cudaStreamSynchronize(ctx->decode_stream);
@@ -5456,8 +5636,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         __half k_buf[64];
         const bool use_q8_old_host =
             kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        const bool use_fp16_old_host =
+            kv->compressed && kv->fp16_k_q4_v_old_backing && kv->d_fp16_old_k;
         std::vector<int8_t> q8_old_k_host;
         std::vector<float> q8_old_k_scale_host;
+        std::vector<__half> fp16_old_k_host;
         if (use_q8_old_host) {
             q8_old_k_host.resize((size_t)old_len * elems_per_token);
             q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
@@ -5474,19 +5657,30 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                              cudaMemcpyDeviceToHost);
             if (err != cudaSuccess) return -11;
         }
+        if (use_fp16_old_host) {
+            fp16_old_k_host.resize((size_t)old_len * elems_per_token);
+            const size_t old_k_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            err = cudaMemcpy(fp16_old_k_host.data(),
+                             kv->d_fp16_old_k + old_k_base,
+                             fp16_old_k_host.size() * sizeof(__half),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -12;
+        }
 
         for (uint32_t block = 0; block < old_blocks; ++block) {
             float score = 0.0f;
-            if (use_q8_old_host) {
+            if (use_q8_old_host || use_fp16_old_host) {
                 const uint32_t start = block * effective_block;
                 const uint32_t end = std::min(start + effective_block, old_len);
                 if (end <= start) continue;
                 for (uint32_t pos = start; pos < end; ++pos) {
                     const size_t base = (size_t)pos * elems_per_token;
-                    const float q8_scale = q8_old_k_scale_host[(size_t)pos * (size_t)kv->num_heads];
                     for (uint32_t d = 0; d < 64; ++d) {
-                        const __half k = __float2half_rn(
-                            (float)q8_old_k_host[base + d] * q8_scale);
+                        const __half k = use_fp16_old_host
+                            ? fp16_old_k_host[base + d]
+                            : __float2half_rn(
+                                (float)q8_old_k_host[base + d]
+                                * q8_old_k_scale_host[(size_t)pos * (size_t)kv->num_heads]);
                         score += q[d] * __half2float(k);
                     }
                 }
@@ -5591,8 +5785,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         __half k_buf[64];
         const bool use_q8_old_host =
             kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        const bool use_fp16_old_host =
+            kv->compressed && kv->fp16_k_q4_v_old_backing && kv->d_fp16_old_k;
         std::vector<int8_t> q8_old_k_host;
         std::vector<float> q8_old_k_scale_host;
+        std::vector<__half> fp16_old_k_host;
         if (use_q8_old_host) {
             q8_old_k_host.resize((size_t)old_len * elems_per_token);
             q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
@@ -5608,6 +5805,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                              q8_old_k_scale_host.size() * sizeof(float),
                              cudaMemcpyDeviceToHost);
             if (err != cudaSuccess) return -21;
+        }
+        if (use_fp16_old_host) {
+            fp16_old_k_host.resize((size_t)old_len * elems_per_token);
+            const size_t old_k_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            err = cudaMemcpy(fp16_old_k_host.data(),
+                             kv->d_fp16_old_k + old_k_base,
+                             fp16_old_k_host.size() * sizeof(__half),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -22;
         }
 
         auto dot_q = [&](const __half* ptr) -> float {
@@ -5656,6 +5862,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             *score = sum / (float)(end - start);
             return 0;
         };
+        auto score_fp16_old_token = [&](uint32_t token, float* score) -> int {
+            if (!use_fp16_old_host || token >= old_len) return -1;
+            const size_t base = (size_t)token * elems_per_token;
+            *score = dot_q(fp16_old_k_host.data() + base);
+            return 0;
+        };
+        auto score_fp16_old_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            if (end <= start) return -1;
+            float sum = 0.0f;
+            for (uint32_t token = start; token < end; ++token) {
+                float token_score = 0.0f;
+                if (score_fp16_old_token(token, &token_score) != 0) return -1;
+                sum += token_score;
+            }
+            *score = sum / (float)(end - start);
+            return 0;
+        };
         auto score_dense_block_mean = [&](uint32_t block, float* score) -> int {
             const uint32_t start = block * effective_block;
             const uint32_t end = std::min(start + effective_block, old_len);
@@ -5674,7 +5899,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         auto selected_blocks_by_score = [&](bool compressed_source, bool q8_source) -> std::vector<uint32_t> {
             std::vector<std::pair<float, uint32_t>> scored;
             for (uint32_t block = 0; block < available_blocks; ++block) {
-                if (q8_source) {
+                if (q8_source && use_fp16_old_host) {
+                    float score = 0.0f;
+                    if (score_fp16_old_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else if (q8_source) {
                     float score = 0.0f;
                     if (score_q8_block_mean(block, &score) != 0) continue;
                     scored.emplace_back(score, block);
@@ -5724,15 +5953,18 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
             }
         } else if (mode == 5) {
-            if (!kv->compressed || !kv->q8_old_backing || !kv->d_q8_old_k ||
-                !kv->d_q8_old_v || !kv->d_q8_old_k_scale || !kv->d_q8_old_v_scale) return -17;
+            if (!kv->compressed || (!use_q8_old_host && !use_fp16_old_host)) return -17;
             std::vector<uint32_t> selected = selected_blocks_by_score(false, true);
             for (uint32_t block : selected) {
                 const uint32_t start = block * effective_block;
                 const uint32_t end = std::min(start + effective_block, old_len);
                 for (uint32_t token = start; token < end; ++token) {
                     float score = 0.0f;
-                    if (score_q8_token(token, &score) != 0) return -18;
+                    if (use_fp16_old_host) {
+                        if (score_fp16_old_token(token, &score) != 0) return -18;
+                    } else if (score_q8_token(token, &score) != 0) {
+                        return -18;
+                    }
                     candidates.push_back({2u, block, token, score, 0.0f});
                 }
             }
@@ -6070,6 +6302,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (kv->d_q8_old_v) cudaFree(kv->d_q8_old_v);
         if (kv->d_q8_old_k_scale) cudaFree(kv->d_q8_old_k_scale);
         if (kv->d_q8_old_v_scale) cudaFree(kv->d_q8_old_v_scale);
+        if (kv->d_fp16_old_k) cudaFree(kv->d_fp16_old_k);
         if (kv->d_q4_old_v) cudaFree(kv->d_q4_old_v);
         if (kv->d_q4_old_v_scale) cudaFree(kv->d_q4_old_v_scale);
         delete kv;
