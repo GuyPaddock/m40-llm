@@ -510,7 +510,7 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
-        if q4_v_diagnostic_enabled() {
+        if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
                 .into_iter()
                 .filter(|ctx| *ctx < limit)
@@ -611,6 +611,12 @@ fn mixed_q4_v_backing_sweep_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn mixed_q4_v_direct_sweep_enabled() -> bool {
+    std::env::var("M40LLM_KV_MIXED_Q4_V_DIRECT_SWEEP")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn top_block_robustness_diagnostic_enabled() -> bool {
     std::env::var("M40LLM_KV_TOP_BLOCK_ROBUSTNESS_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -622,6 +628,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || q8_precision_split_diagnostic_enabled()
         || q4_v_diagnostic_enabled()
         || mixed_q4_v_backing_sweep_enabled()
+        || mixed_q4_v_direct_sweep_enabled()
         || top_block_robustness_diagnostic_enabled()
 }
 
@@ -693,7 +700,10 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
         .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .transpose()?
         .unwrap_or_else(|| {
-            if q4_v_diagnostic_enabled() || mixed_q4_v_backing_sweep_enabled() {
+            if q4_v_diagnostic_enabled()
+                || mixed_q4_v_backing_sweep_enabled()
+                || mixed_q4_v_direct_sweep_enabled()
+            {
                 vec![2, 4, 8, 16]
             } else if q8_precision_split_diagnostic_enabled() {
                 vec![4]
@@ -750,8 +760,10 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase>
                 staging: Some("1"),
             },
         ]
-    } else if mixed_q4_v_backing_sweep_enabled() && mode == KvCompressMode::BlockSelectExact {
-        vec![
+    } else if (mixed_q4_v_backing_sweep_enabled() || mixed_q4_v_direct_sweep_enabled())
+        && mode == KvCompressMode::BlockSelectExact
+    {
+        let mut cases = vec![
             ExactBlockBackendCase {
                 variant: Some("fp16-k-fp16-v"),
                 exact_old_backing: None,
@@ -768,7 +780,18 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase>
                 q8_dense_shadow: false,
                 staging: Some("1"),
             },
-        ]
+        ];
+        if mixed_q4_v_direct_sweep_enabled() {
+            cases.push(ExactBlockBackendCase {
+                variant: Some("fp16-k-q4-v-direct"),
+                exact_old_backing: Some("fp16-k-q4-v"),
+                exact_old_attention: Some("fp16-k-q4-v-direct"),
+                exact_old_precision: None,
+                q8_dense_shadow: false,
+                staging: None,
+            });
+        }
+        cases
     } else if q8_precision_split_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
         vec![
             ExactBlockBackendCase {
@@ -1828,7 +1851,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         {
                             continue;
                         }
-                        if mixed_q4_v_backing_sweep_enabled()
+                        if (mixed_q4_v_backing_sweep_enabled() || mixed_q4_v_direct_sweep_enabled())
                             && mode == KvCompressMode::BlockSelectExact
                             && !matches!(
                                 (target_tokens, needle_position, top_blocks_case),

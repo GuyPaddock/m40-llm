@@ -303,6 +303,19 @@ int m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks; (void)out_dev_f32; return -1;
 }
+int m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    uint32_t recent_window,
+    uint32_t block_size,
+    uint32_t top_blocks,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)recent_window; (void)block_size; (void)top_blocks; (void)out_dev_f32; return -1;
+}
 int m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
     M40llmCudaContext* ctx,
     const M40llmKVCache* kv,

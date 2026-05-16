@@ -2,6 +2,51 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: Direct FP16-K + Q4-V Exact-Old Attention
+
+This checkpoint adds an opt-in direct attention backend for
+`M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`:
+`M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`. It keeps the deployable
+mixed backing layout unchanged: recent K/V stay FP16, old K stays FP16, old V
+stays packed signed q4 with FP32 per-token/per-head scales, and summary/index
+metadata continues to select old blocks. The direct path avoids dequantizing
+selected old q4 V into the reusable FP16 staging workspace and instead unpacks
+q4 V inside the attention value accumulation.
+
+Reports:
+
+- `/tmp/m40-mixed-q4-v-direct-2048-old.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed, including staged-vs-direct FP16-K/q4-V parity coverage.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the bounded 2048 old/top_blocks=2 direct-sweep matrix.
+
+2048 old/top_blocks=2 summary:
+
+| Backend | Status | Output | Final KV | Dense equiv | Staging workspace | Active KV all layers | Decode |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| dense off | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | none | 63.1 MiB | 6.206 s |
+| FP16 K + FP16 V | pass | `ZXQ-NEEDLE-41729` | 4.00 GiB | 4.00 GiB | none | 34.0 MiB | 5.517 s |
+| staged FP16 K + q4 V | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 8.63 MiB | 34.0 MiB | 8.967 s |
+| direct FP16 K + q4 V | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | none | 34.0 MiB | 4.943 s |
+
+Interpretation:
+
+- Direct FP16-K/q4-V preserves the staged mixed pass/fail behavior on this
+  bounded quality row and removes the per-session FP16 staging workspace use for
+  selected old q4 V.
+- The measured 2048 old/top2 direct row is faster than both staged q4 and the
+  FP16 selected-block baseline, but this is not enough to make it default.
+- Next validation should run the same direct-sweep mode on the known 4096 rows:
+  old/top4 and recent/top4/top8/top16. Keep staged q4 as the conservative
+  default until those rows preserve the FP16 selected-context pass/fail pattern.
+
 ## 2026-05-16: Deployable FP16-K + Q4-V Exact-Old KV
 
 This checkpoint adds `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v` for

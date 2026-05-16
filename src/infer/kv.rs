@@ -38,6 +38,17 @@ fn q8_direct_exact_old_attention_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn fp16_k_q4_v_direct_exact_old_attention_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
+        .map(|value| {
+            matches!(
+                value.as_str(),
+                "fp16-k-q4-v-direct" | "FP16-K-Q4-V-DIRECT" | "direct-fp16-k-q4-v"
+            )
+        })
+        .unwrap_or(false)
+}
+
 #[cfg(feature = "cuda")]
 pub fn with_exact_block_staging<R>(
     staging: Option<ExactBlockStagingPtrs>,
@@ -540,6 +551,22 @@ impl LoadedModel {
                         d_out,
                     );
                 }
+                if fp16_k_q4_v_exact_old_backing_enabled()
+                    && fp16_k_q4_v_direct_exact_old_attention_enabled()
+                {
+                    return kv
+                        .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                            &self.cuda,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            d_out,
+                        );
+                }
                 if exact_block_staging_enabled() {
                     if let Some(staging) = current_exact_block_staging() {
                         if q8_exact_old_backing_enabled() {
@@ -865,6 +892,22 @@ impl LoadedModel {
                     top_blocks,
                     d_out,
                 );
+            }
+            if fp16_k_q4_v_exact_old_backing_enabled()
+                && fp16_k_q4_v_direct_exact_old_attention_enabled()
+            {
+                return kv
+                    .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                        &self.cuda,
+                        physical_slot,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        recent_window,
+                        block_size,
+                        top_blocks,
+                        d_out,
+                    );
             }
             if exact_block_staging_enabled() {
                 if let Some(staging) = current_exact_block_staging() {

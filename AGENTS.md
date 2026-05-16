@@ -292,13 +292,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   and 4096 old/top4 plus recent/top4/top8/top16 matrix pass with the expected
   FP16 selected-context pass/fail pattern. Final KV allocation drops from 4.00
   GiB dense-equivalent to 2.97 GiB for the Llama-3.2-1B max-context allocation.
+  `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct` now enables an
+  experimental direct mixed attention backend that keeps old K in FP16 and
+  unpacks packed q4 old V inside attention instead of materializing selected old
+  V into FP16 staging. CUDA attention parity covers staged-vs-direct
+  FP16-K/q4-V. A bounded 2048 old/top_blocks=2 quality row passed and improved
+  decode time from 8.97 s staged-q4 to 4.94 s direct-q4 while keeping final KV
+  allocation at 2.97 GiB.
 - Next: avoid 8192 and server integration until exact-block quality is more
-  stable. Optimize the deployable mixed backing's q4 V staging/dequant overhead,
-  or prototype a direct FP16-K/q4-V attention path that avoids materializing old
-  V into FP16 staging. Also investigate top-block robustness or block promotion
-  for the non-monotonic top_blocks=8 selected-context failure before any 8192
-  sweep. Do not increase representative count or tune pure summary modes for
-  this path.
+  stable. Validate direct FP16-K/q4-V on the known 4096 rows
+  (old/top4 and recent/top4/top8/top16) before making it the recommended mixed
+  backend. Also investigate top-block robustness or block promotion for the
+  non-monotonic top_blocks=8 selected-context failure before any 8192 sweep. Do
+  not increase representative count or tune pure summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

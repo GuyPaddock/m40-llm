@@ -314,6 +314,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let d_q8_staged = ctx.device_malloc(bytes_q)?;
     let d_q8_direct = ctx.device_malloc(bytes_q)?;
     let d_mixed_staged = ctx.device_malloc(bytes_q)?;
+    let d_mixed_direct = ctx.device_malloc(bytes_q)?;
     let staging_capacity_tokens = recent_window + top_blocks * block_size;
     let staging =
         ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
@@ -383,6 +384,17 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
                 mixed_staging.ptrs(),
                 d_mixed_staged,
             )?;
+        kv_mixed.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_mixed_direct,
+        )?;
         ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     }
 
@@ -392,6 +404,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
     let mut q8_staged = vec![0f32; q_dim];
     let mut q8_direct = vec![0f32; q_dim];
     let mut mixed_staged = vec![0f32; q_dim];
+    let mut mixed_direct = vec![0f32; q_dim];
     unsafe {
         ctx.memcpy_d2h(
             dense.as_mut_ptr() as *mut c_void,
@@ -423,6 +436,11 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
             d_mixed_staged as *const c_void,
             bytes_q,
         )?;
+        ctx.memcpy_d2h(
+            mixed_direct.as_mut_ptr() as *mut c_void,
+            d_mixed_direct as *const c_void,
+            bytes_q,
+        )?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_dense)?;
         ctx.device_free(d_sparse)?;
@@ -430,15 +448,17 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         ctx.device_free(d_q8_staged)?;
         ctx.device_free(d_q8_direct)?;
         ctx.device_free(d_mixed_staged)?;
+        ctx.device_free(d_mixed_direct)?;
     }
 
-    for (idx, (((((&a, &b), &c), &q8), &q8_direct), &mixed)) in dense
+    for (idx, ((((((&a, &b), &c), &q8), &q8_direct), &mixed), &mixed_direct)) in dense
         .iter()
         .zip(&sparse)
         .zip(&staged)
         .zip(&q8_staged)
         .zip(&q8_direct)
         .zip(&mixed_staged)
+        .zip(&mixed_direct)
         .enumerate()
     {
         assert!(
@@ -460,6 +480,10 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         assert!(
             (c - mixed).abs() < 5e-2,
             "fp16-k/q4-v staged block-select-exact mismatch at {idx}: staged={c} mixed={mixed}"
+        );
+        assert!(
+            (mixed - mixed_direct).abs() < 1e-3,
+            "fp16-k/q4-v direct block-select-exact mismatch at {idx}: staged={mixed} direct={mixed_direct}"
         );
     }
 

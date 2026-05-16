@@ -134,6 +134,9 @@ fn exact_old_attention_backend_from_env() -> Option<String> {
         .as_deref()
     {
         Some("q8-direct") | Some("Q8-DIRECT") | Some("direct-q8") => Some("direct-q8".to_string()),
+        Some("fp16-k-q4-v-direct") | Some("FP16-K-Q4-V-DIRECT") | Some("direct-fp16-k-q4-v") => {
+            Some("fp16-k-q4-v-direct".to_string())
+        }
         _ => None,
     }
 }
@@ -799,7 +802,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                         .unwrap_or_else(|| "staged-q8".to_string()),
                 )
             } else if kv.exact_old_backing() == "fp16-k-q4-v" {
-                Some("staged-fp16-k-q4-v".to_string())
+                Some(
+                    exact_old_attention_backend_from_env()
+                        .unwrap_or_else(|| "staged-fp16-k-q4-v".to_string()),
+                )
             } else {
                 None
             }

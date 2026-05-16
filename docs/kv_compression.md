@@ -164,6 +164,13 @@ metadata for selecting old blocks. This mode does not allocate q8 old K/V and
 does not allocate the diagnostic dense FP16 shadow. It currently dequantizes
 selected q4 V into the reusable FP16 staging workspace before attention.
 
+Set `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct` with
+`M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v` to use the experimental direct mixed
+attention backend. This keeps old K in FP16, reads old V from the packed q4
+backing, and unpacks q4 V inside the attention value accumulation instead of
+materializing selected old V into FP16 staging. The staged mixed path remains
+the conservative default until the 4096 quality rows are validated.
+
 By default, q8 exact-old attention still dequantizes selected old blocks into
 the reusable FP16 staging workspace before attention. Set
 `M40LLM_KV_EXACT_OLD_ATTENTION=q8-direct` to use the experimental direct q8
