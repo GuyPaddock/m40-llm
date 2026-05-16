@@ -3162,6 +3162,19 @@ impl KVCache {
             } else {
                 0
             };
+            let q8_dense_shadow_bytes = if exact_old_backing == ExactOldBacking::Q8
+                && std::env::var("M40LLM_KV_Q8_DENSE_SHADOW")
+                    .map(|value| value == "1")
+                    .unwrap_or(false)
+            {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<half::f16>()
+                    * 2
+            } else {
+                0
+            };
             let actual_bytes = recent_bytes
                 + summary_f16_bytes
                 + summary_acc_bytes
@@ -3170,7 +3183,8 @@ impl KVCache {
                 + count_bytes
                 + seq_map_bytes
                 + q8_old_backing_bytes
-                + q8_old_backing_scale_bytes;
+                + q8_old_backing_scale_bytes
+                + q8_dense_shadow_bytes;
             let dense_equivalent_bytes = (max_seq_len as usize)
                 * (max_batch_size as usize)
                 * elems_per_token

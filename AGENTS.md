@@ -268,12 +268,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   FP16 exact, staged-q8, and direct-q8, isolating that failure to
   selected-context sensitivity at that top-block count. Direct-q8 matches
   staged-q8 in both rows, so it is not currently worse than staged q8 in these
-  diagnostics.
+  diagnostics. `M40LLM_KV_Q8_PRECISION_SPLIT_DIAG=1` now adds a diagnostic
+  dense-shadow path for q8 exact-block rows so old K and old V precision can be
+  split independently. The 4096 old/top_blocks=4 precision split shows FP16
+  K+FP16 V passes, q8 K+q8 V fails, FP16 K+q8 V passes, and q8 K+FP16 V fails.
+  Treat this as evidence that q8 K/scoring precision is the primary old/top4
+  failure source; V quantization alone did not fail in that diagnostic. The
+  dense shadow is diagnostic overhead, not a deployable memory-saving backend.
 - Next: avoid 8192 and server integration until exact-block quality is more
-  stable. Evaluate q8 quality at higher top_blocks and/or improve exact-old
-  representation quality, such as per-channel/group q8 or mixed precision for
-  high-sensitivity selected blocks. Do not increase representative count or tune
-  pure summary modes for this path.
+  stable. Focus on K-side exact-old representation quality, such as grouped or
+  per-channel q8 for K, mixed FP16-K/q8-V backing for high-sensitivity blocks,
+  or block promotion policies. Also finish the top-block robustness diagnostic
+  for recent/top_blocks=4/8/16 before any 8192 sweep. Do not increase
+  representative count or tune pure summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

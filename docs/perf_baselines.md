@@ -2,6 +2,63 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: 4096 Q8 K/V Precision Split Diagnostic
+
+This checkpoint adds `M40LLM_KV_Q8_PRECISION_SPLIT_DIAG=1`, a narrow
+quality-harness mode for the known 4096 old-needle `top_blocks=4` failure. It
+compares:
+
+- dense `off`
+- FP16 K + FP16 V exact selected blocks
+- q8 K + q8 V staged selected blocks
+- FP16 K + q8 V staged selected blocks
+- q8 K + FP16 V staged selected blocks
+
+The q8 mixed-precision rows allocate a diagnostic dense FP16 shadow of the old
+KV cache so K and V source precision can be split without changing normal q8
+runtime behavior. This makes `actual_allocated_bytes` larger than the real q8
+runtime and should be treated as diagnostic overhead only.
+
+Report:
+
+- `/tmp/m40-q8-precision-split.jsonl`
+- `/tmp/m40-top-block-robustness-1024.jsonl` (bounded wiring smoke only)
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test kv_compression_long_context`
+  passed.
+- `M40LLM_KV_Q8_PRECISION_SPLIT_DIAG=1` completed the 4096 old-needle
+  diagnostic on Llama-3.2-1B-Instruct F16. Total runtime was about 58.8 minutes.
+- `M40LLM_KV_TOP_BLOCK_ROBUSTNESS_DIAG=1 M40LLM_KV_QUALITY_TARGETS=1024`
+  passed as a bounded wiring smoke for recent needles at top_blocks 4/8/16
+  across FP16 exact, staged-q8, and direct-q8. This does not replace the
+  intended 4096 recent/top_blocks robustness run because 1024 has no old blocks
+  outside the recent ring.
+
+4096 old-needle precision split summary:
+
+| Backend | Top blocks | Status | Output | Decode time | Final KV bytes | Note |
+| --- | ---: | --- | --- | ---: | ---: | --- |
+| dense off | - | pass | `ZXQ-NEEDLE-41729` | 12.1 s | 4.00 GiB | reference |
+| FP16 K + FP16 V | 4 | pass | `ZXQ-NEEDLE-41729` | 9.9 s | 4.00 GiB | selected context is sufficient |
+| q8 K + q8 V | 4 | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | 18.9 s | 6.53 GiB | q8 diagnostic shadow included |
+| FP16 K + q8 V | 4 | pass | `ZXQ-NEEDLE-41729` | 11.6 s | 6.53 GiB | V quantization alone does not fail |
+| q8 K + FP16 V | 4 | fail | `ZXQ-NEEDLE-NEEDLE-NEEDLE-NE` | 19.0 s | 6.53 GiB | K quantization/scoring drives failure |
+
+Interpretation:
+
+- The old/top_blocks=4 quality failure is primarily K-side q8 drift. Keeping
+  old K in FP16 while using q8 V preserves the passing output; using q8 K fails
+  even when V is FP16.
+- This points toward K-sensitive exact-old backing designs: mixed precision for
+  K, higher precision/grouped K quantization, or per-block promotion of
+  high-sensitivity K blocks. It does not justify more representative tuning or
+  summary-only lossy tuning.
+- The dense-shadow diagnostic is intentionally not a memory-saving backend. It
+  exists to isolate K/V precision and should remain off by default.
+
 ## 2026-05-15: 4096 Q8 Drift vs Selected-Context Diagnostic
 
 This checkpoint adds `M40LLM_KV_Q8_DRIFT_DIAG=1`, a narrow quality-harness mode

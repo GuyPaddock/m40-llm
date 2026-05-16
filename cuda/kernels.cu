@@ -111,6 +111,29 @@ extern "C" {
         return std::strcmp(value, "chronological") == 0 ? 1u : 0u;
     }
 
+    static bool q8_dense_shadow_from_env() {
+        const char* split = std::getenv("M40LLM_KV_Q8_PRECISION_SPLIT_DIAG");
+        if (split && std::strcmp(split, "1") == 0) return true;
+        const char* value = std::getenv("M40LLM_KV_Q8_DENSE_SHADOW");
+        return value && std::strcmp(value, "1") == 0;
+    }
+
+    static uint32_t q8_old_k_source_from_env() {
+        const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
+        if (!value || value[0] == '\0') return 0u;
+        return std::strcmp(value, "fp16-k-q8-v") == 0 || std::strcmp(value, "fp16-k-fp16-v") == 0
+            ? 1u
+            : 0u;
+    }
+
+    static uint32_t q8_old_v_source_from_env() {
+        const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
+        if (!value || value[0] == '\0') return 0u;
+        return std::strcmp(value, "q8-k-fp16-v") == 0 || std::strcmp(value, "fp16-k-fp16-v") == 0
+            ? 1u
+            : 0u;
+    }
+
     __device__ void sort_selected_blocks_chronological(uint32_t* blocks, uint32_t count) {
         for (uint32_t i = 1; i < count; ++i) {
             const uint32_t key = blocks[i];
@@ -1967,6 +1990,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t top_blocks,
         uint32_t selected_capacity,
         uint32_t selected_block_order,
+        uint32_t old_k_source,
+        uint32_t old_v_source,
         __half* __restrict__ staged_k,
         __half* __restrict__ staged_v,
         uint32_t* __restrict__ staged_positions,
@@ -2007,7 +2032,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
                 const float ks = k_scale[scale_idx];
                 for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
-                    dot_part += qh[d] * ((float)q8_k[base + d] * ks);
+                    const float k_val = old_k_source == 1u && K
+                        ? __half2float(K[base + d])
+                        : (float)q8_k[base + d] * ks;
+                    dot_part += qh[d] * k_val;
                 }
             }
             reduce[tid] = dot_part;
@@ -2075,8 +2103,12 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             const float vs = old_token ? v_scale[scale_idx] : 0.0f;
             for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
                 if (old_token) {
-                    staged_k[dst + d] = __float2half_rn((float)q8_k[q8_src + d] * ks);
-                    staged_v[dst + d] = __float2half_rn((float)q8_v[q8_src + d] * vs);
+                    staged_k[dst + d] = old_k_source == 1u && K
+                        ? K[q8_src + d]
+                        : __float2half_rn((float)q8_k[q8_src + d] * ks);
+                    staged_v[dst + d] = old_v_source == 1u && V
+                        ? V[q8_src + d]
+                        : __float2half_rn((float)q8_v[q8_src + d] * vs);
                 } else if (recent_k && recent_v) {
                     const uint32_t ring = t % recent_window;
                     const size_t recent_src = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
@@ -3529,6 +3561,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
         const uint32_t selected_block_order = selected_block_order_from_env();
+        const uint32_t old_k_source = q8_old_k_source_from_env();
+        const uint32_t old_v_source = q8_old_v_source_from_env();
+        if ((old_k_source == 1u || old_v_source == 1u) && (!kv->d_k || !kv->d_v)) return -17;
         __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
         __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
         uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
@@ -3557,6 +3592,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             selected_old_blocks,
             selected_capacity,
             selected_block_order,
+            old_k_source,
+            old_v_source,
             staged_k,
             staged_v,
             staged_positions,
@@ -4522,6 +4559,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             m40llm_kvcache_destroy(kv);
             return nullptr;
         }
+        if (q8_old_backing != 0 && q8_dense_shadow_from_env()) {
+            const size_t dense_elems = kv_storage_elems(max_seq_len, max_batch_size, num_heads, head_dim);
+            const size_t dense_bytes = dense_elems * sizeof(__half);
+            err = cudaMalloc(&kv->d_k, dense_bytes);
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            err = cudaMalloc(&kv->d_v, dense_bytes);
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            cudaMemset(kv->d_k, 0, dense_bytes);
+            cudaMemset(kv->d_v, 0, dense_bytes);
+        }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
         cudaMemset(kv->d_recent_k, 0, recent_elems * sizeof(__half));
@@ -5026,6 +5073,30 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             if (q8_err != cudaSuccess) {
                 fprintf(stderr, "compressed q8 old append kernel launch error: %s\n", cudaGetErrorString(q8_err));
                 return -7;
+            }
+        }
+        if (kv->d_k && kv->d_v) {
+            const size_t pairs_per_token = elems_per_token / 2u;
+            const int shadow_blocks = (int)((pairs_per_token + threads - 1) / threads);
+            rope_k_append_f32_to_f16_h2_at_kernel<<<shadow_blocks, threads, 0, ctx->decode_stream>>>(
+                reinterpret_cast<const float*>(k_dev_f32),
+                reinterpret_cast<const float*>(v_dev_f32),
+                kv->d_k,
+                kv->d_v,
+                kv->d_seq_map,
+                seq_id,
+                kv->max_seq_len,
+                kv->num_heads,
+                kv->head_dim,
+                position,
+                nullptr,
+                freq_base,
+                freq_scale,
+                pairs_per_token);
+            cudaError_t shadow_err = cudaGetLastError();
+            if (shadow_err != cudaSuccess) {
+                fprintf(stderr, "compressed dense-shadow append kernel launch error: %s\n", cudaGetErrorString(shadow_err));
+                return -8;
             }
         }
         const int blocks = (int)((elems_per_token + threads - 1) / threads);

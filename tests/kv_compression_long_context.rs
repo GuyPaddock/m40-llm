@@ -505,7 +505,7 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
     }
 
     if !full_quality {
-        if q8_drift_diagnostic_enabled() {
+        if exact_q8_diagnostic_enabled() {
             return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
         }
         if exact_block_retrieval_sweep_enabled() {
@@ -582,6 +582,24 @@ fn q8_drift_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn q8_precision_split_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_Q8_PRECISION_SPLIT_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn top_block_robustness_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_TOP_BLOCK_ROBUSTNESS_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn exact_q8_diagnostic_enabled() -> bool {
+    q8_drift_diagnostic_enabled()
+        || q8_precision_split_diagnostic_enabled()
+        || top_block_robustness_diagnostic_enabled()
+}
+
 fn exact_block_staging_enabled() -> bool {
     std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -649,7 +667,11 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
         .map(|value| parse_u32_list(&value, "M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .transpose()?
         .unwrap_or_else(|| {
-            if q8_drift_diagnostic_enabled() {
+            if q8_precision_split_diagnostic_enabled() {
+                vec![4]
+            } else if top_block_robustness_diagnostic_enabled() {
+                vec![4, 8, 16]
+            } else if q8_drift_diagnostic_enabled() {
                 vec![4, 8]
             } else if exact_block_retrieval_sweep_enabled() {
                 vec![1, 2, 4, 8, 16]
@@ -667,28 +689,73 @@ struct ExactBlockBackendCase {
     variant: Option<&'static str>,
     exact_old_backing: Option<&'static str>,
     exact_old_attention: Option<&'static str>,
+    exact_old_precision: Option<&'static str>,
+    q8_dense_shadow: bool,
     staging: Option<&'static str>,
 }
 
 fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase> {
-    if q8_drift_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+    if q8_precision_split_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+        vec![
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-fp16-v"),
+                exact_old_backing: None,
+                exact_old_attention: None,
+                exact_old_precision: None,
+                q8_dense_shadow: false,
+                staging: None,
+            },
+            ExactBlockBackendCase {
+                variant: Some("q8-k-q8-v"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                exact_old_precision: Some("q8-k-q8-v"),
+                q8_dense_shadow: true,
+                staging: Some("1"),
+            },
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-q8-v"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                exact_old_precision: Some("fp16-k-q8-v"),
+                q8_dense_shadow: true,
+                staging: Some("1"),
+            },
+            ExactBlockBackendCase {
+                variant: Some("q8-k-fp16-v"),
+                exact_old_backing: Some("q8"),
+                exact_old_attention: None,
+                exact_old_precision: Some("q8-k-fp16-v"),
+                q8_dense_shadow: true,
+                staging: Some("1"),
+            },
+        ]
+    } else if (q8_drift_diagnostic_enabled() || top_block_robustness_diagnostic_enabled())
+        && mode == KvCompressMode::BlockSelectExact
+    {
         vec![
             ExactBlockBackendCase {
                 variant: Some("fp16-exact"),
                 exact_old_backing: None,
                 exact_old_attention: None,
+                exact_old_precision: None,
+                q8_dense_shadow: false,
                 staging: None,
             },
             ExactBlockBackendCase {
                 variant: Some("staged-q8"),
                 exact_old_backing: Some("q8"),
                 exact_old_attention: None,
+                exact_old_precision: Some("q8-k-q8-v"),
+                q8_dense_shadow: top_block_robustness_diagnostic_enabled(),
                 staging: Some("1"),
             },
             ExactBlockBackendCase {
                 variant: Some("direct-q8"),
                 exact_old_backing: Some("q8"),
                 exact_old_attention: Some("q8-direct"),
+                exact_old_precision: Some("q8-k-q8-v"),
+                q8_dense_shadow: false,
                 staging: Some("1"),
             },
         ]
@@ -697,6 +764,8 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase>
             variant: None,
             exact_old_backing: None,
             exact_old_attention: None,
+            exact_old_precision: None,
+            q8_dense_shadow: false,
             staging: None,
         }]
     }
@@ -706,17 +775,27 @@ fn apply_exact_block_backend_case(case: ExactBlockBackendCase) -> Vec<EnvVarGuar
     let mut guards = Vec::new();
     if let Some(value) = case.exact_old_backing {
         guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_OLD_BACKING", value));
-    } else if q8_drift_diagnostic_enabled() {
+    } else if exact_q8_diagnostic_enabled() {
         guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_OLD_BACKING"));
     }
     if let Some(value) = case.exact_old_attention {
         guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_OLD_ATTENTION", value));
-    } else if q8_drift_diagnostic_enabled() {
+    } else if exact_q8_diagnostic_enabled() {
         guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_OLD_ATTENTION"));
+    }
+    if let Some(value) = case.exact_old_precision {
+        guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_OLD_PRECISION", value));
+    } else if exact_q8_diagnostic_enabled() {
+        guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_OLD_PRECISION"));
+    }
+    if case.q8_dense_shadow {
+        guards.push(EnvVarGuard::set("M40LLM_KV_Q8_DENSE_SHADOW", "1"));
+    } else if exact_q8_diagnostic_enabled() {
+        guards.push(EnvVarGuard::unset("M40LLM_KV_Q8_DENSE_SHADOW"));
     }
     if let Some(value) = case.staging {
         guards.push(EnvVarGuard::set("M40LLM_KV_EXACT_BLOCK_STAGING", value));
-    } else if q8_drift_diagnostic_enabled() {
+    } else if exact_q8_diagnostic_enabled() {
         guards.push(EnvVarGuard::unset("M40LLM_KV_EXACT_BLOCK_STAGING"));
     }
     guards
@@ -791,7 +870,7 @@ fn quality_modes(
             KvCompressMode::RecentOnly,
             KvCompressMode::BlockSelectExact,
         ]
-    } else if q8_drift_diagnostic_enabled() || exact_block_retrieval_sweep_enabled() {
+    } else if exact_q8_diagnostic_enabled() || exact_block_retrieval_sweep_enabled() {
         &[KvCompressMode::Off, KvCompressMode::BlockSelectExact]
     } else if exact_selection_sweep {
         &[
@@ -862,7 +941,7 @@ fn run_retrieval_case(
 ) -> Result<(GeneratedText, usize, Option<u32>)> {
     let exact_selection_sweep = exact_selection_sweep_enabled()
         || exact_block_retrieval_sweep_enabled()
-        || q8_drift_diagnostic_enabled();
+        || exact_q8_diagnostic_enabled();
     let recent_equivalence_sequential = recent_equivalence_sequential_enabled();
     let _prefill_guard = if (lossy_packed_sweep_enabled()
         || (exact_selection_sweep
@@ -1578,7 +1657,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
     let lossy_packed_sweep = lossy_packed_sweep_enabled();
-    let exact_selection_sweep = exact_selection_sweep_enabled() || q8_drift_diagnostic_enabled();
+    let exact_selection_sweep = exact_selection_sweep_enabled() || exact_q8_diagnostic_enabled();
     let modes = quality_modes(lossy_packed_sweep, exact_selection_sweep);
     let rep_cases = representative_cases(lossy_packed_sweep);
     let needle_positions = needle_positions()?;
@@ -1607,6 +1686,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 1024,
             )?;
             for &mode in modes {
+                if q8_precision_split_diagnostic_enabled() && needle_position != "old" {
+                    continue;
+                }
+                if top_block_robustness_diagnostic_enabled() && needle_position != "recent" {
+                    continue;
+                }
                 let mode_rep_cases: Vec<RepresentativeCase> =
                     if matches!(mode, KvCompressMode::Off | KvCompressMode::DenseRecentOnly) {
                         vec![RepresentativeCase {
@@ -1624,6 +1709,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 (needle_position, top_blocks_case),
                                 ("old", Some(4)) | ("recent", Some(8))
                             )
+                        {
+                            continue;
+                        }
+                        if q8_precision_split_diagnostic_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && !matches!((needle_position, top_blocks_case), ("old", Some(4)))
+                        {
+                            continue;
+                        }
+                        if top_block_robustness_diagnostic_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && needle_position != "recent"
                         {
                             continue;
                         }
