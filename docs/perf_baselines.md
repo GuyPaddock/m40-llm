@@ -2,6 +2,57 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: Gated Fallback 4096 Matrix Diagnostic
+
+This checkpoint adds `M40LLM_KV_FALLBACK_DIAG=1`, a bounded diagnostic for
+direct FP16-K/q4-V exact-block retrieval. It keeps top-k as the primary policy,
+reuses the initial top-k generation per row, and tests whether answer-agnostic
+signals can selectively retry fragile rows with top16 support.
+
+Report:
+
+- `/tmp/m40-kv-fallback-4096-matrix.jsonl`
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the fallback matrix.
+
+Summary:
+
+| Needle | Case | Top blocks | Status | Triggered | Reason | Output | Active KV before | Active KV after | Decode total | Final KV |
+| --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| old | dense off | - | pass | - | - | `ZXQ-NEEDLE-41729` | - | 127.0 MiB | 12.072 s | 4.00 GiB |
+| old | topk | 4 | pass | false | - | `ZXQ-NEEDLE-41729` | 36.0 MiB | 36.0 MiB | 7.307 s | 2.97 GiB |
+| old | eot/low/score fallback cases | 4 | pass | false | - | `ZXQ-NEEDLE-41729` | 36.0 MiB | 36.0 MiB | 7.307 s | 2.97 GiB |
+| recent | dense off | - | pass | - | - | `ZXQ-NEEDLE-41729` | - | 127.4 MiB | 12.027 s | 4.00 GiB |
+| recent | topk | 4 | pass | false | - | `ZXQ-NEEDLE-41729` | 36.0 MiB | 36.0 MiB | 7.380 s | 2.97 GiB |
+| recent | eot/low/score fallback cases | 4 | pass | false | - | `ZXQ-NEEDLE-41729` | 36.0 MiB | 36.0 MiB | 7.380 s | 2.97 GiB |
+| recent | topk | 8 | fail | false | - | `ZXQ` | 40.0 MiB | 40.0 MiB | 1.768 s | 2.97 GiB |
+| recent | oracle-eot-top16 | 8 | pass | true | oracle partial answer / early EOT | `ZXQ-NEEDLE-41729` | 40.0 MiB | 48.0 MiB | 10.684 s | 2.97 GiB |
+| recent | eot-anomaly-top16 | 8 | pass | true | EOT anomaly | `ZXQ-NEEDLE-41729` | 40.0 MiB | 48.0 MiB | 10.679 s | 2.97 GiB |
+| recent | low-margin-top16 | 8 | pass | true | low top-token margin | `ZXQ-NEEDLE-41729` | 40.0 MiB | 48.0 MiB | 10.695 s | 2.97 GiB |
+| recent | score-spread-top16 | 8 | pass | true | score cutoff spread | `ZXQ-NEEDLE-41729` | 40.0 MiB | 48.0 MiB | 10.720 s | 2.97 GiB |
+| recent | topk | 16 | pass | false | - | `ZXQ-NEEDLE-41729` | 48.0 MiB | 48.0 MiB | 8.938 s | 2.97 GiB |
+| recent | eot/low/score fallback cases | 16 | pass | false | - | `ZXQ-NEEDLE-41729` | 48.0 MiB | 48.0 MiB | 8.938 s | 2.97 GiB |
+
+Interpretation:
+
+- The fallback diagnostic now preserves stable rows: old/top4, recent/top4, and
+  recent/top16 do not trigger retries and keep their original active KV.
+- The known recent/top8 top-k failure still emits only `ZXQ` with 40.0 MiB of
+  active attended KV.
+- Retrying recent/top8 with top16 recovers the exact answer for the oracle,
+  EOT-anomaly, low-margin, and score-spread cases, raising active attended KV to
+  48.0 MiB while keeping final allocated KV at 2.97 GiB.
+- The oracle case is answer-aware and should remain diagnostic-only. The
+  answer-agnostic signals are promising, but they need validation on multiple
+  prompt types before becoming a preferred runtime fallback.
+- Do not run 8192 or server integration yet; the next step is validating the
+  answer-agnostic gates outside the needle benchmark.
+
 ## 2026-05-17: Anchor-Neighbor 4096 Matrix Validation
 
 This checkpoint adds `M40LLM_KV_ANCHOR_NEIGHBOR_VALIDATE=1`, a bounded matrix

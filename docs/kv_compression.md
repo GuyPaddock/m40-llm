@@ -202,6 +202,35 @@ for dense `off` plus direct FP16-K/q4-V `block-select-exact`. It compares
 `topk` with `anchor-neighbors` for old/top4 and recent/top4/top8/top16. Use
 this before treating anchor-neighbor promotion as a candidate default.
 
+`M40LLM_KV_FALLBACK_DIAG=1` runs the bounded fallback diagnostic for direct
+FP16-K/q4-V exact-block retrieval. It keeps top-k as the primary policy and
+tests whether answer-agnostic retry gates can selectively expand fragile rows to
+top16 without increasing active KV for already-stable rows. The matrix is
+limited to old/top4 and recent/top4/top8/top16 at 4096 tokens.
+
+Fallback rows include:
+
+- `fallback_case`: `topk`, `oracle-eot-top16`, `eot-anomaly-top16`,
+  `low-margin-top16`, or `score-spread-top16`.
+- `fallback_triggered`
+- `fallback_trigger_reason`
+- `fallback_policy_used`
+- `initial_output`
+- `initial_active_kv_bytes_all_layers`
+- `fallback_active_kv_bytes_all_layers`
+- `initial_decode_elapsed_ms`
+- `fallback_decode_elapsed_ms`
+- `total_decode_elapsed_ms_with_retry`
+- `initial_eot_rank_min`
+- `initial_eot_logit_margin_min`
+- `initial_top_margin_min`
+- `score_cutoff_margin`
+
+`oracle-eot-top16` is answer-aware and exists only as a diagnostic baseline.
+Runtime policy work should prefer answer-agnostic gates such as EOT confidence
+anomalies, low top-token margin, score-spread near the block cutoff, or a fixed
+conservative top-block cap when quality is more important than active-KV size.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the

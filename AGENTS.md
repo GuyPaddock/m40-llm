@@ -323,14 +323,25 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `block-select-exact`. That matrix confirms anchor-neighbors fixes recent/top8
   and preserves old/top4 plus recent/top16, but it regresses the previously
   passing recent/top4 row to `QXZNEEDLE41729`. Do not make anchor-neighbors the
-  preferred policy as-is.
+  preferred policy as-is. `M40LLM_KV_FALLBACK_DIAG=1` now runs a bounded 4096
+  fallback matrix for direct FP16-K/q4-V exact-block retrieval. It keeps top-k
+  as the primary policy and retries fragile rows with top16 only when a
+  diagnostic gate fires. Stable old/top4, recent/top4, and recent/top16 rows do
+  not trigger retries and keep their original active KV. The known recent/top8
+  failure still emits `ZXQ` with top-k, but the oracle, EOT-anomaly,
+  low-margin, and score-spread gates all recover `ZXQ-NEEDLE-41729` by retrying
+  with top16, raising active attended KV from 40.0 MiB to 48.0 MiB while keeping
+  final allocated KV at 2.97 GiB. The oracle gate is answer-aware and
+  diagnostic-only; the answer-agnostic gates need validation on other prompt
+  types before they become a preferred runtime policy.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. The next policy step should be a
-  selective promotion rule that fixes recent/top8 without applying harmful
-  anchor-neighbor blocks to already-stable top4 rows. Do not increase
-  representative count, tune pure summary modes, run 8192, or expand compressed
-  KV into server scheduling yet.
+  attention backend, but keep it opt-in. The next policy step should validate
+  the answer-agnostic fallback gates on multiple prompt types, then decide
+  whether EOT-anomaly, low-margin, score-spread, or a conservative top16 quality
+  mode is the safest deployable rule. Do not increase representative count,
+  tune pure summary modes, run 8192, or expand compressed KV into server
+  scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

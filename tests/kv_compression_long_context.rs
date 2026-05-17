@@ -89,6 +89,20 @@ struct CaseRecord {
     prefill_mode: String,
     top_blocks: Option<u32>,
     block_policy_case: Option<String>,
+    fallback_case: Option<String>,
+    fallback_triggered: bool,
+    fallback_trigger_reason: Option<String>,
+    fallback_policy_used: Option<String>,
+    initial_output: Option<String>,
+    initial_active_kv_bytes_all_layers: Option<usize>,
+    fallback_active_kv_bytes_all_layers: Option<usize>,
+    initial_decode_elapsed_ms: Option<u128>,
+    fallback_decode_elapsed_ms: Option<u128>,
+    total_decode_elapsed_ms_with_retry: Option<u128>,
+    initial_eot_rank_min: Option<usize>,
+    initial_eot_logit_margin_min: Option<f32>,
+    initial_top_margin_min: Option<f32>,
+    score_cutoff_margin: Option<f32>,
     block_select_policy: String,
     block_score_delta: Option<f32>,
     block_min_blocks: Option<u32>,
@@ -195,6 +209,14 @@ struct GeneratedLogitTraceRecord {
     max_logit_diff: Option<f32>,
     mean_logit_diff: Option<f32>,
     top10_overlap: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct FallbackSignalSummary {
+    eot_rank_min: Option<usize>,
+    eot_logit_margin_min: Option<f32>,
+    top_margin_min: Option<f32>,
+    sampled_eot_early: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -524,6 +546,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
         if anchor_neighbor_validation_enabled() {
             return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
         }
+        if fallback_diagnostic_enabled() {
+            return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
+        }
         if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
                 .into_iter()
@@ -562,6 +587,9 @@ fn needle_positions() -> Result<Vec<&'static str>> {
         return Ok(vec!["recent"]);
     }
     if anchor_neighbor_validation_enabled() {
+        return Ok(vec!["old", "recent"]);
+    }
+    if fallback_diagnostic_enabled() {
         return Ok(vec!["old", "recent"]);
     }
     let Some(value) = std::env::var("M40LLM_KV_QUALITY_NEEDLES")
@@ -655,6 +683,12 @@ fn anchor_neighbor_validation_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn fallback_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_FALLBACK_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn exact_q8_diagnostic_enabled() -> bool {
     q8_drift_diagnostic_enabled()
         || q8_precision_split_diagnostic_enabled()
@@ -664,6 +698,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || top_block_robustness_diagnostic_enabled()
         || policy_diagnostic_enabled()
         || anchor_neighbor_validation_enabled()
+        || fallback_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -682,6 +717,7 @@ fn logit_compare_enabled() -> bool {
     q4_v_diagnostic_enabled()
         || policy_diagnostic_enabled()
         || anchor_neighbor_validation_enabled()
+        || fallback_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -859,7 +895,7 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
                 vec![4, 8, 16]
             } else if policy_diagnostic_enabled() {
                 vec![8]
-            } else if anchor_neighbor_validation_enabled() {
+            } else if anchor_neighbor_validation_enabled() || fallback_diagnostic_enabled() {
                 vec![4, 8, 16]
             } else if q8_drift_diagnostic_enabled() {
                 vec![4, 8]
@@ -893,6 +929,45 @@ struct BlockPolicyCase {
     min_blocks: Option<&'static str>,
     max_blocks: Option<&'static str>,
     anchors: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FallbackCase {
+    name: &'static str,
+    retry_top_blocks: Option<u32>,
+}
+
+type RetrievalCaseResult = Result<(GeneratedText, usize, Option<u32>), String>;
+
+fn fallback_cases() -> Vec<FallbackCase> {
+    if !fallback_diagnostic_enabled() {
+        return vec![FallbackCase {
+            name: "none",
+            retry_top_blocks: None,
+        }];
+    }
+    vec![
+        FallbackCase {
+            name: "topk",
+            retry_top_blocks: None,
+        },
+        FallbackCase {
+            name: "oracle-eot-top16",
+            retry_top_blocks: Some(16),
+        },
+        FallbackCase {
+            name: "eot-anomaly-top16",
+            retry_top_blocks: Some(16),
+        },
+        FallbackCase {
+            name: "low-margin-top16",
+            retry_top_blocks: Some(16),
+        },
+        FallbackCase {
+            name: "score-spread-top16",
+            retry_top_blocks: Some(16),
+        },
+    ]
 }
 
 fn block_policy_cases(top_blocks: Option<u32>) -> Vec<BlockPolicyCase> {
@@ -1155,7 +1230,9 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Result<Vec<ExactBlockBacke
                 staging: None,
             },
         ]
-    } else if (policy_diagnostic_enabled() || anchor_neighbor_validation_enabled())
+    } else if (policy_diagnostic_enabled()
+        || anchor_neighbor_validation_enabled()
+        || fallback_diagnostic_enabled())
         && mode == KvCompressMode::BlockSelectExact
     {
         vec![ExactBlockBackendCase {
@@ -1810,6 +1887,21 @@ fn active_kv_working_set(
     })
 }
 
+fn active_kv_bytes_for_selection(
+    mode: KvCompressMode,
+    prompt_tokens: usize,
+    top_blocks: Option<u32>,
+    selection: Option<&m40_llm::kv_selection::KvSelectionSummary>,
+    accounting: ActiveKvAccounting,
+) -> Option<usize> {
+    let accounting_top_blocks = first_selection_record_blocks(selection)
+        .as_ref()
+        .map(|selected| selected.len() as u32)
+        .or(top_blocks);
+    active_kv_working_set(mode, prompt_tokens, accounting_top_blocks, accounting)
+        .map(|working| working.bytes_all_layers)
+}
+
 fn top_token_ids(logits: &[f32], k: usize) -> Vec<u32> {
     let mut top: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
     top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
@@ -1875,6 +1967,104 @@ fn top_token_with_logit(logits: &[f32]) -> Option<(u32, f32)> {
         .enumerate()
         .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
         .map(|(idx, logit)| (idx as u32, logit))
+}
+
+fn top2_logit_margin(logits: &[f32]) -> Option<f32> {
+    let mut first = f32::NEG_INFINITY;
+    let mut second = f32::NEG_INFINITY;
+    for &logit in logits {
+        if logit > first {
+            second = first;
+            first = logit;
+        } else if logit > second {
+            second = logit;
+        }
+    }
+    first
+        .is_finite()
+        .then_some(first - second)
+        .filter(|margin| margin.is_finite())
+}
+
+fn fallback_signal_summary(trace: Option<&[GeneratedLogitTraceStep]>) -> FallbackSignalSummary {
+    let Some(trace) = trace else {
+        return FallbackSignalSummary::default();
+    };
+    let eot_token = 128009usize;
+    let mut summary = FallbackSignalSummary::default();
+    for step in trace {
+        let early_step = step.step < 4;
+        if step.sampled_token_id as usize == eot_token && early_step {
+            summary.sampled_eot_early = true;
+        }
+        if let Some(logits) = (!step.logits.is_empty()).then_some(step.logits.as_slice()) {
+            if let Some(eot_logit) = early_step.then(|| logits.get(eot_token).copied()).flatten() {
+                let rank = 1 + logits.iter().filter(|logit| **logit > eot_logit).count();
+                summary.eot_rank_min = Some(summary.eot_rank_min.map_or(rank, |old| old.min(rank)));
+                if let Some((_, top_logit)) = top_token_with_logit(logits) {
+                    let margin = top_logit - eot_logit;
+                    summary.eot_logit_margin_min = Some(
+                        summary
+                            .eot_logit_margin_min
+                            .map_or(margin, |old| old.min(margin)),
+                    );
+                }
+            }
+            if let Some(margin) = top2_logit_margin(logits) {
+                summary.top_margin_min =
+                    Some(summary.top_margin_min.map_or(margin, |old| old.min(margin)));
+            }
+        }
+    }
+    summary
+}
+
+fn score_cutoff_margin(summary: Option<&m40_llm::kv_selection::KvSelectionSummary>) -> Option<f32> {
+    let record = summary?.selection_records.first()?;
+    let mut scores: Vec<f32> = record
+        .selected_blocks
+        .iter()
+        .map(|block| block.score)
+        .filter(|score| score.is_finite())
+        .collect();
+    scores.sort_by(|a, b| f32::total_cmp(b, a));
+    scores
+        .windows(2)
+        .map(|pair| pair[0] - pair[1])
+        .filter(|margin| margin.is_finite())
+        .min_by(f32::total_cmp)
+}
+
+fn fallback_trigger_reason_for_case(
+    case: FallbackCase,
+    output: &str,
+    signals: &FallbackSignalSummary,
+    cutoff_margin: Option<f32>,
+) -> Option<String> {
+    if output.contains(NEEDLE) {
+        return None;
+    }
+    match case.name {
+        "oracle-eot-top16" => signals
+            .sampled_eot_early
+            .then_some("oracle:partial-answer-or-early-eot".to_string()),
+        "eot-anomaly-top16" => {
+            let rank_trigger = signals.eot_rank_min.is_some_and(|rank| rank <= 2);
+            let margin_trigger = signals
+                .eot_logit_margin_min
+                .is_some_and(|margin| margin <= 1.0);
+            (signals.sampled_eot_early || rank_trigger || margin_trigger)
+                .then_some("eot-anomaly".to_string())
+        }
+        "low-margin-top16" => signals
+            .top_margin_min
+            .is_some_and(|margin| margin <= 0.75)
+            .then_some("low-top-token-margin".to_string()),
+        "score-spread-top16" => cutoff_margin
+            .is_some_and(|margin| margin <= 0.10)
+            .then_some("score-cutoff-spread".to_string()),
+        _ => None,
+    }
 }
 
 fn generated_trace_records(
@@ -1970,7 +2160,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} block_policy_case={:?} block_policy={} policy(delta={:?},min={:?},max={:?}) base_selected={:?} policy_added={:?} final_selected={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) old_k_fp16_bytes={:?} q4_v(payload_bytes={:?},scale_bytes={:?}) recent_fp16_bytes={:?} summary_index_bytes={:?} staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} block_policy_case={:?} fallback(case={:?},triggered={},reason={:?},policy={:?},initial_output={:?},initial_kv={:?},fallback_kv={:?},initial_decode={:?},fallback_decode={:?},total_retry_decode={:?},eot_rank={:?},eot_margin={:?},top_margin={:?},score_margin={:?}) block_policy={} policy(delta={:?},min={:?},max={:?}) base_selected={:?} policy_added={:?} final_selected={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) old_k_fp16_bytes={:?} q4_v(payload_bytes={:?},scale_bytes={:?}) recent_fp16_bytes={:?} summary_index_bytes={:?} staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1980,6 +2170,20 @@ fn print_records(records: &[CaseRecord]) {
             record.representative_policy,
             record.top_blocks,
             record.block_policy_case,
+            record.fallback_case,
+            record.fallback_triggered,
+            record.fallback_trigger_reason,
+            record.fallback_policy_used,
+            record.initial_output,
+            record.initial_active_kv_bytes_all_layers,
+            record.fallback_active_kv_bytes_all_layers,
+            record.initial_decode_elapsed_ms,
+            record.fallback_decode_elapsed_ms,
+            record.total_decode_elapsed_ms_with_retry,
+            record.initial_eot_rank_min,
+            record.initial_eot_logit_margin_min,
+            record.initial_top_margin_min,
+            record.score_cutoff_margin,
             record.block_select_policy,
             record.block_score_delta,
             record.block_min_blocks,
@@ -2202,6 +2406,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         {
                             continue;
                         }
+                        if fallback_diagnostic_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && !matches!(
+                                (needle_position, top_blocks_case),
+                                ("old", Some(4))
+                                    | ("recent", Some(4))
+                                    | ("recent", Some(8))
+                                    | ("recent", Some(16))
+                            )
+                        {
+                            continue;
+                        }
                         if q4_v_diagnostic_enabled()
                             && mode == KvCompressMode::BlockSelectExact
                             && !matches!(
@@ -2233,597 +2449,815 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         for policy_case in block_policy_cases(top_blocks_case) {
                             let _policy_guards = apply_block_policy_case(policy_case);
                             let top_blocks_case = policy_case.top_blocks;
-                            for backend_case in exact_block_backend_cases(mode)? {
-                                let _backend_guards = apply_exact_block_backend_case(backend_case);
-                                let exact_block_backend_variant =
-                                    backend_case.variant.map(str::to_string);
-                                let top_blocks = top_blocks_case.unwrap_or(16);
-                                let mut prompt_tokens = 0usize;
-                                let mut generated_tokens = 0usize;
-                                let mut prompt_prefill_elapsed_ms = 0u128;
-                                let mut generated_decode_elapsed_ms = 0u128;
-                                let mut total_elapsed_ms = 0u128;
-                                let mut attention_compression_elapsed_ms = None;
-                                let mut prefill_chunk_size = None;
-                                let mut compressed_prefill_chunk_size = None;
-                                let mut temporary_dense_kv_bytes = None;
-                                let mut final_kv_allocated_bytes = None;
-                                let mut dense_equivalent_kv_bytes = None;
-                                let mut exact_old_backing = None;
-                                let mut exact_old_attention_backend = None;
-                                let mut q8_old_backing_bytes = None;
-                                let mut q8_old_backing_scale_bytes = None;
-                                let mut old_k_fp16_bytes = None;
-                                let mut q4_old_v_payload_bytes = None;
-                                let mut q4_old_v_scale_bytes = None;
-                                let mut recent_fp16_bytes = None;
-                                let mut summary_index_bytes = None;
-                                let mut staged_workspace_reused = false;
-                                let mut staged_workspace_bytes = None;
-                                let mut staged_workspace_capacity_tokens = None;
-                                let mut staged_workspace_allocations = 0usize;
-                                let mut prefill_mode = "error".to_string();
-                                let mut selection_summary = None;
-                                let mut needle_block_index = None;
-                                let mut prompt_logits = None;
-                                let mut first_decode_logits = None;
-                                let mut generated_logit_trace_raw: Option<
-                                    Vec<GeneratedLogitTraceStep>,
-                                > = None;
-                                let (mut status, output, error) = match run_retrieval_case(
-                                    &mut model,
-                                    &tokenizer,
-                                    target_tokens,
-                                    needle_position,
-                                    mode,
-                                    rep_case,
-                                    top_blocks,
-                                ) {
-                                    Ok((generated, _preformatted_prompt_tokens, needle_block)) => {
-                                        prompt_tokens = generated.prompt_token_len;
-                                        generated_tokens = generated
-                                            .token_ids
-                                            .len()
-                                            .saturating_sub(generated.prompt_token_len);
-                                        prompt_prefill_elapsed_ms =
-                                            generated.prompt_prefill_elapsed_ms;
-                                        generated_decode_elapsed_ms =
-                                            generated.generated_decode_elapsed_ms;
-                                        total_elapsed_ms = generated.total_elapsed_ms;
-                                        attention_compression_elapsed_ms =
-                                            generated.attention_compression_elapsed_ms;
-                                        prefill_chunk_size = generated.prefill_chunk_size;
-                                        compressed_prefill_chunk_size =
-                                            generated.compressed_prefill_chunk_size;
-                                        temporary_dense_kv_bytes =
-                                            generated.temporary_dense_kv_bytes;
-                                        final_kv_allocated_bytes =
-                                            generated.final_kv_allocated_bytes;
-                                        dense_equivalent_kv_bytes =
-                                            generated.dense_equivalent_kv_bytes;
-                                        exact_old_backing = generated.exact_old_backing.clone();
-                                        exact_old_attention_backend =
-                                            generated.exact_old_attention_backend.clone();
-                                        q8_old_backing_bytes = generated.q8_old_backing_bytes;
-                                        q8_old_backing_scale_bytes =
-                                            generated.q8_old_backing_scale_bytes;
-                                        old_k_fp16_bytes = generated.old_k_fp16_bytes;
-                                        q4_old_v_payload_bytes = generated.q4_old_v_payload_bytes;
-                                        q4_old_v_scale_bytes = generated.q4_old_v_scale_bytes;
-                                        recent_fp16_bytes = generated.recent_fp16_bytes;
-                                        summary_index_bytes = generated.summary_index_bytes;
-                                        staged_workspace_reused = generated.staged_workspace_reused;
-                                        staged_workspace_bytes = generated.staged_workspace_bytes;
-                                        staged_workspace_capacity_tokens =
-                                            generated.staged_workspace_capacity_tokens;
-                                        staged_workspace_allocations =
-                                            generated.staged_workspace_allocations;
-                                        prefill_mode = generated.prefill_mode.clone();
-                                        selection_summary = generated.kv_selection.clone();
-                                        needle_block_index = needle_block;
-                                        prompt_logits = generated.prompt_logits.clone();
-                                        first_decode_logits = generated.first_decode_logits.clone();
-                                        generated_logit_trace_raw =
-                                            generated.generated_logit_trace.clone();
-                                        let passed = generated.output.contains(NEEDLE);
-                                        if mode == KvCompressMode::Off {
-                                            dense_passed = Some(passed);
-                                            dense_prompt_logits = generated.prompt_logits.clone();
-                                            dense_first_decode_logits =
-                                                generated.first_decode_logits.clone();
-                                            dense_generated_logit_trace =
-                                                generated.generated_logit_trace.clone();
-                                        } else if mode == KvCompressMode::DenseRecentOnly {
-                                            dense_window_prompt_logits =
-                                                generated.prompt_logits.clone();
-                                            dense_window_first_decode_logits =
-                                                generated.first_decode_logits.clone();
-                                        }
-                                        if q4_v_diagnostic_enabled()
-                                            && mode == KvCompressMode::BlockSelectExact
-                                            && exact_block_backend_variant.as_deref()
-                                                == Some("fp16-k-fp16-v")
-                                        {
-                                            exact_reference_prompt_logits =
-                                                generated.prompt_logits.clone();
-                                            exact_reference_first_decode_logits =
-                                                generated.first_decode_logits.clone();
-                                            exact_reference_generated_logit_trace =
-                                                generated.generated_logit_trace.clone();
-                                        }
-                                        let status = if passed {
-                                            CaseStatus::Pass
-                                        } else {
-                                            CaseStatus::Fail
-                                        };
-                                        (status, generated.output, None)
-                                    }
-                                    Err(err) => {
-                                        if mode == KvCompressMode::Off {
-                                            dense_passed = Some(false);
-                                        }
-                                        (CaseStatus::Error, String::new(), Some(err.to_string()))
-                                    }
-                                };
-                                if mode != KvCompressMode::Off && dense_passed == Some(false) {
-                                    status = CaseStatus::Inconclusive;
-                                }
-                                let selected_block_indices = selection_summary
-                                    .as_ref()
-                                    .map(|summary| summary.selected_block_indices.clone());
-                                let final_selected_block_indices =
-                                    first_selection_record_blocks(selection_summary.as_ref());
-                                let (base_selected_block_indices, policy_added_block_indices) =
-                                    base_and_added_blocks(
-                                        final_selected_block_indices.as_ref(),
-                                        top_blocks_case,
-                                    );
-                                let selected_block_score_entries =
-                                    selection_summary.as_ref().map(selected_block_entry_strings);
-                                let selection_records =
-                                    selection_summary.as_ref().map(selection_record_strings);
-                                let selected_blocks_score_order_is_chronological =
-                                    selection_summary
-                                        .as_ref()
-                                        .and_then(first_selection_is_chronological);
-                                let selected_block_order = selected_block_order();
-                                let selected_blocks_attention_order_is_chronological =
-                                    if selected_block_order == "chronological" {
-                                        Some(true)
-                                    } else {
-                                        selected_blocks_score_order_is_chronological
-                                    };
-                                let needle_block_selected = needle_block_index.map(|needle| {
-                                    selected_block_indices
-                                        .as_ref()
-                                        .is_some_and(|selected| selected.contains(&needle))
-                                });
-                                let needle_block_rank = needle_block_index.and_then(|needle| {
-                                    selected_block_indices.as_ref().and_then(|selected| {
-                                        selected
-                                            .iter()
-                                            .position(|block| *block == needle)
-                                            .map(|rank| rank as u32)
-                                    })
-                                });
-                                let total_old_blocks = selection_summary
-                                    .as_ref()
-                                    .map(|summary| summary.total_old_blocks);
-                                let attention = selection_summary
-                                    .as_ref()
-                                    .and_then(|summary| summary.attention.as_ref());
-                                let attention_selected_block_masses =
-                                    attention.map(attention_block_mass_strings);
-                                let (
-                                    attention_candidate_position_min,
-                                    attention_candidate_position_max,
-                                    attention_candidate_order_is_chronological,
-                                ) = selection_summary
-                                    .as_ref()
-                                    .map(|summary| {
-                                        first_attention_candidate_bounds(
-                                            summary,
-                                            position_meta.recent_ring_absolute_start,
-                                            position_meta.recent_ring_absolute_end,
-                                        )
-                                    })
-                                    .unwrap_or((None, None, None));
-                                let attention_candidate_order_is_chronological =
-                                    if selected_block_order == "chronological"
-                                        && selection_summary.is_some()
+                            let mut fallback_initial_cache: Option<RetrievalCaseResult> = None;
+                            let fallback_cases = if fallback_diagnostic_enabled()
+                                && mode == KvCompressMode::BlockSelectExact
+                            {
+                                fallback_cases()
+                            } else {
+                                vec![FallbackCase {
+                                    name: "none",
+                                    retry_top_blocks: None,
+                                }]
+                            };
+                            for fallback_case in fallback_cases {
+                                for backend_case in exact_block_backend_cases(mode)? {
+                                    let _backend_guards =
+                                        apply_exact_block_backend_case(backend_case);
+                                    let exact_block_backend_variant =
+                                        backend_case.variant.map(str::to_string);
+                                    let top_blocks = top_blocks_case.unwrap_or(16);
+                                    let mut prompt_tokens = 0usize;
+                                    let mut generated_tokens = 0usize;
+                                    let mut prompt_prefill_elapsed_ms = 0u128;
+                                    let mut generated_decode_elapsed_ms = 0u128;
+                                    let mut total_elapsed_ms = 0u128;
+                                    let mut attention_compression_elapsed_ms = None;
+                                    let mut prefill_chunk_size = None;
+                                    let mut compressed_prefill_chunk_size = None;
+                                    let mut temporary_dense_kv_bytes = None;
+                                    let mut final_kv_allocated_bytes = None;
+                                    let mut dense_equivalent_kv_bytes = None;
+                                    let mut exact_old_backing = None;
+                                    let mut exact_old_attention_backend = None;
+                                    let mut q8_old_backing_bytes = None;
+                                    let mut q8_old_backing_scale_bytes = None;
+                                    let mut old_k_fp16_bytes = None;
+                                    let mut q4_old_v_payload_bytes = None;
+                                    let mut q4_old_v_scale_bytes = None;
+                                    let mut recent_fp16_bytes = None;
+                                    let mut summary_index_bytes = None;
+                                    let mut staged_workspace_reused = false;
+                                    let mut staged_workspace_bytes = None;
+                                    let mut staged_workspace_capacity_tokens = None;
+                                    let mut staged_workspace_allocations = 0usize;
+                                    let mut prefill_mode = "error".to_string();
+                                    let mut selection_summary = None;
+                                    let mut needle_block_index = None;
+                                    let mut prompt_logits = None;
+                                    let mut first_decode_logits = None;
+                                    let mut generated_logit_trace_raw: Option<
+                                        Vec<GeneratedLogitTraceStep>,
+                                    > = None;
+                                    let mut fallback_triggered = false;
+                                    let mut fallback_trigger_reason = None;
+                                    let mut fallback_policy_used = None;
+                                    let mut initial_output = None;
+                                    let mut initial_active_kv_bytes_all_layers = None;
+                                    let mut fallback_active_kv_bytes_all_layers = None;
+                                    let mut initial_decode_elapsed_ms = None;
+                                    let mut fallback_decode_elapsed_ms = None;
+                                    let mut total_decode_elapsed_ms_with_retry = None;
+                                    let mut initial_eot_rank_min = None;
+                                    let mut initial_eot_logit_margin_min = None;
+                                    let mut initial_top_margin_min = None;
+                                    let mut cutoff_margin = None;
+                                    let retrieval_result = if fallback_diagnostic_enabled()
+                                        && mode == KvCompressMode::BlockSelectExact
                                     {
-                                        Some(true)
-                                    } else {
-                                        attention_candidate_order_is_chronological
-                                    };
-                                let prompt_logit_diff = if logit_compare_enabled() {
-                                    let reference = if q4_v_diagnostic_enabled() {
-                                        exact_reference_prompt_logits.as_deref()
-                                    } else {
-                                        dense_prompt_logits.as_deref()
-                                    };
-                                    reference.zip(prompt_logits.as_deref()).and_then(
-                                        |(dense, compressed)| logit_diff_summary(dense, compressed),
-                                    )
-                                } else {
-                                    None
-                                };
-                                let first_decode_logit_diff = if logit_compare_enabled() {
-                                    let reference = if q4_v_diagnostic_enabled() {
-                                        exact_reference_first_decode_logits.as_deref()
-                                    } else {
-                                        dense_first_decode_logits.as_deref()
-                                    };
-                                    reference.zip(first_decode_logits.as_deref()).and_then(
-                                        |(dense, compressed)| logit_diff_summary(dense, compressed),
-                                    )
-                                } else {
-                                    None
-                                };
-                                let prompt_dense_window_diff = if logit_compare_enabled() {
-                                    dense_window_prompt_logits
-                                        .as_deref()
-                                        .zip(prompt_logits.as_deref())
-                                        .and_then(|(window, compressed)| {
-                                            logit_diff_summary(window, compressed)
-                                        })
-                                } else {
-                                    None
-                                };
-                                let first_decode_dense_window_diff = if logit_compare_enabled() {
-                                    dense_window_first_decode_logits
-                                        .as_deref()
-                                        .zip(first_decode_logits.as_deref())
-                                        .and_then(|(window, compressed)| {
-                                            logit_diff_summary(window, compressed)
-                                        })
-                                } else {
-                                    None
-                                };
-                                let expected_token_window_logits = if logit_compare_enabled() {
-                                    expected_token_summary(
-                                        dense_prompt_logits.as_deref(),
-                                        dense_window_prompt_logits.as_deref(),
-                                        position_meta.expected_first_answer_token_id,
-                                    )
-                                } else {
-                                    ExpectedTokenLogitSummary {
-                                        rank_dense: None,
-                                        rank_compressed: None,
-                                        logit_dense: None,
-                                        logit_compressed: None,
-                                    }
-                                };
-                                let expected_token_logits = if logit_compare_enabled() {
-                                    let reference = if q4_v_diagnostic_enabled() {
-                                        exact_reference_prompt_logits.as_deref()
-                                    } else {
-                                        dense_prompt_logits.as_deref()
-                                    };
-                                    expected_token_summary(
-                                        reference,
-                                        prompt_logits.as_deref(),
-                                        position_meta.expected_first_answer_token_id,
-                                    )
-                                } else {
-                                    ExpectedTokenLogitSummary {
-                                        rank_dense: None,
-                                        rank_compressed: None,
-                                        logit_dense: None,
-                                        logit_compressed: None,
-                                    }
-                                };
-                                let generated_logit_trace = generated_trace_records(
-                                    if q4_v_diagnostic_enabled() {
-                                        exact_reference_generated_logit_trace.as_deref()
-                                    } else {
-                                        dense_generated_logit_trace.as_deref()
-                                    },
-                                    generated_logit_trace_raw.as_deref(),
-                                    position_meta.expected_first_answer_token_id,
-                                );
-                                let accounting_top_blocks = final_selected_block_indices
-                                    .as_ref()
-                                    .map(|selected| selected.len() as u32)
-                                    .or(top_blocks_case);
-                                let active_kv = active_kv_working_set(
-                                    mode,
-                                    prompt_tokens,
-                                    accounting_top_blocks,
-                                    ActiveKvAccounting {
-                                        recent_window: 1024,
-                                        block_size: 32,
-                                        kv_heads: config.attention_head_count_kv as usize,
-                                        head_dim: config.attention_key_length as usize,
-                                        layer_count: config.block_count as usize,
-                                    },
-                                );
-                                let staging_enabled = exact_block_staging_enabled()
-                                    && mode == KvCompressMode::BlockSelectExact;
-                                let staged_position_min = if staging_enabled {
-                                    selected_block_indices
-                                        .as_ref()
-                                        .and_then(|selected| selected.iter().min().copied())
-                                        .map(|block| block as usize * 32)
-                                        .or(position_meta.recent_ring_absolute_start)
-                                } else {
-                                    None
-                                };
-                                let staged_position_max = if staging_enabled {
-                                    prompt_tokens.checked_sub(1)
-                                } else {
-                                    None
-                                };
-                                let record = CaseRecord {
-                                    model_path: probe.candidate.path.display().to_string(),
-                                    resolved_model_path: probe
-                                        .candidate
-                                        .resolved_path
-                                        .display()
-                                        .to_string(),
-                                    target_tokens,
-                                    prompt_tokens,
-                                    generated_tokens,
-                                    needle_position: needle_position.to_string(),
-                                    mode: mode_name(mode).to_string(),
-                                    representatives: rep_case.representatives,
-                                    representative_policy: representative_policy_name(
-                                        rep_case.policy,
-                                    )
-                                    .to_string(),
-                                    status,
-                                    prompt_prefill_elapsed_ms,
-                                    generated_decode_elapsed_ms,
-                                    total_elapsed_ms,
-                                    attention_compression_elapsed_ms,
-                                    exact_block_staging_enabled: staging_enabled,
-                                    staged_workspace_reused,
-                                    staged_workspace_bytes,
-                                    staged_workspace_capacity_tokens,
-                                    staged_workspace_allocations,
-                                    staged_kv_tokens: staging_enabled
-                                        .then(|| active_kv.map(|working| working.tokens))
-                                        .flatten(),
-                                    staged_kv_bytes: staging_enabled
-                                        .then(|| active_kv.map(|working| working.bytes_per_layer))
-                                        .flatten(),
-                                    staged_old_tokens: staging_enabled
-                                        .then(|| active_kv.map(|working| working.old_block_tokens))
-                                        .flatten(),
-                                    staged_recent_tokens: staging_enabled
-                                        .then(|| active_kv.map(|working| working.recent_tokens))
-                                        .flatten(),
-                                    staged_position_min,
-                                    staged_position_max,
-                                    prefill_tokens_per_sec: tokens_per_sec(
-                                        prompt_tokens,
-                                        prompt_prefill_elapsed_ms,
-                                    ),
-                                    decode_tokens_per_sec: tokens_per_sec(
-                                        generated_tokens,
-                                        generated_decode_elapsed_ms,
-                                    ),
-                                    prefill_chunk_size,
-                                    compressed_prefill_chunk_size,
-                                    temporary_dense_kv_bytes,
-                                    final_kv_allocated_bytes,
-                                    dense_equivalent_kv_bytes,
-                                    exact_old_backing,
-                                    exact_old_attention_backend,
-                                    exact_block_backend_variant,
-                                    q8_old_backing_bytes,
-                                    q8_old_backing_scale_bytes,
-                                    old_k_fp16_bytes,
-                                    q4_old_v_payload_bytes,
-                                    q4_old_v_scale_bytes,
-                                    recent_fp16_bytes,
-                                    summary_index_bytes,
-                                    compression_ratio: match (
-                                        dense_equivalent_kv_bytes,
-                                        final_kv_allocated_bytes,
-                                    ) {
-                                        (Some(dense), Some(actual)) if actual > 0 => {
-                                            Some(dense as f64 / actual as f64)
+                                        if fallback_initial_cache.is_none() {
+                                            fallback_initial_cache = Some(
+                                                run_retrieval_case(
+                                                    &mut model,
+                                                    &tokenizer,
+                                                    target_tokens,
+                                                    needle_position,
+                                                    mode,
+                                                    rep_case,
+                                                    top_blocks,
+                                                )
+                                                .map_err(|err| err.to_string()),
+                                            );
                                         }
-                                        _ => None,
-                                    },
-                                    prefill_mode,
-                                    top_blocks: top_blocks_case,
-                                    block_policy_case: (policy_diagnostic_enabled()
-                                        || anchor_neighbor_validation_enabled())
-                                    .then(|| policy_case.name.to_string()),
-                                    block_select_policy: block_select_policy(),
-                                    block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
-                                    block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),
-                                    block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
-                                    base_selected_block_indices,
-                                    policy_added_block_indices,
-                                    final_selected_block_indices,
-                                    needle_block_index,
-                                    selected_block_indices,
-                                    selected_block_score_entries,
-                                    selection_records,
-                                    selected_blocks_score_order_is_chronological,
-                                    selected_block_order,
-                                    selected_blocks_attention_order_is_chronological,
-                                    needle_block_selected,
-                                    needle_block_rank,
-                                    total_old_blocks,
-                                    active_attended_kv_tokens: active_kv
-                                        .map(|working| working.tokens),
-                                    active_attended_kv_bytes: active_kv
-                                        .map(|working| working.bytes_per_layer),
-                                    active_attended_kv_bytes_all_layers: active_kv
-                                        .map(|working| working.bytes_all_layers),
-                                    active_attended_old_block_tokens: active_kv
-                                        .map(|working| working.old_block_tokens),
-                                    active_attended_recent_tokens: active_kv
-                                        .map(|working| working.recent_tokens),
-                                    recent_ring_absolute_start: position_meta
-                                        .recent_ring_absolute_start,
-                                    recent_ring_absolute_end: position_meta
-                                        .recent_ring_absolute_end,
-                                    dense_window_candidate_positions: logit_compare_enabled()
-                                        .then(|| {
-                                            recent_candidate_positions(
+                                        match fallback_initial_cache.as_ref().unwrap() {
+                                            Ok((generated, preformatted, needle_block)) => Ok((
+                                                generated.clone(),
+                                                *preformatted,
+                                                *needle_block,
+                                            )),
+                                            Err(err) => Err(anyhow::anyhow!(err.clone())),
+                                        }
+                                    } else {
+                                        run_retrieval_case(
+                                            &mut model,
+                                            &tokenizer,
+                                            target_tokens,
+                                            needle_position,
+                                            mode,
+                                            rep_case,
+                                            top_blocks,
+                                        )
+                                    };
+                                    let (mut status, output, error) = match retrieval_result {
+                                        Ok((
+                                            mut generated,
+                                            _preformatted_prompt_tokens,
+                                            mut needle_block,
+                                        )) => {
+                                            initial_output = fallback_diagnostic_enabled()
+                                                .then(|| generated.output.clone());
+                                            initial_decode_elapsed_ms =
+                                                fallback_diagnostic_enabled().then_some(
+                                                    generated.generated_decode_elapsed_ms,
+                                                );
+                                            let initial_signals = fallback_signal_summary(
+                                                generated.generated_logit_trace.as_deref(),
+                                            );
+                                            initial_eot_rank_min = initial_signals.eot_rank_min;
+                                            initial_eot_logit_margin_min =
+                                                initial_signals.eot_logit_margin_min;
+                                            initial_top_margin_min = initial_signals.top_margin_min;
+                                            cutoff_margin = score_cutoff_margin(
+                                                generated.kv_selection.as_ref(),
+                                            );
+                                            initial_active_kv_bytes_all_layers =
+                                                fallback_diagnostic_enabled()
+                                                    .then(|| {
+                                                        active_kv_bytes_for_selection(
+                                                            mode,
+                                                            generated.prompt_token_len,
+                                                            top_blocks_case,
+                                                            generated.kv_selection.as_ref(),
+                                                            ActiveKvAccounting {
+                                                                recent_window: 1024,
+                                                                block_size: 32,
+                                                                kv_heads: config
+                                                                    .attention_head_count_kv
+                                                                    as usize,
+                                                                head_dim: config
+                                                                    .attention_key_length
+                                                                    as usize,
+                                                                layer_count: config.block_count
+                                                                    as usize,
+                                                            },
+                                                        )
+                                                    })
+                                                    .flatten();
+                                            if let Some(reason) = fallback_trigger_reason_for_case(
+                                                fallback_case,
+                                                &generated.output,
+                                                &initial_signals,
+                                                cutoff_margin,
+                                            ) {
+                                                if let Some(retry_top_blocks) =
+                                                    fallback_case.retry_top_blocks
+                                                {
+                                                    if retry_top_blocks > top_blocks {
+                                                        fallback_triggered = true;
+                                                        fallback_trigger_reason = Some(reason);
+                                                        fallback_policy_used =
+                                                            Some(format!("topk{retry_top_blocks}"));
+                                                        let _retry_policy_guard = EnvVarGuard::set(
+                                                            "M40LLM_KV_BLOCK_SELECT_POLICY",
+                                                            "topk",
+                                                        );
+                                                        let _retry_score_guard = EnvVarGuard::unset(
+                                                            "M40LLM_KV_BLOCK_SCORE_DELTA",
+                                                        );
+                                                        let _retry_min_guard = EnvVarGuard::unset(
+                                                            "M40LLM_KV_BLOCK_MIN_BLOCKS",
+                                                        );
+                                                        let _retry_max_guard = EnvVarGuard::unset(
+                                                            "M40LLM_KV_BLOCK_MAX_BLOCKS",
+                                                        );
+                                                        let _retry_anchor_guard =
+                                                            EnvVarGuard::unset(
+                                                                "M40LLM_KV_ANCHOR_BLOCKS",
+                                                            );
+                                                        let (
+                                                            retry_generated,
+                                                            _retry_preformatted_prompt_tokens,
+                                                            retry_needle_block,
+                                                        ) = run_retrieval_case(
+                                                            &mut model,
+                                                            &tokenizer,
+                                                            target_tokens,
+                                                            needle_position,
+                                                            mode,
+                                                            rep_case,
+                                                            retry_top_blocks,
+                                                        )?;
+                                                        fallback_decode_elapsed_ms = Some(
+                                                            retry_generated
+                                                                .generated_decode_elapsed_ms,
+                                                        );
+                                                        total_decode_elapsed_ms_with_retry = Some(
+                                                            generated.generated_decode_elapsed_ms
+                                                                + retry_generated
+                                                                    .generated_decode_elapsed_ms,
+                                                        );
+                                                        fallback_active_kv_bytes_all_layers =
+                                                            active_kv_bytes_for_selection(
+                                                                mode,
+                                                                retry_generated.prompt_token_len,
+                                                                Some(retry_top_blocks),
+                                                                retry_generated
+                                                                    .kv_selection
+                                                                    .as_ref(),
+                                                                ActiveKvAccounting {
+                                                                    recent_window: 1024,
+                                                                    block_size: 32,
+                                                                    kv_heads: config
+                                                                        .attention_head_count_kv
+                                                                        as usize,
+                                                                    head_dim: config
+                                                                        .attention_key_length
+                                                                        as usize,
+                                                                    layer_count: config.block_count
+                                                                        as usize,
+                                                                },
+                                                            );
+                                                        generated = retry_generated;
+                                                        needle_block = retry_needle_block;
+                                                    }
+                                                }
+                                            }
+                                            prompt_tokens = generated.prompt_token_len;
+                                            generated_tokens = generated
+                                                .token_ids
+                                                .len()
+                                                .saturating_sub(generated.prompt_token_len);
+                                            prompt_prefill_elapsed_ms =
+                                                generated.prompt_prefill_elapsed_ms;
+                                            generated_decode_elapsed_ms =
+                                                generated.generated_decode_elapsed_ms;
+                                            total_elapsed_ms = generated.total_elapsed_ms;
+                                            attention_compression_elapsed_ms =
+                                                generated.attention_compression_elapsed_ms;
+                                            prefill_chunk_size = generated.prefill_chunk_size;
+                                            compressed_prefill_chunk_size =
+                                                generated.compressed_prefill_chunk_size;
+                                            temporary_dense_kv_bytes =
+                                                generated.temporary_dense_kv_bytes;
+                                            final_kv_allocated_bytes =
+                                                generated.final_kv_allocated_bytes;
+                                            dense_equivalent_kv_bytes =
+                                                generated.dense_equivalent_kv_bytes;
+                                            exact_old_backing = generated.exact_old_backing.clone();
+                                            exact_old_attention_backend =
+                                                generated.exact_old_attention_backend.clone();
+                                            q8_old_backing_bytes = generated.q8_old_backing_bytes;
+                                            q8_old_backing_scale_bytes =
+                                                generated.q8_old_backing_scale_bytes;
+                                            old_k_fp16_bytes = generated.old_k_fp16_bytes;
+                                            q4_old_v_payload_bytes =
+                                                generated.q4_old_v_payload_bytes;
+                                            q4_old_v_scale_bytes = generated.q4_old_v_scale_bytes;
+                                            recent_fp16_bytes = generated.recent_fp16_bytes;
+                                            summary_index_bytes = generated.summary_index_bytes;
+                                            staged_workspace_reused =
+                                                generated.staged_workspace_reused;
+                                            staged_workspace_bytes =
+                                                generated.staged_workspace_bytes;
+                                            staged_workspace_capacity_tokens =
+                                                generated.staged_workspace_capacity_tokens;
+                                            staged_workspace_allocations =
+                                                generated.staged_workspace_allocations;
+                                            prefill_mode = generated.prefill_mode.clone();
+                                            selection_summary = generated.kv_selection.clone();
+                                            needle_block_index = needle_block;
+                                            prompt_logits = generated.prompt_logits.clone();
+                                            first_decode_logits =
+                                                generated.first_decode_logits.clone();
+                                            generated_logit_trace_raw =
+                                                generated.generated_logit_trace.clone();
+                                            let passed = generated.output.contains(NEEDLE);
+                                            if mode == KvCompressMode::Off {
+                                                dense_passed = Some(passed);
+                                                dense_prompt_logits =
+                                                    generated.prompt_logits.clone();
+                                                dense_first_decode_logits =
+                                                    generated.first_decode_logits.clone();
+                                                dense_generated_logit_trace =
+                                                    generated.generated_logit_trace.clone();
+                                            } else if mode == KvCompressMode::DenseRecentOnly {
+                                                dense_window_prompt_logits =
+                                                    generated.prompt_logits.clone();
+                                                dense_window_first_decode_logits =
+                                                    generated.first_decode_logits.clone();
+                                            }
+                                            if q4_v_diagnostic_enabled()
+                                                && mode == KvCompressMode::BlockSelectExact
+                                                && exact_block_backend_variant.as_deref()
+                                                    == Some("fp16-k-fp16-v")
+                                            {
+                                                exact_reference_prompt_logits =
+                                                    generated.prompt_logits.clone();
+                                                exact_reference_first_decode_logits =
+                                                    generated.first_decode_logits.clone();
+                                                exact_reference_generated_logit_trace =
+                                                    generated.generated_logit_trace.clone();
+                                            }
+                                            let status = if passed {
+                                                CaseStatus::Pass
+                                            } else {
+                                                CaseStatus::Fail
+                                            };
+                                            (status, generated.output, None)
+                                        }
+                                        Err(err) => {
+                                            if mode == KvCompressMode::Off {
+                                                dense_passed = Some(false);
+                                            }
+                                            (
+                                                CaseStatus::Error,
+                                                String::new(),
+                                                Some(err.to_string()),
+                                            )
+                                        }
+                                    };
+                                    if mode != KvCompressMode::Off && dense_passed == Some(false) {
+                                        status = CaseStatus::Inconclusive;
+                                    }
+                                    let selected_block_indices = selection_summary
+                                        .as_ref()
+                                        .map(|summary| summary.selected_block_indices.clone());
+                                    let final_selected_block_indices =
+                                        first_selection_record_blocks(selection_summary.as_ref());
+                                    let (base_selected_block_indices, policy_added_block_indices) =
+                                        base_and_added_blocks(
+                                            final_selected_block_indices.as_ref(),
+                                            top_blocks_case,
+                                        );
+                                    let selected_block_score_entries = selection_summary
+                                        .as_ref()
+                                        .map(selected_block_entry_strings);
+                                    let selection_records =
+                                        selection_summary.as_ref().map(selection_record_strings);
+                                    let selected_blocks_score_order_is_chronological =
+                                        selection_summary
+                                            .as_ref()
+                                            .and_then(first_selection_is_chronological);
+                                    let selected_block_order = selected_block_order();
+                                    let selected_blocks_attention_order_is_chronological =
+                                        if selected_block_order == "chronological" {
+                                            Some(true)
+                                        } else {
+                                            selected_blocks_score_order_is_chronological
+                                        };
+                                    let needle_block_selected = needle_block_index.map(|needle| {
+                                        selected_block_indices
+                                            .as_ref()
+                                            .is_some_and(|selected| selected.contains(&needle))
+                                    });
+                                    let needle_block_rank = needle_block_index.and_then(|needle| {
+                                        selected_block_indices.as_ref().and_then(|selected| {
+                                            selected
+                                                .iter()
+                                                .position(|block| *block == needle)
+                                                .map(|rank| rank as u32)
+                                        })
+                                    });
+                                    let total_old_blocks = selection_summary
+                                        .as_ref()
+                                        .map(|summary| summary.total_old_blocks);
+                                    let attention = selection_summary
+                                        .as_ref()
+                                        .and_then(|summary| summary.attention.as_ref());
+                                    let attention_selected_block_masses =
+                                        attention.map(attention_block_mass_strings);
+                                    let (
+                                        attention_candidate_position_min,
+                                        attention_candidate_position_max,
+                                        attention_candidate_order_is_chronological,
+                                    ) = selection_summary
+                                        .as_ref()
+                                        .map(|summary| {
+                                            first_attention_candidate_bounds(
+                                                summary,
                                                 position_meta.recent_ring_absolute_start,
                                                 position_meta.recent_ring_absolute_end,
                                             )
                                         })
-                                        .flatten(),
-                                    compressed_recent_candidate_positions: logit_compare_enabled()
-                                        .then(|| {
-                                            if matches!(
-                                                mode,
-                                                KvCompressMode::RecentOnly
-                                                    | KvCompressMode::BlockSummary
-                                                    | KvCompressMode::BlockSelectLossy
-                                            ) {
+                                        .unwrap_or((None, None, None));
+                                    let attention_candidate_order_is_chronological =
+                                        if selected_block_order == "chronological"
+                                            && selection_summary.is_some()
+                                        {
+                                            Some(true)
+                                        } else {
+                                            attention_candidate_order_is_chronological
+                                        };
+                                    let prompt_logit_diff = if logit_compare_enabled() {
+                                        let reference = if q4_v_diagnostic_enabled() {
+                                            exact_reference_prompt_logits.as_deref()
+                                        } else {
+                                            dense_prompt_logits.as_deref()
+                                        };
+                                        reference.zip(prompt_logits.as_deref()).and_then(
+                                            |(dense, compressed)| {
+                                                logit_diff_summary(dense, compressed)
+                                            },
+                                        )
+                                    } else {
+                                        None
+                                    };
+                                    let first_decode_logit_diff = if logit_compare_enabled() {
+                                        let reference = if q4_v_diagnostic_enabled() {
+                                            exact_reference_first_decode_logits.as_deref()
+                                        } else {
+                                            dense_first_decode_logits.as_deref()
+                                        };
+                                        reference.zip(first_decode_logits.as_deref()).and_then(
+                                            |(dense, compressed)| {
+                                                logit_diff_summary(dense, compressed)
+                                            },
+                                        )
+                                    } else {
+                                        None
+                                    };
+                                    let prompt_dense_window_diff = if logit_compare_enabled() {
+                                        dense_window_prompt_logits
+                                            .as_deref()
+                                            .zip(prompt_logits.as_deref())
+                                            .and_then(|(window, compressed)| {
+                                                logit_diff_summary(window, compressed)
+                                            })
+                                    } else {
+                                        None
+                                    };
+                                    let first_decode_dense_window_diff = if logit_compare_enabled()
+                                    {
+                                        dense_window_first_decode_logits
+                                            .as_deref()
+                                            .zip(first_decode_logits.as_deref())
+                                            .and_then(|(window, compressed)| {
+                                                logit_diff_summary(window, compressed)
+                                            })
+                                    } else {
+                                        None
+                                    };
+                                    let expected_token_window_logits = if logit_compare_enabled() {
+                                        expected_token_summary(
+                                            dense_prompt_logits.as_deref(),
+                                            dense_window_prompt_logits.as_deref(),
+                                            position_meta.expected_first_answer_token_id,
+                                        )
+                                    } else {
+                                        ExpectedTokenLogitSummary {
+                                            rank_dense: None,
+                                            rank_compressed: None,
+                                            logit_dense: None,
+                                            logit_compressed: None,
+                                        }
+                                    };
+                                    let expected_token_logits = if logit_compare_enabled() {
+                                        let reference = if q4_v_diagnostic_enabled() {
+                                            exact_reference_prompt_logits.as_deref()
+                                        } else {
+                                            dense_prompt_logits.as_deref()
+                                        };
+                                        expected_token_summary(
+                                            reference,
+                                            prompt_logits.as_deref(),
+                                            position_meta.expected_first_answer_token_id,
+                                        )
+                                    } else {
+                                        ExpectedTokenLogitSummary {
+                                            rank_dense: None,
+                                            rank_compressed: None,
+                                            logit_dense: None,
+                                            logit_compressed: None,
+                                        }
+                                    };
+                                    let generated_logit_trace = generated_trace_records(
+                                        if q4_v_diagnostic_enabled() {
+                                            exact_reference_generated_logit_trace.as_deref()
+                                        } else {
+                                            dense_generated_logit_trace.as_deref()
+                                        },
+                                        generated_logit_trace_raw.as_deref(),
+                                        position_meta.expected_first_answer_token_id,
+                                    );
+                                    let accounting_top_blocks = final_selected_block_indices
+                                        .as_ref()
+                                        .map(|selected| selected.len() as u32)
+                                        .or(top_blocks_case);
+                                    let active_kv = active_kv_working_set(
+                                        mode,
+                                        prompt_tokens,
+                                        accounting_top_blocks,
+                                        ActiveKvAccounting {
+                                            recent_window: 1024,
+                                            block_size: 32,
+                                            kv_heads: config.attention_head_count_kv as usize,
+                                            head_dim: config.attention_key_length as usize,
+                                            layer_count: config.block_count as usize,
+                                        },
+                                    );
+                                    let staging_enabled = exact_block_staging_enabled()
+                                        && mode == KvCompressMode::BlockSelectExact;
+                                    let staged_position_min = if staging_enabled {
+                                        selected_block_indices
+                                            .as_ref()
+                                            .and_then(|selected| selected.iter().min().copied())
+                                            .map(|block| block as usize * 32)
+                                            .or(position_meta.recent_ring_absolute_start)
+                                    } else {
+                                        None
+                                    };
+                                    let staged_position_max = if staging_enabled {
+                                        prompt_tokens.checked_sub(1)
+                                    } else {
+                                        None
+                                    };
+                                    let record = CaseRecord {
+                                        model_path: probe.candidate.path.display().to_string(),
+                                        resolved_model_path: probe
+                                            .candidate
+                                            .resolved_path
+                                            .display()
+                                            .to_string(),
+                                        target_tokens,
+                                        prompt_tokens,
+                                        generated_tokens,
+                                        needle_position: needle_position.to_string(),
+                                        mode: mode_name(mode).to_string(),
+                                        representatives: rep_case.representatives,
+                                        representative_policy: representative_policy_name(
+                                            rep_case.policy,
+                                        )
+                                        .to_string(),
+                                        status,
+                                        prompt_prefill_elapsed_ms,
+                                        generated_decode_elapsed_ms,
+                                        total_elapsed_ms,
+                                        attention_compression_elapsed_ms,
+                                        exact_block_staging_enabled: staging_enabled,
+                                        staged_workspace_reused,
+                                        staged_workspace_bytes,
+                                        staged_workspace_capacity_tokens,
+                                        staged_workspace_allocations,
+                                        staged_kv_tokens: staging_enabled
+                                            .then(|| active_kv.map(|working| working.tokens))
+                                            .flatten(),
+                                        staged_kv_bytes: staging_enabled
+                                            .then(|| {
+                                                active_kv.map(|working| working.bytes_per_layer)
+                                            })
+                                            .flatten(),
+                                        staged_old_tokens: staging_enabled
+                                            .then(|| {
+                                                active_kv.map(|working| working.old_block_tokens)
+                                            })
+                                            .flatten(),
+                                        staged_recent_tokens: staging_enabled
+                                            .then(|| active_kv.map(|working| working.recent_tokens))
+                                            .flatten(),
+                                        staged_position_min,
+                                        staged_position_max,
+                                        prefill_tokens_per_sec: tokens_per_sec(
+                                            prompt_tokens,
+                                            prompt_prefill_elapsed_ms,
+                                        ),
+                                        decode_tokens_per_sec: tokens_per_sec(
+                                            generated_tokens,
+                                            generated_decode_elapsed_ms,
+                                        ),
+                                        prefill_chunk_size,
+                                        compressed_prefill_chunk_size,
+                                        temporary_dense_kv_bytes,
+                                        final_kv_allocated_bytes,
+                                        dense_equivalent_kv_bytes,
+                                        exact_old_backing,
+                                        exact_old_attention_backend,
+                                        exact_block_backend_variant,
+                                        q8_old_backing_bytes,
+                                        q8_old_backing_scale_bytes,
+                                        old_k_fp16_bytes,
+                                        q4_old_v_payload_bytes,
+                                        q4_old_v_scale_bytes,
+                                        recent_fp16_bytes,
+                                        summary_index_bytes,
+                                        compression_ratio: match (
+                                            dense_equivalent_kv_bytes,
+                                            final_kv_allocated_bytes,
+                                        ) {
+                                            (Some(dense), Some(actual)) if actual > 0 => {
+                                                Some(dense as f64 / actual as f64)
+                                            }
+                                            _ => None,
+                                        },
+                                        prefill_mode,
+                                        top_blocks: top_blocks_case,
+                                        block_policy_case: (policy_diagnostic_enabled()
+                                            || anchor_neighbor_validation_enabled()
+                                            || fallback_diagnostic_enabled())
+                                        .then(|| policy_case.name.to_string()),
+                                        fallback_case: fallback_diagnostic_enabled()
+                                            .then(|| fallback_case.name.to_string()),
+                                        fallback_triggered,
+                                        fallback_trigger_reason,
+                                        fallback_policy_used,
+                                        initial_output,
+                                        initial_active_kv_bytes_all_layers,
+                                        fallback_active_kv_bytes_all_layers,
+                                        initial_decode_elapsed_ms,
+                                        fallback_decode_elapsed_ms,
+                                        total_decode_elapsed_ms_with_retry,
+                                        initial_eot_rank_min,
+                                        initial_eot_logit_margin_min,
+                                        initial_top_margin_min,
+                                        score_cutoff_margin: cutoff_margin,
+                                        block_select_policy: block_select_policy(),
+                                        block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
+                                        block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),
+                                        block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
+                                        base_selected_block_indices,
+                                        policy_added_block_indices,
+                                        final_selected_block_indices,
+                                        needle_block_index,
+                                        selected_block_indices,
+                                        selected_block_score_entries,
+                                        selection_records,
+                                        selected_blocks_score_order_is_chronological,
+                                        selected_block_order,
+                                        selected_blocks_attention_order_is_chronological,
+                                        needle_block_selected,
+                                        needle_block_rank,
+                                        total_old_blocks,
+                                        active_attended_kv_tokens: active_kv
+                                            .map(|working| working.tokens),
+                                        active_attended_kv_bytes: active_kv
+                                            .map(|working| working.bytes_per_layer),
+                                        active_attended_kv_bytes_all_layers: active_kv
+                                            .map(|working| working.bytes_all_layers),
+                                        active_attended_old_block_tokens: active_kv
+                                            .map(|working| working.old_block_tokens),
+                                        active_attended_recent_tokens: active_kv
+                                            .map(|working| working.recent_tokens),
+                                        recent_ring_absolute_start: position_meta
+                                            .recent_ring_absolute_start,
+                                        recent_ring_absolute_end: position_meta
+                                            .recent_ring_absolute_end,
+                                        dense_window_candidate_positions: logit_compare_enabled()
+                                            .then(|| {
                                                 recent_candidate_positions(
                                                     position_meta.recent_ring_absolute_start,
                                                     position_meta.recent_ring_absolute_end,
                                                 )
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .flatten(),
-                                    compressed_recent_ring_slots: logit_compare_enabled()
-                                        .then(|| {
-                                            if matches!(
-                                                mode,
-                                                KvCompressMode::RecentOnly
-                                                    | KvCompressMode::BlockSummary
-                                                    | KvCompressMode::BlockSelectLossy
-                                            ) {
-                                                recent_ring_slots(
-                                                    position_meta.recent_ring_absolute_start,
-                                                    position_meta.recent_ring_absolute_end,
-                                                    1024,
-                                                )
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .flatten(),
-                                    attention_candidate_position_min,
-                                    attention_candidate_position_max,
-                                    attention_candidate_order_is_chronological,
-                                    needle_token_absolute_positions: position_meta
-                                        .needle_token_absolute_positions
-                                        .clone(),
-                                    question_token_absolute_positions: position_meta
-                                        .question_token_absolute_positions
-                                        .clone(),
-                                    needle_tokens_in_recent_ring: position_meta
-                                        .needle_tokens_in_recent_ring,
-                                    question_tokens_in_recent_ring: position_meta
-                                        .question_tokens_in_recent_ring,
-                                    expected_first_answer_token_id: position_meta
-                                        .expected_first_answer_token_id,
-                                    expected_first_answer_token_rank_dense: expected_token_logits
-                                        .rank_dense,
-                                    expected_first_answer_token_rank_dense_window:
-                                        expected_token_window_logits.rank_compressed,
-                                    expected_first_answer_token_rank_compressed:
-                                        expected_token_logits.rank_compressed,
-                                    expected_first_answer_token_logit_dense: expected_token_logits
-                                        .logit_dense,
-                                    expected_first_answer_token_logit_dense_window:
-                                        expected_token_window_logits.logit_compressed,
-                                    expected_first_answer_token_logit_compressed:
-                                        expected_token_logits.logit_compressed,
-                                    prompt_logit_max_abs_diff: prompt_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.max_abs_diff),
-                                    prompt_logit_mean_abs_diff: prompt_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.mean_abs_diff),
-                                    prompt_logit_top10_overlap: prompt_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.top10_overlap),
-                                    prompt_dense_top_token_id: prompt_logit_diff
-                                        .as_ref()
-                                        .and_then(|summary| summary.dense_top_token_id),
-                                    prompt_compressed_top_token_id: prompt_logit_diff
-                                        .as_ref()
-                                        .and_then(|summary| summary.compressed_top_token_id),
-                                    prompt_dense_window_max_abs_diff: prompt_dense_window_diff
-                                        .as_ref()
-                                        .map(|summary| summary.max_abs_diff),
-                                    prompt_dense_window_mean_abs_diff: prompt_dense_window_diff
-                                        .as_ref()
-                                        .map(|summary| summary.mean_abs_diff),
-                                    prompt_dense_window_top10_overlap: prompt_dense_window_diff
-                                        .as_ref()
-                                        .map(|summary| summary.top10_overlap),
-                                    prompt_dense_window_top_token_id: dense_window_prompt_logits
-                                        .as_deref()
-                                        .and_then(top_token_id),
-                                    first_decode_logit_max_abs_diff: first_decode_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.max_abs_diff),
-                                    first_decode_logit_mean_abs_diff: first_decode_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.mean_abs_diff),
-                                    first_decode_logit_top10_overlap: first_decode_logit_diff
-                                        .as_ref()
-                                        .map(|summary| summary.top10_overlap),
-                                    first_decode_dense_top_token_id: first_decode_logit_diff
-                                        .as_ref()
-                                        .and_then(|summary| summary.dense_top_token_id),
-                                    first_decode_compressed_top_token_id: first_decode_logit_diff
-                                        .as_ref()
-                                        .and_then(|summary| summary.compressed_top_token_id),
-                                    first_decode_dense_window_max_abs_diff:
-                                        first_decode_dense_window_diff
+                                            })
+                                            .flatten(),
+                                        compressed_recent_candidate_positions:
+                                            logit_compare_enabled()
+                                                .then(|| {
+                                                    if matches!(
+                                                        mode,
+                                                        KvCompressMode::RecentOnly
+                                                            | KvCompressMode::BlockSummary
+                                                            | KvCompressMode::BlockSelectLossy
+                                                    ) {
+                                                        recent_candidate_positions(
+                                                            position_meta
+                                                                .recent_ring_absolute_start,
+                                                            position_meta.recent_ring_absolute_end,
+                                                        )
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                                .flatten(),
+                                        compressed_recent_ring_slots: logit_compare_enabled()
+                                            .then(|| {
+                                                if matches!(
+                                                    mode,
+                                                    KvCompressMode::RecentOnly
+                                                        | KvCompressMode::BlockSummary
+                                                        | KvCompressMode::BlockSelectLossy
+                                                ) {
+                                                    recent_ring_slots(
+                                                        position_meta.recent_ring_absolute_start,
+                                                        position_meta.recent_ring_absolute_end,
+                                                        1024,
+                                                    )
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .flatten(),
+                                        attention_candidate_position_min,
+                                        attention_candidate_position_max,
+                                        attention_candidate_order_is_chronological,
+                                        needle_token_absolute_positions: position_meta
+                                            .needle_token_absolute_positions
+                                            .clone(),
+                                        question_token_absolute_positions: position_meta
+                                            .question_token_absolute_positions
+                                            .clone(),
+                                        needle_tokens_in_recent_ring: position_meta
+                                            .needle_tokens_in_recent_ring,
+                                        question_tokens_in_recent_ring: position_meta
+                                            .question_tokens_in_recent_ring,
+                                        expected_first_answer_token_id: position_meta
+                                            .expected_first_answer_token_id,
+                                        expected_first_answer_token_rank_dense:
+                                            expected_token_logits.rank_dense,
+                                        expected_first_answer_token_rank_dense_window:
+                                            expected_token_window_logits.rank_compressed,
+                                        expected_first_answer_token_rank_compressed:
+                                            expected_token_logits.rank_compressed,
+                                        expected_first_answer_token_logit_dense:
+                                            expected_token_logits.logit_dense,
+                                        expected_first_answer_token_logit_dense_window:
+                                            expected_token_window_logits.logit_compressed,
+                                        expected_first_answer_token_logit_compressed:
+                                            expected_token_logits.logit_compressed,
+                                        prompt_logit_max_abs_diff: prompt_logit_diff
                                             .as_ref()
                                             .map(|summary| summary.max_abs_diff),
-                                    first_decode_dense_window_mean_abs_diff:
-                                        first_decode_dense_window_diff
+                                        prompt_logit_mean_abs_diff: prompt_logit_diff
                                             .as_ref()
                                             .map(|summary| summary.mean_abs_diff),
-                                    first_decode_dense_window_top10_overlap:
-                                        first_decode_dense_window_diff
+                                        prompt_logit_top10_overlap: prompt_logit_diff
                                             .as_ref()
                                             .map(|summary| summary.top10_overlap),
-                                    first_decode_dense_window_top_token_id:
-                                        dense_window_first_decode_logits
-                                            .as_deref()
-                                            .and_then(top_token_id),
-                                    attention_recent_mass: attention.map(|a| a.recent.prob_mass),
-                                    attention_selected_old_exact_mass: attention
-                                        .map(|a| a.selected_old_exact.prob_mass),
-                                    attention_summary_mass: attention.map(|a| a.summary.prob_mass),
-                                    attention_representative_mass: attention
-                                        .map(|a| a.representatives.prob_mass),
-                                    attention_other_mass: attention.map(|a| a.other.prob_mass),
-                                    attention_needle_block_mass: attention
-                                        .and_then(|a| a.needle_block_mass),
-                                    attention_selected_block_masses,
-                                    attention_recent_logit_max: attention
-                                        .map(|a| a.recent.logit_max),
-                                    attention_recent_logit_mean: attention
-                                        .map(|a| a.recent.logit_mean),
-                                    attention_summary_logit_max: attention
-                                        .map(|a| a.summary.logit_max),
-                                    attention_summary_logit_mean: attention
-                                        .map(|a| a.summary.logit_mean),
-                                    attention_representative_logit_max: attention
-                                        .map(|a| a.representatives.logit_max),
-                                    attention_representative_logit_mean: attention
-                                        .map(|a| a.representatives.logit_mean),
-                                    attention_top_entries: attention
-                                        .map(attention_top_entry_strings),
-                                    attention_records: selection_summary
-                                        .as_ref()
-                                        .map(attention_record_strings),
-                                    generated_logit_trace,
-                                    output,
-                                    error,
-                                };
-                                append_report_record(&record)?;
-                                records.push(record);
+                                        prompt_dense_top_token_id: prompt_logit_diff
+                                            .as_ref()
+                                            .and_then(|summary| summary.dense_top_token_id),
+                                        prompt_compressed_top_token_id: prompt_logit_diff
+                                            .as_ref()
+                                            .and_then(|summary| summary.compressed_top_token_id),
+                                        prompt_dense_window_max_abs_diff: prompt_dense_window_diff
+                                            .as_ref()
+                                            .map(|summary| summary.max_abs_diff),
+                                        prompt_dense_window_mean_abs_diff: prompt_dense_window_diff
+                                            .as_ref()
+                                            .map(|summary| summary.mean_abs_diff),
+                                        prompt_dense_window_top10_overlap: prompt_dense_window_diff
+                                            .as_ref()
+                                            .map(|summary| summary.top10_overlap),
+                                        prompt_dense_window_top_token_id:
+                                            dense_window_prompt_logits
+                                                .as_deref()
+                                                .and_then(top_token_id),
+                                        first_decode_logit_max_abs_diff: first_decode_logit_diff
+                                            .as_ref()
+                                            .map(|summary| summary.max_abs_diff),
+                                        first_decode_logit_mean_abs_diff: first_decode_logit_diff
+                                            .as_ref()
+                                            .map(|summary| summary.mean_abs_diff),
+                                        first_decode_logit_top10_overlap: first_decode_logit_diff
+                                            .as_ref()
+                                            .map(|summary| summary.top10_overlap),
+                                        first_decode_dense_top_token_id: first_decode_logit_diff
+                                            .as_ref()
+                                            .and_then(|summary| summary.dense_top_token_id),
+                                        first_decode_compressed_top_token_id:
+                                            first_decode_logit_diff
+                                                .as_ref()
+                                                .and_then(|summary| summary.compressed_top_token_id),
+                                        first_decode_dense_window_max_abs_diff:
+                                            first_decode_dense_window_diff
+                                                .as_ref()
+                                                .map(|summary| summary.max_abs_diff),
+                                        first_decode_dense_window_mean_abs_diff:
+                                            first_decode_dense_window_diff
+                                                .as_ref()
+                                                .map(|summary| summary.mean_abs_diff),
+                                        first_decode_dense_window_top10_overlap:
+                                            first_decode_dense_window_diff
+                                                .as_ref()
+                                                .map(|summary| summary.top10_overlap),
+                                        first_decode_dense_window_top_token_id:
+                                            dense_window_first_decode_logits
+                                                .as_deref()
+                                                .and_then(top_token_id),
+                                        attention_recent_mass: attention
+                                            .map(|a| a.recent.prob_mass),
+                                        attention_selected_old_exact_mass: attention
+                                            .map(|a| a.selected_old_exact.prob_mass),
+                                        attention_summary_mass: attention
+                                            .map(|a| a.summary.prob_mass),
+                                        attention_representative_mass: attention
+                                            .map(|a| a.representatives.prob_mass),
+                                        attention_other_mass: attention.map(|a| a.other.prob_mass),
+                                        attention_needle_block_mass: attention
+                                            .and_then(|a| a.needle_block_mass),
+                                        attention_selected_block_masses,
+                                        attention_recent_logit_max: attention
+                                            .map(|a| a.recent.logit_max),
+                                        attention_recent_logit_mean: attention
+                                            .map(|a| a.recent.logit_mean),
+                                        attention_summary_logit_max: attention
+                                            .map(|a| a.summary.logit_max),
+                                        attention_summary_logit_mean: attention
+                                            .map(|a| a.summary.logit_mean),
+                                        attention_representative_logit_max: attention
+                                            .map(|a| a.representatives.logit_max),
+                                        attention_representative_logit_mean: attention
+                                            .map(|a| a.representatives.logit_mean),
+                                        attention_top_entries: attention
+                                            .map(attention_top_entry_strings),
+                                        attention_records: selection_summary
+                                            .as_ref()
+                                            .map(attention_record_strings),
+                                        generated_logit_trace,
+                                        output,
+                                        error,
+                                    };
+                                    append_report_record(&record)?;
+                                    records.push(record);
+                                }
                             }
                         }
                     }
