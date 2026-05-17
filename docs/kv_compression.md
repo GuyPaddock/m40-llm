@@ -197,6 +197,11 @@ FP16-K/q4-V `block-select-exact`. It evaluates fixed policy cases for `topk`,
 small score thresholds, anchor block inclusion, and anchor-plus-neighbor
 promotion. Rows include `block_policy_case`.
 
+`M40LLM_KV_ANCHOR_NEIGHBOR_VALIDATE=1` runs a broader 4096 validation matrix
+for dense `off` plus direct FP16-K/q4-V `block-select-exact`. It compares
+`topk` with `anchor-neighbors` for old/top4 and recent/top4/top8/top16. Use
+this before treating anchor-neighbor promotion as a candidate default.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the

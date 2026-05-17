@@ -521,6 +521,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
         if policy_diagnostic_enabled() {
             return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
         }
+        if anchor_neighbor_validation_enabled() {
+            return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
+        }
         if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
                 .into_iter()
@@ -557,6 +560,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
 fn needle_positions() -> Result<Vec<&'static str>> {
     if policy_diagnostic_enabled() {
         return Ok(vec!["recent"]);
+    }
+    if anchor_neighbor_validation_enabled() {
+        return Ok(vec!["old", "recent"]);
     }
     let Some(value) = std::env::var("M40LLM_KV_QUALITY_NEEDLES")
         .ok()
@@ -643,6 +649,12 @@ fn policy_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn anchor_neighbor_validation_enabled() -> bool {
+    std::env::var("M40LLM_KV_ANCHOR_NEIGHBOR_VALIDATE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn exact_q8_diagnostic_enabled() -> bool {
     q8_drift_diagnostic_enabled()
         || q8_precision_split_diagnostic_enabled()
@@ -651,6 +663,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || mixed_q4_v_direct_sweep_enabled()
         || top_block_robustness_diagnostic_enabled()
         || policy_diagnostic_enabled()
+        || anchor_neighbor_validation_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -668,6 +681,7 @@ fn recent_equivalence_sequential_enabled() -> bool {
 fn logit_compare_enabled() -> bool {
     q4_v_diagnostic_enabled()
         || policy_diagnostic_enabled()
+        || anchor_neighbor_validation_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -845,6 +859,8 @@ fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<
                 vec![4, 8, 16]
             } else if policy_diagnostic_enabled() {
                 vec![8]
+            } else if anchor_neighbor_validation_enabled() {
+                vec![4, 8, 16]
             } else if q8_drift_diagnostic_enabled() {
                 vec![4, 8]
             } else if exact_block_retrieval_sweep_enabled() {
@@ -880,6 +896,28 @@ struct BlockPolicyCase {
 }
 
 fn block_policy_cases(top_blocks: Option<u32>) -> Vec<BlockPolicyCase> {
+    if anchor_neighbor_validation_enabled() && top_blocks.is_some() {
+        return vec![
+            BlockPolicyCase {
+                name: "topk",
+                policy: "topk",
+                top_blocks,
+                score_delta: None,
+                min_blocks: None,
+                max_blocks: None,
+                anchors: None,
+            },
+            BlockPolicyCase {
+                name: "anchor-neighbors",
+                policy: "anchor-neighbors",
+                top_blocks,
+                score_delta: None,
+                min_blocks: None,
+                max_blocks: Some("16"),
+                anchors: Some("0"),
+            },
+        ];
+    }
     if !policy_diagnostic_enabled() || top_blocks.is_none() {
         return vec![BlockPolicyCase {
             name: "env",
@@ -959,7 +997,7 @@ fn block_policy_cases(top_blocks: Option<u32>) -> Vec<BlockPolicyCase> {
 }
 
 fn apply_block_policy_case(case: BlockPolicyCase) -> Vec<EnvVarGuard> {
-    if !policy_diagnostic_enabled() {
+    if !policy_diagnostic_enabled() && !anchor_neighbor_validation_enabled() {
         return Vec::new();
     }
     let mut guards = vec![EnvVarGuard::set(
@@ -1117,7 +1155,9 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Result<Vec<ExactBlockBacke
                 staging: None,
             },
         ]
-    } else if policy_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+    } else if (policy_diagnostic_enabled() || anchor_neighbor_validation_enabled())
+        && mode == KvCompressMode::BlockSelectExact
+    {
         vec![ExactBlockBackendCase {
             variant: Some("fp16-k-q4-v-direct"),
             exact_old_backing: Some("fp16-k-q4-v"),
@@ -2150,6 +2190,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         {
                             continue;
                         }
+                        if anchor_neighbor_validation_enabled()
+                            && mode == KvCompressMode::BlockSelectExact
+                            && !matches!(
+                                (needle_position, top_blocks_case),
+                                ("old", Some(4))
+                                    | ("recent", Some(4))
+                                    | ("recent", Some(8))
+                                    | ("recent", Some(16))
+                            )
+                        {
+                            continue;
+                        }
                         if q4_v_diagnostic_enabled()
                             && mode == KvCompressMode::BlockSelectExact
                             && !matches!(
@@ -2577,8 +2629,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     },
                                     prefill_mode,
                                     top_blocks: top_blocks_case,
-                                    block_policy_case: policy_diagnostic_enabled()
-                                        .then(|| policy_case.name.to_string()),
+                                    block_policy_case: (policy_diagnostic_enabled()
+                                        || anchor_neighbor_validation_enabled())
+                                    .then(|| policy_case.name.to_string()),
                                     block_select_policy: block_select_policy(),
                                     block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
                                     block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),

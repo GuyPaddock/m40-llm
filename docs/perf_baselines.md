@@ -2,6 +2,55 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: Anchor-Neighbor 4096 Matrix Validation
+
+This checkpoint adds `M40LLM_KV_ANCHOR_NEIGHBOR_VALIDATE=1`, a bounded matrix
+for validating whether anchor-neighbor block promotion should become the
+preferred experimental direct FP16-K/q4-V exact-old policy.
+
+Report:
+
+- `/tmp/m40-kv-anchor-neighbor-4096-matrix.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 4096 validation matrix.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+
+Summary:
+
+| Needle | Policy | Top blocks | Status | Output | Added blocks | Active KV all layers | Decode | Final KV |
+| --- | --- | ---: | --- | --- | --- | ---: | ---: | ---: |
+| old | dense off | - | pass | `ZXQ-NEEDLE-41729` | - | 127.0 MiB | 12.109 s | 4.00 GiB |
+| old | topk | 4 | pass | `ZXQ-NEEDLE-41729` | none | 36.0 MiB | 7.389 s | 2.97 GiB |
+| old | anchor-neighbors | 4 | pass | `ZXQ-NEEDLE-41729` | `[93,90,92,87,89,78,80,0]` | 44.0 MiB | 8.120 s | 2.97 GiB |
+| recent | dense off | - | pass | `ZXQ-NEEDLE-41729` | - | 127.4 MiB | 12.147 s | 4.00 GiB |
+| recent | topk | 4 | pass | `ZXQ-NEEDLE-41729` | none | 36.0 MiB | 7.416 s | 2.97 GiB |
+| recent | anchor-neighbors | 4 | fail | `QXZNEEDLE41729` | `[94,80,82,77,0]` | 41.0 MiB | 7.263 s | 2.97 GiB |
+| recent | topk | 8 | fail | `ZXQ` | none | 40.0 MiB | 1.748 s | 2.97 GiB |
+| recent | anchor-neighbors | 8 | pass | `ZXQ-NEEDLE-41729` | `[94,80,82,77,89,91,87,0]` | 48.0 MiB | 8.863 s | 2.97 GiB |
+| recent | topk | 16 | pass | `ZXQ-NEEDLE-41729` | none | 48.0 MiB | 8.918 s | 2.97 GiB |
+| recent | anchor-neighbors | 16 | pass | `ZXQ-NEEDLE-41729` | none | 48.0 MiB | 8.960 s | 2.97 GiB |
+
+Interpretation:
+
+- Anchor-neighbors fixes the known recent/top8 failure and keeps active KV at
+  48.0 MiB, far below dense full attention.
+- Anchor-neighbors also preserves old/top4 and recent/top16.
+- Anchor-neighbors regresses the previously passing recent/top4 row by changing
+  output to `QXZNEEDLE41729`, the same formatting/content failure pattern seen
+  with anchor-only. Therefore it should not become the preferred policy as-is.
+- The next policy work should be selective: apply anchor-neighbor promotion only
+  when the base top-k set is fragile or insufficient, or use a score/uncertainty
+  gate rather than unconditional anchor-neighbor promotion.
+- Do not run 8192 or server integration until the promotion rule avoids the
+  recent/top4 regression.
+
 ## 2026-05-16: Focused 4096 Policy and Divergence-Step Diagnostics
 
 This checkpoint adds `M40LLM_KV_POLICY_DIAG=1`, a focused harness mode for the

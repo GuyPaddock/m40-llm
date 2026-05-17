@@ -318,12 +318,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   recovered the needle content but not exact formatting (`QXZNEEDLE41729`);
   anchor-plus-neighbor promotion passed with `ZXQ-NEEDLE-41729` using 16
   selected old blocks and 48.0 MiB active attended KV across all layers.
+  `M40LLM_KV_ANCHOR_NEIGHBOR_VALIDATE=1` now runs the broader 4096 old/top4 and
+  recent/top4/top8/top16 matrix for dense `off` plus direct FP16-K/q4-V
+  `block-select-exact`. That matrix confirms anchor-neighbors fixes recent/top8
+  and preserves old/top4 plus recent/top16, but it regresses the previously
+  passing recent/top4 row to `QXZNEEDLE41729`. Do not make anchor-neighbors the
+  preferred policy as-is.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. Validate anchor-plus-neighbor behavior
-  on the other 4096 rows before making it the preferred experimental selection
-  policy. Do not increase representative count, tune pure summary modes, run
-  8192, or expand compressed KV into server scheduling yet.
+  attention backend, but keep it opt-in. The next policy step should be a
+  selective promotion rule that fixes recent/top8 without applying harmful
+  anchor-neighbor blocks to already-stable top4 rows. Do not increase
+  representative count, tune pure summary modes, run 8192, or expand compressed
+  KV into server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
