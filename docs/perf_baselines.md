@@ -2,6 +2,60 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: Top-Block Robustness Selection Diagnostics
+
+This checkpoint adds diagnostic selected-block promotion policies for direct
+exact-old attention. The default remains score-ranked top-k. The new opt-in
+policy knob is:
+
+```bash
+M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors
+```
+
+Additional knobs are `M40LLM_KV_BLOCK_SCORE_DELTA`,
+`M40LLM_KV_BLOCK_MIN_BLOCKS`, `M40LLM_KV_BLOCK_MAX_BLOCKS`, and
+`M40LLM_KV_ANCHOR_BLOCKS`. JSONL rows now report the policy, base selected
+blocks, policy-added blocks, final selected blocks, and active attended KV using
+the first captured selection record rather than only the aggregate selected set.
+
+Reports:
+
+- `/tmp/m40-kv-policy-neighbors-4096-recent-top8.jsonl`
+- `/tmp/m40-kv-policy-neighbors-64-recent-top8.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for a short 64-token direct FP16-K/q4-V neighbor-policy smoke.
+- A focused 4096 recent/top_blocks=8 direct FP16-K/q4-V neighbor-policy row
+  completed but still failed with output `ZXQ`.
+
+Focused result:
+
+| Target | Needle | Backend | Policy | Top blocks | Status | Output | Final KV | Active KV all layers | Decode |
+| --- | --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: |
+| 4096 | recent | direct FP16 K + q4 V | neighbors | 8 | fail | `ZXQ` | 2.97 GiB | 115.0 MiB reported in pre-fix aggregate row | 2.045 s |
+
+Interpretation:
+
+- Neighbor promotion alone does not recover the known 4096 recent/top8 failure.
+  The first generated token is still correct, then generation emits `Q` and EOT.
+- First-token attention remains dominated by the exact recent ring
+  (`recent_mass ~= 0.99993`), so this row does not look like old selected blocks
+  stealing first-token attention.
+- The selection telemetry initially reported aggregate selected blocks across
+  layers/tokens for the new base/final fields. The harness now derives
+  base/added/final policy fields and active-KV accounting from the first
+  captured selection record, matching the candidate set used for attention
+  diagnostics.
+- Next useful diagnostics are threshold and anchor/anchor-neighbor policies, or
+  per-token attention capture at the divergence point. Do not run 8192 yet.
+
 ## 2026-05-16: Direct FP16-K + Q4-V Exact-Old Attention
 
 This checkpoint adds an opt-in direct attention backend for

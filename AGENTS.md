@@ -303,13 +303,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   passes in 7.36 s, recent/top8 fails with `ZXQ` like the FP16 baseline, and
   recent/top16 passes in 8.91 s. The harness now supports
   `M40LLM_KV_QUALITY_MODES` and `M40LLM_KV_EXACT_BACKEND_VARIANTS` to keep
-  expensive exact-block sweeps bounded.
+  expensive exact-block sweeps bounded. `M40LLM_KV_BLOCK_SELECT_POLICY` now
+  adds diagnostic selected-block promotion policies (`topk`, `neighbors`,
+  `threshold`, `anchor`, and `anchor-neighbors`) for direct exact-old attention.
+  JSONL rows report base selected blocks, policy-added blocks, final selected
+  blocks, and policy knobs. A focused 4096 recent/top8 direct FP16-K/q4-V
+  neighbor-policy row still failed with `ZXQ`, while first-token attention
+  remained dominated by the exact recent ring; simple neighbor promotion is not
+  enough to fix the known non-monotonic row.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. Investigate top-block robustness or
-  block promotion for the non-monotonic top_blocks=8 selected-context failure
-  before any 8192 sweep. Do not increase representative count or tune pure
-  summary modes for this path.
+  attention backend, but keep it opt-in. Try threshold and anchor/anchor-neighbor
+  policies, or capture per-token attention at the divergence point, before any
+  8192 sweep. Do not increase representative count or tune pure summary modes
+  for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

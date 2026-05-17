@@ -173,6 +173,24 @@ the staged/FP16 selected-context pass/fail pattern at 2048 and the known 4096
 rows, and is now the recommended experimental mixed attention backend. It
 remains opt-in while top-block robustness is still under investigation.
 
+Top-block selection diagnostics are also opt-in:
+
+- `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors`
+  controls how selected old blocks are promoted after score ranking for direct
+  exact-old attention diagnostics. The default `topk` preserves existing
+  behavior.
+- `neighbors` adds +/-1 old-block neighbors around score-ranked hits.
+- `threshold` keeps blocks within `M40LLM_KV_BLOCK_SCORE_DELTA` of the best
+  score, with optional `M40LLM_KV_BLOCK_MIN_BLOCKS` and
+  `M40LLM_KV_BLOCK_MAX_BLOCKS` caps.
+- `anchor` and `anchor-neighbors` always include anchor blocks from
+  `M40LLM_KV_ANCHOR_BLOCKS`, defaulting to block 0 when unset.
+
+JSONL rows include `block_select_policy`, `base_selected_block_indices`,
+`policy_added_block_indices`, `final_selected_block_indices`, and the threshold
+or cap values when set. These knobs are diagnostic-only; do not use them as a
+default policy until the 4096 top-block instability is understood.
+
 The quality harness supports row filtering for expensive exact-block sweeps:
 `M40LLM_KV_QUALITY_MODES=block-select-exact` limits the mode matrix, and
 `M40LLM_KV_EXACT_BACKEND_VARIANTS=fp16-k-q4-v-direct` limits exact-block backend

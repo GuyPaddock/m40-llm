@@ -88,6 +88,13 @@ struct CaseRecord {
     compression_ratio: Option<f64>,
     prefill_mode: String,
     top_blocks: Option<u32>,
+    block_select_policy: String,
+    block_score_delta: Option<f32>,
+    block_min_blocks: Option<u32>,
+    block_max_blocks: Option<u32>,
+    base_selected_block_indices: Option<Vec<u32>>,
+    policy_added_block_indices: Option<Vec<u32>>,
+    final_selected_block_indices: Option<Vec<u32>>,
     needle_block_index: Option<u32>,
     selected_block_indices: Option<Vec<u32>>,
     selected_block_score_entries: Option<Vec<String>>,
@@ -661,6 +668,66 @@ fn selected_block_order() -> String {
     }
 }
 
+fn block_select_policy() -> String {
+    match std::env::var("M40LLM_KV_BLOCK_SELECT_POLICY")
+        .ok()
+        .as_deref()
+    {
+        Some("neighbors") => "neighbors".to_string(),
+        Some("threshold") => "threshold".to_string(),
+        Some("anchor") => "anchor".to_string(),
+        Some("anchor-neighbors") => "anchor-neighbors".to_string(),
+        _ => "topk".to_string(),
+    }
+}
+
+fn env_u32(var: &str) -> Option<u32> {
+    std::env::var(var)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+}
+
+fn env_f32(var: &str) -> Option<f32> {
+    std::env::var(var)
+        .ok()
+        .and_then(|value| value.parse::<f32>().ok())
+}
+
+fn base_and_added_blocks(
+    selected: Option<&Vec<u32>>,
+    top_blocks: Option<u32>,
+) -> (Option<Vec<u32>>, Option<Vec<u32>>) {
+    let Some(selected) = selected else {
+        return (None, None);
+    };
+    let base_len = top_blocks
+        .map(|top| top as usize)
+        .unwrap_or(selected.len())
+        .min(selected.len());
+    let base = selected.iter().copied().take(base_len).collect::<Vec<_>>();
+    let added = selected
+        .iter()
+        .copied()
+        .skip(base_len)
+        .filter(|block| !base.contains(block))
+        .collect::<Vec<_>>();
+    (Some(base), Some(added))
+}
+
+fn first_selection_record_blocks(
+    summary: Option<&m40_llm::kv_selection::KvSelectionSummary>,
+) -> Option<Vec<u32>> {
+    summary
+        .and_then(|summary| summary.selection_records.first())
+        .map(|record| {
+            record
+                .selected_blocks
+                .iter()
+                .map(|block| block.block_index)
+                .collect()
+        })
+}
+
 fn parse_u32_list(value: &str, var_name: &str) -> Result<Vec<u32>> {
     let mut values = Vec::new();
     for part in value.split(',') {
@@ -906,6 +973,14 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Result<Vec<ExactBlockBacke
                 exact_old_precision: Some("q8-k-q8-v"),
                 q8_dense_shadow: false,
                 staging: Some("1"),
+            },
+            ExactBlockBackendCase {
+                variant: Some("fp16-k-q4-v-direct"),
+                exact_old_backing: Some("fp16-k-q4-v"),
+                exact_old_attention: Some("fp16-k-q4-v-direct"),
+                exact_old_precision: None,
+                q8_dense_shadow: false,
+                staging: None,
             },
         ]
     } else {
@@ -1696,7 +1771,7 @@ fn print_records(records: &[CaseRecord]) {
             .as_ref()
             .map(|slots| (slots.first().copied(), slots.last().copied(), slots.len()));
         eprintln!(
-            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) old_k_fp16_bytes={:?} q4_v(payload_bytes={:?},scale_bytes={:?}) recent_fp16_bytes={:?} summary_index_bytes={:?} staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
+            "  ctx={} prompt={} generated={} needle={} mode={} reps={} rep_policy={} top_blocks={:?} block_policy={} policy(delta={:?},min={:?},max={:?}) base_selected={:?} policy_added={:?} final_selected={:?} status={:?} ring={:?}..{:?} dense_candidates={:?} compressed_candidates={:?} compressed_slots={:?} needle_pos={:?} question_pos={:?} needle_recent={} question_recent={} expected_id={:?} expected_rank(dense={:?},dense_window={:?},mode={:?}) expected_logit(dense={:?},dense_window={:?},mode={:?}) prompt_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) prompt_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) first_decode_diff(max={:?},mean={:?},top10={:?},dense_top={:?},mode_top={:?}) first_decode_window_diff(max={:?},mean={:?},top10={:?},window_top={:?}) needle_block={:?} selected={:?} needle_selected={:?} needle_rank={:?} old_blocks={:?} exact_backend={:?} exact_old_backing={:?} exact_old_attention={:?} q8_old(bytes={:?},scale_bytes={:?}) old_k_fp16_bytes={:?} q4_v(payload_bytes={:?},scale_bytes={:?}) recent_fp16_bytes={:?} summary_index_bytes={:?} staging={} staging_workspace(reused={},bytes={:?},capacity_tokens={:?},allocations={}) staged(tokens={:?},bytes={:?},old={:?},recent={:?},pos={:?}..{:?}) active_kv(tokens={:?},bytes={:?},all_layers={:?},old={:?},recent={:?}) mass(recent={:?},old_exact={:?},summary={:?},rep={:?},needle={:?}) logits(recent_max={:?},recent_mean={:?},summary_max={:?},summary_mean={:?}) top_attn={:?} attn_records={:?} prefill={}ms decode={}ms total={}ms prefill_tps={:?} decode_tps={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} temp_dense_kv_bytes={:?} compression_ratio={:?} prefill_mode={} output={:?} error={}",
             record.target_tokens,
             record.prompt_tokens,
             record.generated_tokens,
@@ -1705,6 +1780,13 @@ fn print_records(records: &[CaseRecord]) {
             record.representatives,
             record.representative_policy,
             record.top_blocks,
+            record.block_select_policy,
+            record.block_score_delta,
+            record.block_min_blocks,
+            record.block_max_blocks,
+            record.base_selected_block_indices,
+            record.policy_added_block_indices,
+            record.final_selected_block_indices,
             record.status,
             record.recent_ring_absolute_start,
             record.recent_ring_absolute_end,
@@ -2070,6 +2152,13 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                             let selected_block_indices = selection_summary
                                 .as_ref()
                                 .map(|summary| summary.selected_block_indices.clone());
+                            let final_selected_block_indices =
+                                first_selection_record_blocks(selection_summary.as_ref());
+                            let (base_selected_block_indices, policy_added_block_indices) =
+                                base_and_added_blocks(
+                                    final_selected_block_indices.as_ref(),
+                                    top_blocks_case,
+                                );
                             let selected_block_score_entries =
                                 selection_summary.as_ref().map(selected_block_entry_strings);
                             let selection_records =
@@ -2213,10 +2302,14 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 generated_logit_trace_raw.as_deref(),
                                 position_meta.expected_first_answer_token_id,
                             );
+                            let accounting_top_blocks = final_selected_block_indices
+                                .as_ref()
+                                .map(|selected| selected.len() as u32)
+                                .or(top_blocks_case);
                             let active_kv = active_kv_working_set(
                                 mode,
                                 prompt_tokens,
-                                top_blocks_case,
+                                accounting_top_blocks,
                                 ActiveKvAccounting {
                                     recent_window: 1024,
                                     block_size: 32,
@@ -2314,6 +2407,13 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                 },
                                 prefill_mode,
                                 top_blocks: top_blocks_case,
+                                block_select_policy: block_select_policy(),
+                                block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
+                                block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),
+                                block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
+                                base_selected_block_indices,
+                                policy_added_block_indices,
+                                final_selected_block_indices,
                                 needle_block_index,
                                 selected_block_indices,
                                 selected_block_score_entries,
