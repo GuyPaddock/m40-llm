@@ -343,15 +343,24 @@ batched decode path before touching persistent decode or large-model fused-dequa
   produced no fallback regressions. EOT-anomaly and low-margin can trigger on
   already-passing rows but preserved the answer in this run; score-spread was
   conservative and did not trigger. The summary task failed for dense `off` too,
-  so it is not compressed-KV-specific evidence.
+  so it is not compressed-KV-specific evidence. The harness now supports
+  `M40LLM_KV_MULTITASK_TASKS` and `M40LLM_KV_MULTITASK_FALLBACK_CASES` filters
+  for expensive runs. A focused 4096 multi-task run over single-needle,
+  multi-needle, distractor-code, early-fact QA, and long-chat smoke tasks showed
+  that score-spread and combined fallback triggered on every compressed row. The
+  multi-needle row is decisive policy evidence: dense `off` failed, top-k
+  exact-block retrieval passed with `ALPHA-13579, BRAVO-24680`, but both
+  score-spread and combined top16 retries regressed it to
+  `Alfa-13579, Bravo-24680`. Keep fallback diagnostic/opt-in.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. The next policy step should either run
-  the multi-task suite at 4096 or add more diverse prompt families that expose
-  top-k failures outside the single-needle row before choosing EOT-anomaly,
-  low-margin, score-spread, combined fallback, or conservative top16 quality
-  mode as a deployable rule. Do not increase representative count, tune pure
-  summary modes, run 8192, or expand compressed KV into server scheduling yet.
+  attention backend, but keep it opt-in. Top-k should remain the preferred
+  exact-old selection policy for now; fallback gates are too false-positive
+  prone at 4096. The next policy step should tighten trigger thresholds or
+  design non-retry dynamic expansion, then validate against the multi-task suite
+  before considering a deployable fallback. Do not increase representative
+  count, tune pure summary modes, run 8192, or expand compressed KV into server
+  scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

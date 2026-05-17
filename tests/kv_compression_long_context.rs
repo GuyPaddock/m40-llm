@@ -2451,6 +2451,40 @@ fn multitask_fallback_cases() -> Vec<MultiFallbackCase> {
     cases
 }
 
+fn env_name_filter(name: &'static str) -> Option<Vec<String>> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+}
+
+fn filter_multitask_specs(tasks: Vec<MultiTaskSpec>) -> Vec<MultiTaskSpec> {
+    let Some(filter) = env_name_filter("M40LLM_KV_MULTITASK_TASKS") else {
+        return tasks;
+    };
+    tasks
+        .into_iter()
+        .filter(|task| filter.iter().any(|name| name == task.name))
+        .collect()
+}
+
+fn filter_multitask_fallback_cases(cases: Vec<MultiFallbackCase>) -> Vec<MultiFallbackCase> {
+    let Some(filter) = env_name_filter("M40LLM_KV_MULTITASK_FALLBACK_CASES") else {
+        return cases;
+    };
+    cases
+        .into_iter()
+        .filter(|case| filter.iter().any(|name| name == case.name))
+        .collect()
+}
+
 fn multitask_trigger_reason_for_case(
     case: MultiFallbackCase,
     initial_passed: bool,
@@ -2768,11 +2802,13 @@ fn run_fallback_multitask_suite(
     target_tokens: usize,
 ) -> Result<()> {
     let max_tokens = multitask_max_tokens();
-    let tasks = multitask_specs(tokenizer, target_tokens);
+    let tasks = filter_multitask_specs(multitask_specs(tokenizer, target_tokens));
+    let fallback_cases = filter_multitask_fallback_cases(multitask_fallback_cases());
     let mut records = Vec::new();
     eprintln!(
-        "running fallback multitask diagnostic: target={target_tokens} tasks={} max_tokens={max_tokens}",
-        tasks.len()
+        "running fallback multitask diagnostic: target={target_tokens} tasks={} fallback_cases={} max_tokens={max_tokens}",
+        tasks.len(),
+        fallback_cases.len()
     );
     for spec in tasks {
         let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
@@ -2791,7 +2827,7 @@ fn run_fallback_multitask_suite(
         let initial_score = score_multitask_output(&spec, &initial.output);
         let initial_signals = fallback_signal_summary(initial.generated_logit_trace.as_deref());
         let cutoff_margin = score_cutoff_margin(initial.kv_selection.as_ref());
-        for fallback_case in multitask_fallback_cases() {
+        for &fallback_case in &fallback_cases {
             let mut final_generated = initial.clone();
             let mut fallback_triggered = false;
             let mut fallback_trigger_reason = None;

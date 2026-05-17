@@ -2,6 +2,59 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: 4096 Multi-Task Fallback Gate Validation
+
+This checkpoint adds filters for expensive fallback multi-task runs:
+`M40LLM_KV_MULTITASK_TASKS` and `M40LLM_KV_MULTITASK_FALLBACK_CASES`. The
+focused 4096 run used direct FP16-K/q4-V exact-old retrieval, top-k at
+`top_blocks=8`, and top16 retries for `score-spread-top16` and
+`combined-top16`.
+
+Report:
+
+- `/tmp/m40-kv-fallback-multitask-4096-core.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` and
+  `cargo check --features cuda --test kv_compression_long_context` passed before
+  the run.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the filtered 4096 multi-task matrix in 13,705.45 s.
+
+Summary:
+
+| Task | Dense off | Top-k | Score-spread fallback | Combined fallback | Triggered | Regression |
+| --- | --- | --- | --- | --- | --- | --- |
+| single-needle | pass | pass | pass | pass | score-spread, combined | no |
+| multi-needle | fail | pass | fail | fail | score-spread, combined | yes |
+| distractor-needle | pass | pass | pass | pass | score-spread, combined | no |
+| early-fact QA | pass | pass | pass | pass | score-spread, combined | no |
+| long-chat smoke | pass | pass | pass | pass | score-spread, combined | no |
+
+Key numbers:
+
+| Row type | Active KV | Final KV | Typical decode |
+| --- | ---: | ---: | ---: |
+| dense off | ~126-127 MiB | 4.00 GiB | 5.3-20.0 s |
+| top-k `top_blocks=8` | 40.0 MiB | 2.97 GiB | 3.5-13.1 s |
+| top16 fallback | 48.0 MiB | 2.97 GiB | 3.9-14.8 s |
+
+Interpretation:
+
+- Score-spread and combined fallback triggered on every compressed row in this
+  focused matrix, including rows where top-k already passed.
+- The multi-needle row is decisive policy evidence: dense `off` failed, but
+  top-k exact-block retrieval passed exactly; score-spread and combined retries
+  regressed it to `Alfa-13579, Bravo-24680`, scoring only 1/2.
+- Because fallback caused regressions on top-k-passing rows, fallback should not
+  become the preferred experimental policy. Keep top-k as the default exact-old
+  selection policy and leave fallback diagnostic/opt-in.
+- The score-spread threshold is too sensitive for this task family. Any future
+  fallback policy needs stricter trigger gating, per-task validation, or a
+  non-retry dynamic expansion design that does not replace already-good top-k
+  output.
+
 ## 2026-05-17: Multi-Task Fallback Gate Validation
 
 This checkpoint adds `M40LLM_KV_FALLBACK_MULTITASK_DIAG=1`, a bounded

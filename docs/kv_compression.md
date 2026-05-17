@@ -243,6 +243,12 @@ task-specific score, fallback trigger metadata, active KV before/after, retry
 decode time, final KV allocation, and whether a fallback regressed a row that
 top-k already passed.
 
+Use `M40LLM_KV_MULTITASK_TASKS=single-needle,distractor-needle,...` and
+`M40LLM_KV_MULTITASK_FALLBACK_CASES=topk,score-spread-top16,combined-top16` to
+bound expensive 4096-token runs. The multi-task case names are
+`single-needle`, `multi-needle`, `distractor-needle`, `early-fact-qa`,
+`early-fact-summary`, and `long-chat-smoke`.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the
