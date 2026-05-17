@@ -168,8 +168,15 @@ Set `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct` with
 `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v` to use the experimental direct mixed
 attention backend. This keeps old K in FP16, reads old V from the packed q4
 backing, and unpacks q4 V inside the attention value accumulation instead of
-materializing selected old V into FP16 staging. The staged mixed path remains
-the conservative default until the 4096 quality rows are validated.
+materializing selected old V into FP16 staging. The direct mixed path preserves
+the staged/FP16 selected-context pass/fail pattern at 2048 and the known 4096
+rows, and is now the recommended experimental mixed attention backend. It
+remains opt-in while top-block robustness is still under investigation.
+
+The quality harness supports row filtering for expensive exact-block sweeps:
+`M40LLM_KV_QUALITY_MODES=block-select-exact` limits the mode matrix, and
+`M40LLM_KV_EXACT_BACKEND_VARIANTS=fp16-k-q4-v-direct` limits exact-block backend
+cases.
 
 By default, q8 exact-old attention still dequantizes selected old blocks into
 the reusable FP16 staging workspace before attention. Set

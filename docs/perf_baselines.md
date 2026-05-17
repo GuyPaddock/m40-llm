@@ -16,6 +16,7 @@ q4 V inside the attention value accumulation.
 Reports:
 
 - `/tmp/m40-mixed-q4-v-direct-2048-old.jsonl`
+- `/tmp/m40-mixed-q4-v-direct-only-4096.jsonl`
 
 Validation:
 
@@ -26,6 +27,10 @@ Validation:
   passed, including staged-vs-direct FP16-K/q4-V parity coverage.
 - `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
   passed for the bounded 2048 old/top_blocks=2 direct-sweep matrix.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the filtered 4096 direct-only matrix using
+  `M40LLM_KV_QUALITY_MODES=block-select-exact` and
+  `M40LLM_KV_EXACT_BACKEND_VARIANTS=fp16-k-q4-v-direct`.
 
 2048 old/top_blocks=2 summary:
 
@@ -36,16 +41,29 @@ Validation:
 | staged FP16 K + q4 V | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | 8.63 MiB | 34.0 MiB | 8.967 s |
 | direct FP16 K + q4 V | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 4.00 GiB | none | 34.0 MiB | 4.943 s |
 
+4096 direct FP16-K/q4-V summary:
+
+| Target | Top blocks | Status | Output | Final KV | Active KV all layers | Decode |
+| --- | ---: | --- | --- | ---: | ---: | ---: |
+| old | 4 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 36.0 MiB | 7.348 s |
+| recent | 4 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 36.0 MiB | 7.362 s |
+| recent | 8 | fail | `ZXQ` | 2.97 GiB | 40.0 MiB | 1.751 s |
+| recent | 16 | pass | `ZXQ-NEEDLE-41729` | 2.97 GiB | 48.0 MiB | 8.914 s |
+
 Interpretation:
 
 - Direct FP16-K/q4-V preserves the staged mixed pass/fail behavior on this
-  bounded quality row and removes the per-session FP16 staging workspace use for
-  selected old q4 V.
-- The measured 2048 old/top2 direct row is faster than both staged q4 and the
-  FP16 selected-block baseline, but this is not enough to make it default.
-- Next validation should run the same direct-sweep mode on the known 4096 rows:
-  old/top4 and recent/top4/top8/top16. Keep staged q4 as the conservative
-  default until those rows preserve the FP16 selected-context pass/fail pattern.
+  bounded quality row and the known 4096 rows while removing the per-session
+  FP16 staging workspace use for selected old q4 V.
+- The measured direct rows are faster than staged q4 and the FP16
+  selected-block baseline in the passing 2048 old/top2, 4096 old/top4, 4096
+  recent/top4, and 4096 recent/top16 cases.
+- The 4096 recent/top8 direct row fails with `ZXQ`, matching the FP16
+  selected-context and staged-q4 failure pattern. Treat this as selected-context
+  insufficiency, not a direct q4 regression.
+- Direct FP16-K/q4-V is now the recommended experimental mixed attention backend,
+  but remains opt-in until broader prompt coverage and top-block robustness are
+  improved.
 
 ## 2026-05-16: Deployable FP16-K + Q4-V Exact-Old KV
 

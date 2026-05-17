@@ -684,6 +684,58 @@ fn parse_u32_list(value: &str, var_name: &str) -> Result<Vec<u32>> {
     Ok(values)
 }
 
+fn quality_modes_from_env() -> Result<Option<Vec<KvCompressMode>>> {
+    let Some(value) = std::env::var("M40LLM_KV_QUALITY_MODES")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let mut modes = Vec::new();
+    for part in value.split(',') {
+        match part.trim() {
+            "off" => modes.push(KvCompressMode::Off),
+            "dense-recent-only" => modes.push(KvCompressMode::DenseRecentOnly),
+            "block-select-exact" => modes.push(KvCompressMode::BlockSelectExact),
+            "recent-only" => modes.push(KvCompressMode::RecentOnly),
+            "block-summary" => modes.push(KvCompressMode::BlockSummary),
+            "block-select-lossy" => modes.push(KvCompressMode::BlockSelectLossy),
+            "" => {}
+            other => anyhow::bail!(
+                "invalid M40LLM_KV_QUALITY_MODES entry '{other}', expected off, dense-recent-only, block-select-exact, recent-only, block-summary, or block-select-lossy"
+            ),
+        }
+    }
+    modes.sort_unstable_by_key(|mode| mode_name(*mode));
+    modes.dedup();
+    if modes.is_empty() {
+        anyhow::bail!("M40LLM_KV_QUALITY_MODES did not contain any modes");
+    }
+    Ok(Some(modes))
+}
+
+fn exact_backend_variant_filter() -> Result<Option<Vec<String>>> {
+    let Some(value) = std::env::var("M40LLM_KV_EXACT_BACKEND_VARIANTS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let mut variants = Vec::new();
+    for part in value.split(',') {
+        let trimmed = part.trim();
+        if !trimmed.is_empty() {
+            variants.push(trimmed.to_string());
+        }
+    }
+    variants.sort();
+    variants.dedup();
+    if variants.is_empty() {
+        anyhow::bail!("M40LLM_KV_EXACT_BACKEND_VARIANTS did not contain any variants");
+    }
+    Ok(Some(variants))
+}
+
 fn top_block_cases(exact_selection_sweep: bool, mode: KvCompressMode) -> Result<Vec<Option<u32>>> {
     if mode == KvCompressMode::Off {
         return Ok(vec![None]);
@@ -732,8 +784,8 @@ struct ExactBlockBackendCase {
     staging: Option<&'static str>,
 }
 
-fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase> {
-    if q4_v_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
+fn exact_block_backend_cases(mode: KvCompressMode) -> Result<Vec<ExactBlockBackendCase>> {
+    let cases = if q4_v_diagnostic_enabled() && mode == KvCompressMode::BlockSelectExact {
         vec![
             ExactBlockBackendCase {
                 variant: Some("fp16-k-fp16-v"),
@@ -865,7 +917,24 @@ fn exact_block_backend_cases(mode: KvCompressMode) -> Vec<ExactBlockBackendCase>
             q8_dense_shadow: false,
             staging: None,
         }]
+    };
+    let Some(filter) = exact_backend_variant_filter()? else {
+        return Ok(cases);
+    };
+    let filtered: Vec<_> = cases
+        .into_iter()
+        .filter(|case| {
+            let variant = case.variant.unwrap_or("default");
+            filter.iter().any(|allowed| allowed == variant)
+        })
+        .collect();
+    if filtered.is_empty() {
+        anyhow::bail!(
+            "M40LLM_KV_EXACT_BACKEND_VARIANTS did not match any exact backend case for mode {}",
+            mode_name(mode)
+        );
     }
+    Ok(filtered)
 }
 
 fn apply_exact_block_backend_case(case: ExactBlockBackendCase) -> Vec<EnvVarGuard> {
@@ -1767,7 +1836,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         .unwrap_or_else(|_| Tokenizer::byte_level());
     let lossy_packed_sweep = lossy_packed_sweep_enabled();
     let exact_selection_sweep = exact_selection_sweep_enabled() || exact_q8_diagnostic_enabled();
-    let modes = quality_modes(lossy_packed_sweep, exact_selection_sweep);
+    let mode_filter = quality_modes_from_env()?;
+    let modes: Vec<KvCompressMode> = mode_filter
+        .unwrap_or_else(|| quality_modes(lossy_packed_sweep, exact_selection_sweep).to_vec());
     let rep_cases = representative_cases(lossy_packed_sweep);
     let needle_positions = needle_positions()?;
 
@@ -1798,7 +1869,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                 prompt_tokens_for_meta,
                 1024,
             )?;
-            for &mode in modes {
+            for &mode in &modes {
                 if q8_precision_split_diagnostic_enabled() && needle_position != "old" {
                     continue;
                 }
@@ -1865,7 +1936,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                         {
                             continue;
                         }
-                        for backend_case in exact_block_backend_cases(mode) {
+                        for backend_case in exact_block_backend_cases(mode)? {
                             let _backend_guards = apply_exact_block_backend_case(backend_case);
                             let exact_block_backend_variant =
                                 backend_case.variant.map(str::to_string);

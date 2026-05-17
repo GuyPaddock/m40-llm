@@ -298,13 +298,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   V into FP16 staging. CUDA attention parity covers staged-vs-direct
   FP16-K/q4-V. A bounded 2048 old/top_blocks=2 quality row passed and improved
   decode time from 8.97 s staged-q4 to 4.94 s direct-q4 while keeping final KV
-  allocation at 2.97 GiB.
+  allocation at 2.97 GiB. A filtered 4096 direct-only sweep also preserves the
+  expected selected-context pattern: old/top4 passes in 7.35 s, recent/top4
+  passes in 7.36 s, recent/top8 fails with `ZXQ` like the FP16 baseline, and
+  recent/top16 passes in 8.91 s. The harness now supports
+  `M40LLM_KV_QUALITY_MODES` and `M40LLM_KV_EXACT_BACKEND_VARIANTS` to keep
+  expensive exact-block sweeps bounded.
 - Next: avoid 8192 and server integration until exact-block quality is more
-  stable. Validate direct FP16-K/q4-V on the known 4096 rows
-  (old/top4 and recent/top4/top8/top16) before making it the recommended mixed
-  backend. Also investigate top-block robustness or block promotion for the
-  non-monotonic top_blocks=8 selected-context failure before any 8192 sweep. Do
-  not increase representative count or tune pure summary modes for this path.
+  stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
+  attention backend, but keep it opt-in. Investigate top-block robustness or
+  block promotion for the non-monotonic top_blocks=8 selected-context failure
+  before any 8192 sweep. Do not increase representative count or tune pure
+  summary modes for this path.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
