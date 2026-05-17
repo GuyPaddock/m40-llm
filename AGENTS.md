@@ -310,13 +310,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   blocks, and policy knobs. A focused 4096 recent/top8 direct FP16-K/q4-V
   neighbor-policy row still failed with `ZXQ`, while first-token attention
   remained dominated by the exact recent ring; simple neighbor promotion is not
-  enough to fix the known non-monotonic row.
+  enough to fix the known non-monotonic row. `M40LLM_KV_POLICY_DIAG=1` now runs
+  a bounded 4096 recent/top8 policy matrix with dense `off`, direct
+  FP16-K/q4-V `block-select-exact`, generated-step attention capture, and
+  per-row `block_policy_case` labels. In that matrix, small score-threshold
+  deltas did not add blocks and still failed with `ZXQ`; anchor block 0
+  recovered the needle content but not exact formatting (`QXZNEEDLE41729`);
+  anchor-plus-neighbor promotion passed with `ZXQ-NEEDLE-41729` using 16
+  selected old blocks and 48.0 MiB active attended KV across all layers.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. Try threshold and anchor/anchor-neighbor
-  policies, or capture per-token attention at the divergence point, before any
-  8192 sweep. Do not increase representative count or tune pure summary modes
-  for this path.
+  attention backend, but keep it opt-in. Validate anchor-plus-neighbor behavior
+  on the other 4096 rows before making it the preferred experimental selection
+  policy. Do not increase representative count, tune pure summary modes, run
+  8192, or expand compressed KV into server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

@@ -2,6 +2,59 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-16: Focused 4096 Policy and Divergence-Step Diagnostics
+
+This checkpoint adds `M40LLM_KV_POLICY_DIAG=1`, a focused harness mode for the
+known 4096 recent/top_blocks=8 direct FP16-K/q4-V failure. It runs dense `off`
+plus direct mixed `block-select-exact`, captures generated-step attention with
+`M40LLM_KV_CAPTURE_GENERATED_STEP=2`, and records `block_policy_case` so fixed
+policy variants can be compared in one bounded run.
+
+Report:
+
+- `/tmp/m40-kv-policy-diag-4096-recent-top8.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo clippy --features cuda,server --all-targets -- -D warnings` passed.
+- `cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the focused policy diagnostic run.
+
+Summary:
+
+| Mode | Policy case | Top blocks | Status | Output | Added blocks | Active KV all layers | Decode |
+| --- | --- | ---: | --- | --- | --- | ---: | ---: |
+| dense off | env | - | pass | `ZXQ-NEEDLE-41729` | - | 127.4 MiB | 12.159 s |
+| direct FP16 K + q4 V | topk | 8 | fail | `ZXQ` | none | 40.0 MiB | 1.892 s |
+| direct FP16 K + q4 V | threshold-005 | 8 | fail | `ZXQ` | none | 40.0 MiB | 1.916 s |
+| direct FP16 K + q4 V | threshold-010 | 8 | fail | `ZXQ` | none | 40.0 MiB | 1.914 s |
+| direct FP16 K + q4 V | threshold-020 | 8 | fail | `ZXQ` | none | 40.0 MiB | 1.921 s |
+| direct FP16 K + q4 V | anchor-top8 | 8 | fail | `QXZNEEDLE41729` | `[0]` | 41.0 MiB | 7.205 s |
+| direct FP16 K + q4 V | anchor-neighbors-top8 | 8 | pass | `ZXQ-NEEDLE-41729` | `[94,80,82,77,89,91,87,0]` | 48.0 MiB | 8.986 s |
+| direct FP16 K + q4 V | anchor-top4 | 4 | fail | `QXZNEEDLE41729` | `[0]` | 37.0 MiB | 6.741 s |
+
+Interpretation:
+
+- Small threshold deltas did not add any blocks in this row, so they behave
+  identically to top-k and still fail with `ZXQ`.
+- Anchor block 0 changes the failure mode and recovers the needle content, but
+  misses the exact answer formatting. This suggests prompt/header support is a
+  real contributor, not just raw needle-block selection.
+- Anchor-plus-neighbor promotion is the first tested policy that recovers the
+  exact 4096 recent/top8 answer. It doubles selected old blocks from 8 to 16
+  for the first captured attention record, raising active attended KV from
+  40.0 MiB to 48.0 MiB across all layers, still far below dense full attention
+  for this context.
+- Divergence-step attention remains recent-heavy in layer 0, but later layers
+  route substantial probability mass to selected old exact blocks. The failure
+  is not explained by first-token recent-ring attention alone.
+- Next, validate anchor-neighbor behavior on the other 4096 rows before making
+  it the preferred experimental policy. Do not run 8192 or server integration
+  yet.
+
 ## 2026-05-16: Top-Block Robustness Selection Diagnostics
 
 This checkpoint adds diagnostic selected-block promotion policies for direct

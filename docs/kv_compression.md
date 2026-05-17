@@ -191,6 +191,17 @@ JSONL rows include `block_select_policy`, `base_selected_block_indices`,
 or cap values when set. These knobs are diagnostic-only; do not use them as a
 default policy until the 4096 top-block instability is understood.
 
+`M40LLM_KV_POLICY_DIAG=1` runs the current focused top-block policy diagnostic:
+4096-token recent-needle retrieval with dense `off` plus direct
+FP16-K/q4-V `block-select-exact`. It evaluates fixed policy cases for `topk`,
+small score thresholds, anchor block inclusion, and anchor-plus-neighbor
+promotion. Rows include `block_policy_case`.
+
+`M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
+`M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
+attention capture selector is already set. This is useful for capturing the
+actual divergence step instead of only the first generated answer token.
+
 The quality harness supports row filtering for expensive exact-block sweeps:
 `M40LLM_KV_QUALITY_MODES=block-select-exact` limits the mode matrix, and
 `M40LLM_KV_EXACT_BACKEND_VARIANTS=fp16-k-q4-v-direct` limits exact-block backend
