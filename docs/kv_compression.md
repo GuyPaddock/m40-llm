@@ -231,6 +231,18 @@ Runtime policy work should prefer answer-agnostic gates such as EOT confidence
 anomalies, low top-token margin, score-spread near the block cutoff, or a fixed
 conservative top-block cap when quality is more important than active-KV size.
 
+`M40LLM_KV_FALLBACK_MULTITASK_DIAG=1` runs a bounded multi-task validation
+suite for the answer-agnostic fallback gates. It uses direct FP16-K/q4-V
+`block-select-exact` retrieval, compares dense `off`, top-k only, and top16
+fallback rows for EOT-anomaly, low-margin, score-spread, and a combined gate.
+The default target is 1024 tokens so the suite is routine enough to run; set
+`M40LLM_KV_QUALITY_TARGETS=4096` for the heavier long-context version. The suite
+includes single-needle, multi-needle, distractor-code retrieval, early-fact QA,
+early-fact summary, and a normal long-chat smoke. JSONL rows include
+task-specific score, fallback trigger metadata, active KV before/after, retry
+decode time, final KV allocation, and whether a fallback regressed a row that
+top-k already passed.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the

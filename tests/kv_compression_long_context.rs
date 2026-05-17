@@ -16,6 +16,16 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const NEEDLE: &str = "ZXQ-NEEDLE-41729";
+const MULTI_NEEDLE_A: &str = "ALPHA-13579";
+const MULTI_NEEDLE_B: &str = "BRAVO-24680";
+const DISTRACTOR_TARGET: &str = "ORBIT-57291";
+const DISTRACTOR_A: &str = "ORBIT-57219";
+const DISTRACTOR_B: &str = "ORB1T-57291";
+const DISTRACTOR_C: &str = "ORBIT-59271";
+const EARLY_FACT_CITY: &str = "Reykjavik";
+const SUMMARY_FACT_A: &str = "cobalt river";
+const SUMMARY_FACT_B: &str = "amber lighthouse";
+const SUMMARY_FACT_C: &str = "linen atlas";
 
 #[derive(Debug, Clone)]
 struct Candidate {
@@ -179,6 +189,60 @@ struct CaseRecord {
     attention_records: Option<Vec<String>>,
     generated_logit_trace: Option<Vec<GeneratedLogitTraceRecord>>,
     output: String,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MultiTaskRecord {
+    model_path: String,
+    resolved_model_path: String,
+    target_tokens: usize,
+    task: String,
+    score_type: String,
+    mode: String,
+    fallback_case: Option<String>,
+    fallback_triggered: bool,
+    fallback_trigger_reason: Option<String>,
+    fallback_policy_used: Option<String>,
+    top_blocks_initial: Option<u32>,
+    top_blocks_final: Option<u32>,
+    status: CaseStatus,
+    score: f32,
+    max_score: f32,
+    dense_reference_output: Option<String>,
+    initial_output: Option<String>,
+    output: String,
+    expected_terms: Vec<String>,
+    forbidden_terms: Vec<String>,
+    topk_passed: Option<bool>,
+    fallback_regressed_topk_pass: bool,
+    prompt_tokens: usize,
+    generated_tokens: usize,
+    prompt_prefill_elapsed_ms: u128,
+    generated_decode_elapsed_ms: u128,
+    total_elapsed_ms: u128,
+    initial_decode_elapsed_ms: Option<u128>,
+    fallback_decode_elapsed_ms: Option<u128>,
+    total_decode_elapsed_ms_with_retry: Option<u128>,
+    active_attended_kv_bytes_all_layers: Option<usize>,
+    initial_active_kv_bytes_all_layers: Option<usize>,
+    fallback_active_kv_bytes_all_layers: Option<usize>,
+    final_kv_allocated_bytes: Option<usize>,
+    dense_equivalent_kv_bytes: Option<usize>,
+    exact_old_backing: Option<String>,
+    exact_old_attention_backend: Option<String>,
+    old_k_fp16_bytes: Option<usize>,
+    q4_old_v_payload_bytes: Option<usize>,
+    q4_old_v_scale_bytes: Option<usize>,
+    recent_fp16_bytes: Option<usize>,
+    summary_index_bytes: Option<usize>,
+    selected_block_indices: Option<Vec<u32>>,
+    base_selected_block_indices: Option<Vec<u32>>,
+    final_selected_block_indices: Option<Vec<u32>>,
+    initial_eot_rank_min: Option<usize>,
+    initial_eot_logit_margin_min: Option<f32>,
+    initial_top_margin_min: Option<f32>,
+    score_cutoff_margin: Option<f32>,
     error: Option<String>,
 }
 
@@ -512,6 +576,13 @@ fn retrieval_max_tokens() -> usize {
         .unwrap_or(16)
 }
 
+fn multitask_max_tokens() -> usize {
+    std::env::var("M40LLM_KV_MULTITASK_MAX_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(16)
+}
+
 fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize>> {
     let limit = model_context.saturating_sub(128);
     if let Some(targets) = std::env::var("M40LLM_KV_QUALITY_TARGETS")
@@ -548,6 +619,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
         }
         if fallback_diagnostic_enabled() {
             return Ok(if 4096 < limit { vec![4096] } else { Vec::new() });
+        }
+        if fallback_multitask_diagnostic_enabled() {
+            return Ok(if 1024 < limit { vec![1024] } else { Vec::new() });
         }
         if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
@@ -689,6 +763,18 @@ fn fallback_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn fallback_multitask_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_FALLBACK_MULTITASK_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn fallback_include_oracle_enabled() -> bool {
+    std::env::var("M40LLM_KV_FALLBACK_INCLUDE_ORACLE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn exact_q8_diagnostic_enabled() -> bool {
     q8_drift_diagnostic_enabled()
         || q8_precision_split_diagnostic_enabled()
@@ -699,6 +785,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || policy_diagnostic_enabled()
         || anchor_neighbor_validation_enabled()
         || fallback_diagnostic_enabled()
+        || fallback_multitask_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -718,6 +805,7 @@ fn logit_compare_enabled() -> bool {
         || policy_diagnostic_enabled()
         || anchor_neighbor_validation_enabled()
         || fallback_diagnostic_enabled()
+        || fallback_multitask_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -1667,7 +1755,7 @@ fn representative_policy_name(policy: KvRepresentativePolicy) -> &'static str {
     }
 }
 
-fn append_report_record(record: &CaseRecord) -> Result<()> {
+fn append_report_record<T: Serialize>(record: &T) -> Result<()> {
     let Some(path) = std::env::var_os("M40LLM_KV_QUALITY_REPORT") else {
         return Ok(());
     };
@@ -2131,6 +2219,646 @@ fn generated_trace_records(
     Some(records)
 }
 
+#[derive(Debug, Clone)]
+struct MultiTaskSpec {
+    name: &'static str,
+    score_type: &'static str,
+    prompt: String,
+    expected_terms: Vec<&'static str>,
+    forbidden_terms: Vec<&'static str>,
+    require_nonempty: bool,
+}
+
+#[derive(Debug, Clone)]
+struct MultiTaskScore {
+    status: CaseStatus,
+    score: f32,
+    max_score: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct MultiFallbackCase {
+    name: &'static str,
+    retry_top_blocks: Option<u32>,
+}
+
+fn contains_case_insensitive(output: &str, needle: &str) -> bool {
+    output
+        .to_ascii_lowercase()
+        .contains(&needle.to_ascii_lowercase())
+}
+
+fn push_filler_to_target(tokenizer: &Tokenizer, prompt: &mut String, target_tokens: usize) {
+    while tokenizer
+        .encode_with_specials(prompt, true, false)
+        .map(|ids| ids.len())
+        .unwrap_or(usize::MAX)
+        < target_tokens.saturating_sub(96)
+    {
+        prompt.push_str(
+            "Background filler about CUDA kernels, sparse attention, memory locality, and benchmark notes. ",
+        );
+    }
+}
+
+fn multitask_specs(tokenizer: &Tokenizer, target_tokens: usize) -> Vec<MultiTaskSpec> {
+    let mut single = String::new();
+    single
+        .push_str("You are doing an exact retrieval task. Answer with only the requested code.\n");
+    push_filler_to_target(tokenizer, &mut single, target_tokens);
+    single.push_str("\nImportant secret code: ");
+    single.push_str(NEEDLE);
+    single.push_str("\nQuestion: What is the secret code? Answer with only the code.");
+
+    let mut multi = String::new();
+    multi
+        .push_str("You are doing an exact retrieval task. Answer with only the requested codes.\n");
+    multi.push_str("First audit code: ");
+    multi.push_str(MULTI_NEEDLE_A);
+    multi.push('\n');
+    push_filler_to_target(tokenizer, &mut multi, target_tokens);
+    multi.push_str("\nSecond audit code: ");
+    multi.push_str(MULTI_NEEDLE_B);
+    multi.push_str("\nQuestion: What are the two audit codes? Answer with both codes only.");
+
+    let mut distractor = String::new();
+    distractor.push_str(
+        "You are doing an exact retrieval task. Several similar codes are distractors.\n",
+    );
+    distractor.push_str("Target shipment code: ");
+    distractor.push_str(DISTRACTOR_TARGET);
+    distractor.push_str("\nDistractor code, not the answer: ");
+    distractor.push_str(DISTRACTOR_A);
+    distractor.push_str("\nDistractor code, not the answer: ");
+    distractor.push_str(DISTRACTOR_B);
+    distractor.push_str("\nDistractor code, not the answer: ");
+    distractor.push_str(DISTRACTOR_C);
+    distractor.push('\n');
+    push_filler_to_target(tokenizer, &mut distractor, target_tokens);
+    distractor.push_str(
+        "\nQuestion: What is the target shipment code? Answer with only the target code.",
+    );
+
+    let mut early_fact = String::new();
+    early_fact.push_str("Remember this fact exactly. The launch city is ");
+    early_fact.push_str(EARLY_FACT_CITY);
+    early_fact.push_str(".\n");
+    push_filler_to_target(tokenizer, &mut early_fact, target_tokens);
+    early_fact.push_str("\nQuestion: What is the launch city? Answer with only the city.");
+
+    let mut summary = String::new();
+    summary.push_str("Remember these three project facts exactly.\n");
+    summary.push_str("Fact A: ");
+    summary.push_str(SUMMARY_FACT_A);
+    summary.push_str(".\nFact B: ");
+    summary.push_str(SUMMARY_FACT_B);
+    summary.push_str(".\nFact C: ");
+    summary.push_str(SUMMARY_FACT_C);
+    summary.push_str(".\n");
+    push_filler_to_target(tokenizer, &mut summary, target_tokens);
+    summary.push_str(
+        "\nQuestion: Summarize the three project facts in one short sentence using the exact fact names.",
+    );
+
+    let mut chat = String::new();
+    chat.push_str(
+        "You are a concise assistant. The user values careful measurements and clear tradeoffs.\n",
+    );
+    push_filler_to_target(tokenizer, &mut chat, target_tokens);
+    chat.push_str("\nUser: In one sentence, explain why benchmark evidence matters before changing a runtime policy.\nAssistant:");
+
+    vec![
+        MultiTaskSpec {
+            name: "single-needle",
+            score_type: "exact_terms",
+            prompt: single,
+            expected_terms: vec![NEEDLE],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "multi-needle",
+            score_type: "all_terms",
+            prompt: multi,
+            expected_terms: vec![MULTI_NEEDLE_A, MULTI_NEEDLE_B],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "distractor-needle",
+            score_type: "target_without_distractors",
+            prompt: distractor,
+            expected_terms: vec![DISTRACTOR_TARGET],
+            forbidden_terms: vec![DISTRACTOR_A, DISTRACTOR_B, DISTRACTOR_C],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "early-fact-qa",
+            score_type: "exact_terms",
+            prompt: early_fact,
+            expected_terms: vec![EARLY_FACT_CITY],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "early-fact-summary",
+            score_type: "fact_recall_count",
+            prompt: summary,
+            expected_terms: vec![SUMMARY_FACT_A, SUMMARY_FACT_B, SUMMARY_FACT_C],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "long-chat-smoke",
+            score_type: "nonempty_smoke",
+            prompt: chat,
+            expected_terms: vec![],
+            forbidden_terms: vec![],
+            require_nonempty: true,
+        },
+    ]
+}
+
+fn score_multitask_output(spec: &MultiTaskSpec, output: &str) -> MultiTaskScore {
+    let expected_hits = spec
+        .expected_terms
+        .iter()
+        .filter(|term| contains_case_insensitive(output, term))
+        .count();
+    let forbidden_hits = spec
+        .forbidden_terms
+        .iter()
+        .filter(|term| contains_case_insensitive(output, term))
+        .count();
+    let nonempty_pass = !spec.require_nonempty || output.trim().len() >= 8;
+    let max_score = spec
+        .expected_terms
+        .len()
+        .max(usize::from(spec.require_nonempty)) as f32;
+    let score = if spec.require_nonempty && spec.expected_terms.is_empty() {
+        if nonempty_pass {
+            1.0
+        } else {
+            0.0
+        }
+    } else {
+        expected_hits as f32
+    };
+    let passed = nonempty_pass && expected_hits == spec.expected_terms.len() && forbidden_hits == 0;
+    MultiTaskScore {
+        status: if passed {
+            CaseStatus::Pass
+        } else {
+            CaseStatus::Fail
+        },
+        score,
+        max_score,
+    }
+}
+
+fn multitask_fallback_cases() -> Vec<MultiFallbackCase> {
+    let mut cases = vec![
+        MultiFallbackCase {
+            name: "topk",
+            retry_top_blocks: None,
+        },
+        MultiFallbackCase {
+            name: "eot-anomaly-top16",
+            retry_top_blocks: Some(16),
+        },
+        MultiFallbackCase {
+            name: "low-margin-top16",
+            retry_top_blocks: Some(16),
+        },
+        MultiFallbackCase {
+            name: "score-spread-top16",
+            retry_top_blocks: Some(16),
+        },
+        MultiFallbackCase {
+            name: "combined-top16",
+            retry_top_blocks: Some(16),
+        },
+    ];
+    if fallback_include_oracle_enabled() {
+        cases.insert(
+            1,
+            MultiFallbackCase {
+                name: "oracle-eot-top16",
+                retry_top_blocks: Some(16),
+            },
+        );
+    }
+    cases
+}
+
+fn multitask_trigger_reason_for_case(
+    case: MultiFallbackCase,
+    initial_passed: bool,
+    signals: &FallbackSignalSummary,
+    cutoff_margin: Option<f32>,
+) -> Option<String> {
+    let eot_anomaly = {
+        let rank_trigger = signals.eot_rank_min.is_some_and(|rank| rank <= 2);
+        let margin_trigger = signals
+            .eot_logit_margin_min
+            .is_some_and(|margin| margin <= 1.0);
+        signals.sampled_eot_early || rank_trigger || margin_trigger
+    };
+    let low_margin = signals.top_margin_min.is_some_and(|margin| margin <= 0.75);
+    let score_spread = cutoff_margin.is_some_and(|margin| margin <= 0.10);
+    match case.name {
+        "oracle-eot-top16" => (!initial_passed && signals.sampled_eot_early)
+            .then_some("oracle:failed-with-early-eot".to_string()),
+        "eot-anomaly-top16" => eot_anomaly.then_some("eot-anomaly".to_string()),
+        "low-margin-top16" => low_margin.then_some("low-top-token-margin".to_string()),
+        "score-spread-top16" => score_spread.then_some("score-cutoff-spread".to_string()),
+        "combined-top16" => {
+            let mut reasons = Vec::new();
+            if eot_anomaly {
+                reasons.push("eot-anomaly");
+            }
+            if low_margin {
+                reasons.push("low-top-token-margin");
+            }
+            if score_spread {
+                reasons.push("score-cutoff-spread");
+            }
+            (!reasons.is_empty()).then(|| reasons.join("+"))
+        }
+        _ => None,
+    }
+}
+
+fn run_multitask_generate(
+    model: &mut LoadedModel,
+    spec: &MultiTaskSpec,
+    mode: KvCompressMode,
+    top_blocks: u32,
+    max_tokens: usize,
+) -> Result<GeneratedText> {
+    let _prefill_guard = EnvVarGuard::set("M40LLM_PREFILL_CHUNK_SIZE", "4096");
+    let _selection_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
+    let _logit_trace_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1");
+    let _logit_compare_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1");
+    let _policy_guard = EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk");
+    let _score_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_SCORE_DELTA");
+    let _min_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS");
+    let _max_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_MAX_BLOCKS");
+    let _anchor_guard = EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS");
+    let _backing_guard = (mode == KvCompressMode::BlockSelectExact)
+        .then(|| EnvVarGuard::set("M40LLM_KV_EXACT_OLD_BACKING", "fp16-k-q4-v"));
+    let _attention_guard = (mode == KvCompressMode::BlockSelectExact)
+        .then(|| EnvVarGuard::set("M40LLM_KV_EXACT_OLD_ATTENTION", "fp16-k-q4-v-direct"));
+
+    prepare_kv_cache(
+        model,
+        mode,
+        RepresentativeCase {
+            representatives: 0,
+            policy: KvRepresentativePolicy::Last,
+        },
+        top_blocks,
+    )?;
+    generate_text(
+        model,
+        GenerateOptions {
+            prompt: spec.prompt.clone(),
+            max_tokens: Some(max_tokens),
+            top_k: Some(1),
+            log_prefix: "kv_fallback_multitask",
+            kv_compression: KvCompressionConfig {
+                mode,
+                recent_window: 1024,
+                block_size: 32,
+                top_blocks,
+                representatives: 0,
+                representative_policy: KvRepresentativePolicy::Last,
+            },
+            ..Default::default()
+        },
+    )
+}
+
+fn selection_indices(
+    selection: Option<&m40_llm::kv_selection::KvSelectionSummary>,
+) -> Option<Vec<u32>> {
+    first_selection_record_blocks(selection)
+}
+
+fn multitask_active_kv_bytes(
+    generated: &GeneratedText,
+    mode: KvCompressMode,
+    top_blocks: u32,
+    config: &ModelConfig,
+) -> Option<usize> {
+    active_kv_bytes_for_selection(
+        mode,
+        generated.prompt_token_len,
+        Some(top_blocks),
+        generated.kv_selection.as_ref(),
+        ActiveKvAccounting {
+            recent_window: 1024,
+            block_size: 32,
+            kv_heads: config.attention_head_count_kv as usize,
+            head_dim: config.attention_key_length as usize,
+            layer_count: config.block_count as usize,
+        },
+    )
+}
+
+fn dense_multitask_record(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    target_tokens: usize,
+    spec: &MultiTaskSpec,
+    generated: GeneratedText,
+) -> MultiTaskRecord {
+    let score = score_multitask_output(spec, &generated.output);
+    MultiTaskRecord {
+        model_path: probe.candidate.path.display().to_string(),
+        resolved_model_path: probe.candidate.resolved_path.display().to_string(),
+        target_tokens,
+        task: spec.name.to_string(),
+        score_type: spec.score_type.to_string(),
+        mode: "off".to_string(),
+        fallback_case: None,
+        fallback_triggered: false,
+        fallback_trigger_reason: None,
+        fallback_policy_used: None,
+        top_blocks_initial: None,
+        top_blocks_final: None,
+        status: score.status,
+        score: score.score,
+        max_score: score.max_score,
+        dense_reference_output: Some(generated.output.clone()),
+        initial_output: None,
+        output: generated.output.clone(),
+        expected_terms: spec
+            .expected_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        forbidden_terms: spec
+            .forbidden_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        topk_passed: None,
+        fallback_regressed_topk_pass: false,
+        prompt_tokens: generated.prompt_token_len,
+        generated_tokens: generated
+            .token_ids
+            .len()
+            .saturating_sub(generated.prompt_token_len),
+        prompt_prefill_elapsed_ms: generated.prompt_prefill_elapsed_ms,
+        generated_decode_elapsed_ms: generated.generated_decode_elapsed_ms,
+        total_elapsed_ms: generated.total_elapsed_ms,
+        initial_decode_elapsed_ms: None,
+        fallback_decode_elapsed_ms: None,
+        total_decode_elapsed_ms_with_retry: None,
+        active_attended_kv_bytes_all_layers: multitask_active_kv_bytes(
+            &generated,
+            KvCompressMode::Off,
+            0,
+            config,
+        ),
+        initial_active_kv_bytes_all_layers: None,
+        fallback_active_kv_bytes_all_layers: None,
+        final_kv_allocated_bytes: generated.final_kv_allocated_bytes,
+        dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
+        exact_old_backing: generated.exact_old_backing,
+        exact_old_attention_backend: generated.exact_old_attention_backend,
+        old_k_fp16_bytes: generated.old_k_fp16_bytes,
+        q4_old_v_payload_bytes: generated.q4_old_v_payload_bytes,
+        q4_old_v_scale_bytes: generated.q4_old_v_scale_bytes,
+        recent_fp16_bytes: generated.recent_fp16_bytes,
+        summary_index_bytes: generated.summary_index_bytes,
+        selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        base_selected_block_indices: None,
+        final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        initial_eot_rank_min: None,
+        initial_eot_logit_margin_min: None,
+        initial_top_margin_min: None,
+        score_cutoff_margin: None,
+        error: None,
+    }
+}
+
+struct MultitaskCompressedRecordInput<'a> {
+    probe: &'a CandidateProbe,
+    config: &'a ModelConfig,
+    target_tokens: usize,
+    spec: &'a MultiTaskSpec,
+    fallback_case: MultiFallbackCase,
+    dense_output: Option<&'a str>,
+    initial: &'a GeneratedText,
+    final_generated: &'a GeneratedText,
+    fallback_triggered: bool,
+    fallback_trigger_reason: Option<String>,
+    fallback_policy_used: Option<String>,
+    fallback_decode_elapsed_ms: Option<u128>,
+}
+
+fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> MultiTaskRecord {
+    let initial_score = score_multitask_output(input.spec, &input.initial.output);
+    let final_score = score_multitask_output(input.spec, &input.final_generated.output);
+    let initial_active = multitask_active_kv_bytes(
+        input.initial,
+        KvCompressMode::BlockSelectExact,
+        8,
+        input.config,
+    );
+    let final_top_blocks = if input.fallback_triggered { 16 } else { 8 };
+    let fallback_active = multitask_active_kv_bytes(
+        input.final_generated,
+        KvCompressMode::BlockSelectExact,
+        final_top_blocks,
+        input.config,
+    );
+    MultiTaskRecord {
+        model_path: input.probe.candidate.path.display().to_string(),
+        resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
+        target_tokens: input.target_tokens,
+        task: input.spec.name.to_string(),
+        score_type: input.spec.score_type.to_string(),
+        mode: "block-select-exact".to_string(),
+        fallback_case: Some(input.fallback_case.name.to_string()),
+        fallback_triggered: input.fallback_triggered,
+        fallback_trigger_reason: input.fallback_trigger_reason,
+        fallback_policy_used: input.fallback_policy_used,
+        top_blocks_initial: Some(8),
+        top_blocks_final: Some(final_top_blocks),
+        status: final_score.status,
+        score: final_score.score,
+        max_score: final_score.max_score,
+        dense_reference_output: input.dense_output.map(str::to_string),
+        initial_output: Some(input.initial.output.clone()),
+        output: input.final_generated.output.clone(),
+        expected_terms: input
+            .spec
+            .expected_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        forbidden_terms: input
+            .spec
+            .forbidden_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        topk_passed: Some(initial_score.status == CaseStatus::Pass),
+        fallback_regressed_topk_pass: initial_score.status == CaseStatus::Pass
+            && final_score.status != CaseStatus::Pass,
+        prompt_tokens: input.final_generated.prompt_token_len,
+        generated_tokens: input
+            .final_generated
+            .token_ids
+            .len()
+            .saturating_sub(input.final_generated.prompt_token_len),
+        prompt_prefill_elapsed_ms: input.final_generated.prompt_prefill_elapsed_ms,
+        generated_decode_elapsed_ms: input.final_generated.generated_decode_elapsed_ms,
+        total_elapsed_ms: input.final_generated.total_elapsed_ms,
+        initial_decode_elapsed_ms: Some(input.initial.generated_decode_elapsed_ms),
+        fallback_decode_elapsed_ms: input.fallback_decode_elapsed_ms,
+        total_decode_elapsed_ms_with_retry: input
+            .fallback_decode_elapsed_ms
+            .map(|retry| input.initial.generated_decode_elapsed_ms + retry),
+        active_attended_kv_bytes_all_layers: fallback_active,
+        initial_active_kv_bytes_all_layers: initial_active,
+        fallback_active_kv_bytes_all_layers: input
+            .fallback_triggered
+            .then_some(fallback_active)
+            .flatten(),
+        final_kv_allocated_bytes: input.final_generated.final_kv_allocated_bytes,
+        dense_equivalent_kv_bytes: input.final_generated.dense_equivalent_kv_bytes,
+        exact_old_backing: input.final_generated.exact_old_backing.clone(),
+        exact_old_attention_backend: input.final_generated.exact_old_attention_backend.clone(),
+        old_k_fp16_bytes: input.final_generated.old_k_fp16_bytes,
+        q4_old_v_payload_bytes: input.final_generated.q4_old_v_payload_bytes,
+        q4_old_v_scale_bytes: input.final_generated.q4_old_v_scale_bytes,
+        recent_fp16_bytes: input.final_generated.recent_fp16_bytes,
+        summary_index_bytes: input.final_generated.summary_index_bytes,
+        selected_block_indices: selection_indices(input.final_generated.kv_selection.as_ref()),
+        base_selected_block_indices: selection_indices(input.initial.kv_selection.as_ref()),
+        final_selected_block_indices: selection_indices(
+            input.final_generated.kv_selection.as_ref(),
+        ),
+        initial_eot_rank_min: fallback_signal_summary(
+            input.initial.generated_logit_trace.as_deref(),
+        )
+        .eot_rank_min,
+        initial_eot_logit_margin_min: fallback_signal_summary(
+            input.initial.generated_logit_trace.as_deref(),
+        )
+        .eot_logit_margin_min,
+        initial_top_margin_min: fallback_signal_summary(
+            input.initial.generated_logit_trace.as_deref(),
+        )
+        .top_margin_min,
+        score_cutoff_margin: score_cutoff_margin(input.initial.kv_selection.as_ref()),
+        error: None,
+    }
+}
+
+fn run_fallback_multitask_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+    target_tokens: usize,
+) -> Result<()> {
+    let max_tokens = multitask_max_tokens();
+    let tasks = multitask_specs(tokenizer, target_tokens);
+    let mut records = Vec::new();
+    eprintln!(
+        "running fallback multitask diagnostic: target={target_tokens} tasks={} max_tokens={max_tokens}",
+        tasks.len()
+    );
+    for spec in tasks {
+        let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
+        let dense_output = dense.output.clone();
+        let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        append_report_record(&dense_record)?;
+        records.push(dense_record);
+
+        let initial = run_multitask_generate(
+            model,
+            &spec,
+            KvCompressMode::BlockSelectExact,
+            8,
+            max_tokens,
+        )?;
+        let initial_score = score_multitask_output(&spec, &initial.output);
+        let initial_signals = fallback_signal_summary(initial.generated_logit_trace.as_deref());
+        let cutoff_margin = score_cutoff_margin(initial.kv_selection.as_ref());
+        for fallback_case in multitask_fallback_cases() {
+            let mut final_generated = initial.clone();
+            let mut fallback_triggered = false;
+            let mut fallback_trigger_reason = None;
+            let mut fallback_policy_used = None;
+            let mut fallback_decode_elapsed_ms = None;
+            if let Some(reason) = multitask_trigger_reason_for_case(
+                fallback_case,
+                initial_score.status == CaseStatus::Pass,
+                &initial_signals,
+                cutoff_margin,
+            ) {
+                if let Some(retry_top_blocks) = fallback_case.retry_top_blocks {
+                    if retry_top_blocks > 8 {
+                        fallback_triggered = true;
+                        fallback_trigger_reason = Some(reason);
+                        fallback_policy_used = Some(format!("topk{retry_top_blocks}"));
+                        let retry = run_multitask_generate(
+                            model,
+                            &spec,
+                            KvCompressMode::BlockSelectExact,
+                            retry_top_blocks,
+                            max_tokens,
+                        )?;
+                        fallback_decode_elapsed_ms = Some(retry.generated_decode_elapsed_ms);
+                        final_generated = retry;
+                    }
+                }
+            }
+            let record = compressed_multitask_record(MultitaskCompressedRecordInput {
+                probe,
+                config,
+                target_tokens,
+                spec: &spec,
+                fallback_case,
+                dense_output: Some(&dense_output),
+                initial: &initial,
+                final_generated: &final_generated,
+                fallback_triggered,
+                fallback_trigger_reason,
+                fallback_policy_used,
+                fallback_decode_elapsed_ms,
+            });
+            eprintln!(
+                "  task={} case={} status={:?} triggered={} score={}/{} output={:?}",
+                record.task,
+                record.fallback_case.as_deref().unwrap_or("none"),
+                record.status,
+                record.fallback_triggered,
+                record.score,
+                record.max_score,
+                record.output
+            );
+            append_report_record(&record)?;
+            records.push(record);
+        }
+    }
+    let regressions = records
+        .iter()
+        .filter(|record| record.fallback_regressed_topk_pass)
+        .count();
+    eprintln!(
+        "fallback multitask diagnostic complete: rows={} fallback_regressions={regressions}",
+        records.len()
+    );
+    Ok(())
+}
+
 fn print_records(records: &[CaseRecord]) {
     eprintln!("KV compression retrieval quality results:");
     for record in records {
@@ -2320,6 +3048,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
+    if fallback_multitask_diagnostic_enabled() {
+        return run_fallback_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);
+    }
     let lossy_packed_sweep = lossy_packed_sweep_enabled();
     let exact_selection_sweep = exact_selection_sweep_enabled() || exact_q8_diagnostic_enabled();
     let mode_filter = quality_modes_from_env()?;

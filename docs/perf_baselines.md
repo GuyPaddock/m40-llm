@@ -2,6 +2,49 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: Multi-Task Fallback Gate Validation
+
+This checkpoint adds `M40LLM_KV_FALLBACK_MULTITASK_DIAG=1`, a bounded
+multi-task quality suite for testing answer-agnostic fallback gates outside the
+single-needle benchmark. The suite defaults to 1024 tokens because the full
+4096 multi-task matrix is much slower; set `M40LLM_KV_QUALITY_TARGETS=4096` for
+the heavier version.
+
+Report:
+
+- `/tmp/m40-kv-fallback-multitask-1024.jsonl`
+
+Validation:
+
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 1024-token multi-task fallback matrix.
+
+Summary:
+
+| Task | Dense off | Top-k | EOT fallback | Low-margin fallback | Score-spread fallback | Combined fallback | Regression |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| single-needle | pass | pass | pass, triggered | pass | pass | pass, triggered | no |
+| multi-needle | pass | pass | pass | pass | pass | pass | no |
+| distractor-needle | pass | pass | pass | pass, triggered | pass | pass, triggered | no |
+| early-fact QA | pass | pass | pass | pass | pass | pass | no |
+| early-fact summary | fail | fail | fail | fail, triggered | fail | fail, triggered | no |
+| long-chat smoke | pass | pass | pass | pass, triggered | pass | pass | no |
+
+Interpretation:
+
+- The answer-agnostic fallback gates did not regress any row where top-k already
+  passed in the 1024-token multi-task suite.
+- EOT-anomaly and low-margin can trigger on already-passing rows; in this suite
+  the top16 retry preserved the answer, but these are not yet safe defaults.
+- Score-spread was conservative in this run and did not trigger.
+- The early-fact summary prompt failed for dense `off` as well as compressed
+  rows, so it is model/task capability evidence rather than a compressed-KV
+  regression.
+- Keep oracle fallback diagnostic-only. Before making a fallback preferred,
+  validate at 4096 or add more diverse prompt families that actually expose
+  top-k failures outside the single-needle row.
+
 ## 2026-05-17: Gated Fallback 4096 Matrix Diagnostic
 
 This checkpoint adds `M40LLM_KV_FALLBACK_DIAG=1`, a bounded diagnostic for

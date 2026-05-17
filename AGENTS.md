@@ -332,16 +332,26 @@ batched decode path before touching persistent decode or large-model fused-dequa
   low-margin, and score-spread gates all recover `ZXQ-NEEDLE-41729` by retrying
   with top16, raising active attended KV from 40.0 MiB to 48.0 MiB while keeping
   final allocated KV at 2.97 GiB. The oracle gate is answer-aware and
-  diagnostic-only; the answer-agnostic gates need validation on other prompt
-  types before they become a preferred runtime policy.
+  diagnostic-only. `M40LLM_KV_FALLBACK_MULTITASK_DIAG=1` now runs a bounded
+  multi-task validation suite for answer-agnostic fallback gates outside the
+  single-needle benchmark. It compares dense `off`, top-k only, EOT-anomaly,
+  low-margin, score-spread, and combined top16 fallback rows across
+  single-needle, multi-needle, distractor-code retrieval, early-fact QA,
+  early-fact summary, and normal long-chat smoke tasks. The default target is
+  1024 tokens because the 4096 multi-task matrix is expensive; set
+  `M40LLM_KV_QUALITY_TARGETS=4096` for the heavier version. The 1024 suite
+  produced no fallback regressions. EOT-anomaly and low-margin can trigger on
+  already-passing rows but preserved the answer in this run; score-spread was
+  conservative and did not trigger. The summary task failed for dense `off` too,
+  so it is not compressed-KV-specific evidence.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
-  attention backend, but keep it opt-in. The next policy step should validate
-  the answer-agnostic fallback gates on multiple prompt types, then decide
-  whether EOT-anomaly, low-margin, score-spread, or a conservative top16 quality
-  mode is the safest deployable rule. Do not increase representative count,
-  tune pure summary modes, run 8192, or expand compressed KV into server
-  scheduling yet.
+  attention backend, but keep it opt-in. The next policy step should either run
+  the multi-task suite at 4096 or add more diverse prompt families that expose
+  top-k failures outside the single-needle row before choosing EOT-anomaly,
+  low-margin, score-spread, combined fallback, or conservative top16 quality
+  mode as a deployable rule. Do not increase representative count, tune pure
+  summary modes, run 8192, or expand compressed KV into server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
