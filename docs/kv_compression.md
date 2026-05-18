@@ -275,16 +275,21 @@ why top4/top16 fail while top8 passes, not to add fallback/retry behavior.
 `M40LLM_KV_TOPK_ABLATION_DIAG=1` runs the 4096 multi-needle selected-set
 ablation for direct FP16-K/q4-V exact-old retrieval. It tests top4 plus each
 single top8-delta block, top8 minus each selected block, top8 plus each
-top16-extra block, and one `score-cluster` policy. The diagnostic uses:
+top16-extra block, selected pair/quartet support-shape cases, and score-cluster
+policies. Use `M40LLM_KV_ABLATION_CASES=case-a,case-b` to restrict expensive
+runs to named cases. The diagnostic uses:
 
 - `M40LLM_KV_BLOCK_SELECT_POLICY=explicit`
 - `M40LLM_KV_FORCE_INCLUDE_BLOCKS=...`
 - `M40LLM_KV_FORCE_EXCLUDE_BLOCKS=...`
 - `M40LLM_KV_BLOCK_SELECT_POLICY=score-cluster`
+- `M40LLM_KV_BLOCK_SELECT_POLICY=score-cluster-adaptive`
 
 These are diagnostic-only selection controls. `score-cluster` starts from the
 base top-k set and adds score-near candidates up to `M40LLM_KV_BLOCK_MAX_BLOCKS`
 using `M40LLM_KV_BLOCK_SCORE_DELTA` relative to the top-k cutoff score.
+`score-cluster-adaptive` uses the same cutoff rule but also honors
+`M40LLM_KV_BLOCK_MIN_BLOCKS`, so it can enforce a minimum support-set size.
 
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit

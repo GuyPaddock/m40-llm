@@ -376,15 +376,21 @@ batched decode path before touching persistent decode or large-model fused-dequa
   and top8 still passes when any one top16-extra block is added. The top16
   regression is therefore a combined support-set/distribution-shift effect, not
   a single toxic block. Failing rows diverge at generated step 6.
+  `M40LLM_KV_ABLATION_CASES` now filters expensive ablation runs, and
+  `score-cluster-adaptive` honors min/max block caps. The filtered 4096
+  support-shape run shows top4 plus tested pairs still fails; top4 plus the full
+  top8 delta also fails when explicit include changes candidate order; top8
+  plus tested pairs/quartets all pass; and score-cluster-adaptive with min8
+  recovers exactly the passing top8 set.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred
   exact-old selection policy for now, but do not blindly raise the default to
   top16. Fallback gates are too false-positive prone at 4096. The next policy
-  step should test adaptive cluster sizing or pair/group additions before
-  considering a deployable dynamic policy. Do not increase representative count,
-  tune pure summary modes, run 8192, or expand compressed KV into server
-  scheduling yet.
+  step should validate score-cluster-adaptive on other prompt types and fix or
+  explicitly control candidate ordering before comparing explicit-set cases.
+  Do not increase representative count, tune pure summary modes, run 8192, or
+  expand compressed KV into server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

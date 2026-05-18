@@ -2,6 +2,56 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-18: Top-K Support-Set Shape Diagnostic
+
+This checkpoint extends `M40LLM_KV_TOPK_ABLATION_DIAG=1` with selected
+pair/quartet support-shape cases plus `score-cluster-adaptive`. The focused run
+used direct FP16-K/q4-V exact-old retrieval on the 4096 multi-needle prompt and
+filtered the matrix with `M40LLM_KV_ABLATION_CASES`.
+
+Report:
+
+- `/tmp/m40-kv-support-shape-4096-multineedle.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the filtered support-shape run in 10,412.93 s.
+
+Summary:
+
+| Case | Status | Score | Active KV | Selected blocks |
+| --- | --- | ---: | ---: | --- |
+| top4 | fail | 1/2 | 36.0 MiB | `[94,80,77,91]` |
+| top8 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+| top16 | fail | 1/2 | 48.0 MiB | `[94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93]` |
+| top4 + `[92,78]` | fail | 1/2 | 38.0 MiB | `[94,80,77,91,78,92]` |
+| top4 + `[89,87]` | fail | 1/2 | 38.0 MiB | `[94,80,77,91,87,89]` |
+| top4 + `[92,78,89,87]` | fail | 1/2 | 40.0 MiB | `[94,80,77,91,78,87,89,92]` |
+| top8 + pair extras | pass | 2/2 | 42.0 MiB | all tested pairs passed |
+| top8 + quartet extras | pass | 2/2 | 44.0 MiB | both tested quartets passed |
+| score-cluster-adaptive min8/max12 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+| score-cluster-adaptive min8/max16 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+
+Interpretation:
+
+- Pair additions to top4 are not enough; the support requirement is larger than
+  either tested pair.
+- The explicit full top8-delta case selected the same set as top8 but in a
+  different order and failed. This points to candidate ordering or selection
+  path equivalence as a real variable, not just set membership.
+- Top8 plus pair/quartet extras passes, while full top16 fails. This supports
+  the cumulative distribution-shift hypothesis: the regression appears only
+  when the full tail of extra blocks is present.
+- `score-cluster-adaptive` with `min_k=8` recovered exactly the top8 set and
+  passed for both max12 and max16 caps. This is the best current candidate for
+  a dynamic, answer-agnostic policy, but it needs more prompt validation before
+  becoming preferred.
+- All failing rows diverged at generated step 6, consistent with later-token
+  drift rather than first-token retrieval failure.
+
 ## 2026-05-18: Top-K Multi-Needle Selection Ablation
 
 This checkpoint adds `M40LLM_KV_TOPK_ABLATION_DIAG=1`, a focused selected-set

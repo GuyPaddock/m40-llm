@@ -154,6 +154,7 @@ extern "C" {
         if (std::strcmp(value, "anchor-neighbors") == 0) return 4u;
         if (std::strcmp(value, "explicit") == 0) return 5u;
         if (std::strcmp(value, "score-cluster") == 0) return 6u;
+        if (std::strcmp(value, "score-cluster-adaptive") == 0) return 7u;
         return 0u;
     }
 
@@ -2430,7 +2431,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u) ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2524,7 +2525,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
-            if (block_select_policy == 6u) {
+            if (block_select_policy == 6u || block_select_policy == 7u) {
                 const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
                 for (uint32_t i = top_n; i < keep_n; ++i) {
                     if (selected_scores[i] >= cutoff) {
@@ -2532,7 +2533,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
-            for (uint32_t i = final_block_count; i < min_take && i < top_n; ++i) {
+            for (uint32_t i = 0; final_block_count < min_take && i < keep_n; ++i) {
                 append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
             }
             if (block_select_policy == 5u) {
@@ -2699,7 +2700,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u) ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2791,7 +2792,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
-            if (block_select_policy == 6u) {
+            if (block_select_policy == 6u || block_select_policy == 7u) {
                 const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
                 for (uint32_t i = top_n; i < keep_n; ++i) {
                     if (selected_scores[i] >= cutoff) {
@@ -2799,7 +2800,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
-            for (uint32_t i = final_block_count; i < min_take && i < top_n; ++i) {
+            for (uint32_t i = 0; final_block_count < min_take && i < keep_n; ++i) {
                 append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
             }
             if (block_select_policy == 5u) {
@@ -6260,7 +6261,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 }
             }
         }
-        if (policy == 6u) {
+        if (policy == 6u || policy == 7u) {
             const float cutoff = base_count > 0 && base_count <= scored.size()
                 ? scored[base_count - 1u].first - score_delta
                 : best_score;

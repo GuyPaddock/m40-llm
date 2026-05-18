@@ -866,6 +866,7 @@ fn block_select_policy() -> String {
         Some("anchor-neighbors") => "anchor-neighbors".to_string(),
         Some("explicit") => "explicit".to_string(),
         Some("score-cluster") => "score-cluster".to_string(),
+        Some("score-cluster-adaptive") => "score-cluster-adaptive".to_string(),
         _ => "topk".to_string(),
     }
 }
@@ -1062,6 +1063,7 @@ struct TopkAblationCase {
     top_blocks: u32,
     include_blocks: Option<&'static str>,
     exclude_blocks: Option<&'static str>,
+    min_blocks: Option<&'static str>,
     max_blocks: &'static str,
     score_delta: Option<&'static str>,
 }
@@ -1237,9 +1239,12 @@ fn apply_topk_ablation_case(case: TopkAblationCase) -> Vec<EnvVarGuard> {
     let mut guards = vec![
         EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", case.policy),
         EnvVarGuard::set("M40LLM_KV_BLOCK_MAX_BLOCKS", case.max_blocks),
-        EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS"),
         EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS"),
     ];
+    match case.min_blocks {
+        Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_BLOCK_MIN_BLOCKS", value)),
+        None => guards.push(EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS")),
+    }
     match case.include_blocks {
         Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_FORCE_INCLUDE_BLOCKS", value)),
         None => guards.push(EnvVarGuard::unset("M40LLM_KV_FORCE_INCLUDE_BLOCKS")),
@@ -2572,6 +2577,7 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 4,
             include_blocks: None,
             exclude_blocks: None,
+            min_blocks: None,
             max_blocks: "4",
             score_delta: None,
         },
@@ -2581,6 +2587,7 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 8,
             include_blocks: None,
             exclude_blocks: None,
+            min_blocks: None,
             max_blocks: "8",
             score_delta: None,
         },
@@ -2590,6 +2597,7 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 16,
             include_blocks: None,
             exclude_blocks: None,
+            min_blocks: None,
             max_blocks: "16",
             score_delta: None,
         },
@@ -2606,7 +2614,25 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 4,
             include_blocks: Some(block),
             exclude_blocks: None,
+            min_blocks: None,
             max_blocks: "5",
+            score_delta: None,
+        });
+    }
+    for (name, blocks) in [
+        ("top4-plus-92-78", "92,78"),
+        ("top4-plus-89-87", "89,87"),
+        ("top4-plus-92-78-89-87", "92,78,89,87"),
+    ] {
+        let max_blocks = if blocks.contains(",89,") { "8" } else { "6" };
+        cases.push(TopkAblationCase {
+            name,
+            policy: "explicit",
+            top_blocks: 4,
+            include_blocks: Some(blocks),
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks,
             score_delta: None,
         });
     }
@@ -2626,7 +2652,32 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 8,
             include_blocks: None,
             exclude_blocks: Some(block),
+            min_blocks: None,
             max_blocks: "8",
+            score_delta: None,
+        });
+    }
+    for (name, blocks) in [
+        ("top8-plus-88-57", "88,57"),
+        ("top8-plus-90-71", "90,71"),
+        ("top8-plus-46-53", "46,53"),
+        ("top8-plus-73-93", "73,93"),
+        ("top8-plus-88-57-90-71", "88,57,90,71"),
+        ("top8-plus-46-53-73-93", "46,53,73,93"),
+    ] {
+        let max_blocks = if blocks.matches(',').count() >= 3 {
+            "12"
+        } else {
+            "10"
+        };
+        cases.push(TopkAblationCase {
+            name,
+            policy: "explicit",
+            top_blocks: 8,
+            include_blocks: Some(blocks),
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks,
             score_delta: None,
         });
     }
@@ -2646,6 +2697,7 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             top_blocks: 8,
             include_blocks: Some(block),
             exclude_blocks: None,
+            min_blocks: None,
             max_blocks: "9",
             score_delta: None,
         });
@@ -2656,10 +2708,42 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
         top_blocks: 4,
         include_blocks: None,
         exclude_blocks: None,
+        min_blocks: None,
         max_blocks: "8",
         score_delta: Some("0.05"),
     });
+    cases.push(TopkAblationCase {
+        name: "score-cluster-adaptive-min8-max12",
+        policy: "score-cluster-adaptive",
+        top_blocks: 4,
+        include_blocks: None,
+        exclude_blocks: None,
+        min_blocks: Some("8"),
+        max_blocks: "12",
+        score_delta: Some("0.25"),
+    });
+    cases.push(TopkAblationCase {
+        name: "score-cluster-adaptive-min8-max16",
+        policy: "score-cluster-adaptive",
+        top_blocks: 4,
+        include_blocks: None,
+        exclude_blocks: None,
+        min_blocks: Some("8"),
+        max_blocks: "16",
+        score_delta: Some("0.25"),
+    });
     cases
+}
+
+fn filtered_topk_ablation_cases() -> Vec<TopkAblationCase> {
+    let cases = topk_ablation_cases();
+    let Some(filter) = env_name_filter("M40LLM_KV_ABLATION_CASES") else {
+        return cases;
+    };
+    cases
+        .into_iter()
+        .filter(|case| filter.iter().any(|name| name == case.name))
+        .collect()
 }
 
 fn multitask_trigger_reason_for_case(
@@ -3278,11 +3362,12 @@ fn run_topk_ablation_suite(
     let dense_trace = dense.generated_logit_trace.clone();
     let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
     append_report_record(&dense_record)?;
+    let ablation_cases = filtered_topk_ablation_cases();
     eprintln!(
         "running top-k ablation diagnostic: target={target_tokens} cases={} max_tokens={max_tokens}",
-        topk_ablation_cases().len()
+        ablation_cases.len()
     );
-    for case in topk_ablation_cases() {
+    for case in ablation_cases {
         let _guards = apply_topk_ablation_case(case);
         let generated = run_multitask_generate(
             model,
