@@ -237,6 +237,12 @@ struct MultiTaskRecord {
     recent_fp16_bytes: Option<usize>,
     summary_index_bytes: Option<usize>,
     selected_block_indices: Option<Vec<u32>>,
+    selected_block_score_entries: Option<Vec<String>>,
+    selection_records: Option<Vec<String>>,
+    attention_selected_block_masses: Option<Vec<String>>,
+    attention_top_entries: Option<Vec<String>>,
+    attention_records: Option<Vec<String>>,
+    generated_logit_trace: Option<Vec<GeneratedLogitTraceRecord>>,
     base_selected_block_indices: Option<Vec<u32>>,
     final_selected_block_indices: Option<Vec<u32>>,
     initial_eot_rank_min: Option<usize>,
@@ -778,6 +784,12 @@ fn topk_multitask_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn topk_sensitivity_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_TOPK_SENSITIVITY_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn fallback_include_oracle_enabled() -> bool {
     std::env::var("M40LLM_KV_FALLBACK_INCLUDE_ORACLE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -796,6 +808,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || fallback_diagnostic_enabled()
         || fallback_multitask_diagnostic_enabled()
         || topk_multitask_diagnostic_enabled()
+        || topk_sensitivity_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -817,6 +830,7 @@ fn logit_compare_enabled() -> bool {
         || fallback_diagnostic_enabled()
         || fallback_multitask_diagnostic_enabled()
         || topk_multitask_diagnostic_enabled()
+        || topk_sensitivity_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -2689,6 +2703,29 @@ fn dense_multitask_record(
         recent_fp16_bytes: generated.recent_fp16_bytes,
         summary_index_bytes: generated.summary_index_bytes,
         selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        selected_block_score_entries: generated
+            .kv_selection
+            .as_ref()
+            .map(selected_block_entry_strings),
+        selection_records: generated
+            .kv_selection
+            .as_ref()
+            .map(selection_record_strings),
+        attention_selected_block_masses: generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_block_mass_strings),
+        attention_top_entries: generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_top_entry_strings),
+        attention_records: generated
+            .kv_selection
+            .as_ref()
+            .map(attention_record_strings),
+        generated_logit_trace: None,
         base_selected_block_indices: None,
         final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
         initial_eot_rank_min: None,
@@ -2794,6 +2831,38 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         recent_fp16_bytes: input.final_generated.recent_fp16_bytes,
         summary_index_bytes: input.final_generated.summary_index_bytes,
         selected_block_indices: selection_indices(input.final_generated.kv_selection.as_ref()),
+        selected_block_score_entries: input
+            .final_generated
+            .kv_selection
+            .as_ref()
+            .map(selected_block_entry_strings),
+        selection_records: input
+            .final_generated
+            .kv_selection
+            .as_ref()
+            .map(selection_record_strings),
+        attention_selected_block_masses: input
+            .final_generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_block_mass_strings),
+        attention_top_entries: input
+            .final_generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_top_entry_strings),
+        attention_records: input
+            .final_generated
+            .kv_selection
+            .as_ref()
+            .map(attention_record_strings),
+        generated_logit_trace: generated_trace_records(
+            input.initial.generated_logit_trace.as_deref(),
+            input.final_generated.generated_logit_trace.as_deref(),
+            None,
+        ),
         base_selected_block_indices: selection_indices(input.initial.kv_selection.as_ref()),
         final_selected_block_indices: selection_indices(
             input.final_generated.kv_selection.as_ref(),
@@ -2815,92 +2884,134 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
     }
 }
 
-fn topk_multitask_record(
-    probe: &CandidateProbe,
-    config: &ModelConfig,
+struct TopkMultitaskRecordInput<'a> {
+    probe: &'a CandidateProbe,
+    config: &'a ModelConfig,
     target_tokens: usize,
-    spec: &MultiTaskSpec,
-    dense_output: Option<&str>,
+    spec: &'a MultiTaskSpec,
+    dense_output: Option<&'a str>,
+    dense_trace: Option<&'a [GeneratedLogitTraceStep]>,
     generated: GeneratedText,
     top_blocks: u32,
-) -> MultiTaskRecord {
-    let score = score_multitask_output(spec, &generated.output);
+}
+
+fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord {
+    let score = score_multitask_output(input.spec, &input.generated.output);
     MultiTaskRecord {
-        model_path: probe.candidate.path.display().to_string(),
-        resolved_model_path: probe.candidate.resolved_path.display().to_string(),
-        target_tokens,
-        task: spec.name.to_string(),
-        score_type: spec.score_type.to_string(),
+        model_path: input.probe.candidate.path.display().to_string(),
+        resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
+        target_tokens: input.target_tokens,
+        task: input.spec.name.to_string(),
+        score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
         fallback_case: None,
         fallback_triggered: false,
         fallback_trigger_reason: None,
         fallback_policy_used: None,
-        top_blocks_initial: Some(top_blocks),
-        top_blocks_final: Some(top_blocks),
+        top_blocks_initial: Some(input.top_blocks),
+        top_blocks_final: Some(input.top_blocks),
         status: score.status,
         score: score.score,
         max_score: score.max_score,
-        dense_reference_output: dense_output.map(str::to_string),
-        initial_output: Some(generated.output.clone()),
-        output: generated.output.clone(),
-        expected_terms: spec
+        dense_reference_output: input.dense_output.map(str::to_string),
+        initial_output: Some(input.generated.output.clone()),
+        output: input.generated.output.clone(),
+        expected_terms: input
+            .spec
             .expected_terms
             .iter()
             .map(|term| term.to_string())
             .collect(),
-        forbidden_terms: spec
+        forbidden_terms: input
+            .spec
             .forbidden_terms
             .iter()
             .map(|term| term.to_string())
             .collect(),
         topk_passed: Some(score.status == CaseStatus::Pass),
         fallback_regressed_topk_pass: false,
-        prompt_tokens: generated.prompt_token_len,
-        generated_tokens: generated
+        prompt_tokens: input.generated.prompt_token_len,
+        generated_tokens: input
+            .generated
             .token_ids
             .len()
-            .saturating_sub(generated.prompt_token_len),
-        prompt_prefill_elapsed_ms: generated.prompt_prefill_elapsed_ms,
-        generated_decode_elapsed_ms: generated.generated_decode_elapsed_ms,
-        total_elapsed_ms: generated.total_elapsed_ms,
-        initial_decode_elapsed_ms: Some(generated.generated_decode_elapsed_ms),
+            .saturating_sub(input.generated.prompt_token_len),
+        prompt_prefill_elapsed_ms: input.generated.prompt_prefill_elapsed_ms,
+        generated_decode_elapsed_ms: input.generated.generated_decode_elapsed_ms,
+        total_elapsed_ms: input.generated.total_elapsed_ms,
+        initial_decode_elapsed_ms: Some(input.generated.generated_decode_elapsed_ms),
         fallback_decode_elapsed_ms: None,
         total_decode_elapsed_ms_with_retry: None,
         active_attended_kv_bytes_all_layers: multitask_active_kv_bytes(
-            &generated,
+            &input.generated,
             KvCompressMode::BlockSelectExact,
-            top_blocks,
-            config,
+            input.top_blocks,
+            input.config,
         ),
         initial_active_kv_bytes_all_layers: multitask_active_kv_bytes(
-            &generated,
+            &input.generated,
             KvCompressMode::BlockSelectExact,
-            top_blocks,
-            config,
+            input.top_blocks,
+            input.config,
         ),
         fallback_active_kv_bytes_all_layers: None,
-        final_kv_allocated_bytes: generated.final_kv_allocated_bytes,
-        dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
-        exact_old_backing: generated.exact_old_backing.clone(),
-        exact_old_attention_backend: generated.exact_old_attention_backend.clone(),
-        old_k_fp16_bytes: generated.old_k_fp16_bytes,
-        q4_old_v_payload_bytes: generated.q4_old_v_payload_bytes,
-        q4_old_v_scale_bytes: generated.q4_old_v_scale_bytes,
-        recent_fp16_bytes: generated.recent_fp16_bytes,
-        summary_index_bytes: generated.summary_index_bytes,
-        selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
-        base_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
-        final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
-        initial_eot_rank_min: fallback_signal_summary(generated.generated_logit_trace.as_deref())
-            .eot_rank_min,
+        final_kv_allocated_bytes: input.generated.final_kv_allocated_bytes,
+        dense_equivalent_kv_bytes: input.generated.dense_equivalent_kv_bytes,
+        exact_old_backing: input.generated.exact_old_backing.clone(),
+        exact_old_attention_backend: input.generated.exact_old_attention_backend.clone(),
+        old_k_fp16_bytes: input.generated.old_k_fp16_bytes,
+        q4_old_v_payload_bytes: input.generated.q4_old_v_payload_bytes,
+        q4_old_v_scale_bytes: input.generated.q4_old_v_scale_bytes,
+        recent_fp16_bytes: input.generated.recent_fp16_bytes,
+        summary_index_bytes: input.generated.summary_index_bytes,
+        selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
+        selected_block_score_entries: input
+            .generated
+            .kv_selection
+            .as_ref()
+            .map(selected_block_entry_strings),
+        selection_records: input
+            .generated
+            .kv_selection
+            .as_ref()
+            .map(selection_record_strings),
+        attention_selected_block_masses: input
+            .generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_block_mass_strings),
+        attention_top_entries: input
+            .generated
+            .kv_selection
+            .as_ref()
+            .and_then(|summary| summary.attention.as_ref())
+            .map(attention_top_entry_strings),
+        attention_records: input
+            .generated
+            .kv_selection
+            .as_ref()
+            .map(attention_record_strings),
+        generated_logit_trace: generated_trace_records(
+            input.dense_trace,
+            input.generated.generated_logit_trace.as_deref(),
+            None,
+        ),
+        base_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
+        final_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
+        initial_eot_rank_min: fallback_signal_summary(
+            input.generated.generated_logit_trace.as_deref(),
+        )
+        .eot_rank_min,
         initial_eot_logit_margin_min: fallback_signal_summary(
-            generated.generated_logit_trace.as_deref(),
+            input.generated.generated_logit_trace.as_deref(),
         )
         .eot_logit_margin_min,
-        initial_top_margin_min: fallback_signal_summary(generated.generated_logit_trace.as_deref())
-            .top_margin_min,
-        score_cutoff_margin: score_cutoff_margin(generated.kv_selection.as_ref()),
+        initial_top_margin_min: fallback_signal_summary(
+            input.generated.generated_logit_trace.as_deref(),
+        )
+        .top_margin_min,
+        score_cutoff_margin: score_cutoff_margin(input.generated.kv_selection.as_ref()),
         error: None,
     }
 }
@@ -2924,6 +3035,7 @@ fn run_topk_multitask_suite(
     for spec in tasks {
         let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
         let dense_output = dense.output.clone();
+        let dense_trace = dense.generated_logit_trace.clone();
         let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
         append_report_record(&dense_record)?;
         records.push(dense_record);
@@ -2936,15 +3048,16 @@ fn run_topk_multitask_suite(
                 *top_blocks,
                 max_tokens,
             )?;
-            let record = topk_multitask_record(
+            let record = topk_multitask_record(TopkMultitaskRecordInput {
                 probe,
                 config,
                 target_tokens,
-                &spec,
-                Some(&dense_output),
+                spec: &spec,
+                dense_output: Some(&dense_output),
+                dense_trace: dense_trace.as_deref(),
                 generated,
-                *top_blocks,
-            );
+                top_blocks: *top_blocks,
+            });
             eprintln!(
                 "  task={} top_blocks={} status={:?} score={}/{} active_kv={:?} output={:?}",
                 record.task,
@@ -2964,6 +3077,24 @@ fn run_topk_multitask_suite(
         records.len()
     );
     Ok(())
+}
+
+fn run_topk_sensitivity_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+) -> Result<()> {
+    if config.context_length < 4096 {
+        eprintln!(
+            "top-k sensitivity diagnostic requires ctx>=4096; selected model ctx={}",
+            config.context_length
+        );
+        return Ok(());
+    }
+    let _tasks_guard = EnvVarGuard::set("M40LLM_KV_MULTITASK_TASKS", "multi-needle");
+    let _top_blocks_guard = EnvVarGuard::set("M40LLM_KV_MULTITASK_TOP_BLOCKS", "4,8,16");
+    run_topk_multitask_suite(probe, config, model, tokenizer, 4096)
 }
 
 fn run_fallback_multitask_suite(
@@ -3256,6 +3387,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
+    if topk_sensitivity_diagnostic_enabled() {
+        return run_topk_sensitivity_suite(&probe, config, &mut model, &tokenizer);
+    }
     if topk_multitask_diagnostic_enabled() {
         return run_topk_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);
     }

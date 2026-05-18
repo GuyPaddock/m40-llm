@@ -2,6 +2,48 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: Top-K Multi-Needle Sensitivity
+
+This checkpoint adds `M40LLM_KV_TOPK_SENSITIVITY_DIAG=1`, a focused 4096
+multi-needle diagnostic for direct FP16-K/q4-V exact-old retrieval. It forces
+the multi-needle task and compares top4/top8/top16 with richer selected-block,
+attention-mass, and generated-logit trace telemetry.
+
+Report:
+
+- `/tmp/m40-kv-topk-sensitivity-4096-multineedle.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the focused 4096 multi-needle sensitivity run in 2789.16 s.
+
+Summary:
+
+| Row | Status | Score | Output | Active KV | Selected blocks | Score margin |
+| --- | --- | ---: | --- | ---: | --- | ---: |
+| dense off | fail | 0/2 | `Alfa-13579, Beta-13579` | 126.4 MiB | - | - |
+| top4 | fail | 1/2 | `Alfa-13579, BRAVO-24680` | 36.0 MiB | `[94,80,77,91]` | 0.1659 |
+| top8 | pass | 2/2 | `ALPHA-13579, BRAVO-24680` | 40.0 MiB | `[94,80,77,91,92,78,89,87]` | 0.0042 |
+| top16 | fail | 1/2 | `Alfa-13579, Bravo-24680` | 48.0 MiB | `[94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93]` | 0.0009 |
+
+Interpretation:
+
+- Top8 adds `[92,78,89,87]` over top4 and is the only exact pass for this
+  prompt.
+- Top16 adds `[88,57,90,71,46,53,73,93]` over top8 and regresses formatting
+  back to a 1/2 score, confirming that broader support can dilute or perturb
+  generation even with exact old K and q4 V.
+- First-captured attention remains dominated by the recent ring; selected old
+  blocks have very small first-token mass. The useful signal is therefore in
+  later-token logit drift and selected context composition, not first-token old
+  block attention mass.
+- The score margin shrinks sharply at top8/top16, which makes score-cluster or
+  diversity-style selection worth testing next. Do not add fallback/retry logic
+  for this row.
+
 ## 2026-05-17: Top-K Multi-Task Robustness
 
 This checkpoint adds `M40LLM_KV_TOPK_MULTITASK_DIAG=1`, a bounded multi-task
@@ -58,6 +100,16 @@ Interpretation:
 - Keep top-k as the preferred policy, but do not simply raise the default to
   top16. A robust policy likely needs task-agnostic stability checks or
   selection-set sensitivity diagnostics rather than fixed larger support.
+- Current policy stance: direct FP16-K/q4-V is the preferred experimental
+  backend, plain top-k is the preferred selection policy, top4 is the best
+  current 4096 efficiency setting, top8 is useful for multi-fact retrieval but
+  not universally superior, and top16 is not a safe robustness default because
+  quality is non-monotonic. Dense `off` also failing multi-needle makes that row
+  model/task brittleness evidence, not compression-only failure.
+- `M40LLM_KV_TOPK_SENSITIVITY_DIAG=1` is the next focused diagnostic for the
+  4096 multi-needle row. It compares top4/top8/top16 selected block sets,
+  block scores, selected-block attention masses, and per-generated-token logit
+  traces without adding fallback/retry behavior.
 
 ## 2026-05-17: 4096 Multi-Task Fallback Gate Validation
 

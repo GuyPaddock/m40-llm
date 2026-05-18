@@ -173,6 +173,16 @@ the staged/FP16 selected-context pass/fail pattern at 2048 and the known 4096
 rows, and is now the recommended experimental mixed attention backend. It
 remains opt-in while top-block robustness is still under investigation.
 
+Current long-context quality evidence makes direct FP16-K/q4-V the preferred
+experimental backend and plain score-ranked top-k the preferred selection
+policy. In the current 4096 multi-task matrix, `top_blocks=4` is the best
+efficiency setting: it passes single-needle, distractor retrieval, early-fact
+QA, and long-chat smoke with the smallest active attended KV. `top_blocks=8`
+is useful for the multi-needle row, but it is not universally superior.
+`top_blocks=16` is not a safe robustness default because quality is
+non-monotonic. Dense `off` also fails the multi-needle row, so treat that row
+as model/task brittleness rather than compression-only failure.
+
 Top-block selection diagnostics are also opt-in:
 
 - `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors`
@@ -253,6 +263,14 @@ bound expensive 4096-token runs. The multi-task case names are
 fallback. It compares dense `off` with direct FP16-K/q4-V `block-select-exact`
 for top-k selected old blocks. Use `M40LLM_KV_MULTITASK_TOP_BLOCKS=4,8,16` to
 choose the tested `top_blocks` values.
+
+`M40LLM_KV_TOPK_SENSITIVITY_DIAG=1` runs the focused 4096 multi-needle
+selection-set diagnostic. It forces `M40LLM_KV_MULTITASK_TASKS=multi-needle`
+and `M40LLM_KV_MULTITASK_TOP_BLOCKS=4,8,16`, then emits richer JSONL telemetry
+for comparing selected block scores, selection records, selected-block
+attention masses, top attended entries, and dense-vs-compressed per-token logit
+traces. Use this before adding more policy complexity; it is meant to explain
+why top4/top16 fail while top8 passes, not to add fallback/retry behavior.
 
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit

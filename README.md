@@ -11,7 +11,9 @@ hot paths, and an optional HTTP `/generate` server.
 - C FFI symbols under the `m40llm_*` prefix.
 - FP16 weights/KV storage with FP32 compute on Maxwell.
 - CLI generation and optional HTTP server.
-- Experimental long-context KV compression and batching work.
+- Experimental long-context KV compression and batching work. The current
+  preferred experimental KV path is direct FP16-K/q4-V exact-old retrieval with
+  plain top-k block selection; see [`docs/kv_compression.md`](docs/kv_compression.md).
 
 This is for M40 owners and researchers who want an M40-first runtime rather
 than a broad portability layer. It aims to be faster than generic runtimes on

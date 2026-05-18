@@ -358,7 +358,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   single-needle, distractor retrieval, early-fact QA, and long-chat smoke, while
   multi-needle is non-monotonic: top4 fails, top8 passes exactly, and top16
   fails. Dense `off` also fails multi-needle, so treat that row as task/model
-  capability evidence rather than pure compression failure.
+  capability evidence rather than pure compression failure. Direct
+  FP16-K/q4-V remains the preferred experimental backend and plain top-k
+  remains the preferred selection policy. In the current 4096 matrix, top4 is
+  the best efficiency setting, top8 is useful for multi-fact retrieval but not
+  universally superior, and top16 is not a safe robustness default because
+  quality is non-monotonic. `M40LLM_KV_TOPK_SENSITIVITY_DIAG=1` now focuses the
+  top-k suite on the 4096 multi-needle row and emits richer selected-block,
+  attention-mass, and generated-logit trace telemetry. The focused run
+  reproduced the non-monotonic result: top4 fails with `[94,80,77,91]`, top8
+  passes after adding `[92,78,89,87]`, and top16 fails after adding
+  `[88,57,90,71,46,53,73,93]`. First-captured attention remains dominated by
+  the recent ring, so the next selection work should test score-cluster or
+  diversity-style filtering rather than fallback/retry logic.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred
