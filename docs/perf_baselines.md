@@ -2,6 +2,63 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-17: Top-K Multi-Task Robustness
+
+This checkpoint adds `M40LLM_KV_TOPK_MULTITASK_DIAG=1`, a bounded multi-task
+diagnostic for direct FP16-K/q4-V exact-old retrieval with top-k only. It
+compares dense `off` against `block-select-exact` at `top_blocks=4,8,16`.
+
+Reports:
+
+- `/tmp/m40-kv-topk-multitask-1024.jsonl`
+- `/tmp/m40-kv-topk-multitask-4096.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` and
+  `cargo check --features cuda --test kv_compression_long_context` passed before
+  the GPU runs.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the 1024 smoke in 842.93 s.
+- The same test passed for the 4096 matrix in 13,707.16 s.
+
+4096 summary:
+
+| Task | Dense off | Top4 | Top8 | Top16 | Smallest passing top-k | Note |
+| --- | --- | --- | --- | --- | --- | --- |
+| single-needle | pass | pass | pass | pass | 4 | stable |
+| multi-needle | fail | fail | pass | fail | 8 | non-monotonic; dense also failed |
+| distractor-needle | pass | pass | pass | pass | 4 | stable |
+| early-fact QA | pass | pass | pass | pass | 4 | stable |
+| long-chat smoke | pass | pass | pass | pass | 4 | stable |
+
+4096 active-KV and decode tradeoff:
+
+| Mode | Active KV all layers | Final KV | Decode range |
+| --- | ---: | ---: | ---: |
+| dense off | ~125.8-126.4 MiB | 4.00 GiB | 5.3-19.9 s |
+| top4 | 36.0 MiB | 2.97 GiB | 3.3-12.2 s |
+| top8 | 40.0 MiB | 2.97 GiB | 3.5-13.1 s |
+| top16 | 48.0 MiB | 2.97 GiB | 4.0-14.8 s |
+
+Interpretation:
+
+- The 1024 smoke passed all tested prompt types and top-block counts; at 1024,
+  active KV does not vary materially because almost all context is in the recent
+  ring.
+- At 4096, top4 is sufficient for single-needle, distractor retrieval,
+  early-fact QA, and long-chat smoke.
+- Multi-needle is the important robustness case: top4 fails, top8 passes, and
+  top16 fails. This confirms that selected-context quality is non-monotonic and
+  that "more selected blocks" is not a safe universal policy.
+- Dense `off` also fails multi-needle by producing `Alfa-13579, Beta-13579`,
+  so that row should be treated as task/model capability evidence rather than a
+  pure compression failure. The top8 exact-block row still succeeds, which means
+  sparse exact selection can sometimes outperform dense for this brittle prompt.
+- Keep top-k as the preferred policy, but do not simply raise the default to
+  top16. A robust policy likely needs task-agnostic stability checks or
+  selection-set sensitivity diagnostics rather than fixed larger support.
+
 ## 2026-05-17: 4096 Multi-Task Fallback Gate Validation
 
 This checkpoint adds filters for expensive fallback multi-task runs:

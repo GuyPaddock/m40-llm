@@ -249,6 +249,11 @@ bound expensive 4096-token runs. The multi-task case names are
 `single-needle`, `multi-needle`, `distractor-needle`, `early-fact-qa`,
 `early-fact-summary`, and `long-chat-smoke`.
 
+`M40LLM_KV_TOPK_MULTITASK_DIAG=1` runs the same multi-task prompt suite without
+fallback. It compares dense `off` with direct FP16-K/q4-V `block-select-exact`
+for top-k selected old blocks. Use `M40LLM_KV_MULTITASK_TOP_BLOCKS=4,8,16` to
+choose the tested `top_blocks` values.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the

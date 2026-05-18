@@ -623,6 +623,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
         if fallback_multitask_diagnostic_enabled() {
             return Ok(if 1024 < limit { vec![1024] } else { Vec::new() });
         }
+        if topk_multitask_diagnostic_enabled() {
+            return Ok(if 1024 < limit { vec![1024] } else { Vec::new() });
+        }
         if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
                 .into_iter()
@@ -769,6 +772,12 @@ fn fallback_multitask_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn topk_multitask_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_TOPK_MULTITASK_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn fallback_include_oracle_enabled() -> bool {
     std::env::var("M40LLM_KV_FALLBACK_INCLUDE_ORACLE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -786,6 +795,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || anchor_neighbor_validation_enabled()
         || fallback_diagnostic_enabled()
         || fallback_multitask_diagnostic_enabled()
+        || topk_multitask_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -806,6 +816,7 @@ fn logit_compare_enabled() -> bool {
         || anchor_neighbor_validation_enabled()
         || fallback_diagnostic_enabled()
         || fallback_multitask_diagnostic_enabled()
+        || topk_multitask_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -2485,6 +2496,16 @@ fn filter_multitask_fallback_cases(cases: Vec<MultiFallbackCase>) -> Vec<MultiFa
         .collect()
 }
 
+fn multitask_top_block_cases() -> Result<Vec<u32>> {
+    let values = std::env::var("M40LLM_KV_MULTITASK_TOP_BLOCKS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| parse_u32_list(&value, "M40LLM_KV_MULTITASK_TOP_BLOCKS"))
+        .transpose()?
+        .unwrap_or_else(|| vec![4, 8, 16]);
+    Ok(values)
+}
+
 fn multitask_trigger_reason_for_case(
     case: MultiFallbackCase,
     initial_passed: bool,
@@ -2794,6 +2815,157 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
     }
 }
 
+fn topk_multitask_record(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    target_tokens: usize,
+    spec: &MultiTaskSpec,
+    dense_output: Option<&str>,
+    generated: GeneratedText,
+    top_blocks: u32,
+) -> MultiTaskRecord {
+    let score = score_multitask_output(spec, &generated.output);
+    MultiTaskRecord {
+        model_path: probe.candidate.path.display().to_string(),
+        resolved_model_path: probe.candidate.resolved_path.display().to_string(),
+        target_tokens,
+        task: spec.name.to_string(),
+        score_type: spec.score_type.to_string(),
+        mode: "block-select-exact".to_string(),
+        fallback_case: None,
+        fallback_triggered: false,
+        fallback_trigger_reason: None,
+        fallback_policy_used: None,
+        top_blocks_initial: Some(top_blocks),
+        top_blocks_final: Some(top_blocks),
+        status: score.status,
+        score: score.score,
+        max_score: score.max_score,
+        dense_reference_output: dense_output.map(str::to_string),
+        initial_output: Some(generated.output.clone()),
+        output: generated.output.clone(),
+        expected_terms: spec
+            .expected_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        forbidden_terms: spec
+            .forbidden_terms
+            .iter()
+            .map(|term| term.to_string())
+            .collect(),
+        topk_passed: Some(score.status == CaseStatus::Pass),
+        fallback_regressed_topk_pass: false,
+        prompt_tokens: generated.prompt_token_len,
+        generated_tokens: generated
+            .token_ids
+            .len()
+            .saturating_sub(generated.prompt_token_len),
+        prompt_prefill_elapsed_ms: generated.prompt_prefill_elapsed_ms,
+        generated_decode_elapsed_ms: generated.generated_decode_elapsed_ms,
+        total_elapsed_ms: generated.total_elapsed_ms,
+        initial_decode_elapsed_ms: Some(generated.generated_decode_elapsed_ms),
+        fallback_decode_elapsed_ms: None,
+        total_decode_elapsed_ms_with_retry: None,
+        active_attended_kv_bytes_all_layers: multitask_active_kv_bytes(
+            &generated,
+            KvCompressMode::BlockSelectExact,
+            top_blocks,
+            config,
+        ),
+        initial_active_kv_bytes_all_layers: multitask_active_kv_bytes(
+            &generated,
+            KvCompressMode::BlockSelectExact,
+            top_blocks,
+            config,
+        ),
+        fallback_active_kv_bytes_all_layers: None,
+        final_kv_allocated_bytes: generated.final_kv_allocated_bytes,
+        dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
+        exact_old_backing: generated.exact_old_backing.clone(),
+        exact_old_attention_backend: generated.exact_old_attention_backend.clone(),
+        old_k_fp16_bytes: generated.old_k_fp16_bytes,
+        q4_old_v_payload_bytes: generated.q4_old_v_payload_bytes,
+        q4_old_v_scale_bytes: generated.q4_old_v_scale_bytes,
+        recent_fp16_bytes: generated.recent_fp16_bytes,
+        summary_index_bytes: generated.summary_index_bytes,
+        selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        base_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        initial_eot_rank_min: fallback_signal_summary(generated.generated_logit_trace.as_deref())
+            .eot_rank_min,
+        initial_eot_logit_margin_min: fallback_signal_summary(
+            generated.generated_logit_trace.as_deref(),
+        )
+        .eot_logit_margin_min,
+        initial_top_margin_min: fallback_signal_summary(generated.generated_logit_trace.as_deref())
+            .top_margin_min,
+        score_cutoff_margin: score_cutoff_margin(generated.kv_selection.as_ref()),
+        error: None,
+    }
+}
+
+fn run_topk_multitask_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+    target_tokens: usize,
+) -> Result<()> {
+    let max_tokens = multitask_max_tokens();
+    let tasks = filter_multitask_specs(multitask_specs(tokenizer, target_tokens));
+    let top_block_cases = multitask_top_block_cases()?;
+    let mut records = Vec::new();
+    eprintln!(
+        "running top-k multitask diagnostic: target={target_tokens} tasks={} top_block_cases={:?} max_tokens={max_tokens}",
+        tasks.len(),
+        top_block_cases
+    );
+    for spec in tasks {
+        let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
+        let dense_output = dense.output.clone();
+        let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        append_report_record(&dense_record)?;
+        records.push(dense_record);
+
+        for top_blocks in &top_block_cases {
+            let generated = run_multitask_generate(
+                model,
+                &spec,
+                KvCompressMode::BlockSelectExact,
+                *top_blocks,
+                max_tokens,
+            )?;
+            let record = topk_multitask_record(
+                probe,
+                config,
+                target_tokens,
+                &spec,
+                Some(&dense_output),
+                generated,
+                *top_blocks,
+            );
+            eprintln!(
+                "  task={} top_blocks={} status={:?} score={}/{} active_kv={:?} output={:?}",
+                record.task,
+                top_blocks,
+                record.status,
+                record.score,
+                record.max_score,
+                record.active_attended_kv_bytes_all_layers,
+                record.output
+            );
+            append_report_record(&record)?;
+            records.push(record);
+        }
+    }
+    eprintln!(
+        "top-k multitask diagnostic complete: rows={}",
+        records.len()
+    );
+    Ok(())
+}
+
 fn run_fallback_multitask_suite(
     probe: &CandidateProbe,
     config: &ModelConfig,
@@ -3084,6 +3256,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
+    if topk_multitask_diagnostic_enabled() {
+        return run_topk_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);
+    }
     if fallback_multitask_diagnostic_enabled() {
         return run_fallback_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);
     }

@@ -352,15 +352,22 @@ batched decode path before touching persistent decode or large-model fused-dequa
   exact-block retrieval passed with `ALPHA-13579, BRAVO-24680`, but both
   score-spread and combined top16 retries regressed it to
   `Alfa-13579, Bravo-24680`. Keep fallback diagnostic/opt-in.
+  `M40LLM_KV_TOPK_MULTITASK_DIAG=1` now characterizes top-k robustness across
+  the same multi-task prompt family without fallback. The 1024 smoke passed all
+  tasks and top-block counts. The 4096 matrix shows top4 is sufficient for
+  single-needle, distractor retrieval, early-fact QA, and long-chat smoke, while
+  multi-needle is non-monotonic: top4 fails, top8 passes exactly, and top16
+  fails. Dense `off` also fails multi-needle, so treat that row as task/model
+  capability evidence rather than pure compression failure.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred
-  exact-old selection policy for now; fallback gates are too false-positive
-  prone at 4096. The next policy step should tighten trigger thresholds or
-  design non-retry dynamic expansion, then validate against the multi-task suite
-  before considering a deployable fallback. Do not increase representative
-  count, tune pure summary modes, run 8192, or expand compressed KV into server
-  scheduling yet.
+  exact-old selection policy for now, but do not blindly raise the default to
+  top16. Fallback gates are too false-positive prone at 4096. The next policy
+  step should explain top-block non-monotonicity, compare selected block sets,
+  or design task-agnostic stability checks before considering a deployable
+  dynamic policy. Do not increase representative count, tune pure summary modes,
+  run 8192, or expand compressed KV into server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.
