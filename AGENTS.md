@@ -369,17 +369,22 @@ batched decode path before touching persistent decode or large-model fused-dequa
   reproduced the non-monotonic result: top4 fails with `[94,80,77,91]`, top8
   passes after adding `[92,78,89,87]`, and top16 fails after adding
   `[88,57,90,71,46,53,73,93]`. First-captured attention remains dominated by
-  the recent ring, so the next selection work should test score-cluster or
-  diversity-style filtering rather than fallback/retry logic.
+  the recent ring. `M40LLM_KV_TOPK_ABLATION_DIAG=1` now adds diagnostic
+  explicit include/exclude selected-block controls and a score-cluster policy.
+  The 4096 multi-needle ablation shows top4 cannot be repaired by any single
+  top8-delta block, top8 still passes when any one selected block is removed,
+  and top8 still passes when any one top16-extra block is added. The top16
+  regression is therefore a combined support-set/distribution-shift effect, not
+  a single toxic block. Failing rows diverge at generated step 6.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred
   exact-old selection policy for now, but do not blindly raise the default to
   top16. Fallback gates are too false-positive prone at 4096. The next policy
-  step should explain top-block non-monotonicity, compare selected block sets,
-  or design task-agnostic stability checks before considering a deployable
-  dynamic policy. Do not increase representative count, tune pure summary modes,
-  run 8192, or expand compressed KV into server scheduling yet.
+  step should test adaptive cluster sizing or pair/group additions before
+  considering a deployable dynamic policy. Do not increase representative count,
+  tune pure summary modes, run 8192, or expand compressed KV into server
+  scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

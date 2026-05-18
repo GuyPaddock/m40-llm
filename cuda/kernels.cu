@@ -152,6 +152,8 @@ extern "C" {
         if (std::strcmp(value, "threshold") == 0) return 2u;
         if (std::strcmp(value, "anchor") == 0) return 3u;
         if (std::strcmp(value, "anchor-neighbors") == 0) return 4u;
+        if (std::strcmp(value, "explicit") == 0) return 5u;
+        if (std::strcmp(value, "score-cluster") == 0) return 6u;
         return 0u;
     }
 
@@ -187,6 +189,33 @@ extern "C" {
             if (!ptr) break;
         }
         return mask == 0ull ? 1ull : mask;
+    }
+
+    static void block_masks_from_env(const char* name, uint64_t* low, uint64_t* high) {
+        *low = 0ull;
+        *high = 0ull;
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0') return;
+        const char* ptr = value;
+        while (*ptr) {
+            char* end = nullptr;
+            const unsigned long parsed = std::strtoul(ptr, &end, 10);
+            if (end != ptr && parsed < 128ul) {
+                if (parsed < 64ul) {
+                    *low |= (1ull << parsed);
+                } else {
+                    *high |= (1ull << (parsed - 64ul));
+                }
+            }
+            ptr = end && *end ? end + 1 : end;
+            if (!ptr) break;
+        }
+    }
+
+    __host__ __device__ bool block_mask_contains(uint64_t low, uint64_t high, uint32_t block) {
+        if (block < 64u) return (low & (1ull << block)) != 0ull;
+        if (block < 128u) return (high & (1ull << (block - 64u))) != 0ull;
+        return false;
     }
 
     __device__ void sort_selected_blocks_chronological(uint32_t* blocks, uint32_t count) {
@@ -2378,6 +2407,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t block_min_blocks,
         uint32_t block_max_blocks,
         uint64_t anchor_block_mask,
+        uint64_t force_include_block_mask_low,
+        uint64_t force_include_block_mask_high,
+        uint64_t force_exclude_block_mask_low,
+        uint64_t force_exclude_block_mask_high,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t qh_idx = blockIdx.x;
@@ -2397,7 +2430,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = block_select_policy == 2u ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2484,8 +2517,34 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
+            if (block_select_policy == 5u) {
+                for (uint32_t b = 0; b < old_blocks && b < 128u; ++b) {
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 6u) {
+                const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
+                for (uint32_t i = top_n; i < keep_n; ++i) {
+                    if (selected_scores[i] >= cutoff) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
             for (uint32_t i = final_block_count; i < min_take && i < top_n; ++i) {
                 append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 5u) {
+                uint32_t write = 0;
+                for (uint32_t i = 0; i < final_block_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (!block_mask_contains(force_exclude_block_mask_low, force_exclude_block_mask_high, b)) {
+                        final_blocks[write++] = b;
+                    }
+                }
+                for (uint32_t i = write; i < final_block_count; ++i) final_blocks[i] = 0xffffffffu;
+                final_block_count = write;
             }
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(final_blocks, final_block_count);
@@ -2616,6 +2675,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t block_min_blocks,
         uint32_t block_max_blocks,
         uint64_t anchor_block_mask,
+        uint64_t force_include_block_mask_low,
+        uint64_t force_include_block_mask_high,
+        uint64_t force_exclude_block_mask_low,
+        uint64_t force_exclude_block_mask_high,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t qh_idx = blockIdx.x;
@@ -2636,7 +2699,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = block_select_policy == 2u ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2721,8 +2784,34 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
+            if (block_select_policy == 5u) {
+                for (uint32_t b = 0; b < old_blocks && b < 128u; ++b) {
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 6u) {
+                const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
+                for (uint32_t i = top_n; i < keep_n; ++i) {
+                    if (selected_scores[i] >= cutoff) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
             for (uint32_t i = final_block_count; i < min_take && i < top_n; ++i) {
                 append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 5u) {
+                uint32_t write = 0;
+                for (uint32_t i = 0; i < final_block_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (!block_mask_contains(force_exclude_block_mask_low, force_exclude_block_mask_high, b)) {
+                        final_blocks[write++] = b;
+                    }
+                }
+                for (uint32_t i = write; i < final_block_count; ++i) final_blocks[i] = 0xffffffffu;
+                final_block_count = write;
             }
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(final_blocks, final_block_count);
@@ -4155,6 +4244,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t block_min_blocks = block_min_blocks_from_env();
         const uint32_t block_max_blocks = block_max_blocks_from_env(64u);
         const uint64_t anchor_block_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
         const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
         const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
@@ -4190,6 +4283,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             block_min_blocks,
             block_max_blocks,
             anchor_block_mask,
+            force_include_low,
+            force_include_high,
+            force_exclude_low,
+            force_exclude_high,
             reinterpret_cast<float*>(out_dev_f32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -8;
@@ -4223,6 +4320,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t block_min_blocks = block_min_blocks_from_env();
         const uint32_t block_max_blocks = block_max_blocks_from_env(64u);
         const uint64_t anchor_block_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
         const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
         const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
@@ -4255,6 +4356,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             block_min_blocks,
             block_max_blocks,
             anchor_block_mask,
+            force_include_low,
+            force_include_high,
+            force_exclude_low,
+            force_exclude_high,
             reinterpret_cast<float*>(out_dev_f32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -8;
@@ -6125,6 +6230,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float best_score = scored.empty() ? -1e30f : scored[0].first;
         const float score_delta = block_score_delta_from_env();
         const uint64_t anchor_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
         std::vector<uint32_t> selected_blocks;
         selected_blocks.reserve(capacity);
         auto append_unique = [&](uint32_t block) {
@@ -6151,13 +6260,35 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 }
             }
         }
+        if (policy == 6u) {
+            const float cutoff = base_count > 0 && base_count <= scored.size()
+                ? scored[base_count - 1u].first - score_delta
+                : best_score;
+            for (const auto& entry : scored) {
+                if (entry.first >= cutoff) {
+                    append_unique(entry.second);
+                }
+            }
+        }
         if (policy == 3u || policy == 4u) {
             for (uint32_t block = 0; block < old_blocks && block < 64u; ++block) {
                 if ((anchor_mask & (1ull << block)) != 0ull) append_unique(block);
             }
         }
+        if (policy == 5u) {
+            for (uint32_t block = 0; block < old_blocks && block < 128u; ++block) {
+                if (block_mask_contains(force_include_low, force_include_high, block)) append_unique(block);
+            }
+        }
         for (uint32_t i = 0; selected_blocks.size() < min_take && i < scored.size(); ++i) {
             append_unique(scored[i].second);
+        }
+        if (policy == 5u) {
+            selected_blocks.erase(
+                std::remove_if(selected_blocks.begin(), selected_blocks.end(), [&](uint32_t block) {
+                    return block_mask_contains(force_exclude_low, force_exclude_high, block);
+                }),
+                selected_blocks.end());
         }
         if (selected_block_order_from_env() == 1u) {
             std::sort(selected_blocks.begin(), selected_blocks.end());

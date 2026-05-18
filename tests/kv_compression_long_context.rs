@@ -200,6 +200,7 @@ struct MultiTaskRecord {
     task: String,
     score_type: String,
     mode: String,
+    selection_ablation_case: Option<String>,
     fallback_case: Option<String>,
     fallback_triggered: bool,
     fallback_trigger_reason: Option<String>,
@@ -790,6 +791,12 @@ fn topk_sensitivity_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn topk_ablation_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_TOPK_ABLATION_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn fallback_include_oracle_enabled() -> bool {
     std::env::var("M40LLM_KV_FALLBACK_INCLUDE_ORACLE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -809,6 +816,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || fallback_multitask_diagnostic_enabled()
         || topk_multitask_diagnostic_enabled()
         || topk_sensitivity_diagnostic_enabled()
+        || topk_ablation_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -831,6 +839,7 @@ fn logit_compare_enabled() -> bool {
         || fallback_multitask_diagnostic_enabled()
         || topk_multitask_diagnostic_enabled()
         || topk_sensitivity_diagnostic_enabled()
+        || topk_ablation_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -855,6 +864,8 @@ fn block_select_policy() -> String {
         Some("threshold") => "threshold".to_string(),
         Some("anchor") => "anchor".to_string(),
         Some("anchor-neighbors") => "anchor-neighbors".to_string(),
+        Some("explicit") => "explicit".to_string(),
+        Some("score-cluster") => "score-cluster".to_string(),
         _ => "topk".to_string(),
     }
 }
@@ -1045,6 +1056,17 @@ struct BlockPolicyCase {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct TopkAblationCase {
+    name: &'static str,
+    policy: &'static str,
+    top_blocks: u32,
+    include_blocks: Option<&'static str>,
+    exclude_blocks: Option<&'static str>,
+    max_blocks: &'static str,
+    score_delta: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct FallbackCase {
     name: &'static str,
     retry_top_blocks: Option<u32>,
@@ -1207,6 +1229,28 @@ fn apply_block_policy_case(case: BlockPolicyCase) -> Vec<EnvVarGuard> {
     match case.anchors {
         Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_ANCHOR_BLOCKS", value)),
         None => guards.push(EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS")),
+    }
+    guards
+}
+
+fn apply_topk_ablation_case(case: TopkAblationCase) -> Vec<EnvVarGuard> {
+    let mut guards = vec![
+        EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", case.policy),
+        EnvVarGuard::set("M40LLM_KV_BLOCK_MAX_BLOCKS", case.max_blocks),
+        EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS"),
+        EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS"),
+    ];
+    match case.include_blocks {
+        Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_FORCE_INCLUDE_BLOCKS", value)),
+        None => guards.push(EnvVarGuard::unset("M40LLM_KV_FORCE_INCLUDE_BLOCKS")),
+    }
+    match case.exclude_blocks {
+        Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", value)),
+        None => guards.push(EnvVarGuard::unset("M40LLM_KV_FORCE_EXCLUDE_BLOCKS")),
+    }
+    match case.score_delta {
+        Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_BLOCK_SCORE_DELTA", value)),
+        None => guards.push(EnvVarGuard::unset("M40LLM_KV_BLOCK_SCORE_DELTA")),
     }
     guards
 }
@@ -2520,6 +2564,104 @@ fn multitask_top_block_cases() -> Result<Vec<u32>> {
     Ok(values)
 }
 
+fn topk_ablation_cases() -> Vec<TopkAblationCase> {
+    let mut cases = vec![
+        TopkAblationCase {
+            name: "top4",
+            policy: "topk",
+            top_blocks: 4,
+            include_blocks: None,
+            exclude_blocks: None,
+            max_blocks: "4",
+            score_delta: None,
+        },
+        TopkAblationCase {
+            name: "top8",
+            policy: "topk",
+            top_blocks: 8,
+            include_blocks: None,
+            exclude_blocks: None,
+            max_blocks: "8",
+            score_delta: None,
+        },
+        TopkAblationCase {
+            name: "top16",
+            policy: "topk",
+            top_blocks: 16,
+            include_blocks: None,
+            exclude_blocks: None,
+            max_blocks: "16",
+            score_delta: None,
+        },
+    ];
+    for block in ["92", "78", "89", "87"] {
+        cases.push(TopkAblationCase {
+            name: match block {
+                "92" => "top4-plus-92",
+                "78" => "top4-plus-78",
+                "89" => "top4-plus-89",
+                _ => "top4-plus-87",
+            },
+            policy: "explicit",
+            top_blocks: 4,
+            include_blocks: Some(block),
+            exclude_blocks: None,
+            max_blocks: "5",
+            score_delta: None,
+        });
+    }
+    for block in ["94", "80", "77", "91", "92", "78", "89", "87"] {
+        cases.push(TopkAblationCase {
+            name: match block {
+                "94" => "top8-minus-94",
+                "80" => "top8-minus-80",
+                "77" => "top8-minus-77",
+                "91" => "top8-minus-91",
+                "92" => "top8-minus-92",
+                "78" => "top8-minus-78",
+                "89" => "top8-minus-89",
+                _ => "top8-minus-87",
+            },
+            policy: "explicit",
+            top_blocks: 8,
+            include_blocks: None,
+            exclude_blocks: Some(block),
+            max_blocks: "8",
+            score_delta: None,
+        });
+    }
+    for block in ["88", "57", "90", "71", "46", "53", "73", "93"] {
+        cases.push(TopkAblationCase {
+            name: match block {
+                "88" => "top8-plus-88",
+                "57" => "top8-plus-57",
+                "90" => "top8-plus-90",
+                "71" => "top8-plus-71",
+                "46" => "top8-plus-46",
+                "53" => "top8-plus-53",
+                "73" => "top8-plus-73",
+                _ => "top8-plus-93",
+            },
+            policy: "explicit",
+            top_blocks: 8,
+            include_blocks: Some(block),
+            exclude_blocks: None,
+            max_blocks: "9",
+            score_delta: None,
+        });
+    }
+    cases.push(TopkAblationCase {
+        name: "score-cluster-005",
+        policy: "score-cluster",
+        top_blocks: 4,
+        include_blocks: None,
+        exclude_blocks: None,
+        max_blocks: "8",
+        score_delta: Some("0.05"),
+    });
+    cases
+}
+
 fn multitask_trigger_reason_for_case(
     case: MultiFallbackCase,
     initial_passed: bool,
@@ -2569,11 +2711,21 @@ fn run_multitask_generate(
     let _selection_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
     let _logit_trace_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1");
     let _logit_compare_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1");
-    let _policy_guard = EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk");
-    let _score_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_SCORE_DELTA");
-    let _min_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS");
-    let _max_guard = EnvVarGuard::unset("M40LLM_KV_BLOCK_MAX_BLOCKS");
-    let _anchor_guard = EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS");
+    let preserve_policy_env = topk_ablation_diagnostic_enabled();
+    let _policy_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk"));
+    let _score_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_BLOCK_SCORE_DELTA"));
+    let _min_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS"));
+    let _max_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_BLOCK_MAX_BLOCKS"));
+    let _anchor_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS"));
+    let _include_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_FORCE_INCLUDE_BLOCKS"));
+    let _exclude_guard =
+        (!preserve_policy_env).then(|| EnvVarGuard::unset("M40LLM_KV_FORCE_EXCLUDE_BLOCKS"));
     let _backing_guard = (mode == KvCompressMode::BlockSelectExact)
         .then(|| EnvVarGuard::set("M40LLM_KV_EXACT_OLD_BACKING", "fp16-k-q4-v"));
     let _attention_guard = (mode == KvCompressMode::BlockSelectExact)
@@ -2650,6 +2802,7 @@ fn dense_multitask_record(
         task: spec.name.to_string(),
         score_type: spec.score_type.to_string(),
         mode: "off".to_string(),
+        selection_ablation_case: None,
         fallback_case: None,
         fallback_triggered: false,
         fallback_trigger_reason: None,
@@ -2774,6 +2927,7 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         task: input.spec.name.to_string(),
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
+        selection_ablation_case: None,
         fallback_case: Some(input.fallback_case.name.to_string()),
         fallback_triggered: input.fallback_triggered,
         fallback_trigger_reason: input.fallback_trigger_reason,
@@ -2891,6 +3045,7 @@ struct TopkMultitaskRecordInput<'a> {
     spec: &'a MultiTaskSpec,
     dense_output: Option<&'a str>,
     dense_trace: Option<&'a [GeneratedLogitTraceStep]>,
+    selection_ablation_case: Option<&'a str>,
     generated: GeneratedText,
     top_blocks: u32,
 }
@@ -2904,6 +3059,7 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         task: input.spec.name.to_string(),
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
+        selection_ablation_case: input.selection_ablation_case.map(str::to_string),
         fallback_case: None,
         fallback_triggered: false,
         fallback_trigger_reason: None,
@@ -3055,6 +3211,7 @@ fn run_topk_multitask_suite(
                 spec: &spec,
                 dense_output: Some(&dense_output),
                 dense_trace: dense_trace.as_deref(),
+                selection_ablation_case: None,
                 generated,
                 top_blocks: *top_blocks,
             });
@@ -3095,6 +3252,71 @@ fn run_topk_sensitivity_suite(
     let _tasks_guard = EnvVarGuard::set("M40LLM_KV_MULTITASK_TASKS", "multi-needle");
     let _top_blocks_guard = EnvVarGuard::set("M40LLM_KV_MULTITASK_TOP_BLOCKS", "4,8,16");
     run_topk_multitask_suite(probe, config, model, tokenizer, 4096)
+}
+
+fn run_topk_ablation_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+) -> Result<()> {
+    if config.context_length < 4096 {
+        eprintln!(
+            "top-k ablation diagnostic requires ctx>=4096; selected model ctx={}",
+            config.context_length
+        );
+        return Ok(());
+    }
+    let target_tokens = 4096;
+    let max_tokens = multitask_max_tokens();
+    let spec = multitask_specs(tokenizer, target_tokens)
+        .into_iter()
+        .find(|spec| spec.name == "multi-needle")
+        .context("multi-needle multitask spec not found")?;
+    let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
+    let dense_output = dense.output.clone();
+    let dense_trace = dense.generated_logit_trace.clone();
+    let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+    append_report_record(&dense_record)?;
+    eprintln!(
+        "running top-k ablation diagnostic: target={target_tokens} cases={} max_tokens={max_tokens}",
+        topk_ablation_cases().len()
+    );
+    for case in topk_ablation_cases() {
+        let _guards = apply_topk_ablation_case(case);
+        let generated = run_multitask_generate(
+            model,
+            &spec,
+            KvCompressMode::BlockSelectExact,
+            case.top_blocks,
+            max_tokens,
+        )?;
+        let record = topk_multitask_record(TopkMultitaskRecordInput {
+            probe,
+            config,
+            target_tokens,
+            spec: &spec,
+            dense_output: Some(&dense_output),
+            dense_trace: dense_trace.as_deref(),
+            selection_ablation_case: Some(case.name),
+            generated,
+            top_blocks: case.top_blocks,
+        });
+        eprintln!(
+            "  ablation={} policy={} top_blocks={} status={:?} score={}/{} active_kv={:?} selected={:?} output={:?}",
+            case.name,
+            case.policy,
+            case.top_blocks,
+            record.status,
+            record.score,
+            record.max_score,
+            record.active_attended_kv_bytes_all_layers,
+            record.selected_block_indices,
+            record.output
+        );
+        append_report_record(&record)?;
+    }
+    Ok(())
 }
 
 fn run_fallback_multitask_suite(
@@ -3387,6 +3609,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
+    if topk_ablation_diagnostic_enabled() {
+        return run_topk_ablation_suite(&probe, config, &mut model, &tokenizer);
+    }
     if topk_sensitivity_diagnostic_enabled() {
         return run_topk_sensitivity_suite(&probe, config, &mut model, &tokenizer);
     }

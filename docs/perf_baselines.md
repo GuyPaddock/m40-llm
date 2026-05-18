@@ -2,6 +2,51 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-18: Top-K Multi-Needle Selection Ablation
+
+This checkpoint adds `M40LLM_KV_TOPK_ABLATION_DIAG=1`, a focused selected-set
+ablation for the 4096 multi-needle row with direct FP16-K/q4-V exact-old
+retrieval. It adds diagnostic `explicit` include/exclude block selection and a
+`score-cluster` policy, without adding fallback or retry behavior.
+
+Report:
+
+- `/tmp/m40-kv-topk-ablation-4096-multineedle.jsonl`
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the focused 4096 ablation run in 17,316.02 s.
+
+Summary:
+
+| Case group | Result |
+| --- | --- |
+| top4 baseline | fail, 1/2, `[94,80,77,91]`, `Alfa-13579, BRAVO-24680`, 36.0 MiB |
+| top8 baseline | pass, 2/2, `[94,80,77,91,92,78,89,87]`, `ALPHA-13579, BRAVO-24680`, 40.0 MiB |
+| top16 baseline | fail, 1/2, `[94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93]`, `Alfa-13579, Bravo-24680`, 48.0 MiB |
+| top4 + one of `92,78,89,87` | all fail, 1/2, same top4-style output |
+| top8 - one selected block | all pass, 2/2, 39.0 MiB |
+| top8 + one of `88,57,90,71,46,53,73,93` | all pass, 2/2, 41.0 MiB |
+| score-cluster-005 | fail, selected top4 only |
+
+Interpretation:
+
+- Top8 does not depend on one critical block: removing any single top8 block
+  still passes.
+- Top4 cannot be repaired by one added top8-delta block, so top8's benefit is a
+  broader group/support effect.
+- Top16 does not fail because of one individually toxic extra block: adding any
+  single top16-extra block to top8 still passes. The top16 regression is a
+  combined support-set or distribution-shift effect.
+- Failing compressed rows diverge from dense at generated step 6. This points to
+  later-token drift, not first-token retrieval failure.
+- The first score-cluster policy was too conservative: `delta=0.05` relative to
+  the top4 cutoff selected only top4 and failed. The next policy experiment
+  should try adaptive cluster sizing or pair/group additions, not fallback/retry.
+
 ## 2026-05-17: Top-K Multi-Needle Sensitivity
 
 This checkpoint adds `M40LLM_KV_TOPK_SENSITIVITY_DIAG=1`, a focused 4096
