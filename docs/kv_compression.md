@@ -185,7 +185,7 @@ as model/task brittleness rather than compression-only failure.
 
 Top-block selection diagnostics are also opt-in:
 
-- `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors`
+- `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors|explicit|explicit-score-order`
   controls how selected old blocks are promoted after score ranking for direct
   exact-old attention diagnostics. The default `topk` preserves existing
   behavior.
@@ -195,6 +195,12 @@ Top-block selection diagnostics are also opt-in:
   `M40LLM_KV_BLOCK_MAX_BLOCKS` caps.
 - `anchor` and `anchor-neighbors` always include anchor blocks from
   `M40LLM_KV_ANCHOR_BLOCKS`, defaulting to block 0 when unset.
+- `explicit` uses `M40LLM_KV_FORCE_INCLUDE_BLOCKS` /
+  `M40LLM_KV_FORCE_EXCLUDE_BLOCKS` for selected-set ablations.
+- `explicit-score-order` selects only forced-included blocks while preserving
+  score order before optional `M40LLM_KV_SELECTED_BLOCK_ORDER` canonicalization.
+- `M40LLM_KV_SELECTED_BLOCK_ORDER=score|chronological|descending` controls the
+  physical/materialized selected-block order for order-invariance diagnostics.
 
 JSONL rows include `block_select_policy`, `base_selected_block_indices`,
 `policy_added_block_indices`, `final_selected_block_indices`, and the threshold
@@ -290,6 +296,16 @@ base top-k set and adds score-near candidates up to `M40LLM_KV_BLOCK_MAX_BLOCKS`
 using `M40LLM_KV_BLOCK_SCORE_DELTA` relative to the top-k cutoff score.
 `score-cluster-adaptive` uses the same cutoff rule but also honors
 `M40LLM_KV_BLOCK_MIN_BLOCKS`, so it can enforce a minimum support-set size.
+
+`M40LLM_KV_ORDER_EQUIV_DIAG=1` runs a focused 4096 multi-needle
+order-equivalence diagnostic. It compares baseline top8, baseline top16,
+explicit same-set top8 in score order, ascending order, and descending order,
+plus score-cluster-adaptive min8/max12 and min8/max16 candidate rows. JSONL rows
+include `attention_step_trace` with per-generated-step top8-core mass,
+top16-tail mass, selected-old entropy, recent mass, old exact mass, and selected
+block materialization order. Current evidence shows same-set top8 passes under
+all tested orderings; top16 failure is therefore better explained as cumulative
+tail distribution shift than simple candidate order.
 
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit

@@ -113,7 +113,9 @@ extern "C" {
     static uint32_t selected_block_order_from_env() {
         const char* value = std::getenv("M40LLM_KV_SELECTED_BLOCK_ORDER");
         if (!value || value[0] == '\0') return 0;
-        return std::strcmp(value, "chronological") == 0 ? 1u : 0u;
+        if (std::strcmp(value, "chronological") == 0) return 1u;
+        if (std::strcmp(value, "descending") == 0) return 2u;
+        return 0u;
     }
 
     static bool q8_dense_shadow_from_env() {
@@ -155,6 +157,7 @@ extern "C" {
         if (std::strcmp(value, "explicit") == 0) return 5u;
         if (std::strcmp(value, "score-cluster") == 0) return 6u;
         if (std::strcmp(value, "score-cluster-adaptive") == 0) return 7u;
+        if (std::strcmp(value, "explicit-score-order") == 0) return 8u;
         return 0u;
     }
 
@@ -224,6 +227,18 @@ extern "C" {
             const uint32_t key = blocks[i];
             uint32_t j = i;
             while (j > 0 && blocks[j - 1] > key) {
+                blocks[j] = blocks[j - 1];
+                --j;
+            }
+            blocks[j] = key;
+        }
+    }
+
+    __device__ void sort_selected_blocks_descending(uint32_t* blocks, uint32_t count) {
+        for (uint32_t i = 1; i < count; ++i) {
+            const uint32_t key = blocks[i];
+            uint32_t j = i;
+            while (j > 0 && blocks[j - 1] < key) {
                 blocks[j] = blocks[j - 1];
                 --j;
             }
@@ -1750,6 +1765,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (tid == 0) {
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
             }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
@@ -1909,6 +1926,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (tid == 0) {
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
             }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
@@ -2250,6 +2269,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (tid == 0) {
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
             }
             for (uint32_t i = 0; i < top_n; ++i) {
                 const uint32_t b = selected_blocks[i];
@@ -2431,7 +2452,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u) ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u || block_select_policy == 8u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2525,6 +2546,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
+            if (block_select_policy == 8u) {
+                final_block_count = 0;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    const uint32_t b = selected_blocks[i];
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
             if (block_select_policy == 6u || block_select_policy == 7u) {
                 const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
                 for (uint32_t i = top_n; i < keep_n; ++i) {
@@ -2549,6 +2579,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(final_blocks, final_block_count);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(final_blocks, final_block_count);
             }
             for (uint32_t i = 0; i < final_block_count; ++i) {
                 const uint32_t b = final_blocks[i];
@@ -2700,7 +2732,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             ? (old_blocks < 64u ? old_blocks : 64u)
             : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
-        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u) ? block_capacity : top_n;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u || block_select_policy == 8u) ? block_capacity : top_n;
 
         float* token_slots = shmem;
         float* scores = token_slots + selected_capacity;
@@ -2792,6 +2824,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     }
                 }
             }
+            if (block_select_policy == 8u) {
+                final_block_count = 0;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    const uint32_t b = selected_blocks[i];
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
             if (block_select_policy == 6u || block_select_policy == 7u) {
                 const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
                 for (uint32_t i = top_n; i < keep_n; ++i) {
@@ -2816,6 +2857,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
             if (selected_block_order == 1u) {
                 sort_selected_blocks_chronological(final_blocks, final_block_count);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(final_blocks, final_block_count);
             }
             for (uint32_t i = 0; i < final_block_count; ++i) {
                 const uint32_t b = final_blocks[i];
@@ -6281,6 +6324,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 if (block_mask_contains(force_include_low, force_include_high, block)) append_unique(block);
             }
         }
+        if (policy == 8u) {
+            selected_blocks.clear();
+            for (const auto& entry : scored) {
+                if (block_mask_contains(force_include_low, force_include_high, entry.second)) {
+                    append_unique(entry.second);
+                }
+            }
+        }
         for (uint32_t i = 0; selected_blocks.size() < min_take && i < scored.size(); ++i) {
             append_unique(scored[i].second);
         }
@@ -6293,6 +6344,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
         if (selected_block_order_from_env() == 1u) {
             std::sort(selected_blocks.begin(), selected_blocks.end());
+        } else if (selected_block_order_from_env() == 2u) {
+            std::sort(selected_blocks.begin(), selected_blocks.end(), std::greater<uint32_t>());
         }
         auto score_for_block = [&](uint32_t block) {
             for (const auto& entry : scored) {
@@ -6514,6 +6567,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             for (uint32_t i = 0; i < take; ++i) selected.push_back(scored[i].second);
             if (selected_block_order_from_env() == 1u) {
                 std::sort(selected.begin(), selected.end());
+            } else if (selected_block_order_from_env() == 2u) {
+                std::sort(selected.begin(), selected.end(), std::greater<uint32_t>());
             }
             return selected;
         };

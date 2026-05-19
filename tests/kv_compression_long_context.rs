@@ -201,6 +201,8 @@ struct MultiTaskRecord {
     score_type: String,
     mode: String,
     selection_ablation_case: Option<String>,
+    block_select_policy: String,
+    selected_block_order: String,
     fallback_case: Option<String>,
     fallback_triggered: bool,
     fallback_trigger_reason: Option<String>,
@@ -243,7 +245,9 @@ struct MultiTaskRecord {
     attention_selected_block_masses: Option<Vec<String>>,
     attention_top_entries: Option<Vec<String>>,
     attention_records: Option<Vec<String>>,
+    attention_step_trace: Option<Vec<AttentionStepTelemetryRecord>>,
     generated_logit_trace: Option<Vec<GeneratedLogitTraceRecord>>,
+    first_divergence_step: Option<usize>,
     base_selected_block_indices: Option<Vec<u32>>,
     final_selected_block_indices: Option<Vec<u32>>,
     initial_eot_rank_min: Option<usize>,
@@ -280,6 +284,18 @@ struct GeneratedLogitTraceRecord {
     max_logit_diff: Option<f32>,
     mean_logit_diff: Option<f32>,
     top10_overlap: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AttentionStepTelemetryRecord {
+    token: u32,
+    record_count: usize,
+    top8_core_mass_mean: f32,
+    top16_tail_mass_mean: f32,
+    selected_old_exact_mass_mean: f32,
+    recent_mass_mean: f32,
+    selected_old_block_entropy_mean: f32,
+    selected_block_order: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -797,6 +813,12 @@ fn topk_ablation_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn order_equiv_diagnostic_enabled() -> bool {
+    std::env::var("M40LLM_KV_ORDER_EQUIV_DIAG")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn fallback_include_oracle_enabled() -> bool {
     std::env::var("M40LLM_KV_FALLBACK_INCLUDE_ORACLE")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -817,6 +839,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || topk_multitask_diagnostic_enabled()
         || topk_sensitivity_diagnostic_enabled()
         || topk_ablation_diagnostic_enabled()
+        || order_equiv_diagnostic_enabled()
 }
 
 fn exact_block_staging_enabled() -> bool {
@@ -840,6 +863,7 @@ fn logit_compare_enabled() -> bool {
         || topk_multitask_diagnostic_enabled()
         || topk_sensitivity_diagnostic_enabled()
         || topk_ablation_diagnostic_enabled()
+        || order_equiv_diagnostic_enabled()
         || std::env::var("M40LLM_KV_LOGIT_COMPARE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
             .unwrap_or(false)
@@ -851,6 +875,7 @@ fn selected_block_order() -> String {
         .as_deref()
     {
         Some("chronological") => "chronological".to_string(),
+        Some("descending") => "descending".to_string(),
         _ => "score".to_string(),
     }
 }
@@ -867,6 +892,7 @@ fn block_select_policy() -> String {
         Some("explicit") => "explicit".to_string(),
         Some("score-cluster") => "score-cluster".to_string(),
         Some("score-cluster-adaptive") => "score-cluster-adaptive".to_string(),
+        Some("explicit-score-order") => "explicit-score-order".to_string(),
         _ => "topk".to_string(),
     }
 }
@@ -1235,12 +1261,24 @@ fn apply_block_policy_case(case: BlockPolicyCase) -> Vec<EnvVarGuard> {
     guards
 }
 
+fn selected_order_for_topk_ablation_case(name: &str) -> Option<&'static str> {
+    match name {
+        "explicit-top8-ascending" => Some("chronological"),
+        "explicit-top8-descending" => Some("descending"),
+        _ => None,
+    }
+}
+
 fn apply_topk_ablation_case(case: TopkAblationCase) -> Vec<EnvVarGuard> {
     let mut guards = vec![
         EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", case.policy),
         EnvVarGuard::set("M40LLM_KV_BLOCK_MAX_BLOCKS", case.max_blocks),
         EnvVarGuard::unset("M40LLM_KV_ANCHOR_BLOCKS"),
     ];
+    match selected_order_for_topk_ablation_case(case.name) {
+        Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_SELECTED_BLOCK_ORDER", value)),
+        None => guards.push(EnvVarGuard::unset("M40LLM_KV_SELECTED_BLOCK_ORDER")),
+    }
     match case.min_blocks {
         Some(value) => guards.push(EnvVarGuard::set("M40LLM_KV_BLOCK_MIN_BLOCKS", value)),
         None => guards.push(EnvVarGuard::unset("M40LLM_KV_BLOCK_MIN_BLOCKS")),
@@ -1976,6 +2014,111 @@ fn attention_record_strings(summary: &m40_llm::kv_selection::KvSelectionSummary)
         .collect()
 }
 
+const TOP8_CORE_BLOCKS: &[u32] = &[94, 80, 77, 91, 92, 78, 89, 87];
+const TOP16_TAIL_BLOCKS: &[u32] = &[88, 57, 90, 71, 46, 53, 73, 93];
+
+fn block_mass_for(
+    attention: &m40_llm::kv_selection::KvAttentionTelemetrySummary,
+    blocks: &[u32],
+) -> f32 {
+    attention
+        .selected_block_masses
+        .iter()
+        .filter(|mass| blocks.contains(&mass.block_index))
+        .map(|mass| mass.prob_mass)
+        .sum()
+}
+
+fn selected_old_block_entropy(
+    attention: &m40_llm::kv_selection::KvAttentionTelemetrySummary,
+) -> f32 {
+    let total: f32 = attention
+        .selected_block_masses
+        .iter()
+        .map(|mass| mass.prob_mass)
+        .sum();
+    if total <= 0.0 {
+        return 0.0;
+    }
+    -attention
+        .selected_block_masses
+        .iter()
+        .filter_map(|mass| {
+            let p = mass.prob_mass / total;
+            (p > 0.0).then_some(p * p.ln())
+        })
+        .sum::<f32>()
+}
+
+fn attention_step_trace_records(
+    summary: Option<&m40_llm::kv_selection::KvSelectionSummary>,
+) -> Option<Vec<AttentionStepTelemetryRecord>> {
+    let summary = summary?;
+    if summary.attentions.is_empty() {
+        return None;
+    }
+    let mut by_token: BTreeMap<u32, Vec<&m40_llm::kv_selection::KvAttentionTelemetryRecord>> =
+        BTreeMap::new();
+    for record in &summary.attentions {
+        if let Some(token) = record.token {
+            by_token.entry(token).or_default().push(record);
+        }
+    }
+    if by_token.is_empty() {
+        return None;
+    }
+    Some(
+        by_token
+            .into_iter()
+            .map(|(token, records)| {
+                let denom = records.len() as f32;
+                let selected_block_order = summary
+                    .selection_records
+                    .iter()
+                    .find(|record| record.token == Some(token))
+                    .map(|record| {
+                        record
+                            .selected_blocks
+                            .iter()
+                            .map(|block| block.block_index)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                AttentionStepTelemetryRecord {
+                    token,
+                    record_count: records.len(),
+                    top8_core_mass_mean: records
+                        .iter()
+                        .map(|record| block_mass_for(&record.attention, TOP8_CORE_BLOCKS))
+                        .sum::<f32>()
+                        / denom,
+                    top16_tail_mass_mean: records
+                        .iter()
+                        .map(|record| block_mass_for(&record.attention, TOP16_TAIL_BLOCKS))
+                        .sum::<f32>()
+                        / denom,
+                    selected_old_exact_mass_mean: records
+                        .iter()
+                        .map(|record| record.attention.selected_old_exact.prob_mass)
+                        .sum::<f32>()
+                        / denom,
+                    recent_mass_mean: records
+                        .iter()
+                        .map(|record| record.attention.recent.prob_mass)
+                        .sum::<f32>()
+                        / denom,
+                    selected_old_block_entropy_mean: records
+                        .iter()
+                        .map(|record| selected_old_block_entropy(&record.attention))
+                        .sum::<f32>()
+                        / denom,
+                    selected_block_order,
+                }
+            })
+            .collect(),
+    )
+}
+
 fn top_token_id(logits: &[f32]) -> Option<u32> {
     logits
         .iter()
@@ -2293,6 +2436,15 @@ fn generated_trace_records(
     Some(records)
 }
 
+fn first_divergence_step(records: Option<&[GeneratedLogitTraceRecord]>) -> Option<usize> {
+    records?.iter().find_map(|record| {
+        (record.dense_generated_token.is_some()
+            && record.compressed_generated_token.is_some()
+            && record.dense_generated_token != record.compressed_generated_token)
+            .then_some(record.step)
+    })
+}
+
 #[derive(Debug, Clone)]
 struct MultiTaskSpec {
     name: &'static str,
@@ -2602,6 +2754,22 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
             score_delta: None,
         },
     ];
+    for name in [
+        "explicit-top8-score-order",
+        "explicit-top8-ascending",
+        "explicit-top8-descending",
+    ] {
+        cases.push(TopkAblationCase {
+            name,
+            policy: "explicit-score-order",
+            top_blocks: 8,
+            include_blocks: Some("94,80,77,91,92,78,89,87"),
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks: "8",
+            score_delta: None,
+        });
+    }
     for block in ["92", "78", "89", "87"] {
         cases.push(TopkAblationCase {
             name: match block {
@@ -2737,6 +2905,21 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
 
 fn filtered_topk_ablation_cases() -> Vec<TopkAblationCase> {
     let cases = topk_ablation_cases();
+    if order_equiv_diagnostic_enabled() {
+        const ORDER_EQUIV_CASES: &[&str] = &[
+            "top8",
+            "explicit-top8-score-order",
+            "explicit-top8-ascending",
+            "explicit-top8-descending",
+            "top16",
+            "score-cluster-adaptive-min8-max12",
+            "score-cluster-adaptive-min8-max16",
+        ];
+        return cases
+            .into_iter()
+            .filter(|case| ORDER_EQUIV_CASES.contains(&case.name))
+            .collect();
+    }
     let Some(filter) = env_name_filter("M40LLM_KV_ABLATION_CASES") else {
         return cases;
     };
@@ -2795,7 +2978,8 @@ fn run_multitask_generate(
     let _selection_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
     let _logit_trace_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1");
     let _logit_compare_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1");
-    let preserve_policy_env = topk_ablation_diagnostic_enabled();
+    let preserve_policy_env =
+        topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled();
     let _policy_guard =
         (!preserve_policy_env).then(|| EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk"));
     let _score_guard =
@@ -2887,6 +3071,8 @@ fn dense_multitask_record(
         score_type: spec.score_type.to_string(),
         mode: "off".to_string(),
         selection_ablation_case: None,
+        block_select_policy: "off".to_string(),
+        selected_block_order: "off".to_string(),
         fallback_case: None,
         fallback_triggered: false,
         fallback_trigger_reason: None,
@@ -2962,7 +3148,9 @@ fn dense_multitask_record(
             .kv_selection
             .as_ref()
             .map(attention_record_strings),
+        attention_step_trace: None,
         generated_logit_trace: None,
+        first_divergence_step: None,
         base_selected_block_indices: None,
         final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
         initial_eot_rank_min: None,
@@ -3004,6 +3192,11 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         final_top_blocks,
         input.config,
     );
+    let generated_logit_trace = generated_trace_records(
+        input.initial.generated_logit_trace.as_deref(),
+        input.final_generated.generated_logit_trace.as_deref(),
+        None,
+    );
     MultiTaskRecord {
         model_path: input.probe.candidate.path.display().to_string(),
         resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
@@ -3012,6 +3205,8 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
         selection_ablation_case: None,
+        block_select_policy: block_select_policy(),
+        selected_block_order: selected_block_order(),
         fallback_case: Some(input.fallback_case.name.to_string()),
         fallback_triggered: input.fallback_triggered,
         fallback_trigger_reason: input.fallback_trigger_reason,
@@ -3096,11 +3291,11 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
             .kv_selection
             .as_ref()
             .map(attention_record_strings),
-        generated_logit_trace: generated_trace_records(
-            input.initial.generated_logit_trace.as_deref(),
-            input.final_generated.generated_logit_trace.as_deref(),
-            None,
+        attention_step_trace: attention_step_trace_records(
+            input.final_generated.kv_selection.as_ref(),
         ),
+        first_divergence_step: first_divergence_step(generated_logit_trace.as_deref()),
+        generated_logit_trace,
         base_selected_block_indices: selection_indices(input.initial.kv_selection.as_ref()),
         final_selected_block_indices: selection_indices(
             input.final_generated.kv_selection.as_ref(),
@@ -3136,6 +3331,11 @@ struct TopkMultitaskRecordInput<'a> {
 
 fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord {
     let score = score_multitask_output(input.spec, &input.generated.output);
+    let generated_logit_trace = generated_trace_records(
+        input.dense_trace,
+        input.generated.generated_logit_trace.as_deref(),
+        None,
+    );
     MultiTaskRecord {
         model_path: input.probe.candidate.path.display().to_string(),
         resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
@@ -3144,6 +3344,8 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
         selection_ablation_case: input.selection_ablation_case.map(str::to_string),
+        block_select_policy: block_select_policy(),
+        selected_block_order: selected_block_order(),
         fallback_case: None,
         fallback_triggered: false,
         fallback_trigger_reason: None,
@@ -3232,11 +3434,9 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
             .kv_selection
             .as_ref()
             .map(attention_record_strings),
-        generated_logit_trace: generated_trace_records(
-            input.dense_trace,
-            input.generated.generated_logit_trace.as_deref(),
-            None,
-        ),
+        attention_step_trace: attention_step_trace_records(input.generated.kv_selection.as_ref()),
+        first_divergence_step: first_divergence_step(generated_logit_trace.as_deref()),
+        generated_logit_trace,
         base_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
         final_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
         initial_eot_rank_min: fallback_signal_summary(
@@ -3363,6 +3563,8 @@ fn run_topk_ablation_suite(
     let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
     append_report_record(&dense_record)?;
     let ablation_cases = filtered_topk_ablation_cases();
+    let _attention_capture_guard = order_equiv_diagnostic_enabled()
+        .then(|| EnvVarGuard::set("M40LLM_KV_ATTENTION_CAPTURE", "all"));
     eprintln!(
         "running top-k ablation diagnostic: target={target_tokens} cases={} max_tokens={max_tokens}",
         ablation_cases.len()
@@ -3694,7 +3896,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
-    if topk_ablation_diagnostic_enabled() {
+    if topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled() {
         return run_topk_ablation_suite(&probe, config, &mut model, &tokenizer);
     }
     if topk_sensitivity_diagnostic_enabled() {

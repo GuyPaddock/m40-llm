@@ -379,16 +379,27 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_KV_ABLATION_CASES` now filters expensive ablation runs, and
   `score-cluster-adaptive` honors min/max block caps. The filtered 4096
   support-shape run shows top4 plus tested pairs still fails; top4 plus the full
-  top8 delta also fails when explicit include changes candidate order; top8
-  plus tested pairs/quartets all pass; and score-cluster-adaptive with min8
-  recovers exactly the passing top8 set.
+  top8 delta also fails through the older explicit-include path; top8 plus
+  tested pairs/quartets all pass; and score-cluster-adaptive with min8 recovers
+  exactly the passing top8 set. `M40LLM_KV_ORDER_EQUIV_DIAG=1` now adds
+  explicit score-order selection and `M40LLM_KV_SELECTED_BLOCK_ORDER=descending`
+  so same-set top8 can be compared in score, ascending, and descending
+  materialized order. The corrected 4096 multi-needle order-equivalence run
+  shows same-set top8 passes under all three tested orders, while top16 still
+  fails. Candidate ordering is therefore not the root cause for this prompt;
+  the top16 regression remains best explained as cumulative distribution shift
+  from the full tail of extra blocks. Score-cluster-adaptive min8/max12 and
+  min8/max16 still select the passing top8 core and pass, but remain candidate
+  policies only.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred
   exact-old selection policy for now, but do not blindly raise the default to
   top16. Fallback gates are too false-positive prone at 4096. The next policy
-  step should validate score-cluster-adaptive on other prompt types and fix or
-  explicitly control candidate ordering before comparing explicit-set cases.
+  step should validate score-cluster-adaptive on other prompt types and context
+  shapes: single-needle 4096, multi-needle 2048/4096/8192 if practical,
+  distractor-heavy prompts, answers near block boundaries, far-apart relevant
+  blocks, and high-score-plus-weak-support cases.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

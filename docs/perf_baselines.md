@@ -2,6 +2,52 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-18: Top-K Order-Equivalence Diagnostic
+
+This checkpoint adds `M40LLM_KV_ORDER_EQUIV_DIAG=1` and
+`M40LLM_KV_BLOCK_SELECT_POLICY=explicit-score-order` to test whether the 4096
+multi-needle top8/top16 behavior is caused by selected-block ordering rather
+than selected-set composition. The diagnostic uses direct FP16-K/q4-V
+exact-old retrieval.
+
+Reports:
+
+- `/tmp/m40-kv-order-equiv-4096-multineedle.jsonl`
+- `/tmp/m40-kv-order-equiv-rerun-4096-multineedle.jsonl`
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- Full order-equivalence run passed in 5,566.43 s.
+- Corrected explicit/adaptive subset rerun passed in 4,181.06 s.
+
+Summary:
+
+| Case | Status | Score | Active KV | Selected blocks |
+| --- | --- | ---: | ---: | --- |
+| top8 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+| top16 | fail | 1/2 | 48.0 MiB | `[94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93]` |
+| explicit top8 score order | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+| explicit top8 ascending | pass | 2/2 | 40.0 MiB | `[77,78,80,87,89,91,92,94]` |
+| explicit top8 descending | pass | 2/2 | 40.0 MiB | `[94,92,91,89,87,80,78,77]` |
+| score-cluster-adaptive min8/max12 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+| score-cluster-adaptive min8/max16 | pass | 2/2 | 40.0 MiB | `[94,80,77,91,92,78,89,87]` |
+
+Interpretation:
+
+- Same-set top8 passes under score order, ascending order, and descending order.
+  Candidate materialization order is not the root cause for this prompt.
+- The earlier `top4 + full top8 delta` failure is now interpreted as a policy
+  path/support-shape artifact, not evidence that ascending order alone breaks
+  the top8 set.
+- Top16 still fails, so the strongest current explanation remains cumulative
+  distribution shift from the full tail of extra blocks.
+- `score-cluster-adaptive` remains only a candidate policy. It needs validation
+  across single-needle 4096, multi-needle 2048/4096/8192 when practical,
+  distractor-heavy prompts, block-boundary answers, far-apart relevant blocks,
+  and high-score-plus-weak-support cases before any promotion.
+
 ## 2026-05-18: Top-K Support-Set Shape Diagnostic
 
 This checkpoint extends `M40LLM_KV_TOPK_ABLATION_DIAG=1` with selected
@@ -39,9 +85,10 @@ Interpretation:
 
 - Pair additions to top4 are not enough; the support requirement is larger than
   either tested pair.
-- The explicit full top8-delta case selected the same set as top8 but in a
-  different order and failed. This points to candidate ordering or selection
-  path equivalence as a real variable, not just set membership.
+- A later order-equivalence diagnostic supersedes the initial interpretation of
+  the explicit full top8-delta failure: same-set top8 passes under score,
+  ascending, and descending order when selected through the explicit score-order
+  path.
 - Top8 plus pair/quartet extras passes, while full top16 fails. This supports
   the cumulative distribution-shift hypothesis: the regression appears only
   when the full tail of extra blocks is present.
