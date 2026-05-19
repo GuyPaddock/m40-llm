@@ -307,6 +307,16 @@ block materialization order. Current evidence shows same-set top8 passes under
 all tested orderings; top16 failure is therefore better explained as cumulative
 tail distribution shift than simple candidate order.
 
+Tail-prefix ablation cases are available through
+`M40LLM_KV_TOPK_ABLATION_DIAG=1` and `M40LLM_KV_ABLATION_CASES`:
+`top8-plus-tail1` through `top8-plus-tail8` cumulatively add the top16 tail
+blocks `[88,57,90,71,46,53,73,93]` to the passing top8 core. JSONL
+`generated_logit_trace` rows include `dense_reference_token_margin_compressed`,
+defined as compressed top logit minus the dense-reference token logit. The
+4096 multi-needle diagnostic shows `top8-plus-tail1` and `top8-plus-tail2`
+pass, while `top8-plus-tail3` and all larger prefixes fail; block `90` is the
+first transition point in this prompt.
+
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
 attention capture selector is already set. This is useful for capturing the

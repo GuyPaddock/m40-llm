@@ -390,7 +390,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   the top16 regression remains best explained as cumulative distribution shift
   from the full tail of extra blocks. Score-cluster-adaptive min8/max12 and
   min8/max16 still select the passing top8 core and pass, but remain candidate
-  policies only.
+  policies only. `top8-plus-tail1` through `top8-plus-tail8` now run
+  cumulative top16-tail prefix ablations. The 4096 multi-needle run shows
+  tail1 `[88]` and tail2 `[88,57]` pass, while tail3 `[88,57,90]` is the first
+  failing transition and every larger prefix also fails. Tail attention mass is
+  small in absolute terms, so this is not just the tail taking all probability;
+  the dense-reference token logit margin shifts at the failing transition.
 - Next: avoid 8192 and server integration until exact-block quality is more
   stable. Treat direct FP16-K/q4-V as the recommended experimental mixed
   attention backend, but keep it opt-in. Top-k should remain the preferred

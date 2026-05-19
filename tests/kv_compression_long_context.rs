@@ -267,6 +267,7 @@ struct GeneratedLogitTraceRecord {
     dense_reference_token_rank_compressed: Option<usize>,
     dense_reference_token_logit_dense: Option<f32>,
     dense_reference_token_logit_compressed: Option<f32>,
+    dense_reference_token_margin_compressed: Option<f32>,
     expected_answer_token: Option<u32>,
     expected_token_rank_dense: Option<usize>,
     expected_token_rank_compressed: Option<usize>,
@@ -2405,6 +2406,10 @@ fn generated_trace_records(
         );
         let dense_top = dense_step.and_then(|step| top_token_with_logit(&step.logits));
         let compressed_top = compressed_step.and_then(|step| top_token_with_logit(&step.logits));
+        let dense_reference_margin_compressed = compressed_top
+            .map(|(_, logit)| logit)
+            .zip(dense_reference.logit_compressed)
+            .map(|(top_logit, reference_logit)| top_logit - reference_logit);
         records.push(GeneratedLogitTraceRecord {
             step,
             dense_generated_token: dense_step.map(|step| step.sampled_token_id),
@@ -2414,6 +2419,7 @@ fn generated_trace_records(
             dense_reference_token_rank_compressed: dense_reference.rank_compressed,
             dense_reference_token_logit_dense: dense_reference.logit_dense,
             dense_reference_token_logit_compressed: dense_reference.logit_compressed,
+            dense_reference_token_margin_compressed: dense_reference_margin_compressed,
             expected_answer_token: expected_token_id,
             expected_token_rank_dense: expected.rank_dense,
             expected_token_rank_compressed: expected.rank_compressed,
@@ -2841,6 +2847,47 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
         cases.push(TopkAblationCase {
             name,
             policy: "explicit",
+            top_blocks: 8,
+            include_blocks: Some(blocks),
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks,
+            score_delta: None,
+        });
+    }
+    for (name, blocks, max_blocks) in [
+        ("top8-plus-tail1", "94,80,77,91,92,78,89,87,88", "9"),
+        ("top8-plus-tail2", "94,80,77,91,92,78,89,87,88,57", "10"),
+        ("top8-plus-tail3", "94,80,77,91,92,78,89,87,88,57,90", "11"),
+        (
+            "top8-plus-tail4",
+            "94,80,77,91,92,78,89,87,88,57,90,71",
+            "12",
+        ),
+        (
+            "top8-plus-tail5",
+            "94,80,77,91,92,78,89,87,88,57,90,71,46",
+            "13",
+        ),
+        (
+            "top8-plus-tail6",
+            "94,80,77,91,92,78,89,87,88,57,90,71,46,53",
+            "14",
+        ),
+        (
+            "top8-plus-tail7",
+            "94,80,77,91,92,78,89,87,88,57,90,71,46,53,73",
+            "15",
+        ),
+        (
+            "top8-plus-tail8",
+            "94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93",
+            "16",
+        ),
+    ] {
+        cases.push(TopkAblationCase {
+            name,
+            policy: "explicit-score-order",
             top_blocks: 8,
             include_blocks: Some(blocks),
             exclude_blocks: None,

@@ -2,6 +2,54 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-18: Top16 Tail-Prefix Drift Diagnostic
+
+This checkpoint extends the 4096 multi-needle direct FP16-K/q4-V exact-old
+diagnostic with cumulative top16-tail prefix cases and a compressed-logit margin
+for the dense-reference token. The run used `M40LLM_KV_TOPK_ABLATION_DIAG=1`,
+`M40LLM_KV_ATTENTION_CAPTURE=all`, and filtered cases through
+`M40LLM_KV_ABLATION_CASES`.
+
+Report:
+
+- `/tmp/m40-kv-tail-prefix-4096-multineedle.jsonl`
+
+Validation:
+
+- `cargo fmt --all` passed before the run.
+- `cargo check --features cuda --test kv_compression_long_context` passed.
+- `cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1`
+  passed for the filtered tail-prefix run in 7,667.73 s.
+
+Summary:
+
+| Case | Status | Score | Active KV | Selected tail prefix | Output |
+| --- | --- | ---: | ---: | --- | --- |
+| top8 | pass | 2/2 | 40.0 MiB | none | `ALPHA-13579, BRAVO-24680` |
+| top16 | fail | 1/2 | 48.0 MiB | full tail | `Alfa-13579, Bravo-24680` |
+| top8 + tail1 | pass | 2/2 | 41.0 MiB | `[88]` | `ALPHA-13579, BRAVO-24680` |
+| top8 + tail2 | pass | 2/2 | 42.0 MiB | `[88,57]` | `ALPHA-13579, BRAVO-24680` |
+| top8 + tail3 | fail | 1/2 | 43.0 MiB | `[88,57,90]` | `Alph-13579, BRAVO-24680` |
+| top8 + tail4 | fail | 1/2 | 44.0 MiB | `[88,57,90,71]` | `Alphabetical... BRAVO-24680...` |
+| top8 + tail5 | fail | 0/2 | 45.0 MiB | `[88,57,90,71,46]` | `There are no two audit codes.` |
+| top8 + tail6 | fail | 1/2 | 46.0 MiB | `[88,57,90,71,46,53]` | `ALPHA-13579` plus incomplete `BRAVO-` |
+| top8 + tail7 | fail | 0/2 | 47.0 MiB | `[88,57,90,71,46,53,73]` | `ALPHA-13580` and partial `BRA` |
+| top8 + tail8 | fail | 0/2 | 48.0 MiB | `[88,57,90,71,46,53,73,93]` | filler text |
+
+Interpretation:
+
+- The first failing transition is tail3, when block `90` is added after the
+  passing `[88,57]` prefix.
+- The failure is not monotonic in exact output shape, but all prefixes from
+  tail3 onward fail. This points to a support-set transition, not a single
+  all-tail threshold.
+- Tail attention mass is small in absolute terms, so the issue is not simply
+  "tail gets most of the probability." The compressed-logit margin for the
+  dense-reference token changes sharply at the failing transition.
+- Score-cluster-adaptive remains a candidate only. The next policy work should
+  validate whether it avoids this tail3 transition across broader prompt
+  shapes before any promotion.
+
 ## 2026-05-18: Top-K Order-Equivalence Diagnostic
 
 This checkpoint adds `M40LLM_KV_ORDER_EQUIV_DIAG=1` and
