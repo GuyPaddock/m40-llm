@@ -2,6 +2,33 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-19: Qwen2.5 Head128 Attention Enablement
+
+This checkpoint generalizes the packed varlen prefill CUDA path from a
+head64-specific API to a runtime `head_dim` API for `head_dim=64` and
+`head_dim=128`. It also extends the direct FP16-K/q4-V exact-old compressed
+attention backend to `head_dim=128`, which is required by the cached
+Qwen2.5-3B-Instruct F16 GGUF (`heads=16`, `kv_heads=2`, `head_dim=128`).
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_prefill_varlen -- --nocapture --test-threads=1`
+  passed: 2 tests.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed: 9 tests, including direct FP16-K/q4-V `head_dim=128` parity against a
+  CPU q4-V reconstruction reference.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Qwen smoke:
+
+- A bounded Qwen2.5 512-token top-k multitask quality run now passes the earlier
+  `head_dim=128` admission gates and reaches packed-prefix prefill.
+- The run was terminated before any quality row completed because Qwen2.5-3B
+  remains too slow for a quick smoke on this harness/model combination. Treat
+  this as an unblock/compile-and-launch checkpoint, not a quality result.
+
 ## 2026-05-18: Top16 Tail-Prefix Drift Diagnostic
 
 This checkpoint extends the 4096 multi-needle direct FP16-K/q4-V exact-old
@@ -2422,7 +2449,7 @@ Validation:
 - `forward_batched_prefill_uses_varlen_attention` compares packed prefill final
   hidden output against sequential token prefill on a tiny CUDA model.
 - `server_smoke` now enables `M40LLM_SERVER_BATCH_PREFILL=1` and asserts that
-  server batching launches `attention_prefill_f32_gqa_varlen_head64`.
+  server batching launches `attention_prefill_f32_gqa_varlen`.
 - `attention_prefill_varlen`, `forward_with_layer_smoke`, and CUDA/server Clippy
   passed after the integration.
 

@@ -2084,17 +2084,17 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void copy_evicted_recent_k_to_fp16_old_head64_kernel(
+    __global__ void copy_evicted_recent_k_to_fp16_old_kernel(
         const __half* __restrict__ recent_k,
         __half* __restrict__ old_k,
         uint32_t max_seq_len,
         uint32_t recent_window,
         uint32_t num_heads,
+        uint32_t head_dim,
         uint32_t seq_id,
         uint32_t position) {
         const uint32_t head = blockIdx.x;
         const uint32_t tid = threadIdx.x;
-        const uint32_t head_dim = 64;
         if (head >= num_heads || position < recent_window) return;
         const uint32_t old_pos = position - recent_window;
         const uint32_t ring = position % recent_window;
@@ -2120,19 +2120,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return (float)signed_value * scale;
     }
 
-    __global__ void quantize_evicted_recent_v_to_q4_old_head64_kernel(
+    __global__ void quantize_evicted_recent_v_to_q4_old_kernel(
         const __half* __restrict__ recent_v,
         uint8_t* __restrict__ q4_v,
         float* __restrict__ v_scale,
         uint32_t max_seq_len,
         uint32_t recent_window,
         uint32_t num_heads,
+        uint32_t head_dim,
         uint32_t seq_id,
         uint32_t position) {
         __shared__ float reduce[128];
         const uint32_t head = blockIdx.x;
         const uint32_t tid = threadIdx.x;
-        const uint32_t head_dim = 64;
         if (head >= num_heads || position < recent_window) return;
         const uint32_t old_pos = position - recent_window;
         const uint32_t ring = position % recent_window;
@@ -2686,7 +2686,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_head64_kernel(
+    __global__ void attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_kernel(
         const __half* __restrict__ old_k,
         const __half* __restrict__ recent_k,
         const __half* __restrict__ recent_v,
@@ -2695,6 +2695,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t max_seq_len,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         uint32_t seq_id,
         const float* __restrict__ Q,
         uint32_t seq_len,
@@ -2720,10 +2721,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         const uint32_t group = q_heads / kv_heads;
         const uint32_t kvh_idx = qh_idx / group;
-        const uint32_t head_dim = 64;
         const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
         const size_t packed_per_token = (size_t)kv_heads * (size_t)(head_dim / 2u);
-        const float inv_sqrt = 0.125f;
+        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
         const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
         const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
         const uint32_t recent_start = old_len;
@@ -3603,7 +3603,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void attention_prefill_gqa_varlen_head64_kernel(
+    __global__ void attention_prefill_gqa_varlen_kernel(
         const float* __restrict__ Q,
         const float* __restrict__ K,
         const float* __restrict__ V,
@@ -3614,6 +3614,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t q_idx = blockIdx.x;
@@ -3628,8 +3629,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         const uint32_t group = q_heads / kv_heads;
         const uint32_t kvh_idx = qh_idx / group;
-        const uint32_t head_dim = 64;
-        const float inv_sqrt = 0.125f;
+        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
         const uint32_t q_token_offset = q_offsets[batch_idx] + q_idx;
         const uint32_t kv_offset = kv_offsets[batch_idx];
         const uint32_t causal_end = kv_len - q_len + q_idx;
@@ -4355,7 +4355,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (seq_id >= kv->max_batch_size) return -2;
         if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
-        if (kv->head_dim != 64) return -5;
+        if (kv->head_dim != 64 && kv->head_dim != 128) return -5;
         if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
         const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
@@ -4378,7 +4378,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int blocks = (int)q_heads;
         const int threads = 128;
         const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
-        attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+        attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
             kv->d_fp16_old_k,
             kv->d_recent_k,
             kv->d_recent_v,
@@ -4387,6 +4387,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             kv->max_seq_len,
             q_heads,
             kv->num_heads,
+            kv->head_dim,
             seq_id,
             reinterpret_cast<const float*>(q_dev_f32),
             seq_len,
@@ -4665,7 +4666,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             false);
     }
 
-    static int attention_prefill_f32_gqa_varlen_head64_impl(
+    static int attention_prefill_f32_gqa_varlen_impl(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -4677,16 +4678,18 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32,
         bool synchronize) {
         if (!ctx || !q_dev_f32 || !k_dev_f32 || !v_dev_f32 || !q_offsets_dev || !kv_offsets_dev || !q_lens_dev || !kv_lens_dev || !out_dev_f32) return -1;
         if (batch_size == 0) return -2;
         if (q_heads == 0 || kv_heads == 0 || q_heads % kv_heads != 0) return -3;
+        if (head_dim != 64 && head_dim != 128) return -9;
 
         static int logged = 0;
         const char* log_env = getenv("M40LLM_ATTN_LOG");
         if (!logged && log_env && strcmp(log_env, "1") == 0) {
-            fprintf(stderr, "[cuda] attention_prefill_gqa_varlen backend: head64 packed-f32 kernel\n");
+            fprintf(stderr, "[cuda] attention_prefill_gqa_varlen backend: head%u packed-f32 kernel\n", head_dim);
             logged = 1;
         }
 
@@ -4724,7 +4727,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         dim3 grid((int)max_q_len_host, (int)q_heads, (int)batch_size);
         const size_t shmem = ((size_t)max_kv_len_host + (size_t)threads) * sizeof(float);
-        attention_prefill_gqa_varlen_head64_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
+        attention_prefill_gqa_varlen_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
             reinterpret_cast<const float*>(q_dev_f32),
             reinterpret_cast<const float*>(k_dev_f32),
             reinterpret_cast<const float*>(v_dev_f32),
@@ -4735,6 +4738,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             reinterpret_cast<float*>(out_dev_f32));
         err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
@@ -4745,7 +4749,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
-    int m40llm_attention_prefill_f32_gqa_varlen_head64(
+    int m40llm_attention_prefill_f32_gqa_varlen(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -4757,8 +4761,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32) {
-        return attention_prefill_f32_gqa_varlen_head64_impl(
+        return attention_prefill_f32_gqa_varlen_impl(
             ctx,
             q_dev_f32,
             k_dev_f32,
@@ -4770,11 +4775,12 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             out_dev_f32,
             true);
     }
 
-    int m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+    int m40llm_attention_prefill_f32_gqa_varlen_async(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -4786,8 +4792,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32) {
-        return attention_prefill_f32_gqa_varlen_head64_impl(
+        return attention_prefill_f32_gqa_varlen_impl(
             ctx,
             q_dev_f32,
             k_dev_f32,
@@ -4799,6 +4806,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             out_dev_f32,
             false);
     }
@@ -5195,7 +5203,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
     }
 
     static bool allocate_q4_old_v_backing(M40llmKVCache* kv) {
-        if (kv->head_dim != 64) return false;
+        if ((kv->head_dim != 64 && kv->head_dim != 128) || (kv->head_dim % 2u) != 0u) return false;
         const size_t elems = (size_t)kv->max_seq_len
             * (size_t)kv->max_batch_size
             * (size_t)kv->num_heads
@@ -5834,7 +5842,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (!kv->compressed) return -2;
         if (seq_id >= kv->max_batch_size) return -3;
-        if (kv->head_dim != 64 || kv->num_heads == 0 || kv->recent_window == 0 || kv->block_size == 0) return -4;
+        if ((kv->head_dim != 64 && kv->head_dim != 128) || kv->num_heads == 0 || kv->recent_window == 0 || kv->block_size == 0) return -4;
         if (position >= kv->max_seq_len) return -5;
         const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
         const int threads = 256;
@@ -5857,13 +5865,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 return -7;
             }
             if (kv->q4_old_v_backing) {
-                quantize_evicted_recent_v_to_q4_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                quantize_evicted_recent_v_to_q4_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
                     kv->d_recent_v,
                     kv->d_q4_old_v,
                     kv->d_q4_old_v_scale,
                     kv->max_seq_len,
                     kv->recent_window,
                     kv->num_heads,
+                    kv->head_dim,
                     seq_id,
                     position);
                 cudaError_t q4_err = cudaGetLastError();
@@ -5874,12 +5883,13 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
         }
         if (kv->fp16_k_q4_v_old_backing && position >= kv->recent_window) {
-            copy_evicted_recent_k_to_fp16_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+            copy_evicted_recent_k_to_fp16_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
                 kv->d_recent_k,
                 kv->d_fp16_old_k,
                 kv->max_seq_len,
                 kv->recent_window,
                 kv->num_heads,
+                kv->head_dim,
                 seq_id,
                 position);
             cudaError_t old_k_err = cudaGetLastError();
@@ -5887,13 +5897,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 fprintf(stderr, "compressed fp16 old K append kernel launch error: %s\n", cudaGetErrorString(old_k_err));
                 return -10;
             }
-            quantize_evicted_recent_v_to_q4_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+            quantize_evicted_recent_v_to_q4_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
                 kv->d_recent_v,
                 kv->d_q4_old_v,
                 kv->d_q4_old_v_scale,
                 kv->max_seq_len,
                 kv->recent_window,
                 kv->num_heads,
+                kv->head_dim,
                 seq_id,
                 position);
             cudaError_t q4_err = cudaGetLastError();

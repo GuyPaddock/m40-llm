@@ -587,7 +587,7 @@ mod ffi {
             q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
-        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64(
+        pub fn m40llm_attention_prefill_f32_gqa_varlen(
             ctx: *mut M40llmCudaContext,
             d_q_f32: *const c_void,
             d_k_f32: *const c_void,
@@ -599,9 +599,10 @@ mod ffi {
             batch_size: u32,
             q_heads: u32,
             kv_heads: u32,
+            head_dim: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
-        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_async(
             ctx: *mut M40llmCudaContext,
             d_q_f32: *const c_void,
             d_k_f32: *const c_void,
@@ -613,6 +614,7 @@ mod ffi {
             batch_size: u32,
             q_heads: u32,
             kv_heads: u32,
+            head_dim: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
 
@@ -1954,10 +1956,10 @@ impl CudaContext {
     }
 
     /// # Safety
-    /// Packed buffers must use [total_tokens, heads, 64] row-major f32 layout.
+    /// Packed buffers must use [total_tokens, heads, head_dim] row-major f32 layout.
     /// Offset/lens arrays must contain `batch_size` u32 entries.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn attention_prefill_f32_gqa_varlen_head64(
+    pub unsafe fn attention_prefill_f32_gqa_varlen(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -1969,12 +1971,13 @@ impl CudaContext {
         batch_size: u32,
         q_heads: u32,
         kv_heads: u32,
+        head_dim: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64(
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen(
                 self.inner.raw.as_ptr(),
                 d_q_f32,
                 d_k_f32,
@@ -1986,14 +1989,15 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_attention_prefill_f32_gqa_varlen_head64 failed: {rc}"
+                    "m40llm_attention_prefill_f32_gqa_varlen failed: {rc}"
                 ));
             }
-            record_sync_kernel("attention_prefill_f32_gqa_varlen_head64");
+            record_sync_kernel("attention_prefill_f32_gqa_varlen");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2009,6 +2013,7 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             Ok(())
@@ -2020,7 +2025,7 @@ impl CudaContext {
     /// launch validation. Call `synchronize_stream(CudaStream::Prefill)` before
     /// reading `d_out_f32` or reusing input/output buffers.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn attention_prefill_f32_gqa_varlen_head64_async(
+    pub unsafe fn attention_prefill_f32_gqa_varlen_async(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -2032,12 +2037,13 @@ impl CudaContext {
         batch_size: u32,
         q_heads: u32,
         kv_heads: u32,
+        head_dim: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_async(
                 self.inner.raw.as_ptr(),
                 d_q_f32,
                 d_k_f32,
@@ -2049,14 +2055,15 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_attention_prefill_f32_gqa_varlen_head64_async failed: {rc}"
+                    "m40llm_attention_prefill_f32_gqa_varlen_async failed: {rc}"
                 ));
             }
-            record_async_kernel("attention_prefill_f32_gqa_varlen_head64");
+            record_async_kernel("attention_prefill_f32_gqa_varlen");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2072,6 +2079,7 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             Ok(())

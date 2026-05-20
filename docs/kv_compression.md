@@ -171,7 +171,9 @@ backing, and unpacks q4 V inside the attention value accumulation instead of
 materializing selected old V into FP16 staging. The direct mixed path preserves
 the staged/FP16 selected-context pass/fail pattern at 2048 and the known 4096
 rows, and is now the recommended experimental mixed attention backend. It
-remains opt-in while top-block robustness is still under investigation.
+supports `head_dim=64` and `head_dim=128` models; the older staged/q8 exact-old
+and summary/lossy CUDA paths remain `head_dim=64` only. It remains opt-in while
+top-block robustness is still under investigation.
 
 Current long-context quality evidence makes direct FP16-K/q4-V the preferred
 experimental backend and plain score-ranked top-k the preferred selection

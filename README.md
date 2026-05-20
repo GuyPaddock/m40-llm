@@ -128,7 +128,8 @@ tokenizer markers. Auto prompt formatting wraps unformatted Qwen prompts in the
 ChatML-style `<|im_start|>` / `<|im_end|>` template; use
 `--prompt-format qwen-chat` to force that wrapper.
 `Qwen2.5-3B-Instruct-f16.gguf` has a basic one-token CUDA smoke on Tesla M40;
-long-context KV quality results are still pending.
+long-context KV quality validation now has the required head_dim=128 kernel
+support for dense packed prefill and direct FP16-K/q4-V exact-old retrieval.
 
 Host sampling supports greedy, top-k, top-p, temperature, and deterministic RNG
 paths. The normal CUDA path keeps full-layer decode on device and copies logits

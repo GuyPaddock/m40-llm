@@ -101,7 +101,7 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     );
     let prefill_attention_launches = snapshot
         .by_op
-        .get("attention_prefill_f32_gqa_varlen_head64")
+        .get("attention_prefill_f32_gqa_varlen")
         .map(|counts| counts.launches)
         .unwrap_or_default();
     assert!(

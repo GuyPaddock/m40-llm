@@ -206,7 +206,7 @@ fn bench_stream_overlap(c: &mut Criterion) {
         group.bench_function("sequential_sync", |b| {
             b.iter(|| unsafe {
                 prefill_plan
-                    .dispatch_head64(
+                    .dispatch(
                         d_prefill_q.ptr,
                         d_prefill_k.ptr,
                         d_prefill_v.ptr,
@@ -231,7 +231,7 @@ fn bench_stream_overlap(c: &mut Criterion) {
         group.bench_function("split_async_final_sync", |b| {
             b.iter(|| unsafe {
                 prefill_plan
-                    .dispatch_head64_async(
+                    .dispatch_async(
                         d_prefill_q.ptr,
                         d_prefill_k.ptr,
                         d_prefill_v.ptr,

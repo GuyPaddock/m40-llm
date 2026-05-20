@@ -70,6 +70,11 @@ impl VarlenPrefillTile {
         tile_n: 128,
         tile_k: 64,
     };
+    pub const CONSERVATIVE_HEAD128: Self = Self {
+        tile_m: 1,
+        tile_n: 128,
+        tile_k: 128,
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,9 +87,9 @@ pub struct VarlenPrefillTileSelection {
 
 impl VarlenPrefillTileSelection {
     pub fn select(meta: &BatchMetadata, head_dim: u32) -> Result<Self> {
-        if head_dim != 64 {
+        if head_dim != 64 && head_dim != 128 {
             anyhow::bail!(
-                "variable-length prefill currently supports head_dim=64 only, got {head_dim}"
+                "variable-length prefill currently supports head_dim=64 or 128 only, got {head_dim}"
             );
         }
         let max_query_len = meta
@@ -103,7 +108,11 @@ impl VarlenPrefillTileSelection {
             head_dim,
             max_query_len,
             max_kv_len,
-            tile: VarlenPrefillTile::CONSERVATIVE_HEAD64,
+            tile: if head_dim == 128 {
+                VarlenPrefillTile::CONSERVATIVE_HEAD128
+            } else {
+                VarlenPrefillTile::CONSERVATIVE_HEAD64
+            },
         })
     }
 }
@@ -194,9 +203,9 @@ impl VarlenPrefillPlan {
     }
 
     /// # Safety
-    /// Packed buffers must use [total_q_tokens, q_heads, 64] and
-    /// [total_kv_tokens, kv_heads, 64] row-major f32 layouts.
-    pub unsafe fn dispatch_head64(
+    /// Packed buffers must use [total_q_tokens, q_heads, head_dim] and
+    /// [total_kv_tokens, kv_heads, head_dim] row-major f32 layouts.
+    pub unsafe fn dispatch(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -205,7 +214,7 @@ impl VarlenPrefillPlan {
         kv_heads: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
-        self.ctx.attention_prefill_f32_gqa_varlen_head64(
+        self.ctx.attention_prefill_f32_gqa_varlen(
             d_q_f32,
             d_k_f32,
             d_v_f32,
@@ -216,14 +225,15 @@ impl VarlenPrefillPlan {
             self.batch_size(),
             q_heads,
             kv_heads,
+            self.selection.head_dim,
             d_out_f32,
         )
     }
 
     /// # Safety
-    /// Same layout requirements as `dispatch_head64`. The call only enqueues
+    /// Same layout requirements as `dispatch`. The call only enqueues
     /// work on the prefill stream; synchronize before reading outputs.
-    pub unsafe fn dispatch_head64_async(
+    pub unsafe fn dispatch_async(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -232,7 +242,7 @@ impl VarlenPrefillPlan {
         kv_heads: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
-        self.ctx.attention_prefill_f32_gqa_varlen_head64_async(
+        self.ctx.attention_prefill_f32_gqa_varlen_async(
             d_q_f32,
             d_k_f32,
             d_v_f32,
@@ -243,6 +253,7 @@ impl VarlenPrefillPlan {
             self.batch_size(),
             q_heads,
             kv_heads,
+            self.selection.head_dim,
             d_out_f32,
         )
     }

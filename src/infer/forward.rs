@@ -2090,9 +2090,9 @@ impl LoadedModel {
             anyhow::bail!("batched prefill: model has zero layers");
         }
         let (d_model, hidden_dim) = self.validate_standard_layers()?;
-        if kv.head_dim() != 64 {
+        if kv.head_dim() != 64 && kv.head_dim() != 128 {
             anyhow::bail!(
-                "batched prefill attention currently requires head_dim=64, got {}",
+                "batched prefill attention currently requires head_dim=64 or 128, got {}",
                 kv.head_dim()
             );
         }
@@ -2322,7 +2322,7 @@ impl LoadedModel {
                     "prefill_rope_kv_to_attention",
                 )?;
                 unsafe {
-                    prefill_plan.dispatch_head64_async(
+                    prefill_plan.dispatch_async(
                         ws.dq as *const c_void,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,

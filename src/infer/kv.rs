@@ -307,8 +307,12 @@ impl LoadedModel {
         config.validate()?;
         let num_heads = self.model_config.attention_head_count_kv;
         let head_dim = self.model_config.attention_key_length;
-        if head_dim != 64 {
-            anyhow::bail!("compressed KV cache currently requires head_dim=64");
+        let supports_head128 = config.mode == KvCompressMode::BlockSelectExact
+            && matches!(exact_old_backing, ExactOldBacking::Fp16KQ4V);
+        if head_dim != 64 && !(head_dim == 128 && supports_head128) {
+            anyhow::bail!(
+                "compressed KV cache currently requires head_dim=64, or head_dim=128 with block-select-exact fp16-k-q4-v backing"
+            );
         }
         let recent_window = config.recent_window.min(max_seq_len);
         self.kv_cache = None;
@@ -484,8 +488,12 @@ impl LoadedModel {
                 );
             }
         } else if compression.mode == KvCompressMode::BlockSelectExact {
-            if head_dim != 64 {
-                anyhow::bail!("block-select-exact requires head_dim=64");
+            let direct_fp16_k_q4_v = fp16_k_q4_v_exact_old_backing_enabled()
+                && fp16_k_q4_v_direct_exact_old_attention_enabled();
+            if head_dim != 64 && !(head_dim == 128 && direct_fp16_k_q4_v) {
+                anyhow::bail!(
+                    "block-select-exact requires head_dim=64, or head_dim=128 with direct fp16-k-q4-v exact-old attention"
+                );
             }
             #[cfg(feature = "cuda")]
             unsafe {
@@ -551,9 +559,7 @@ impl LoadedModel {
                         d_out,
                     );
                 }
-                if fp16_k_q4_v_exact_old_backing_enabled()
-                    && fp16_k_q4_v_direct_exact_old_attention_enabled()
-                {
+                if direct_fp16_k_q4_v {
                     return kv
                         .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
                             &self.cuda,

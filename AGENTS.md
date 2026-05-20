@@ -127,7 +127,7 @@ batched decode path before touching persistent decode or large-model fused-dequa
   for skewed batch size 4, with all requests returning HTTP 200. Results and
   validation commands are recorded in `docs/perf_baselines.md`.
 - Packed varlen prefill is now available behind
-  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64 buffered scheduler
+  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64/128 buffered scheduler
   batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
   speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
   speedup with all HTTP requests successful.
@@ -408,7 +408,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   and prompt/tokenizer detection are now wired as the next cross-model target
   before attempting Mistral-7B F16. `Qwen2.5-3B-Instruct-f16.gguf` downloaded
   successfully and completed a one-token CUDA generation smoke on Tesla M40;
-  long-context KV quality validation is still pending.
+  dense packed prefill and direct FP16-K/q4-V exact-old attention now admit
+  head_dim=128 so Qwen long-context KV quality validation can proceed. The older
+  staged/q8 exact-old and summary/lossy compressed CUDA paths remain head_dim=64
+  only.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

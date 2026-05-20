@@ -547,7 +547,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             ));
             group.bench_function(format!("{name}_padded_max"), |b| {
                 b.iter(|| unsafe {
-                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                    ctx.attention_prefill_f32_gqa_varlen(
                         d_padded_q as *const c_void,
                         d_padded_k as *const c_void,
                         d_padded_v as *const c_void,
@@ -558,6 +558,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                         batch_size as u32,
                         q_heads,
                         kv_heads,
+                        head_dim,
                         d_padded_out,
                     )
                     .expect("padded prefill attention")
@@ -567,7 +568,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             group.throughput(Throughput::Elements(meta.total_attention_cells()));
             group.bench_function(format!("{name}_packed_varlen"), |b| {
                 b.iter(|| unsafe {
-                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                    ctx.attention_prefill_f32_gqa_varlen(
                         d_q as *const c_void,
                         d_k as *const c_void,
                         d_v as *const c_void,
@@ -578,6 +579,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                         meta.sequences().len() as u32,
                         q_heads,
                         kv_heads,
+                        head_dim,
                         d_out,
                     )
                     .expect("prefill attention")
@@ -586,7 +588,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             group.bench_function(format!("{name}_bucketed_varlen"), |b| {
                 b.iter(|| unsafe {
                     for dispatch in &bucket_dispatches {
-                        ctx.attention_prefill_f32_gqa_varlen_head64(
+                        ctx.attention_prefill_f32_gqa_varlen(
                             d_q as *const c_void,
                             d_k as *const c_void,
                             d_v as *const c_void,
@@ -597,6 +599,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                             dispatch.batch_size,
                             q_heads,
                             kv_heads,
+                            head_dim,
                             d_out,
                         )
                         .expect("bucketed prefill attention");
