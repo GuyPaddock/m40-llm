@@ -119,6 +119,9 @@ int m40llm_rope_f32(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows,
 int m40llm_rope_f32_async(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_rope_f32_layout_async(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
+}
 
 int m40llm_rope_f32_inplace(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
@@ -126,8 +129,14 @@ int m40llm_rope_f32_inplace(M40llmCudaContext* ctx, void* d_x, uint32_t rows, ui
 int m40llm_rope_f32_inplace_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_rope_f32_inplace_layout_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
+}
 int m40llm_rope_f32_inplace_position_dev_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, const uint32_t* past_len_dev, float freq_base, float freq_scale) {
     (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len_dev; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_rope_f32_inplace_position_dev_layout_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, const uint32_t* past_len_dev, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len_dev; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
 }
 
 int m40llm_residual_add_f32(M40llmCudaContext* ctx, const void* d_a, const void* d_b, void* d_out, size_t n) {
@@ -166,11 +175,20 @@ int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx, M40llmKVCache
 int m40llm_kvcache_append_token_f32_rope_k_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_kvcache_append_token_f32_rope_k_layout_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t past_len, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)past_len; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
+}
 int m40llm_kvcache_append_token_f32_rope_k_at_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t position, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_kvcache_append_token_f32_rope_k_at_layout_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t position, uint32_t past_len, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position; (void)past_len; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
+}
 int m40llm_kvcache_append_token_f32_rope_k_position_dev_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, const uint32_t* position_dev, float freq_base, float freq_scale) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position_dev; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, const uint32_t* position_dev, float freq_base, float freq_scale, uint32_t rope_layout) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position_dev; (void)freq_base; (void)freq_scale; (void)rope_layout; return -1;
 }
 int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
     (void)ctx; (void)kv; return -1;

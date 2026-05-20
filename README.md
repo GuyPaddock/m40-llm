@@ -128,14 +128,16 @@ tokenizer markers. Auto prompt formatting wraps unformatted Qwen prompts in the
 ChatML-style `<|im_start|>` / `<|im_end|>` template; use
 `--prompt-format qwen-chat` to force that wrapper.
 The Qwen path uses the Qwen2 `tiktoken` encoding and maps optional Q/K/V
-attention biases found in Qwen2.5 GGUF files. `Qwen2.5-3B-Instruct-f16.gguf`
-has a basic CUDA generation canary on Tesla M40; long-context KV quality
-validation now has the required head_dim=128 kernel support for dense packed
-prefill and direct FP16-K/q4-V exact-old retrieval.
+attention biases found in Qwen2.5 GGUF files. It also uses Qwen/NeoX
+split-half RoPE layout instead of the adjacent-pair Llama layout.
+`Qwen2.5-3B-Instruct-f16.gguf` has basic CUDA generation canaries on Tesla M40;
+raw prompt output has been checked against an Ollama oracle for the same GGUF,
+and long-context KV quality validation now has the required head_dim=128 kernel
+support for dense packed prefill and direct FP16-K/q4-V exact-old retrieval.
 The long-context quality harness also supports
-`M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot` so Qwen
-retrieval prompts can be validated against dense `off` before interpreting
-compressed-KV rows.
+`M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot|qwen-natural`
+so Qwen retrieval prompts can be validated against dense `off` before
+interpreting compressed-KV rows.
 
 Host sampling supports greedy, top-k, top-p, temperature, and deterministic RNG
 paths. The normal CUDA path keeps full-layer decode on device and copies logits

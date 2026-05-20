@@ -387,7 +387,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
                     )?;
-                    self.cuda.rope_f32_inplace_async(
+                    self.cuda.rope_f32_inplace_layout_async(
                         ws.dq,
                         1,
                         q_heads,
@@ -395,6 +395,7 @@ impl LoadedModel {
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     log_profiled_op(
                         &label,
@@ -820,7 +821,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
                     )?;
-                    self.cuda.rope_f32_inplace_position_dev_async(
+                    self.cuda.rope_f32_inplace_position_dev_layout_async(
                         ws.dq,
                         1,
                         q_heads,
@@ -828,6 +829,7 @@ impl LoadedModel {
                         d_position,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     log_profiled_op(
                         &label,
@@ -1907,7 +1909,7 @@ impl LoadedModel {
                     let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
                     let kv_slot =
                         self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
-                    self.cuda.rope_f32_inplace_async(
+                    self.cuda.rope_f32_inplace_layout_async(
                         q_row,
                         1,
                         q_heads,
@@ -1915,6 +1917,7 @@ impl LoadedModel {
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     self.append_kv_token_f32_rope_k_at_async(
                         kv_slot,
@@ -2356,7 +2359,7 @@ impl LoadedModel {
                         let k_row_mut = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
                         let k_row = k_row_mut as *const c_void;
                         let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
-                        kv.append_token_f32_rope_k_at_async(
+                        kv.append_token_f32_rope_k_at_layout_async(
                             &self.cuda,
                             kv_slot,
                             k_row,
@@ -2365,8 +2368,9 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_async(
+                        self.cuda.rope_f32_inplace_layout_async(
                             q_row,
                             1,
                             q_heads,
@@ -2374,8 +2378,9 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_async(
+                        self.cuda.rope_f32_inplace_layout_async(
                             k_row_mut,
                             1,
                             kv_heads,
@@ -2383,6 +2388,7 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
                     }
                 }

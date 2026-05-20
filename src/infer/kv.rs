@@ -1063,9 +1063,18 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
-                )
+                kv.append_token_f32_rope_k_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
+                )?;
+                self.cuda
+                    .synchronize_stream(crate::cuda::CudaStream::Decode)
             }
         }
         #[cfg(not(feature = "cuda"))]
@@ -1095,8 +1104,15 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_async(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                kv.append_token_f32_rope_k_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }
@@ -1129,8 +1145,16 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_at_async(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, position, past_len, freq_base, freq_scale,
+                kv.append_token_f32_rope_k_at_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    position,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }
@@ -1166,7 +1190,7 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_position_dev_async(
+                kv.append_token_f32_rope_k_position_dev_layout_async(
                     &self.cuda,
                     seq_id,
                     d_k_f32,
@@ -1174,6 +1198,7 @@ impl LoadedModel {
                     position_dev,
                     freq_base,
                     freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }

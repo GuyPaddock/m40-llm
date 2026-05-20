@@ -31,6 +31,14 @@ pub struct ModelConfig {
 }
 
 impl ModelConfig {
+    pub fn rope_layout_code(&self) -> u32 {
+        if self.architecture.starts_with("qwen") {
+            crate::cuda::ROPE_LAYOUT_NEOX
+        } else {
+            crate::cuda::ROPE_LAYOUT_ADJACENT
+        }
+    }
+
     #[cfg(feature = "gguf_ext")]
     pub(super) fn from_gguf_ext_bytes(
         bytes: &[u8],

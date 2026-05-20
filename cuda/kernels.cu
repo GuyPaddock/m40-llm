@@ -5547,6 +5547,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    static constexpr uint32_t M40LLM_ROPE_LAYOUT_ADJACENT = 0u;
+    static constexpr uint32_t M40LLM_ROPE_LAYOUT_NEOX = 1u;
+
+    __device__ __forceinline__ void rope_pair_indices(
+        uint32_t head,
+        uint32_t offset_in_head,
+        uint32_t head_dim,
+        uint32_t rope_layout,
+        size_t* i0,
+        size_t* i1) {
+        const size_t head_base = (size_t)head * (size_t)head_dim;
+        if (rope_layout == M40LLM_ROPE_LAYOUT_NEOX) {
+            *i0 = head_base + (size_t)offset_in_head;
+            *i1 = *i0 + (size_t)(head_dim / 2u);
+        } else {
+            *i0 = head_base + (size_t)(2u * offset_in_head);
+            *i1 = *i0 + 1u;
+        }
+    }
+
     __global__ void rope_k_append_f32_to_f16_h2_kernel(
         const float* __restrict__ k_in,
         const float* __restrict__ v_in,
@@ -5557,33 +5577,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale,
+        uint32_t rope_layout,
         size_t pairs_per_token) {
         const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
         if (pair >= pairs_per_token) return;
 
-        const size_t i = pair * 2u;
-        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
-        const uint32_t head = (uint32_t)(i / (size_t)head_dim);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = (uint32_t)(pair % (size_t)half_dim);
+        const uint32_t head = (uint32_t)(pair / (size_t)half_dim);
         if (head >= num_heads) return;
 
-        const uint32_t offset_in_head = dim / 2u;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
         const float pos = static_cast<float>(past_len) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float k0 = k_in[i];
-        const float k1 = k_in[i + 1u];
-        const float v0 = v_in[i];
-        const float v1 = v_in[i + 1u];
-
-        const __half2 k_h2 = __halves2half2(
-            __float2half_rn(k0 * c - k1 * s),
-            __float2half_rn(k0 * s + k1 * c));
-        const __half2 v_h2 = __halves2half2(__float2half_rn(v0), __float2half_rn(v1));
-        reinterpret_cast<__half2*>(k_out)[pair] = k_h2;
-        reinterpret_cast<__half2*>(v_out)[pair] = v_h2;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        k_out[i0] = __float2half_rn(k0 * c - k1 * s);
+        k_out[i1] = __float2half_rn(k0 * s + k1 * c);
+        v_out[i0] = __float2half_rn(v_in[i0]);
+        v_out[i1] = __float2half_rn(v_in[i1]);
     }
 
     __global__ void rope_k_append_f32_to_f16_h2_at_kernel(
@@ -5600,6 +5618,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t* __restrict__ position_dev,
         float freq_base,
         float freq_scale,
+        uint32_t rope_layout,
         size_t pairs_per_token) {
         const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
         if (pair >= pairs_per_token) return;
@@ -5614,29 +5633,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         __half* k_out = k_base + token_offset;
         __half* v_out = v_base + token_offset;
 
-        const size_t i = pair * 2u;
-        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
-        const uint32_t head = (uint32_t)(i / (size_t)head_dim);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = (uint32_t)(pair % (size_t)half_dim);
+        const uint32_t head = (uint32_t)(pair / (size_t)half_dim);
         if (head >= num_heads) return;
 
-        const uint32_t offset_in_head = dim / 2u;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
         const float pos = static_cast<float>(position) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float k0 = k_in[i];
-        const float k1 = k_in[i + 1u];
-        const float v0 = v_in[i];
-        const float v1 = v_in[i + 1u];
-
-        const __half2 k_h2 = __halves2half2(
-            __float2half_rn(k0 * c - k1 * s),
-            __float2half_rn(k0 * s + k1 * c));
-        const __half2 v_h2 = __halves2half2(__float2half_rn(v0), __float2half_rn(v1));
-        reinterpret_cast<__half2*>(k_out)[pair] = k_h2;
-        reinterpret_cast<__half2*>(v_out)[pair] = v_h2;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        k_out[i0] = __float2half_rn(k0 * c - k1 * s);
+        k_out[i1] = __float2half_rn(k0 * s + k1 * c);
+        v_out[i0] = __float2half_rn(v_in[i0]);
+        v_out[i1] = __float2half_rn(v_in[i1]);
         if (pair == 0) {
             seq_map[seq_id] = position + 1u;
         }
@@ -5680,6 +5696,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t position,
         float freq_base,
         float freq_scale,
+        uint32_t rope_layout,
         size_t elems_per_token) {
         const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i >= elems_per_token) return;
@@ -5687,17 +5704,27 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const size_t recent_base =
             ((size_t)seq_id * (size_t)recent_window + recent_token) * elems_per_token;
         const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
-        const uint32_t offset_in_head = dim / 2u;
+        const uint32_t head = (uint32_t)((i / (size_t)head_dim) % (size_t)num_heads);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = rope_layout == M40LLM_ROPE_LAYOUT_NEOX
+            ? (dim % half_dim)
+            : (dim / 2u);
         const float pos = static_cast<float>(position) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const size_t pair_i = (i & ~1ull);
-        const float k0 = k_in[pair_i];
-        const float k1 = k_in[pair_i + 1u];
-        const float rotated = (i & 1u) == 0
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t token_head_base =
+            (i / ((size_t)num_heads * (size_t)head_dim)) * ((size_t)num_heads * (size_t)head_dim);
+        i0 += token_head_base;
+        i1 += token_head_base;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        const float rotated = i == i0
             ? (k0 * c - k1 * s)
             : (k0 * s + k1 * c);
         const float v = v_in[i];
@@ -5862,6 +5889,44 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_kvcache_append_token_f32_rope_k_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         const uint32_t* position_dev,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+
     int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx,
                                          M40llmKVCache* kv,
                                          uint32_t seq_id,
@@ -5886,6 +5951,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t past_len,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
@@ -5917,6 +5996,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             past_len,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -5940,10 +6020,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t past_len,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (kv->compressed) {
-            return m40llm_kvcache_append_token_f32_rope_k_compressed_at_async(
-                ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, freq_base, freq_scale);
+            return m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(
+                ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, freq_base, freq_scale, rope_layout);
         }
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
@@ -5969,6 +6064,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             nullptr,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -5987,6 +6083,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t position,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (!kv->compressed) return -2;
         if (seq_id >= kv->max_batch_size) return -3;
@@ -6078,6 +6188,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 nullptr,
                 freq_base,
                 freq_scale,
+                rope_layout,
                 pairs_per_token);
             cudaError_t shadow_err = cudaGetLastError();
             if (shadow_err != cudaSuccess) {
@@ -6111,6 +6222,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             position,
             freq_base,
             freq_scale,
+            rope_layout,
             elems_per_token);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -6128,6 +6240,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          const uint32_t* position_dev,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position_dev, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         const uint32_t* position_dev,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32 || !position_dev) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
@@ -6151,6 +6277,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             position_dev,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -7113,7 +7240,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         uint32_t past_len,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
         const uint32_t total_pairs = rows * pairs_per_row;
@@ -7124,7 +7252,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
 
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
@@ -7132,15 +7263,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float c = cosf(theta);
         const float s = sinf(theta);
 
-        const float q0 = q[base];
-        const float q1 = q[base + 1];
-        q[base] = q0 * c - q1 * s;
-        q[base + 1] = q0 * s + q1 * c;
+        const float q0 = q[base + i0];
+        const float q1 = q[base + i1];
+        q[base + i0] = q0 * c - q1 * s;
+        q[base + i1] = q0 * s + q1 * c;
 
-        const float k0 = k[base];
-        const float k1 = k[base + 1];
-        k[base] = k0 * c - k1 * s;
-        k[base + 1] = k0 * s + k1 * c;
+        const float k0 = k[base + i0];
+        const float k1 = k[base + i1];
+        k[base + i0] = k0 * c - k1 * s;
+        k[base + i1] = k0 * s + k1 * c;
     }
 
     __global__ void rope_f32_inplace_kernel(
@@ -7150,7 +7281,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         uint32_t past_len,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
         const uint32_t total_pairs = rows * pairs_per_row;
@@ -7160,17 +7292,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t pair_in_row = pair_idx % pairs_per_row;
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float x0 = x[base];
-        const float x1 = x[base + 1];
-        x[base] = x0 * c - x1 * s;
-        x[base + 1] = x0 * s + x1 * c;
+        const float x0 = x[base + i0];
+        const float x1 = x[base + i1];
+        x[base + i0] = x0 * c - x1 * s;
+        x[base + i1] = x0 * s + x1 * c;
     }
 
     __global__ void rope_f32_inplace_position_dev_kernel(
@@ -7180,7 +7315,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         const uint32_t* __restrict__ past_len_dev,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!past_len_dev) return;
         const uint32_t past_len = *past_len_dev;
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -7192,18 +7328,53 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t pair_in_row = pair_idx % pairs_per_row;
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float x0 = x[base];
-        const float x1 = x[base + 1];
-        x[base] = x0 * c - x1 * s;
-        x[base + 1] = x0 * s + x1 * c;
+        const float x0 = x[base + i0];
+        const float x1 = x[base + i1];
+        x[base + i0] = x0 * c - x1 * s;
+        x[base + i1] = x0 * s + x1 * c;
     }
+
+    int m40llm_rope_f32_layout_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
+    int m40llm_rope_f32_inplace_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
+    int m40llm_rope_f32_inplace_position_dev_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
 
     int m40llm_rope_f32(
         M40llmCudaContext* ctx,
@@ -7232,6 +7403,22 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_layout_async(
+            ctx, q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_layout_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -7239,7 +7426,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;
@@ -7270,6 +7457,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_inplace_layout_async(
+            ctx, x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_inplace_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !x || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -7277,7 +7479,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_inplace_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            x, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+            x, rows, num_heads, head_dim, past_len, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;
@@ -7292,6 +7494,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t* past_len_dev,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_inplace_position_dev_layout_async(
+            ctx, x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_inplace_position_dev_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !x || !past_len_dev || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -7299,7 +7516,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_inplace_position_dev_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale);
+            x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;

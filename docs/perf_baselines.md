@@ -2,6 +2,56 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen Split-Half RoPE Oracle Validation
+
+This checkpoint resolves the Qwen2.5 synthetic retrieval failure by comparing
+the same GGUF against an external oracle and fixing architecture-specific RoPE
+layout.
+
+Finding:
+
+- Ollama with `Qwen2.5-3B-Instruct-f16.gguf`, raw prompting, `temperature=0`,
+  `top_k=1`, and `num_predict=16` returns `ZXQ-NEEDLE-41729` for the same
+  synthetic retrieval canary that m40-llm previously failed.
+- m40-llm was applying adjacent-pair RoPE to Qwen heads. Qwen-family models use
+  split-half/NeoX RoPE pairing, so Qwen Q/K rotations were semantically wrong
+  even though simple short prompts could still look plausible.
+
+Implementation:
+
+- CUDA RoPE and fused K-RoPE+KV-append kernels now accept an explicit layout:
+  adjacent-pair for existing Llama-style paths and split-half/NeoX for Qwen.
+- `LoadedModelConfig::rope_layout_code()` selects split-half layout for
+  `qwen*` architectures and preserves adjacent layout elsewhere.
+- Existing non-layout Rust/CUDA APIs continue to default to adjacent layout for
+  compatibility with current callers.
+
+Validation:
+
+- Ollama raw oracle:
+  `ZXQ-NEEDLE-41729`.
+- m40-llm raw Qwen CLI canary:
+  `ZXQ-NEEDLE-41729\nThe secret code`.
+- m40-llm auto ChatML Qwen CLI canary:
+  `ZXQ-NEEDLE-41729`.
+- `M40LLM_KV_TOPK_MULTITASK_DIAG=1` Qwen default single-needle, target 64:
+  dense `off` pass, direct FP16-K/q4-V top4 pass.
+- `M40LLM_KV_TOPK_MULTITASK_DIAG=1` Qwen default single-needle, target 256:
+  dense `off` pass, direct FP16-K/q4-V top4 pass.
+
+Reports:
+
+- `/tmp/qwen2-after-rope-default-64.jsonl`
+- `/tmp/qwen2-after-rope-default-256.jsonl`
+
+Interpretation:
+
+- Qwen2.5 compressed-KV rows are no longer inherently inconclusive for the
+  synthetic retrieval canary; the prior failures were caused by an
+  architecture-specific RoPE layout bug.
+- Cross-model policy conclusions still need bounded Qwen matrices, but the
+  basic Qwen runtime path is now semantically aligned with the external oracle.
+
 ## 2026-05-20: Qwen Natural Retrieval Canary
 
 This checkpoint separates Qwen runtime correctness from prompt suitability in

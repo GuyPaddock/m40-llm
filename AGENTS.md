@@ -487,20 +487,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   applied by sequential one-token decode, graph-parameter decode, batched decode,
   and packed-prefix prefill. A synthetic CUDA packed-prefill parity test with
   QKV biases now matches sequential logits, and the direct Qwen `OK` canary
-  still passes. The 256-token Qwen default and `qwen-strict` retrieval rows
-  still fail dense `off`, so the remaining Qwen work should isolate real-model
-  sequential-vs-packed logits or first-token retrieval logits rather than tuning
-  compressed-KV policy. The multitask harness now supports
+  still passes. The multitask harness now supports
   `M40LLM_KV_MULTITASK_PREFILL_MODE=packed|sequential`, and JSONL multitask
-  rows include the actual generated `prefill_mode`. A 64-token Qwen default
-  prompt fails identically with packed and true sequential prefill, so that
-  failure is not a packed-prefix bug. `qwen-natural` now provides a dense-valid
-  Qwen retrieval canary using an unambiguous `answer key is BLUE` fact: at
-  64 tokens, dense `off` and direct FP16-K/q4-V exact-old retrieval both pass
-  and compressed rows are no longer inconclusive. The 256-token `qwen-natural`
-  row still fails dense `off`, so Qwen longer-context KV policy conclusions
-  remain blocked on prompt/task suitability or deeper Qwen model-behavior
-  diagnostics.
+  rows include the actual generated `prefill_mode`. `qwen-natural` provides a
+  Qwen retrieval canary using an unambiguous `answer key is BLUE` fact. An
+  Ollama oracle comparison with the same `Qwen2.5-3B-Instruct-f16.gguf` showed
+  the default synthetic `ZXQ-NEEDLE-41729` canary should pass under raw
+  prompting. The remaining Qwen blocker was an architecture-specific RoPE
+  layout bug: m40-llm was using adjacent-pair RoPE, while Qwen needs
+  split-half/NeoX pairing. CUDA RoPE and fused K-RoPE+KV-append wrappers now
+  accept explicit layout selection, and `qwen*` architectures select NeoX RoPE.
+  After the fix, raw and auto-formatted Qwen CLI canaries return
+  `ZXQ-NEEDLE-41729`, and the 64/256-token default single-needle quality rows
+  pass for dense `off` and direct FP16-K/q4-V top4.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

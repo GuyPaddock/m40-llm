@@ -21,6 +21,9 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
+pub const ROPE_LAYOUT_NEOX: u32 = 1;
+
 #[cfg(feature = "cuda")]
 mod ffi {
     use super::*;
@@ -249,7 +252,7 @@ mod ffi {
             weight_dtype: u32,
         ) -> i32;
 
-        pub fn m40llm_rope_f32_async(
+        pub fn m40llm_rope_f32_layout_async(
             ctx: *mut M40llmCudaContext,
             d_q: *mut c_void,
             d_k: *mut c_void,
@@ -259,8 +262,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_rope_f32_inplace_async(
+        pub fn m40llm_rope_f32_inplace_layout_async(
             ctx: *mut M40llmCudaContext,
             d_x: *mut c_void,
             rows: u32,
@@ -269,8 +273,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_rope_f32_inplace_position_dev_async(
+        pub fn m40llm_rope_f32_inplace_position_dev_layout_async(
             ctx: *mut M40llmCudaContext,
             d_x: *mut c_void,
             rows: u32,
@@ -279,6 +284,7 @@ mod ffi {
             past_len_dev: *const u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
         pub fn m40llm_residual_add_f32_async(
             ctx: *mut M40llmCudaContext,
@@ -329,7 +335,7 @@ mod ffi {
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -338,8 +344,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_at_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -349,8 +356,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -359,6 +367,7 @@ mod ffi {
             position_dev: *const u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
@@ -2344,10 +2353,42 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_layout_async(
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues RoPE with an explicit layout. `rope_layout` is
+    /// `ROPE_LAYOUT_ADJACENT` for GGUF-permuted adjacent pairs or
+    /// `ROPE_LAYOUT_NEOX` for split-half rotary pairs.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_layout_async(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_async(
+            let rc = ffi::m40llm_rope_f32_layout_async(
                 self.inner.raw.as_ptr(),
                 d_q,
                 d_k,
@@ -2357,9 +2398,10 @@ impl CudaContext {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32_async failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_layout_async failed: {rc}"));
             }
             record_async_kernel("rope_f32");
             Ok(())
@@ -2367,7 +2409,15 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (
-                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -2413,10 +2463,38 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_inplace_layout_async(
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE with an explicit rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_inplace_layout_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_inplace_async(
+            let rc = ffi::m40llm_rope_f32_inplace_layout_async(
                 self.inner.raw.as_ptr(),
                 d_x,
                 rows,
@@ -2425,9 +2503,10 @@ impl CudaContext {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32_inplace_async failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_inplace_layout_async failed: {rc}"));
             }
             record_async_kernel("rope_f32_inplace");
             Ok(())
@@ -2435,7 +2514,14 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (
-                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -2454,10 +2540,39 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_inplace_position_dev_layout_async(
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE with a device-resident position and explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_inplace_position_dev_layout_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_inplace_position_dev_async(
+            let rc = ffi::m40llm_rope_f32_inplace_position_dev_layout_async(
                 self.inner.raw.as_ptr(),
                 d_x,
                 rows,
@@ -2466,10 +2581,11 @@ impl CudaContext {
                 past_len_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_rope_f32_inplace_position_dev_async failed: {rc}"
+                    "m40llm_rope_f32_inplace_position_dev_layout_async failed: {rc}"
                 ));
             }
             record_async_kernel("rope_f32_inplace_position_dev");
@@ -2485,6 +2601,7 @@ impl CudaContext {
                 past_len_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -3625,9 +3742,37 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and KV append with an explicit rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -3636,11 +3781,12 @@ impl KVCache {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k");
@@ -3663,9 +3809,40 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_at_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues explicit-position fused K RoPE and KV append with an explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_at_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_at_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -3675,11 +3852,12 @@ impl KVCache {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_at_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_at_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k_at");
@@ -3700,9 +3878,38 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_position_dev_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position_dev,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues device-position fused K RoPE and KV append with an explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_position_dev_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -3711,11 +3918,12 @@ impl KVCache {
                 position_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_position_dev_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k_position_dev");
