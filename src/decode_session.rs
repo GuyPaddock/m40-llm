@@ -2,7 +2,7 @@
 use crate::cuda::KVCache;
 #[cfg(feature = "cuda")]
 use crate::cuda::{
-    CudaContext, CudaGraphExec, CudaStream, DeviceBuffer, ExactBlockStagingWorkspace,
+    CudaContext, CudaEvent, CudaGraphExec, CudaStream, DeviceBuffer, ExactBlockStagingWorkspace,
 };
 #[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
@@ -16,6 +16,64 @@ use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 fn decode_session_log_enabled() -> bool {
     std::env::var("M40LLM_DECODE_SESSION_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn prefill_sync_diag_enabled() -> bool {
+    std::env::var("M40LLM_PREFILL_SYNC_DIAG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+struct PrefillSyncDiag {
+    label: String,
+    wall_start: std::time::Instant,
+    decode_start: CudaEvent,
+    prefill_start: CudaEvent,
+}
+
+#[cfg(feature = "cuda")]
+impl PrefillSyncDiag {
+    fn start(cuda: &CudaContext, label: impl Into<String>) -> Result<Option<Self>> {
+        if !prefill_sync_diag_enabled() {
+            return Ok(None);
+        }
+        let decode_start = cuda.create_event()?;
+        let prefill_start = cuda.create_event()?;
+        decode_start.record(CudaStream::Decode)?;
+        prefill_start.record(CudaStream::Prefill)?;
+        Ok(Some(Self {
+            label: label.into(),
+            wall_start: std::time::Instant::now(),
+            decode_start,
+            prefill_start,
+        }))
+    }
+
+    fn finish(self, cuda: &CudaContext) -> Result<()> {
+        let decode_stop = cuda.create_event()?;
+        let prefill_stop = cuda.create_event()?;
+        decode_stop.record(CudaStream::Decode)?;
+        prefill_stop.record(CudaStream::Prefill)?;
+        let decode_gpu_ms = self
+            .decode_start
+            .elapsed_sync(&decode_stop, "packed_prefill_sync_diag_decode")?;
+        let prefill_gpu_ms = self
+            .prefill_start
+            .elapsed_sync(&prefill_stop, "packed_prefill_sync_diag_prefill")?;
+        let wall = self.wall_start.elapsed();
+        timing::log(format_args!("{}.sync_diag.wall", self.label), wall);
+        if timing::enabled() {
+            eprintln!(
+                "[timing] {}.sync_diag.decode_gpu {:.3} ms",
+                self.label, decode_gpu_ms
+            );
+            eprintln!(
+                "[timing] {}.sync_diag.prefill_gpu {:.3} ms",
+                self.label, prefill_gpu_ms
+            );
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -321,6 +379,10 @@ impl DecodeSession {
             .as_mut_ptr();
         let prefix_len = ids.len() - 1;
         let prefill_start = std::time::Instant::now();
+        let sync_diag = PrefillSyncDiag::start(
+            &self.model().cuda,
+            format!("{}.packed_prefill.ids_len_{}", self.log_prefix, ids.len()),
+        )?;
         let layers = unsafe {
             (*self.model).forward_prefill_all_layers_varlen_for_sequences(&[
                 crate::infer::ForwardPrefillSequence {
@@ -330,6 +392,9 @@ impl DecodeSession {
                 },
             ])
         }?;
+        if let Some(sync_diag) = sync_diag {
+            sync_diag.finish(&self.model().cuda)?;
+        }
         timing::timing_log!(
             prefill_start.elapsed(),
             "{}.packed_prefill.ids_len_{}",
@@ -457,6 +522,14 @@ impl DecodeSession {
             .ok_or_else(|| anyhow::anyhow!("d_out is not allocated for this decode session"))?
             .as_mut_ptr();
         let prefill_start = std::time::Instant::now();
+        let sync_diag = PrefillSyncDiag::start(
+            &self.model().cuda,
+            format!(
+                "{}.packed_then_compress_prefill.forward.ids_len_{}",
+                self.log_prefix,
+                ids.len()
+            ),
+        )?;
         let layers = unsafe {
             (*self.model).forward_prefill_all_layers_varlen_for_sequences_with_kv(
                 &[crate::infer::ForwardPrefillSequence {
@@ -467,11 +540,21 @@ impl DecodeSession {
                 &temp_dense_kv,
             )
         }?;
+        if let Some(sync_diag) = sync_diag {
+            sync_diag.finish(&self.model().cuda)?;
+        }
+        let compress_start = std::time::Instant::now();
         active_kv.build_compressed_from_dense(
             &self.model().cuda,
             &temp_dense_kv,
             prefix_len as u32,
         )?;
+        timing::timing_log!(
+            compress_start.elapsed(),
+            "{}.packed_then_compress_prefill.compress.ids_len_{}",
+            self.log_prefix,
+            ids.len()
+        );
         timing::timing_log!(
             prefill_start.elapsed(),
             "{}.packed_then_compress_prefill.ids_len_{}",

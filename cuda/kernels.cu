@@ -18,6 +18,10 @@ struct M40llmCudaGraphExec {
     cudaGraphExec_t exec;
 };
 
+struct M40llmCudaEvent {
+    cudaEvent_t event;
+};
+
 struct M40llmCudaContext {
     int device_id;
     cudaStream_t prefill_stream;
@@ -609,6 +613,53 @@ extern "C" {
         cudaEventDestroy(stop);
         cudaEventDestroy(start);
         return err == cudaSuccess ? 0 : -10;
+    }
+
+    int m40llm_cuda_event_create(M40llmCudaContext* ctx, M40llmCudaEvent** out_event) {
+        if (!ctx || !out_event) return -1;
+        *out_event = nullptr;
+        if (ensure_device(ctx) != 0) return -2;
+        M40llmCudaEvent* wrapped = new M40llmCudaEvent();
+        wrapped->event = nullptr;
+        cudaError_t err = cudaEventCreate(&wrapped->event);
+        if (err != cudaSuccess) {
+            delete wrapped;
+            return -3;
+        }
+        *out_event = wrapped;
+        return 0;
+    }
+
+    int m40llm_cuda_event_record(
+        M40llmCudaContext* ctx,
+        M40llmCudaEvent* event,
+        uint32_t stream_kind) {
+        if (!ctx || !event || !event->event) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaError_t err = cudaEventRecord(event->event, stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_cuda_event_elapsed_sync(
+        M40llmCudaContext* ctx,
+        M40llmCudaEvent* start,
+        M40llmCudaEvent* stop,
+        float* elapsed_ms) {
+        if (!ctx || !start || !stop || !start->event || !stop->event || !elapsed_ms) return -1;
+        *elapsed_ms = 0.0f;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaError_t err = cudaEventSynchronize(stop->event);
+        if (err != cudaSuccess) return -3;
+        err = cudaEventElapsedTime(elapsed_ms, start->event, stop->event);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    void m40llm_cuda_event_destroy(M40llmCudaEvent* event) {
+        if (!event) return;
+        if (event->event) cudaEventDestroy(event->event);
+        delete event;
     }
 
     void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) {

@@ -434,8 +434,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   while the direct FP16-K/q4-V row took roughly 0.9 s. Timing logs show the
   dense-row delay is paid at `logits.output_norm`, which is the first
   synchronization point after dense packed-prefix work, not an actual 86 s norm
-  kernel. Next add explicit dense packed-prefix CUDA-event timing or an opt-in
-  pre-logits stream sync to attribute that GPU work correctly.
+  kernel. `M40LLM_PREFILL_SYNC_DIAG=1` now adds an opt-in two-stream CUDA-event
+  sync diagnostic after packed-prefix prefill and is verified on a short
+  packed-prefix parity test. The Qwen diagnostic output is verbose enough that
+  the next step should capture full stderr to a file or add the sync diagnostic
+  timings to JSONL rows before drawing the final dense packed-prefix attribution
+  conclusion.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

@@ -27,6 +27,11 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 - `M40LLM_PROFILE_LOG=1`: print lower-noise per-operation counter deltas around
   forward-pass timing regions.
 - `M40LLM_TIMING_LOG=1`: print verbose per-token and per-layer decode timing.
+- `M40LLM_PREFILL_SYNC_DIAG=1`: after CLI/test packed-prefix prefill, record
+  CUDA events on both decode and prefill streams, synchronize the stop events,
+  and print `sync_diag.wall`, `sync_diag.decode_gpu`, and
+  `sync_diag.prefill_gpu` timing labels. This changes timing and is intended
+  only for attribution diagnostics.
 - `M40LLM_STREAM_LOG=1`: print prefill/decode stream creation details and
   best-effort priority selection.
 - `M40LLM_DECODE_SESSION_LOG=1`: print verbose decode-session token logs.

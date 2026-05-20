@@ -98,9 +98,17 @@ Notes:
   `logits.lm_head_gemm` and D2H were sub-ms, and `logits.output_norm` absorbed
   roughly 86.45 s. That means `output_norm` is the first synchronization point
   paying for previously enqueued dense packed-prefix GPU work; it is not itself
-  an 86 s norm kernel. The next diagnostic should add CUDA-event timing or an
-  explicit opt-in stream sync at the end of dense packed-prefix prefill so dense
-  prefill GPU time is attributed to the prefill phase instead of logits.
+  an 86 s norm kernel.
+- `M40LLM_PREFILL_SYNC_DIAG=1` now adds an opt-in two-stream CUDA-event sync
+  diagnostic after packed-prefix prefill. A short packed-prefix parity test
+  confirmed it emits `sync_diag.wall`, `sync_diag.decode_gpu`, and
+  `sync_diag.prefill_gpu` labels without changing correctness. A repeated Qwen
+  64-token run still showed the dense row paying roughly 84-86 s at the
+  high-level logits synchronization point in retained terminal output, while
+  the compressed row remained roughly 1.5 s total. The next diagnostic should
+  either capture full stderr to a file or add these sync timings to JSONL rows
+  so the exact Qwen packed-prefix stream timing survives the very verbose
+  per-layer log output.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

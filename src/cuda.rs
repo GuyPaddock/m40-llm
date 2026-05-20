@@ -37,6 +37,10 @@ mod ffi {
         _private: [u8; 0],
     }
     #[repr(C)]
+    pub struct M40llmCudaEvent {
+        _private: [u8; 0],
+    }
+    #[repr(C)]
     #[derive(Debug, Clone, Copy, Default)]
     pub struct M40llmAttentionGroupStats {
         pub prob_mass: f32,
@@ -146,6 +150,22 @@ mod ffi {
             elapsed_ms: *mut f32,
         ) -> i32;
         pub fn m40llm_cuda_graph_destroy(graph: *mut M40llmCudaGraphExec);
+        pub fn m40llm_cuda_event_create(
+            ctx: *mut M40llmCudaContext,
+            out_event: *mut *mut M40llmCudaEvent,
+        ) -> i32;
+        pub fn m40llm_cuda_event_record(
+            ctx: *mut M40llmCudaContext,
+            event: *mut M40llmCudaEvent,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_event_elapsed_sync(
+            ctx: *mut M40llmCudaContext,
+            start: *mut M40llmCudaEvent,
+            stop: *mut M40llmCudaEvent,
+            elapsed_ms: *mut f32,
+        ) -> i32;
+        pub fn m40llm_cuda_event_destroy(event: *mut M40llmCudaEvent);
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -914,6 +934,65 @@ impl Drop for DeviceBuffer {
 
 #[cfg(feature = "cuda")]
 #[derive(Debug)]
+pub struct CudaEvent {
+    ctx: CudaContext,
+    raw: NonNull<ffi::M40llmCudaEvent>,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for CudaEvent {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for CudaEvent {}
+
+#[cfg(feature = "cuda")]
+impl CudaEvent {
+    pub fn record(&self, stream: CudaStream) -> Result<()> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_record(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_event_record failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    pub fn elapsed_sync(&self, stop: &CudaEvent, op: &'static str) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_cuda_event_elapsed_sync failed for {op}: {rc}"
+            ));
+        }
+        crate::profile::record_stream_sync(op);
+        Ok(elapsed_ms)
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for CudaEvent {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::m40llm_cuda_event_destroy(self.raw.as_ptr());
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
 pub struct CudaGraphExec {
     ctx: CudaContext,
     raw: NonNull<ffi::M40llmCudaGraphExec>,
@@ -1185,6 +1264,24 @@ impl CudaContext {
             let _ = (waiting, signal, op);
             Ok(())
         }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn create_event(&self) -> Result<CudaEvent> {
+        let _g = self.inner.lock.lock().unwrap();
+        let mut out: *mut ffi::M40llmCudaEvent = std::ptr::null_mut();
+        let rc =
+            unsafe { ffi::m40llm_cuda_event_create(self.inner.raw.as_ptr(), &mut out as *mut _) };
+        if rc != 0 || out.is_null() {
+            return Err(anyhow!(
+                "m40llm_cuda_event_create failed: rc={rc}, out_null={}",
+                out.is_null()
+            ));
+        }
+        Ok(CudaEvent {
+            ctx: self.clone(),
+            raw: NonNull::new(out).ok_or_else(|| anyhow!("CUDA event create returned null"))?,
+        })
     }
 
     pub fn capture_graph(
