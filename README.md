@@ -123,6 +123,13 @@ wraps unformatted prompts in the Llama 3 chat template. Use
 `--prompt-format raw` for already-formatted prompts or
 `--prompt-format llama3-chat` to force that wrapper.
 
+Qwen2/Qwen2.5 GGUF files are recognized through `qwen2.*` metadata and Qwen
+tokenizer markers. Auto prompt formatting wraps unformatted Qwen prompts in the
+ChatML-style `<|im_start|>` / `<|im_end|>` template; use
+`--prompt-format qwen-chat` to force that wrapper.
+`Qwen2.5-3B-Instruct-f16.gguf` has a basic one-token CUDA smoke on Tesla M40;
+long-context KV quality results are still pending.
+
 Host sampling supports greedy, top-k, top-p, temperature, and deterministic RNG
 paths. The normal CUDA path keeps full-layer decode on device and copies logits
 back for host sampling.

@@ -19,6 +19,7 @@ pub enum PromptFormat {
     Auto,
     Raw,
     Llama3Chat,
+    QwenChat,
 }
 
 #[derive(Debug, Clone)]
@@ -245,6 +246,11 @@ pub fn prepare_prompt(
                 && !prompt.contains("<|start_header_id|>")
             {
                 PromptFormat::Llama3Chat
+            } else if tokenizer.is_qwen2()
+                && tokenizer.has_chat_template()
+                && !prompt.contains("<|im_start|>")
+            {
+                PromptFormat::QwenChat
             } else {
                 PromptFormat::Raw
             }
@@ -256,6 +262,13 @@ pub fn prepare_prompt(
         PromptFormat::Llama3Chat => (
             format!(
                 "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                prompt.trim()
+            ),
+            false,
+        ),
+        PromptFormat::QwenChat => (
+            format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
                 prompt.trim()
             ),
             false,

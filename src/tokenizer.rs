@@ -11,6 +11,7 @@ pub enum TokenizerKind {
     SentencePiece,
     Bpe,
     Llama3,
+    Qwen2,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +64,9 @@ impl Tokenizer {
     pub fn is_llama3(&self) -> bool {
         self.kind == TokenizerKind::Llama3
     }
+    pub fn is_qwen2(&self) -> bool {
+        self.kind == TokenizerKind::Qwen2
+    }
     pub fn has_chat_template(&self) -> bool {
         self.has_chat_template
     }
@@ -79,6 +83,14 @@ impl Tokenizer {
                 ids.push(eot);
             }
             if let Some(end_text) = self.token_id("<|end_of_text|>") {
+                ids.push(end_text);
+            }
+        }
+        if self.is_qwen2() {
+            if let Some(im_end) = self.token_id("<|im_end|>") {
+                ids.push(im_end);
+            }
+            if let Some(end_text) = self.token_id("<|endoftext|>") {
                 ids.push(end_text);
             }
         }
@@ -121,6 +133,10 @@ impl Tokenizer {
             .map(|s| s.to_ascii_lowercase());
         let has_tokens = metadata.get("tokenizer.ggml.tokens").is_some();
         let has_chat_template = metadata.get("tokenizer.chat_template").is_some();
+        let architecture = metadata
+            .get("general.architecture")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_ascii_lowercase());
         let has_sp = metadata
             .get("sentencepiece.model")
             .and_then(|v| v.as_str())
@@ -142,9 +158,17 @@ impl Tokenizer {
                 GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
                 _ => None,
             }) == Some(128_256);
+        let is_qwen_bpe = architecture
+            .as_deref()
+            .is_some_and(|arch| arch.starts_with("qwen"))
+            || pre_str
+                .as_deref()
+                .is_some_and(|pre| pre.starts_with("qwen"));
 
         let kind = if is_llama_bpe {
             TokenizerKind::Llama3
+        } else if is_qwen_bpe {
+            TokenizerKind::Qwen2
         } else if has_sp {
             TokenizerKind::SentencePiece
         } else if has_bpe {
@@ -219,6 +243,7 @@ impl Tokenizer {
             TokenizerKind::ByteLevel => Ok(text.as_bytes().iter().map(|&b| b as u32).collect()),
             TokenizerKind::SentencePiece => Ok(self.encode_sentencepiece(text)),
             TokenizerKind::Bpe => Ok(self.encode_bpe(text)),
+            TokenizerKind::Qwen2 => Ok(self.encode_qwen2(text)),
             TokenizerKind::Llama3 => {
                 let enc = tiktoken::get_encoding("llama3")
                     .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
@@ -234,6 +259,7 @@ impl Tokenizer {
                     .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
                 Ok(enc.encode_with_special_tokens(text))
             }
+            TokenizerKind::Qwen2 => Ok(self.encode_qwen2_with_specials(text)),
             _ => self.encode(text),
         }
     }
@@ -323,6 +349,7 @@ impl Tokenizer {
                 }
                 replaced
             }
+            TokenizerKind::Qwen2 => joined.replace('Ġ', " ").replace('Ċ', "\n"),
             _ => joined,
         };
 
@@ -351,6 +378,39 @@ impl Tokenizer {
             }
             self.encode_piece(&piece, &mut ids);
         }
+        ids
+    }
+
+    fn encode_qwen2(&self, text: &str) -> Vec<u32> {
+        self.encode_bpe(text)
+    }
+
+    fn encode_qwen2_with_specials(&self, text: &str) -> Vec<u32> {
+        const SPECIALS: [&str; 3] = ["<|im_start|>", "<|im_end|>", "<|endoftext|>"];
+        let mut ids = Vec::new();
+        let mut rest = text;
+
+        while !rest.is_empty() {
+            let next = SPECIALS
+                .iter()
+                .filter_map(|special| rest.find(special).map(|idx| (idx, *special)))
+                .min_by_key(|(idx, _)| *idx);
+            let Some((idx, special)) = next else {
+                ids.extend(self.encode_qwen2(rest));
+                break;
+            };
+
+            if idx > 0 {
+                ids.extend(self.encode_qwen2(&rest[..idx]));
+            }
+            if let Some(id) = self.token_id(special) {
+                ids.push(id);
+            } else {
+                ids.extend(self.encode_qwen2(special));
+            }
+            rest = &rest[idx + special.len()..];
+        }
+
         ids
     }
 

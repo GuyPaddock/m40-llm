@@ -86,6 +86,62 @@ fn model_config_respects_kv_head_override() {
 }
 
 #[test]
+fn model_config_parses_qwen2_metadata_aliases() {
+    let mut meta = HashMap::new();
+    meta.insert(
+        "general.architecture".into(),
+        GgufValue::Scalar(GgufScalar::Str("qwen2".into())),
+    );
+    meta.insert(
+        "qwen2.embedding_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(24)),
+    );
+    meta.insert(
+        "qwen2.attention.head_count".into(),
+        GgufValue::Scalar(GgufScalar::U32(6)),
+    );
+    meta.insert(
+        "qwen2.attention.head_count_kv".into(),
+        GgufValue::Scalar(GgufScalar::U32(2)),
+    );
+    meta.insert(
+        "qwen2.block_count".into(),
+        GgufValue::Scalar(GgufScalar::U32(3)),
+    );
+    meta.insert(
+        "qwen2.context_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(32)),
+    );
+    meta.insert(
+        "qwen2.feed_forward_length".into(),
+        GgufValue::Scalar(GgufScalar::U32(96)),
+    );
+    meta.insert(
+        "qwen2.vocab_size".into(),
+        GgufValue::Scalar(GgufScalar::U32(256)),
+    );
+    meta.insert(
+        "qwen2.rope.freq_base".into(),
+        GgufValue::Scalar(GgufScalar::F32(1_000_000.0)),
+    );
+    meta.insert(
+        "qwen2.attention.layer_norm_rms_epsilon".into(),
+        GgufValue::Scalar(GgufScalar::F32(1e-6)),
+    );
+
+    let cfg = ModelConfig::from_metadata(&meta, &[]).expect("qwen2 config should parse");
+    assert_eq!(cfg.architecture, "qwen2");
+    assert_eq!(cfg.embedding_length, 24);
+    assert_eq!(cfg.attention_head_count, 6);
+    assert_eq!(cfg.attention_head_count_kv, 2);
+    assert_eq!(cfg.attention_key_length, 4);
+    assert_eq!(cfg.feed_forward_length, 96);
+    assert_eq!(cfg.vocab_size, 256);
+    assert_eq!(cfg.rope_freq_base, 1_000_000.0);
+    assert_eq!(cfg.layer_norm_epsilon, 1e-6);
+}
+
+#[test]
 fn model_config_derives_kv_heads_from_k_tensor() {
     let meta = base_metadata();
     let tensors = vec![GgufTensor {

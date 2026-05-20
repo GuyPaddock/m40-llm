@@ -44,6 +44,7 @@ pub enum PromptFormatArg {
     Auto,
     Raw,
     Llama3Chat,
+    QwenChat,
 }
 
 impl From<PromptFormatArg> for crate::generate::PromptFormat {
@@ -52,6 +53,7 @@ impl From<PromptFormatArg> for crate::generate::PromptFormat {
             PromptFormatArg::Auto => Self::Auto,
             PromptFormatArg::Raw => Self::Raw,
             PromptFormatArg::Llama3Chat => Self::Llama3Chat,
+            PromptFormatArg::QwenChat => Self::QwenChat,
         }
     }
 }
@@ -189,6 +191,25 @@ mod tests {
                     KvRepresentativePolicyArg::Last
                 );
                 assert_eq!(prompt_format, PromptFormatArg::Auto);
+            }
+            other => panic!("expected generate command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_qwen_chat_prompt_format() {
+        let cli = Cli::parse_from([
+            "m40-llm",
+            "generate",
+            "qwen.gguf",
+            "Hello",
+            "--prompt-format",
+            "qwen-chat",
+        ]);
+
+        match cli.command {
+            Commands::Generate { prompt_format, .. } => {
+                assert_eq!(prompt_format, PromptFormatArg::QwenChat);
             }
             other => panic!("expected generate command, got {other:?}"),
         }

@@ -404,7 +404,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   step should validate score-cluster-adaptive on other prompt types and context
   shapes: single-needle 4096, multi-needle 2048/4096/8192 if practical,
   distractor-heavy prompts, answers near block boundaries, far-apart relevant
-  blocks, and high-score-plus-weak-support cases.
+  blocks, and high-score-plus-weak-support cases. Qwen2/Qwen2.5 GGUF metadata
+  and prompt/tokenizer detection are now wired as the next cross-model target
+  before attempting Mistral-7B F16. `Qwen2.5-3B-Instruct-f16.gguf` downloaded
+  successfully and completed a one-token CUDA generation smoke on Tesla M40;
+  long-context KV quality validation is still pending.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
