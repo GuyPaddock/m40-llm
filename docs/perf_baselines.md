@@ -33,10 +33,33 @@ Qwen quality smoke:
   and `M40LLM_KV_QUALITY_TOP_BLOCKS=4`.
 - The run reached model load and packed-prefix prefill but timed out after
   180 s before emitting any JSONL row.
-- Interpretation: raw head128 attention kernels are not the multi-minute
-  bottleneck. The next target should be full-model Qwen prefill timing,
-  especially materialized projection/GEMM and per-layer packed-prefix
-  orchestration.
+- A follow-up 64-token first-token smoke used
+  `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1`, `M40LLM_KV_QUALITY_TARGETS=64`,
+  `M40LLM_KV_MULTITASK_TASKS=single-needle`,
+  `M40LLM_KV_QUALITY_TOP_BLOCKS=4`, and
+  `M40LLM_KV_MULTITASK_MAX_TOKENS=1`.
+
+64-token Qwen first-token results:
+
+| Mode | Materialized FP32 weights | Prompt prefill | Total | Output | Notes |
+| --- | --- | ---: | ---: | --- | --- |
+| Dense `off` | enabled | 88.585 s | 89.198 s | `"` | Cold row materializes Qwen FP32 projection cache. |
+| `block-select-exact` top4 direct FP16-K/q4-V | enabled | 0.882 s | 1.448 s | `"` | Reuses materialized weights from the dense row. |
+| Dense `off` | disabled | 110.603 s | 111.474 s | `"` | Slower than materialized path. |
+| `block-select-exact` top4 direct FP16-K/q4-V | disabled | 24.264 s | 25.586 s | `"` | Slower than warm materialized path. |
+
+Notes:
+
+- `M40LLM_KV_QUALITY_TOP_BLOCKS` now aliases the multitask-specific
+  `M40LLM_KV_MULTITASK_TOP_BLOCKS`, so bounded top-block smokes can use the
+  same knob as the other quality suites.
+- The quoted one-token output is not a quality pass; this was a speed
+  localization smoke.
+- Raw head128 attention kernels are not the multi-minute bottleneck. Cold Qwen
+  dense quality rows are dominated by FP32 materialization, and disabling
+  materialization is worse. Practical Qwen quality validation should separate
+  cold materialization from warm steady rows instead of treating the first dense
+  row as steady-state quality latency.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

@@ -2729,9 +2729,15 @@ fn filter_multitask_fallback_cases(cases: Vec<MultiFallbackCase>) -> Vec<MultiFa
 
 fn multitask_top_block_cases() -> Result<Vec<u32>> {
     let values = std::env::var("M40LLM_KV_MULTITASK_TOP_BLOCKS")
+        .or_else(|_| std::env::var("M40LLM_KV_QUALITY_TOP_BLOCKS"))
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .map(|value| parse_u32_list(&value, "M40LLM_KV_MULTITASK_TOP_BLOCKS"))
+        .map(|value| {
+            parse_u32_list(
+                &value,
+                "M40LLM_KV_MULTITASK_TOP_BLOCKS/M40LLM_KV_QUALITY_TOP_BLOCKS",
+            )
+        })
         .transpose()?
         .unwrap_or_else(|| vec![4, 8, 16]);
     Ok(values)

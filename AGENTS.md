@@ -413,9 +413,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   staged/q8 exact-old and summary/lossy compressed CUDA paths remain head_dim=64
   only. Qwen/head128 microbenchmark hooks now show raw packed prefill attention
   is milliseconds at 512 tokens, while a 256-token full quality row still timed
-  out after 180 s even with minimal telemetry. The next speed target should be
-  full-model Qwen prefill timing, especially materialized projection/GEMM and
-  per-layer packed-prefix orchestration.
+  out after 180 s even with minimal telemetry. A 64-token Qwen first-token
+  smoke localizes the issue: the cold dense row spent roughly 88.6 s in prompt
+  prefill while materializing FP32 projection weights, the following compressed
+  top4 row reused those weights and prefilled in roughly 0.9 s, and disabling
+  materialization was slower for both dense and compressed rows. The next speed
+  target should separate cold materialization from warm steady Qwen quality
+  timings rather than disabling the materialized FP32 cuBLAS path.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
