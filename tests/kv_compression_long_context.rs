@@ -87,6 +87,15 @@ struct CaseRecord {
     dense_equivalent_kv_bytes: Option<usize>,
     materialized_f32_cache_entries: Option<usize>,
     materialized_f32_cache_bytes: Option<usize>,
+    materialized_f32_cache_entries_before: Option<usize>,
+    materialized_f32_cache_bytes_before: Option<usize>,
+    materialized_f32_cache_entries_after_prompt: Option<usize>,
+    materialized_f32_cache_bytes_after_prompt: Option<usize>,
+    materialized_f32_cache_entries_added_prompt: Option<usize>,
+    materialized_f32_cache_bytes_added_prompt: Option<usize>,
+    materialized_f32_cache_entries_added_total: Option<usize>,
+    materialized_f32_cache_bytes_added_total: Option<usize>,
+    materialized_f32_warm_row: Option<bool>,
     exact_old_backing: Option<String>,
     exact_old_attention_backend: Option<String>,
     exact_block_backend_variant: Option<String>,
@@ -238,6 +247,15 @@ struct MultiTaskRecord {
     dense_equivalent_kv_bytes: Option<usize>,
     materialized_f32_cache_entries: Option<usize>,
     materialized_f32_cache_bytes: Option<usize>,
+    materialized_f32_cache_entries_before: Option<usize>,
+    materialized_f32_cache_bytes_before: Option<usize>,
+    materialized_f32_cache_entries_after_prompt: Option<usize>,
+    materialized_f32_cache_bytes_after_prompt: Option<usize>,
+    materialized_f32_cache_entries_added_prompt: Option<usize>,
+    materialized_f32_cache_bytes_added_prompt: Option<usize>,
+    materialized_f32_cache_entries_added_total: Option<usize>,
+    materialized_f32_cache_bytes_added_total: Option<usize>,
+    materialized_f32_warm_row: Option<bool>,
     exact_old_backing: Option<String>,
     exact_old_attention_backend: Option<String>,
     old_k_fp16_bytes: Option<usize>,
@@ -816,6 +834,12 @@ fn quality_minimal_telemetry_enabled() -> bool {
 
 fn quality_warmup_materialization_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn quality_warm_rows_enabled() -> bool {
+    std::env::var("M40LLM_KV_QUALITY_WARM_ROWS")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -3201,6 +3225,21 @@ fn dense_multitask_record(
         dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
         materialized_f32_cache_entries: generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: generated.materialized_f32_cache_bytes,
+        materialized_f32_cache_entries_before: generated.materialized_f32_cache_entries_before,
+        materialized_f32_cache_bytes_before: generated.materialized_f32_cache_bytes_before,
+        materialized_f32_cache_entries_after_prompt: generated
+            .materialized_f32_cache_entries_after_prompt,
+        materialized_f32_cache_bytes_after_prompt: generated
+            .materialized_f32_cache_bytes_after_prompt,
+        materialized_f32_cache_entries_added_prompt: generated
+            .materialized_f32_cache_entries_added_prompt,
+        materialized_f32_cache_bytes_added_prompt: generated
+            .materialized_f32_cache_bytes_added_prompt,
+        materialized_f32_cache_entries_added_total: generated
+            .materialized_f32_cache_entries_added_total,
+        materialized_f32_cache_bytes_added_total: generated
+            .materialized_f32_cache_bytes_added_total,
+        materialized_f32_warm_row: generated.materialized_f32_warm_row,
         exact_old_backing: generated.exact_old_backing,
         exact_old_attention_backend: generated.exact_old_attention_backend,
         old_k_fp16_bytes: generated.old_k_fp16_bytes,
@@ -3343,6 +3382,31 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         dense_equivalent_kv_bytes: input.final_generated.dense_equivalent_kv_bytes,
         materialized_f32_cache_entries: input.final_generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.final_generated.materialized_f32_cache_bytes,
+        materialized_f32_cache_entries_before: input
+            .final_generated
+            .materialized_f32_cache_entries_before,
+        materialized_f32_cache_bytes_before: input
+            .final_generated
+            .materialized_f32_cache_bytes_before,
+        materialized_f32_cache_entries_after_prompt: input
+            .final_generated
+            .materialized_f32_cache_entries_after_prompt,
+        materialized_f32_cache_bytes_after_prompt: input
+            .final_generated
+            .materialized_f32_cache_bytes_after_prompt,
+        materialized_f32_cache_entries_added_prompt: input
+            .final_generated
+            .materialized_f32_cache_entries_added_prompt,
+        materialized_f32_cache_bytes_added_prompt: input
+            .final_generated
+            .materialized_f32_cache_bytes_added_prompt,
+        materialized_f32_cache_entries_added_total: input
+            .final_generated
+            .materialized_f32_cache_entries_added_total,
+        materialized_f32_cache_bytes_added_total: input
+            .final_generated
+            .materialized_f32_cache_bytes_added_total,
+        materialized_f32_warm_row: input.final_generated.materialized_f32_warm_row,
         exact_old_backing: input.final_generated.exact_old_backing.clone(),
         exact_old_attention_backend: input.final_generated.exact_old_attention_backend.clone(),
         old_k_fp16_bytes: input.final_generated.old_k_fp16_bytes,
@@ -3490,6 +3554,29 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         dense_equivalent_kv_bytes: input.generated.dense_equivalent_kv_bytes,
         materialized_f32_cache_entries: input.generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.generated.materialized_f32_cache_bytes,
+        materialized_f32_cache_entries_before: input
+            .generated
+            .materialized_f32_cache_entries_before,
+        materialized_f32_cache_bytes_before: input.generated.materialized_f32_cache_bytes_before,
+        materialized_f32_cache_entries_after_prompt: input
+            .generated
+            .materialized_f32_cache_entries_after_prompt,
+        materialized_f32_cache_bytes_after_prompt: input
+            .generated
+            .materialized_f32_cache_bytes_after_prompt,
+        materialized_f32_cache_entries_added_prompt: input
+            .generated
+            .materialized_f32_cache_entries_added_prompt,
+        materialized_f32_cache_bytes_added_prompt: input
+            .generated
+            .materialized_f32_cache_bytes_added_prompt,
+        materialized_f32_cache_entries_added_total: input
+            .generated
+            .materialized_f32_cache_entries_added_total,
+        materialized_f32_cache_bytes_added_total: input
+            .generated
+            .materialized_f32_cache_bytes_added_total,
+        materialized_f32_warm_row: input.generated.materialized_f32_warm_row,
         exact_old_backing: input.generated.exact_old_backing.clone(),
         exact_old_attention_backend: input.generated.exact_old_attention_backend.clone(),
         old_k_fp16_bytes: input.generated.old_k_fp16_bytes,
@@ -3551,7 +3638,7 @@ fn run_quality_materialization_warmup(
     model: &mut LoadedModel,
     prompt: &str,
 ) -> Result<Option<(u128, usize)>> {
-    if !quality_warmup_materialization_enabled() {
+    if !quality_warmup_materialization_enabled() && !quality_warm_rows_enabled() {
         return Ok(None);
     }
     let warmup = MultiTaskSpec {
@@ -3565,11 +3652,17 @@ fn run_quality_materialization_warmup(
     let generated = run_multitask_generate(model, &warmup, KvCompressMode::Off, 16, 1)
         .context("run materialization warmup generation")?;
     eprintln!(
-        "materialization warmup complete: prompt_tokens={} prefill_ms={} decode_ms={} total_ms={}",
+        "materialization warmup complete: prompt_tokens={} prefill_ms={} decode_ms={} total_ms={} materialized_entries_before={:?} materialized_entries_after={:?} materialized_entries_added={:?} materialized_bytes_before={:?} materialized_bytes_after={:?} materialized_bytes_added={:?}",
         generated.prompt_token_len,
         generated.prompt_prefill_elapsed_ms,
         generated.generated_decode_elapsed_ms,
-        generated.total_elapsed_ms
+        generated.total_elapsed_ms,
+        generated.materialized_f32_cache_entries_before,
+        generated.materialized_f32_cache_entries,
+        generated.materialized_f32_cache_entries_added_total,
+        generated.materialized_f32_cache_bytes_before,
+        generated.materialized_f32_cache_bytes,
+        generated.materialized_f32_cache_bytes_added_total
     );
     Ok(Some((
         generated.total_elapsed_ms,
@@ -4202,6 +4295,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     let mut dense_equivalent_kv_bytes = None;
                                     let mut materialized_f32_cache_entries = None;
                                     let mut materialized_f32_cache_bytes = None;
+                                    let mut materialized_f32_cache_entries_before = None;
+                                    let mut materialized_f32_cache_bytes_before = None;
+                                    let mut materialized_f32_cache_entries_after_prompt = None;
+                                    let mut materialized_f32_cache_bytes_after_prompt = None;
+                                    let mut materialized_f32_cache_entries_added_prompt = None;
+                                    let mut materialized_f32_cache_bytes_added_prompt = None;
+                                    let mut materialized_f32_cache_entries_added_total = None;
+                                    let mut materialized_f32_cache_bytes_added_total = None;
+                                    let mut materialized_f32_warm_row = None;
                                     let mut exact_old_backing = None;
                                     let mut exact_old_attention_backend = None;
                                     let mut q8_old_backing_bytes = None;
@@ -4421,6 +4523,24 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                                 generated.materialized_f32_cache_entries;
                                             materialized_f32_cache_bytes =
                                                 generated.materialized_f32_cache_bytes;
+                                            materialized_f32_cache_entries_before =
+                                                generated.materialized_f32_cache_entries_before;
+                                            materialized_f32_cache_bytes_before =
+                                                generated.materialized_f32_cache_bytes_before;
+                                            materialized_f32_cache_entries_after_prompt = generated
+                                                .materialized_f32_cache_entries_after_prompt;
+                                            materialized_f32_cache_bytes_after_prompt =
+                                                generated.materialized_f32_cache_bytes_after_prompt;
+                                            materialized_f32_cache_entries_added_prompt = generated
+                                                .materialized_f32_cache_entries_added_prompt;
+                                            materialized_f32_cache_bytes_added_prompt =
+                                                generated.materialized_f32_cache_bytes_added_prompt;
+                                            materialized_f32_cache_entries_added_total = generated
+                                                .materialized_f32_cache_entries_added_total;
+                                            materialized_f32_cache_bytes_added_total =
+                                                generated.materialized_f32_cache_bytes_added_total;
+                                            materialized_f32_warm_row =
+                                                generated.materialized_f32_warm_row;
                                             exact_old_backing = generated.exact_old_backing.clone();
                                             exact_old_attention_backend =
                                                 generated.exact_old_attention_backend.clone();
@@ -4749,6 +4869,15 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                         dense_equivalent_kv_bytes,
                                         materialized_f32_cache_entries,
                                         materialized_f32_cache_bytes,
+                                        materialized_f32_cache_entries_before,
+                                        materialized_f32_cache_bytes_before,
+                                        materialized_f32_cache_entries_after_prompt,
+                                        materialized_f32_cache_bytes_after_prompt,
+                                        materialized_f32_cache_entries_added_prompt,
+                                        materialized_f32_cache_bytes_added_prompt,
+                                        materialized_f32_cache_entries_added_total,
+                                        materialized_f32_cache_bytes_added_total,
+                                        materialized_f32_warm_row,
                                         exact_old_backing,
                                         exact_old_attention_backend,
                                         exact_block_backend_variant,

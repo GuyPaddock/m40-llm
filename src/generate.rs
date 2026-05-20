@@ -72,6 +72,15 @@ pub struct GeneratedText {
     pub dense_equivalent_kv_bytes: Option<usize>,
     pub materialized_f32_cache_entries: Option<usize>,
     pub materialized_f32_cache_bytes: Option<usize>,
+    pub materialized_f32_cache_entries_before: Option<usize>,
+    pub materialized_f32_cache_bytes_before: Option<usize>,
+    pub materialized_f32_cache_entries_after_prompt: Option<usize>,
+    pub materialized_f32_cache_bytes_after_prompt: Option<usize>,
+    pub materialized_f32_cache_entries_added_prompt: Option<usize>,
+    pub materialized_f32_cache_bytes_added_prompt: Option<usize>,
+    pub materialized_f32_cache_entries_added_total: Option<usize>,
+    pub materialized_f32_cache_bytes_added_total: Option<usize>,
+    pub materialized_f32_warm_row: Option<bool>,
     pub exact_old_backing: Option<String>,
     pub exact_old_attention_backend: Option<String>,
     pub q8_old_backing_bytes: Option<usize>,
@@ -292,6 +301,12 @@ fn log_top_logits(logits: &[f32], k: usize, log_prefix: &str) {
 
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
     let total_start = std::time::Instant::now();
+    #[cfg(feature = "cuda")]
+    let (materialized_f32_cache_entries_before, materialized_f32_cache_bytes_before) =
+        model.materialized_f32_cache_stats();
+    #[cfg(not(feature = "cuda"))]
+    let (materialized_f32_cache_entries_before, materialized_f32_cache_bytes_before) =
+        (0usize, 0usize);
     options.kv_compression.validate()?;
     set_runtime_config(options.kv_compression.clone());
     kv_selection::reset();
@@ -384,6 +399,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let mut generated_logit_trace = Vec::new();
     let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
     let mut generated_decode_elapsed = std::time::Duration::ZERO;
+    let mut materialized_f32_cache_after_prompt = None;
     let mut logits_fn = {
         |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let timed_logits_fn_start = std::time::Instant::now();
@@ -697,6 +713,15 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             let elapsed = timed_logits_fn_start.elapsed();
             if logits_call_count == 0 {
                 prompt_prefill_elapsed += elapsed;
+                #[cfg(feature = "cuda")]
+                {
+                    materialized_f32_cache_after_prompt =
+                        Some(model.materialized_f32_cache_stats());
+                }
+                #[cfg(not(feature = "cuda"))]
+                {
+                    materialized_f32_cache_after_prompt = Some((0usize, 0usize));
+                }
                 if capture_logits {
                     if let Ok(logits) = &result {
                         prompt_logits_snapshot = Some(logits.clone());
@@ -793,6 +818,17 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         model.materialized_f32_cache_stats();
     #[cfg(not(feature = "cuda"))]
     let (materialized_f32_cache_entries, materialized_f32_cache_bytes) = (0usize, 0usize);
+    let (materialized_f32_cache_entries_after_prompt, materialized_f32_cache_bytes_after_prompt) =
+        materialized_f32_cache_after_prompt
+            .unwrap_or((materialized_f32_cache_entries, materialized_f32_cache_bytes));
+    let materialized_f32_cache_entries_added_prompt = materialized_f32_cache_entries_after_prompt
+        .saturating_sub(materialized_f32_cache_entries_before);
+    let materialized_f32_cache_bytes_added_prompt = materialized_f32_cache_bytes_after_prompt
+        .saturating_sub(materialized_f32_cache_bytes_before);
+    let materialized_f32_cache_entries_added_total =
+        materialized_f32_cache_entries.saturating_sub(materialized_f32_cache_entries_before);
+    let materialized_f32_cache_bytes_added_total =
+        materialized_f32_cache_bytes.saturating_sub(materialized_f32_cache_bytes_before);
 
     Ok(GeneratedText {
         output: sanitize_output(&text),
@@ -813,6 +849,21 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .map(|kv| kv.dense_equivalent_bytes()),
         materialized_f32_cache_entries: Some(materialized_f32_cache_entries),
         materialized_f32_cache_bytes: Some(materialized_f32_cache_bytes),
+        materialized_f32_cache_entries_before: Some(materialized_f32_cache_entries_before),
+        materialized_f32_cache_bytes_before: Some(materialized_f32_cache_bytes_before),
+        materialized_f32_cache_entries_after_prompt: Some(
+            materialized_f32_cache_entries_after_prompt,
+        ),
+        materialized_f32_cache_bytes_after_prompt: Some(materialized_f32_cache_bytes_after_prompt),
+        materialized_f32_cache_entries_added_prompt: Some(
+            materialized_f32_cache_entries_added_prompt,
+        ),
+        materialized_f32_cache_bytes_added_prompt: Some(materialized_f32_cache_bytes_added_prompt),
+        materialized_f32_cache_entries_added_total: Some(
+            materialized_f32_cache_entries_added_total,
+        ),
+        materialized_f32_cache_bytes_added_total: Some(materialized_f32_cache_bytes_added_total),
+        materialized_f32_warm_row: Some(materialized_f32_cache_bytes_added_total == 0),
         exact_old_backing: model
             .kv_cache
             .as_ref()

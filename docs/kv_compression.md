@@ -67,10 +67,11 @@ Use `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to write one JSONL record
 per case. Records include mode, prompt tokens, generated tokens, pass/fail,
 output text, prefill/decode/total timing, token rates, KV byte accounting, and
 compression ratio. CUDA rows also include
-`materialized_f32_cache_entries` and `materialized_f32_cache_bytes` so Qwen-like
+`materialized_f32_cache_entries` / `materialized_f32_cache_bytes`, before/after
+prompt cache totals, and prompt/total cache-added deltas so Qwen-like
 cross-model runs can distinguish cold FP32 weight materialization from steady
-decode/prefill behavior. `attention_compression_elapsed_ms` is currently
-`null` unless a per-attention counter is available.
+decode/prefill behavior. `attention_compression_elapsed_ms` is currently `null`
+unless a per-attention counter is available.
 
 Set `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1` for cross-model smoke runs where
 diagnostic overhead would dominate. This leaves pass/fail, output, timing, and
@@ -82,6 +83,9 @@ warmup generation before top-k multitask quality rows. JSONL rows then include
 This is diagnostic-only: on Qwen2.5-3B the full-prompt warmup exposed that cold
 materialization and dense packed-prefix timing still need to be separated more
 carefully before using the first dense row as a steady-state latency number.
+Set `M40LLM_KV_QUALITY_WARM_ROWS=1` for the same warmup behavior when the
+intent is to label measured rows by `materialized_f32_warm_row`; a row is warm
+when it adds no materialized FP32 cache bytes.
 
 ## Prefill Experiments
 

@@ -61,6 +61,15 @@ Notes:
   timed out before measured rows completed under a 180 s bound. Treat this as
   evidence that Qwen cold/warm accounting needs a dedicated cache-timing
   diagnostic before longer quality sweeps.
+- `M40LLM_KV_QUALITY_WARM_ROWS=1` now uses the same warmup path and labels
+  measured rows with `materialized_f32_warm_row`. Rows also report before,
+  after-prompt, and final materialized-cache totals plus prompt/total added
+  entries and bytes.
+- A Qwen2.5 64-token `M40LLM_KV_QUALITY_WARM_ROWS=1` run still timed out under
+  the 180 s bound after the full-prompt warmup completed and before any measured
+  JSONL row was emitted. Warmup logging now includes materialized-cache
+  before/after/add totals so future timeout runs still identify whether the
+  cold interval populated the FP32 cache.
 - The quoted one-token output is not a quality pass; this was a speed
   localization smoke.
 - Raw head128 attention kernels are not the multi-minute bottleneck. Cold Qwen
@@ -73,6 +82,12 @@ Notes:
   weights, and the following direct FP16-K/q4-V compressed row reported the same
   cache size while reducing prompt prefill from 844 ms to 336 ms. The row was a
   field-emission smoke, not a retrieval-quality result.
+- A TinyLlama `M40LLM_KV_QUALITY_WARM_ROWS=1` smoke validated the cache-delta
+  fields: the warmup added 155 entries / 4.14 GB, while measured dense and
+  compressed rows both reported zero prompt/total cache growth and
+  `materialized_f32_warm_row=true`. Warm measured dense prefill was 328 ms and
+  warm measured compressed prefill was 336 ms for this one-token field-emission
+  smoke.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

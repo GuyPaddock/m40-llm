@@ -424,8 +424,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   generation before top-k multitask rows, but a same-prompt Qwen warmup still
   did not produce measured rows within a 180 s bound; add more explicit
   materialized-cache timing/inspection before longer Qwen sweeps. Generated
-  quality rows now include materialized FP32 cache entry and byte counts for
-  that investigation.
+  quality rows now include materialized FP32 cache before/after-prompt/final
+  totals, added entry/byte deltas, and a `materialized_f32_warm_row` label for
+  that investigation. Warmup stderr logging also prints cache before/after/add
+  totals because Qwen can still time out before measured rows are emitted.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
