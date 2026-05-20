@@ -36,10 +36,28 @@ Validation:
 - `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test qwen2_tokenizer_prompt -- --nocapture`
   passed.
 
-The focused Qwen2.5 prompt-style quality run is still pending in this checkpoint
-because the hardware benchmark escalation was not approved. Run the 256-token
-single-needle matrix for `default`, `qwen-strict`, and `qwen-fewshot` before
-using Qwen rows for KV-policy decisions.
+Focused Qwen2.5 prompt-style results at 256 tokens:
+
+| Prompt style | Dense status | Dense output | Compressed status | Prompt tokens | Dense prefill | Dense decode |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| `qwen-strict` | fail | full-width spaces | inconclusive | 181 | 2.69 s | 3.05 s |
+| `qwen-fewshot` | fail | full-width spaces plus repeated Python stub text | inconclusive | 193 | 2.97 s | 3.17 s |
+
+Reports:
+
+- `/tmp/qwen2-prompt-style-qwen-strict-256.jsonl`
+- `/tmp/qwen2-prompt-style-qwen-fewshot-256.jsonl`
+
+Conclusion:
+
+- The harness now correctly avoids treating compressed rows as failures when
+  dense `off` fails the same Qwen prompt.
+- Neither Qwen-specific prompt style produced a usable dense retrieval baseline
+  for the current synthetic needle task.
+- Do not use Qwen2.5 rows for KV policy conclusions yet. The next Qwen task
+  should investigate whether the model needs a different retrieval prompt family,
+  a generation stop/format issue fix, or another architecture-specific decode
+  correctness fix beyond tokenizer and Q/K/V biases.
 
 ## 2026-05-20: Qwen2.5 Tokenizer and QKV Bias Correctness
 

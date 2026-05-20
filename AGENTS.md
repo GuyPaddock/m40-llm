@@ -479,8 +479,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   for Qwen prompt validation, emits `retrieval_prompt_style`,
   `dense_reference_passed`, and `quality_conclusion` in JSONL rows, and marks
   compressed multitask rows inconclusive when dense `off` fails the same prompt.
-  The focused 256-token Qwen prompt-style benchmark is still pending because
-  the hardware escalation was not approved in this pass.
+  The focused 256-token Qwen prompt-style benchmark ran for `qwen-strict` and
+  `qwen-fewshot`; dense `off` failed both, so compressed rows were correctly
+  marked inconclusive. Do not use Qwen2.5 rows for KV policy conclusions until a
+  dense-valid Qwen retrieval prompt or another remaining decode correctness
+  issue is identified.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
