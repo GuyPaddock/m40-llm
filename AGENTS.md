@@ -458,32 +458,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   for bounded targets. A bounded Qwen cross-model checkpoint now runs 256/512
   top-k multitask targets and confirms the harness emits rows in practical
   time after the head128 fix; the top-k multitask diagnostic now honors every
-  requested `M40LLM_KV_QUALITY_TARGETS` entry instead of only the first. Qwen
-  dense `off` still emits nonsensical repeated characters in both the quality
-  harness and a direct CLI generation smoke, so Qwen compression quality is
-  currently inconclusive. The next Qwen task should debug model correctness
-  first: tokenizer/chat template, output token mapping, RoPE/scaling metadata,
-  tied/output embedding layout, or architecture-specific tensor mapping.
+  requested `M40LLM_KV_QUALITY_TARGETS` entry instead of only the first.
   Qwen2/Qwen2.5 tokenization now uses the real `tiktoken` Qwen2 encoding for
   normal text and special-token paths, and standard layer mapping accepts
   optional Q/K/V F32 attention biases such as `blk.N.attn_q.bias`,
   `blk.N.attn_k.bias`, and `blk.N.attn_v.bias`. Full-layer decode applies those
   biases after async Q/K/V projection before RoPE/KV append. The direct Qwen2.5
   CUDA canary for `Hello, please answer with the word OK.` now generates `OK`,
-  whereas it previously emitted nonsensical text. A bounded 256-token
-  single-needle quality row now completes in roughly 51 s, but dense `off`
-  still fails that retrieval prompt with the same short answer as compressed
-  mode; treat Qwen long-context KV quality as prompt/benchmark-inconclusive
-  until dense Qwen retrieval prompts are validated. The quality harness now
-  supports `M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot`
+  whereas it previously emitted nonsensical text. The quality harness supports
+  `M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot|qwen-natural`
   for Qwen prompt validation, emits `retrieval_prompt_style`,
   `dense_reference_passed`, and `quality_conclusion` in JSONL rows, and marks
   compressed multitask rows inconclusive when dense `off` fails the same prompt.
-  The focused 256-token Qwen prompt-style benchmark ran for `qwen-strict` and
-  `qwen-fewshot`; dense `off` failed both, so compressed rows were correctly
-  marked inconclusive. Do not use Qwen2.5 rows for KV policy conclusions until a
-  dense-valid Qwen retrieval prompt or another remaining decode correctness
-  issue is identified. Optional Q/K/V attention bias handling is now shared and
+  Optional Q/K/V attention bias handling is now shared and
   applied by sequential one-token decode, graph-parameter decode, batched decode,
   and packed-prefix prefill. A synthetic CUDA packed-prefill parity test with
   QKV biases now matches sequential logits, and the direct Qwen `OK` canary
