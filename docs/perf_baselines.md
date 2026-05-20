@@ -2,6 +2,52 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen Natural Retrieval Canary
+
+This checkpoint separates Qwen runtime correctness from prompt suitability in
+the KV quality harness.
+
+Changes:
+
+- `M40LLM_KV_MULTITASK_PREFILL_MODE=packed|sequential` now controls the
+  multitask quality harness prefill path. The default remains `packed`, while
+  `sequential` unsets `M40LLM_PREFILL_CHUNK_SIZE` so real one-token prefill can
+  be compared against packed-prefix prefill.
+- Multitask JSONL records now include the generated `prefill_mode`.
+- `M40LLM_KV_RETRIEVAL_PROMPT_STYLE=qwen-natural` adds a Qwen-specific natural
+  retrieval canary using an unambiguous `answer key is BLUE` fact instead of the
+  Llama-oriented synthetic `ZXQ-NEEDLE-41729` code.
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test kv_compression_long_context`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+- Focused Qwen CUDA quality canaries below all completed successfully as test
+  runs; pass/fail in the table refers to retrieval quality status.
+
+Qwen2.5 results:
+
+| Run | Dense status | Compressed status | Dense output | Compressed output | Report |
+| --- | --- | --- | --- | --- | --- |
+| 64-token default, packed | fail | inconclusive | `alta$userxBF\nZX` | `alta$userxBF\nZX` | `/tmp/qwen2-prefill-packed-64.jsonl` |
+| 64-token default, sequential | fail | inconclusive | `alta$userxBF\nZX` | `alta$userxBF\nZX` | `/tmp/qwen2-prefill-sequential-64.jsonl` |
+| 64-token `qwen-natural`, packed | pass | pass | `Blue` | `Blue` | `/tmp/qwen2-qwen-natural-blue-64.jsonl` |
+| 256-token `qwen-natural`, packed | fail | inconclusive | `FactFinding the exact answer` | same | `/tmp/qwen2-qwen-natural-blue-256.jsonl` |
+
+Interpretation:
+
+- Sequential and packed prefill match for the failing 64-token synthetic-code
+  prompt, so that failure is not a packed-prefix correctness issue.
+- Qwen2.5 can pass a dense-valid natural retrieval canary, and direct
+  FP16-K/q4-V exact-old retrieval is no longer inconclusive for that bounded
+  row.
+- The 256-token natural row still fails dense `off`, so Qwen longer-context KV
+  policy conclusions remain blocked on prompt/task suitability or further
+  Qwen-specific model-behavior diagnostics.
+
 ## 2026-05-20: Qwen QKV Bias Coverage for Packed Forward Paths
 
 This checkpoint makes Q/K/V attention bias handling consistent across forward

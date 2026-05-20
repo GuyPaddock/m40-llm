@@ -16,6 +16,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const NEEDLE: &str = "ZXQ-NEEDLE-41729";
+const QWEN_NATURAL_NEEDLE: &str = "BLUE";
 const MULTI_NEEDLE_A: &str = "ALPHA-13579";
 const MULTI_NEEDLE_B: &str = "BRAVO-24680";
 const DISTRACTOR_TARGET: &str = "ORBIT-57291";
@@ -56,6 +57,7 @@ enum RetrievalPromptStyle {
     Default,
     QwenStrict,
     QwenFewshot,
+    QwenNatural,
 }
 
 impl RetrievalPromptStyle {
@@ -70,8 +72,9 @@ impl RetrievalPromptStyle {
             "default" => Ok(Self::Default),
             "qwen-strict" => Ok(Self::QwenStrict),
             "qwen-fewshot" => Ok(Self::QwenFewshot),
+            "qwen-natural" => Ok(Self::QwenNatural),
             other => anyhow::bail!(
-                "invalid M40LLM_KV_RETRIEVAL_PROMPT_STYLE '{other}', expected default, qwen-strict, or qwen-fewshot"
+                "invalid M40LLM_KV_RETRIEVAL_PROMPT_STYLE '{other}', expected default, qwen-strict, qwen-fewshot, or qwen-natural"
             ),
         }
         .and_then(|style| {
@@ -91,6 +94,7 @@ impl RetrievalPromptStyle {
             Self::Default => "default",
             Self::QwenStrict => "qwen-strict",
             Self::QwenFewshot => "qwen-fewshot",
+            Self::QwenNatural => "qwen-natural",
         }
     }
 }
@@ -291,6 +295,7 @@ struct MultiTaskRecord {
     prompt_prefill_elapsed_ms: u128,
     generated_decode_elapsed_ms: u128,
     total_elapsed_ms: u128,
+    prefill_mode: String,
     materialization_warmup_elapsed_ms: Option<u128>,
     materialization_warmup_prompt_tokens: Option<usize>,
     initial_decode_elapsed_ms: Option<u128>,
@@ -691,6 +696,22 @@ fn multitask_max_tokens() -> usize {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(16)
+}
+
+fn multitask_prefill_mode() -> Result<&'static str> {
+    let Some(value) = std::env::var("M40LLM_KV_MULTITASK_PREFILL_MODE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok("packed");
+    };
+    match value.trim() {
+        "packed" => Ok("packed"),
+        "sequential" => Ok("sequential"),
+        other => anyhow::bail!(
+            "invalid M40LLM_KV_MULTITASK_PREFILL_MODE '{other}', expected packed or sequential"
+        ),
+    }
 }
 
 fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize>> {
@@ -2640,8 +2661,28 @@ fn strict_single_needle_prompt(
             push_filler_to_target(tokenizer, &mut prompt, target_tokens);
             prompt.push_str("\nQuestion: What is the secret code?\nAnswer:");
         }
+        RetrievalPromptStyle::QwenNatural => {
+            prompt.push_str(
+                "You must answer exact retrieval questions with only the requested answer key.\n",
+            );
+            prompt.push_str("Fact: the answer key is ");
+            prompt.push_str(QWEN_NATURAL_NEEDLE);
+            prompt.push_str(".\n\n");
+            push_filler_to_target(tokenizer, &mut prompt, target_tokens);
+            prompt
+                .push_str("\nQuestion: What is the answer key?\nAnswer with only the answer key.");
+        }
     }
     prompt
+}
+
+fn strict_single_expected_term(style: RetrievalPromptStyle) -> &'static str {
+    match style {
+        RetrievalPromptStyle::QwenNatural => QWEN_NATURAL_NEEDLE,
+        RetrievalPromptStyle::Default
+        | RetrievalPromptStyle::QwenStrict
+        | RetrievalPromptStyle::QwenFewshot => NEEDLE,
+    }
 }
 
 fn multitask_specs(
@@ -2650,6 +2691,7 @@ fn multitask_specs(
     style: RetrievalPromptStyle,
 ) -> Vec<MultiTaskSpec> {
     let single = strict_single_needle_prompt(tokenizer, target_tokens, style);
+    let single_expected = strict_single_expected_term(style);
 
     let mut multi = String::new();
     multi
@@ -2713,7 +2755,7 @@ fn multitask_specs(
             name: "single-needle",
             score_type: "exact_terms",
             prompt: single,
-            expected_terms: vec![NEEDLE],
+            expected_terms: vec![single_expected],
             forbidden_terms: vec![],
             require_nonempty: false,
         },
@@ -3186,7 +3228,11 @@ fn run_multitask_generate(
     top_blocks: u32,
     max_tokens: usize,
 ) -> Result<GeneratedText> {
-    let _prefill_guard = EnvVarGuard::set("M40LLM_PREFILL_CHUNK_SIZE", "4096");
+    let _prefill_guard = match multitask_prefill_mode()? {
+        "packed" => Some(EnvVarGuard::set("M40LLM_PREFILL_CHUNK_SIZE", "4096")),
+        "sequential" => Some(EnvVarGuard::unset("M40LLM_PREFILL_CHUNK_SIZE")),
+        _ => unreachable!("multitask_prefill_mode validates known modes"),
+    };
     let minimal_telemetry = quality_minimal_telemetry_enabled();
     let _selection_guard =
         (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1"));
@@ -3326,6 +3372,7 @@ fn dense_multitask_record(
         prompt_prefill_elapsed_ms: generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: generated.generated_decode_elapsed_ms,
         total_elapsed_ms: generated.total_elapsed_ms,
+        prefill_mode: generated.prefill_mode.clone(),
         materialization_warmup_elapsed_ms: None,
         materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: None,
@@ -3499,6 +3546,7 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         prompt_prefill_elapsed_ms: input.final_generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: input.final_generated.generated_decode_elapsed_ms,
         total_elapsed_ms: input.final_generated.total_elapsed_ms,
+        prefill_mode: input.final_generated.prefill_mode.clone(),
         materialization_warmup_elapsed_ms: None,
         materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: Some(input.initial.generated_decode_elapsed_ms),
@@ -3686,6 +3734,7 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         prompt_prefill_elapsed_ms: input.generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: input.generated.generated_decode_elapsed_ms,
         total_elapsed_ms: input.generated.total_elapsed_ms,
+        prefill_mode: input.generated.prefill_mode.clone(),
         materialization_warmup_elapsed_ms: None,
         materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: Some(input.generated.generated_decode_elapsed_ms),
