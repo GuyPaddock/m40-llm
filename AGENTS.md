@@ -474,7 +474,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   single-needle quality row now completes in roughly 51 s, but dense `off`
   still fails that retrieval prompt with the same short answer as compressed
   mode; treat Qwen long-context KV quality as prompt/benchmark-inconclusive
-  until dense Qwen retrieval prompts are validated.
+  until dense Qwen retrieval prompts are validated. The quality harness now
+  supports `M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot`
+  for Qwen prompt validation, emits `retrieval_prompt_style`,
+  `dense_reference_passed`, and `quality_conclusion` in JSONL rows, and marks
+  compressed multitask rows inconclusive when dense `off` fails the same prompt.
+  The focused 256-token Qwen prompt-style benchmark is still pending because
+  the hardware escalation was not approved in this pass.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

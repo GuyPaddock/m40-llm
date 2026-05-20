@@ -132,6 +132,10 @@ attention biases found in Qwen2.5 GGUF files. `Qwen2.5-3B-Instruct-f16.gguf`
 has a basic CUDA generation canary on Tesla M40; long-context KV quality
 validation now has the required head_dim=128 kernel support for dense packed
 prefill and direct FP16-K/q4-V exact-old retrieval.
+The long-context quality harness also supports
+`M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot` so Qwen
+retrieval prompts can be validated against dense `off` before interpreting
+compressed-KV rows.
 
 Host sampling supports greedy, top-k, top-p, temperature, and deterministic RNG
 paths. The normal CUDA path keeps full-layer decode on device and copies logits

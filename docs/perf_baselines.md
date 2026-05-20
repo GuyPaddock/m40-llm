@@ -2,6 +2,45 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen Retrieval Prompt-Style Harness
+
+This checkpoint adds Qwen-specific retrieval prompt styles to the long-context
+quality harness so Qwen cross-model rows can be validated against a meaningful
+dense `off` baseline before compressed-KV policy conclusions are drawn.
+
+New diagnostic knob:
+
+```bash
+M40LLM_KV_RETRIEVAL_PROMPT_STYLE=default|qwen-strict|qwen-fewshot
+```
+
+Behavior:
+
+- `default` preserves the existing prompt text.
+- `qwen-strict` uses a concise exact-retrieval instruction and explicit final
+  answer cue.
+- `qwen-fewshot` adds one short code-retrieval example before the real needle.
+- Qwen-specific styles are rejected for non-Qwen tokenizers to avoid silently
+  changing Llama/Llama3 baselines.
+- JSONL rows now include `retrieval_prompt_style`,
+  `dense_reference_passed`, and `quality_conclusion`.
+- Compressed multitask rows are marked `inconclusive` with
+  `quality_conclusion="inconclusive_dense_failed"` whenever dense `off` fails
+  the same prompt.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test kv_compression_long_context`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test qwen2_tokenizer_prompt -- --nocapture`
+  passed.
+
+The focused Qwen2.5 prompt-style quality run is still pending in this checkpoint
+because the hardware benchmark escalation was not approved. Run the 256-token
+single-needle matrix for `default`, `qwen-strict`, and `qwen-fewshot` before
+using Qwen rows for KV-policy decisions.
+
 ## 2026-05-20: Qwen2.5 Tokenizer and QKV Bias Correctness
 
 This checkpoint fixes the first Qwen2.5 semantic decode blocker after the

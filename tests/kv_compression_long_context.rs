@@ -8,7 +8,7 @@ use m40_llm::generate::{
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
 use m40_llm::infer::{LoadedModel, ModelConfig};
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig, KvRepresentativePolicy};
-use m40_llm::tokenizer::Tokenizer;
+use m40_llm::tokenizer::{Tokenizer, TokenizerKind};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
@@ -51,11 +51,58 @@ enum CaseStatus {
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RetrievalPromptStyle {
+    Default,
+    QwenStrict,
+    QwenFewshot,
+}
+
+impl RetrievalPromptStyle {
+    fn from_env_for(tokenizer: &Tokenizer) -> Result<Self> {
+        let Some(value) = std::env::var("M40LLM_KV_RETRIEVAL_PROMPT_STYLE")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+        else {
+            return Ok(Self::Default);
+        };
+        match value.trim() {
+            "default" => Ok(Self::Default),
+            "qwen-strict" => Ok(Self::QwenStrict),
+            "qwen-fewshot" => Ok(Self::QwenFewshot),
+            other => anyhow::bail!(
+                "invalid M40LLM_KV_RETRIEVAL_PROMPT_STYLE '{other}', expected default, qwen-strict, or qwen-fewshot"
+            ),
+        }
+        .and_then(|style| {
+            if style != Self::Default && !matches!(tokenizer.kind(), TokenizerKind::Qwen2) {
+                anyhow::bail!(
+                    "M40LLM_KV_RETRIEVAL_PROMPT_STYLE={} is Qwen-specific but selected tokenizer is {:?}",
+                    style.name(),
+                    tokenizer.kind()
+                );
+            }
+            Ok(style)
+        })
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::QwenStrict => "qwen-strict",
+            Self::QwenFewshot => "qwen-fewshot",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct CaseRecord {
     model_path: String,
     resolved_model_path: String,
     target_tokens: usize,
+    retrieval_prompt_style: String,
+    dense_reference_passed: Option<bool>,
+    quality_conclusion: String,
     prompt_tokens: usize,
     generated_tokens: usize,
     needle_position: String,
@@ -214,6 +261,9 @@ struct MultiTaskRecord {
     model_path: String,
     resolved_model_path: String,
     target_tokens: usize,
+    retrieval_prompt_style: String,
+    dense_reference_passed: Option<bool>,
+    quality_conclusion: String,
     task: String,
     score_type: String,
     mode: String,
@@ -2551,14 +2601,55 @@ fn push_filler_to_target(tokenizer: &Tokenizer, prompt: &mut String, target_toke
     }
 }
 
-fn multitask_specs(tokenizer: &Tokenizer, target_tokens: usize) -> Vec<MultiTaskSpec> {
-    let mut single = String::new();
-    single
-        .push_str("You are doing an exact retrieval task. Answer with only the requested code.\n");
-    push_filler_to_target(tokenizer, &mut single, target_tokens);
-    single.push_str("\nImportant secret code: ");
-    single.push_str(NEEDLE);
-    single.push_str("\nQuestion: What is the secret code? Answer with only the code.");
+fn strict_single_needle_prompt(
+    tokenizer: &Tokenizer,
+    target_tokens: usize,
+    style: RetrievalPromptStyle,
+) -> String {
+    let mut prompt = String::new();
+    match style {
+        RetrievalPromptStyle::Default => {
+            prompt.push_str(
+                "You are doing an exact retrieval task. Answer with only the requested code.\n",
+            );
+            push_filler_to_target(tokenizer, &mut prompt, target_tokens);
+            prompt.push_str("\nImportant secret code: ");
+            prompt.push_str(NEEDLE);
+            prompt.push_str("\nQuestion: What is the secret code? Answer with only the code.");
+        }
+        RetrievalPromptStyle::QwenStrict => {
+            prompt.push_str("You must do exact retrieval.\n");
+            prompt.push_str("Rules:\n");
+            prompt.push_str("- The final answer must contain exactly one code.\n");
+            prompt.push_str("- Do not explain, quote, format, or add punctuation.\n");
+            prompt.push_str("- If asked for the secret code, output the secret code only.\n\n");
+            prompt.push_str("Secret code record:\n");
+            prompt.push_str(NEEDLE);
+            prompt.push_str("\n\n");
+            push_filler_to_target(tokenizer, &mut prompt, target_tokens);
+            prompt.push_str("\nFinal question: What is the secret code?\nFinal answer:");
+        }
+        RetrievalPromptStyle::QwenFewshot => {
+            prompt.push_str("You must answer exact retrieval questions with only the code.\n");
+            prompt.push_str("Example record: EXAMPLE-CODE-000\n");
+            prompt.push_str("Example question: What is the example code?\n");
+            prompt.push_str("Example answer: EXAMPLE-CODE-000\n\n");
+            prompt.push_str("Secret code record:\n");
+            prompt.push_str(NEEDLE);
+            prompt.push_str("\n\n");
+            push_filler_to_target(tokenizer, &mut prompt, target_tokens);
+            prompt.push_str("\nQuestion: What is the secret code?\nAnswer:");
+        }
+    }
+    prompt
+}
+
+fn multitask_specs(
+    tokenizer: &Tokenizer,
+    target_tokens: usize,
+    style: RetrievalPromptStyle,
+) -> Vec<MultiTaskSpec> {
+    let single = strict_single_needle_prompt(tokenizer, target_tokens, style);
 
     let mut multi = String::new();
     multi
@@ -2703,6 +2794,16 @@ fn score_multitask_output(spec: &MultiTaskSpec, output: &str) -> MultiTaskScore 
         },
         score,
         max_score,
+    }
+}
+
+fn quality_conclusion(status: CaseStatus, dense_reference_passed: Option<bool>) -> &'static str {
+    match (status, dense_reference_passed) {
+        (CaseStatus::Pass, _) => "pass",
+        (CaseStatus::Error, _) => "error",
+        (_, Some(false)) => "inconclusive_dense_failed",
+        (CaseStatus::Inconclusive, _) => "inconclusive",
+        _ => "fail",
     }
 }
 
@@ -3174,14 +3275,19 @@ fn dense_multitask_record(
     probe: &CandidateProbe,
     config: &ModelConfig,
     target_tokens: usize,
+    retrieval_prompt_style: RetrievalPromptStyle,
     spec: &MultiTaskSpec,
     generated: GeneratedText,
 ) -> MultiTaskRecord {
     let score = score_multitask_output(spec, &generated.output);
+    let dense_reference_passed = Some(score.status == CaseStatus::Pass);
     MultiTaskRecord {
         model_path: probe.candidate.path.display().to_string(),
         resolved_model_path: probe.candidate.resolved_path.display().to_string(),
         target_tokens,
+        retrieval_prompt_style: retrieval_prompt_style.name().to_string(),
+        dense_reference_passed,
+        quality_conclusion: quality_conclusion(score.status, dense_reference_passed).to_string(),
         task: spec.name.to_string(),
         score_type: spec.score_type.to_string(),
         mode: "off".to_string(),
@@ -3305,9 +3411,11 @@ struct MultitaskCompressedRecordInput<'a> {
     probe: &'a CandidateProbe,
     config: &'a ModelConfig,
     target_tokens: usize,
+    retrieval_prompt_style: RetrievalPromptStyle,
     spec: &'a MultiTaskSpec,
     fallback_case: MultiFallbackCase,
     dense_output: Option<&'a str>,
+    dense_reference_passed: Option<bool>,
     initial: &'a GeneratedText,
     final_generated: &'a GeneratedText,
     fallback_triggered: bool,
@@ -3337,10 +3445,18 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         input.final_generated.generated_logit_trace.as_deref(),
         None,
     );
+    let status = if input.dense_reference_passed == Some(false) {
+        CaseStatus::Inconclusive
+    } else {
+        final_score.status
+    };
     MultiTaskRecord {
         model_path: input.probe.candidate.path.display().to_string(),
         resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
         target_tokens: input.target_tokens,
+        retrieval_prompt_style: input.retrieval_prompt_style.name().to_string(),
+        dense_reference_passed: input.dense_reference_passed,
+        quality_conclusion: quality_conclusion(status, input.dense_reference_passed).to_string(),
         task: input.spec.name.to_string(),
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
@@ -3353,7 +3469,7 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         fallback_policy_used: input.fallback_policy_used,
         top_blocks_initial: Some(8),
         top_blocks_final: Some(final_top_blocks),
-        status: final_score.status,
+        status,
         score: final_score.score,
         max_score: final_score.max_score,
         dense_reference_output: input.dense_output.map(str::to_string),
@@ -3500,8 +3616,10 @@ struct TopkMultitaskRecordInput<'a> {
     probe: &'a CandidateProbe,
     config: &'a ModelConfig,
     target_tokens: usize,
+    retrieval_prompt_style: RetrievalPromptStyle,
     spec: &'a MultiTaskSpec,
     dense_output: Option<&'a str>,
+    dense_reference_passed: Option<bool>,
     dense_trace: Option<&'a [GeneratedLogitTraceStep]>,
     selection_ablation_case: Option<&'a str>,
     generated: GeneratedText,
@@ -3510,6 +3628,11 @@ struct TopkMultitaskRecordInput<'a> {
 
 fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord {
     let score = score_multitask_output(input.spec, &input.generated.output);
+    let status = if input.dense_reference_passed == Some(false) {
+        CaseStatus::Inconclusive
+    } else {
+        score.status
+    };
     let generated_logit_trace = generated_trace_records(
         input.dense_trace,
         input.generated.generated_logit_trace.as_deref(),
@@ -3519,6 +3642,9 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         model_path: input.probe.candidate.path.display().to_string(),
         resolved_model_path: input.probe.candidate.resolved_path.display().to_string(),
         target_tokens: input.target_tokens,
+        retrieval_prompt_style: input.retrieval_prompt_style.name().to_string(),
+        dense_reference_passed: input.dense_reference_passed,
+        quality_conclusion: quality_conclusion(status, input.dense_reference_passed).to_string(),
         task: input.spec.name.to_string(),
         score_type: input.spec.score_type.to_string(),
         mode: "block-select-exact".to_string(),
@@ -3531,7 +3657,7 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         fallback_policy_used: None,
         top_blocks_initial: Some(input.top_blocks),
         top_blocks_final: Some(input.top_blocks),
-        status: score.status,
+        status,
         score: score.score,
         max_score: score.max_score,
         dense_reference_output: input.dense_output.map(str::to_string),
@@ -3712,7 +3838,12 @@ fn run_topk_multitask_suite(
     target_tokens: usize,
 ) -> Result<()> {
     let max_tokens = multitask_max_tokens();
-    let tasks = filter_multitask_specs(multitask_specs(tokenizer, target_tokens));
+    let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
+    let tasks = filter_multitask_specs(multitask_specs(
+        tokenizer,
+        target_tokens,
+        retrieval_prompt_style,
+    ));
     let top_block_cases = multitask_top_block_cases()?;
     let materialization_warmup = if let Some(first_task) = tasks.first() {
         run_quality_materialization_warmup(model, &first_task.prompt)?
@@ -3721,7 +3852,8 @@ fn run_topk_multitask_suite(
     };
     let mut records = Vec::new();
     eprintln!(
-        "running top-k multitask diagnostic: target={target_tokens} tasks={} top_block_cases={:?} max_tokens={max_tokens}",
+        "running top-k multitask diagnostic: target={target_tokens} prompt_style={} tasks={} top_block_cases={:?} max_tokens={max_tokens}",
+        retrieval_prompt_style.name(),
         tasks.len(),
         top_block_cases
     );
@@ -3729,7 +3861,15 @@ fn run_topk_multitask_suite(
         let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
         let dense_output = dense.output.clone();
         let dense_trace = dense.generated_logit_trace.clone();
-        let mut dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        let mut dense_record = dense_multitask_record(
+            probe,
+            config,
+            target_tokens,
+            retrieval_prompt_style,
+            &spec,
+            dense,
+        );
+        let dense_reference_passed = dense_record.dense_reference_passed;
         if let Some((elapsed_ms, prompt_tokens)) = materialization_warmup {
             dense_record.materialization_warmup_elapsed_ms = Some(elapsed_ms);
             dense_record.materialization_warmup_prompt_tokens = Some(prompt_tokens);
@@ -3749,8 +3889,10 @@ fn run_topk_multitask_suite(
                 probe,
                 config,
                 target_tokens,
+                retrieval_prompt_style,
                 spec: &spec,
                 dense_output: Some(&dense_output),
+                dense_reference_passed,
                 dense_trace: dense_trace.as_deref(),
                 selection_ablation_case: None,
                 generated,
@@ -3814,14 +3956,23 @@ fn run_topk_ablation_suite(
     }
     let target_tokens = 4096;
     let max_tokens = multitask_max_tokens();
-    let spec = multitask_specs(tokenizer, target_tokens)
+    let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
+    let spec = multitask_specs(tokenizer, target_tokens, retrieval_prompt_style)
         .into_iter()
         .find(|spec| spec.name == "multi-needle")
         .context("multi-needle multitask spec not found")?;
     let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
     let dense_output = dense.output.clone();
     let dense_trace = dense.generated_logit_trace.clone();
-    let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+    let dense_record = dense_multitask_record(
+        probe,
+        config,
+        target_tokens,
+        retrieval_prompt_style,
+        &spec,
+        dense,
+    );
+    let dense_reference_passed = dense_record.dense_reference_passed;
     append_report_record(&dense_record)?;
     let ablation_cases = filtered_topk_ablation_cases();
     let _attention_capture_guard = order_equiv_diagnostic_enabled()
@@ -3843,8 +3994,10 @@ fn run_topk_ablation_suite(
             probe,
             config,
             target_tokens,
+            retrieval_prompt_style,
             spec: &spec,
             dense_output: Some(&dense_output),
+            dense_reference_passed,
             dense_trace: dense_trace.as_deref(),
             selection_ablation_case: Some(case.name),
             generated,
@@ -3875,7 +4028,12 @@ fn run_fallback_multitask_suite(
     target_tokens: usize,
 ) -> Result<()> {
     let max_tokens = multitask_max_tokens();
-    let tasks = filter_multitask_specs(multitask_specs(tokenizer, target_tokens));
+    let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
+    let tasks = filter_multitask_specs(multitask_specs(
+        tokenizer,
+        target_tokens,
+        retrieval_prompt_style,
+    ));
     let fallback_cases = filter_multitask_fallback_cases(multitask_fallback_cases());
     let mut records = Vec::new();
     eprintln!(
@@ -3886,7 +4044,15 @@ fn run_fallback_multitask_suite(
     for spec in tasks {
         let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
         let dense_output = dense.output.clone();
-        let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        let dense_record = dense_multitask_record(
+            probe,
+            config,
+            target_tokens,
+            retrieval_prompt_style,
+            &spec,
+            dense,
+        );
+        let dense_reference_passed = dense_record.dense_reference_passed;
         append_report_record(&dense_record)?;
         records.push(dense_record);
 
@@ -3933,9 +4099,11 @@ fn run_fallback_multitask_suite(
                 probe,
                 config,
                 target_tokens,
+                retrieval_prompt_style,
                 spec: &spec,
                 fallback_case,
                 dense_output: Some(&dense_output),
+                dense_reference_passed,
                 initial: &initial,
                 final_generated: &final_generated,
                 fallback_triggered,
@@ -4872,6 +5040,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                             .display()
                                             .to_string(),
                                         target_tokens,
+                                        retrieval_prompt_style: RetrievalPromptStyle::Default
+                                            .name()
+                                            .to_string(),
+                                        dense_reference_passed: None,
+                                        quality_conclusion: quality_conclusion(status, None)
+                                            .to_string(),
                                         prompt_tokens,
                                         generated_tokens,
                                         needle_position: needle_position.to_string(),
