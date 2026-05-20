@@ -24,6 +24,11 @@ fn prefill_sync_diag_enabled() -> bool {
 }
 
 #[cfg(feature = "cuda")]
+fn forward_sync_diag_enabled() -> bool {
+    std::env::var("M40LLM_FORWARD_SYNC_DIAG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
 struct PrefillSyncDiag {
     label: String,
     wall_start: std::time::Instant,
@@ -108,6 +113,7 @@ pub struct DecodeSession {
     step: usize,
     logged_full_forward: bool,
     last_prefill_sync_diag: Option<PrefillSyncDiagTimings>,
+    last_forward_sync_diag: Option<PrefillSyncDiagTimings>,
 }
 
 #[cfg(feature = "cuda")]
@@ -246,6 +252,7 @@ impl DecodeSession {
             step: 0,
             logged_full_forward: false,
             last_prefill_sync_diag: None,
+            last_forward_sync_diag: None,
         })
     }
 
@@ -594,6 +601,10 @@ impl DecodeSession {
         self.last_prefill_sync_diag
     }
 
+    pub fn forward_sync_diag_timings(&self) -> Option<PrefillSyncDiagTimings> {
+        self.last_forward_sync_diag
+    }
+
     pub fn logits_for_ids(
         &mut self,
         ids: &[u32],
@@ -677,7 +688,19 @@ impl DecodeSession {
         );
 
         if self.can_forward {
+            self.last_forward_sync_diag = None;
             let forward_start = std::time::Instant::now();
+            let forward_sync_diag = if forward_sync_diag_enabled() {
+                Some(
+                    PrefillSyncDiag::start(
+                        &self.model().cuda,
+                        format!("{}.token.{token_idx}.forward_sync_diag", self.log_prefix),
+                    )?
+                    .expect("forward sync diagnostic is enabled"),
+                )
+            } else {
+                None
+            };
             let d_out = self
                 .d_out
                 .as_ref()
@@ -703,6 +726,9 @@ impl DecodeSession {
                     CudaStream::Decode,
                     "logits_wait_graph_replay",
                 )?;
+            }
+            if let Some(sync_diag) = forward_sync_diag {
+                self.last_forward_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
             }
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(

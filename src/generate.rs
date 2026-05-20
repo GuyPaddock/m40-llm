@@ -71,6 +71,9 @@ pub struct GeneratedText {
     pub packed_prefill_sync_wall_ms: Option<u128>,
     pub packed_prefill_sync_decode_gpu_ms: Option<f32>,
     pub packed_prefill_sync_prefill_gpu_ms: Option<f32>,
+    pub prompt_forward_sync_wall_ms: Option<u128>,
+    pub prompt_forward_sync_decode_gpu_ms: Option<f32>,
+    pub prompt_forward_sync_prefill_gpu_ms: Option<f32>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
     pub materialized_f32_cache_entries: Option<usize>,
@@ -403,6 +406,8 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
     let mut generated_decode_elapsed = std::time::Duration::ZERO;
     let mut materialized_f32_cache_after_prompt = None;
+    #[cfg(feature = "cuda")]
+    let mut prompt_forward_sync_diag = None;
     let mut logits_fn = {
         |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let timed_logits_fn_start = std::time::Instant::now();
@@ -720,6 +725,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 {
                     materialized_f32_cache_after_prompt =
                         Some(model.materialized_f32_cache_stats());
+                    prompt_forward_sync_diag = decode_session.forward_sync_diag_timings();
                 }
                 #[cfg(not(feature = "cuda"))]
                 {
@@ -802,6 +808,19 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let packed_prefill_sync_decode_gpu_ms = None;
     #[cfg(not(feature = "cuda"))]
     let packed_prefill_sync_prefill_gpu_ms = None;
+    #[cfg(feature = "cuda")]
+    let prompt_forward_sync_wall_ms = prompt_forward_sync_diag.map(|diag| diag.wall_ms);
+    #[cfg(feature = "cuda")]
+    let prompt_forward_sync_decode_gpu_ms = prompt_forward_sync_diag.map(|diag| diag.decode_gpu_ms);
+    #[cfg(feature = "cuda")]
+    let prompt_forward_sync_prefill_gpu_ms =
+        prompt_forward_sync_diag.map(|diag| diag.prefill_gpu_ms);
+    #[cfg(not(feature = "cuda"))]
+    let prompt_forward_sync_wall_ms = None;
+    #[cfg(not(feature = "cuda"))]
+    let prompt_forward_sync_decode_gpu_ms = None;
+    #[cfg(not(feature = "cuda"))]
+    let prompt_forward_sync_prefill_gpu_ms = None;
     let output_decode_start = std::time::Instant::now();
     let text =
         decode_generated_text(&tokenizer, &ids, prompt_token_len).context("decode failed")?;
@@ -863,6 +882,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         packed_prefill_sync_wall_ms,
         packed_prefill_sync_decode_gpu_ms,
         packed_prefill_sync_prefill_gpu_ms,
+        prompt_forward_sync_wall_ms,
+        prompt_forward_sync_decode_gpu_ms,
+        prompt_forward_sync_prefill_gpu_ms,
         final_kv_allocated_bytes: model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
         dense_equivalent_kv_bytes: model
             .kv_cache

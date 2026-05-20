@@ -86,6 +86,9 @@ struct CaseRecord {
     packed_prefill_sync_wall_ms: Option<u128>,
     packed_prefill_sync_decode_gpu_ms: Option<f32>,
     packed_prefill_sync_prefill_gpu_ms: Option<f32>,
+    prompt_forward_sync_wall_ms: Option<u128>,
+    prompt_forward_sync_decode_gpu_ms: Option<f32>,
+    prompt_forward_sync_prefill_gpu_ms: Option<f32>,
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
     materialized_f32_cache_entries: Option<usize>,
@@ -251,6 +254,9 @@ struct MultiTaskRecord {
     packed_prefill_sync_wall_ms: Option<u128>,
     packed_prefill_sync_decode_gpu_ms: Option<f32>,
     packed_prefill_sync_prefill_gpu_ms: Option<f32>,
+    prompt_forward_sync_wall_ms: Option<u128>,
+    prompt_forward_sync_decode_gpu_ms: Option<f32>,
+    prompt_forward_sync_prefill_gpu_ms: Option<f32>,
     materialized_f32_cache_entries: Option<usize>,
     materialized_f32_cache_bytes: Option<usize>,
     materialized_f32_cache_entries_before: Option<usize>,
@@ -3232,6 +3238,9 @@ fn dense_multitask_record(
         packed_prefill_sync_wall_ms: generated.packed_prefill_sync_wall_ms,
         packed_prefill_sync_decode_gpu_ms: generated.packed_prefill_sync_decode_gpu_ms,
         packed_prefill_sync_prefill_gpu_ms: generated.packed_prefill_sync_prefill_gpu_ms,
+        prompt_forward_sync_wall_ms: generated.prompt_forward_sync_wall_ms,
+        prompt_forward_sync_decode_gpu_ms: generated.prompt_forward_sync_decode_gpu_ms,
+        prompt_forward_sync_prefill_gpu_ms: generated.prompt_forward_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: generated.materialized_f32_cache_entries_before,
@@ -3394,6 +3403,11 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         packed_prefill_sync_prefill_gpu_ms: input
             .final_generated
             .packed_prefill_sync_prefill_gpu_ms,
+        prompt_forward_sync_wall_ms: input.final_generated.prompt_forward_sync_wall_ms,
+        prompt_forward_sync_decode_gpu_ms: input.final_generated.prompt_forward_sync_decode_gpu_ms,
+        prompt_forward_sync_prefill_gpu_ms: input
+            .final_generated
+            .prompt_forward_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: input.final_generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.final_generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: input
@@ -3569,6 +3583,9 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         packed_prefill_sync_wall_ms: input.generated.packed_prefill_sync_wall_ms,
         packed_prefill_sync_decode_gpu_ms: input.generated.packed_prefill_sync_decode_gpu_ms,
         packed_prefill_sync_prefill_gpu_ms: input.generated.packed_prefill_sync_prefill_gpu_ms,
+        prompt_forward_sync_wall_ms: input.generated.prompt_forward_sync_wall_ms,
+        prompt_forward_sync_decode_gpu_ms: input.generated.prompt_forward_sync_decode_gpu_ms,
+        prompt_forward_sync_prefill_gpu_ms: input.generated.prompt_forward_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: input.generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: input
@@ -4311,6 +4328,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     let mut packed_prefill_sync_wall_ms = None;
                                     let mut packed_prefill_sync_decode_gpu_ms = None;
                                     let mut packed_prefill_sync_prefill_gpu_ms = None;
+                                    let mut prompt_forward_sync_wall_ms = None;
+                                    let mut prompt_forward_sync_decode_gpu_ms = None;
+                                    let mut prompt_forward_sync_prefill_gpu_ms = None;
                                     let mut final_kv_allocated_bytes = None;
                                     let mut dense_equivalent_kv_bytes = None;
                                     let mut materialized_f32_cache_entries = None;
@@ -4541,6 +4561,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                                 generated.packed_prefill_sync_decode_gpu_ms;
                                             packed_prefill_sync_prefill_gpu_ms =
                                                 generated.packed_prefill_sync_prefill_gpu_ms;
+                                            prompt_forward_sync_wall_ms =
+                                                generated.prompt_forward_sync_wall_ms;
+                                            prompt_forward_sync_decode_gpu_ms =
+                                                generated.prompt_forward_sync_decode_gpu_ms;
+                                            prompt_forward_sync_prefill_gpu_ms =
+                                                generated.prompt_forward_sync_prefill_gpu_ms;
                                             final_kv_allocated_bytes =
                                                 generated.final_kv_allocated_bytes;
                                             dense_equivalent_kv_bytes =
@@ -4894,6 +4920,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                         packed_prefill_sync_wall_ms,
                                         packed_prefill_sync_decode_gpu_ms,
                                         packed_prefill_sync_prefill_gpu_ms,
+                                        prompt_forward_sync_wall_ms,
+                                        prompt_forward_sync_decode_gpu_ms,
+                                        prompt_forward_sync_prefill_gpu_ms,
                                         final_kv_allocated_bytes,
                                         dense_equivalent_kv_bytes,
                                         materialized_f32_cache_entries,

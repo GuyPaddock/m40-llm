@@ -34,6 +34,13 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
   `packed_prefill_sync_wall_ms`, `packed_prefill_sync_decode_gpu_ms`, and
   `packed_prefill_sync_prefill_gpu_ms`. This changes timing and is intended
   only for attribution diagnostics.
+- `M40LLM_FORWARD_SYNC_DIAG=1`: for the prompt final-token forward pass,
+  record CUDA events on both decode and prefill streams before forward starts
+  and synchronize them immediately before logits. KV quality JSONL rows include
+  `prompt_forward_sync_wall_ms`, `prompt_forward_sync_decode_gpu_ms`, and
+  `prompt_forward_sync_prefill_gpu_ms`. Use this with
+  `M40LLM_PREFILL_SYNC_DIAG=1` when separating packed-prefix prefill time from
+  final-token dense attention or KV-cache work.
 - `M40LLM_STREAM_LOG=1`: print prefill/decode stream creation details and
   best-effort priority selection.
 - `M40LLM_DECODE_SESSION_LOG=1`: print verbose decode-session token logs.

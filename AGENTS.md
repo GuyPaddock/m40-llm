@@ -440,10 +440,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   timings. The Qwen 64-token warm-row JSONL result shows dense `off` and direct
   FP16-K/q4-V both spend only roughly 0.73-0.74 s in packed-prefix sync; dense
   still spends roughly 87 s total while compressed is roughly 1.47 s. This
-  rules out packed-prefix prefill as the dense-only delay. The next diagnostic
-  should add an opt-in final-token forward sync/event checkpoint before logits
-  to determine whether dense full-context attention/KV layout is causing the
-  final prompt token to run for tens of seconds.
+  rules out packed-prefix prefill as the dense-only delay.
+  `M40LLM_FORWARD_SYNC_DIAG=1` now adds an opt-in two-stream CUDA-event
+  checkpoint around the prompt final-token forward pass before logits. A
+  repeated Qwen 64-token run shows dense `off` spends roughly 86.5 s in that
+  final-token forward sync, while direct FP16-K/q4-V spends roughly 0.13 s.
+  Treat the Qwen delay as dense full-context final-token forward work, most
+  likely dense attention over the full prompt/KV range, rather than
+  packed-prefix prefill or output-norm itself.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

@@ -116,10 +116,21 @@ Notes:
   row is warm (`materialized_f32_cache_bytes_added_prompt=0`) and packed-prefix
   GPU work is comparable to the compressed row. The remaining delay is paid
   after packed-prefix, at the logits/output-norm synchronization point for the
-  final prompt-token path. The next diagnostic should add an opt-in final-token
-  forward sync/event checkpoint before logits so we can determine whether dense
-  full-context attention/KV layout is causing the final prompt token to run for
-  tens of seconds.
+  final prompt-token path.
+- `M40LLM_FORWARD_SYNC_DIAG=1` now adds that final-token checkpoint before
+  logits. A repeated Qwen 64-token run showed the dense row spends roughly
+  86.5 s in the final prompt-token forward sync, while direct FP16-K/q4-V
+  spends roughly 0.13 s there:
+
+| Mode | Prompt prefill total | Packed-prefix sync wall | Final-token forward sync wall | Final-token decode GPU | Final-token prefill GPU | Total row |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dense `off` | 87.279 s | 0.729 s | 86.532 s | 86.533 s | 86.533 s | 87.893 s |
+| `block-select-exact` direct FP16-K/q4-V | 0.883 s | 0.738 s | 0.128 s | 0.129 s | 0.129 s | 1.467 s |
+
+- This confirms the Qwen dense delay is not prefix prefill. It is the final
+  prompt-token dense full-context forward work, most likely dense attention over
+  the full prompt/KV range. The direct exact-block path is fast because it
+  restricts the active attended KV set.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 
