@@ -760,6 +760,36 @@ fn bench_attention_qwen_head128(c: &mut Criterion) {
         let recent_window = 128u32;
         let block_size = 32u32;
         for seq_len in [512u32, 2048] {
+            let dense_kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)
+                .expect("qwen dense kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &dense_kv, seq_len, kv_dim);
+            let q: Vec<f32> = (0..q_dim)
+                .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
+                .collect();
+            let bytes_q = q_dim * std::mem::size_of::<f32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+            }
+
+            group.throughput(Throughput::Elements(seq_len as u64));
+            group.bench_function(format!("dense_q16_kv2_d128_s{seq_len}"), |b| {
+                b.iter(|| unsafe {
+                    dense_kv
+                        .attention_last_token_f32_gqa(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            d_out,
+                        )
+                        .expect("qwen dense attention");
+                })
+            });
+
             let kv = KVCache::new_compressed_with_context(
                 &ctx,
                 seq_len,
@@ -775,16 +805,6 @@ fn bench_attention_qwen_head128(c: &mut Criterion) {
             )
             .expect("qwen mixed kv cache");
             seed_kv_cache_with_explicit_positions(&ctx, &kv, seq_len, kv_dim);
-            let q: Vec<f32> = (0..q_dim)
-                .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
-                .collect();
-            let bytes_q = q_dim * std::mem::size_of::<f32>();
-            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
-            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
-            unsafe {
-                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
-                    .expect("copy q");
-            }
 
             for top_blocks in [4u32, 8, 16] {
                 group.throughput(Throughput::Elements(

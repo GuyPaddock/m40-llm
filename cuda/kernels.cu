@@ -1562,6 +1562,88 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_head128_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* reduce = scores + seq_len;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score_local = -1e30f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) {
+                    reduce[tid] += reduce[tid + stride];
+                }
+                __syncthreads();
+            }
+
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[t] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t t = tid; t < seq_len; t += blockDim.x) {
+            denom_part += expf(scores[t] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[t] - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
     __global__ void attention_last_token_gqa_dense_recent_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -3798,23 +3880,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -6;
 
         const bool use_head64 = kv->head_dim == 64 && seq_len <= 8192;
-        if (use_head64) {
+        const bool use_head128 = kv->head_dim == 128 && seq_len <= 8192;
+        if (use_head64 || use_head128) {
             const char* cache_experiment = getenv("M40LLM_CACHE_EXPERIMENT");
             const bool use_ldg_kv = cache_experiment && strcmp(cache_experiment, "ldg_kv") == 0;
             static int logged_head64 = 0;
             static int logged_head64_ldg = 0;
-            const char* log_env = getenv("M40LLM_ATTN_LOG");
-            if (use_ldg_kv && !logged_head64_ldg && log_env && strcmp(log_env, "1") == 0) {
-                fprintf(stderr, "[cuda] attention_gqa backend: head64 __ldg KV experiment\n");
-                logged_head64_ldg = 1;
-            } else if (!use_ldg_kv && !logged_head64 && log_env && strcmp(log_env, "1") == 0) {
-                fprintf(stderr, "[cuda] attention_gqa backend: head64 shared-score kernel\n");
-                logged_head64 = 1;
-            }
             const int blocks = (int)q_heads;
             const int threads = 128;
             const size_t shmem = ((size_t)seq_len + (size_t)threads) * sizeof(float);
-            if (use_ldg_kv) {
+            const char* log_env = getenv("M40LLM_ATTN_LOG");
+            if (use_head64 && use_ldg_kv) {
+                if (!logged_head64_ldg && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head64 __ldg KV experiment\n");
+                    logged_head64_ldg = 1;
+                }
                 attention_last_token_gqa_head64_ldg_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
                     reinterpret_cast<const __half*>(kv->d_k),
                     reinterpret_cast<const __half*>(kv->d_v),
@@ -3822,8 +3902,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     reinterpret_cast<const float*>(q_dev_f32), seq_len,
                     reinterpret_cast<float*>(out_dev_f32)
                 );
-            } else {
+            } else if (use_head64) {
+                if (!logged_head64 && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head64 shared-score kernel\n");
+                    logged_head64 = 1;
+                }
                 attention_last_token_gqa_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                    reinterpret_cast<const __half*>(kv->d_k),
+                    reinterpret_cast<const __half*>(kv->d_v),
+                    kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                    reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                    reinterpret_cast<float*>(out_dev_f32)
+                );
+            } else {
+                static int logged_head128 = 0;
+                if (!logged_head128 && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head128 shared-score kernel\n");
+                    logged_head128 = 1;
+                }
+                attention_last_token_gqa_head128_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
                     reinterpret_cast<const __half*>(kv->d_k),
                     reinterpret_cast<const __half*>(kv->d_v),
                     kv->max_seq_len, q_heads, kv->num_heads, seq_id,

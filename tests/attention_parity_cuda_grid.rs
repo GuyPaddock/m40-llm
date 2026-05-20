@@ -1509,7 +1509,7 @@ fn attention_last_token_cuda_gqa_parity_grid() -> Result<()> {
         return Ok(());
     }
 
-    let head_dims = [1u32, 5, 8, 16, 32];
+    let head_dims = [1u32, 5, 8, 16, 32, 128];
     let head_pairs = [(2u32, 1u32), (4, 1), (8, 2), (32, 4)];
     let seq_lens = [1u32, 2, 3, 4, 8, 16];
     let max_seq_len = *seq_lens.iter().max().unwrap();

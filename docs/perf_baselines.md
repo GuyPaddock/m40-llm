@@ -2,6 +2,53 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen2.5 Dense Head128 Attention Specialization
+
+This checkpoint adds a dense last-token GQA specialization for `head_dim=128`,
+matching the existing shared-score dense `head_dim=64` path. Before this change,
+Qwen dense `off` decode used the generic fallback kernel, which recomputed QK
+scores once per output dimension and made the final prompt-token forward sync
+take roughly 86.5 s on the 64-token diagnostic.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --bench attention --test attention_parity_cuda_grid --test kv_compression_long_context`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_parity_cuda_grid attention_last_token_cuda_gqa_parity_grid -- --nocapture --test-threads=1`
+  passed, including `head_dim=128` in the GQA parity grid.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Qwen dense attention microbenchmark:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench attention dense_q16_kv2_d128 -- --sample-size 10
+```
+
+| Benchmark | Time | Throughput |
+| --- | ---: | ---: |
+| `attention_qwen_head128/dense_q16_kv2_d128_s512` | 991 us | 516 Kelem/s |
+| `attention_qwen_head128/dense_q16_kv2_d128_s2048` | 3.924 ms | 522 Kelem/s |
+
+Qwen 64-token warm-row diagnostic:
+
+| Mode | Prompt prefill total | Packed-prefix sync wall | Final-token forward sync wall | Total row |
+| --- | ---: | ---: | ---: | ---: |
+| Dense `off` | 0.863 s | 0.729 s | 0.117 s | 1.467 s |
+| `block-select-exact` direct FP16-K/q4-V | 0.881 s | 0.735 s | 0.129 s | 1.481 s |
+
+Notes:
+
+- `M40LLM_ATTN_LOG=1` confirmed the dense row uses
+  `attention_gqa backend: head128 shared-score kernel`.
+- This removes the previous dense-only 86 s final-token delay for short Qwen
+  rows. Dense and direct exact-block are now comparable on this bounded
+  64-token one-token diagnostic.
+- Longer Qwen sweeps are still needed before treating dense `off` as practical
+  for 2K/4K quality matrices.
+
 ## 2026-05-19: Qwen2.5 Head128 Measurement Hooks
 
 This checkpoint adds a dedicated `attention_qwen_head128` Criterion benchmark

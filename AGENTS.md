@@ -447,7 +447,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   final-token forward sync, while direct FP16-K/q4-V spends roughly 0.13 s.
   Treat the Qwen delay as dense full-context final-token forward work, most
   likely dense attention over the full prompt/KV range, rather than
-  packed-prefix prefill or output-norm itself.
+  packed-prefix prefill or output-norm itself. Dense last-token GQA now has a
+  shared-score `head_dim=128` specialization analogous to the existing head64
+  path. The Qwen dense attention microbenchmark reports roughly 991 us at
+  512 tokens and 3.924 ms at 2048 tokens. The bounded 64-token Qwen warm-row
+  diagnostic now drops dense `off` prompt prefill from roughly 87.3 s to
+  roughly 0.86 s and final-token forward sync from roughly 86.5 s to
+  roughly 0.117 s; dense and direct FP16-K/q4-V are both roughly 1.47-1.48 s
+  total for that one-token row. Longer Qwen quality sweeps are now unblocked
+  for bounded targets.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
