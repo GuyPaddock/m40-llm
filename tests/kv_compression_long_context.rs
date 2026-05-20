@@ -4164,7 +4164,10 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
         return run_topk_sensitivity_suite(&probe, config, &mut model, &tokenizer);
     }
     if topk_multitask_diagnostic_enabled() {
-        return run_topk_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);
+        for target_tokens in contexts {
+            run_topk_multitask_suite(&probe, config, &mut model, &tokenizer, target_tokens)?;
+        }
+        return Ok(());
     }
     if fallback_multitask_diagnostic_enabled() {
         return run_fallback_multitask_suite(&probe, config, &mut model, &tokenizer, contexts[0]);

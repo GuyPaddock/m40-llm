@@ -455,7 +455,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   roughly 0.86 s and final-token forward sync from roughly 86.5 s to
   roughly 0.117 s; dense and direct FP16-K/q4-V are both roughly 1.47-1.48 s
   total for that one-token row. Longer Qwen quality sweeps are now unblocked
-  for bounded targets.
+  for bounded targets. A bounded Qwen cross-model checkpoint now runs 256/512
+  top-k multitask targets and confirms the harness emits rows in practical
+  time after the head128 fix; the top-k multitask diagnostic now honors every
+  requested `M40LLM_KV_QUALITY_TARGETS` entry instead of only the first. Qwen
+  dense `off` still emits nonsensical repeated characters in both the quality
+  harness and a direct CLI generation smoke, so Qwen compression quality is
+  currently inconclusive. The next Qwen task should debug model correctness
+  first: tokenizer/chat template, output token mapping, RoPE/scaling metadata,
+  tied/output embedding layout, or architecture-specific tensor mapping.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

@@ -49,6 +49,65 @@ Notes:
 - Longer Qwen sweeps are still needed before treating dense `off` as practical
   for 2K/4K quality matrices.
 
+## 2026-05-20: Qwen2.5 Bounded Cross-Model KV Quality Checkpoint
+
+This checkpoint runs the Qwen2.5-3B-Instruct F16 GGUF through the long-context
+quality harness after the dense `head_dim=128` attention fix. It also updates
+the top-k multitask diagnostic so `M40LLM_KV_QUALITY_TARGETS=...` runs every
+requested target instead of only the first target.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test kv_compression_long_context`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Reports:
+
+- `/tmp/qwen2-crossmodel-smoke-256.jsonl`
+- `/tmp/qwen2-crossmodel-topk-256-512.jsonl`
+- `/tmp/qwen2-crossmodel-single-512.jsonl`
+- `/tmp/qwen2-crossmodel-multitarget-smoke.jsonl`
+
+Bounded runtime results:
+
+| Target | Task set | Rows | Runtime | Result |
+| ---: | --- | ---: | ---: | --- |
+| 256 | single-needle, one token | 2 | 48.1 s | Dense and compressed rows emitted. |
+| 256 | four multitask prompts, top4/8/16 | 16 | 149.1 s | Dense and compressed rows emitted. |
+| 512 | single-needle, top4 | 2 | 86.2 s | Dense and compressed rows emitted. |
+| 256,512 | single-needle, top4, two tokens | 4 | 93.2 s | Multi-target diagnostic confirmed. |
+
+Representative JSONL timings after warm materialization:
+
+| Target | Mode | Prompt prefill | Packed-prefix sync | Final-token forward sync | Total | Final KV |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 256 | Dense `off` | 3.991 s | 3.755 s | 0.218 s | 4.950 s | 1.21 GB |
+| 256 | Direct FP16-K/q4-V top4 | 4.042 s | 3.776 s | 0.249 s | 5.030 s | 912 MB |
+| 512 | Dense `off` | 13.919 s | 13.519 s | 0.382 s | 15.025 s | 1.21 GB |
+| 512 | Direct FP16-K/q4-V top4 | 14.031 s | 13.572 s | 0.442 s | 15.224 s | 912 MB |
+
+Quality status:
+
+- Qwen dense `off` fails the bounded needle prompts and emits nonsensical
+  repeated characters such as `ŀÛ` or backslashes.
+- A direct CLI generation smoke also emits nonsensical output:
+  `1æĳħ 1\\ \æĳħ` for `Hello, please answer with the word OK.`
+- Because dense `off` fails, the compressed rows are quality-inconclusive for
+  Qwen. Do not interpret these as compression-policy failures.
+- The next Qwen task should debug Qwen decode correctness itself: tokenizer/chat
+  template, output token mapping, RoPE/scaling metadata, tied/output embedding
+  layout, or architecture-specific tensor mapping.
+
+Conclusion:
+
+- The head128 dense attention fix makes bounded Qwen quality rows practical up
+  to at least 512 tokens on M40.
+- Cross-model KV conclusions cannot be drawn until dense Qwen generation is
+  semantically correct.
+
 ## 2026-05-19: Qwen2.5 Head128 Measurement Hooks
 
 This checkpoint adds a dedicated `attention_qwen_head128` Criterion benchmark
