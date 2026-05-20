@@ -68,6 +68,9 @@ pub struct GeneratedText {
     pub prefill_chunk_size: Option<usize>,
     pub compressed_prefill_chunk_size: Option<usize>,
     pub temporary_dense_kv_bytes: Option<usize>,
+    pub packed_prefill_sync_wall_ms: Option<u128>,
+    pub packed_prefill_sync_decode_gpu_ms: Option<f32>,
+    pub packed_prefill_sync_prefill_gpu_ms: Option<f32>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
     pub materialized_f32_cache_entries: Option<usize>,
@@ -784,6 +787,21 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         }
     }
     timing::timing_log!(decode_start.elapsed(), "{}.decode_loop", options.log_prefix);
+    #[cfg(feature = "cuda")]
+    let packed_prefill_sync_diag = decode_session.prefill_sync_diag_timings();
+    #[cfg(feature = "cuda")]
+    let packed_prefill_sync_wall_ms = packed_prefill_sync_diag.map(|diag| diag.wall_ms);
+    #[cfg(feature = "cuda")]
+    let packed_prefill_sync_decode_gpu_ms = packed_prefill_sync_diag.map(|diag| diag.decode_gpu_ms);
+    #[cfg(feature = "cuda")]
+    let packed_prefill_sync_prefill_gpu_ms =
+        packed_prefill_sync_diag.map(|diag| diag.prefill_gpu_ms);
+    #[cfg(not(feature = "cuda"))]
+    let packed_prefill_sync_wall_ms = None;
+    #[cfg(not(feature = "cuda"))]
+    let packed_prefill_sync_decode_gpu_ms = None;
+    #[cfg(not(feature = "cuda"))]
+    let packed_prefill_sync_prefill_gpu_ms = None;
     let output_decode_start = std::time::Instant::now();
     let text =
         decode_generated_text(&tokenizer, &ids, prompt_token_len).context("decode failed")?;
@@ -842,6 +860,9 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         prefill_chunk_size,
         compressed_prefill_chunk_size,
         temporary_dense_kv_bytes,
+        packed_prefill_sync_wall_ms,
+        packed_prefill_sync_decode_gpu_ms,
+        packed_prefill_sync_prefill_gpu_ms,
         final_kv_allocated_bytes: model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
         dense_equivalent_kv_bytes: model
             .kv_cache

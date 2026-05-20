@@ -83,6 +83,9 @@ struct CaseRecord {
     prefill_chunk_size: Option<usize>,
     compressed_prefill_chunk_size: Option<usize>,
     temporary_dense_kv_bytes: Option<usize>,
+    packed_prefill_sync_wall_ms: Option<u128>,
+    packed_prefill_sync_decode_gpu_ms: Option<f32>,
+    packed_prefill_sync_prefill_gpu_ms: Option<f32>,
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
     materialized_f32_cache_entries: Option<usize>,
@@ -245,6 +248,9 @@ struct MultiTaskRecord {
     fallback_active_kv_bytes_all_layers: Option<usize>,
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
+    packed_prefill_sync_wall_ms: Option<u128>,
+    packed_prefill_sync_decode_gpu_ms: Option<f32>,
+    packed_prefill_sync_prefill_gpu_ms: Option<f32>,
     materialized_f32_cache_entries: Option<usize>,
     materialized_f32_cache_bytes: Option<usize>,
     materialized_f32_cache_entries_before: Option<usize>,
@@ -3223,6 +3229,9 @@ fn dense_multitask_record(
         fallback_active_kv_bytes_all_layers: None,
         final_kv_allocated_bytes: generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
+        packed_prefill_sync_wall_ms: generated.packed_prefill_sync_wall_ms,
+        packed_prefill_sync_decode_gpu_ms: generated.packed_prefill_sync_decode_gpu_ms,
+        packed_prefill_sync_prefill_gpu_ms: generated.packed_prefill_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: generated.materialized_f32_cache_entries_before,
@@ -3380,6 +3389,11 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
             .flatten(),
         final_kv_allocated_bytes: input.final_generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: input.final_generated.dense_equivalent_kv_bytes,
+        packed_prefill_sync_wall_ms: input.final_generated.packed_prefill_sync_wall_ms,
+        packed_prefill_sync_decode_gpu_ms: input.final_generated.packed_prefill_sync_decode_gpu_ms,
+        packed_prefill_sync_prefill_gpu_ms: input
+            .final_generated
+            .packed_prefill_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: input.final_generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.final_generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: input
@@ -3552,6 +3566,9 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         fallback_active_kv_bytes_all_layers: None,
         final_kv_allocated_bytes: input.generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: input.generated.dense_equivalent_kv_bytes,
+        packed_prefill_sync_wall_ms: input.generated.packed_prefill_sync_wall_ms,
+        packed_prefill_sync_decode_gpu_ms: input.generated.packed_prefill_sync_decode_gpu_ms,
+        packed_prefill_sync_prefill_gpu_ms: input.generated.packed_prefill_sync_prefill_gpu_ms,
         materialized_f32_cache_entries: input.generated.materialized_f32_cache_entries,
         materialized_f32_cache_bytes: input.generated.materialized_f32_cache_bytes,
         materialized_f32_cache_entries_before: input
@@ -4291,6 +4308,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     let mut prefill_chunk_size = None;
                                     let mut compressed_prefill_chunk_size = None;
                                     let mut temporary_dense_kv_bytes = None;
+                                    let mut packed_prefill_sync_wall_ms = None;
+                                    let mut packed_prefill_sync_decode_gpu_ms = None;
+                                    let mut packed_prefill_sync_prefill_gpu_ms = None;
                                     let mut final_kv_allocated_bytes = None;
                                     let mut dense_equivalent_kv_bytes = None;
                                     let mut materialized_f32_cache_entries = None;
@@ -4515,6 +4535,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                                 generated.compressed_prefill_chunk_size;
                                             temporary_dense_kv_bytes =
                                                 generated.temporary_dense_kv_bytes;
+                                            packed_prefill_sync_wall_ms =
+                                                generated.packed_prefill_sync_wall_ms;
+                                            packed_prefill_sync_decode_gpu_ms =
+                                                generated.packed_prefill_sync_decode_gpu_ms;
+                                            packed_prefill_sync_prefill_gpu_ms =
+                                                generated.packed_prefill_sync_prefill_gpu_ms;
                                             final_kv_allocated_bytes =
                                                 generated.final_kv_allocated_bytes;
                                             dense_equivalent_kv_bytes =
@@ -4865,6 +4891,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                         prefill_chunk_size,
                                         compressed_prefill_chunk_size,
                                         temporary_dense_kv_bytes,
+                                        packed_prefill_sync_wall_ms,
+                                        packed_prefill_sync_decode_gpu_ms,
+                                        packed_prefill_sync_prefill_gpu_ms,
                                         final_kv_allocated_bytes,
                                         dense_equivalent_kv_bytes,
                                         materialized_f32_cache_entries,

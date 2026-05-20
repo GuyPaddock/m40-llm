@@ -102,13 +102,24 @@ Notes:
 - `M40LLM_PREFILL_SYNC_DIAG=1` now adds an opt-in two-stream CUDA-event sync
   diagnostic after packed-prefix prefill. A short packed-prefix parity test
   confirmed it emits `sync_diag.wall`, `sync_diag.decode_gpu`, and
-  `sync_diag.prefill_gpu` labels without changing correctness. A repeated Qwen
-  64-token run still showed the dense row paying roughly 84-86 s at the
-  high-level logits synchronization point in retained terminal output, while
-  the compressed row remained roughly 1.5 s total. The next diagnostic should
-  either capture full stderr to a file or add these sync timings to JSONL rows
-  so the exact Qwen packed-prefix stream timing survives the very verbose
-  per-layer log output.
+  `sync_diag.prefill_gpu` labels without changing correctness. JSONL rows now
+  include these sync timings. A repeated Qwen 64-token run showed dense `off`
+  and direct FP16-K/q4-V both spend roughly 0.73-0.74 s in packed-prefix GPU
+  sync after warm materialization:
+
+| Mode | Prompt prefill total | Packed-prefix sync wall | Decode stream GPU | Prefill stream GPU | Total row |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Dense `off` | 87.270 s | 0.731 s | 0.731 s | 0.731 s | 87.860 s |
+| `block-select-exact` direct FP16-K/q4-V | 0.884 s | 0.739 s | 0.740 s | 0.740 s | 1.467 s |
+
+- This rules out packed-prefix prefill as the 87 s dense-only delay. The dense
+  row is warm (`materialized_f32_cache_bytes_added_prompt=0`) and packed-prefix
+  GPU work is comparable to the compressed row. The remaining delay is paid
+  after packed-prefix, at the logits/output-norm synchronization point for the
+  final prompt-token path. The next diagnostic should add an opt-in final-token
+  forward sync/event checkpoint before logits so we can determine whether dense
+  full-context attention/KV layout is causing the final prompt token to run for
+  tens of seconds.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

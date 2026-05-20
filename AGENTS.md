@@ -436,10 +436,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   synchronization point after dense packed-prefix work, not an actual 86 s norm
   kernel. `M40LLM_PREFILL_SYNC_DIAG=1` now adds an opt-in two-stream CUDA-event
   sync diagnostic after packed-prefix prefill and is verified on a short
-  packed-prefix parity test. The Qwen diagnostic output is verbose enough that
-  the next step should capture full stderr to a file or add the sync diagnostic
-  timings to JSONL rows before drawing the final dense packed-prefix attribution
-  conclusion.
+  packed-prefix parity test. KV quality JSONL rows now include those sync
+  timings. The Qwen 64-token warm-row JSONL result shows dense `off` and direct
+  FP16-K/q4-V both spend only roughly 0.73-0.74 s in packed-prefix sync; dense
+  still spends roughly 87 s total while compressed is roughly 1.47 s. This
+  rules out packed-prefix prefill as the dense-only delay. The next diagnostic
+  should add an opt-in final-token forward sync/event checkpoint before logits
+  to determine whether dense full-context attention/KV layout is causing the
+  final prompt token to run for tens of seconds.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

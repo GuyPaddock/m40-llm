@@ -30,7 +30,9 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 - `M40LLM_PREFILL_SYNC_DIAG=1`: after CLI/test packed-prefix prefill, record
   CUDA events on both decode and prefill streams, synchronize the stop events,
   and print `sync_diag.wall`, `sync_diag.decode_gpu`, and
-  `sync_diag.prefill_gpu` timing labels. This changes timing and is intended
+  `sync_diag.prefill_gpu` timing labels. KV quality JSONL rows also include
+  `packed_prefill_sync_wall_ms`, `packed_prefill_sync_decode_gpu_ms`, and
+  `packed_prefill_sync_prefill_gpu_ms`. This changes timing and is intended
   only for attribution diagnostics.
 - `M40LLM_STREAM_LOG=1`: print prefill/decode stream creation details and
   best-effort priority selection.

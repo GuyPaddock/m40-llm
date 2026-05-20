@@ -32,6 +32,14 @@ struct PrefillSyncDiag {
 }
 
 #[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy)]
+pub struct PrefillSyncDiagTimings {
+    pub wall_ms: u128,
+    pub decode_gpu_ms: f32,
+    pub prefill_gpu_ms: f32,
+}
+
+#[cfg(feature = "cuda")]
 impl PrefillSyncDiag {
     fn start(cuda: &CudaContext, label: impl Into<String>) -> Result<Option<Self>> {
         if !prefill_sync_diag_enabled() {
@@ -49,7 +57,7 @@ impl PrefillSyncDiag {
         }))
     }
 
-    fn finish(self, cuda: &CudaContext) -> Result<()> {
+    fn finish(self, cuda: &CudaContext) -> Result<PrefillSyncDiagTimings> {
         let decode_stop = cuda.create_event()?;
         let prefill_stop = cuda.create_event()?;
         decode_stop.record(CudaStream::Decode)?;
@@ -72,7 +80,11 @@ impl PrefillSyncDiag {
                 self.label, prefill_gpu_ms
             );
         }
-        Ok(())
+        Ok(PrefillSyncDiagTimings {
+            wall_ms: wall.as_millis(),
+            decode_gpu_ms,
+            prefill_gpu_ms,
+        })
     }
 }
 
@@ -95,6 +107,7 @@ pub struct DecodeSession {
     log_prefix: &'static str,
     step: usize,
     logged_full_forward: bool,
+    last_prefill_sync_diag: Option<PrefillSyncDiagTimings>,
 }
 
 #[cfg(feature = "cuda")]
@@ -232,6 +245,7 @@ impl DecodeSession {
             log_prefix,
             step: 0,
             logged_full_forward: false,
+            last_prefill_sync_diag: None,
         })
     }
 
@@ -357,6 +371,7 @@ impl DecodeSession {
         ids: &[u32],
         mut on_token_logits: impl FnMut(&[f32]),
     ) -> Result<Vec<f32>> {
+        self.last_prefill_sync_diag = None;
         if !self.can_forward {
             anyhow::bail!("packed prefill requires full-layer forward");
         }
@@ -393,7 +408,7 @@ impl DecodeSession {
             ])
         }?;
         if let Some(sync_diag) = sync_diag {
-            sync_diag.finish(&self.model().cuda)?;
+            self.last_prefill_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
         }
         timing::timing_log!(
             prefill_start.elapsed(),
@@ -483,6 +498,7 @@ impl DecodeSession {
         ids: &[u32],
         mut on_token_logits: impl FnMut(&[f32]),
     ) -> Result<(Vec<f32>, usize)> {
+        self.last_prefill_sync_diag = None;
         if !self.can_forward {
             anyhow::bail!("packed-then-compress prefill requires full-layer forward");
         }
@@ -540,15 +556,16 @@ impl DecodeSession {
                 &temp_dense_kv,
             )
         }?;
-        if let Some(sync_diag) = sync_diag {
-            sync_diag.finish(&self.model().cuda)?;
-        }
+        let sync_diag_timings = sync_diag
+            .map(|sync_diag| sync_diag.finish(&self.model().cuda))
+            .transpose()?;
         let compress_start = std::time::Instant::now();
         active_kv.build_compressed_from_dense(
             &self.model().cuda,
             &temp_dense_kv,
             prefix_len as u32,
         )?;
+        self.last_prefill_sync_diag = sync_diag_timings;
         timing::timing_log!(
             compress_start.elapsed(),
             "{}.packed_then_compress_prefill.compress.ids_len_{}",
@@ -571,6 +588,10 @@ impl DecodeSession {
         self.processed_len = prefix_len;
         let logits = self.logits_for_ids(ids, |logits| on_token_logits(logits))?;
         Ok((logits, temp_dense_bytes))
+    }
+
+    pub fn prefill_sync_diag_timings(&self) -> Option<PrefillSyncDiagTimings> {
+        self.last_prefill_sync_diag
     }
 
     pub fn logits_for_ids(
