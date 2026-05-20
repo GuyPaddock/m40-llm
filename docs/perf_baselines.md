@@ -88,6 +88,19 @@ Notes:
   `materialized_f32_warm_row=true`. Warm measured dense prefill was 328 ms and
   warm measured compressed prefill was 336 ms for this one-token field-emission
   smoke.
+- A longer Qwen2.5 64-token warm-row run completed in 211.2 s. The warmup
+  materialized 253 entries / 12.34 GB in 89.2 s. The measured dense `off` row
+  was marked warm and added zero materialized bytes, but still reported
+  87.2 s prompt prefill. The measured direct FP16-K/q4-V compressed row was also
+  warm and reported 0.887 s prompt prefill.
+- `M40LLM_TIMING_LOG=1` localized the warm dense delay to synchronization
+  accounting: `token.79.forward_all_layers` was roughly 20 ms,
+  `logits.lm_head_gemm` and D2H were sub-ms, and `logits.output_norm` absorbed
+  roughly 86.45 s. That means `output_norm` is the first synchronization point
+  paying for previously enqueued dense packed-prefix GPU work; it is not itself
+  an 86 s norm kernel. The next diagnostic should add CUDA-event timing or an
+  explicit opt-in stream sync at the end of dense packed-prefix prefill so dense
+  prefill GPU time is attributed to the prefill phase instead of logits.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

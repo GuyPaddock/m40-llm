@@ -427,7 +427,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   quality rows now include materialized FP32 cache before/after-prompt/final
   totals, added entry/byte deltas, and a `materialized_f32_warm_row` label for
   that investigation. Warmup stderr logging also prints cache before/after/add
-  totals because Qwen can still time out before measured rows are emitted.
+  totals because Qwen can still time out before measured rows are emitted. A
+  longer Qwen 64-token warm-row diagnostic completed: warmup materialized
+  253 FP32 entries / 12.34 GB in roughly 89.2 s; the measured dense row added
+  zero materialized bytes but still spent roughly 87.2 s in prompt prefill,
+  while the direct FP16-K/q4-V row took roughly 0.9 s. Timing logs show the
+  dense-row delay is paid at `logits.output_norm`, which is the first
+  synchronization point after dense packed-prefix work, not an actual 86 s norm
+  kernel. Next add explicit dense packed-prefix CUDA-event timing or an opt-in
+  pre-logits stream sync to attribute that GPU work correctly.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
