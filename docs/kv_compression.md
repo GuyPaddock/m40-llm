@@ -73,6 +73,13 @@ Set `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1` for cross-model smoke runs where
 diagnostic overhead would dominate. This leaves pass/fail, output, timing, and
 KV accounting enabled but does not force selection telemetry or logit traces.
 
+Set `M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION=1` to run one unreported dense
+warmup generation before top-k multitask quality rows. JSONL rows then include
+`materialization_warmup_elapsed_ms` and `materialization_warmup_prompt_tokens`.
+This is diagnostic-only: on Qwen2.5-3B the full-prompt warmup exposed that cold
+materialization and dense packed-prefix timing still need to be separated more
+carefully before using the first dense row as a steady-state latency number.
+
 ## Prefill Experiments
 
 - `M40LLM_PREFILL_CHUNK_SIZE=<n>` enables experimental packed-prefix prefill
@@ -273,8 +280,9 @@ bound expensive 4096-token runs. The multi-task case names are
 
 `M40LLM_KV_TOPK_MULTITASK_DIAG=1` runs the same multi-task prompt suite without
 fallback. It compares dense `off` with direct FP16-K/q4-V `block-select-exact`
-for top-k selected old blocks. Use `M40LLM_KV_MULTITASK_TOP_BLOCKS=4,8,16` to
-choose the tested `top_blocks` values.
+for top-k selected old blocks. Use `M40LLM_KV_MULTITASK_TOP_BLOCKS=4,8,16` or
+the shared `M40LLM_KV_QUALITY_TOP_BLOCKS=4,8,16` alias to choose the tested
+`top_blocks` values.
 
 `M40LLM_KV_TOPK_SENSITIVITY_DIAG=1` runs the focused 4096 multi-needle
 selection-set diagnostic. It forces `M40LLM_KV_MULTITASK_TASKS=multi-needle`

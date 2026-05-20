@@ -224,6 +224,8 @@ struct MultiTaskRecord {
     prompt_prefill_elapsed_ms: u128,
     generated_decode_elapsed_ms: u128,
     total_elapsed_ms: u128,
+    materialization_warmup_elapsed_ms: Option<u128>,
+    materialization_warmup_prompt_tokens: Option<usize>,
     initial_decode_elapsed_ms: Option<u128>,
     fallback_decode_elapsed_ms: Option<u128>,
     total_decode_elapsed_ms_with_retry: Option<u128>,
@@ -804,6 +806,12 @@ fn topk_multitask_diagnostic_enabled() -> bool {
 
 fn quality_minimal_telemetry_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_MINIMAL_TELEMETRY")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn quality_warmup_materialization_enabled() -> bool {
+    std::env::var("M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
         .unwrap_or(false)
 }
@@ -3172,6 +3180,8 @@ fn dense_multitask_record(
         prompt_prefill_elapsed_ms: generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: generated.generated_decode_elapsed_ms,
         total_elapsed_ms: generated.total_elapsed_ms,
+        materialization_warmup_elapsed_ms: None,
+        materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: None,
         fallback_decode_elapsed_ms: None,
         total_decode_elapsed_ms_with_retry: None,
@@ -3310,6 +3320,8 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         prompt_prefill_elapsed_ms: input.final_generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: input.final_generated.generated_decode_elapsed_ms,
         total_elapsed_ms: input.final_generated.total_elapsed_ms,
+        materialization_warmup_elapsed_ms: None,
+        materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: Some(input.initial.generated_decode_elapsed_ms),
         fallback_decode_elapsed_ms: input.fallback_decode_elapsed_ms,
         total_decode_elapsed_ms_with_retry: input
@@ -3448,6 +3460,8 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         prompt_prefill_elapsed_ms: input.generated.prompt_prefill_elapsed_ms,
         generated_decode_elapsed_ms: input.generated.generated_decode_elapsed_ms,
         total_elapsed_ms: input.generated.total_elapsed_ms,
+        materialization_warmup_elapsed_ms: None,
+        materialization_warmup_prompt_tokens: None,
         initial_decode_elapsed_ms: Some(input.generated.generated_decode_elapsed_ms),
         fallback_decode_elapsed_ms: None,
         total_decode_elapsed_ms_with_retry: None,
@@ -3523,6 +3537,36 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
     }
 }
 
+fn run_quality_materialization_warmup(
+    model: &mut LoadedModel,
+    prompt: &str,
+) -> Result<Option<(u128, usize)>> {
+    if !quality_warmup_materialization_enabled() {
+        return Ok(None);
+    }
+    let warmup = MultiTaskSpec {
+        name: "materialization-warmup",
+        score_type: "warmup",
+        prompt: prompt.to_string(),
+        expected_terms: vec![],
+        forbidden_terms: vec![],
+        require_nonempty: false,
+    };
+    let generated = run_multitask_generate(model, &warmup, KvCompressMode::Off, 16, 1)
+        .context("run materialization warmup generation")?;
+    eprintln!(
+        "materialization warmup complete: prompt_tokens={} prefill_ms={} decode_ms={} total_ms={}",
+        generated.prompt_token_len,
+        generated.prompt_prefill_elapsed_ms,
+        generated.generated_decode_elapsed_ms,
+        generated.total_elapsed_ms
+    );
+    Ok(Some((
+        generated.total_elapsed_ms,
+        generated.prompt_token_len,
+    )))
+}
+
 fn run_topk_multitask_suite(
     probe: &CandidateProbe,
     config: &ModelConfig,
@@ -3533,6 +3577,11 @@ fn run_topk_multitask_suite(
     let max_tokens = multitask_max_tokens();
     let tasks = filter_multitask_specs(multitask_specs(tokenizer, target_tokens));
     let top_block_cases = multitask_top_block_cases()?;
+    let materialization_warmup = if let Some(first_task) = tasks.first() {
+        run_quality_materialization_warmup(model, &first_task.prompt)?
+    } else {
+        None
+    };
     let mut records = Vec::new();
     eprintln!(
         "running top-k multitask diagnostic: target={target_tokens} tasks={} top_block_cases={:?} max_tokens={max_tokens}",
@@ -3543,7 +3592,11 @@ fn run_topk_multitask_suite(
         let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
         let dense_output = dense.output.clone();
         let dense_trace = dense.generated_logit_trace.clone();
-        let dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        let mut dense_record = dense_multitask_record(probe, config, target_tokens, &spec, dense);
+        if let Some((elapsed_ms, prompt_tokens)) = materialization_warmup {
+            dense_record.materialization_warmup_elapsed_ms = Some(elapsed_ms);
+            dense_record.materialization_warmup_prompt_tokens = Some(prompt_tokens);
+        }
         append_report_record(&dense_record)?;
         records.push(dense_record);
 
@@ -3555,7 +3608,7 @@ fn run_topk_multitask_suite(
                 *top_blocks,
                 max_tokens,
             )?;
-            let record = topk_multitask_record(TopkMultitaskRecordInput {
+            let mut record = topk_multitask_record(TopkMultitaskRecordInput {
                 probe,
                 config,
                 target_tokens,
@@ -3566,6 +3619,10 @@ fn run_topk_multitask_suite(
                 generated,
                 top_blocks: *top_blocks,
             });
+            if let Some((elapsed_ms, prompt_tokens)) = materialization_warmup {
+                record.materialization_warmup_elapsed_ms = Some(elapsed_ms);
+                record.materialization_warmup_prompt_tokens = Some(prompt_tokens);
+            }
             eprintln!(
                 "  task={} top_blocks={} status={:?} score={}/{} active_kv={:?} output={:?}",
                 record.task,

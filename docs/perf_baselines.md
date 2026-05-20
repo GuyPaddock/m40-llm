@@ -47,12 +47,20 @@ Qwen quality smoke:
 | `block-select-exact` top4 direct FP16-K/q4-V | enabled | 0.882 s | 1.448 s | `"` | Reuses materialized weights from the dense row. |
 | Dense `off` | disabled | 110.603 s | 111.474 s | `"` | Slower than materialized path. |
 | `block-select-exact` top4 direct FP16-K/q4-V | disabled | 24.264 s | 25.586 s | `"` | Slower than warm materialized path. |
+| Dense warmup using same 64-token prompt | enabled | 89.946 s | 91.292 s | `"` | Unreported `M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION=1` row. |
 
 Notes:
 
 - `M40LLM_KV_QUALITY_TOP_BLOCKS` now aliases the multitask-specific
   `M40LLM_KV_MULTITASK_TOP_BLOCKS`, so bounded top-block smokes can use the
   same knob as the other quality suites.
+- `M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION=1` records
+  `materialization_warmup_elapsed_ms` and `materialization_warmup_prompt_tokens`
+  on top-k multitask JSONL rows. A short-prompt warmup completed but did not
+  warm the same path as the 64-token quality row; a same-prompt warmup still
+  timed out before measured rows completed under a 180 s bound. Treat this as
+  evidence that Qwen cold/warm accounting needs a dedicated cache-timing
+  diagnostic before longer quality sweeps.
 - The quoted one-token output is not a quality pass; this was a speed
   localization smoke.
 - Raw head128 attention kernels are not the multi-minute bottleneck. Cold Qwen

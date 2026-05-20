@@ -420,6 +420,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   materialization was slower for both dense and compressed rows. The next speed
   target should separate cold materialization from warm steady Qwen quality
   timings rather than disabling the materialized FP32 cuBLAS path.
+  `M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION=1` now records a dense warmup
+  generation before top-k multitask rows, but a same-prompt Qwen warmup still
+  did not produce measured rows within a 180 s bound; add more explicit
+  materialized-cache timing/inspection before longer Qwen sweeps.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
