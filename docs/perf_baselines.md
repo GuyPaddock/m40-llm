@@ -68,6 +68,11 @@ Notes:
   materialization is worse. Practical Qwen quality validation should separate
   cold materialization from warm steady rows instead of treating the first dense
   row as steady-state quality latency.
+- A TinyLlama 64-token smoke validated the new materialized-cache JSONL fields:
+  the dense row reported 155 cached FP32 entries and 4.14 GB of materialized
+  weights, and the following direct FP16-K/q4-V compressed row reported the same
+  cache size while reducing prompt prefill from 844 ms to 336 ms. The row was a
+  field-emission smoke, not a retrieval-quality result.
 
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 

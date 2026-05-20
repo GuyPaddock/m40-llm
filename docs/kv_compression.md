@@ -66,8 +66,11 @@ the default generated-token budget.
 Use `M40LLM_KV_QUALITY_REPORT=path/to/report.jsonl` to write one JSONL record
 per case. Records include mode, prompt tokens, generated tokens, pass/fail,
 output text, prefill/decode/total timing, token rates, KV byte accounting, and
-compression ratio. `attention_compression_elapsed_ms` is currently `null`
-unless a per-attention counter is available.
+compression ratio. CUDA rows also include
+`materialized_f32_cache_entries` and `materialized_f32_cache_bytes` so Qwen-like
+cross-model runs can distinguish cold FP32 weight materialization from steady
+decode/prefill behavior. `attention_compression_elapsed_ms` is currently
+`null` unless a per-attention counter is available.
 
 Set `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1` for cross-model smoke runs where
 diagnostic overhead would dominate. This leaves pass/fail, output, timing, and

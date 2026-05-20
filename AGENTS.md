@@ -423,7 +423,9 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_KV_QUALITY_WARMUP_MATERIALIZATION=1` now records a dense warmup
   generation before top-k multitask rows, but a same-prompt Qwen warmup still
   did not produce measured rows within a 180 s bound; add more explicit
-  materialized-cache timing/inspection before longer Qwen sweeps.
+  materialized-cache timing/inspection before longer Qwen sweeps. Generated
+  quality rows now include materialized FP32 cache entry and byte counts for
+  that investigation.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

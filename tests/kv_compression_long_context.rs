@@ -85,6 +85,8 @@ struct CaseRecord {
     temporary_dense_kv_bytes: Option<usize>,
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
+    materialized_f32_cache_entries: Option<usize>,
+    materialized_f32_cache_bytes: Option<usize>,
     exact_old_backing: Option<String>,
     exact_old_attention_backend: Option<String>,
     exact_block_backend_variant: Option<String>,
@@ -234,6 +236,8 @@ struct MultiTaskRecord {
     fallback_active_kv_bytes_all_layers: Option<usize>,
     final_kv_allocated_bytes: Option<usize>,
     dense_equivalent_kv_bytes: Option<usize>,
+    materialized_f32_cache_entries: Option<usize>,
+    materialized_f32_cache_bytes: Option<usize>,
     exact_old_backing: Option<String>,
     exact_old_attention_backend: Option<String>,
     old_k_fp16_bytes: Option<usize>,
@@ -3195,6 +3199,8 @@ fn dense_multitask_record(
         fallback_active_kv_bytes_all_layers: None,
         final_kv_allocated_bytes: generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: generated.dense_equivalent_kv_bytes,
+        materialized_f32_cache_entries: generated.materialized_f32_cache_entries,
+        materialized_f32_cache_bytes: generated.materialized_f32_cache_bytes,
         exact_old_backing: generated.exact_old_backing,
         exact_old_attention_backend: generated.exact_old_attention_backend,
         old_k_fp16_bytes: generated.old_k_fp16_bytes,
@@ -3335,6 +3341,8 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
             .flatten(),
         final_kv_allocated_bytes: input.final_generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: input.final_generated.dense_equivalent_kv_bytes,
+        materialized_f32_cache_entries: input.final_generated.materialized_f32_cache_entries,
+        materialized_f32_cache_bytes: input.final_generated.materialized_f32_cache_bytes,
         exact_old_backing: input.final_generated.exact_old_backing.clone(),
         exact_old_attention_backend: input.final_generated.exact_old_attention_backend.clone(),
         old_k_fp16_bytes: input.final_generated.old_k_fp16_bytes,
@@ -3480,6 +3488,8 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         fallback_active_kv_bytes_all_layers: None,
         final_kv_allocated_bytes: input.generated.final_kv_allocated_bytes,
         dense_equivalent_kv_bytes: input.generated.dense_equivalent_kv_bytes,
+        materialized_f32_cache_entries: input.generated.materialized_f32_cache_entries,
+        materialized_f32_cache_bytes: input.generated.materialized_f32_cache_bytes,
         exact_old_backing: input.generated.exact_old_backing.clone(),
         exact_old_attention_backend: input.generated.exact_old_attention_backend.clone(),
         old_k_fp16_bytes: input.generated.old_k_fp16_bytes,
@@ -4190,6 +4200,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                     let mut temporary_dense_kv_bytes = None;
                                     let mut final_kv_allocated_bytes = None;
                                     let mut dense_equivalent_kv_bytes = None;
+                                    let mut materialized_f32_cache_entries = None;
+                                    let mut materialized_f32_cache_bytes = None;
                                     let mut exact_old_backing = None;
                                     let mut exact_old_attention_backend = None;
                                     let mut q8_old_backing_bytes = None;
@@ -4405,6 +4417,10 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                                 generated.final_kv_allocated_bytes;
                                             dense_equivalent_kv_bytes =
                                                 generated.dense_equivalent_kv_bytes;
+                                            materialized_f32_cache_entries =
+                                                generated.materialized_f32_cache_entries;
+                                            materialized_f32_cache_bytes =
+                                                generated.materialized_f32_cache_bytes;
                                             exact_old_backing = generated.exact_old_backing.clone();
                                             exact_old_attention_backend =
                                                 generated.exact_old_attention_backend.clone();
@@ -4731,6 +4747,8 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                         temporary_dense_kv_bytes,
                                         final_kv_allocated_bytes,
                                         dense_equivalent_kv_bytes,
+                                        materialized_f32_cache_entries,
+                                        materialized_f32_cache_bytes,
                                         exact_old_backing,
                                         exact_old_attention_backend,
                                         exact_block_backend_variant,

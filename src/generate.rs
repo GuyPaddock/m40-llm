@@ -70,6 +70,8 @@ pub struct GeneratedText {
     pub temporary_dense_kv_bytes: Option<usize>,
     pub final_kv_allocated_bytes: Option<usize>,
     pub dense_equivalent_kv_bytes: Option<usize>,
+    pub materialized_f32_cache_entries: Option<usize>,
+    pub materialized_f32_cache_bytes: Option<usize>,
     pub exact_old_backing: Option<String>,
     pub exact_old_attention_backend: Option<String>,
     pub q8_old_backing_bytes: Option<usize>,
@@ -786,6 +788,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         "{}.generate_text_total",
         options.log_prefix
     );
+    #[cfg(feature = "cuda")]
+    let (materialized_f32_cache_entries, materialized_f32_cache_bytes) =
+        model.materialized_f32_cache_stats();
+    #[cfg(not(feature = "cuda"))]
+    let (materialized_f32_cache_entries, materialized_f32_cache_bytes) = (0usize, 0usize);
 
     Ok(GeneratedText {
         output: sanitize_output(&text),
@@ -804,6 +811,8 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .kv_cache
             .as_ref()
             .map(|kv| kv.dense_equivalent_bytes()),
+        materialized_f32_cache_entries: Some(materialized_f32_cache_entries),
+        materialized_f32_cache_bytes: Some(materialized_f32_cache_bytes),
         exact_old_backing: model
             .kv_cache
             .as_ref()

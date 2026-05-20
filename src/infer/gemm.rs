@@ -372,6 +372,13 @@ impl LoadedModel {
     }
 
     #[cfg(feature = "cuda")]
+    pub fn materialized_f32_cache_stats(&self) -> (usize, usize) {
+        let weights = self.materialized_weights.lock().unwrap();
+        let bytes = weights.values().map(|w| w.bytes).sum();
+        (weights.len(), bytes)
+    }
+
+    #[cfg(feature = "cuda")]
     fn estimated_materialized_f32_bytes(&self) -> usize {
         self.device_tensors
             .values()
