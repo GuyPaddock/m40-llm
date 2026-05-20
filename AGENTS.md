@@ -411,7 +411,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   dense packed prefill and direct FP16-K/q4-V exact-old attention now admit
   head_dim=128 so Qwen long-context KV quality validation can proceed. The older
   staged/q8 exact-old and summary/lossy compressed CUDA paths remain head_dim=64
-  only.
+  only. Qwen/head128 microbenchmark hooks now show raw packed prefill attention
+  is milliseconds at 512 tokens, while a 256-token full quality row still timed
+  out after 180 s even with minimal telemetry. The next speed target should be
+  full-model Qwen prefill timing, especially materialized projection/GEMM and
+  per-layer packed-prefix orchestration.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

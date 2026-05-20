@@ -69,6 +69,10 @@ output text, prefill/decode/total timing, token rates, KV byte accounting, and
 compression ratio. `attention_compression_elapsed_ms` is currently `null`
 unless a per-attention counter is available.
 
+Set `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1` for cross-model smoke runs where
+diagnostic overhead would dominate. This leaves pass/fail, output, timing, and
+KV accounting enabled but does not force selection telemetry or logit traces.
+
 ## Prefill Experiments
 
 - `M40LLM_PREFILL_CHUNK_SIZE=<n>` enables experimental packed-prefix prefill

@@ -2,6 +2,42 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-19: Qwen2.5 Head128 Measurement Hooks
+
+This checkpoint adds a dedicated `attention_qwen_head128` Criterion benchmark
+group for Qwen-like shapes (`q_heads=16`, `kv_heads=2`, `head_dim=128`) and an
+opt-in minimal-telemetry mode for cross-model KV quality smoke tests.
+
+Validation:
+
+- `cargo fmt --all` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --bench attention --test attention_prefill_varlen --test attention_parity_cuda_grid --test kv_compression_long_context`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_prefill_varlen --test attention_parity_cuda_grid -- --nocapture --test-threads=1`
+  passed: 11 tests.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Quick Qwen-shape microbenchmarks:
+
+| Benchmark | Time | Throughput |
+| --- | ---: | ---: |
+| `attention_qwen_head128/prefill_q16_kv2_d128_s128` | 1.448 ms | 11.31 Melem/s |
+| `attention_qwen_head128/prefill_q16_kv2_d128_s512` | 20.39 ms | 12.86 Melem/s |
+| `attention_qwen_head128/direct_fp16_k_q4_v_q16_kv2_d128_s512_top4` | 776 us | 329.8 Kelem/s |
+
+Qwen quality smoke:
+
+- Command used `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1`,
+  `M40LLM_KV_QUALITY_TARGETS=256`, `M40LLM_KV_MULTITASK_TASKS=single-needle`,
+  and `M40LLM_KV_QUALITY_TOP_BLOCKS=4`.
+- The run reached model load and packed-prefix prefill but timed out after
+  180 s before emitting any JSONL row.
+- Interpretation: raw head128 attention kernels are not the multi-minute
+  bottleneck. The next target should be full-model Qwen prefill timing,
+  especially materialized projection/GEMM and per-layer packed-prefix
+  orchestration.
+
 ## 2026-05-19: Qwen2.5 Head128 Attention Enablement
 
 This checkpoint generalizes the packed varlen prefill CUDA path from a

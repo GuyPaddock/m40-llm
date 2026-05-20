@@ -2723,7 +2723,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t kvh_idx = qh_idx / group;
         const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
         const size_t packed_per_token = (size_t)kv_heads * (size_t)(head_dim / 2u);
-        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
         const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
         const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
         const uint32_t recent_start = old_len;
@@ -3629,7 +3629,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         const uint32_t group = q_heads / kv_heads;
         const uint32_t kvh_idx = qh_idx / group;
-        const float inv_sqrt = 1.0f / sqrtf((float)head_dim);
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
         const uint32_t q_token_offset = q_offsets[batch_idx] + q_idx;
         const uint32_t kv_offset = kv_offsets[batch_idx];
         const uint32_t causal_end = kv_len - q_len + q_idx;

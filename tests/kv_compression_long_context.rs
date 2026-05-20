@@ -802,6 +802,12 @@ fn topk_multitask_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn quality_minimal_telemetry_enabled() -> bool {
+    std::env::var("M40LLM_KV_QUALITY_MINIMAL_TELEMETRY")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn topk_sensitivity_diagnostic_enabled() -> bool {
     std::env::var("M40LLM_KV_TOPK_SENSITIVITY_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -1684,7 +1690,9 @@ fn run_retrieval_case(
     } else {
         None
     };
-    let _selection_telemetry_guard = if exact_selection_sweep
+    let minimal_telemetry = quality_minimal_telemetry_enabled();
+    let _selection_telemetry_guard = if !minimal_telemetry
+        && exact_selection_sweep
         && matches!(
             mode,
             KvCompressMode::BlockSelectExact
@@ -1697,10 +1705,12 @@ fn run_retrieval_case(
     } else {
         None
     };
-    let _logit_compare_guard = (q4_v_diagnostic_enabled() || policy_diagnostic_enabled())
-        .then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
-    let _logit_trace_guard = (q4_v_diagnostic_enabled() || policy_diagnostic_enabled())
-        .then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1"));
+    let _logit_compare_guard = (!minimal_telemetry
+        && (q4_v_diagnostic_enabled() || policy_diagnostic_enabled()))
+    .then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
+    let _logit_trace_guard = (!minimal_telemetry
+        && (q4_v_diagnostic_enabled() || policy_diagnostic_enabled()))
+    .then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1"));
 
     prepare_kv_cache(model, mode, rep_case, top_blocks)?;
     let prompt = retrieval_prompt(tokenizer, target_tokens, needle_position);
@@ -3022,9 +3032,13 @@ fn run_multitask_generate(
     max_tokens: usize,
 ) -> Result<GeneratedText> {
     let _prefill_guard = EnvVarGuard::set("M40LLM_PREFILL_CHUNK_SIZE", "4096");
-    let _selection_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
-    let _logit_trace_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1");
-    let _logit_compare_guard = EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1");
+    let minimal_telemetry = quality_minimal_telemetry_enabled();
+    let _selection_guard =
+        (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1"));
+    let _logit_trace_guard =
+        (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1"));
+    let _logit_compare_guard =
+        (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
     let preserve_policy_env =
         topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled();
     let _policy_guard =
