@@ -162,6 +162,18 @@ impl LoadedModel {
             format!("layers.{layer}.attention.wv.weight"),
             format!("blk.{layer}.attn_v.weight"),
         ];
+        let bq_names = vec![
+            format!("layers.{layer}.attention.wq.bias"),
+            format!("blk.{layer}.attn_q.bias"),
+        ];
+        let bk_names = vec![
+            format!("layers.{layer}.attention.wk.bias"),
+            format!("blk.{layer}.attn_k.bias"),
+        ];
+        let bv_names = vec![
+            format!("layers.{layer}.attention.wv.bias"),
+            format!("blk.{layer}.attn_v.bias"),
+        ];
         let wo_names = vec![
             format!("layers.{layer}.attention.wo.weight"),
             format!("blk.{layer}.attn_output.weight"),
@@ -193,6 +205,9 @@ impl LoadedModel {
         let wq = self.find_tensor_any(&wq_names)?.clone();
         let wk = self.find_tensor_any(&wk_names)?.clone();
         let wv = self.find_tensor_any(&wv_names)?.clone();
+        let bq = self.find_tensor_any_optional(&bq_names);
+        let bk = self.find_tensor_any_optional(&bk_names);
+        let bv = self.find_tensor_any_optional(&bv_names);
         let wo = self.find_tensor_any(&wo_names)?.clone();
         let w_gate = self.find_tensor_any(&w_gate_names)?.clone();
         let w_up = self.find_tensor_any(&w_up_names)?.clone();
@@ -250,6 +265,23 @@ impl LoadedModel {
         if on != expect_no {
             anyhow::bail!("wo second dim {} != expected {}", on, expect_no);
         }
+        for (name, bias, expected) in [
+            ("bq", &bq, expect_nq),
+            ("bk", &bk, expect_nk),
+            ("bv", &bv, expect_nv),
+        ] {
+            if let Some(t) = bias {
+                if t.dtype != GgmlDType::F32 {
+                    anyhow::bail!("{name} expected F32 bias, got {:?}", t.dtype);
+                }
+                if t.shape.len() != 1 || t.shape[0] as usize != expected {
+                    anyhow::bail!(
+                        "{name} shape invalid: expected [{expected}], got {:?}",
+                        t.shape
+                    );
+                }
+            }
+        }
         // Infer hidden_dim from up/gate
         for (name, t) in [("w_gate", &w_gate), ("w_up", &w_up)] {
             let k = *t.shape.first().unwrap_or(&0) as usize;
@@ -305,6 +337,9 @@ impl LoadedModel {
             wq,
             wk,
             wv,
+            bq,
+            bk,
+            bv,
             wo,
             w_gate,
             w_up,

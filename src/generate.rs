@@ -305,6 +305,36 @@ fn log_top_logits(logits: &[f32], k: usize, log_prefix: &str) {
     eprintln!("[{log_prefix}] top_logits={top:?}");
 }
 
+fn log_tokenizer_diag(
+    tokenizer: &Tokenizer,
+    prompt: &str,
+    add_bos: bool,
+    prompt_ids: &[u32],
+    log_prefix: &str,
+) {
+    if std::env::var("M40LLM_TOKENIZER_DIAG").ok().as_deref() != Some("1") {
+        return;
+    }
+    let head: Vec<u32> = prompt_ids.iter().copied().take(32).collect();
+    let mut tail: Vec<u32> = prompt_ids.iter().rev().copied().take(16).collect();
+    tail.reverse();
+    eprintln!(
+        "[{log_prefix}] tokenizer kind={:?} bos={:?} eos={:?} pad={:?} unk={:?} stop_ids={:?} has_chat_template={} add_bos={} prompt_chars={} prompt_tokens={} prompt_head={:?} prompt_tail={:?}",
+        tokenizer.kind(),
+        tokenizer.bos_id(),
+        tokenizer.eos_id(),
+        tokenizer.pad_id(),
+        tokenizer.unk_id(),
+        tokenizer.stop_ids(),
+        tokenizer.has_chat_template(),
+        add_bos,
+        prompt.chars().count(),
+        prompt_ids.len(),
+        head,
+        tail,
+    );
+}
+
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
     let total_start = std::time::Instant::now();
     #[cfg(feature = "cuda")]
@@ -334,10 +364,17 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         .unwrap_or_else(|_| Tokenizer::byte_level());
     let (prompt, add_bos) = prepare_prompt(&tokenizer, &options.prompt, options.prompt_format);
     let encode_start = std::time::Instant::now();
-    let prompt_token_len = tokenizer
+    let prompt_ids = tokenizer
         .encode_with_specials(&prompt, add_bos, false)
-        .context("encode prompt")?
-        .len();
+        .context("encode prompt")?;
+    log_tokenizer_diag(
+        &tokenizer,
+        &prompt,
+        add_bos,
+        &prompt_ids,
+        options.log_prefix,
+    );
+    let prompt_token_len = prompt_ids.len();
     timing::timing_log!(
         encode_start.elapsed(),
         "{}.prompt_encode",
@@ -750,9 +787,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     };
 
     let decode_start = std::time::Instant::now();
-    let mut ids = tokenizer
-        .encode_with_specials(&prompt, add_bos, false)
-        .context("encode prompt for decode")?;
+    let mut ids = prompt_ids;
     let start_len = ids.len();
     let mut generated = Vec::new();
     loop {

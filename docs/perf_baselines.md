@@ -2,6 +2,75 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen2.5 Tokenizer and QKV Bias Correctness
+
+This checkpoint fixes the first Qwen2.5 semantic decode blocker after the
+`head_dim=128` attention speed work. Qwen2/Qwen2.5 tokenization now uses the
+real `tiktoken` Qwen2 encoding for normal text and special-token paths, and
+standard layer mapping now accepts optional Q/K/V F32 attention biases such as
+`blk.N.attn_q.bias`, `blk.N.attn_k.bias`, and `blk.N.attn_v.bias`. Full-layer
+decode applies those biases after the async Q/K/V projections before RoPE and KV
+append.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test qwen2_tokenizer_prompt --test forward_with_layer_smoke`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda qwen2 --test qwen2_tokenizer_prompt -- --nocapture`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test map_standard_layer -- --nocapture`
+  passed.
+
+Qwen direct generation canary:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TOKENIZER_DIAG=1 \
+  cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  "Hello, please answer with the word OK." \
+  --top-k 1 --require-sm52 --max-tokens 8
+```
+
+Result:
+
+- Prompt tokenizer diagnostic reported `TokenizerKind::Qwen2`, 17 prompt tokens,
+  and ChatML IDs beginning with `[151644, 872, ...]`.
+- Generated output: `OK`.
+- The same canary previously emitted nonsensical text (`1æĳħ ...` before the
+  tokenizer fix, then `zro 摅` after tokenization but before Q/K/V bias
+  application).
+
+Bounded quality smoke:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_LONG_CONTEXT_RETRIEVAL_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+M40LLM_KV_TOPK_MULTITASK_DIAG=1 \
+M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1 \
+M40LLM_KV_QUALITY_TARGETS=256 \
+M40LLM_KV_MULTITASK_TASKS=single-needle \
+M40LLM_KV_QUALITY_TOP_BLOCKS=4 \
+M40LLM_KV_MULTITASK_MAX_TOKENS=8 \
+M40LLM_KV_QUALITY_WARM_ROWS=1 \
+M40LLM_KV_QUALITY_REPORT=/tmp/qwen2-correctness-after-bias-256.jsonl \
+  cargo test --features cuda --test kv_compression_long_context -- --nocapture --test-threads=1
+```
+
+The test completed in roughly 51 s and emitted dense plus direct FP16-K/q4-V
+rows, but dense `off` still failed the 256-token single-needle prompt with:
+
+```text
+    return the code:
+
+    >>> Your
+```
+
+Treat this quality row as inconclusive for compressed KV policy. The simple
+instruction canary is now semantically sane, but Qwen retrieval prompts need a
+separate prompt/answer-format investigation before drawing cross-model KV
+quality conclusions.
+
 ## 2026-05-20: Qwen2.5 Dense Head128 Attention Specialization
 
 This checkpoint adds a dense last-token GQA specialization for `head_dim=128`,

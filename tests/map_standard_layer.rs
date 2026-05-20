@@ -3,34 +3,36 @@ use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufValue};
 use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
 use std::collections::HashMap;
 
+fn strides_from(shape: &[u64]) -> Vec<usize> {
+    let mut out = Vec::with_capacity(shape.len());
+    let mut stride = 1usize;
+    for &dim in shape.iter().rev() {
+        out.push(stride);
+        stride *= dim as usize;
+    }
+    out.reverse();
+    out
+}
+
+fn make_view(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
+    let strides = strides_from(&shape);
+    DeviceTensorView {
+        dtype,
+        shape,
+        strides,
+        byte_offset: 0,
+        nbytes: 0,
+        #[cfg(feature = "cuda")]
+        dptr: std::ptr::null_mut(),
+    }
+}
+
 fn make_model_with_layer(
     layer: usize,
     d_model: usize,
     hidden: usize,
     f16_weights: bool,
 ) -> Result<LoadedModel> {
-    fn strides_from(shape: &[u64]) -> Vec<usize> {
-        let mut out = Vec::with_capacity(shape.len());
-        let mut stride = 1usize;
-        for &dim in shape.iter().rev() {
-            out.push(stride);
-            stride *= dim as usize;
-        }
-        out.reverse();
-        out
-    }
-    fn make_view(dtype: GgmlDType, shape: Vec<u64>) -> DeviceTensorView {
-        let strides = strides_from(&shape);
-        DeviceTensorView {
-            dtype,
-            shape,
-            strides,
-            byte_offset: 0,
-            nbytes: 0,
-            #[cfg(feature = "cuda")]
-            dptr: std::ptr::null_mut(),
-        }
-    }
     // Minimal GGUF backing; only used for metadata if present
     let mut gguf = GgufModel::new(0);
     gguf.metadata.insert(
@@ -151,6 +153,21 @@ fn make_model_with_layer(
     })
 }
 
+fn add_qkv_biases(lm: &mut LoadedModel, layer: usize, q_dim: usize, kv_dim: usize) {
+    lm.device_tensors.insert(
+        format!("blk.{layer}.attn_q.bias"),
+        make_view(GgmlDType::F32, vec![q_dim as u64]),
+    );
+    lm.device_tensors.insert(
+        format!("blk.{layer}.attn_k.bias"),
+        make_view(GgmlDType::F32, vec![kv_dim as u64]),
+    );
+    lm.device_tensors.insert(
+        format!("blk.{layer}.attn_v.bias"),
+        make_view(GgmlDType::F32, vec![kv_dim as u64]),
+    );
+}
+
 #[test]
 fn map_standard_layer_ok() -> Result<()> {
     let lm = match make_model_with_layer(0, 32, 64, true) {
@@ -163,6 +180,41 @@ fn map_standard_layer_ok() -> Result<()> {
     let mapped = lm.map_standard_layer(0).expect("should map successfully");
     assert_eq!(mapped.d_model, 32);
     assert_eq!(mapped.hidden_dim, 64);
+    Ok(())
+}
+
+#[test]
+fn map_standard_layer_accepts_optional_qkv_biases() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    add_qkv_biases(&mut lm, 0, 32, 32);
+
+    let mapped = lm.map_standard_layer(0).expect("should map with biases");
+    assert!(mapped.bq.is_some());
+    assert!(mapped.bk.is_some());
+    assert!(mapped.bv.is_some());
+    Ok(())
+}
+
+#[test]
+fn map_standard_layer_rejects_bad_qkv_bias_shape() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    add_qkv_biases(&mut lm, 0, 31, 32);
+
+    let err = lm.map_standard_layer(0).unwrap_err();
+    let msg = format!("{err}");
+    assert!(msg.contains("bq shape invalid"), "unexpected error: {msg}");
     Ok(())
 }
 

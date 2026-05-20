@@ -464,6 +464,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   currently inconclusive. The next Qwen task should debug model correctness
   first: tokenizer/chat template, output token mapping, RoPE/scaling metadata,
   tied/output embedding layout, or architecture-specific tensor mapping.
+  Qwen2/Qwen2.5 tokenization now uses the real `tiktoken` Qwen2 encoding for
+  normal text and special-token paths, and standard layer mapping accepts
+  optional Q/K/V F32 attention biases such as `blk.N.attn_q.bias`,
+  `blk.N.attn_k.bias`, and `blk.N.attn_v.bias`. Full-layer decode applies those
+  biases after async Q/K/V projection before RoPE/KV append. The direct Qwen2.5
+  CUDA canary for `Hello, please answer with the word OK.` now generates `OK`,
+  whereas it previously emitted nonsensical text. A bounded 256-token
+  single-needle quality row now completes in roughly 51 s, but dense `off`
+  still fails that retrieval prompt with the same short answer as compressed
+  mode; treat Qwen long-context KV quality as prompt/benchmark-inconclusive
+  until dense Qwen retrieval prompts are validated.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

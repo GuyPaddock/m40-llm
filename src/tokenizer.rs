@@ -243,7 +243,11 @@ impl Tokenizer {
             TokenizerKind::ByteLevel => Ok(text.as_bytes().iter().map(|&b| b as u32).collect()),
             TokenizerKind::SentencePiece => Ok(self.encode_sentencepiece(text)),
             TokenizerKind::Bpe => Ok(self.encode_bpe(text)),
-            TokenizerKind::Qwen2 => Ok(self.encode_qwen2(text)),
+            TokenizerKind::Qwen2 => {
+                let enc = tiktoken::get_encoding("qwen2")
+                    .ok_or_else(|| anyhow!("qwen2 tokenizer encoding unavailable"))?;
+                Ok(enc.encode(text))
+            }
             TokenizerKind::Llama3 => {
                 let enc = tiktoken::get_encoding("llama3")
                     .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
@@ -259,7 +263,11 @@ impl Tokenizer {
                     .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
                 Ok(enc.encode_with_special_tokens(text))
             }
-            TokenizerKind::Qwen2 => Ok(self.encode_qwen2_with_specials(text)),
+            TokenizerKind::Qwen2 => {
+                let enc = tiktoken::get_encoding("qwen2")
+                    .ok_or_else(|| anyhow!("qwen2 tokenizer encoding unavailable"))?;
+                Ok(enc.encode_with_special_tokens(text))
+            }
             _ => self.encode(text),
         }
     }
@@ -317,9 +325,14 @@ impl Tokenizer {
                 .map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"));
         }
 
-        if self.kind == TokenizerKind::Llama3 {
-            let enc = tiktoken::get_encoding("llama3")
-                .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
+        if self.kind == TokenizerKind::Llama3 || self.kind == TokenizerKind::Qwen2 {
+            let encoding_name = if self.kind == TokenizerKind::Qwen2 {
+                "qwen2"
+            } else {
+                "llama3"
+            };
+            let enc = tiktoken::get_encoding(encoding_name)
+                .ok_or_else(|| anyhow!("{encoding_name} tokenizer encoding unavailable"))?;
             return enc
                 .decode_to_string(ids)
                 .map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"));
@@ -378,39 +391,6 @@ impl Tokenizer {
             }
             self.encode_piece(&piece, &mut ids);
         }
-        ids
-    }
-
-    fn encode_qwen2(&self, text: &str) -> Vec<u32> {
-        self.encode_bpe(text)
-    }
-
-    fn encode_qwen2_with_specials(&self, text: &str) -> Vec<u32> {
-        const SPECIALS: [&str; 3] = ["<|im_start|>", "<|im_end|>", "<|endoftext|>"];
-        let mut ids = Vec::new();
-        let mut rest = text;
-
-        while !rest.is_empty() {
-            let next = SPECIALS
-                .iter()
-                .filter_map(|special| rest.find(special).map(|idx| (idx, *special)))
-                .min_by_key(|(idx, _)| *idx);
-            let Some((idx, special)) = next else {
-                ids.extend(self.encode_qwen2(rest));
-                break;
-            };
-
-            if idx > 0 {
-                ids.extend(self.encode_qwen2(&rest[..idx]));
-            }
-            if let Some(id) = self.token_id(special) {
-                ids.push(id);
-            } else {
-                ids.extend(self.encode_qwen2(special));
-            }
-            rest = &rest[idx + special.len()..];
-        }
-
         ids
     }
 
