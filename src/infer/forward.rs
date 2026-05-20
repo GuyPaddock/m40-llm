@@ -21,6 +21,9 @@ use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
+type QkvBiasPtrs = (*const c_void, *const c_void, *const c_void);
+
+#[cfg(feature = "cuda")]
 #[derive(Debug, Clone, Copy)]
 pub struct ForwardBatchItem {
     pub d_x_f32: *mut c_void,
@@ -96,6 +99,69 @@ fn forward_finite_log_enabled() -> bool {
 }
 
 impl LoadedModel {
+    #[cfg(feature = "cuda")]
+    fn qkv_bias_ptrs(&self, w: &super::StandardLayerWeights) -> Result<Option<QkvBiasPtrs>> {
+        let bq_ptr =
+            w.bq.as_ref()
+                .map(|view| self.tensor_device_ptr("bq", view))
+                .transpose()?;
+        let bk_ptr =
+            w.bk.as_ref()
+                .map(|view| self.tensor_device_ptr("bk", view))
+                .transpose()?;
+        let bv_ptr =
+            w.bv.as_ref()
+                .map(|view| self.tensor_device_ptr("bv", view))
+                .transpose()?;
+        match (bq_ptr, bk_ptr, bv_ptr) {
+            (Some(bq), Some(bk), Some(bv)) => Ok(Some((bq, bk, bv))),
+            (None, None, None) => Ok(None),
+            _ => anyhow::bail!("Q/K/V attention biases must be all present or all absent"),
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    fn apply_qkv_bias_async(
+        &self,
+        qkv_bias: Option<QkvBiasPtrs>,
+        rows: usize,
+        d_model: usize,
+        kv_dim: usize,
+        ws: ForwardWorkspacePtrs,
+    ) -> Result<()> {
+        let Some((d_bq, d_bk, d_bv)) = qkv_bias else {
+            return Ok(());
+        };
+        if rows == 0 {
+            return Ok(());
+        }
+        let bytes_d = d_model
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("q bias row byte size overflow")?;
+        let bytes_kv = kv_dim
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("kv bias row byte size overflow")?;
+        self.cuda.stream_wait_for_stream(
+            CudaStream::Decode,
+            CudaStream::Prefill,
+            "qkv_project_to_bias_add",
+        )?;
+        for row in 0..rows {
+            let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
+            let k_row = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
+            let v_row = unsafe { mut_byte_offset(ws.dv, row * bytes_kv) };
+            unsafe {
+                self.cuda
+                    .residual_add_f32_async(q_row as *const c_void, d_bq, q_row, d_model)?;
+                self.cuda
+                    .residual_add_f32_async(k_row as *const c_void, d_bk, k_row, kv_dim)?;
+                self.cuda
+                    .residual_add_f32_async(v_row as *const c_void, d_bv, v_row, kv_dim)?;
+            }
+        }
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     fn debug_log_device_f32_finiteness(
         &self,
@@ -184,7 +250,7 @@ impl LoadedModel {
         d_wq_f16: *const c_void,
         d_wk_f16: *const c_void,
         d_wv_f16: *const c_void,
-        qkv_bias: Option<(*const c_void, *const c_void, *const c_void)>,
+        qkv_bias: Option<QkvBiasPtrs>,
         d_wo_f16: *const c_void,
         d_w_gate_f16: *const c_void,
         d_w_up_f16: *const c_void,
@@ -290,31 +356,7 @@ impl LoadedModel {
                         ws.dk,
                         ws.dv,
                     )?;
-                    if let Some((d_bq, d_bk, d_bv)) = qkv_bias {
-                        self.cuda.stream_wait_for_stream(
-                            CudaStream::Decode,
-                            CudaStream::Prefill,
-                            "qkv_project_to_bias_add",
-                        )?;
-                        self.cuda.residual_add_f32_async(
-                            ws.dq as *const c_void,
-                            d_bq,
-                            ws.dq,
-                            d_model as usize,
-                        )?;
-                        self.cuda.residual_add_f32_async(
-                            ws.dk as *const c_void,
-                            d_bk,
-                            ws.dk,
-                            kv_dim as usize,
-                        )?;
-                        self.cuda.residual_add_f32_async(
-                            ws.dv as *const c_void,
-                            d_bv,
-                            ws.dv,
-                            kv_dim as usize,
-                        )?;
-                    }
+                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
                     log_profiled_op(
                         &label,
                         "qkv_project",
@@ -660,6 +702,7 @@ impl LoadedModel {
         d_wq_f16: *const c_void,
         d_wk_f16: *const c_void,
         d_wv_f16: *const c_void,
+        qkv_bias: Option<QkvBiasPtrs>,
         d_wo_f16: *const c_void,
         d_w_gate_f16: *const c_void,
         d_w_up_f16: *const c_void,
@@ -762,6 +805,7 @@ impl LoadedModel {
                         ws.dk,
                         ws.dv,
                     )?;
+                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
                     log_profiled_op(
                         &label,
                         "qkv_project",
@@ -1219,23 +1263,7 @@ impl LoadedModel {
             let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
             let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
             let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
-            let bq_ptr =
-                w.bq.as_ref()
-                    .map(|view| self.tensor_device_ptr("bq", view))
-                    .transpose()?;
-            let bk_ptr =
-                w.bk.as_ref()
-                    .map(|view| self.tensor_device_ptr("bk", view))
-                    .transpose()?;
-            let bv_ptr =
-                w.bv.as_ref()
-                    .map(|view| self.tensor_device_ptr("bv", view))
-                    .transpose()?;
-            let qkv_bias = match (bq_ptr, bk_ptr, bv_ptr) {
-                (Some(bq), Some(bk), Some(bv)) => Some((bq, bk, bv)),
-                (None, None, None) => None,
-                _ => anyhow::bail!("Q/K/V attention biases must be all present or all absent"),
-            };
+            let qkv_bias = self.qkv_bias_ptrs(&w)?;
             let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
             let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1543,6 +1571,7 @@ impl LoadedModel {
             let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
             let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
             let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+            let qkv_bias = self.qkv_bias_ptrs(&w)?;
             let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
             let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1570,6 +1599,7 @@ impl LoadedModel {
                 wq_ptr,
                 wk_ptr,
                 wv_ptr,
+                qkv_bias,
                 wo_ptr,
                 w_gate_ptr,
                 w_up_ptr,
@@ -1771,6 +1801,7 @@ impl LoadedModel {
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+                let qkv_bias = self.qkv_bias_ptrs(&w)?;
                 let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
                 let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
                 let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1854,6 +1885,7 @@ impl LoadedModel {
                     ws.dk,
                     ws.dv,
                 )?;
+                self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
                     "qkv_project",
@@ -2220,6 +2252,7 @@ impl LoadedModel {
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+                let qkv_bias = self.qkv_bias_ptrs(&w)?;
                 let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
                 let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
                 let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -2291,6 +2324,7 @@ impl LoadedModel {
                     ws.dk,
                     ws.dv,
                 )?;
+                self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
                     "qkv_project",

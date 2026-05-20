@@ -2,6 +2,50 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen QKV Bias Coverage for Packed Forward Paths
+
+This checkpoint makes Q/K/V attention bias handling consistent across forward
+paths. The sequential one-token path already applied optional Q/K/V biases after
+projection; packed-prefix prefill, batched decode, and graph-parameter decode
+now do the same.
+
+Validation:
+
+- `cargo fmt --all -- --check` passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo check --features cuda --test forward_with_layer_smoke --test kv_compression_long_context --test qwen2_tokenizer_prompt --test map_standard_layer`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test forward_with_layer_smoke packed_prefill_logits_match_sequential -- --nocapture --test-threads=1`
+  passed for both dense and QKV-bias fixtures.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test map_standard_layer --test qwen2_tokenizer_prompt -- --nocapture`
+  passed.
+- `M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings`
+  passed.
+
+Qwen canaries:
+
+| Run | Result |
+| --- | --- |
+| Direct CLI `Hello, please answer with the word OK.` | still emits `OK` |
+| 256-token default retrieval prompt | dense `off` still fails with repeated code-fence-like text; compressed row is inconclusive |
+| 256-token `qwen-strict` retrieval prompt | dense `off` still fails with `ure`; compressed row is inconclusive |
+
+Reports:
+
+- `/tmp/qwen2-after-qkv-bias-paths-default-256.jsonl`
+- `/tmp/qwen2-after-qkv-bias-paths-qwen-strict-256.jsonl`
+
+Interpretation:
+
+- Missing Q/K/V bias application in packed forward paths was a real correctness
+  gap; the synthetic packed-prefill parity test now covers it.
+- This fix changes Qwen packed-prefix retrieval behavior, but it does not make
+  the current synthetic retrieval prompts dense-valid.
+- Keep Qwen excluded from compressed-KV policy conclusions until the remaining
+  Qwen retrieval blocker is isolated. The next Qwen diagnostic should compare
+  sequential one-token prefill against packed-prefix prefill on the real Qwen
+  model, or inspect first-token logits/top tokens for the failing retrieval
+  prompt.
+
 ## 2026-05-20: Qwen Retrieval Prompt-Style Harness
 
 This checkpoint adds Qwen-specific retrieval prompt styles to the long-context

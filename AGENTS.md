@@ -483,7 +483,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `qwen-fewshot`; dense `off` failed both, so compressed rows were correctly
   marked inconclusive. Do not use Qwen2.5 rows for KV policy conclusions until a
   dense-valid Qwen retrieval prompt or another remaining decode correctness
-  issue is identified.
+  issue is identified. Optional Q/K/V attention bias handling is now shared and
+  applied by sequential one-token decode, graph-parameter decode, batched decode,
+  and packed-prefix prefill. A synthetic CUDA packed-prefill parity test with
+  QKV biases now matches sequential logits, and the direct Qwen `OK` canary
+  still passes. The 256-token Qwen default and `qwen-strict` retrieval rows
+  still fail dense `off`, so the remaining Qwen work should isolate real-model
+  sequential-vs-packed logits or first-token retrieval logits rather than tuning
+  compressed-KV policy.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

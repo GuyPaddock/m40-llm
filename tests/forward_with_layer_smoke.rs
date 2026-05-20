@@ -516,6 +516,66 @@ fn packed_prefill_logits_match_sequential_dense() -> Result<()> {
     run_packed_prefill_logit_parity()
 }
 
+#[test]
+fn packed_prefill_logits_match_sequential_with_qkv_biases() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 256,
+        d_model: 128,
+        hidden: 16,
+        head_count: 2,
+        block_count: 2,
+        context_length: 32,
+    };
+    let (gg_seq, weights_seq) = tiny_gguf::make_attention_bias_tiny_gguf(cfg.clone());
+    let (gg_packed, weights_packed) = tiny_gguf::make_attention_bias_tiny_gguf(cfg.clone());
+    let mut sequential = LoadedModel::from_gguf(gg_seq, weights_seq, -1)?;
+    let mut packed = LoadedModel::from_gguf(gg_packed, weights_packed, -1)?;
+    sequential.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count, 2, 64)?;
+    packed.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count, 2, 64)?;
+
+    let ids = [3, 4, 5, 6];
+    let mut sequential_session = DecodeSession::new_for_sequence(
+        &sequential,
+        0,
+        cfg.d_model,
+        true,
+        "test_seq_bias_prefill",
+        "test_seq_bias_prefill:x",
+        "test_seq_bias_prefill:out",
+    )?;
+    let mut packed_session = DecodeSession::new_for_sequence(
+        &packed,
+        0,
+        cfg.d_model,
+        true,
+        "test_packed_bias_prefill",
+        "test_packed_bias_prefill:x",
+        "test_packed_bias_prefill:out",
+    )?;
+    let sequential_logits = sequential_session.logits_for_ids(&ids, |_| {})?;
+    let packed_logits = packed_session.logits_for_packed_prefix_then_ids(&ids, |_| {})?;
+    sequential.cuda.synchronize_stream(CudaStream::Decode)?;
+    sequential.cuda.synchronize_stream(CudaStream::Prefill)?;
+    packed.cuda.synchronize_stream(CudaStream::Decode)?;
+    packed.cuda.synchronize_stream(CudaStream::Prefill)?;
+    assert_close_logits(&packed_logits, &sequential_logits, 2e-3);
+    assert!(
+        packed_logits.iter().any(|value| value.abs() > 0.01),
+        "biased attention fixture should produce non-zero logits"
+    );
+    assert_eq!(packed_session.processed_len(), ids.len());
+    Ok(())
+}
+
 fn run_compressed_chunked_prefill_logit_parity(mode: KvCompressMode) -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
