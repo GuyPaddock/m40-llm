@@ -2,6 +2,63 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen 2048 Top-K KV Validation
+
+This checkpoint extends the Qwen2.5 cross-model validation to 2048 tokens for
+the preferred experimental exact-old backend:
+
+- model: `Qwen2.5-3B-Instruct-f16.gguf`
+- backend: `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+- attention: `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`
+- policy: plain score-ranked top-k, `top_blocks=4,8`
+- tasks: single-needle, multi-needle, distractor-needle, early-fact QA
+
+Validation commands:
+
+- `M40LLM_KV_TOPK_MULTITASK_DIAG=1 ... M40LLM_KV_QUALITY_TARGETS=2048 M40LLM_KV_QUALITY_TOP_BLOCKS=4,8 ...`
+  emitted `/tmp/qwen2-cross-model-topk-2048.jsonl`. It hit the explicit
+  2400 s timeout after finishing dense/top4/top8 rows for single-needle,
+  multi-needle, and distractor-needle, plus the dense early-fact QA row.
+- A focused early-fact QA follow-up emitted
+  `/tmp/qwen2-cross-model-topk-2048-earlyfact.jsonl` and completed the missing
+  top4/top8 compressed rows.
+
+Results:
+
+| Task | Dense `off` | Top4 | Top8 | Output |
+| --- | --- | --- | --- | --- |
+| single-needle | pass | pass | pass | `ZXQ-NEEDLE-41729` |
+| multi-needle | pass | pass | pass | `ALPHA-13579`, `BRAVO-24680` |
+| distractor-needle | pass | pass | pass | `ORBIT-57291` |
+| early-fact QA | pass | pass | pass | `Reykjavik` |
+
+Timing and memory:
+
+| Task | Prompt tokens | Dense prefill / decode | Top4 prefill / decode | Top8 prefill / decode | Active KV top4 / top8 |
+| --- | ---: | --- | --- | --- | --- |
+| single-needle | 1992 | 203.6 s / 16.5 s | 208.1 s / 14.3 s | 208.3 s / 15.8 s | 40.5 MiB / 45.0 MiB |
+| multi-needle | 2001 | 204.7 s / 24.9 s | 209.9 s / 21.6 s | 210.0 s / 23.8 s | 40.5 MiB / 45.0 MiB |
+| distractor-needle | 1982 | 200.8 s / 10.9 s | 206.1 s / 9.5 s | 206.1 s / 10.5 s | 40.5 MiB / 45.0 MiB |
+| early-fact QA | 1974 | 200.4 s / 5.4 s | 204.5 s / 4.8 s | 204.6 s / 5.3 s | 40.5 MiB / 45.0 MiB |
+
+KV accounting:
+
+- Dense-equivalent Qwen KV allocation: 1,207,959,552 bytes.
+- Direct FP16-K/q4-V final KV allocation: 912,010,896 bytes.
+- Selected block indices/scores were not emitted because this run used
+  `M40LLM_KV_QUALITY_MINIMAL_TELEMETRY=1`.
+
+Interpretation:
+
+- Qwen2.5 remains clean at 2048 for direct FP16-K/q4-V exact-old retrieval with
+  plain top-k: dense `off`, top4, and top8 all pass every tested task.
+- Top16 was not run because top4 and top8 agree and dense passes.
+- This strengthens the cross-model evidence for the backend without changing
+  the policy default: keep top4 as the efficiency setting, and keep larger
+  top-k values diagnostic or task-driven.
+- Next: return to Llama selection-set robustness / score-cluster-adaptive
+  validation before considering 4096+ Qwen or server integration.
+
 ## 2026-05-20: Qwen Cross-Model Top-K KV Quality Checkpoint
 
 This checkpoint validates the preferred experimental exact-old backend on

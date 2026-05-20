@@ -494,7 +494,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   multi-needle inconclusive row was a 16-token answer truncation and passes
   with `M40LLM_KV_MULTITASK_MAX_TOKENS=24`. Treat Qwen as a useful second-model
   checkpoint for the backend, while keeping top4 as the efficiency default and
-  higher top-k values diagnostic/task-driven.
+  higher top-k values diagnostic/task-driven. The bounded Qwen 2048 checkpoint
+  also passes dense `off`, top4, and top8 for single-needle, multi-needle,
+  distractor-needle, and early-fact QA. Top16 was not needed because top4 and
+  top8 agree. The Qwen 2048 run used minimal telemetry, so selected block
+  indices/scores were not emitted; rerun without minimal telemetry only if
+  future Qwen failures require selected-block diagnosis.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
