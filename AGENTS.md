@@ -486,7 +486,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   accept explicit layout selection, and `qwen*` architectures select NeoX RoPE.
   After the fix, raw and auto-formatted Qwen CLI canaries return
   `ZXQ-NEEDLE-41729`, and the 64/256-token default single-needle quality rows
-  pass for dense `off` and direct FP16-K/q4-V top4.
+  pass for dense `off` and direct FP16-K/q4-V top4. A Qwen cross-model
+  top-k multitask checkpoint now validates direct FP16-K/q4-V exact-old
+  retrieval on targets 256, 512, and 1024 across single-needle, multi-needle,
+  distractor-needle, and early-fact QA tasks. Top4, top8, and top16 all pass
+  whenever dense `off` is given enough decode tokens to pass; the only 512
+  multi-needle inconclusive row was a 16-token answer truncation and passes
+  with `M40LLM_KV_MULTITASK_MAX_TOKENS=24`. Treat Qwen as a useful second-model
+  checkpoint for the backend, while keeping top4 as the efficiency default and
+  higher top-k values diagnostic/task-driven.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

@@ -2,6 +2,68 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Qwen Cross-Model Top-K KV Quality Checkpoint
+
+This checkpoint validates the preferred experimental exact-old backend on
+Qwen2.5 after the split-half RoPE fix:
+
+- model: `Qwen2.5-3B-Instruct-f16.gguf`
+- backend: `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+- attention: `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`
+- policy: plain score-ranked top-k, `top_blocks=4,8,16`
+- tasks: single-needle, multi-needle, distractor-needle, early-fact QA
+
+Validation commands:
+
+- `M40LLM_KV_TOPK_MULTITASK_DIAG=1 ... M40LLM_KV_QUALITY_TARGETS=256,512 ...`
+  completed in 477.7 s and emitted `/tmp/qwen2-cross-model-topk-256-512.jsonl`.
+- A focused 512-token multi-needle rerun with
+  `M40LLM_KV_MULTITASK_MAX_TOKENS=24` completed in 134.9 s and emitted
+  `/tmp/qwen2-cross-model-topk-512-multineedle-max24.jsonl`.
+- Optional `M40LLM_KV_QUALITY_TARGETS=1024` with
+  `M40LLM_KV_MULTITASK_MAX_TOKENS=24` completed in 1034.7 s and emitted
+  `/tmp/qwen2-cross-model-topk-1024.jsonl`.
+
+Results:
+
+| Target | Task | Dense `off` | Top4 | Top8 | Top16 | Note |
+| --- | --- | --- | --- | --- | --- | --- |
+| 256 | single-needle | pass | pass | pass | pass | `ZXQ-NEEDLE-41729` |
+| 256 | multi-needle | pass | pass | pass | pass | `ALPHA-13579 BRAVO-24680` |
+| 256 | distractor-needle | pass | pass | pass | pass | `ORBIT-57291` |
+| 256 | early-fact QA | pass | pass | pass | pass | `Reykjavik` |
+| 512 | single-needle | pass | pass | pass | pass | `ZXQ-NEEDLE-41729` |
+| 512 | multi-needle | pass with 24 decode tokens | pass | pass | pass | 16-token run only truncated `BRAVO-24680` |
+| 512 | distractor-needle | pass | pass | pass | pass | `ORBIT-57291` |
+| 512 | early-fact QA | pass | pass | pass | pass | `Reykjavik` |
+| 1024 | single-needle | pass | pass | pass | pass | `ZXQ-NEEDLE-41729` |
+| 1024 | multi-needle | pass | pass | pass | pass | `ALPHA-13579 BRAVO-24680` |
+| 1024 | distractor-needle | pass | pass | pass | pass | `ORBIT-57291` |
+| 1024 | early-fact QA | pass | pass | pass | pass | `Reykjavik` |
+
+Memory and timing:
+
+- Final compressed KV allocation is 912,010,896 bytes versus
+  1,207,959,552 dense-equivalent bytes for the configured Qwen cache.
+- Active attended KV across all layers ranges from roughly 6.4 MiB at 256
+  early-fact QA to roughly 34.3 MiB at 1024 multi-needle.
+- Compressed decode times for passing rows range from roughly 0.9 s at 256
+  early-fact QA to roughly 15.1 s at 1024 multi-needle.
+
+Interpretation:
+
+- Qwen2.5 now provides a useful second-model checkpoint for the direct
+  FP16-K/q4-V exact-old backend.
+- Unlike the Llama 3.2 1B 4096 matrix, this bounded Qwen 256/512/1024 matrix
+  does not show top-k non-monotonicity: top4, top8, and top16 all pass whenever
+  dense `off` is given enough decode tokens to pass.
+- Keep top4 as the efficiency default for this backend. Higher top-k values
+  should remain diagnostic or task-driven rather than a blanket robustness
+  default.
+- Do not run 8192 or server integration yet; the next useful cross-model step
+  is either a bounded 2048 Qwen checkpoint or returning to Llama policy
+  robustness with score-cluster-adaptive validation.
+
 ## 2026-05-20: Qwen Split-Half RoPE Oracle Validation
 
 This checkpoint resolves the Qwen2.5 synthetic retrieval failure by comparing
