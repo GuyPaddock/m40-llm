@@ -2,6 +2,85 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-20: Llama Selection Anatomy and Score-Cluster Validation
+
+This checkpoint validates selection-set anatomy before treating
+`score-cluster-adaptive` as a candidate policy. It keeps the backend fixed:
+
+- model: `Llama-3.2-1B-Instruct-f16.gguf`
+- backend: `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+- attention: `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`
+- primary policy: plain score-ranked top-k
+
+Selection anatomy command shape:
+
+- `M40LLM_KV_TOPK_ABLATION_DIAG=1 ... M40LLM_KV_ABLATION_CASES=...`
+  emitted focused 4096 multi-needle reports under
+  `/tmp/llama32-selection-anatomy-4096*.jsonl`.
+
+Score-cluster validation command shape:
+
+- `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1 ... M40LLM_KV_QUALITY_TARGETS=2048`
+  emitted `/tmp/llama32-score-cluster-validate-2048.jsonl` and completed in
+  roughly 6005 s.
+- `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1 ... M40LLM_KV_QUALITY_TARGETS=4096`
+  emitted `/tmp/llama32-score-cluster-validate-4096*.jsonl`; the broad run hit
+  its timeout after completing single-needle, multi-needle, distractor-needle,
+  and part of boundary-single-needle, then focused boundary and far-apart
+  follow-ups completed the intended rows.
+
+4096 multi-needle selection anatomy:
+
+| Case | Status | Score | Selected blocks | Note |
+| --- | --- | ---: | --- | --- |
+| dense `off` | fail | 0/2 | `[]` | `Alfa-13579, Beta-13579` |
+| top4 | inconclusive | 1/2 | `[94,80,77,91]` | Missing exact `ALPHA` casing |
+| top8 | inconclusive | 2/2 | `[94,80,77,91,92,78,89,87]` | Exact output |
+| top16 | inconclusive | 1/2 | `[94,80,77,91,92,78,89,87,88,57,90,71,46,53,73,93]` | Regression |
+| top4 + any single top8-delta block | inconclusive | 1/2 | top4 plus one of `92,78,89,87` | No single critical block |
+| top4 + tested top8-delta pairs/quartet | inconclusive | 1/2 | explicit include path | Still fails |
+| top8 - any one selected block | inconclusive | 2/2 | top8 minus one block | No single required block |
+| top8 + any single top16-extra block | inconclusive | 2/2 | top8 plus one of `88,57,90,71,46,53,73,93` | No single toxic block |
+| top8 + `[88]` | inconclusive | 2/2 | top8 plus tail1 | Pass |
+| top8 + `[88,57]` | inconclusive | 2/2 | top8 plus tail2 | Pass |
+| top8 + `[88,57,90]` | inconclusive | 1/2 | top8 plus tail3 | First failing transition |
+
+The formal compression-policy status for this row remains inconclusive because
+dense `off` fails. The anatomy is still useful: block `90` alone is not toxic,
+top4 is not repaired by isolated top8-delta additions, top8 has redundant
+support, and the top16 regression appears only when a cumulative tail prefix is
+present. This reinforces the distribution-shift interpretation rather than a
+single missing or harmful block.
+
+Score-cluster validation summary:
+
+| Target | Task | Dense `off` | Top4 | Top8 | Top16 | Score-cluster min8/max12 | Score-cluster min8/max16 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2048 | single-needle | pass | pass | pass | pass | pass | pass |
+| 2048 | multi-needle | pass | pass | pass | pass | pass | pass |
+| 2048 | distractor-needle | pass | pass | pass | pass | pass | pass |
+| 2048 | early-fact QA | pass | pass | pass | pass | pass | pass |
+| 2048 | boundary-single-needle | pass | pass | pass | pass | pass | pass |
+| 2048 | far-apart-multi-needle | pass | pass | pass | pass | pass | pass |
+| 4096 | single-needle | pass | pass | pass | pass | pass | pass |
+| 4096 | multi-needle | fail | inconclusive 1/2 | inconclusive 2/2 | inconclusive 1/2 | inconclusive 2/2 | inconclusive 2/2 |
+| 4096 | distractor-needle | pass | pass | pass | pass | pass | pass |
+| 4096 | boundary-single-needle | pass | pass | pass | pass | pass | pass |
+| 4096 | far-apart-multi-needle | fail | inconclusive 0/2 | inconclusive 0/2 | inconclusive 0/2 | inconclusive 0/2 | inconclusive 0/2 |
+
+Interpretation:
+
+- `score-cluster-adaptive` with `min_k=8` did not regress any dense-valid 2048
+  or completed 4096 row in this checkpoint.
+- On the known Llama 4096 multi-needle row, score-cluster selects the passing
+  top8 core and avoids the failing top16 tail, but the row is still formally
+  inconclusive because dense `off` fails.
+- The new far-apart 4096 prompt also fails dense `off`, so it is prompt/model
+  capability evidence rather than compression-policy evidence.
+- Keep direct FP16-K/q4-V plus plain top-k as the preferred experimental path.
+  Treat score-cluster-adaptive as a stronger opt-in candidate, not a default,
+  until it is validated on more model families and dense-valid 4096+ prompts.
+
 ## 2026-05-20: Qwen 2048 Top-K KV Validation
 
 This checkpoint extends the Qwen2.5 cross-model validation to 2048 tokens for

@@ -499,7 +499,19 @@ batched decode path before touching persistent decode or large-model fused-dequa
   distractor-needle, and early-fact QA. Top16 was not needed because top4 and
   top8 agree. The Qwen 2048 run used minimal telemetry, so selected block
   indices/scores were not emitted; rerun without minimal telemetry only if
-  future Qwen failures require selected-block diagnosis.
+  future Qwen failures require selected-block diagnosis. The Llama 4096
+  selection-anatomy diagnostic now confirms the multi-needle top16 regression
+  is a cumulative support-set/distribution-shift effect rather than a single
+  toxic block: top8 passes, top8 minus any one block still passes, top8 plus any
+  single top16-extra block still passes, and the cumulative tail first fails at
+  `[88,57,90]`. `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1` now runs a bounded
+  validation suite over dense `off`, top4/top8/top16, and
+  score-cluster-adaptive min8/max12 plus min8/max16 across 2048/4096 prompt
+  shapes, including boundary and far-apart retrieval prompts. The 2048 suite
+  passed all dense-valid rows. The completed 4096 dense-valid rows also passed,
+  while multi-needle and far-apart rows remain inconclusive because dense
+  `off` itself fails. Keep score-cluster-adaptive opt-in/candidate only; direct
+  FP16-K/q4-V with plain top-k remains the preferred experimental path.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

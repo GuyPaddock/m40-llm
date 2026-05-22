@@ -283,7 +283,12 @@ Use `M40LLM_KV_MULTITASK_TASKS=single-needle,distractor-needle,...` and
 `M40LLM_KV_MULTITASK_FALLBACK_CASES=topk,score-spread-top16,combined-top16` to
 bound expensive 4096-token runs. The multi-task case names are
 `single-needle`, `multi-needle`, `distractor-needle`, `early-fact-qa`,
-`early-fact-summary`, and `long-chat-smoke`.
+`early-fact-summary`, and `long-chat-smoke`. Some diagnostics also enable
+additional prompt shapes:
+
+- `boundary-single-needle`: places the answer near a block boundary.
+- `far-apart-multi-needle`: places two required answers far apart in the
+  prompt.
 
 `M40LLM_KV_TOPK_MULTITASK_DIAG=1` runs the same multi-task prompt suite without
 fallback. It compares dense `off` with direct FP16-K/q4-V `block-select-exact`
@@ -337,6 +342,23 @@ defined as compressed top logit minus the dense-reference token logit. The
 4096 multi-needle diagnostic shows `top8-plus-tail1` and `top8-plus-tail2`
 pass, while `top8-plus-tail3` and all larger prefixes fail; block `90` is the
 first transition point in this prompt.
+
+`M40LLM_KV_SCORE_CLUSTER_VALIDATE=1` runs the bounded score-cluster candidate
+validation suite after the anatomy diagnostics. It compares dense `off`, plain
+top4/top8/top16, and:
+
+- `score-cluster-adaptive` with `min_k=8,max_k=12`
+- `score-cluster-adaptive` with `min_k=8,max_k=16`
+
+The default targets are 2048 and 4096 when the model context permits. Set
+`M40LLM_KV_QUALITY_TARGETS=2048` or `4096` to bound the run, and use
+`M40LLM_KV_MULTITASK_TASKS=...` to resume individual expensive prompt shapes.
+The 2048 suite includes single-needle, multi-needle, distractor-needle,
+early-fact QA, boundary-single-needle, and far-apart-multi-needle. The 4096
+suite omits early-fact QA and focuses on single-needle, multi-needle,
+distractor-needle, boundary-single-needle, and far-apart-multi-needle. Dense
+`off` remains the reference: compressed rows are marked inconclusive for
+compression-policy conclusions when dense fails the same prompt.
 
 `M40LLM_KV_CAPTURE_GENERATED_STEP=<n>` sets
 `M40LLM_KV_ATTENTION_CAPTURE=token:<prompt_last_token + n>` when no explicit
