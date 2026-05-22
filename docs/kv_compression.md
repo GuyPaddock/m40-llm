@@ -203,6 +203,19 @@ is useful for the multi-needle row, but it is not universally superior.
 non-monotonic. Dense `off` also fails the multi-needle row, so treat that row
 as model/task brittleness rather than compression-only failure.
 
+Score-cluster evidence is promising but not enough to promote it. The Llama
+4096 multi-needle row is useful for selection anatomy, but it is formally
+inconclusive because dense `off` fails. The top16 regression appears to be
+cumulative support-set distribution shift rather than a single toxic block:
+top8 passes, top8 plus individual top16-extra blocks passes, and the cumulative
+tail first fails at `[88,57,90]`. In that checkpoint, score-cluster-adaptive
+with `min_k=8` avoided the failing top16 tail without regressing dense-valid
+rows. A Qwen2.5 2048 follow-up is dense-valid across single-needle,
+multi-needle, distractor-needle, and early-fact QA; score-cluster min8/max12
+and min8/max16 passed all rows and used top4-sized active KV. Keep
+score-cluster-adaptive opt-in until it is validated across more dense-valid
+4096+ prompts and model families.
+
 Top-block selection diagnostics are also opt-in:
 
 - `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors|explicit|explicit-score-order`

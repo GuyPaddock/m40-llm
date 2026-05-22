@@ -510,8 +510,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   shapes, including boundary and far-apart retrieval prompts. The 2048 suite
   passed all dense-valid rows. The completed 4096 dense-valid rows also passed,
   while multi-needle and far-apart rows remain inconclusive because dense
-  `off` itself fails. Keep score-cluster-adaptive opt-in/candidate only; direct
-  FP16-K/q4-V with plain top-k remains the preferred experimental path.
+  `off` itself fails. A Qwen2.5 2048 score-cluster validation checkpoint now
+  passes dense `off`, top4, top8, top16, score-cluster min8/max12, and
+  score-cluster min8/max16 for single-needle, multi-needle, distractor-needle,
+  and early-fact QA. Score-cluster did not regress any Qwen dense-valid row and
+  used top4-sized active KV in that run, while matching top8/top16 quality.
+  Keep score-cluster-adaptive opt-in/candidate only; direct FP16-K/q4-V with
+  plain top-k remains the preferred experimental path.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

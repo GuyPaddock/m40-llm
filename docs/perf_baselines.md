@@ -2,6 +2,82 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-22: Qwen 2048 Score-Cluster Validation
+
+This checkpoint validates `score-cluster-adaptive` on the second dense-valid
+model checkpoint before any policy promotion:
+
+- model: `Qwen2.5-3B-Instruct-f16.gguf`
+- backend: `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+- attention: `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`
+- target: 2048 tokens
+- tasks: single-needle, multi-needle, distractor-needle, early-fact QA
+- cases: dense `off`, top4, top8, top16, score-cluster min8/max12, and
+  score-cluster min8/max16
+
+Validation command:
+
+- `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1 ... M40LLM_KV_QUALITY_TARGETS=2048
+  M40LLM_KV_MULTITASK_TASKS=single-needle,multi-needle,distractor-needle,early-fact-qa ...`
+  emitted `/tmp/qwen2-score-cluster-validate-2048.jsonl` and completed in
+  5452.54 s.
+
+Quality summary:
+
+| Task | Dense `off` | Top4 | Top8 | Top16 | Score-cluster min8/max12 | Score-cluster min8/max16 |
+| --- | --- | --- | --- | --- | --- | --- |
+| single-needle | pass | pass | pass | pass | pass | pass |
+| multi-needle | pass | pass | pass | pass | pass | pass |
+| distractor-needle | pass | pass | pass | pass | pass | pass |
+| early-fact QA | pass | pass | pass | pass | pass | pass |
+
+Outputs:
+
+| Task | Output |
+| --- | --- |
+| single-needle | `ZXQ-NEEDLE-41729` |
+| multi-needle | `ALPHA-13579`, `BRAVO-24680` |
+| distractor-needle | `ORBIT-57291` |
+| early-fact QA | `Reykjavik` |
+
+Timing and memory:
+
+| Task | Prompt tokens | Dense prefill / decode | Top4 prefill / decode | Top8 prefill / decode | Top16 prefill / decode | Score-cluster prefill / decode |
+| --- | ---: | --- | --- | --- | --- | --- |
+| single-needle | 1992 | 203.6 s / 16.5 s | 208.2 s / 14.3 s | 208.3 s / 15.8 s | 208.6 s / 18.8 s | 208.4 s / 16.0-16.1 s |
+| multi-needle | 2001 | 204.7 s / 24.9 s | 210.0 s / 21.5 s | 210.1 s / 23.8 s | 210.4 s / 28.3 s | 210.1-210.2 s / 24.1-24.3 s |
+| distractor-needle | 1982 | 200.9 s / 10.9 s | 206.2 s / 9.5 s | 206.4 s / 10.5 s | 206.6 s / 12.5 s | 206.3-206.4 s / 10.6-10.7 s |
+| early-fact QA | 1974 | 199.3 s / 5.4 s | 204.6 s / 4.8 s | 204.8 s / 5.3 s | 204.9 s / 6.2 s | 204.8 s / 5.3-5.4 s |
+
+KV accounting:
+
+- Dense-equivalent Qwen KV allocation: 1,207,959,552 bytes.
+- Direct FP16-K/q4-V final KV allocation: 912,010,896 bytes.
+- Active attended KV across all layers:
+  - dense `off`: roughly 69.4-70.3 MiB
+  - top4: 40.5 MiB
+  - top8: 45.0 MiB
+  - top16: 54.0 MiB
+  - score-cluster min8/max12 and min8/max16: 40.5 MiB in every row
+- Selected block indices/scores were not emitted in this Qwen run, even though
+  pass/fail, timing, active KV, and allocation accounting were recorded.
+
+Interpretation:
+
+- Qwen 2048 is a dense-valid checkpoint for this policy comparison: dense
+  `off` passed every row, so all compressed rows count as compression-policy
+  evidence.
+- Score-cluster-adaptive did not regress any Qwen 2048 top-k row.
+- In this run, score-cluster behaved like a top4-sized active-KV policy while
+  matching the quality of top8/top16 on all tested tasks.
+- This strengthens score-cluster-adaptive as an opt-in candidate, but it should
+  not become the default yet. Direct FP16-K/q4-V remains the preferred
+  experimental backend, and plain top-k remains the preferred policy until
+  score-cluster is validated on more dense-valid 4096+ prompts and model
+  families.
+- Do not run Qwen 4096, 8192, fallback, anchor-neighbor, or server integration
+  from this checkpoint.
+
 ## 2026-05-20: Llama Selection Anatomy and Score-Cluster Validation
 
 This checkpoint validates selection-set anatomy before treating
