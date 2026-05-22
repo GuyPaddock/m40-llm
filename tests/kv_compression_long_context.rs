@@ -27,6 +27,9 @@ const EARLY_FACT_CITY: &str = "Reykjavik";
 const SUMMARY_FACT_A: &str = "cobalt river";
 const SUMMARY_FACT_B: &str = "amber lighthouse";
 const SUMMARY_FACT_C: &str = "linen atlas";
+const BOUNDARY_NEEDLE: &str = "BOUNDARY-86420";
+const FAR_NEEDLE_A: &str = "DELTA-31415";
+const FAR_NEEDLE_B: &str = "ECHO-27182";
 
 #[derive(Debug, Clone)]
 struct Candidate {
@@ -939,6 +942,12 @@ fn topk_ablation_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn score_cluster_validation_enabled() -> bool {
+    std::env::var("M40LLM_KV_SCORE_CLUSTER_VALIDATE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn order_equiv_diagnostic_enabled() -> bool {
     std::env::var("M40LLM_KV_ORDER_EQUIV_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -965,6 +974,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || topk_multitask_diagnostic_enabled()
         || topk_sensitivity_diagnostic_enabled()
         || topk_ablation_diagnostic_enabled()
+        || score_cluster_validation_enabled()
         || order_equiv_diagnostic_enabled()
 }
 
@@ -2729,6 +2739,30 @@ fn multitask_specs(
     push_filler_to_target(tokenizer, &mut early_fact, target_tokens);
     early_fact.push_str("\nQuestion: What is the launch city? Answer with only the city.");
 
+    let mut boundary = String::new();
+    boundary.push_str(
+        "You are doing an exact retrieval task. The boundary code appears near a block boundary.\n",
+    );
+    let boundary_target = ((target_tokens / 2) / 32).max(1) * 32;
+    push_filler_to_target(tokenizer, &mut boundary, boundary_target);
+    boundary.push_str("\nBoundary audit code: ");
+    boundary.push_str(BOUNDARY_NEEDLE);
+    boundary.push('\n');
+    push_filler_to_target(tokenizer, &mut boundary, target_tokens);
+    boundary.push_str("\nQuestion: What is the boundary audit code? Answer with only the code.");
+
+    let mut far_apart = String::new();
+    far_apart.push_str("You are doing an exact retrieval task. Two codes appear far apart.\n");
+    far_apart.push_str("First distant code: ");
+    far_apart.push_str(FAR_NEEDLE_A);
+    far_apart.push('\n');
+    push_filler_to_target(tokenizer, &mut far_apart, target_tokens / 2);
+    far_apart.push_str("\nSecond distant code: ");
+    far_apart.push_str(FAR_NEEDLE_B);
+    far_apart.push('\n');
+    push_filler_to_target(tokenizer, &mut far_apart, target_tokens);
+    far_apart.push_str("\nQuestion: What are the two distant codes? Answer with both codes only.");
+
     let mut summary = String::new();
     summary.push_str("Remember these three project facts exactly.\n");
     summary.push_str("Fact A: ");
@@ -2780,6 +2814,22 @@ fn multitask_specs(
             score_type: "exact_terms",
             prompt: early_fact,
             expected_terms: vec![EARLY_FACT_CITY],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "boundary-single-needle",
+            score_type: "exact_terms",
+            prompt: boundary,
+            expected_terms: vec![BOUNDARY_NEEDLE],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "far-apart-multi-needle",
+            score_type: "all_terms",
+            prompt: far_apart,
+            expected_terms: vec![FAR_NEEDLE_A, FAR_NEEDLE_B],
             forbidden_terms: vec![],
             require_nonempty: false,
         },
@@ -3157,6 +3207,61 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
     cases
 }
 
+fn score_cluster_validation_cases() -> Vec<TopkAblationCase> {
+    vec![
+        TopkAblationCase {
+            name: "top4",
+            policy: "topk",
+            top_blocks: 4,
+            include_blocks: None,
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks: "4",
+            score_delta: None,
+        },
+        TopkAblationCase {
+            name: "top8",
+            policy: "topk",
+            top_blocks: 8,
+            include_blocks: None,
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks: "8",
+            score_delta: None,
+        },
+        TopkAblationCase {
+            name: "top16",
+            policy: "topk",
+            top_blocks: 16,
+            include_blocks: None,
+            exclude_blocks: None,
+            min_blocks: None,
+            max_blocks: "16",
+            score_delta: None,
+        },
+        TopkAblationCase {
+            name: "score-cluster-adaptive-min8-max12",
+            policy: "score-cluster-adaptive",
+            top_blocks: 4,
+            include_blocks: None,
+            exclude_blocks: None,
+            min_blocks: Some("8"),
+            max_blocks: "12",
+            score_delta: Some("0.25"),
+        },
+        TopkAblationCase {
+            name: "score-cluster-adaptive-min8-max16",
+            policy: "score-cluster-adaptive",
+            top_blocks: 4,
+            include_blocks: None,
+            exclude_blocks: None,
+            min_blocks: Some("8"),
+            max_blocks: "16",
+            score_delta: Some("0.25"),
+        },
+    ]
+}
+
 fn filtered_topk_ablation_cases() -> Vec<TopkAblationCase> {
     let cases = topk_ablation_cases();
     if order_equiv_diagnostic_enabled() {
@@ -3240,8 +3345,9 @@ fn run_multitask_generate(
         (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_TRACE", "1"));
     let _logit_compare_guard =
         (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
-    let preserve_policy_env =
-        topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled();
+    let preserve_policy_env = topk_ablation_diagnostic_enabled()
+        || order_equiv_diagnostic_enabled()
+        || score_cluster_validation_enabled();
     let _policy_guard =
         (!preserve_policy_env).then(|| EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk"));
     let _score_guard =
@@ -4069,6 +4175,133 @@ fn run_topk_ablation_suite(
     Ok(())
 }
 
+fn score_cluster_validation_tasks(target_tokens: usize) -> &'static [&'static str] {
+    if target_tokens >= 4096 {
+        &[
+            "single-needle",
+            "multi-needle",
+            "distractor-needle",
+            "boundary-single-needle",
+            "far-apart-multi-needle",
+        ]
+    } else {
+        &[
+            "single-needle",
+            "multi-needle",
+            "distractor-needle",
+            "early-fact-qa",
+            "boundary-single-needle",
+            "far-apart-multi-needle",
+        ]
+    }
+}
+
+fn run_score_cluster_validation_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+) -> Result<()> {
+    let max_tokens = multitask_max_tokens();
+    let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
+    let targets: Vec<usize> = if std::env::var("M40LLM_KV_QUALITY_TARGETS")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .is_some()
+    {
+        target_contexts(config.context_length as usize, true)?
+            .into_iter()
+            .filter(|target| *target >= 2048)
+            .collect()
+    } else {
+        [2048, 4096]
+            .into_iter()
+            .filter(|target| *target <= config.context_length as usize)
+            .collect()
+    };
+    if targets.is_empty() {
+        eprintln!(
+            "score-cluster validation requires ctx>=2048; selected model ctx={}",
+            config.context_length
+        );
+        return Ok(());
+    }
+    let cases = score_cluster_validation_cases();
+    for target_tokens in targets {
+        let task_filter = score_cluster_validation_tasks(target_tokens);
+        let env_task_filter = env_name_filter("M40LLM_KV_MULTITASK_TASKS");
+        let tasks: Vec<MultiTaskSpec> =
+            multitask_specs(tokenizer, target_tokens, retrieval_prompt_style)
+                .into_iter()
+                .filter(|spec| task_filter.contains(&spec.name))
+                .filter(|spec| {
+                    env_task_filter
+                        .as_ref()
+                        .is_none_or(|filter| filter.iter().any(|name| name == spec.name))
+                })
+                .collect();
+        eprintln!(
+            "running score-cluster validation: target={target_tokens} prompt_style={} tasks={} cases={} max_tokens={max_tokens}",
+            retrieval_prompt_style.name(),
+            tasks.len(),
+            cases.len()
+        );
+        for spec in tasks {
+            let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
+            let dense_output = dense.output.clone();
+            let dense_trace = dense.generated_logit_trace.clone();
+            let dense_record = dense_multitask_record(
+                probe,
+                config,
+                target_tokens,
+                retrieval_prompt_style,
+                &spec,
+                dense,
+            );
+            let dense_reference_passed = dense_record.dense_reference_passed;
+            append_report_record(&dense_record)?;
+            for case in &cases {
+                let _guards = apply_topk_ablation_case(*case);
+                let generated = run_multitask_generate(
+                    model,
+                    &spec,
+                    KvCompressMode::BlockSelectExact,
+                    case.top_blocks,
+                    max_tokens,
+                )?;
+                let record = topk_multitask_record(TopkMultitaskRecordInput {
+                    probe,
+                    config,
+                    target_tokens,
+                    retrieval_prompt_style,
+                    spec: &spec,
+                    dense_output: Some(&dense_output),
+                    dense_reference_passed,
+                    dense_trace: dense_trace.as_deref(),
+                    selection_ablation_case: Some(case.name),
+                    generated,
+                    top_blocks: case.top_blocks,
+                });
+                eprintln!(
+                    "  target={} task={} case={} policy={} status={:?} score={}/{} active_kv={:?} selected={:?} output={:?}",
+                    target_tokens,
+                    spec.name,
+                    case.name,
+                    case.policy,
+                    record.status,
+                    record.score,
+                    record.max_score,
+                    record.active_attended_kv_bytes_all_layers,
+                    record.selected_block_indices,
+                    record.output
+                );
+                append_report_record(&record)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn run_fallback_multitask_suite(
     probe: &CandidateProbe,
     config: &ModelConfig,
@@ -4374,6 +4607,9 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
+    if score_cluster_validation_enabled() {
+        return run_score_cluster_validation_suite(&probe, config, &mut model, &tokenizer);
+    }
     if topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled() {
         return run_topk_ablation_suite(&probe, config, &mut model, &tokenizer);
     }
