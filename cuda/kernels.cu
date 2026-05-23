@@ -6443,7 +6443,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (!ctx || !kv || !q_dev_f32 || !out_blocks_host || !out_scores_host ||
             !out_start_host || !out_end_host || !out_count || !out_total_old_blocks) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
-        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim != 64) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim == 0) return -3;
         if (seq_len == 0 || seq_len > kv->max_seq_len || block_size == 0 || max_out == 0) return -4;
 
         const uint32_t effective_recent = kv->compressed ? kv->recent_window : recent_window;
@@ -6458,15 +6458,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
         if (err != cudaSuccess) return -6;
 
-        float q[64];
-        err = cudaMemcpy(q, q_dev_f32, sizeof(q), cudaMemcpyDeviceToHost);
+        const uint32_t head_dim = kv->head_dim;
+        const float scale = head_dim == 64u ? 0.125f : 0.08838834764831845f;
+        std::vector<float> q(head_dim);
+        err = cudaMemcpy(q.data(), q_dev_f32, q.size() * sizeof(float), cudaMemcpyDeviceToHost);
         if (err != cudaSuccess) return -7;
 
         std::vector<std::pair<float, uint32_t>> scored;
         scored.reserve(old_blocks);
         const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
-        const float scale = 0.125f;
-        __half k_buf[64];
+        std::vector<__half> k_buf(head_dim);
         const bool use_q8_old_host =
             kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
         const bool use_fp16_old_host =
@@ -6508,7 +6509,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 if (end <= start) continue;
                 for (uint32_t pos = start; pos < end; ++pos) {
                     const size_t base = (size_t)pos * elems_per_token;
-                    for (uint32_t d = 0; d < 64; ++d) {
+                    for (uint32_t d = 0; d < head_dim; ++d) {
                         const __half k = use_fp16_old_host
                             ? fp16_old_k_host[base + d]
                             : __float2half_rn(
@@ -6520,25 +6521,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 score /= (float)(end - start);
             } else if (kv->compressed) {
                 const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
-                err = cudaMemcpy(k_buf, kv->d_summary_k + offset, sizeof(k_buf), cudaMemcpyDeviceToHost);
+                err = cudaMemcpy(k_buf.data(), kv->d_summary_k + offset, k_buf.size() * sizeof(__half), cudaMemcpyDeviceToHost);
                 if (err != cudaSuccess) return -8;
-                for (uint32_t d = 0; d < 64; ++d) {
+                for (uint32_t d = 0; d < head_dim; ++d) {
                     score += q[d] * __half2float(k_buf[d]);
                 }
             } else {
                 const uint32_t start = block * effective_block;
                 const uint32_t end = std::min(start + effective_block, old_len);
-                float mean_k[64] = {0.0f};
+                std::vector<float> mean_k(head_dim, 0.0f);
                 for (uint32_t pos = start; pos < end; ++pos) {
                     const size_t offset = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * elems_per_token;
-                    err = cudaMemcpy(k_buf, kv->d_k + offset, sizeof(k_buf), cudaMemcpyDeviceToHost);
+                    err = cudaMemcpy(k_buf.data(), kv->d_k + offset, k_buf.size() * sizeof(__half), cudaMemcpyDeviceToHost);
                     if (err != cudaSuccess) return -9;
-                    for (uint32_t d = 0; d < 64; ++d) {
+                    for (uint32_t d = 0; d < head_dim; ++d) {
                         mean_k[d] += __half2float(k_buf[d]);
                     }
                 }
                 const float inv_count = 1.0f / (float)(end - start);
-                for (uint32_t d = 0; d < 64; ++d) {
+                for (uint32_t d = 0; d < head_dim; ++d) {
                     score += q[d] * (mean_k[d] * inv_count);
                 }
             }

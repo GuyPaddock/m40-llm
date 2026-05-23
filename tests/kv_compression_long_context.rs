@@ -191,6 +191,8 @@ struct CaseRecord {
     base_selected_block_indices: Option<Vec<u32>>,
     policy_added_block_indices: Option<Vec<u32>>,
     final_selected_block_indices: Option<Vec<u32>>,
+    selected_support_size: Option<usize>,
+    selected_support_bucket: Option<String>,
     needle_block_index: Option<u32>,
     selected_block_indices: Option<Vec<u32>>,
     selected_block_score_entries: Option<Vec<String>>,
@@ -276,6 +278,9 @@ struct MultiTaskRecord {
     mode: String,
     selection_ablation_case: Option<String>,
     block_select_policy: String,
+    block_score_delta: Option<f32>,
+    block_min_blocks: Option<u32>,
+    block_max_blocks: Option<u32>,
     selected_block_order: String,
     fallback_case: Option<String>,
     fallback_triggered: bool,
@@ -344,6 +349,8 @@ struct MultiTaskRecord {
     first_divergence_step: Option<usize>,
     base_selected_block_indices: Option<Vec<u32>>,
     final_selected_block_indices: Option<Vec<u32>>,
+    selected_support_size: Option<usize>,
+    selected_support_bucket: Option<String>,
     initial_eot_rank_min: Option<usize>,
     initial_eot_logit_margin_min: Option<f32>,
     initial_top_margin_min: Option<f32>,
@@ -1064,6 +1071,21 @@ fn base_and_added_blocks(
         .filter(|block| !base.contains(block))
         .collect::<Vec<_>>();
     (Some(base), Some(added))
+}
+
+fn selected_support_size(selected: Option<&Vec<u32>>) -> Option<usize> {
+    selected.map(Vec::len)
+}
+
+fn selected_support_bucket(selected: Option<&Vec<u32>>) -> Option<String> {
+    let len = selected?.len();
+    let bucket = match len {
+        0..=4 => "top4-sized",
+        5..=8 => "top8-sized",
+        9..=16 => "top16-sized",
+        _ => "other",
+    };
+    Some(bucket.to_string())
 }
 
 fn first_selection_record_blocks(
@@ -3208,7 +3230,7 @@ fn topk_ablation_cases() -> Vec<TopkAblationCase> {
 }
 
 fn score_cluster_validation_cases() -> Vec<TopkAblationCase> {
-    vec![
+    let cases = vec![
         TopkAblationCase {
             name: "top4",
             policy: "topk",
@@ -3259,7 +3281,14 @@ fn score_cluster_validation_cases() -> Vec<TopkAblationCase> {
             max_blocks: "16",
             score_delta: Some("0.25"),
         },
-    ]
+    ];
+    let Some(filter) = env_name_filter("M40LLM_KV_SCORE_CLUSTER_CASES") else {
+        return cases;
+    };
+    cases
+        .into_iter()
+        .filter(|case| filter.iter().any(|name| name == case.name))
+        .collect()
 }
 
 fn filtered_topk_ablation_cases() -> Vec<TopkAblationCase> {
@@ -3445,6 +3474,9 @@ fn dense_multitask_record(
         mode: "off".to_string(),
         selection_ablation_case: None,
         block_select_policy: "off".to_string(),
+        block_score_delta: None,
+        block_min_blocks: None,
+        block_max_blocks: None,
         selected_block_order: "off".to_string(),
         fallback_case: None,
         fallback_triggered: false,
@@ -3552,6 +3584,12 @@ fn dense_multitask_record(
         first_divergence_step: None,
         base_selected_block_indices: None,
         final_selected_block_indices: selection_indices(generated.kv_selection.as_ref()),
+        selected_support_size: selected_support_size(
+            selection_indices(generated.kv_selection.as_ref()).as_ref(),
+        ),
+        selected_support_bucket: selected_support_bucket(
+            selection_indices(generated.kv_selection.as_ref()).as_ref(),
+        ),
         initial_eot_rank_min: None,
         initial_eot_logit_margin_min: None,
         initial_top_margin_min: None,
@@ -3615,6 +3653,9 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         mode: "block-select-exact".to_string(),
         selection_ablation_case: None,
         block_select_policy: block_select_policy(),
+        block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
+        block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),
+        block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
         selected_block_order: selected_block_order(),
         fallback_case: Some(input.fallback_case.name.to_string()),
         fallback_triggered: input.fallback_triggered,
@@ -3749,6 +3790,12 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         final_selected_block_indices: selection_indices(
             input.final_generated.kv_selection.as_ref(),
         ),
+        selected_support_size: selected_support_size(
+            selection_indices(input.final_generated.kv_selection.as_ref()).as_ref(),
+        ),
+        selected_support_bucket: selected_support_bucket(
+            selection_indices(input.final_generated.kv_selection.as_ref()).as_ref(),
+        ),
         initial_eot_rank_min: fallback_signal_summary(
             input.initial.generated_logit_trace.as_deref(),
         )
@@ -3804,6 +3851,9 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         mode: "block-select-exact".to_string(),
         selection_ablation_case: input.selection_ablation_case.map(str::to_string),
         block_select_policy: block_select_policy(),
+        block_score_delta: env_f32("M40LLM_KV_BLOCK_SCORE_DELTA"),
+        block_min_blocks: env_u32("M40LLM_KV_BLOCK_MIN_BLOCKS"),
+        block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
         selected_block_order: selected_block_order(),
         fallback_case: None,
         fallback_triggered: false,
@@ -3932,6 +3982,12 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         generated_logit_trace,
         base_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
         final_selected_block_indices: selection_indices(input.generated.kv_selection.as_ref()),
+        selected_support_size: selected_support_size(
+            selection_indices(input.generated.kv_selection.as_ref()).as_ref(),
+        ),
+        selected_support_bucket: selected_support_bucket(
+            selection_indices(input.generated.kv_selection.as_ref()).as_ref(),
+        ),
         initial_eot_rank_min: fallback_signal_summary(
             input.generated.generated_logit_trace.as_deref(),
         )
@@ -3993,6 +4049,7 @@ fn run_topk_multitask_suite(
     target_tokens: usize,
 ) -> Result<()> {
     let max_tokens = multitask_max_tokens();
+    let _selection_telemetry_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
     let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
     let tasks = filter_multitask_specs(multitask_specs(
         tokenizer,
@@ -4203,6 +4260,7 @@ fn run_score_cluster_validation_suite(
     tokenizer: &Tokenizer,
 ) -> Result<()> {
     let max_tokens = multitask_max_tokens();
+    let _selection_telemetry_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
     let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
     let targets: Vec<usize> = if std::env::var("M40LLM_KV_QUALITY_TARGETS")
         .ok()
@@ -4283,7 +4341,7 @@ fn run_score_cluster_validation_suite(
                     top_blocks: case.top_blocks,
                 });
                 eprintln!(
-                    "  target={} task={} case={} policy={} status={:?} score={}/{} active_kv={:?} selected={:?} output={:?}",
+                    "  target={} task={} case={} policy={} status={:?} score={}/{} active_kv={:?} support={:?} bucket={:?} selected={:?} output={:?}",
                     target_tokens,
                     spec.name,
                     case.name,
@@ -4292,6 +4350,8 @@ fn run_score_cluster_validation_suite(
                     record.score,
                     record.max_score,
                     record.active_attended_kv_bytes_all_layers,
+                    record.selected_support_size,
+                    record.selected_support_bucket,
                     record.selected_block_indices,
                     record.output
                 );
@@ -5444,6 +5504,12 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
                                         block_max_blocks: env_u32("M40LLM_KV_BLOCK_MAX_BLOCKS"),
                                         base_selected_block_indices,
                                         policy_added_block_indices,
+                                        selected_support_size: selected_support_size(
+                                            final_selected_block_indices.as_ref(),
+                                        ),
+                                        selected_support_bucket: selected_support_bucket(
+                                            final_selected_block_indices.as_ref(),
+                                        ),
                                         final_selected_block_indices,
                                         needle_block_index,
                                         selected_block_indices,
