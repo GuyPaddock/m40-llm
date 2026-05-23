@@ -212,7 +212,9 @@ tail first fails at `[88,57,90]`. In that checkpoint, score-cluster-adaptive
 with `min_k=8` avoided the failing top16 tail without regressing dense-valid
 rows. A Qwen2.5 2048 follow-up is dense-valid across single-needle,
 multi-needle, distractor-needle, and early-fact QA; score-cluster min8/max12
-and min8/max16 passed all rows and used top4-sized active KV. Keep
+and min8/max16 passed all rows. A later telemetry confirmation fixed Qwen
+head_dim=128 selected-block reporting and showed score-cluster min8/max12 uses
+top8-sized support on the checked Qwen rows, not top4-sized support. Keep
 score-cluster-adaptive opt-in until it is validated across more dense-valid
 4096+ prompts and model families.
 
@@ -362,6 +364,13 @@ top4/top8/top16, and:
 
 - `score-cluster-adaptive` with `min_k=8,max_k=12`
 - `score-cluster-adaptive` with `min_k=8,max_k=16`
+
+Use `M40LLM_KV_SCORE_CLUSTER_CASES=top4,top8,score-cluster-adaptive-min8-max12`
+to restrict expensive validation runs to named cases. Score-cluster JSONL rows
+include the selected block set, scored selection records, score cutoff margin,
+policy score delta, min/max block caps, active KV bytes, and
+`selected_support_size` / `selected_support_bucket` (`top4-sized`,
+`top8-sized`, `top16-sized`, or `other`).
 
 The default targets are 2048 and 4096 when the model context permits. Set
 `M40LLM_KV_QUALITY_TARGETS=2048` or `4096` to bound the run, and use

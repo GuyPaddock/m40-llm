@@ -2,6 +2,85 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-22: Score-Cluster Support Telemetry Confirmation
+
+This checkpoint fixes and validates selected-block telemetry for
+score-cluster rows. The previous Qwen 2048 score-cluster run passed quality but
+did not emit selected block sets because the debug selection helper was limited
+to `head_dim=64`; Qwen uses `head_dim=128`. The debug path now supports dynamic
+head dimensions, and JSONL multitask rows include:
+
+- `selected_support_size`
+- `selected_support_bucket`
+- `block_score_delta`
+- `block_min_blocks`
+- `block_max_blocks`
+- selected block indices and scored selection records
+
+Qwen2.5 2048 telemetry command shape:
+
+- `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1
+  M40LLM_KV_SCORE_CLUSTER_CASES=top4,top8,score-cluster-adaptive-min8-max12
+  M40LLM_KV_QUALITY_TARGETS=2048
+  M40LLM_KV_MULTITASK_TASKS=multi-needle,distractor-needle ...`
+  emitted `/tmp/qwen2-score-cluster-telemetry-2048.jsonl` and completed in
+  1874.27 s.
+- A focused min/max field confirmation emitted
+  `/tmp/qwen2-score-cluster-telemetry-2048-minmax.jsonl` and completed in
+  946.62 s.
+
+Qwen2.5 2048 results:
+
+| Task | Dense | Top4 | Top8 | Score-cluster min8/max12 |
+| --- | --- | --- | --- | --- |
+| multi-needle | pass | pass, `[4,6,3,1]`, 40.5 MiB | pass, `[4,6,3,1,7,2,5,0]`, 45.0 MiB | pass, `[4,6,3,1,7,2,5,0]`, 45.0 MiB |
+| distractor-needle | pass | pass, `[3,2,4,5]`, 40.5 MiB | pass, `[3,2,4,5,0,6,7,1]`, 45.0 MiB | pass, `[3,2,4,5,0,6,7,1]`, 45.0 MiB |
+
+The score-cluster rows emitted `block_score_delta=0.25`,
+`block_min_blocks=8`, `block_max_blocks=12`, and `selected_support_bucket =
+top8-sized`.
+
+Llama 4096 telemetry command shape:
+
+- `M40LLM_KV_SCORE_CLUSTER_VALIDATE=1
+  M40LLM_KV_SCORE_CLUSTER_CASES=top4,top8,score-cluster-adaptive-min8-max12
+  M40LLM_KV_QUALITY_TARGETS=4096
+  M40LLM_KV_MULTITASK_TASKS=single-needle,distractor-needle,boundary-single-needle ...`
+  emitted `/tmp/llama32-score-cluster-telemetry-4096.jsonl`. It hit timeout
+  after boundary top4.
+- A boundary resume emitted
+  `/tmp/llama32-score-cluster-telemetry-4096-boundary-resume.jsonl` and
+  completed in 2074.64 s.
+- A focused min/max field confirmation emitted
+  `/tmp/llama32-score-cluster-telemetry-4096-minmax.jsonl` and completed in
+  4147.36 s.
+
+Llama 4096 dense-valid results:
+
+| Task | Dense | Top4 | Top8 | Score-cluster min8/max12 |
+| --- | --- | --- | --- | --- |
+| single-needle | pass | pass, `[94,93,87,77]`, 36.0 MiB | pass, `[94,93,87,77,78,80,89,91]`, 40.0 MiB | pass, `[94,93,87,77,78,80,89,91]`, 40.0 MiB |
+| distractor-needle | pass | pass, `[93,94,87,78]`, 36.0 MiB | pass, `[93,94,87,78,52,90,77,89]`, 40.0 MiB | pass, `[93,94,87,78,52,90,77,89]`, 40.0 MiB |
+| boundary-single-needle | pass | pass, `[93,90,87,79]`, 36.0 MiB | pass, `[93,90,87,79,73,52,77,70]`, 40.0 MiB | pass, `[93,90,87,79,73,52,77,70]`, 40.0 MiB |
+
+The Llama score-cluster rows also emitted `block_score_delta=0.25`,
+`block_min_blocks=8`, `block_max_blocks=12`, and `selected_support_bucket =
+top8-sized`.
+
+Interpretation:
+
+- Score-cluster telemetry is now complete for both Llama head64 and Qwen
+  head128.
+- On these bounded dense-valid rows, score-cluster min8/max12 selected the same
+  top8-sized support as plain top8 and did not regress quality.
+- The earlier Qwen statement that score-cluster used top4-sized active KV was
+  an accounting artifact from missing head128 selected-block telemetry. The
+  corrected telemetry shows top8-sized active KV.
+- Keep the hierarchy unchanged: direct FP16-K/q4-V is the preferred
+  experimental backend, plain top-k remains the preferred policy, and
+  score-cluster-adaptive remains a strong opt-in candidate rather than a
+  default.
+
 ## 2026-05-22: Qwen 2048 Score-Cluster Validation
 
 This checkpoint validates `score-cluster-adaptive` on the second dense-valid
@@ -53,7 +132,7 @@ KV accounting:
 
 - Dense-equivalent Qwen KV allocation: 1,207,959,552 bytes.
 - Direct FP16-K/q4-V final KV allocation: 912,010,896 bytes.
-- Active attended KV across all layers:
+- Active attended KV across all layers as originally recorded:
   - dense `off`: roughly 69.4-70.3 MiB
   - top4: 40.5 MiB
   - top8: 45.0 MiB
@@ -61,6 +140,9 @@ KV accounting:
   - score-cluster min8/max12 and min8/max16: 40.5 MiB in every row
 - Selected block indices/scores were not emitted in this Qwen run, even though
   pass/fail, timing, active KV, and allocation accounting were recorded.
+- A later telemetry confirmation supersedes the score-cluster active-KV
+  interpretation: once head128 selected-block telemetry is available,
+  score-cluster min8/max12 is top8-sized on the checked Qwen rows.
 
 Interpretation:
 
@@ -68,8 +150,9 @@ Interpretation:
   `off` passed every row, so all compressed rows count as compression-policy
   evidence.
 - Score-cluster-adaptive did not regress any Qwen 2048 top-k row.
-- In this run, score-cluster behaved like a top4-sized active-KV policy while
-  matching the quality of top8/top16 on all tested tasks.
+- This run established quality but not selected-set shape; later telemetry
+  shows score-cluster min8/max12 uses top8-sized support on the checked Qwen
+  rows.
 - This strengthens score-cluster-adaptive as an opt-in candidate, but it should
   not become the default yet. Direct FP16-K/q4-V remains the preferred
   experimental backend, and plain top-k remains the preferred policy until

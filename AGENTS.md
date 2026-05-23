@@ -514,9 +514,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   passes dense `off`, top4, top8, top16, score-cluster min8/max12, and
   score-cluster min8/max16 for single-needle, multi-needle, distractor-needle,
   and early-fact QA. Score-cluster did not regress any Qwen dense-valid row and
-  used top4-sized active KV in that run, while matching top8/top16 quality.
-  Keep score-cluster-adaptive opt-in/candidate only; direct FP16-K/q4-V with
-  plain top-k remains the preferred experimental path.
+  matched top8/top16 quality. A later telemetry fix extended debug selection to
+  `head_dim=128`, so Qwen score-cluster rows now emit selected block sets and
+  support buckets; the corrected Qwen 2048 multi/distractor confirmation shows
+  score-cluster min8/max12 selects top8-sized support, matching plain top8.
+  The Llama 4096 dense-valid single/distractor/boundary confirmation shows the
+  same top8-sized score-cluster behavior with no regressions. Keep
+  score-cluster-adaptive opt-in/candidate only; direct FP16-K/q4-V with plain
+  top-k remains the preferred experimental path.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 
