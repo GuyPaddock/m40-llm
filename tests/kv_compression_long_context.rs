@@ -30,6 +30,15 @@ const SUMMARY_FACT_C: &str = "linen atlas";
 const BOUNDARY_NEEDLE: &str = "BOUNDARY-86420";
 const FAR_NEEDLE_A: &str = "DELTA-31415";
 const FAR_NEEDLE_B: &str = "ECHO-27182";
+const CLUSTER_TARGET: &str = "CLUSTER-80817";
+const CLUSTER_DISTRACTOR_A: &str = "CLUSTER-80871";
+const CLUSTER_DISTRACTOR_B: &str = "CLUSTER-80187";
+const CLUSTER_DISTRACTOR_C: &str = "CLUSTER-88017";
+const BOUNDARY_DISTRACTOR_TARGET: &str = "EDGE-42068";
+const BOUNDARY_DISTRACTOR_A: &str = "EDGE-42608";
+const BOUNDARY_DISTRACTOR_B: &str = "EDGE-40268";
+const WEAK_SUPPORT_A: &str = "SIGMA-11235";
+const WEAK_SUPPORT_B: &str = "TAU-81321";
 
 #[derive(Debug, Clone)]
 struct Candidate {
@@ -351,6 +360,7 @@ struct MultiTaskRecord {
     final_selected_block_indices: Option<Vec<u32>>,
     selected_support_size: Option<usize>,
     selected_support_bucket: Option<String>,
+    selection_elapsed_ms: Option<f32>,
     initial_eot_rank_min: Option<usize>,
     initial_eot_logit_margin_min: Option<f32>,
     initial_top_margin_min: Option<f32>,
@@ -955,6 +965,12 @@ fn score_cluster_validation_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn score_cluster_diff_validation_enabled() -> bool {
+    std::env::var("M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn order_equiv_diagnostic_enabled() -> bool {
     std::env::var("M40LLM_KV_ORDER_EQUIV_DIAG")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -982,6 +998,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || topk_sensitivity_diagnostic_enabled()
         || topk_ablation_diagnostic_enabled()
         || score_cluster_validation_enabled()
+        || score_cluster_diff_validation_enabled()
         || order_equiv_diagnostic_enabled()
 }
 
@@ -2071,14 +2088,15 @@ fn selected_block_entry_strings(
         .flat_map(|record| {
             record.selected_blocks.iter().map(move |block| {
                 format!(
-                    "layer={:?}:token={:?}:rank={}:block={}:score={:.6}:range={}..{}",
+                    "layer={:?}:token={:?}:rank={}:block={}:score={:.6}:range={}..{}:selection_ms={:?}",
                     record.layer,
                     record.token,
                     block.rank,
                     block.block_index,
                     block.score,
                     block.absolute_start,
-                    block.absolute_end
+                    block.absolute_end,
+                    record.selection_elapsed_ms
                 )
             })
         })
@@ -2102,8 +2120,13 @@ fn selection_record_strings(summary: &m40_llm::kv_selection::KvSelectionSummary)
                 .collect::<Vec<_>>()
                 .join(",");
             format!(
-                "layer={:?}:token={:?}:top_blocks={}:total_old_blocks={}:blocks={}",
-                record.layer, record.token, record.top_blocks, record.total_old_blocks, blocks
+                "layer={:?}:token={:?}:top_blocks={}:total_old_blocks={}:selection_ms={:?}:blocks={}",
+                record.layer,
+                record.token,
+                record.top_blocks,
+                record.total_old_blocks,
+                record.selection_elapsed_ms,
+                blocks
             )
         })
         .collect()
@@ -2502,6 +2525,16 @@ fn score_cutoff_margin(summary: Option<&m40_llm::kv_selection::KvSelectionSummar
         .min_by(f32::total_cmp)
 }
 
+fn selection_elapsed_ms(
+    summary: Option<&m40_llm::kv_selection::KvSelectionSummary>,
+) -> Option<f32> {
+    summary?
+        .selection_records
+        .iter()
+        .filter_map(|record| record.selection_elapsed_ms)
+        .reduce(f32::max)
+}
+
 fn fallback_trigger_reason_for_case(
     case: FallbackCase,
     output: &str,
@@ -2785,6 +2818,65 @@ fn multitask_specs(
     push_filler_to_target(tokenizer, &mut far_apart, target_tokens);
     far_apart.push_str("\nQuestion: What are the two distant codes? Answer with both codes only.");
 
+    let mut clustered = String::new();
+    clustered.push_str(
+        "You are doing an exact retrieval task. Many similar cluster codes are decoys.\n",
+    );
+    clustered.push_str("Target cluster code: ");
+    clustered.push_str(CLUSTER_TARGET);
+    clustered.push('\n');
+    push_filler_to_target(tokenizer, &mut clustered, target_tokens / 3);
+    clustered.push_str("\nDecoy cluster code, not the answer: ");
+    clustered.push_str(CLUSTER_DISTRACTOR_A);
+    clustered.push('\n');
+    push_filler_to_target(tokenizer, &mut clustered, (target_tokens * 2) / 3);
+    clustered.push_str("\nDecoy cluster code, not the answer: ");
+    clustered.push_str(CLUSTER_DISTRACTOR_B);
+    clustered.push_str("\nDecoy cluster code, not the answer: ");
+    clustered.push_str(CLUSTER_DISTRACTOR_C);
+    clustered.push('\n');
+    push_filler_to_target(tokenizer, &mut clustered, target_tokens);
+    clustered
+        .push_str("\nQuestion: What is the target cluster code? Answer with only the target code.");
+
+    let mut boundary_distractor = String::new();
+    boundary_distractor.push_str(
+        "You are doing an exact retrieval task. The target and decoys are near block boundaries.\n",
+    );
+    let boundary_distractor_target = ((target_tokens / 2) / 32).max(1) * 32;
+    push_filler_to_target(
+        tokenizer,
+        &mut boundary_distractor,
+        boundary_distractor_target,
+    );
+    boundary_distractor.push_str("\nBoundary target code: ");
+    boundary_distractor.push_str(BOUNDARY_DISTRACTOR_TARGET);
+    boundary_distractor.push_str("\nBoundary decoy code, not the answer: ");
+    boundary_distractor.push_str(BOUNDARY_DISTRACTOR_A);
+    boundary_distractor.push('\n');
+    push_filler_to_target(tokenizer, &mut boundary_distractor, target_tokens);
+    boundary_distractor.push_str("\nBoundary decoy code, not the answer: ");
+    boundary_distractor.push_str(BOUNDARY_DISTRACTOR_B);
+    boundary_distractor.push_str(
+        "\nQuestion: What is the boundary target code? Answer with only the target code.",
+    );
+
+    let mut weak_support = String::new();
+    weak_support.push_str(
+        "You are doing an exact retrieval task. One code is obvious and one code is weakly supported.\n",
+    );
+    weak_support.push_str("Primary code: ");
+    weak_support.push_str(WEAK_SUPPORT_A);
+    weak_support.push('\n');
+    push_filler_to_target(tokenizer, &mut weak_support, target_tokens / 4);
+    weak_support.push_str("\nSecondary code: ");
+    weak_support.push_str(WEAK_SUPPORT_B);
+    weak_support.push('\n');
+    push_filler_to_target(tokenizer, &mut weak_support, target_tokens);
+    weak_support.push_str(
+        "\nQuestion: What are the primary and secondary codes? Answer with both codes only.",
+    );
+
     let mut summary = String::new();
     summary.push_str("Remember these three project facts exactly.\n");
     summary.push_str("Fact A: ");
@@ -2852,6 +2944,34 @@ fn multitask_specs(
             score_type: "all_terms",
             prompt: far_apart,
             expected_terms: vec![FAR_NEEDLE_A, FAR_NEEDLE_B],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "clustered-distractor-needle",
+            score_type: "target_without_distractors",
+            prompt: clustered,
+            expected_terms: vec![CLUSTER_TARGET],
+            forbidden_terms: vec![
+                CLUSTER_DISTRACTOR_A,
+                CLUSTER_DISTRACTOR_B,
+                CLUSTER_DISTRACTOR_C,
+            ],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "boundary-distractor-needle",
+            score_type: "target_without_distractors",
+            prompt: boundary_distractor,
+            expected_terms: vec![BOUNDARY_DISTRACTOR_TARGET],
+            forbidden_terms: vec![BOUNDARY_DISTRACTOR_A, BOUNDARY_DISTRACTOR_B],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "weak-support-multi-needle",
+            score_type: "all_terms",
+            prompt: weak_support,
+            expected_terms: vec![WEAK_SUPPORT_A, WEAK_SUPPORT_B],
             forbidden_terms: vec![],
             require_nonempty: false,
         },
@@ -3282,7 +3402,19 @@ fn score_cluster_validation_cases() -> Vec<TopkAblationCase> {
             score_delta: Some("0.25"),
         },
     ];
-    let Some(filter) = env_name_filter("M40LLM_KV_SCORE_CLUSTER_CASES") else {
+    let filter = env_name_filter("M40LLM_KV_SCORE_CLUSTER_CASES");
+    let filter = filter.or_else(|| {
+        score_cluster_diff_validation_enabled().then(|| {
+            vec![
+                "top4".to_string(),
+                "top8".to_string(),
+                "top16".to_string(),
+                "score-cluster-adaptive-min8-max12".to_string(),
+                "score-cluster-adaptive-min8-max16".to_string(),
+            ]
+        })
+    });
+    let Some(filter) = filter else {
         return cases;
     };
     cases
@@ -3376,7 +3508,8 @@ fn run_multitask_generate(
         (!minimal_telemetry).then(|| EnvVarGuard::set("M40LLM_KV_LOGIT_COMPARE", "1"));
     let preserve_policy_env = topk_ablation_diagnostic_enabled()
         || order_equiv_diagnostic_enabled()
-        || score_cluster_validation_enabled();
+        || score_cluster_validation_enabled()
+        || score_cluster_diff_validation_enabled();
     let _policy_guard =
         (!preserve_policy_env).then(|| EnvVarGuard::set("M40LLM_KV_BLOCK_SELECT_POLICY", "topk"));
     let _score_guard =
@@ -3590,6 +3723,7 @@ fn dense_multitask_record(
         selected_support_bucket: selected_support_bucket(
             selection_indices(generated.kv_selection.as_ref()).as_ref(),
         ),
+        selection_elapsed_ms: selection_elapsed_ms(generated.kv_selection.as_ref()),
         initial_eot_rank_min: None,
         initial_eot_logit_margin_min: None,
         initial_top_margin_min: None,
@@ -3796,6 +3930,7 @@ fn compressed_multitask_record(input: MultitaskCompressedRecordInput<'_>) -> Mul
         selected_support_bucket: selected_support_bucket(
             selection_indices(input.final_generated.kv_selection.as_ref()).as_ref(),
         ),
+        selection_elapsed_ms: selection_elapsed_ms(input.final_generated.kv_selection.as_ref()),
         initial_eot_rank_min: fallback_signal_summary(
             input.initial.generated_logit_trace.as_deref(),
         )
@@ -3988,6 +4123,7 @@ fn topk_multitask_record(input: TopkMultitaskRecordInput<'_>) -> MultiTaskRecord
         selected_support_bucket: selected_support_bucket(
             selection_indices(input.generated.kv_selection.as_ref()).as_ref(),
         ),
+        selection_elapsed_ms: selection_elapsed_ms(input.generated.kv_selection.as_ref()),
         initial_eot_rank_min: fallback_signal_summary(
             input.generated.generated_logit_trace.as_deref(),
         )
@@ -4233,6 +4369,13 @@ fn run_topk_ablation_suite(
 }
 
 fn score_cluster_validation_tasks(target_tokens: usize) -> &'static [&'static str] {
+    if score_cluster_diff_validation_enabled() {
+        return &[
+            "clustered-distractor-needle",
+            "boundary-distractor-needle",
+            "weak-support-multi-needle",
+        ];
+    }
     if target_tokens >= 4096 {
         &[
             "single-needle",
@@ -4667,7 +4810,7 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     let mut model = load_selected_model(&probe)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)
         .unwrap_or_else(|_| Tokenizer::byte_level());
-    if score_cluster_validation_enabled() {
+    if score_cluster_validation_enabled() || score_cluster_diff_validation_enabled() {
         return run_score_cluster_validation_suite(&probe, config, &mut model, &tokenizer);
     }
     if topk_ablation_diagnostic_enabled() || order_equiv_diagnostic_enabled() {

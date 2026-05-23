@@ -521,6 +521,7 @@ impl LoadedModel {
                             kv_selection::record_attention(attention);
                         }
                     }
+                    let selection_start = std::time::Instant::now();
                     if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
                         &self.cuda,
                         seq_id,
@@ -531,10 +532,11 @@ impl LoadedModel {
                         compression.block_size,
                         compression.top_blocks,
                     ) {
-                        kv_selection::record_scored(
+                        kv_selection::record_scored_timed(
                             blocks,
                             total_old_blocks,
                             compression.top_blocks,
+                            Some(selection_start.elapsed().as_secs_f32() * 1000.0),
                         );
                     }
                 }
@@ -715,6 +717,7 @@ impl LoadedModel {
                             kv_selection::record_attention(attention);
                         }
                     }
+                    let selection_start = std::time::Instant::now();
                     if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
                         &self.cuda,
                         seq_id,
@@ -725,7 +728,12 @@ impl LoadedModel {
                         compression.block_size,
                         top_blocks,
                     ) {
-                        kv_selection::record_scored(blocks, total_old_blocks, top_blocks);
+                        kv_selection::record_scored_timed(
+                            blocks,
+                            total_old_blocks,
+                            top_blocks,
+                            Some(selection_start.elapsed().as_secs_f32() * 1000.0),
+                        );
                     }
                 }
                 return kv.attention_last_token_f32_gqa_block_summary_lossy_async(

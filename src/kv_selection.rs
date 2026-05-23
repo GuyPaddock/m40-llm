@@ -25,6 +25,7 @@ pub struct KvSelectionRecord {
     pub selected_blocks: Vec<KvSelectedBlock>,
     pub total_old_blocks: u32,
     pub top_blocks: u32,
+    pub selection_elapsed_ms: Option<f32>,
 }
 
 #[derive(Debug, Clone)]
@@ -188,6 +189,15 @@ pub fn record_scored(
     total_old_blocks: u32,
     top_blocks: u32,
 ) {
+    record_scored_timed(selected_blocks, total_old_blocks, top_blocks, None);
+}
+
+pub fn record_scored_timed(
+    selected_blocks: Vec<KvSelectedBlock>,
+    total_old_blocks: u32,
+    top_blocks: u32,
+    selection_elapsed_ms: Option<f32>,
+) {
     if let Ok(mut guard) = state().lock() {
         guard.total_old_blocks = guard.total_old_blocks.max(total_old_blocks);
         guard.top_blocks = guard.top_blocks.max(top_blocks);
@@ -202,6 +212,7 @@ pub fn record_scored(
             selected_blocks,
             total_old_blocks,
             top_blocks,
+            selection_elapsed_ms,
         });
     }
 }
