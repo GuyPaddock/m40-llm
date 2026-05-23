@@ -521,7 +521,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   The Llama 4096 dense-valid single/distractor/boundary confirmation shows the
   same top8-sized score-cluster behavior with no regressions. Keep
   score-cluster-adaptive opt-in/candidate only; direct FP16-K/q4-V with plain
-  top-k remains the preferred experimental path.
+  top-k remains the preferred experimental path. Targeted
+  `M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE=1` prompts now exercise clustered
+  distractors, boundary distractors, and weak-support multi-needle retrieval
+  while recording selected support size/bucket, active KV, decode time, and
+  `selection_elapsed_ms`. The first Llama/Qwen differentiation checkpoint did
+  not find a dense-valid top9-top12 score-cluster case: dense-valid targeted
+  rows collapsed to top8-sized support and passed, while the Llama clustered
+  distractor row was formally inconclusive because dense `off` chose a decoy.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

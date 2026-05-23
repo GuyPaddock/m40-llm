@@ -218,6 +218,18 @@ top8-sized support on the checked Qwen rows, not top4-sized support. Keep
 score-cluster-adaptive opt-in until it is validated across more dense-valid
 4096+ prompts and model families.
 
+`M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE=1` runs a narrower targeted
+score-cluster differentiation suite. It constructs clustered distractor,
+boundary distractor, and weak-support multi-needle prompts, then compares top4,
+top8, top16, score-cluster min8/max12, and score-cluster min8/max16. JSONL rows
+include `selected_support_size`, `selected_support_bucket`,
+`active_attended_kv_bytes_all_layers`, `decode_elapsed_ms`, selected block
+indices/scores, and `selection_elapsed_ms` where the debug-selection path can
+time block scoring. The first Llama/Qwen runs did not find a dense-valid
+top9-top12 score-cluster case: all dense-valid targeted rows collapsed to
+top8-sized support and passed, so score-cluster remains opt-in rather than a
+preferred default.
+
 Top-block selection diagnostics are also opt-in:
 
 - `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors|explicit|explicit-score-order`

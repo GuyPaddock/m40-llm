@@ -2,6 +2,87 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-23: Targeted Score-Cluster Differentiation
+
+This checkpoint tried to find dense-valid prompts where
+`score-cluster-adaptive` selects a support size different from plain top8, such
+as top9-top12. It keeps the current hierarchy unchanged:
+
+- preferred experimental backend: direct FP16-K/q4-V
+- preferred policy: plain score-ranked top-k
+- score-cluster-adaptive: strong opt-in candidate, not default
+
+Implementation notes:
+
+- `M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE=1` runs targeted prompt shapes meant
+  to stress cutoff behavior: clustered distractors, boundary distractors, and
+  weak-support multi-needle retrieval.
+- JSONL rows now include `selected_support_size`, `selected_support_bucket`,
+  active KV bytes, decode time, and `selection_elapsed_ms` from the block
+  scoring/debug-selection path.
+
+Llama 3.2 1B 4096 command shape:
+
+- `M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE=1
+  M40LLM_KV_QUALITY_TARGETS=4096
+  M40LLM_KV_MULTITASK_TASKS=clustered-distractor-needle,boundary-distractor-needle,weak-support-multi-needle ...`
+  emitted `/tmp/llama32-score-cluster-diff-4096.jsonl`.
+- The broad run timed out after clustered rows and boundary top4/top8/top16.
+  A focused boundary score-cluster resume emitted
+  `/tmp/llama32-score-cluster-diff-4096-boundary-scorecluster.jsonl`.
+
+Llama 4096 findings:
+
+| Task | Dense | Top4 | Top8 | Top16 | Score-cluster min8/max12 | Score-cluster min8/max16 |
+| --- | --- | --- | --- | --- | --- | --- |
+| clustered-distractor-needle | fail, `CLUSTER-80871` | inconclusive pass, support 4 | inconclusive pass, support 8 | inconclusive fail, support 16 | inconclusive pass, support 8 | inconclusive pass, support 8 |
+| boundary-distractor-needle | pass, `EDGE-42068` | pass, support 4 | pass, support 8 | pass, support 16 | pass, support 8 | pass, support 8 |
+
+The clustered row is useful selection-mechanics evidence but not
+compression-policy evidence because dense `off` chose a distractor. The
+dense-valid boundary row did not distinguish score-cluster from top8: both
+score-cluster min8/max12 and min8/max16 selected the same eight blocks as
+plain top8, with roughly 40.0 MiB active attended KV and about 58-61 ms
+selection elapsed time.
+
+Qwen2.5 3B 2048 command shape:
+
+- `M40LLM_KV_SCORE_CLUSTER_DIFF_VALIDATE=1
+  M40LLM_KV_QUALITY_TARGETS=2048
+  M40LLM_KV_MULTITASK_TASKS=clustered-distractor-needle,boundary-distractor-needle,weak-support-multi-needle ...`
+  emitted `/tmp/qwen2-score-cluster-diff-2048.jsonl` and completed in
+  4103.88 s.
+
+Qwen 2048 findings:
+
+| Task | Dense | Top4 | Top8 | Top16 | Score-cluster min8/max12 | Score-cluster min8/max16 |
+| --- | --- | --- | --- | --- | --- | --- |
+| clustered-distractor-needle | pass | pass, support 4 | pass, support 8 | pass, support 16 | pass, support 8 | pass, support 8 |
+| boundary-distractor-needle | pass | pass, support 4 | pass, support 8 | pass, support 16 | pass, support 8 | pass, support 8 |
+| weak-support-multi-needle | pass | pass, support 4 | pass, support 8 | pass, support 16 | pass, support 8 | pass, support 8 |
+
+Qwen active attended KV and timing follow support size:
+
+- top4: 42,467,328 bytes active, roughly 8.4-20.6 s decode depending on task
+- top8: 47,185,920 bytes active, roughly 9.3-22.7 s decode
+- top16: 56,623,104 bytes active, roughly 11.0-26.9 s decode
+- score-cluster min8/max12 and min8/max16: top8-sized support in all rows,
+  47,185,920 bytes active, roughly top8-like decode time
+- selection elapsed time was roughly 34 ms for top4, 37-38 ms for top8,
+  44-45 ms for top16, 39-40 ms for score-cluster min8/max12, and 42-43 ms for
+  score-cluster min8/max16
+
+Interpretation:
+
+- The targeted prompts did not find a dense-valid top9-top12 score-cluster
+  case. On all dense-valid Llama/Qwen targeted rows, score-cluster collapsed to
+  top8-sized support and did not regress quality.
+- This is still a useful negative result: score-cluster remains a strong
+  opt-in candidate, but it is not yet proven to add value beyond top8 on
+  dense-valid prompts.
+- Do not promote score-cluster-adaptive, do not run Qwen 4096/8192 yet, and do
+  not revisit fallback/anchor-neighbor policy work from this checkpoint.
+
 ## 2026-05-22: Score-Cluster Support Telemetry Confirmation
 
 This checkpoint fixes and validates selected-block telemetry for
