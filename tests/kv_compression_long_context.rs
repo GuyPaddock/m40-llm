@@ -39,6 +39,16 @@ const BOUNDARY_DISTRACTOR_A: &str = "EDGE-42608";
 const BOUNDARY_DISTRACTOR_B: &str = "EDGE-40268";
 const WEAK_SUPPORT_A: &str = "SIGMA-11235";
 const WEAK_SUPPORT_B: &str = "TAU-81321";
+const REAL_CHAT_RELEASE: &str = "Triton Ridge";
+const REAL_DOC_EARLY_FACT: &str = "Cedar-17";
+const REAL_DOC_MIDDLE_FACT: &str = "Falcon-42";
+const REAL_DOC_LATE_FACT: &str = "Harbor-09";
+const REAL_EXTRACT_A: &str = "invoice_id=INV-7319";
+const REAL_EXTRACT_B: &str = "region=ap-south-2";
+const REAL_EXTRACT_DISTRACTOR_A: &str = "invoice_id=INV-7139";
+const REAL_EXTRACT_DISTRACTOR_B: &str = "region=ap-south-1";
+const REAL_CONFIG_TARGET: &str = "M40_BATCH_LIMIT=37";
+const REAL_CONFIG_DISTRACTOR: &str = "M40_BATCH_LIMIT=73";
 
 #[derive(Debug, Clone)]
 struct Candidate {
@@ -777,6 +787,9 @@ fn target_contexts(model_context: usize, full_quality: bool) -> Result<Vec<usize
         if topk_multitask_diagnostic_enabled() {
             return Ok(if 1024 < limit { vec![1024] } else { Vec::new() });
         }
+        if realistic_prompt_validation_enabled() {
+            return Ok(if 2048 < limit { vec![2048] } else { Vec::new() });
+        }
         if q4_v_diagnostic_enabled() || mixed_q4_v_direct_sweep_enabled() {
             return Ok([2048, 4096]
                 .into_iter()
@@ -929,6 +942,18 @@ fn topk_multitask_diagnostic_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn realistic_prompt_validation_enabled() -> bool {
+    std::env::var("M40LLM_KV_REALISTIC_PROMPT_VALIDATE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn realistic_include_top16_enabled() -> bool {
+    std::env::var("M40LLM_KV_REALISTIC_INCLUDE_TOP16")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
 fn quality_minimal_telemetry_enabled() -> bool {
     std::env::var("M40LLM_KV_QUALITY_MINIMAL_TELEMETRY")
         .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
@@ -995,6 +1020,7 @@ fn exact_q8_diagnostic_enabled() -> bool {
         || fallback_diagnostic_enabled()
         || fallback_multitask_diagnostic_enabled()
         || topk_multitask_diagnostic_enabled()
+        || realistic_prompt_validation_enabled()
         || topk_sensitivity_diagnostic_enabled()
         || topk_ablation_diagnostic_enabled()
         || score_cluster_validation_enabled()
@@ -2877,6 +2903,79 @@ fn multitask_specs(
         "\nQuestion: What are the primary and secondary codes? Answer with both codes only.",
     );
 
+    let mut real_chat = String::new();
+    real_chat.push_str(
+        "System: You are helping an engineering team track realistic release planning details.\n",
+    );
+    real_chat
+        .push_str("User: For the next runtime release, remember that the internal codename is ");
+    real_chat.push_str(REAL_CHAT_RELEASE);
+    real_chat.push_str(".\nAssistant: Noted.\n");
+    push_filler_to_target(tokenizer, &mut real_chat, target_tokens / 2);
+    real_chat.push_str("\nUser: We also discussed benchmark methodology, CUDA stream ordering, and rollout notes.\nAssistant: I will keep the details separate.\n");
+    push_filler_to_target(tokenizer, &mut real_chat, target_tokens);
+    real_chat.push_str("\nUser: What is the internal codename for the next runtime release? Answer with only the codename.\nAssistant:");
+
+    let mut real_doc_early = String::new();
+    real_doc_early.push_str("# Deployment Readiness Memo\n\n");
+    real_doc_early.push_str("Early audit marker: ");
+    real_doc_early.push_str(REAL_DOC_EARLY_FACT);
+    real_doc_early.push_str(".\n\n");
+    push_filler_to_target(tokenizer, &mut real_doc_early, target_tokens);
+    real_doc_early
+        .push_str("\nQuestion: What is the early audit marker? Answer with only the marker.");
+
+    let mut real_doc_middle = String::new();
+    real_doc_middle.push_str("# Operations Review\n\n");
+    push_filler_to_target(tokenizer, &mut real_doc_middle, target_tokens / 2);
+    real_doc_middle.push_str("\nMiddle routing marker: ");
+    real_doc_middle.push_str(REAL_DOC_MIDDLE_FACT);
+    real_doc_middle.push_str(".\n");
+    push_filler_to_target(tokenizer, &mut real_doc_middle, target_tokens);
+    real_doc_middle
+        .push_str("\nQuestion: What is the middle routing marker? Answer with only the marker.");
+
+    let mut real_doc_late = String::new();
+    real_doc_late.push_str("# Incident Follow-up\n\n");
+    push_filler_to_target(tokenizer, &mut real_doc_late, target_tokens);
+    real_doc_late.push_str("\nLate incident marker: ");
+    real_doc_late.push_str(REAL_DOC_LATE_FACT);
+    real_doc_late
+        .push_str(".\nQuestion: What is the late incident marker? Answer with only the marker.");
+
+    let mut real_extract = String::new();
+    real_extract.push_str("Extract the requested production fields from this incident packet.\n");
+    real_extract.push_str("Primary record: ");
+    real_extract.push_str(REAL_EXTRACT_A);
+    real_extract.push_str("; ");
+    real_extract.push_str(REAL_EXTRACT_B);
+    real_extract.push_str(".\n");
+    push_filler_to_target(tokenizer, &mut real_extract, target_tokens / 2);
+    real_extract.push_str("\nDistractor record, not current: ");
+    real_extract.push_str(REAL_EXTRACT_DISTRACTOR_A);
+    real_extract.push_str("; ");
+    real_extract.push_str(REAL_EXTRACT_DISTRACTOR_B);
+    real_extract.push_str(".\n");
+    push_filler_to_target(tokenizer, &mut real_extract, target_tokens);
+    real_extract.push_str(
+        "\nQuestion: What are the current invoice_id and region? Answer with both fields only.",
+    );
+
+    let mut real_config = String::new();
+    real_config
+        .push_str("Review this configuration history and answer from the active block only.\n");
+    real_config.push_str("```toml\n[archived]\n");
+    real_config.push_str(REAL_CONFIG_DISTRACTOR);
+    real_config.push_str("\n```\n");
+    push_filler_to_target(tokenizer, &mut real_config, target_tokens / 2);
+    real_config.push_str("\n```toml\n[active.m40]\n");
+    real_config.push_str(REAL_CONFIG_TARGET);
+    real_config.push_str("\nM40_PREFILL_CHUNK=128\n```\n");
+    push_filler_to_target(tokenizer, &mut real_config, target_tokens);
+    real_config.push_str(
+        "\nQuestion: What is the active M40_BATCH_LIMIT setting? Answer with only the full setting.",
+    );
+
     let mut summary = String::new();
     summary.push_str("Remember these three project facts exactly.\n");
     summary.push_str("Fact A: ");
@@ -2973,6 +3072,54 @@ fn multitask_specs(
             prompt: weak_support,
             expected_terms: vec![WEAK_SUPPORT_A, WEAK_SUPPORT_B],
             forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-chat-history-qa",
+            score_type: "exact_terms",
+            prompt: real_chat,
+            expected_terms: vec![REAL_CHAT_RELEASE],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-doc-qa-early",
+            score_type: "exact_terms",
+            prompt: real_doc_early,
+            expected_terms: vec![REAL_DOC_EARLY_FACT],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-doc-qa-middle",
+            score_type: "exact_terms",
+            prompt: real_doc_middle,
+            expected_terms: vec![REAL_DOC_MIDDLE_FACT],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-doc-qa-late",
+            score_type: "exact_terms",
+            prompt: real_doc_late,
+            expected_terms: vec![REAL_DOC_LATE_FACT],
+            forbidden_terms: vec![],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-multifact-distractor-extract",
+            score_type: "target_without_distractors",
+            prompt: real_extract,
+            expected_terms: vec![REAL_EXTRACT_A, REAL_EXTRACT_B],
+            forbidden_terms: vec![REAL_EXTRACT_DISTRACTOR_A, REAL_EXTRACT_DISTRACTOR_B],
+            require_nonempty: false,
+        },
+        MultiTaskSpec {
+            name: "real-code-config-lookup",
+            score_type: "target_without_distractors",
+            prompt: real_config,
+            expected_terms: vec![REAL_CONFIG_TARGET],
+            forbidden_terms: vec![REAL_CONFIG_DISTRACTOR],
             require_nonempty: false,
         },
         MultiTaskSpec {
@@ -4271,6 +4418,141 @@ fn run_topk_multitask_suite(
     Ok(())
 }
 
+fn realistic_prompt_tasks() -> &'static [&'static str] {
+    &[
+        "real-chat-history-qa",
+        "real-doc-qa-early",
+        "real-doc-qa-middle",
+        "real-doc-qa-late",
+        "real-multifact-distractor-extract",
+        "real-code-config-lookup",
+    ]
+}
+
+fn run_realistic_prompt_validation_suite(
+    probe: &CandidateProbe,
+    config: &ModelConfig,
+    model: &mut LoadedModel,
+    tokenizer: &Tokenizer,
+    target_tokens: usize,
+) -> Result<()> {
+    let max_tokens = multitask_max_tokens();
+    let _selection_telemetry_guard = EnvVarGuard::set("M40LLM_KV_SELECTION_TELEMETRY", "1");
+    let retrieval_prompt_style = RetrievalPromptStyle::from_env_for(tokenizer)?;
+    let env_task_filter = env_name_filter("M40LLM_KV_MULTITASK_TASKS");
+    let tasks: Vec<MultiTaskSpec> =
+        multitask_specs(tokenizer, target_tokens, retrieval_prompt_style)
+            .into_iter()
+            .filter(|spec| realistic_prompt_tasks().contains(&spec.name))
+            .filter(|spec| {
+                env_task_filter
+                    .as_ref()
+                    .is_none_or(|filter| filter.iter().any(|name| name == spec.name))
+            })
+            .collect();
+    eprintln!(
+        "running realistic prompt validation: target={target_tokens} prompt_style={} tasks={} max_tokens={max_tokens}",
+        retrieval_prompt_style.name(),
+        tasks.len()
+    );
+    for spec in tasks {
+        let dense = run_multitask_generate(model, &spec, KvCompressMode::Off, 16, max_tokens)?;
+        let dense_output = dense.output.clone();
+        let dense_trace = dense.generated_logit_trace.clone();
+        let dense_record = dense_multitask_record(
+            probe,
+            config,
+            target_tokens,
+            retrieval_prompt_style,
+            &spec,
+            dense,
+        );
+        let dense_reference_passed = dense_record.dense_reference_passed;
+        append_report_record(&dense_record)?;
+
+        let mut compressed_records = Vec::new();
+        for top_blocks in [4, 8] {
+            let generated = run_multitask_generate(
+                model,
+                &spec,
+                KvCompressMode::BlockSelectExact,
+                top_blocks,
+                max_tokens,
+            )?;
+            let record = topk_multitask_record(TopkMultitaskRecordInput {
+                probe,
+                config,
+                target_tokens,
+                retrieval_prompt_style,
+                spec: &spec,
+                dense_output: Some(&dense_output),
+                dense_reference_passed,
+                dense_trace: dense_trace.as_deref(),
+                selection_ablation_case: None,
+                generated,
+                top_blocks,
+            });
+            eprintln!(
+                "  realistic task={} top_blocks={} status={:?} score={}/{} active_kv={:?} decode_ms={} selected={:?} output={:?}",
+                record.task,
+                top_blocks,
+                record.status,
+                record.score,
+                record.max_score,
+                record.active_attended_kv_bytes_all_layers,
+                record.generated_decode_elapsed_ms,
+                record.selected_block_indices,
+                record.output
+            );
+            append_report_record(&record)?;
+            compressed_records.push(record);
+        }
+
+        let top4 = &compressed_records[0];
+        let top8 = &compressed_records[1];
+        let top4_top8_disagree = top4.status != top8.status
+            || (top4.score - top8.score).abs() > f32::EPSILON
+            || top4.output.trim() != top8.output.trim();
+        if realistic_include_top16_enabled()
+            || (dense_reference_passed == Some(true) && top4_top8_disagree)
+        {
+            let generated = run_multitask_generate(
+                model,
+                &spec,
+                KvCompressMode::BlockSelectExact,
+                16,
+                max_tokens,
+            )?;
+            let record = topk_multitask_record(TopkMultitaskRecordInput {
+                probe,
+                config,
+                target_tokens,
+                retrieval_prompt_style,
+                spec: &spec,
+                dense_output: Some(&dense_output),
+                dense_reference_passed,
+                dense_trace: dense_trace.as_deref(),
+                selection_ablation_case: Some("top16-if-top4-top8-disagree"),
+                generated,
+                top_blocks: 16,
+            });
+            eprintln!(
+                "  realistic task={} top_blocks=16 status={:?} score={}/{} active_kv={:?} decode_ms={} selected={:?} output={:?}",
+                record.task,
+                record.status,
+                record.score,
+                record.max_score,
+                record.active_attended_kv_bytes_all_layers,
+                record.generated_decode_elapsed_ms,
+                record.selected_block_indices,
+                record.output
+            );
+            append_report_record(&record)?;
+        }
+    }
+    Ok(())
+}
+
 fn run_topk_sensitivity_suite(
     probe: &CandidateProbe,
     config: &ModelConfig,
@@ -4822,6 +5104,18 @@ fn long_context_needle_retrieval_quality_smoke() -> Result<()> {
     if topk_multitask_diagnostic_enabled() {
         for target_tokens in contexts {
             run_topk_multitask_suite(&probe, config, &mut model, &tokenizer, target_tokens)?;
+        }
+        return Ok(());
+    }
+    if realistic_prompt_validation_enabled() {
+        for target_tokens in contexts {
+            run_realistic_prompt_validation_suite(
+                &probe,
+                config,
+                &mut model,
+                &tokenizer,
+                target_tokens,
+            )?;
         }
         return Ok(());
     }
