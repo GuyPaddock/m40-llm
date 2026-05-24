@@ -122,6 +122,16 @@ extern "C" {
         return 0u;
     }
 
+    static uint32_t exact_block_selected_token_capacity(
+        uint32_t recent_count,
+        uint32_t old_len,
+        uint32_t selected_old_blocks,
+        uint32_t block_size) {
+        const uint32_t selected_old_token_capacity =
+            std::min(old_len, selected_old_blocks * block_size);
+        return recent_count + selected_old_token_capacity;
+    }
+
     static bool q8_dense_shadow_from_env() {
         const char* split = std::getenv("M40LLM_KV_Q8_PRECISION_SPLIT_DIAG");
         if (split && std::strcmp(split, "1") == 0) return true;
@@ -4033,7 +4043,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         const uint32_t selected_block_order = selected_block_order_from_env();
         const int blocks = (int)q_heads;
@@ -4131,7 +4142,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
 
         const size_t staged_elems = (size_t)q_heads * (size_t)selected_capacity * 64u;
@@ -4188,7 +4200,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
         const uint32_t selected_block_order = selected_block_order_from_env();
@@ -4264,7 +4277,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
         const uint32_t selected_block_order = selected_block_order_from_env();
@@ -4354,7 +4368,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
 
@@ -4443,7 +4458,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
         const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         const uint32_t selected_block_order = selected_block_order_from_env();
 
@@ -4519,7 +4535,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
         const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
         const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
-        const uint32_t selected_capacity = recent_count + selected_old_blocks * block_size;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         const uint32_t selected_block_order = selected_block_order_from_env();
 
