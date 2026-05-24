@@ -24,7 +24,7 @@ use crate::generate::{
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::kv_compression::KvCompressionConfig;
+use crate::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
 use crate::tokenizer::Tokenizer;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
@@ -301,6 +301,7 @@ impl DecodeSchedulerRequest {
         if self.stopping.should_stop(&self.generated) {
             return Ok(DecodeSchedulerStep::Complete);
         }
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(self.session.kv_compression().clone());
         let logits = self
             .session
             .logits_for_ids(&self.ids, |logits| log_top_logits(logits, 8))?;
@@ -530,10 +531,13 @@ fn process_scheduler_prefill_tick(
         }
     };
 
-    let forward_result = unsafe {
-        state
-            .model
-            .forward_prefill_all_layers_varlen_for_sequences(&items)
+    let forward_result = {
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
+        unsafe {
+            state
+                .model
+                .forward_prefill_all_layers_varlen_for_sequences(&items)
+        }
     };
     drop(items);
 
@@ -594,10 +598,13 @@ fn process_scheduler_batch_tick(
     }
 
     let items: Vec<_> = prepared.iter().map(|token| token.item).collect();
-    let forward_result = unsafe {
-        state
-            .model
-            .forward_one_token_all_layers_batched_for_sequences(&items)
+    let forward_result = {
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
+        unsafe {
+            state
+                .model
+                .forward_one_token_all_layers_batched_for_sequences(&items)
+        }
     };
     if let Err(err) = forward_result {
         for request in requests {
@@ -1075,9 +1082,8 @@ async fn generate(
             #[cfg(feature = "cuda")]
             {
                 let _ = model;
-                let _kv_runtime_guard = crate::kv_compression::ScopedRuntimeConfig::new(
-                    state_for_logits.kv_compression.clone(),
-                );
+                let _kv_runtime_guard =
+                    ScopedRuntimeConfig::new(state_for_logits.kv_compression.clone());
                 decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8))
             }
 

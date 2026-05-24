@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use m40_llm::infer::LoadedModel;
+use m40_llm::kv_compression::KvCompressionConfig;
 use m40_llm::profile;
 use m40_llm::server::{
     app_router, AppState, GenerateRequest, GenerateResponse, GenerateStreamChunk,
@@ -60,7 +61,8 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
     model.allocate_kv_cache_for_layer_sequences(16, 2)?;
 
-    let server = start_test_server(model).await?;
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
     let client = reqwest::Client::new();
     let url = format!("http://{}/generate", server.addr);
     let req_a = GenerateRequest {
@@ -128,8 +130,11 @@ impl TestServer {
     }
 }
 
-async fn start_test_server(model: LoadedModel) -> Result<TestServer> {
-    let state = Arc::new(AppState::new(model));
+async fn start_test_server_with_kv_config(
+    model: LoadedModel,
+    kv_compression: KvCompressionConfig,
+) -> Result<TestServer> {
+    let state = Arc::new(AppState::new_with_kv_config(model, kv_compression));
     let router = app_router(state);
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -150,6 +155,48 @@ async fn start_test_server(model: LoadedModel) -> Result<TestServer> {
 }
 
 #[tokio::test]
+async fn server_streaming_respects_dense_kv_config() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    let _ = model.allocate_kv_cache(16, 1);
+
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req = GenerateRequest {
+        prompt: "A".to_string(),
+        max_tokens: Some(2),
+        stream: true,
+        ..Default::default()
+    };
+    let resp = client.post(&url).json(&req).send().await.unwrap();
+    assert!(resp.status().is_success());
+
+    let mut stream = resp.bytes_stream();
+    let mut last: Option<GenerateStreamChunk> = None;
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.unwrap();
+        for line in bytes.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
+            let part: GenerateStreamChunk = serde_json::from_slice(line).unwrap();
+            last = Some(part);
+        }
+    }
+
+    let last = last.expect("expected at least one streamed chunk");
+    assert!(last.done);
+    assert!(!last.output.is_empty());
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn server_generate_smoke() -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
         eprintln!("skipping server smoke tests without CUDA upload support");
@@ -161,7 +208,8 @@ async fn server_generate_smoke() -> Result<()> {
     // KV cache optional for non-CUDA path but harmless to allocate small
     let _ = model.allocate_kv_cache(16, 1);
 
-    let server = start_test_server(model).await?;
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
 
     // Request small generation
     let client = reqwest::Client::new();
@@ -194,7 +242,8 @@ async fn server_generate_streaming_nul_free() -> Result<()> {
     let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
     let _ = model.allocate_kv_cache(16, 1);
 
-    let server = start_test_server(model).await?;
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
 
     let client = reqwest::Client::new();
     let url = format!("http://{}/generate", server.addr);

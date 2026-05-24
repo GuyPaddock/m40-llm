@@ -122,6 +122,10 @@ unsafe impl Send for DecodeSession {}
 
 #[cfg(feature = "cuda")]
 impl DecodeSession {
+    pub fn kv_compression(&self) -> &crate::kv_compression::KvCompressionConfig {
+        &self.kv_compression
+    }
+
     pub fn new(
         model: &LoadedModel,
         d_model: usize,
