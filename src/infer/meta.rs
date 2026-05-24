@@ -12,14 +12,24 @@ pub fn get_u32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<
     })
 }
 
+pub fn get_u32_meta_any(metadata: &HashMap<String, GgufValue>, keys: &[&str]) -> Option<u32> {
+    keys.iter().find_map(|key| get_u32_meta(metadata, key))
+}
+
+pub fn arch_key(architecture: &str, suffix: &str) -> String {
+    format!("{architecture}.{suffix}")
+}
+
 pub fn derive_attention_head_count_kv(
     metadata: &HashMap<String, GgufValue>,
     tensors: &[GgufTensor],
+    architecture: &str,
     d_model: u32,
     attention_head_count: u32,
     head_dim: u32,
 ) -> Result<u32> {
-    if let Some(v) = get_u32_meta(metadata, "llama.attention.head_count_kv") {
+    let kv_key = arch_key(architecture, "attention.head_count_kv");
+    if let Some(v) = get_u32_meta_any(metadata, &[&kv_key, "llama.attention.head_count_kv"]) {
         return Ok(v);
     }
 
@@ -48,11 +58,13 @@ pub fn derive_attention_head_count_kv(
 pub fn derive_vocab_size(
     metadata: &HashMap<String, GgufValue>,
     tensors: &[GgufTensor],
+    architecture: &str,
     d_model: u32,
 ) -> Result<u32> {
-    if let Some(v) = get_u32_meta(metadata, "llama.vocab_size") {
+    let vocab_key = arch_key(architecture, "vocab_size");
+    if let Some(v) = get_u32_meta_any(metadata, &[&vocab_key, "llama.vocab_size"]) {
         if v == 0 {
-            anyhow::bail!("llama.vocab_size must be > 0");
+            anyhow::bail!("vocab_size must be > 0");
         }
         return Ok(v);
     }
@@ -77,17 +89,19 @@ pub fn derive_vocab_size(
             }
         }
     }
-    anyhow::bail!("vocab_size missing; add llama.vocab_size or embeddings tensor")
+    anyhow::bail!("vocab_size missing; add architecture vocab_size or embeddings tensor")
 }
 
 pub fn derive_feed_forward_length(
     metadata: &HashMap<String, GgufValue>,
     tensors: &[GgufTensor],
+    architecture: &str,
     d_model: u32,
 ) -> Result<u32> {
-    if let Some(v) = get_u32_meta(metadata, "llama.feed_forward_length") {
+    let ff_key = arch_key(architecture, "feed_forward_length");
+    if let Some(v) = get_u32_meta_any(metadata, &[&ff_key, "llama.feed_forward_length"]) {
         if v == 0 {
-            anyhow::bail!("llama.feed_forward_length must be > 0");
+            anyhow::bail!("feed_forward_length must be > 0");
         }
         return Ok(v);
     }
@@ -112,7 +126,7 @@ pub fn derive_feed_forward_length(
         }
     }
     anyhow::bail!(
-        "feed_forward_length missing; add llama.feed_forward_length or a feed-forward weight tensor"
+        "feed_forward_length missing; add architecture feed_forward_length or a feed-forward weight tensor"
     )
 }
 
@@ -121,6 +135,10 @@ pub fn get_f32_meta(metadata: &HashMap<String, GgufValue>, key: &str) -> Option<
         GgufValue::Scalar(GgufScalar::F32(x)) => Some(*x),
         _ => None,
     })
+}
+
+pub fn get_f32_meta_any(metadata: &HashMap<String, GgufValue>, keys: &[&str]) -> Option<f32> {
+    keys.iter().find_map(|key| get_f32_meta(metadata, key))
 }
 
 pub fn get_str_meta<'a>(metadata: &'a HashMap<String, GgufValue>, key: &str) -> Option<&'a str> {

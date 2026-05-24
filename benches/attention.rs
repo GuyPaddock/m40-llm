@@ -6,9 +6,11 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 #[cfg(not(all(feature = "cuda", nvcc)))]
 use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(all(feature = "cuda", nvcc))]
-use m40_llm::cuda::KVCache;
+use m40_llm::cuda::{ExactOldBacking, KVCache};
 #[cfg(all(feature = "cuda", nvcc))]
 use m40_llm::infer::{BatchMetadata, BatchSequence};
+#[cfg(all(feature = "cuda", nvcc))]
+use m40_llm::kv_compression::KvRepresentativePolicy;
 #[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
@@ -146,6 +148,49 @@ fn seed_kv_cache(ctx: &m40_llm::cuda::CudaContext, kv: &KVCache, seq_lens: &[u32
                 kv.append_token_f32(ctx, seq_idx as u32, d_k as *const c_void, d_v)
                     .expect("append kv");
             }
+        }
+    }
+    unsafe {
+        ctx.device_free(d_k).expect("free d_k");
+        ctx.device_free(d_v).expect("free d_v");
+    }
+}
+
+#[cfg(all(feature = "cuda", nvcc))]
+fn seed_kv_cache_with_explicit_positions(
+    ctx: &m40_llm::cuda::CudaContext,
+    kv: &KVCache,
+    seq_len: u32,
+    kv_dim: usize,
+) {
+    let bytes_kv = kv_dim * std::mem::size_of::<f32>();
+    let d_k = ctx.device_malloc(bytes_kv).expect("d_k");
+    let d_v = ctx.device_malloc(bytes_kv).expect("d_v");
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * kv_dim + i) as f32) * 0.0003 - 0.25)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * kv_dim + (kv_dim - 1 - i)) as f32) * 0.0002 - 0.1)
+            .collect();
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes_kv)
+                .expect("copy k");
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes_kv)
+                .expect("copy v");
+            kv.append_token_f32_rope_k_at_async(
+                ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )
+            .expect("append kv");
+            ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                .expect("sync append kv");
         }
     }
     unsafe {
@@ -502,7 +547,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             ));
             group.bench_function(format!("{name}_padded_max"), |b| {
                 b.iter(|| unsafe {
-                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                    ctx.attention_prefill_f32_gqa_varlen(
                         d_padded_q as *const c_void,
                         d_padded_k as *const c_void,
                         d_padded_v as *const c_void,
@@ -513,6 +558,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                         batch_size as u32,
                         q_heads,
                         kv_heads,
+                        head_dim,
                         d_padded_out,
                     )
                     .expect("padded prefill attention")
@@ -522,7 +568,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             group.throughput(Throughput::Elements(meta.total_attention_cells()));
             group.bench_function(format!("{name}_packed_varlen"), |b| {
                 b.iter(|| unsafe {
-                    ctx.attention_prefill_f32_gqa_varlen_head64(
+                    ctx.attention_prefill_f32_gqa_varlen(
                         d_q as *const c_void,
                         d_k as *const c_void,
                         d_v as *const c_void,
@@ -533,6 +579,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                         meta.sequences().len() as u32,
                         q_heads,
                         kv_heads,
+                        head_dim,
                         d_out,
                     )
                     .expect("prefill attention")
@@ -541,7 +588,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
             group.bench_function(format!("{name}_bucketed_varlen"), |b| {
                 b.iter(|| unsafe {
                     for dispatch in &bucket_dispatches {
-                        ctx.attention_prefill_f32_gqa_varlen_head64(
+                        ctx.attention_prefill_f32_gqa_varlen(
                             d_q as *const c_void,
                             d_k as *const c_void,
                             d_v as *const c_void,
@@ -552,6 +599,7 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
                             dispatch.batch_size,
                             q_heads,
                             kv_heads,
+                            head_dim,
                             d_out,
                         )
                         .expect("bucketed prefill attention");
@@ -602,10 +650,362 @@ fn bench_attention_prefill_gqa_varlen(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_attention_qwen_head128(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attention_qwen_head128");
+
+    #[cfg(all(feature = "cuda", nvcc))]
+    {
+        let ctx = cuda_env::ctx_m40().expect("cuda context");
+        cuda_env::require_sm52(&ctx).expect("sm_52 device");
+
+        let q_heads = 16u32;
+        let kv_heads = 2u32;
+        let head_dim = 128u32;
+        let q_dim = (q_heads * head_dim) as usize;
+        let kv_dim = (kv_heads * head_dim) as usize;
+
+        for target in [128u32, 256, 512] {
+            let meta = BatchMetadata::new(vec![BatchSequence {
+                seq_len: target,
+                query_len: target,
+                kv_len: target,
+            }])
+            .expect("qwen prefill metadata");
+            let q: Vec<f32> = (0..meta.total_q_tokens() as usize * q_dim)
+                .map(|i| ((i * 17 % 251) as f32) * 0.0011 - 0.13)
+                .collect();
+            let k: Vec<f32> = (0..meta.total_kv_tokens() as usize * kv_dim)
+                .map(|i| ((i * 23 % 263) as f32) * 0.0009 - 0.09)
+                .collect();
+            let v: Vec<f32> = (0..meta.total_kv_tokens() as usize * kv_dim)
+                .map(|i| ((i * 29 % 269) as f32) * 0.0013 - 0.17)
+                .collect();
+            let bytes_q = q.len() * std::mem::size_of::<f32>();
+            let bytes_kv = k.len() * std::mem::size_of::<f32>();
+            let bytes_offsets = std::mem::size_of::<u32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_k = ctx.device_malloc(bytes_kv).expect("d_k");
+            let d_v = ctx.device_malloc(bytes_kv).expect("d_v");
+            let d_q_offsets = ctx.device_malloc(bytes_offsets).expect("d_q_offsets");
+            let d_kv_offsets = ctx.device_malloc(bytes_offsets).expect("d_kv_offsets");
+            let d_q_lens = ctx.device_malloc(bytes_offsets).expect("d_q_lens");
+            let d_kv_lens = ctx.device_malloc(bytes_offsets).expect("d_kv_lens");
+            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+                ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes_kv)
+                    .expect("copy k");
+                ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes_kv)
+                    .expect("copy v");
+                ctx.memcpy_h2d(
+                    d_q_offsets,
+                    meta.q_offsets().as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy q offsets");
+                ctx.memcpy_h2d(
+                    d_kv_offsets,
+                    meta.kv_offsets().as_ptr() as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy kv offsets");
+                ctx.memcpy_h2d(
+                    d_q_lens,
+                    &target as *const u32 as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy q lens");
+                ctx.memcpy_h2d(
+                    d_kv_lens,
+                    &target as *const u32 as *const c_void,
+                    bytes_offsets,
+                )
+                .expect("copy kv lens");
+            }
+
+            group.throughput(Throughput::Elements(target as u64 * target as u64));
+            group.bench_function(format!("prefill_q16_kv2_d128_s{target}"), |b| {
+                b.iter(|| unsafe {
+                    ctx.attention_prefill_f32_gqa_varlen(
+                        d_q as *const c_void,
+                        d_k as *const c_void,
+                        d_v as *const c_void,
+                        d_q_offsets as *const u32,
+                        d_kv_offsets as *const u32,
+                        d_q_lens as *const u32,
+                        d_kv_lens as *const u32,
+                        1,
+                        q_heads,
+                        kv_heads,
+                        head_dim,
+                        d_out,
+                    )
+                    .expect("qwen prefill attention")
+                })
+            });
+
+            unsafe {
+                ctx.device_free(d_q).expect("free d_q");
+                ctx.device_free(d_k).expect("free d_k");
+                ctx.device_free(d_v).expect("free d_v");
+                ctx.device_free(d_q_offsets).expect("free d_q_offsets");
+                ctx.device_free(d_kv_offsets).expect("free d_kv_offsets");
+                ctx.device_free(d_q_lens).expect("free d_q_lens");
+                ctx.device_free(d_kv_lens).expect("free d_kv_lens");
+                ctx.device_free(d_out).expect("free d_out");
+            }
+        }
+
+        let recent_window = 128u32;
+        let block_size = 32u32;
+        for seq_len in [512u32, 2048] {
+            let dense_kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)
+                .expect("qwen dense kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &dense_kv, seq_len, kv_dim);
+            let q: Vec<f32> = (0..q_dim)
+                .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
+                .collect();
+            let bytes_q = q_dim * std::mem::size_of::<f32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+            }
+
+            group.throughput(Throughput::Elements(seq_len as u64));
+            group.bench_function(format!("dense_q16_kv2_d128_s{seq_len}"), |b| {
+                b.iter(|| unsafe {
+                    dense_kv
+                        .attention_last_token_f32_gqa(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            d_out,
+                        )
+                        .expect("qwen dense attention");
+                })
+            });
+
+            let kv = KVCache::new_compressed_with_context(
+                &ctx,
+                seq_len,
+                1,
+                kv_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                16,
+                0,
+                KvRepresentativePolicy::Last,
+                ExactOldBacking::Fp16KQ4V,
+            )
+            .expect("qwen mixed kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &kv, seq_len, kv_dim);
+
+            for top_blocks in [4u32, 8, 16] {
+                group.throughput(Throughput::Elements(
+                    (recent_window + top_blocks * block_size) as u64,
+                ));
+                group.bench_function(
+                    format!("direct_fp16_k_q4_v_q16_kv2_d128_s{seq_len}_top{top_blocks}"),
+                    |b| {
+                        b.iter(|| unsafe {
+                            kv.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                                &ctx,
+                                0,
+                                d_q as *const c_void,
+                                q_heads,
+                                seq_len,
+                                recent_window,
+                                block_size,
+                                top_blocks,
+                                d_out,
+                            )
+                            .expect("qwen direct fp16-k/q4-v attention");
+                            ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                                .expect("sync qwen direct attention");
+                        })
+                    },
+                );
+            }
+
+            unsafe {
+                ctx.device_free(d_q).expect("free d_q");
+                ctx.device_free(d_out).expect("free d_out");
+            }
+        }
+    }
+
+    #[cfg(not(all(feature = "cuda", nvcc)))]
+    {
+        group.bench_function("noop", |b| b.iter(|| {}));
+    }
+
+    group.finish();
+}
+
+fn bench_attention_kv_compression_modes(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attention_kv_compression_modes");
+
+    #[cfg(all(feature = "cuda", nvcc))]
+    {
+        let ctx = cuda_env::ctx_m40().expect("cuda context");
+        cuda_env::require_sm52(&ctx).expect("sm_52 device");
+
+        let q_heads = 32u32;
+        let kv_heads = 4u32;
+        let head_dim = 64u32;
+        let q_dim = (q_heads * head_dim) as usize;
+        let kv_dim = (kv_heads * head_dim) as usize;
+        let recent_window = 1024u32;
+        let block_size = 32u32;
+        let top_blocks = 16u32;
+        let seq_lens = [4096u32, 8192, 16384, 32768];
+
+        for seq_len in seq_lens {
+            let dense_kv =
+                KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim).expect("kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &dense_kv, seq_len, kv_dim);
+            let compressed_kv = KVCache::new_compressed_with_context(
+                &ctx,
+                seq_len,
+                1,
+                kv_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                0,
+                KvRepresentativePolicy::Last,
+                ExactOldBacking::Dense,
+            )
+            .expect("compressed kv cache");
+            seed_kv_cache_with_explicit_positions(&ctx, &compressed_kv, seq_len, kv_dim);
+            let q: Vec<f32> = (0..q_dim)
+                .map(|i| ((i * 11 % 257) as f32) * 0.0004 - 0.2)
+                .collect();
+            let bytes_q = q_dim * std::mem::size_of::<f32>();
+            let d_q = ctx.device_malloc(bytes_q).expect("d_q");
+            let d_out = ctx.device_malloc(bytes_q).expect("d_out");
+            unsafe {
+                ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)
+                    .expect("copy q");
+            }
+
+            let dense_kv_bytes = seq_len as usize * kv_dim * std::mem::size_of::<half::f16>() * 2;
+            let summary_count = seq_len.saturating_sub(recent_window).div_ceil(block_size);
+            let block_summary_bytes = (recent_window as usize + summary_count as usize)
+                * kv_dim
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let block_select_lossy_bytes = (recent_window as usize
+                + top_blocks.min(summary_count) as usize)
+                * kv_dim
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let actual_compressed_bytes = compressed_kv.actual_bytes();
+            eprintln!(
+                "[kv-compress-bench] seq_len={seq_len} dense_kv_bytes={dense_kv_bytes} actual_compressed_kv_bytes={actual_compressed_bytes} block_summary_equiv_bytes={block_summary_bytes} block_select_lossy_equiv_bytes={block_select_lossy_bytes}"
+            );
+
+            group.throughput(Throughput::Elements(seq_len as u64));
+            group.bench_function(format!("s{seq_len}_dense"), |b| {
+                b.iter(|| unsafe {
+                    dense_kv
+                        .attention_last_token_f32_gqa(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            d_out,
+                        )
+                        .expect("dense attention")
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_select_exact"), |b| {
+                b.iter(|| unsafe {
+                    dense_kv
+                        .attention_last_token_f32_gqa_block_select_exact_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            d_out,
+                        )
+                        .expect("block-select-exact attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-select-exact");
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_summary"), |b| {
+                b.iter(|| unsafe {
+                    compressed_kv
+                        .attention_last_token_f32_gqa_block_summary_lossy_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            0,
+                            d_out,
+                        )
+                        .expect("block-summary attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-summary");
+                })
+            });
+            group.bench_function(format!("s{seq_len}_block_select_lossy"), |b| {
+                b.iter(|| unsafe {
+                    compressed_kv
+                        .attention_last_token_f32_gqa_block_summary_lossy_async(
+                            &ctx,
+                            0,
+                            d_q as *const c_void,
+                            q_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            d_out,
+                        )
+                        .expect("block-select-lossy attention");
+                    ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)
+                        .expect("sync block-select-lossy");
+                })
+            });
+
+            unsafe {
+                ctx.device_free(d_q).expect("free d_q");
+                ctx.device_free(d_out).expect("free d_out");
+            }
+        }
+    }
+
+    #[cfg(not(all(feature = "cuda", nvcc)))]
+    {
+        group.bench_function("noop", |b| b.iter(|| {}));
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_attention_last_token_gqa,
     bench_attention_last_token_gqa_batched_varlen,
-    bench_attention_prefill_gqa_varlen
+    bench_attention_prefill_gqa_varlen,
+    bench_attention_qwen_head128,
+    bench_attention_kv_compression_modes
 );
 criterion_main!(benches);

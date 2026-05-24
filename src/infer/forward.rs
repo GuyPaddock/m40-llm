@@ -4,9 +4,13 @@ use super::workspace::ForwardWorkspacePtrs;
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
+#[cfg(feature = "cuda")]
+use crate::cuda::KVCache;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
+#[cfg(feature = "cuda")]
+use crate::kv_selection;
 #[cfg(feature = "cuda")]
 use crate::profile;
 #[cfg(feature = "cuda")]
@@ -15,6 +19,9 @@ use crate::timing;
 use anyhow::Context;
 use anyhow::{anyhow, Result};
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+type QkvBiasPtrs = (*const c_void, *const c_void, *const c_void);
 
 #[cfg(feature = "cuda")]
 #[derive(Debug, Clone, Copy)]
@@ -54,7 +61,147 @@ fn log_profiled_op(
     profile::log_delta(&format!("{label}.{op}"), before, elapsed);
 }
 
+#[cfg(feature = "cuda")]
+fn kv_physical_slot_for_layer_sequence_in(
+    kv: &KVCache,
+    layer_count: u32,
+    layer_id: u32,
+    sequence_id: u32,
+) -> Result<u32> {
+    if layer_count == 0 || layer_id >= layer_count {
+        anyhow::bail!("KV layer_id {layer_id} out of range for {layer_count} layers");
+    }
+    let sequence_capacity = kv.max_batch_size() / layer_count;
+    if sequence_id >= sequence_capacity {
+        anyhow::bail!(
+            "KV sequence_id {} out of range for {} logical sequences",
+            sequence_id,
+            sequence_capacity
+        );
+    }
+    let physical_slot = sequence_id
+        .checked_mul(layer_count)
+        .and_then(|base| base.checked_add(layer_id))
+        .ok_or_else(|| anyhow!("KV physical slot overflow"))?;
+    if physical_slot >= kv.max_batch_size() {
+        anyhow::bail!(
+            "KV physical slot {} out of range for {} slots",
+            physical_slot,
+            kv.max_batch_size()
+        );
+    }
+    Ok(physical_slot)
+}
+
+#[cfg(feature = "cuda")]
+fn forward_finite_log_enabled() -> bool {
+    std::env::var("M40LLM_FORWARD_FINITE_LOG").ok().as_deref() == Some("1")
+}
+
 impl LoadedModel {
+    #[cfg(feature = "cuda")]
+    fn qkv_bias_ptrs(&self, w: &super::StandardLayerWeights) -> Result<Option<QkvBiasPtrs>> {
+        let bq_ptr =
+            w.bq.as_ref()
+                .map(|view| self.tensor_device_ptr("bq", view))
+                .transpose()?;
+        let bk_ptr =
+            w.bk.as_ref()
+                .map(|view| self.tensor_device_ptr("bk", view))
+                .transpose()?;
+        let bv_ptr =
+            w.bv.as_ref()
+                .map(|view| self.tensor_device_ptr("bv", view))
+                .transpose()?;
+        match (bq_ptr, bk_ptr, bv_ptr) {
+            (Some(bq), Some(bk), Some(bv)) => Ok(Some((bq, bk, bv))),
+            (None, None, None) => Ok(None),
+            _ => anyhow::bail!("Q/K/V attention biases must be all present or all absent"),
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    fn apply_qkv_bias_async(
+        &self,
+        qkv_bias: Option<QkvBiasPtrs>,
+        rows: usize,
+        d_model: usize,
+        kv_dim: usize,
+        ws: ForwardWorkspacePtrs,
+    ) -> Result<()> {
+        let Some((d_bq, d_bk, d_bv)) = qkv_bias else {
+            return Ok(());
+        };
+        if rows == 0 {
+            return Ok(());
+        }
+        let bytes_d = d_model
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("q bias row byte size overflow")?;
+        let bytes_kv = kv_dim
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("kv bias row byte size overflow")?;
+        self.cuda.stream_wait_for_stream(
+            CudaStream::Decode,
+            CudaStream::Prefill,
+            "qkv_project_to_bias_add",
+        )?;
+        for row in 0..rows {
+            let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
+            let k_row = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
+            let v_row = unsafe { mut_byte_offset(ws.dv, row * bytes_kv) };
+            unsafe {
+                self.cuda
+                    .residual_add_f32_async(q_row as *const c_void, d_bq, q_row, d_model)?;
+                self.cuda
+                    .residual_add_f32_async(k_row as *const c_void, d_bk, k_row, kv_dim)?;
+                self.cuda
+                    .residual_add_f32_async(v_row as *const c_void, d_bv, v_row, kv_dim)?;
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    fn debug_log_device_f32_finiteness(
+        &self,
+        label: &str,
+        ptr: *const c_void,
+        len: usize,
+    ) -> Result<()> {
+        if !forward_finite_log_enabled() {
+            return Ok(());
+        }
+        self.cuda.synchronize_stream(CudaStream::Decode)?;
+        self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        let bytes = len
+            .checked_mul(std::mem::size_of::<f32>())
+            .context("debug finiteness byte size overflow")?;
+        let mut raw = vec![0u8; bytes];
+        unsafe {
+            self.cuda
+                .memcpy_d2h(raw.as_mut_ptr() as *mut c_void, ptr, bytes)?;
+        }
+        let mut nonfinite = 0usize;
+        let mut min = f32::INFINITY;
+        let mut max = f32::NEG_INFINITY;
+        let mut first_nonfinite = None;
+        for (idx, ch) in raw.chunks_exact(4).enumerate() {
+            let value = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
+            if value.is_finite() {
+                min = min.min(value);
+                max = max.max(value);
+            } else {
+                nonfinite += 1;
+                first_nonfinite.get_or_insert((idx, value));
+            }
+        }
+        eprintln!(
+            "[cuda] finite_check {label}: len={len} nonfinite={nonfinite} first_nonfinite={first_nonfinite:?} finite_min={min:.6e} finite_max={max:.6e}"
+        );
+        Ok(())
+    }
+
     #[cfg(feature = "cuda")]
     fn with_forward_workspace<R>(
         &self,
@@ -96,6 +243,7 @@ impl LoadedModel {
         f(ptrs)
     }
 
+    #[cfg(feature = "cuda")]
     pub unsafe fn forward_one_token_minimal_with_norms(
         &self,
         d_x_f32: *const c_void,
@@ -103,6 +251,7 @@ impl LoadedModel {
         d_wq_f16: *const c_void,
         d_wk_f16: *const c_void,
         d_wv_f16: *const c_void,
+        qkv_bias: Option<QkvBiasPtrs>,
         d_wo_f16: *const c_void,
         d_w_gate_f16: *const c_void,
         d_w_up_f16: *const c_void,
@@ -180,6 +329,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attn_norm"),
+                        ws.d_xn as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Q uses query heads; K/V use KV heads for GQA models.
                     let profile_before = profile::snapshot_if_enabled();
@@ -203,12 +357,28 @@ impl LoadedModel {
                         ws.dk,
                         ws.dv,
                     )?;
+                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
                     log_profiled_op(
                         &label,
                         "qkv_project",
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.q"),
+                        ws.dq as *const c_void,
+                        d_model as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.k"),
+                        ws.dk as *const c_void,
+                        kv_dim as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.v"),
+                        ws.dv as *const c_void,
+                        kv_dim as usize,
+                    )?;
 
                     let pos = seq_len.saturating_sub(1);
                     let profile_before = profile::snapshot_if_enabled();
@@ -218,7 +388,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
                     )?;
-                    self.cuda.rope_f32_inplace_async(
+                    self.cuda.rope_f32_inplace_layout_async(
                         ws.dq,
                         1,
                         q_heads,
@@ -226,6 +396,7 @@ impl LoadedModel {
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     log_profiled_op(
                         &label,
@@ -233,6 +404,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.rope_q"),
+                        ws.dq as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
@@ -276,6 +452,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attention"),
+                        ws.datt as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Output projection of attention
                     let profile_before = profile::snapshot_if_enabled();
@@ -299,6 +480,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.out_project"),
+                        ws.dy_attn as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Residual add y_attn: x1 = x + y_attn.
                     let profile_before = profile::snapshot_if_enabled();
@@ -320,6 +506,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.attn_residual"),
+                        ws.d_x1 as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Post-attention norm: x1n = norm(x1)
                     let profile_before = profile::snapshot_if_enabled();
@@ -349,6 +540,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.ffn_norm"),
+                        ws.d_x1n as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // MLP gates and up (now feed post-attn normalized x1n)
                     let profile_before = profile::snapshot_if_enabled();
@@ -374,6 +570,16 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.gate"),
+                        ws.dgate as *const c_void,
+                        hidden_dim as usize,
+                    )?;
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.up"),
+                        ws.dup as *const c_void,
+                        hidden_dim as usize,
+                    )?;
 
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
                     let profile_before = profile::snapshot_if_enabled();
@@ -395,6 +601,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.swiglu"),
+                        ws.dhid as *const c_void,
+                        hidden_dim as usize,
+                    )?;
 
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
@@ -418,6 +629,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.mlp_down"),
+                        ws.dy_mlp as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
                     let profile_before = profile::snapshot_if_enabled();
@@ -439,6 +655,11 @@ impl LoadedModel {
                         profile_before.as_ref(),
                         op_start.elapsed(),
                     );
+                    self.debug_log_device_f32_finiteness(
+                        &format!("{label}.mlp_residual"),
+                        d_out_f32 as *const c_void,
+                        d_model as usize,
+                    )?;
 
                     Ok(())
                 },
@@ -475,6 +696,7 @@ impl LoadedModel {
     /// # Safety
     /// All device pointers must be valid on this context's device. `d_position`
     /// and `d_seq_len` must each point to one device-resident u32.
+    #[cfg(feature = "cuda")]
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn forward_one_token_minimal_with_norms_graph_params(
         &self,
@@ -483,6 +705,7 @@ impl LoadedModel {
         d_wq_f16: *const c_void,
         d_wk_f16: *const c_void,
         d_wv_f16: *const c_void,
+        qkv_bias: Option<QkvBiasPtrs>,
         d_wo_f16: *const c_void,
         d_w_gate_f16: *const c_void,
         d_w_up_f16: *const c_void,
@@ -585,6 +808,7 @@ impl LoadedModel {
                         ws.dk,
                         ws.dv,
                     )?;
+                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
                     log_profiled_op(
                         &label,
                         "qkv_project",
@@ -599,7 +823,7 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
                     )?;
-                    self.cuda.rope_f32_inplace_position_dev_async(
+                    self.cuda.rope_f32_inplace_position_dev_layout_async(
                         ws.dq,
                         1,
                         q_heads,
@@ -607,6 +831,7 @@ impl LoadedModel {
                         d_position,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     log_profiled_op(
                         &label,
@@ -844,6 +1069,7 @@ impl LoadedModel {
     ///
     /// # Safety
     /// All device pointers must be valid on this context's device.
+    #[cfg(feature = "cuda")]
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn forward_one_token_minimal(
         &self,
@@ -867,6 +1093,7 @@ impl LoadedModel {
             d_wq_f16,
             d_wk_f16,
             d_wv_f16,
+            None,
             d_wo_f16,
             d_w_gate_f16,
             d_w_up_f16,
@@ -1024,6 +1251,8 @@ impl LoadedModel {
             .try_into()
             .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
         let position = seq_len.saturating_sub(1);
+        #[cfg(feature = "cuda")]
+        kv_selection::set_attention_context(Some(layer_id), Some(position));
         if let Some(kv) = &self.kv_cache {
             if position >= kv.max_seq_len() {
                 anyhow::bail!(
@@ -1039,6 +1268,7 @@ impl LoadedModel {
             let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
             let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
             let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+            let qkv_bias = self.qkv_bias_ptrs(&w)?;
             let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
             let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1066,6 +1296,7 @@ impl LoadedModel {
                 wq_ptr,
                 wk_ptr,
                 wv_ptr,
+                qkv_bias,
                 wo_ptr,
                 w_gate_ptr,
                 w_up_ptr,
@@ -1338,11 +1569,14 @@ impl LoadedModel {
             .try_into()
             .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
         #[cfg(feature = "cuda")]
+        kv_selection::set_attention_context(Some(layer_id), None);
+        #[cfg(feature = "cuda")]
         {
             let kv_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
             let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
             let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
             let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+            let qkv_bias = self.qkv_bias_ptrs(&w)?;
             let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
             let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
             let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1370,6 +1604,7 @@ impl LoadedModel {
                 wq_ptr,
                 wk_ptr,
                 wv_ptr,
+                qkv_bias,
                 wo_ptr,
                 w_gate_ptr,
                 w_up_ptr,
@@ -1571,6 +1806,7 @@ impl LoadedModel {
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+                let qkv_bias = self.qkv_bias_ptrs(&w)?;
                 let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
                 let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
                 let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -1654,6 +1890,7 @@ impl LoadedModel {
                     ws.dk,
                     ws.dv,
                 )?;
+                self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
                     "qkv_project",
@@ -1675,7 +1912,7 @@ impl LoadedModel {
                     let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
                     let kv_slot =
                         self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
-                    self.cuda.rope_f32_inplace_async(
+                    self.cuda.rope_f32_inplace_layout_async(
                         q_row,
                         1,
                         q_heads,
@@ -1683,6 +1920,7 @@ impl LoadedModel {
                         pos,
                         self.model_config.rope_freq_base,
                         self.model_config.rope_freq_scale,
+                        self.model_config.rope_layout_code(),
                     )?;
                     self.append_kv_token_f32_rope_k_at_async(
                         kv_slot,
@@ -1916,6 +2154,18 @@ impl LoadedModel {
         &self,
         items: &[ForwardPrefillSequence<'_>],
     ) -> Result<usize> {
+        let kv = self.kv_cache.as_ref().ok_or_else(|| {
+            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
+        })?;
+        unsafe { self.forward_prefill_all_layers_varlen_for_sequences_with_kv(items, kv) }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub unsafe fn forward_prefill_all_layers_varlen_for_sequences_with_kv(
+        &self,
+        items: &[ForwardPrefillSequence<'_>],
+        kv: &KVCache,
+    ) -> Result<usize> {
         if items.is_empty() {
             anyhow::bail!("batched prefill requires at least one item");
         }
@@ -1924,12 +2174,9 @@ impl LoadedModel {
             anyhow::bail!("batched prefill: model has zero layers");
         }
         let (d_model, hidden_dim) = self.validate_standard_layers()?;
-        let kv = self.kv_cache.as_ref().ok_or_else(|| {
-            anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
-        })?;
-        if kv.head_dim() != 64 {
+        if kv.head_dim() != 64 && kv.head_dim() != 128 {
             anyhow::bail!(
-                "batched prefill attention currently requires head_dim=64, got {}",
+                "batched prefill attention currently requires head_dim=64 or 128, got {}",
                 kv.head_dim()
             );
         }
@@ -1939,7 +2186,12 @@ impl LoadedModel {
             if item.token_ids.is_empty() {
                 anyhow::bail!("batched prefill item has empty prompt");
             }
-            self.kv_physical_slot_for_layer_sequence((layer_count - 1) as u32, item.sequence_id)?;
+            kv_physical_slot_for_layer_sequence_in(
+                kv,
+                layer_count as u32,
+                (layer_count - 1) as u32,
+                item.sequence_id,
+            )?;
             let len: u32 = item
                 .token_ids
                 .len()
@@ -2007,6 +2259,7 @@ impl LoadedModel {
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
+                let qkv_bias = self.qkv_bias_ptrs(&w)?;
                 let wo_ptr = self.tensor_device_ptr("wo", &w.wo)?;
                 let w_gate_ptr = self.tensor_device_ptr("w_gate", &w.w_gate)?;
                 let w_up_ptr = self.tensor_device_ptr("w_up", &w.w_up)?;
@@ -2078,6 +2331,7 @@ impl LoadedModel {
                     ws.dk,
                     ws.dv,
                 )?;
+                self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
                     "qkv_project",
@@ -2094,8 +2348,12 @@ impl LoadedModel {
                 )?;
                 for (seq_idx, item) in items.iter().enumerate() {
                     let q_offset = meta.offsets()[seq_idx].q_offset as usize;
-                    let kv_slot =
-                        self.kv_physical_slot_for_layer_sequence(layer_id, item.sequence_id)?;
+                    let kv_slot = kv_physical_slot_for_layer_sequence_in(
+                        kv,
+                        layer_count as u32,
+                        layer_id,
+                        item.sequence_id,
+                    )?;
                     for tok_idx in 0..item.token_ids.len() {
                         let pos: u32 = tok_idx
                             .try_into()
@@ -2105,7 +2363,8 @@ impl LoadedModel {
                         let k_row_mut = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
                         let k_row = k_row_mut as *const c_void;
                         let v_row = unsafe { const_byte_offset(ws.dv, row * bytes_kv) };
-                        self.append_kv_token_f32_rope_k_at_async(
+                        kv.append_token_f32_rope_k_at_layout_async(
+                            &self.cuda,
                             kv_slot,
                             k_row,
                             v_row,
@@ -2113,8 +2372,9 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_async(
+                        self.cuda.rope_f32_inplace_layout_async(
                             q_row,
                             1,
                             q_heads,
@@ -2122,8 +2382,9 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_async(
+                        self.cuda.rope_f32_inplace_layout_async(
                             k_row_mut,
                             1,
                             kv_heads,
@@ -2131,6 +2392,7 @@ impl LoadedModel {
                             pos,
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
+                            self.model_config.rope_layout_code(),
                         )?;
                     }
                 }
@@ -2149,7 +2411,7 @@ impl LoadedModel {
                     "prefill_rope_kv_to_attention",
                 )?;
                 unsafe {
-                    prefill_plan.dispatch_head64_async(
+                    prefill_plan.dispatch_async(
                         ws.dq as *const c_void,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,

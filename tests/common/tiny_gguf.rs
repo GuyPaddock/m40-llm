@@ -35,17 +35,272 @@ fn f16_bytes(v: f32) -> [u8; 2] {
     f16::from_f32(v).to_bits().to_le_bytes()
 }
 
+fn f32_bytes(v: f32) -> [u8; 4] {
+    v.to_le_bytes()
+}
+
 #[allow(dead_code)]
 pub fn make_identity_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
-    make_tiny_gguf(cfg, TinyOutput::Identity)
+    make_tiny_gguf(cfg, TinyOutput::Identity, false)
 }
 
 #[allow(dead_code)]
 pub fn make_ascii_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
-    make_tiny_gguf(cfg, TinyOutput::ForceToken(b'A' as usize))
+    make_tiny_gguf(cfg, TinyOutput::ForceToken(b'A' as usize), false)
 }
 
-fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8>) {
+#[allow(dead_code)]
+pub fn make_tied_identity_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
+    make_tiny_gguf(cfg, TinyOutput::Identity, true)
+}
+
+#[allow(dead_code)]
+pub fn make_attention_bias_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
+    assert!(cfg.vocab >= cfg.d_model);
+    assert!(cfg.d_model > 0);
+    assert!(cfg.hidden > 0);
+    assert!(cfg.head_count > 0);
+    assert!(cfg.block_count > 0);
+    assert!(cfg.d_model.is_multiple_of(cfg.head_count as usize));
+
+    let mut metadata = std::collections::HashMap::new();
+    metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+    metadata.insert(
+        "general.file_type".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(1)),
+    );
+    metadata.insert(
+        "llama.embedding_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.d_model as u32)),
+    );
+    metadata.insert(
+        "llama.vocab_size".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.vocab as u32)),
+    );
+    metadata.insert(
+        "llama.block_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.block_count)),
+    );
+    metadata.insert(
+        "llama.attention.head_count".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.head_count)),
+    );
+    metadata.insert(
+        "llama.feed_forward_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.hidden as u32)),
+    );
+    metadata.insert(
+        "llama.context_length".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(cfg.context_length)),
+    );
+    metadata.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("llama".to_string())),
+    );
+
+    let mut tensors: Vec<GgufTensor> = Vec::new();
+    let mut weights: Vec<u8> = Vec::new();
+    fn push_tensor(
+        tensors: &mut Vec<GgufTensor>,
+        weights: &mut Vec<u8>,
+        name: &str,
+        dtype: GgmlDType,
+        shape: &[u64],
+        bytes: Vec<u8>,
+    ) {
+        let offset = weights.len() as u64;
+        weights.extend_from_slice(&bytes);
+        tensors.push(GgufTensor {
+            name: name.to_string(),
+            dtype,
+            shape: shape.to_vec(),
+            offset,
+        });
+    }
+
+    let mut embedding_bytes = Vec::new();
+    {
+        let buf = &mut embedding_bytes;
+        for row in 0..cfg.vocab {
+            for col in 0..cfg.d_model {
+                let v = if row == col { 1.0 } else { 0.0 };
+                buf.extend_from_slice(&f16_bytes(v));
+            }
+        }
+    }
+    push_tensor(
+        &mut tensors,
+        &mut weights,
+        "tok_embeddings.weight",
+        GgmlDType::F16,
+        &[cfg.vocab as u64, cfg.d_model as u64],
+        embedding_bytes,
+    );
+
+    let mut output_bytes = Vec::new();
+    {
+        let buf = &mut output_bytes;
+        for col in 0..cfg.vocab {
+            for row in 0..cfg.d_model {
+                let v = if row == col { 1.0 } else { 0.0 };
+                buf.extend_from_slice(&f16_bytes(v));
+            }
+        }
+    }
+    push_tensor(
+        &mut tensors,
+        &mut weights,
+        "output.weight",
+        GgmlDType::F16,
+        &[cfg.d_model as u64, cfg.vocab as u64],
+        output_bytes,
+    );
+
+    fn push_zeros(tensors: &mut Vec<GgufTensor>, weights: &mut Vec<u8>, name: &str, shape: &[u64]) {
+        let elems: usize = shape.iter().copied().product::<u64>() as usize;
+        push_tensor(
+            tensors,
+            weights,
+            name,
+            GgmlDType::F16,
+            shape,
+            (0..elems).flat_map(|_| f16_bytes(0.0)).collect(),
+        );
+    }
+    fn push_identity(
+        tensors: &mut Vec<GgufTensor>,
+        weights: &mut Vec<u8>,
+        name: &str,
+        rows: usize,
+        cols: usize,
+    ) {
+        let mut bytes = Vec::new();
+        {
+            let buf = &mut bytes;
+            for col in 0..cols {
+                for row in 0..rows {
+                    let v = if row == col { 1.0 } else { 0.0 };
+                    buf.extend_from_slice(&f16_bytes(v));
+                }
+            }
+        }
+        push_tensor(
+            tensors,
+            weights,
+            name,
+            GgmlDType::F16,
+            &[rows as u64, cols as u64],
+            bytes,
+        );
+    }
+    fn push_bias(
+        tensors: &mut Vec<GgufTensor>,
+        weights: &mut Vec<u8>,
+        name: &str,
+        d_model: usize,
+        scale: f32,
+    ) {
+        let mut bytes = Vec::new();
+        {
+            let buf = &mut bytes;
+            for idx in 0..d_model {
+                buf.extend_from_slice(&f32_bytes(scale * (idx as f32 + 1.0)));
+            }
+        }
+        push_tensor(
+            tensors,
+            weights,
+            name,
+            GgmlDType::F32,
+            &[d_model as u64],
+            bytes,
+        );
+    }
+
+    for layer in 0..cfg.block_count {
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wq.weight"),
+            &[cfg.d_model as u64, cfg.d_model as u64],
+        );
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wk.weight"),
+            &[cfg.d_model as u64, cfg.d_model as u64],
+        );
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wv.weight"),
+            &[cfg.d_model as u64, cfg.d_model as u64],
+        );
+        push_bias(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wq.bias"),
+            cfg.d_model,
+            0.01,
+        );
+        push_bias(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wk.bias"),
+            cfg.d_model,
+            0.02,
+        );
+        push_bias(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wv.bias"),
+            cfg.d_model,
+            0.03,
+        );
+        push_identity(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.attention.wo.weight"),
+            cfg.d_model,
+            cfg.d_model,
+        );
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.feed_forward.w3.weight"),
+            &[cfg.d_model as u64, cfg.hidden as u64],
+        );
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.feed_forward.w1.weight"),
+            &[cfg.d_model as u64, cfg.hidden as u64],
+        );
+        push_zeros(
+            &mut tensors,
+            &mut weights,
+            &format!("layers.{layer}.feed_forward.w2.weight"),
+            &[cfg.hidden as u64, cfg.d_model as u64],
+        );
+    }
+
+    let gguf = GgufModel {
+        version: 1,
+        metadata,
+        tensors,
+        data_offset: 0,
+    };
+    (gguf, weights)
+}
+
+fn make_tiny_gguf(
+    cfg: TinyGgufConfig,
+    output: TinyOutput,
+    tied_output: bool,
+) -> (GgufModel, Vec<u8>) {
     assert!(cfg.vocab >= cfg.d_model);
     assert!(cfg.d_model > 0);
     assert!(cfg.hidden > 0);
@@ -108,7 +363,22 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
             });
         };
 
-    {
+    if tied_output {
+        let mut fill = |buf: &mut Vec<u8>| {
+            for col in 0..cfg.vocab {
+                for row in 0..cfg.d_model {
+                    let v = if row == col { 1.0 } else { 0.0 };
+                    buf.extend_from_slice(&f16_bytes(v));
+                }
+            }
+        };
+        add_tensor(
+            "tok_embeddings.weight",
+            GgmlDType::F16,
+            &[cfg.d_model as u64, cfg.vocab as u64],
+            &mut fill,
+        );
+    } else {
         let mut fill = |buf: &mut Vec<u8>| {
             for row in 0..cfg.vocab {
                 for col in 0..cfg.d_model {
@@ -125,7 +395,7 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
         );
     }
 
-    {
+    if !tied_output {
         let mut fill = |buf: &mut Vec<u8>| {
             for col in 0..cfg.vocab {
                 for row in 0..cfg.d_model {

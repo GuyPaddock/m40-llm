@@ -246,8 +246,41 @@ pub fn load_gguf(path: &Path) -> Result<GgufModel> {
         });
     }
 
-    // The current file position is the start of the tensor data block.
-    let data_offset = f.stream_position()?;
+    // Tensor offsets are relative to the aligned tensor data section. The GGUF
+    // default alignment is 32 bytes; older synthetic tests in this repository
+    // omitted padding, so when the key is absent we only apply the default if
+    // the aligned payload still fits in the file.
+    let tensor_info_end = f.stream_position()?;
+    let file_len = f.metadata()?.len();
+    let max_tensor_end = tensors
+        .iter()
+        .filter_map(tensor_payload_end)
+        .max()
+        .unwrap_or(0);
+    let data_offset = match metadata.get("general.alignment") {
+        Some(GgufValue::Scalar(GgufScalar::U32(alignment))) if *alignment > 0 => {
+            align_offset(tensor_info_end, u64::from(*alignment))
+        }
+        Some(GgufValue::Scalar(GgufScalar::U64(alignment))) if *alignment > 0 => {
+            align_offset(tensor_info_end, *alignment)
+        }
+        Some(GgufValue::Scalar(GgufScalar::I32(alignment))) if *alignment > 0 => {
+            align_offset(tensor_info_end, *alignment as u64)
+        }
+        Some(GgufValue::Scalar(GgufScalar::I64(alignment))) if *alignment > 0 => {
+            align_offset(tensor_info_end, *alignment as u64)
+        }
+        Some(_) => anyhow::bail!("general.alignment must be a positive integer when present"),
+        None if !tensors.is_empty() => {
+            let aligned = align_offset(tensor_info_end, 32);
+            if aligned.saturating_add(max_tensor_end) <= file_len {
+                aligned
+            } else {
+                tensor_info_end
+            }
+        }
+        None => tensor_info_end,
+    };
 
     Ok(GgufModel {
         version,
@@ -258,6 +291,42 @@ pub fn load_gguf(path: &Path) -> Result<GgufModel> {
 }
 
 // ---------- helpers ----------
+
+fn align_offset(offset: u64, alignment: u64) -> u64 {
+    debug_assert!(alignment > 0);
+    let rem = offset % alignment;
+    if rem == 0 {
+        offset
+    } else {
+        offset + (alignment - rem)
+    }
+}
+
+fn tensor_payload_end(t: &GgufTensor) -> Option<u64> {
+    let (block_elems, block_bytes) = match t.dtype {
+        GgmlDType::F32 => (1u64, 4u64),
+        GgmlDType::F16 => (1, 2),
+        GgmlDType::Q4_0 => (32, 18),
+        GgmlDType::Q4_1 => (32, 20),
+        GgmlDType::Q5_0 => (32, 22),
+        GgmlDType::Q5_1 => (32, 36),
+        GgmlDType::Q8_0 => (32, 34),
+        GgmlDType::Q8_1 => (32, 36),
+        GgmlDType::Q2K => (256, 84),
+        GgmlDType::Q3K => (256, 110),
+        GgmlDType::Q4K => (256, 144),
+        GgmlDType::Q5K => (256, 176),
+        GgmlDType::Q6K => (256, 210),
+        GgmlDType::Q8K => (256, 292),
+        GgmlDType::Unknown(_) => return None,
+    };
+    let elems = t
+        .shape
+        .iter()
+        .try_fold(1u64, |acc, dim| acc.checked_mul(*dim))?;
+    let blocks = elems.div_ceil(block_elems);
+    t.offset.checked_add(blocks.checked_mul(block_bytes)?)
+}
 
 fn read_u32<R: Read>(r: &mut R) -> Result<u32> {
     let mut buf = [0u8; 4];

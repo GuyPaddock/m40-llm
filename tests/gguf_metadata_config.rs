@@ -2,7 +2,7 @@
 
 use m40_llm::gguf::{load_gguf, GgufScalar, GgufValue};
 use std::fs::File;
-use std::io::Write;
+use std::io::{Seek, Write};
 
 fn write_le_u32(f: &mut File, v: u32) {
     f.write_all(&v.to_le_bytes()).unwrap();
@@ -16,6 +16,12 @@ fn write_le_f32(f: &mut File, v: f32) {
 fn write_string(f: &mut File, s: &str) {
     write_le_u64(f, s.len() as u64);
     f.write_all(s.as_bytes()).unwrap();
+}
+
+fn write_kv_u32(f: &mut File, key: &str, val: u32) {
+    write_string(f, key);
+    write_le_u32(f, 4); // U32
+    write_le_u32(f, val);
 }
 
 #[test]
@@ -125,6 +131,46 @@ fn gguf_metadata_llama_core_params() {
     assert_eq!(d_model % n_head, 0);
     let head_dim = d_model / n_head;
     assert_eq!(head_dim, 8);
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn gguf_data_offset_honors_general_alignment() {
+    let mut path = std::env::temp_dir();
+    path.push(format!(
+        "m40llm_gguf_aligned_data_{}.gguf",
+        std::process::id()
+    ));
+
+    let tensor_bytes = 8usize;
+    let data_offset;
+    {
+        let mut f = File::create(&path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        write_le_u32(&mut f, 3);
+        write_le_u64(&mut f, 1);
+        write_le_u64(&mut f, 1);
+        write_kv_u32(&mut f, "general.alignment", 32);
+
+        write_string(&mut f, "W");
+        write_le_u32(&mut f, 1);
+        write_le_u64(&mut f, 4);
+        write_le_u32(&mut f, 1); // F16
+        write_le_u64(&mut f, 0);
+
+        let tensor_info_end = f.stream_position().unwrap();
+        data_offset = tensor_info_end.next_multiple_of(32);
+        let padding = (data_offset - tensor_info_end) as usize;
+        f.write_all(&vec![0u8; padding]).unwrap();
+        f.write_all(&vec![0x5au8; tensor_bytes]).unwrap();
+        f.flush().unwrap();
+    }
+
+    let gg = load_gguf(&path).expect("parse gguf");
+    assert_eq!(gg.data_offset, data_offset);
+    let bytes = std::fs::read(&path).unwrap();
+    assert_eq!(bytes[gg.data_offset as usize], 0x5a);
 
     let _ = std::fs::remove_file(&path);
 }

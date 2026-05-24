@@ -1,6 +1,6 @@
 use super::meta::{
-    derive_attention_head_count_kv, derive_feed_forward_length, derive_vocab_size, get_f32_meta,
-    get_str_meta, get_u32_meta,
+    arch_key, derive_attention_head_count_kv, derive_feed_forward_length, derive_vocab_size,
+    get_f32_meta_any, get_str_meta, get_u32_meta_any,
 };
 use crate::cuda::{CudaContext, KVCache};
 use crate::gguf::{GgmlDType, GgufModel, GgufTensor, GgufValue};
@@ -31,6 +31,14 @@ pub struct ModelConfig {
 }
 
 impl ModelConfig {
+    pub fn rope_layout_code(&self) -> u32 {
+        if self.architecture.starts_with("qwen") {
+            crate::cuda::ROPE_LAYOUT_NEOX
+        } else {
+            crate::cuda::ROPE_LAYOUT_ADJACENT
+        }
+    }
+
     #[cfg(feature = "gguf_ext")]
     pub(super) fn from_gguf_ext_bytes(
         bytes: &[u8],
@@ -77,11 +85,13 @@ impl ModelConfig {
                 head_dim
             );
         }
-        let vocab_size =
-            derive_vocab_size(metadata, tensors, d_model).context("derive vocab_size from gguf")?;
+        let vocab_size = derive_vocab_size(metadata, tensors, &typed.architecture, d_model)
+            .context("derive vocab_size from gguf")?;
         let layer_norm_epsilon = typed.layer_norm_epsilon.unwrap_or(1e-5);
         let rope_freq_base = typed.rope_freq_base.unwrap_or(10_000.0);
-        let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
+        let rope_scale_key = arch_key(&typed.architecture, "rope.freq_scale");
+        let rope_freq_scale =
+            get_f32_meta_any(metadata, &[&rope_scale_key, "llama.rope.freq_scale"]).unwrap_or(1.0);
         let feed_forward_length = typed.feed_forward_length;
         let cfg = Self {
             architecture: typed.architecture.clone(),
@@ -108,28 +118,47 @@ impl ModelConfig {
         let architecture = get_str_meta(metadata, "general.architecture")
             .ok_or_else(|| anyhow!("missing general.architecture"))?
             .to_string();
-        let embedding_length = get_u32_meta(metadata, "llama.embedding_length")
-            .ok_or_else(|| anyhow!("missing llama.embedding_length"))?;
-        let attention_head_count = get_u32_meta(metadata, "llama.attention.head_count")
-            .ok_or_else(|| anyhow!("missing llama.attention.head_count"))?;
-        let block_count = get_u32_meta(metadata, "llama.block_count")
-            .ok_or_else(|| anyhow!("missing llama.block_count"))?;
-        let context_length = get_u32_meta(metadata, "llama.context_length")
-            .ok_or_else(|| anyhow!("missing llama.context_length"))?;
-        let feed_forward_length = derive_feed_forward_length(metadata, tensors, embedding_length)?;
-        let head_dim = get_u32_meta(metadata, "llama.attention.key_length")
+        let embedding_key = arch_key(&architecture, "embedding_length");
+        let head_count_key = arch_key(&architecture, "attention.head_count");
+        let block_count_key = arch_key(&architecture, "block_count");
+        let context_key = arch_key(&architecture, "context_length");
+        let key_length_key = arch_key(&architecture, "attention.key_length");
+        let embedding_length =
+            get_u32_meta_any(metadata, &[&embedding_key, "llama.embedding_length"])
+                .ok_or_else(|| anyhow!("missing architecture embedding_length"))?;
+        let attention_head_count =
+            get_u32_meta_any(metadata, &[&head_count_key, "llama.attention.head_count"])
+                .ok_or_else(|| anyhow!("missing architecture attention.head_count"))?;
+        let block_count = get_u32_meta_any(metadata, &[&block_count_key, "llama.block_count"])
+            .ok_or_else(|| anyhow!("missing architecture block_count"))?;
+        let context_length = get_u32_meta_any(metadata, &[&context_key, "llama.context_length"])
+            .ok_or_else(|| anyhow!("missing architecture context_length"))?;
+        let feed_forward_length =
+            derive_feed_forward_length(metadata, tensors, &architecture, embedding_length)?;
+        let head_dim = get_u32_meta_any(metadata, &[&key_length_key, "llama.attention.key_length"])
             .unwrap_or_else(|| embedding_length / attention_head_count);
         let head_kv = derive_attention_head_count_kv(
             metadata,
             tensors,
+            &architecture,
             embedding_length,
             attention_head_count,
             head_dim,
         )?;
-        let layer_norm_epsilon = get_f32_meta(metadata, "llama.layer_norm_epsilon").unwrap_or(1e-5);
-        let rope_freq_base = get_f32_meta(metadata, "llama.rope.freq_base").unwrap_or(10_000.0);
-        let rope_freq_scale = get_f32_meta(metadata, "llama.rope.freq_scale").unwrap_or(1.0);
-        let vocab_size = derive_vocab_size(metadata, tensors, embedding_length)
+        let eps_key = arch_key(&architecture, "attention.layer_norm_rms_epsilon");
+        let legacy_eps_key = arch_key(&architecture, "layer_norm_epsilon");
+        let layer_norm_epsilon = get_f32_meta_any(
+            metadata,
+            &[&eps_key, &legacy_eps_key, "llama.layer_norm_epsilon"],
+        )
+        .unwrap_or(1e-5);
+        let rope_base_key = arch_key(&architecture, "rope.freq_base");
+        let rope_scale_key = arch_key(&architecture, "rope.freq_scale");
+        let rope_freq_base = get_f32_meta_any(metadata, &[&rope_base_key, "llama.rope.freq_base"])
+            .unwrap_or(10_000.0);
+        let rope_freq_scale =
+            get_f32_meta_any(metadata, &[&rope_scale_key, "llama.rope.freq_scale"]).unwrap_or(1.0);
+        let vocab_size = derive_vocab_size(metadata, tensors, &architecture, embedding_length)
             .context("derive vocab_size from gguf metadata")?;
         let cfg = Self {
             architecture,
@@ -285,6 +314,9 @@ pub struct StandardLayerWeights {
     pub wq: DeviceTensorView,
     pub wk: DeviceTensorView,
     pub wv: DeviceTensorView,
+    pub bq: Option<DeviceTensorView>,
+    pub bk: Option<DeviceTensorView>,
+    pub bv: Option<DeviceTensorView>,
     pub wo: DeviceTensorView,
     pub w_gate: DeviceTensorView,
     pub w_up: DeviceTensorView,

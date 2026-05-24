@@ -18,11 +18,13 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
 use crate::generate::{
-    decode_generated_text, generate_text, sampler_from_options, sanitize_output, GenerateOptions,
+    decode_generated_text, generate_text, prepare_prompt, sampler_from_options, sanitize_output,
+    GenerateOptions, PromptFormat,
 };
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
+use crate::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
 use crate::tokenizer::Tokenizer;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
@@ -79,6 +81,8 @@ pub struct GenerateRequest {
     pub top_p: Option<f32>,
     #[serde(default)]
     pub seed: Option<u64>,
+    #[serde(default)]
+    pub prompt_format: PromptFormat,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -109,7 +113,11 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     Ok(Bytes::from(buf))
 }
 
-fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> GenerateOptions {
+fn options_from_request(
+    req: &GenerateRequest,
+    log_prefix: &'static str,
+    kv_compression: KvCompressionConfig,
+) -> GenerateOptions {
     GenerateOptions {
         prompt: req.prompt.clone(),
         max_tokens: req.max_tokens,
@@ -120,6 +128,8 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         log_prefix,
         sequence_id: 0,
         reset_kv_cache: true,
+        kv_compression,
+        prompt_format: req.prompt_format,
     }
 }
 
@@ -230,17 +240,17 @@ impl DecodeSchedulerRequest {
             .ok_or_else(|| anyhow::anyhow!("decode batching requires a sequence lease"))?;
         let tokenizer = Tokenizer::from_gguf_metadata(&state.model.gguf.metadata)
             .unwrap_or_else(|_| Tokenizer::byte_level());
-        let add_bos = true;
+        let (prompt, add_bos) = prepare_prompt(&tokenizer, &req.prompt, req.prompt_format);
         let ids = tokenizer
-            .encode_with_specials(&req.prompt, add_bos, false)
+            .encode_with_specials(&prompt, add_bos, false)
             .context("encode prompt")?;
         let prompt_token_len = ids.len();
         let max_tokens = req
             .max_tokens
             .or(Some(state.model.model_config.context_length as usize))
             .unwrap_or(32);
-        let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
-        let mut options = options_from_request(&req, "server");
+        let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
+        let mut options = options_from_request(&req, "server", state.kv_compression.clone());
         options.sequence_id = sequence_lease.sequence_id();
         options.reset_kv_cache = false;
         let sampler = sampler_from_options(&options)?;
@@ -255,9 +265,10 @@ impl DecodeSchedulerRequest {
             hidden_dim,
             sequence_lease.sequence_id()
         );
-        let session = crate::decode_session::DecodeSession::new_for_sequence(
+        let session = crate::decode_session::DecodeSession::new_for_sequence_with_kv_config(
             &state.model,
             sequence_lease.sequence_id(),
+            options.kv_compression.clone(),
             d_model,
             true,
             "server",
@@ -290,6 +301,7 @@ impl DecodeSchedulerRequest {
         if self.stopping.should_stop(&self.generated) {
             return Ok(DecodeSchedulerStep::Complete);
         }
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(self.session.kv_compression().clone());
         let logits = self
             .session
             .logits_for_ids(&self.ids, |logits| log_top_logits(logits, 8))?;
@@ -519,10 +531,13 @@ fn process_scheduler_prefill_tick(
         }
     };
 
-    let forward_result = unsafe {
-        state
-            .model
-            .forward_prefill_all_layers_varlen_for_sequences(&items)
+    let forward_result = {
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
+        unsafe {
+            state
+                .model
+                .forward_prefill_all_layers_varlen_for_sequences(&items)
+        }
     };
     drop(items);
 
@@ -583,10 +598,13 @@ fn process_scheduler_batch_tick(
     }
 
     let items: Vec<_> = prepared.iter().map(|token| token.item).collect();
-    let forward_result = unsafe {
-        state
-            .model
-            .forward_one_token_all_layers_batched_for_sequences(&items)
+    let forward_result = {
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
+        unsafe {
+            state
+                .model
+                .forward_one_token_all_layers_batched_for_sequences(&items)
+        }
     };
     if let Err(err) = forward_result {
         for request in requests {
@@ -740,8 +758,12 @@ mod tests {
             seed: Some(7),
             ..Default::default()
         };
-        let mut sampler =
-            sampler_from_options(&options_from_request(&req, "test")).expect("build sampler");
+        let mut sampler = sampler_from_options(&options_from_request(
+            &req,
+            "test",
+            KvCompressionConfig::dense_reference(),
+        ))
+        .expect("build sampler");
         let logits = [0.2f32, 0.8, 0.1];
         // top_k=1 should force the max logit (index 1)
         for _ in 0..5 {
@@ -756,7 +778,12 @@ mod tests {
             top_p: Some(1.5),
             ..Default::default()
         };
-        assert!(sampler_from_options(&options_from_request(&req, "test")).is_err());
+        assert!(sampler_from_options(&options_from_request(
+            &req,
+            "test",
+            KvCompressionConfig::dense_reference(),
+        ))
+        .is_err());
     }
 
     #[test]
@@ -810,6 +837,7 @@ mod tests {
 
 pub struct AppState {
     pub model: LoadedModel,
+    pub kv_compression: KvCompressionConfig,
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
     pub decode_batching_requested: bool,
     pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
@@ -819,6 +847,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(model: LoadedModel) -> Self {
+        Self::new_with_kv_config(model, KvCompressionConfig::default())
+    }
+
+    pub fn new_with_kv_config(model: LoadedModel, kv_compression: KvCompressionConfig) -> Self {
         let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
         let decode_sequence_pool = decode_batching_requested
             .then(|| model.kv_cache_logical_sequence_capacity())
@@ -829,6 +861,7 @@ impl AppState {
         }
         Self {
             model,
+            kv_compression,
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
             decode_batching_requested,
             decode_sequence_pool,
@@ -886,7 +919,7 @@ async fn generate(
 
         let sequence_lease = lease_decode_sequence(&state)?;
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
-        let mut options = options_from_request(&req, "server");
+        let mut options = options_from_request(&req, "server", state.kv_compression.clone());
         if let Some(lease) = sequence_lease.as_ref() {
             options.sequence_id = lease.sequence_id();
             options.reset_kv_cache = false;
@@ -919,14 +952,18 @@ async fn generate(
         Err(_) => Tokenizer::byte_level(),
     };
 
-    let eos_id = tokenizer.eos_id();
+    let (prompt, add_bos) = prepare_prompt(&tokenizer, &req.prompt, req.prompt_format);
     let max_tokens = req
         .max_tokens
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
-    let stopping = StoppingCriteria::new(Some(max_tokens), eos_id);
-    let sampler =
-        sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
+    let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
+    let sampler = sampler_from_options(&options_from_request(
+        &req,
+        "server",
+        state.kv_compression.clone(),
+    ))
+    .map_err(internal_error)?;
 
     let sequence_lease = lease_decode_sequence(&state)?;
     #[cfg(feature = "cuda")]
@@ -956,9 +993,10 @@ async fn generate(
                 full_decode_d_model,
                 full_decode_hidden_dim
             );
-            crate::decode_session::DecodeSession::new_for_sequence(
+            crate::decode_session::DecodeSession::new_for_sequence_with_kv_config(
                 &state_for_logits.model,
                 sequence_id,
+                state_for_logits.kv_compression.clone(),
                 full_decode_d_model,
                 true,
                 "server",
@@ -1044,6 +1082,8 @@ async fn generate(
             #[cfg(feature = "cuda")]
             {
                 let _ = model;
+                let _kv_runtime_guard =
+                    ScopedRuntimeConfig::new(state_for_logits.kv_compression.clone());
                 decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8))
             }
 
@@ -1111,14 +1151,13 @@ async fn generate(
         }
     };
 
-    let add_bos = true;
     let base_sampler = sampler;
 
     if req.stream {
         let generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut sampler = base_sampler.clone();
         let tokenizer_stream = tokenizer.clone();
-        let prompt = req.prompt.clone();
+        let prompt = prompt.clone();
         #[allow(unused_mut)]
         let mut logits_fn = logits_fn;
         let stopping_stream = stopping.clone();
@@ -1199,15 +1238,8 @@ async fn generate(
                     }
                 }
 
-                if let Some(eos) = stopping_stream.eos_id {
-                    if next == eos {
-                        break;
-                    }
-                }
-                if let Some(mt) = stopping_stream.max_tokens {
-                    if generated.len() >= mt {
-                        break;
-                    }
+                if stopping_stream.should_stop(&generated) {
+                    break;
                 }
             }
 
@@ -1241,7 +1273,7 @@ async fn generate(
         return Ok(response);
     }
 
-    let prompt_token_len = match tokenizer.encode_with_specials(&req.prompt, add_bos, false) {
+    let prompt_token_len = match tokenizer.encode_with_specials(&prompt, add_bos, false) {
         Ok(ids) => ids.len(),
         Err(e) => {
             eprintln!("[server] prompt encode failed: {e}");
@@ -1256,7 +1288,7 @@ async fn generate(
 
     let ids = match decode_loop_with(
         &tokenizer,
-        &req.prompt,
+        &prompt,
         add_bos,
         base_sampler,
         &stopping,

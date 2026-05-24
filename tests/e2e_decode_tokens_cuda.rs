@@ -128,3 +128,52 @@ fn e2e_decode_tokens_cuda_vs_cpu_identity() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn e2e_logits_cuda_uses_tied_output_embeddings() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("skipping: {}", e);
+        return Ok(());
+    }
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 128,
+        d_model: 64,
+        head_count: 8,
+        ..Default::default()
+    };
+    let (gguf, bytes) = tiny_gguf::make_tied_identity_tiny_gguf(cfg.clone());
+    let model = LoadedModel::from_gguf(gguf, bytes, -1)?;
+    let (_name, _view, d_model, vocab, tied) = model.map_lm_head()?;
+    assert_eq!(d_model, cfg.d_model);
+    assert_eq!(vocab, cfg.vocab);
+    assert!(tied);
+
+    let mut hidden = vec![0f32; cfg.d_model];
+    hidden[42] = 1.0;
+    let hidden_bytes = hidden.len() * std::mem::size_of::<f32>();
+    let d_hidden = model.cuda.device_malloc(hidden_bytes)?;
+    unsafe {
+        model.cuda.memcpy_h2d(
+            d_hidden,
+            hidden.as_ptr() as *const std::ffi::c_void,
+            hidden_bytes,
+        )?;
+        let logits = model.logits_from_hidden(d_hidden)?;
+        model.cuda.device_free(d_hidden)?;
+
+        let (best_token, best_logit) = logits
+            .iter()
+            .copied()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .expect("logits non-empty");
+        assert_eq!(best_token, 42);
+        assert!((best_logit - 1.0).abs() < 1e-5);
+    }
+    Ok(())
+}

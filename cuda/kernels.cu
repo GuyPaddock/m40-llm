@@ -8,12 +8,18 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
+#include <vector>
 #include "common.h"
 
 struct M40llmPersistentDecode;
 struct M40llmCudaGraphExec {
     cudaGraph_t graph;
     cudaGraphExec_t exec;
+};
+
+struct M40llmCudaEvent {
+    cudaEvent_t event;
 };
 
 struct M40llmCudaContext {
@@ -43,11 +49,227 @@ extern "C" {
         __half* d_k; // FP16 K storage
         __half* d_v; // FP16 V storage
         uint32_t* d_seq_map; // sequence ID to current length (tokens appended)
+        __half* d_recent_k;
+        __half* d_recent_v;
+        float* d_summary_k_acc;
+        float* d_summary_v_acc;
+        __half* d_summary_k;
+        __half* d_summary_v;
+        uint32_t* d_block_counts;
+        __half* d_rep_k;
+        __half* d_rep_v;
+        uint32_t* d_rep_positions;
+        int8_t* d_q8_old_k;
+        int8_t* d_q8_old_v;
+        float* d_q8_old_k_scale;
+        float* d_q8_old_v_scale;
+        __half* d_fp16_old_k;
+        uint8_t* d_q4_old_v;
+        float* d_q4_old_v_scale;
         uint32_t max_seq_len;
         uint32_t max_batch_size;
         uint32_t num_heads;
         uint32_t head_dim;
+        uint32_t compressed;
+        uint32_t recent_window;
+        uint32_t block_size;
+        uint32_t max_blocks;
+        uint32_t top_blocks;
+        uint32_t representatives;
+        uint32_t representative_policy;
+        uint32_t q8_old_backing;
+        uint32_t fp16_k_q4_v_old_backing;
+        uint32_t q4_old_v_backing;
     };
+    struct M40llmAttentionGroupStats {
+        float prob_mass;
+        float logit_max;
+        float logit_mean;
+        uint32_t count;
+    };
+    struct M40llmAttentionTopEntry {
+        uint32_t group;
+        uint32_t block_index;
+        uint32_t token_position;
+        float score;
+        float probability;
+    };
+    struct M40llmAttentionBlockMass {
+        uint32_t block_index;
+        float prob_mass;
+        float logit_max;
+        float logit_mean;
+        uint32_t count;
+    };
+    struct M40llmAttentionTelemetry {
+        M40llmAttentionGroupStats recent;
+        M40llmAttentionGroupStats selected_old_exact;
+        M40llmAttentionGroupStats summary;
+        M40llmAttentionGroupStats representatives;
+        M40llmAttentionGroupStats other;
+        float needle_block_mass;
+        M40llmAttentionBlockMass selected_block_masses[64];
+        uint32_t selected_block_mass_count;
+        M40llmAttentionTopEntry top_entries[8];
+        uint32_t top_entry_count;
+    };
+
+    static uint32_t selected_block_order_from_env() {
+        const char* value = std::getenv("M40LLM_KV_SELECTED_BLOCK_ORDER");
+        if (!value || value[0] == '\0') return 0;
+        if (std::strcmp(value, "chronological") == 0) return 1u;
+        if (std::strcmp(value, "descending") == 0) return 2u;
+        return 0u;
+    }
+
+    static uint32_t exact_block_selected_token_capacity(
+        uint32_t recent_count,
+        uint32_t old_len,
+        uint32_t selected_old_blocks,
+        uint32_t block_size) {
+        const uint32_t selected_old_token_capacity =
+            std::min(old_len, selected_old_blocks * block_size);
+        return recent_count + selected_old_token_capacity;
+    }
+
+    static bool q8_dense_shadow_from_env() {
+        const char* split = std::getenv("M40LLM_KV_Q8_PRECISION_SPLIT_DIAG");
+        if (split && std::strcmp(split, "1") == 0) return true;
+        const char* value = std::getenv("M40LLM_KV_Q8_DENSE_SHADOW");
+        return value && std::strcmp(value, "1") == 0;
+    }
+
+    static uint32_t q8_old_k_source_from_env() {
+        const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
+        if (!value || value[0] == '\0') return 0u;
+        return std::strcmp(value, "fp16-k-q8-v") == 0 || std::strcmp(value, "fp16-k-fp16-v") == 0
+            ? 1u
+            : 0u;
+    }
+
+    static uint32_t q8_old_v_source_from_env() {
+        const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
+        if (!value || value[0] == '\0') return 0u;
+        if (std::strcmp(value, "fp16-k-q4-v") == 0) return 2u;
+        return std::strcmp(value, "q8-k-fp16-v") == 0 || std::strcmp(value, "fp16-k-fp16-v") == 0
+            ? 1u
+            : 0u;
+    }
+
+    static bool q4_old_v_diag_from_env() {
+        const char* value = std::getenv("M40LLM_KV_Q4_V_DIAG");
+        return value && std::strcmp(value, "1") == 0;
+    }
+
+    static uint32_t block_select_policy_from_env() {
+        const char* value = std::getenv("M40LLM_KV_BLOCK_SELECT_POLICY");
+        if (!value || value[0] == '\0' || std::strcmp(value, "topk") == 0) return 0u;
+        if (std::strcmp(value, "neighbors") == 0) return 1u;
+        if (std::strcmp(value, "threshold") == 0) return 2u;
+        if (std::strcmp(value, "anchor") == 0) return 3u;
+        if (std::strcmp(value, "anchor-neighbors") == 0) return 4u;
+        if (std::strcmp(value, "explicit") == 0) return 5u;
+        if (std::strcmp(value, "score-cluster") == 0) return 6u;
+        if (std::strcmp(value, "score-cluster-adaptive") == 0) return 7u;
+        if (std::strcmp(value, "explicit-score-order") == 0) return 8u;
+        return 0u;
+    }
+
+    static float block_score_delta_from_env() {
+        const char* value = std::getenv("M40LLM_KV_BLOCK_SCORE_DELTA");
+        return value && value[0] != '\0' ? (float)std::atof(value) : 0.0f;
+    }
+
+    static uint32_t block_min_blocks_from_env() {
+        const char* value = std::getenv("M40LLM_KV_BLOCK_MIN_BLOCKS");
+        const int parsed = value && value[0] != '\0' ? std::atoi(value) : 0;
+        return parsed > 0 ? (uint32_t)parsed : 0u;
+    }
+
+    static uint32_t block_max_blocks_from_env(uint32_t fallback) {
+        const char* value = std::getenv("M40LLM_KV_BLOCK_MAX_BLOCKS");
+        const int parsed = value && value[0] != '\0' ? std::atoi(value) : 0;
+        return parsed > 0 ? (uint32_t)parsed : fallback;
+    }
+
+    static uint64_t anchor_blocks_from_env() {
+        const char* value = std::getenv("M40LLM_KV_ANCHOR_BLOCKS");
+        if (!value || value[0] == '\0') return 1ull;
+        uint64_t mask = 0ull;
+        const char* ptr = value;
+        while (*ptr) {
+            char* end = nullptr;
+            const unsigned long parsed = std::strtoul(ptr, &end, 10);
+            if (end != ptr && parsed < 64ul) {
+                mask |= (1ull << parsed);
+            }
+            ptr = end && *end ? end + 1 : end;
+            if (!ptr) break;
+        }
+        return mask == 0ull ? 1ull : mask;
+    }
+
+    static void block_masks_from_env(const char* name, uint64_t* low, uint64_t* high) {
+        *low = 0ull;
+        *high = 0ull;
+        const char* value = std::getenv(name);
+        if (!value || value[0] == '\0') return;
+        const char* ptr = value;
+        while (*ptr) {
+            char* end = nullptr;
+            const unsigned long parsed = std::strtoul(ptr, &end, 10);
+            if (end != ptr && parsed < 128ul) {
+                if (parsed < 64ul) {
+                    *low |= (1ull << parsed);
+                } else {
+                    *high |= (1ull << (parsed - 64ul));
+                }
+            }
+            ptr = end && *end ? end + 1 : end;
+            if (!ptr) break;
+        }
+    }
+
+    __host__ __device__ bool block_mask_contains(uint64_t low, uint64_t high, uint32_t block) {
+        if (block < 64u) return (low & (1ull << block)) != 0ull;
+        if (block < 128u) return (high & (1ull << (block - 64u))) != 0ull;
+        return false;
+    }
+
+    __device__ void sort_selected_blocks_chronological(uint32_t* blocks, uint32_t count) {
+        for (uint32_t i = 1; i < count; ++i) {
+            const uint32_t key = blocks[i];
+            uint32_t j = i;
+            while (j > 0 && blocks[j - 1] > key) {
+                blocks[j] = blocks[j - 1];
+                --j;
+            }
+            blocks[j] = key;
+        }
+    }
+
+    __device__ void sort_selected_blocks_descending(uint32_t* blocks, uint32_t count) {
+        for (uint32_t i = 1; i < count; ++i) {
+            const uint32_t key = blocks[i];
+            uint32_t j = i;
+            while (j > 0 && blocks[j - 1] < key) {
+                blocks[j] = blocks[j - 1];
+                --j;
+            }
+            blocks[j] = key;
+        }
+    }
+
+    __device__ bool append_unique_block(uint32_t* blocks, uint32_t* count, uint32_t capacity, uint32_t block) {
+        if (block == 0xffffffffu) return false;
+        for (uint32_t i = 0; i < *count; ++i) {
+            if (blocks[i] == block) return false;
+        }
+        if (*count >= capacity) return false;
+        blocks[(*count)++] = block;
+        return true;
+    }
+
     // Back-compat alias so other TU code using KVCache still compiles
     typedef M40llmKVCache KVCache;
 
@@ -403,6 +625,53 @@ extern "C" {
         return err == cudaSuccess ? 0 : -10;
     }
 
+    int m40llm_cuda_event_create(M40llmCudaContext* ctx, M40llmCudaEvent** out_event) {
+        if (!ctx || !out_event) return -1;
+        *out_event = nullptr;
+        if (ensure_device(ctx) != 0) return -2;
+        M40llmCudaEvent* wrapped = new M40llmCudaEvent();
+        wrapped->event = nullptr;
+        cudaError_t err = cudaEventCreate(&wrapped->event);
+        if (err != cudaSuccess) {
+            delete wrapped;
+            return -3;
+        }
+        *out_event = wrapped;
+        return 0;
+    }
+
+    int m40llm_cuda_event_record(
+        M40llmCudaContext* ctx,
+        M40llmCudaEvent* event,
+        uint32_t stream_kind) {
+        if (!ctx || !event || !event->event) return -1;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        cudaError_t err = cudaEventRecord(event->event, stream);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    int m40llm_cuda_event_elapsed_sync(
+        M40llmCudaContext* ctx,
+        M40llmCudaEvent* start,
+        M40llmCudaEvent* stop,
+        float* elapsed_ms) {
+        if (!ctx || !start || !stop || !start->event || !stop->event || !elapsed_ms) return -1;
+        *elapsed_ms = 0.0f;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaError_t err = cudaEventSynchronize(stop->event);
+        if (err != cudaSuccess) return -3;
+        err = cudaEventElapsedTime(elapsed_ms, start->event, stop->event);
+        return err == cudaSuccess ? 0 : -4;
+    }
+
+    void m40llm_cuda_event_destroy(M40llmCudaEvent* event) {
+        if (!event) return;
+        if (event->event) cudaEventDestroy(event->event);
+        delete event;
+    }
+
     void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) {
         if (!graph) return;
         if (graph->exec) cudaGraphExecDestroy(graph->exec);
@@ -668,6 +937,28 @@ int m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
         uint32_t q_heads,
         const uint32_t* seq_len_dev,
         void* out_dev_f32);
+int m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32);
+int m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32);
 int m40llm_kvcache_append_token_f32_async(
         M40llmCudaContext* ctx,
         M40llmKVCache* kv,
@@ -702,6 +993,16 @@ int m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
         const uint32_t* position_dev,
         float freq_base,
         float freq_scale);
+int m40llm_kvcache_append_token_f32_rope_k_compressed_at_async(
+        M40llmCudaContext* ctx,
+        M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* k_dev_f32,
+        const void* v_dev_f32,
+        uint32_t position,
+        float freq_base,
+        float freq_scale);
+void m40llm_kvcache_destroy(M40llmKVCache* kv);
 int m40llm_rope_f32_async(
         M40llmCudaContext* ctx,
         float* q,
@@ -1271,6 +1572,171 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_head128_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* reduce = scores + seq_len;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score_local = -1e30f;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) {
+                    reduce[tid] += reduce[tid + stride];
+                }
+                __syncthreads();
+            }
+
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[t] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t t = tid; t < seq_len; t += blockDim.x) {
+            denom_part += expf(scores[t] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[t] - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_dense_recent_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        float* __restrict__ Out) {
+        const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t window_start = seq_len - window_len;
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* reduce = scores + window_len;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads || window_len == 0) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score_local = -1e30f;
+        for (uint32_t i = 0; i < window_len; ++i) {
+            const uint32_t t = window_start + i;
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[i] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t i = tid; i < window_len; i += blockDim.x) {
+            denom_part += expf(scores[i] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t i = 0; i < window_len; ++i) {
+                const uint32_t t = window_start + i;
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[i] - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
     __global__ void attention_last_token_gqa_batched_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -1351,6 +1817,1765 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                    + (size_t)kvh_idx * (size_t)head_dim;
                 const float p = expf(scores[t] - max_score) / denom;
                 acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_block_select_exact_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        uint32_t selected_block_order,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
+
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity = recent_count + top_blocks * block_size;
+        float* scores = shmem;
+        float* token_slots = scores + selected_capacity;
+        float* reduce = token_slots + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+        }
+
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot_part += qh[d] * __half2float(K[base + d]);
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                uint32_t insert = top_n;
+                for (uint32_t i = 0; i < top_n; ++i) {
+                    if (score > selected_scores[i]) {
+                        insert = i;
+                        break;
+                    }
+                }
+                if (insert < top_n) {
+                    for (uint32_t j = top_n - 1; j > insert; --j) {
+                        selected_scores[j] = selected_scores[j - 1];
+                        selected_blocks[j] = selected_blocks[j - 1];
+                    }
+                    selected_scores[insert] = score;
+                    selected_blocks[insert] = b;
+                }
+            }
+            __syncthreads();
+        }
+
+        uint32_t selected_count = 0;
+        if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
+            }
+            for (uint32_t i = 0; i < top_n; ++i) {
+                const uint32_t b = selected_blocks[i];
+                if (b == 0xffffffffu) continue;
+                const uint32_t block_start = b * block_size;
+                const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                for (uint32_t t = block_start; t < block_end; ++t) {
+                    token_slots[selected_count++] = __uint_as_float(t);
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+        if (selected_count == 0) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t t = __float_as_uint(token_slots[idx]);
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const uint32_t t = __float_as_uint(token_slots[idx]);
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[idx] - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void gather_block_select_exact_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        uint32_t selected_capacity,
+        uint32_t selected_block_order,
+        __half* __restrict__ staged_k,
+        __half* __restrict__ staged_v,
+        uint32_t* __restrict__ staged_positions,
+        uint32_t* __restrict__ staged_counts) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
+
+        float* token_slots = shmem;
+        float* reduce = token_slots + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+        }
+
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot_part += qh[d] * __half2float(K[base + d]);
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                uint32_t insert = top_n;
+                for (uint32_t i = 0; i < top_n; ++i) {
+                    if (score > selected_scores[i]) {
+                        insert = i;
+                        break;
+                    }
+                }
+                if (insert < top_n) {
+                    for (uint32_t j = top_n - 1; j > insert; --j) {
+                        selected_scores[j] = selected_scores[j - 1];
+                        selected_blocks[j] = selected_blocks[j - 1];
+                    }
+                    selected_scores[insert] = score;
+                    selected_blocks[insert] = b;
+                }
+            }
+            __syncthreads();
+        }
+
+        uint32_t selected_count = 0;
+        if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
+            }
+            for (uint32_t i = 0; i < top_n; ++i) {
+                const uint32_t b = selected_blocks[i];
+                if (b == 0xffffffffu) continue;
+                const uint32_t block_start = b * block_size;
+                const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                for (uint32_t t = block_start; t < block_end; ++t) {
+                    token_slots[selected_count++] = __uint_as_float(t);
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+            staged_counts[qh_idx] = selected_count;
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t t = __float_as_uint(token_slots[idx]);
+            if (tid == 0) {
+                staged_positions[(size_t)qh_idx * selected_capacity + idx] = t;
+            }
+            const size_t src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                             + (size_t)kvh_idx * (size_t)head_dim;
+            const size_t dst = ((size_t)qh_idx * selected_capacity + idx) * head_dim;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                staged_k[dst + d] = K[src + d];
+                staged_v[dst + d] = V[src + d];
+            }
+        }
+    }
+
+    __global__ void build_q8_old_from_dense_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        int8_t* __restrict__ q8_k,
+        int8_t* __restrict__ q8_v,
+        float* __restrict__ k_scale,
+        float* __restrict__ v_scale,
+        uint32_t max_seq_len,
+        uint32_t num_heads,
+        uint32_t seq_id,
+        uint32_t seq_len,
+        uint32_t recent_window) {
+        __shared__ float reduce[128];
+        const uint32_t vec = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t head_dim = 64;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        if (old_len == 0) return;
+        const uint32_t head = vec % num_heads;
+        const uint32_t token = (vec / num_heads) % old_len;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t src_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)token) * elems_per_token
+                              + (size_t)head * head_dim;
+        float local_max_k = 0.0f;
+        float local_max_v = 0.0f;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            const float k = fabsf(__half2float(K[src_base + d]));
+            const float v = fabsf(__half2float(V[src_base + d]));
+            local_max_k = fmaxf(local_max_k, k);
+            local_max_v = fmaxf(local_max_v, v);
+        }
+        reduce[tid] = local_max_k;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_k = reduce[0];
+        reduce[tid] = local_max_v;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_v = reduce[0];
+        const float scale_k = max_k > 0.0f ? max_k / 127.0f : 1.0f / 127.0f;
+        const float scale_v = max_v > 0.0f ? max_v / 127.0f : 1.0f / 127.0f;
+        const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)token) * (size_t)num_heads + head;
+        if (tid == 0) {
+            k_scale[scale_idx] = scale_k;
+            v_scale[scale_idx] = scale_v;
+        }
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            const float k = __half2float(K[src_base + d]) / scale_k;
+            const float v = __half2float(V[src_base + d]) / scale_v;
+            const int kq = max(-127, min(127, (int)lrintf(k)));
+            const int vq = max(-127, min(127, (int)lrintf(v)));
+            q8_k[src_base + d] = (int8_t)kq;
+            q8_v[src_base + d] = (int8_t)vq;
+        }
+    }
+
+    __global__ void quantize_evicted_recent_to_q8_old_head64_kernel(
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        int8_t* __restrict__ q8_k,
+        int8_t* __restrict__ q8_v,
+        float* __restrict__ k_scale,
+        float* __restrict__ v_scale,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t num_heads,
+        uint32_t seq_id,
+        uint32_t position) {
+        __shared__ float reduce[128];
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t head_dim = 64;
+        if (head >= num_heads || position < recent_window) return;
+        const uint32_t old_pos = position - recent_window;
+        const uint32_t ring = position % recent_window;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t recent_base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                 * elems_per_token + (size_t)head * head_dim;
+        const size_t q8_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                             * elems_per_token + (size_t)head * head_dim;
+        float local_max_k = 0.0f;
+        float local_max_v = 0.0f;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            local_max_k = fmaxf(local_max_k, fabsf(__half2float(recent_k[recent_base + d])));
+            local_max_v = fmaxf(local_max_v, fabsf(__half2float(recent_v[recent_base + d])));
+        }
+        reduce[tid] = local_max_k;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_k = reduce[0];
+        reduce[tid] = local_max_v;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_v = reduce[0];
+        const float scale_k = max_k > 0.0f ? max_k / 127.0f : 1.0f / 127.0f;
+        const float scale_v = max_v > 0.0f ? max_v / 127.0f : 1.0f / 127.0f;
+        const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                               * (size_t)num_heads + head;
+        if (tid == 0) {
+            k_scale[scale_idx] = scale_k;
+            v_scale[scale_idx] = scale_v;
+        }
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            const int kq = max(-127, min(127, (int)lrintf(__half2float(recent_k[recent_base + d]) / scale_k)));
+            const int vq = max(-127, min(127, (int)lrintf(__half2float(recent_v[recent_base + d]) / scale_v)));
+            q8_k[q8_base + d] = (int8_t)kq;
+            q8_v[q8_base + d] = (int8_t)vq;
+        }
+    }
+
+    __global__ void copy_evicted_recent_k_to_fp16_old_kernel(
+        const __half* __restrict__ recent_k,
+        __half* __restrict__ old_k,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t seq_id,
+        uint32_t position) {
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (head >= num_heads || position < recent_window) return;
+        const uint32_t old_pos = position - recent_window;
+        const uint32_t ring = position % recent_window;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t recent_base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                 * elems_per_token + (size_t)head * head_dim;
+        const size_t old_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                              * elems_per_token + (size_t)head * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            old_k[old_base + d] = recent_k[recent_base + d];
+        }
+    }
+
+    __device__ __forceinline__ uint8_t pack_q4_pair(float a, float b, float scale) {
+        const int qa = max(-7, min(7, (int)lrintf(a / scale)));
+        const int qb = max(-7, min(7, (int)lrintf(b / scale)));
+        return (uint8_t)((qa & 0x0f) | ((qb & 0x0f) << 4));
+    }
+
+    __device__ __forceinline__ float unpack_q4(uint8_t packed, uint32_t lane, float scale) {
+        const uint8_t nibble = lane == 0u ? (packed & 0x0f) : ((packed >> 4) & 0x0f);
+        const int signed_value = nibble >= 8u ? (int)nibble - 16 : (int)nibble;
+        return (float)signed_value * scale;
+    }
+
+    __global__ void quantize_evicted_recent_v_to_q4_old_kernel(
+        const __half* __restrict__ recent_v,
+        uint8_t* __restrict__ q4_v,
+        float* __restrict__ v_scale,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t seq_id,
+        uint32_t position) {
+        __shared__ float reduce[128];
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (head >= num_heads || position < recent_window) return;
+        const uint32_t old_pos = position - recent_window;
+        const uint32_t ring = position % recent_window;
+        const size_t elems_per_token = (size_t)num_heads * head_dim;
+        const size_t recent_base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                 * elems_per_token + (size_t)head * head_dim;
+        const size_t packed_per_token = (size_t)num_heads * (head_dim / 2u);
+        const size_t q4_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                             * packed_per_token + (size_t)head * (head_dim / 2u);
+        float local_max_v = 0.0f;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            local_max_v = fmaxf(local_max_v, fabsf(__half2float(recent_v[recent_base + d])));
+        }
+        reduce[tid] = local_max_v;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] = fmaxf(reduce[tid], reduce[tid + stride]);
+            __syncthreads();
+        }
+        const float max_v = reduce[0];
+        const float scale_v = max_v > 0.0f ? max_v / 7.0f : 1.0f / 7.0f;
+        const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)old_pos)
+                               * (size_t)num_heads + head;
+        if (tid == 0) {
+            v_scale[scale_idx] = scale_v;
+        }
+        for (uint32_t pair = tid; pair < head_dim / 2u; pair += blockDim.x) {
+            const uint32_t d = pair * 2u;
+            const float v0 = __half2float(recent_v[recent_base + d]);
+            const float v1 = __half2float(recent_v[recent_base + d + 1u]);
+            q4_v[q4_base + pair] = pack_q4_pair(v0, v1, scale_v);
+        }
+    }
+
+    __global__ void gather_block_select_exact_q8_old_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        const int8_t* __restrict__ q8_k,
+        const int8_t* __restrict__ q8_v,
+        const float* __restrict__ k_scale,
+        const float* __restrict__ v_scale,
+        const uint8_t* __restrict__ q4_v,
+        const float* __restrict__ q4_v_scale,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        uint32_t selected_capacity,
+        uint32_t selected_block_order,
+        uint32_t old_k_source,
+        uint32_t old_v_source,
+        __half* __restrict__ staged_k,
+        __half* __restrict__ staged_v,
+        uint32_t* __restrict__ staged_positions,
+        uint32_t* __restrict__ staged_counts) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
+
+        float* token_slots = shmem;
+        float* reduce = token_slots + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+        }
+
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
+                const float ks = old_k_source == 1u ? 0.0f : k_scale[scale_idx];
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    const float k_val = old_k_source == 1u && K
+                        ? __half2float(K[base + d])
+                        : (float)q8_k[base + d] * ks;
+                    dot_part += qh[d] * k_val;
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                uint32_t insert = top_n;
+                for (uint32_t i = 0; i < top_n; ++i) {
+                    if (score > selected_scores[i]) {
+                        insert = i;
+                        break;
+                    }
+                }
+                if (insert < top_n) {
+                    for (uint32_t j = top_n - 1; j > insert; --j) {
+                        selected_scores[j] = selected_scores[j - 1];
+                        selected_blocks[j] = selected_blocks[j - 1];
+                    }
+                    selected_scores[insert] = score;
+                    selected_blocks[insert] = b;
+                }
+            }
+            __syncthreads();
+        }
+
+        uint32_t selected_count = 0;
+        if (tid == 0) {
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(selected_blocks, top_n);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(selected_blocks, top_n);
+            }
+            for (uint32_t i = 0; i < top_n; ++i) {
+                const uint32_t b = selected_blocks[i];
+                if (b == 0xffffffffu) continue;
+                const uint32_t block_start = b * block_size;
+                const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                for (uint32_t t = block_start; t < block_end; ++t) {
+                    token_slots[selected_count++] = __uint_as_float(t);
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+            staged_counts[qh_idx] = selected_count;
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t t = __float_as_uint(token_slots[idx]);
+            if (tid == 0) {
+                staged_positions[(size_t)qh_idx * selected_capacity + idx] = t;
+            }
+            const size_t dst = ((size_t)qh_idx * selected_capacity + idx) * head_dim;
+            const bool old_token = t < recent_start;
+            const size_t q8_src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                + (size_t)kvh_idx * (size_t)head_dim;
+            const size_t q4_src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t)
+                                * ((size_t)kv_heads * (size_t)(head_dim / 2u))
+                                + (size_t)kvh_idx * (size_t)(head_dim / 2u);
+            const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
+            const float ks = old_token && old_k_source != 1u ? k_scale[scale_idx] : 0.0f;
+            const float vs = old_token && old_v_source == 0u ? v_scale[scale_idx] : 0.0f;
+            const float q4_vs = old_token && q4_v_scale ? q4_v_scale[scale_idx] : 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                if (old_token) {
+                    staged_k[dst + d] = old_k_source == 1u && K
+                        ? K[q8_src + d]
+                        : __float2half_rn((float)q8_k[q8_src + d] * ks);
+                    if (old_v_source == 1u && V) {
+                        staged_v[dst + d] = V[q8_src + d];
+                    } else if (old_v_source == 2u && q4_v && q4_v_scale) {
+                        staged_v[dst + d] = __float2half_rn(unpack_q4(q4_v[q4_src + d / 2u], d & 1u, q4_vs));
+                    } else {
+                        staged_v[dst + d] = __float2half_rn((float)q8_v[q8_src + d] * vs);
+                    }
+                } else if (recent_k && recent_v) {
+                    const uint32_t ring = t % recent_window;
+                    const size_t recent_src = ((size_t)seq_id * (size_t)recent_window + (size_t)ring)
+                                            * elems_per_token + (size_t)kvh_idx * (size_t)head_dim;
+                    staged_k[dst + d] = recent_k[recent_src + d];
+                    staged_v[dst + d] = recent_v[recent_src + d];
+                } else {
+                    const size_t src = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t)
+                                     * elems_per_token + (size_t)kvh_idx * (size_t)head_dim;
+                    staged_k[dst + d] = K[src + d];
+                    staged_v[dst + d] = V[src + d];
+                }
+            }
+        }
+    }
+
+    __global__ void attention_last_token_gqa_staged_exact_head64_kernel(
+        const __half* __restrict__ staged_k,
+        const __half* __restrict__ staged_v,
+        const uint32_t* __restrict__ staged_counts,
+        uint32_t selected_capacity,
+        uint32_t q_heads,
+        const float* __restrict__ Q,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t head_dim = 64;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * head_dim;
+        const uint32_t selected_count = staged_counts[qh_idx];
+        if (selected_count == 0 || selected_count > selected_capacity) return;
+        float* scores = shmem;
+        float* reduce = scores + selected_capacity;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const size_t base = ((size_t)qh_idx * selected_capacity + idx) * head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(staged_k[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const size_t base = ((size_t)qh_idx * selected_capacity + idx) * head_dim;
+                const float p = expf(scores[idx] - max_score) / denom;
+                acc += p * __half2float(staged_v[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_block_select_exact_q8_direct_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        const int8_t* __restrict__ q8_k,
+        const int8_t* __restrict__ q8_v,
+        const float* __restrict__ k_scale,
+        const float* __restrict__ v_scale,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        uint32_t selected_capacity,
+        uint32_t selected_block_order,
+        uint32_t block_select_policy,
+        float block_score_delta,
+        uint32_t block_min_blocks,
+        uint32_t block_max_blocks,
+        uint64_t anchor_block_mask,
+        uint64_t force_include_block_mask_low,
+        uint64_t force_include_block_mask_high,
+        uint64_t force_exclude_block_mask_low,
+        uint64_t force_exclude_block_mask_high,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t block_capacity = block_max_blocks == 0u
+            ? (old_blocks < 64u ? old_blocks : 64u)
+            : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
+        const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u || block_select_policy == 8u) ? block_capacity : top_n;
+
+        float* token_slots = shmem;
+        float* scores = token_slots + selected_capacity;
+        float* reduce = scores + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        uint32_t final_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+            final_blocks[i] = 0xffffffffu;
+        }
+
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
+                const float ks = k_scale[scale_idx];
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot_part += qh[d] * ((float)q8_k[base + d] * ks);
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                uint32_t insert = keep_n;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    if (score > selected_scores[i]) {
+                        insert = i;
+                        break;
+                    }
+                }
+                if (insert < keep_n) {
+                    for (uint32_t j = keep_n - 1; j > insert; --j) {
+                        selected_scores[j] = selected_scores[j - 1];
+                        selected_blocks[j] = selected_blocks[j - 1];
+                    }
+                    selected_scores[insert] = score;
+                    selected_blocks[insert] = b;
+                }
+            }
+            __syncthreads();
+        }
+
+        uint32_t selected_count = 0;
+        if (tid == 0) {
+            uint32_t final_block_count = 0;
+            const float best_score = top_n > 0 ? selected_scores[0] : -1e30f;
+            const uint32_t base_min = block_min_blocks > top_n ? block_min_blocks : top_n;
+            const uint32_t min_take = base_min < old_blocks ? base_min : old_blocks;
+            for (uint32_t i = 0; i < top_n; ++i) {
+                append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 1u || block_select_policy == 4u) {
+                const uint32_t base_count = final_block_count;
+                for (uint32_t i = 0; i < base_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (b > 0u) append_unique_block(final_blocks, &final_block_count, block_capacity, b - 1u);
+                    if (b + 1u < old_blocks) append_unique_block(final_blocks, &final_block_count, block_capacity, b + 1u);
+                }
+            }
+            if (block_select_policy == 2u) {
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    if (i < min_take || selected_scores[i] >= best_score - block_score_delta) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
+            if (block_select_policy == 3u || block_select_policy == 4u) {
+                for (uint32_t b = 0; b < old_blocks && b < 64u; ++b) {
+                    if ((anchor_block_mask & (1ull << b)) != 0ull) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 5u) {
+                for (uint32_t b = 0; b < old_blocks && b < 128u; ++b) {
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 8u) {
+                final_block_count = 0;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    const uint32_t b = selected_blocks[i];
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 6u || block_select_policy == 7u) {
+                const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
+                for (uint32_t i = top_n; i < keep_n; ++i) {
+                    if (selected_scores[i] >= cutoff) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
+            for (uint32_t i = 0; final_block_count < min_take && i < keep_n; ++i) {
+                append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 5u) {
+                uint32_t write = 0;
+                for (uint32_t i = 0; i < final_block_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (!block_mask_contains(force_exclude_block_mask_low, force_exclude_block_mask_high, b)) {
+                        final_blocks[write++] = b;
+                    }
+                }
+                for (uint32_t i = write; i < final_block_count; ++i) final_blocks[i] = 0xffffffffu;
+                final_block_count = write;
+            }
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(final_blocks, final_block_count);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(final_blocks, final_block_count);
+            }
+            for (uint32_t i = 0; i < final_block_count; ++i) {
+                const uint32_t b = final_blocks[i];
+                if (b == 0xffffffffu) continue;
+                const uint32_t block_start = b * block_size;
+                const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                for (uint32_t t = block_start; t < block_end; ++t) {
+                    token_slots[selected_count++] = __uint_as_float(t);
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+        if (selected_count == 0 || selected_count > selected_capacity) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t t = __float_as_uint(token_slots[idx]);
+            const bool old_token = t < recent_start;
+            float dot = 0.0f;
+            if (old_token) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
+                const float ks = k_scale[scale_idx];
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    const __half k = __float2half_rn((float)q8_k[base + d] * ks);
+                    dot += qh[d] * __half2float(k);
+                }
+            } else if (recent_k && recent_v) {
+                const uint32_t ring = t % recent_window;
+                const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot += qh[d] * __half2float(recent_k[base + d]);
+                }
+            } else {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot += qh[d] * __half2float(K[base + d]);
+                }
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const uint32_t t = __float_as_uint(token_slots[idx]);
+                const float p = expf(scores[idx] - max_score) / denom;
+                const bool old_token = t < recent_start;
+                if (old_token) {
+                    const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * (size_t)kv_heads + kvh_idx;
+                    const __half v = __float2half_rn((float)q8_v[base + d] * v_scale[scale_idx]);
+                    acc += p * __half2float(v);
+                } else if (recent_k && recent_v) {
+                    const uint32_t ring = t % recent_window;
+                    const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(recent_v[base + d]);
+                } else {
+                    const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(V[base + d]);
+                }
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_kernel(
+        const __half* __restrict__ old_k,
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        const uint8_t* __restrict__ q4_v,
+        const float* __restrict__ q4_v_scale,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t head_dim,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        uint32_t selected_capacity,
+        uint32_t selected_block_order,
+        uint32_t block_select_policy,
+        float block_score_delta,
+        uint32_t block_min_blocks,
+        uint32_t block_max_blocks,
+        uint64_t anchor_block_mask,
+        uint64_t force_include_block_mask_low,
+        uint64_t force_include_block_mask_high,
+        uint64_t force_exclude_block_mask_low,
+        uint64_t force_exclude_block_mask_high,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const size_t packed_per_token = (size_t)kv_heads * (size_t)(head_dim / 2u);
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t block_capacity = block_max_blocks == 0u
+            ? (old_blocks < 64u ? old_blocks : 64u)
+            : (block_max_blocks < old_blocks ? block_max_blocks : old_blocks);
+        const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t keep_n = (block_select_policy == 2u || block_select_policy == 6u || block_select_policy == 7u || block_select_policy == 8u) ? block_capacity : top_n;
+
+        float* token_slots = shmem;
+        float* scores = token_slots + selected_capacity;
+        float* reduce = scores + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        uint32_t final_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+            final_blocks[i] = 0xffffffffu;
+        }
+
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot_part += qh[d] * __half2float(old_k[base + d]);
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                uint32_t insert = keep_n;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    if (score > selected_scores[i]) {
+                        insert = i;
+                        break;
+                    }
+                }
+                if (insert < keep_n) {
+                    for (uint32_t j = keep_n - 1; j > insert; --j) {
+                        selected_scores[j] = selected_scores[j - 1];
+                        selected_blocks[j] = selected_blocks[j - 1];
+                    }
+                    selected_scores[insert] = score;
+                    selected_blocks[insert] = b;
+                }
+            }
+            __syncthreads();
+        }
+
+        uint32_t selected_count = 0;
+        if (tid == 0) {
+            uint32_t final_block_count = 0;
+            const float best_score = top_n > 0 ? selected_scores[0] : -1e30f;
+            const uint32_t base_min = block_min_blocks > top_n ? block_min_blocks : top_n;
+            const uint32_t min_take = base_min < old_blocks ? base_min : old_blocks;
+            for (uint32_t i = 0; i < top_n; ++i) {
+                append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 1u || block_select_policy == 4u) {
+                const uint32_t base_count = final_block_count;
+                for (uint32_t i = 0; i < base_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (b > 0u) append_unique_block(final_blocks, &final_block_count, block_capacity, b - 1u);
+                    if (b + 1u < old_blocks) append_unique_block(final_blocks, &final_block_count, block_capacity, b + 1u);
+                }
+            }
+            if (block_select_policy == 2u) {
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    if (i < min_take || selected_scores[i] >= best_score - block_score_delta) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
+            if (block_select_policy == 3u || block_select_policy == 4u) {
+                for (uint32_t b = 0; b < old_blocks && b < 64u; ++b) {
+                    if ((anchor_block_mask & (1ull << b)) != 0ull) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 5u) {
+                for (uint32_t b = 0; b < old_blocks && b < 128u; ++b) {
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 8u) {
+                final_block_count = 0;
+                for (uint32_t i = 0; i < keep_n; ++i) {
+                    const uint32_t b = selected_blocks[i];
+                    if (block_mask_contains(force_include_block_mask_low, force_include_block_mask_high, b)) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, b);
+                    }
+                }
+            }
+            if (block_select_policy == 6u || block_select_policy == 7u) {
+                const float cutoff = top_n > 0 ? selected_scores[top_n - 1u] - block_score_delta : best_score;
+                for (uint32_t i = top_n; i < keep_n; ++i) {
+                    if (selected_scores[i] >= cutoff) {
+                        append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+                    }
+                }
+            }
+            for (uint32_t i = 0; final_block_count < min_take && i < keep_n; ++i) {
+                append_unique_block(final_blocks, &final_block_count, block_capacity, selected_blocks[i]);
+            }
+            if (block_select_policy == 5u) {
+                uint32_t write = 0;
+                for (uint32_t i = 0; i < final_block_count; ++i) {
+                    const uint32_t b = final_blocks[i];
+                    if (!block_mask_contains(force_exclude_block_mask_low, force_exclude_block_mask_high, b)) {
+                        final_blocks[write++] = b;
+                    }
+                }
+                for (uint32_t i = write; i < final_block_count; ++i) final_blocks[i] = 0xffffffffu;
+                final_block_count = write;
+            }
+            if (selected_block_order == 1u) {
+                sort_selected_blocks_chronological(final_blocks, final_block_count);
+            } else if (selected_block_order == 2u) {
+                sort_selected_blocks_descending(final_blocks, final_block_count);
+            }
+            for (uint32_t i = 0; i < final_block_count; ++i) {
+                const uint32_t b = final_blocks[i];
+                if (b == 0xffffffffu) continue;
+                const uint32_t block_start = b * block_size;
+                const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                for (uint32_t t = block_start; t < block_end; ++t) {
+                    token_slots[selected_count++] = __uint_as_float(t);
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+        if (selected_count == 0 || selected_count > selected_capacity) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t t = __float_as_uint(token_slots[idx]);
+            const bool old_token = t < recent_start;
+            float dot = 0.0f;
+            if (old_token) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot += qh[d] * __half2float(old_k[base + d]);
+                }
+            } else {
+                const uint32_t ring = t % recent_window;
+                const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot += qh[d] * __half2float(recent_k[base + d]);
+                }
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const uint32_t t = __float_as_uint(token_slots[idx]);
+                const float p = expf(scores[idx] - max_score) / denom;
+                const bool old_token = t < recent_start;
+                if (old_token) {
+                    const size_t q4_base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * packed_per_token
+                                         + (size_t)kvh_idx * (size_t)(head_dim / 2u);
+                    const size_t scale_idx = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t)
+                                           * (size_t)kv_heads + kvh_idx;
+                    const float v = unpack_q4(q4_v[q4_base + d / 2u], d & 1u, q4_v_scale[scale_idx]);
+                    acc += p * __half2float(__float2half_rn(v));
+                } else {
+                    const uint32_t ring = t % recent_window;
+                    const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(recent_v[base + d]);
+                }
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_block_summary_lossy_head64_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_summary_count =
+            top_blocks == 0 || top_blocks > old_blocks ? old_blocks : top_blocks;
+        const uint32_t selected_capacity = recent_count + selected_summary_count;
+        float* scores = shmem;
+        float* token_slots = scores + selected_capacity;
+        float* reduce = token_slots + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+        }
+
+        uint32_t selected_count = 0;
+        for (uint32_t b = 0; b < old_blocks; ++b) {
+            const uint32_t block_start = b * block_size;
+            const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+            float dot_part = 0.0f;
+            for (uint32_t t = block_start; t < block_end; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot_part += qh[d] * __half2float(K[base + d]);
+                }
+            }
+            reduce[tid] = dot_part;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float block_len = (float)(block_end - block_start);
+                const float score = (reduce[0] / block_len) * inv_sqrt;
+                if (top_blocks == 0) {
+                    token_slots[selected_count] = __uint_as_float(0x80000000u | b);
+                    scores[selected_count] = score;
+                    selected_count++;
+                } else {
+                    uint32_t insert = selected_summary_count;
+                    for (uint32_t i = 0; i < selected_summary_count; ++i) {
+                        if (score > selected_scores[i]) {
+                            insert = i;
+                            break;
+                        }
+                    }
+                    if (insert < selected_summary_count) {
+                        for (uint32_t j = selected_summary_count - 1; j > insert; --j) {
+                            selected_scores[j] = selected_scores[j - 1];
+                            selected_blocks[j] = selected_blocks[j - 1];
+                        }
+                        selected_scores[insert] = score;
+                        selected_blocks[insert] = b;
+                    }
+                }
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) {
+            if (top_blocks != 0) {
+                selected_count = 0;
+                for (uint32_t i = 0; i < selected_summary_count; ++i) {
+                    if (selected_blocks[i] == 0xffffffffu) continue;
+                    token_slots[selected_count] = __uint_as_float(0x80000000u | selected_blocks[i]);
+                    scores[selected_count] = selected_scores[i];
+                    selected_count++;
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                token_slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+        if (selected_count == 0) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t slot = __float_as_uint(token_slots[idx]);
+            if ((slot & 0x80000000u) != 0) {
+                if (tid == 0 && scores[idx] > max_score_local) max_score_local = scores[idx];
+                __syncthreads();
+                continue;
+            }
+            const uint32_t t = slot;
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const uint32_t slot = __float_as_uint(token_slots[idx]);
+                const float p = expf(scores[idx] - max_score) / denom;
+                if ((slot & 0x80000000u) != 0) {
+                    const uint32_t b = slot & 0x7fffffffu;
+                    const uint32_t block_start = b * block_size;
+                    const uint32_t block_end = block_start + block_size < old_len ? block_start + block_size : old_len;
+                    float mean_v = 0.0f;
+                    for (uint32_t t = block_start; t < block_end; ++t) {
+                        const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                           + (size_t)kvh_idx * (size_t)head_dim;
+                        mean_v += __half2float(V[base + d]);
+                    }
+                    mean_v /= (float)(block_end - block_start);
+                    acc += p * mean_v;
+                } else {
+                    const uint32_t t = slot;
+                    const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(V[base + d]);
+                }
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_compressed_summary_head64_kernel(
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        const __half* __restrict__ summary_k,
+        const __half* __restrict__ summary_v,
+        const __half* __restrict__ rep_k,
+        const __half* __restrict__ rep_v,
+        const uint32_t* __restrict__ rep_positions,
+        const uint32_t* __restrict__ block_counts,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t max_blocks,
+        uint32_t representatives,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t top_blocks,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = old_len;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t available_blocks = old_blocks < max_blocks ? old_blocks : max_blocks;
+        const uint32_t selected_summary_count =
+            top_blocks == 0 || top_blocks > available_blocks ? available_blocks : top_blocks;
+        const uint32_t selected_capacity = recent_count + selected_summary_count * (1u + representatives);
+        float* scores = shmem;
+        float* slots = scores + selected_capacity;
+        float* reduce = slots + selected_capacity;
+
+        float selected_scores[64];
+        uint32_t selected_blocks[64];
+        for (uint32_t i = 0; i < 64; ++i) {
+            selected_scores[i] = -1e30f;
+            selected_blocks[i] = 0xffffffffu;
+        }
+
+        uint32_t selected_count = 0;
+        for (uint32_t b = 0; b < available_blocks; ++b) {
+            const uint32_t count = block_counts[(size_t)seq_id * (size_t)max_blocks + (size_t)b];
+            if (count == 0) continue;
+            const size_t base = ((size_t)seq_id * (size_t)max_blocks + (size_t)b) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(summary_k[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                if (top_blocks == 0) {
+                    slots[selected_count] = __uint_as_float(0x80000000u | b);
+                    scores[selected_count] = score;
+                    selected_count++;
+                } else {
+                    uint32_t insert = selected_summary_count;
+                    for (uint32_t i = 0; i < selected_summary_count; ++i) {
+                        if (score > selected_scores[i]) {
+                            insert = i;
+                            break;
+                        }
+                    }
+                    if (insert < selected_summary_count) {
+                        for (uint32_t j = selected_summary_count - 1; j > insert; --j) {
+                            selected_scores[j] = selected_scores[j - 1];
+                            selected_blocks[j] = selected_blocks[j - 1];
+                        }
+                        selected_scores[insert] = score;
+                        selected_blocks[insert] = b;
+                    }
+                }
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) {
+            if (top_blocks != 0) {
+                selected_count = 0;
+                for (uint32_t i = 0; i < selected_summary_count; ++i) {
+                    if (selected_blocks[i] == 0xffffffffu) continue;
+                    slots[selected_count] = __uint_as_float(0x80000000u | selected_blocks[i]);
+                    scores[selected_count] = selected_scores[i];
+                    selected_count++;
+                }
+            }
+            const uint32_t summary_count = selected_count;
+            if (representatives > 0 && rep_k && rep_v && rep_positions) {
+                for (uint32_t i = 0; i < summary_count; ++i) {
+                    const uint32_t block_slot = __float_as_uint(slots[i]);
+                    if ((block_slot & 0x80000000u) == 0) continue;
+                    const uint32_t b = block_slot & 0x7fffffffu;
+                    for (uint32_t r = 0; r < representatives; ++r) {
+                        const size_t pos_idx = ((size_t)seq_id * (size_t)max_blocks + (size_t)b)
+                            * (size_t)representatives + (size_t)r;
+                        if (rep_positions[pos_idx] == 0xffffffffu) continue;
+                        slots[selected_count++] = __uint_as_float(0x40000000u | (b * representatives + r));
+                    }
+                }
+            }
+            for (uint32_t t = recent_start; t < seq_len; ++t) {
+                slots[selected_count++] = __uint_as_float(t);
+            }
+            reduce[0] = __uint_as_float(selected_count);
+        }
+        __syncthreads();
+        selected_count = __float_as_uint(reduce[0]);
+        if (selected_count == 0) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t idx = 0; idx < selected_count; ++idx) {
+            const uint32_t slot = __float_as_uint(slots[idx]);
+            if ((slot & 0x80000000u) != 0) {
+                if (tid == 0 && scores[idx] > max_score_local) max_score_local = scores[idx];
+                __syncthreads();
+                continue;
+            }
+            if ((slot & 0x40000000u) != 0) {
+                const uint32_t rep_id = slot & 0x3fffffffu;
+                const uint32_t b = representatives > 0 ? rep_id / representatives : 0;
+                const uint32_t r = representatives > 0 ? rep_id % representatives : 0;
+                const size_t base = (((size_t)seq_id * (size_t)max_blocks + (size_t)b)
+                    * (size_t)representatives + (size_t)r) * elems_per_token
+                    + (size_t)kvh_idx * (size_t)head_dim;
+                float dot = 0.0f;
+                for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                    dot += qh[d] * __half2float(rep_k[base + d]);
+                }
+                reduce[tid] = dot;
+                __syncthreads();
+                for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                    if (tid < stride) reduce[tid] += reduce[tid + stride];
+                    __syncthreads();
+                }
+                if (tid == 0) {
+                    const float score = reduce[0] * inv_sqrt;
+                    scores[idx] = score;
+                    if (score > max_score_local) max_score_local = score;
+                }
+                __syncthreads();
+                continue;
+            }
+            const uint32_t recent_idx = slot % recent_window;
+            const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)recent_idx) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(recent_k[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[idx] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+        float denom_part = 0.0f;
+        for (uint32_t idx = tid; idx < selected_count; idx += blockDim.x) {
+            denom_part += expf(scores[idx] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t idx = 0; idx < selected_count; ++idx) {
+                const uint32_t slot = __float_as_uint(slots[idx]);
+                const float p = expf(scores[idx] - max_score) / denom;
+                if ((slot & 0x80000000u) != 0) {
+                    const uint32_t b = slot & 0x7fffffffu;
+                    const size_t base = ((size_t)seq_id * (size_t)max_blocks + (size_t)b) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(summary_v[base + d]);
+                } else if ((slot & 0x40000000u) != 0) {
+                    const uint32_t rep_id = slot & 0x3fffffffu;
+                    const uint32_t b = representatives > 0 ? rep_id / representatives : 0;
+                    const uint32_t r = representatives > 0 ? rep_id % representatives : 0;
+                    const size_t base = (((size_t)seq_id * (size_t)max_blocks + (size_t)b)
+                        * (size_t)representatives + (size_t)r) * elems_per_token
+                        + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(rep_v[base + d]);
+                } else {
+                    const uint32_t recent_idx = slot % recent_window;
+                    const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)recent_idx) * elems_per_token
+                                       + (size_t)kvh_idx * (size_t)head_dim;
+                    acc += p * __half2float(recent_v[base + d]);
+                }
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_compressed_recent_only_head64_kernel(
+        const __half* __restrict__ recent_k,
+        const __half* __restrict__ recent_v,
+        uint32_t recent_window,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* reduce = scores + recent_window;
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 64;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.125f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t recent_start = seq_len - recent_count;
+        if (recent_count == 0) return;
+
+        float max_score_local = -1e30f;
+        for (uint32_t i = 0; i < recent_count; ++i) {
+            const uint32_t pos = recent_start + i;
+            const uint32_t ring = pos % recent_window;
+            const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+                dot += qh[d] * __half2float(recent_k[base + d]);
+            }
+            reduce[tid] = dot;
+            __syncthreads();
+            for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+                if (tid < stride) reduce[tid] += reduce[tid + stride];
+                __syncthreads();
+            }
+            if (tid == 0) {
+                const float score = reduce[0] * inv_sqrt;
+                scores[i] = score;
+                if (score > max_score_local) max_score_local = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0) reduce[0] = max_score_local;
+        __syncthreads();
+        const float max_score = reduce[0];
+        float denom_part = 0.0f;
+        for (uint32_t i = tid; i < recent_count; i += blockDim.x) {
+            denom_part += expf(scores[i] - max_score);
+        }
+        reduce[tid] = denom_part;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) reduce[tid] += reduce[tid + stride];
+            __syncthreads();
+        }
+        const float denom = reduce[0] > 0.0f ? reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = tid; d < head_dim; d += blockDim.x) {
+            float acc = 0.0f;
+            for (uint32_t i = 0; i < recent_count; ++i) {
+                const uint32_t pos = recent_start + i;
+                const uint32_t ring = pos % recent_window;
+                const size_t base = ((size_t)seq_id * (size_t)recent_window + (size_t)ring) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[i] - max_score) / denom;
+                acc += p * __half2float(recent_v[base + d]);
             }
             out_h[d] = acc;
         }
@@ -1521,7 +3746,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void attention_prefill_gqa_varlen_head64_kernel(
+    __global__ void attention_prefill_gqa_varlen_kernel(
         const float* __restrict__ Q,
         const float* __restrict__ K,
         const float* __restrict__ V,
@@ -1532,6 +3757,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         float* __restrict__ Out) {
         extern __shared__ float shmem[];
         const uint32_t q_idx = blockIdx.x;
@@ -1546,8 +3772,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         const uint32_t group = q_heads / kv_heads;
         const uint32_t kvh_idx = qh_idx / group;
-        const uint32_t head_dim = 64;
-        const float inv_sqrt = 0.125f;
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
         const uint32_t q_token_offset = q_offsets[batch_idx] + q_idx;
         const uint32_t kv_offset = kv_offsets[batch_idx];
         const uint32_t causal_end = kv_len - q_len + q_idx;
@@ -1665,23 +3890,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -6;
 
         const bool use_head64 = kv->head_dim == 64 && seq_len <= 8192;
-        if (use_head64) {
+        const bool use_head128 = kv->head_dim == 128 && seq_len <= 8192;
+        if (use_head64 || use_head128) {
             const char* cache_experiment = getenv("M40LLM_CACHE_EXPERIMENT");
             const bool use_ldg_kv = cache_experiment && strcmp(cache_experiment, "ldg_kv") == 0;
             static int logged_head64 = 0;
             static int logged_head64_ldg = 0;
-            const char* log_env = getenv("M40LLM_ATTN_LOG");
-            if (use_ldg_kv && !logged_head64_ldg && log_env && strcmp(log_env, "1") == 0) {
-                fprintf(stderr, "[cuda] attention_gqa backend: head64 __ldg KV experiment\n");
-                logged_head64_ldg = 1;
-            } else if (!use_ldg_kv && !logged_head64 && log_env && strcmp(log_env, "1") == 0) {
-                fprintf(stderr, "[cuda] attention_gqa backend: head64 shared-score kernel\n");
-                logged_head64 = 1;
-            }
             const int blocks = (int)q_heads;
             const int threads = 128;
             const size_t shmem = ((size_t)seq_len + (size_t)threads) * sizeof(float);
-            if (use_ldg_kv) {
+            const char* log_env = getenv("M40LLM_ATTN_LOG");
+            if (use_head64 && use_ldg_kv) {
+                if (!logged_head64_ldg && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head64 __ldg KV experiment\n");
+                    logged_head64_ldg = 1;
+                }
                 attention_last_token_gqa_head64_ldg_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
                     reinterpret_cast<const __half*>(kv->d_k),
                     reinterpret_cast<const __half*>(kv->d_v),
@@ -1689,8 +3912,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     reinterpret_cast<const float*>(q_dev_f32), seq_len,
                     reinterpret_cast<float*>(out_dev_f32)
                 );
-            } else {
+            } else if (use_head64) {
+                if (!logged_head64 && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head64 shared-score kernel\n");
+                    logged_head64 = 1;
+                }
                 attention_last_token_gqa_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                    reinterpret_cast<const __half*>(kv->d_k),
+                    reinterpret_cast<const __half*>(kv->d_v),
+                    kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                    reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                    reinterpret_cast<float*>(out_dev_f32)
+                );
+            } else {
+                static int logged_head128 = 0;
+                if (!logged_head128 && log_env && strcmp(log_env, "1") == 0) {
+                    fprintf(stderr, "[cuda] attention_gqa backend: head128 shared-score kernel\n");
+                    logged_head128 = 1;
+                }
+                attention_last_token_gqa_head128_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
                     reinterpret_cast<const __half*>(kv->d_k),
                     reinterpret_cast<const __half*>(kv->d_v),
                     kv->max_seq_len, q_heads, kv->num_heads, seq_id,
@@ -1743,6 +3983,711 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         );
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_dense_recent_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0) return -6;
+        const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)window_len + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_dense_recent_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            reinterpret_cast<float*>(out_dev_f32)
+        );
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -7;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const uint32_t selected_block_order = selected_block_order_from_env();
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_block_select_exact_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            selected_old_blocks,
+            selected_block_order,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        uint32_t staged_capacity_tokens,
+        void* out_dev_f32);
+
+    int m40llm_kvcache_build_q8_old_from_dense(
+        M40llmCudaContext* ctx,
+        M40llmKVCache* kv,
+        uint32_t seq_id,
+        uint32_t seq_len,
+        uint32_t recent_window) {
+        if (!ctx || !kv) return -1;
+        if (!kv->q8_old_backing || !kv->d_q8_old_k || !kv->d_q8_old_v ||
+            !kv->d_q8_old_k_scale || !kv->d_q8_old_v_scale) return -2;
+        if (kv->compressed) return -3;
+        if (kv->head_dim != 64 || kv->num_heads == 0) return -4;
+        if (seq_id >= kv->max_batch_size) return -5;
+        if (seq_len == 0 || seq_len > kv->max_seq_len || recent_window == 0) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        if (old_len == 0) return 0;
+        const size_t vectors = (size_t)old_len * (size_t)kv->num_heads;
+        const int threads = 128;
+        const int blocks = (int)vectors;
+        build_q8_old_from_dense_head64_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            kv->d_k,
+            kv->d_v,
+            kv->d_q8_old_k,
+            kv->d_q8_old_v,
+            kv->d_q8_old_k_scale,
+            kv->d_q8_old_v_scale,
+            kv->max_seq_len,
+            kv->num_heads,
+            seq_id,
+            seq_len,
+            recent_window);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -7;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+
+        const size_t staged_elems = (size_t)q_heads * (size_t)selected_capacity * 64u;
+        const size_t positions_elems = (size_t)q_heads * (size_t)selected_capacity;
+        __half* staged_k = nullptr;
+        __half* staged_v = nullptr;
+        uint32_t* staged_positions = nullptr;
+        uint32_t* staged_counts = nullptr;
+        cudaError_t err = cudaMalloc(&staged_k, staged_elems * sizeof(__half));
+        if (err != cudaSuccess) return -8;
+        err = cudaMalloc(&staged_v, staged_elems * sizeof(__half));
+        if (err != cudaSuccess) { cudaFree(staged_k); return -9; }
+        err = cudaMalloc(&staged_positions, positions_elems * sizeof(uint32_t));
+        if (err != cudaSuccess) { cudaFree(staged_k); cudaFree(staged_v); return -10; }
+        err = cudaMalloc(&staged_counts, (size_t)q_heads * sizeof(uint32_t));
+        if (err != cudaSuccess) {
+            cudaFree(staged_k); cudaFree(staged_v); cudaFree(staged_positions); return -11;
+        }
+
+        const int rc = m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+            ctx, kv, seq_id, q_dev_f32, q_heads, seq_len, recent_window, block_size, top_blocks,
+            staged_k, staged_v, staged_positions, staged_counts, selected_capacity, out_dev_f32);
+        cudaFree(staged_k);
+        cudaFree(staged_v);
+        cudaFree(staged_positions);
+        cudaFree(staged_counts);
+        return rc == 0 ? 0 : rc - 20;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        uint32_t staged_capacity_tokens,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!staged_k_dev || !staged_v_dev || !staged_positions_dev || !staged_counts_dev) return -14;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        if (selected_capacity > staged_capacity_tokens) return -15;
+        const uint32_t selected_block_order = selected_block_order_from_env();
+        __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
+        __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
+        uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
+        uint32_t* staged_counts = reinterpret_cast<uint32_t*>(staged_counts_dev);
+
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        gather_block_select_exact_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            selected_old_blocks,
+            selected_capacity,
+            selected_block_order,
+            staged_k,
+            staged_v,
+            staged_positions,
+            staged_counts);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -12;
+
+        const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+            staged_k,
+            staged_v,
+            staged_counts,
+            selected_capacity,
+            q_heads,
+            reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<float*>(out_dev_f32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -13;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        uint32_t staged_capacity_tokens,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!staged_k_dev || !staged_v_dev || !staged_positions_dev || !staged_counts_dev) return -14;
+        if (!kv->q8_old_backing || !kv->d_q8_old_k || !kv->d_q8_old_v ||
+            !kv->d_q8_old_k_scale || !kv->d_q8_old_v_scale) return -16;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        if (selected_capacity > staged_capacity_tokens) return -15;
+        const uint32_t selected_block_order = selected_block_order_from_env();
+        const uint32_t old_k_source = q8_old_k_source_from_env();
+        const uint32_t old_v_source = q8_old_v_source_from_env();
+        if ((old_k_source == 1u || old_v_source == 1u) && (!kv->d_k || !kv->d_v)) return -17;
+        if (old_v_source == 2u && (!kv->q4_old_v_backing || !kv->d_q4_old_v || !kv->d_q4_old_v_scale)) return -18;
+        __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
+        __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
+        uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
+        uint32_t* staged_counts = reinterpret_cast<uint32_t*>(staged_counts_dev);
+
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
+            kv->d_q8_old_k,
+            kv->d_q8_old_v,
+            kv->d_q8_old_k_scale,
+            kv->d_q8_old_v_scale,
+            kv->d_q4_old_v,
+            kv->d_q4_old_v_scale,
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            selected_old_blocks,
+            selected_capacity,
+            selected_block_order,
+            old_k_source,
+            old_v_source,
+            staged_k,
+            staged_v,
+            staged_positions,
+            staged_counts);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -12;
+
+        const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+            staged_k,
+            staged_v,
+            staged_counts,
+            selected_capacity,
+            q_heads,
+            reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<float*>(out_dev_f32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -13;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        uint32_t staged_capacity_tokens,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!staged_k_dev || !staged_v_dev || !staged_positions_dev || !staged_counts_dev) return -14;
+        if (!kv->fp16_k_q4_v_old_backing || !kv->d_fp16_old_k ||
+            !kv->q4_old_v_backing || !kv->d_q4_old_v || !kv->d_q4_old_v_scale) return -16;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_old_blocks = top_blocks < old_blocks ? top_blocks : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        if (selected_capacity > staged_capacity_tokens) return -15;
+
+        __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
+        __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
+        uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
+        uint32_t* staged_counts = reinterpret_cast<uint32_t*>(staged_counts_dev);
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
+            kv->d_fp16_old_k,
+            nullptr,
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr,
+            kv->d_q4_old_v,
+            kv->d_q4_old_v_scale,
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            selected_old_blocks,
+            selected_capacity,
+            selected_block_order_from_env(),
+            1u,
+            2u,
+            staged_k,
+            staged_v,
+            staged_positions,
+            staged_counts);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -12;
+
+        const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+            staged_k,
+            staged_v,
+            staged_counts,
+            selected_capacity,
+            q_heads,
+            reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<float*>(out_dev_f32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -13;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!kv->q8_old_backing || !kv->d_q8_old_k || !kv->d_q8_old_v ||
+            !kv->d_q8_old_k_scale || !kv->d_q8_old_v_scale) return -16;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t block_select_policy = block_select_policy_from_env();
+        const float block_score_delta = block_score_delta_from_env();
+        const uint32_t block_min_blocks = block_min_blocks_from_env();
+        const uint32_t block_max_blocks = block_max_blocks_from_env(64u);
+        const uint64_t anchor_block_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
+        const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
+        const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const uint32_t selected_block_order = selected_block_order_from_env();
+
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_block_select_exact_q8_direct_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
+            kv->d_q8_old_k,
+            kv->d_q8_old_v,
+            kv->d_q8_old_k_scale,
+            kv->d_q8_old_v_scale,
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            selected_capacity,
+            selected_block_order,
+            block_select_policy,
+            block_score_delta,
+            block_min_blocks,
+            block_max_blocks,
+            anchor_block_mask,
+            force_include_low,
+            force_include_high,
+            force_exclude_low,
+            force_exclude_high,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!kv->fp16_k_q4_v_old_backing || !kv->d_fp16_old_k ||
+            !kv->q4_old_v_backing || !kv->d_q4_old_v || !kv->d_q4_old_v_scale ||
+            !kv->d_recent_k || !kv->d_recent_v) return -16;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64 && kv->head_dim != 128) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t block_select_policy = block_select_policy_from_env();
+        const float block_score_delta = block_score_delta_from_env();
+        const uint32_t block_min_blocks = block_min_blocks_from_env();
+        const uint32_t block_max_blocks = block_max_blocks_from_env(64u);
+        const uint64_t anchor_block_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
+        const uint32_t policy_capacity = block_select_policy == 0u ? top_blocks : block_max_blocks;
+        const uint32_t selected_old_blocks = policy_capacity < old_blocks ? policy_capacity : old_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity =
+            exact_block_selected_token_capacity(recent_count, old_len, selected_old_blocks, block_size);
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const uint32_t selected_block_order = selected_block_order_from_env();
+
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_block_select_exact_fp16_k_q4_v_direct_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            kv->d_fp16_old_k,
+            kv->d_recent_k,
+            kv->d_recent_v,
+            kv->d_q4_old_v,
+            kv->d_q4_old_v_scale,
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            kv->head_dim,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            selected_capacity,
+            selected_block_order,
+            block_select_policy,
+            block_score_delta,
+            block_min_blocks,
+            block_max_blocks,
+            anchor_block_mask,
+            force_include_low,
+            force_include_high,
+            force_exclude_low,
+            force_exclude_high,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t top_blocks,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
+        if (kv->head_dim != 64) return -5;
+        if (recent_window == 0 || block_size == 0 || top_blocks > 64) return -6;
+        if (kv->compressed) {
+            const uint32_t old_len = seq_len > kv->recent_window ? seq_len - kv->recent_window : 0;
+            const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + kv->block_size - 1) / kv->block_size;
+            const uint32_t selected_summary_count =
+                top_blocks == 0 || top_blocks > old_blocks ? old_blocks : top_blocks;
+            const uint32_t recent_count = seq_len < kv->recent_window ? seq_len : kv->recent_window;
+            const uint32_t selected_capacity =
+                recent_count + selected_summary_count * (1u + kv->representatives);
+            if (selected_capacity == 0) return -7;
+            const int blocks = (int)q_heads;
+            const int threads = 128;
+            const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
+            attention_last_token_gqa_compressed_summary_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                kv->d_recent_k,
+                kv->d_recent_v,
+                kv->d_summary_k,
+                kv->d_summary_v,
+                kv->d_rep_k,
+                kv->d_rep_v,
+                kv->d_rep_positions,
+                kv->d_block_counts,
+                kv->recent_window,
+                kv->block_size,
+                kv->max_blocks,
+                kv->representatives,
+                q_heads,
+                kv->num_heads,
+                seq_id,
+                reinterpret_cast<const float*>(q_dev_f32),
+                seq_len,
+                top_blocks,
+                reinterpret_cast<float*>(out_dev_f32));
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) return -8;
+            return 0;
+        }
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
+        const uint32_t selected_summary_count =
+            top_blocks == 0 || top_blocks > old_blocks ? old_blocks : top_blocks;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t selected_capacity = recent_count + selected_summary_count;
+        if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)selected_capacity * 2u + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_block_summary_lossy_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(kv->d_k),
+            reinterpret_cast<const __half*>(kv->d_v),
+            kv->max_seq_len,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
+        return 0;
+    }
+
+    int m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (!kv->compressed) return -2;
+        if (seq_id >= kv->max_batch_size) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -4;
+        if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -5;
+        if (kv->head_dim != 64 || kv->recent_window == 0) return -6;
+        const uint32_t recent_count = seq_len < kv->recent_window ? seq_len : kv->recent_window;
+        if (recent_count == 0) return -7;
+        const int blocks = (int)q_heads;
+        const int threads = 128;
+        const size_t shmem = ((size_t)kv->recent_window + (size_t)threads) * sizeof(float);
+        attention_last_token_gqa_compressed_recent_only_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+            kv->d_recent_k,
+            kv->d_recent_v,
+            kv->recent_window,
+            q_heads,
+            kv->num_heads,
+            seq_id,
+            reinterpret_cast<const float*>(q_dev_f32),
+            seq_len,
+            reinterpret_cast<float*>(out_dev_f32));
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -8;
         return 0;
     }
 
@@ -1886,7 +4831,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             false);
     }
 
-    static int attention_prefill_f32_gqa_varlen_head64_impl(
+    static int attention_prefill_f32_gqa_varlen_impl(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -1898,16 +4843,18 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32,
         bool synchronize) {
         if (!ctx || !q_dev_f32 || !k_dev_f32 || !v_dev_f32 || !q_offsets_dev || !kv_offsets_dev || !q_lens_dev || !kv_lens_dev || !out_dev_f32) return -1;
         if (batch_size == 0) return -2;
         if (q_heads == 0 || kv_heads == 0 || q_heads % kv_heads != 0) return -3;
+        if (head_dim != 64 && head_dim != 128) return -9;
 
         static int logged = 0;
         const char* log_env = getenv("M40LLM_ATTN_LOG");
         if (!logged && log_env && strcmp(log_env, "1") == 0) {
-            fprintf(stderr, "[cuda] attention_prefill_gqa_varlen backend: head64 packed-f32 kernel\n");
+            fprintf(stderr, "[cuda] attention_prefill_gqa_varlen backend: head%u packed-f32 kernel\n", head_dim);
             logged = 1;
         }
 
@@ -1945,7 +4892,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         dim3 grid((int)max_q_len_host, (int)q_heads, (int)batch_size);
         const size_t shmem = ((size_t)max_kv_len_host + (size_t)threads) * sizeof(float);
-        attention_prefill_gqa_varlen_head64_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
+        attention_prefill_gqa_varlen_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
             reinterpret_cast<const float*>(q_dev_f32),
             reinterpret_cast<const float*>(k_dev_f32),
             reinterpret_cast<const float*>(v_dev_f32),
@@ -1956,6 +4903,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             reinterpret_cast<float*>(out_dev_f32));
         err = cudaGetLastError();
         if (err != cudaSuccess) return -4;
@@ -1966,7 +4914,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
-    int m40llm_attention_prefill_f32_gqa_varlen_head64(
+    int m40llm_attention_prefill_f32_gqa_varlen(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -1978,8 +4926,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32) {
-        return attention_prefill_f32_gqa_varlen_head64_impl(
+        return attention_prefill_f32_gqa_varlen_impl(
             ctx,
             q_dev_f32,
             k_dev_f32,
@@ -1991,11 +4940,12 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             out_dev_f32,
             true);
     }
 
-    int m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+    int m40llm_attention_prefill_f32_gqa_varlen_async(
         M40llmCudaContext* ctx,
         const void* q_dev_f32,
         const void* k_dev_f32,
@@ -2007,8 +4957,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t batch_size,
         uint32_t q_heads,
         uint32_t kv_heads,
+        uint32_t head_dim,
         void* out_dev_f32) {
-        return attention_prefill_f32_gqa_varlen_head64_impl(
+        return attention_prefill_f32_gqa_varlen_impl(
             ctx,
             q_dev_f32,
             k_dev_f32,
@@ -2020,6 +4971,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             batch_size,
             q_heads,
             kv_heads,
+            head_dim,
             out_dev_f32,
             false);
     }
@@ -2366,6 +5318,72 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return (size_t)max_seq_len * (size_t)max_batch_size * (size_t)num_heads * (size_t)head_dim;
     }
 
+    static void init_q8_old_backing_fields(M40llmKVCache* kv) {
+        kv->d_q8_old_k = nullptr;
+        kv->d_q8_old_v = nullptr;
+        kv->d_q8_old_k_scale = nullptr;
+        kv->d_q8_old_v_scale = nullptr;
+        kv->d_fp16_old_k = nullptr;
+        kv->d_q4_old_v = nullptr;
+        kv->d_q4_old_v_scale = nullptr;
+        kv->q8_old_backing = 0;
+        kv->fp16_k_q4_v_old_backing = 0;
+        kv->q4_old_v_backing = 0;
+    }
+
+    static bool allocate_q8_old_backing(M40llmKVCache* kv) {
+        const size_t elems = kv_storage_elems(
+            kv->max_seq_len,
+            kv->max_batch_size,
+            kv->num_heads,
+            kv->head_dim);
+        const size_t vectors = (size_t)kv->max_seq_len * (size_t)kv->max_batch_size * (size_t)kv->num_heads;
+        cudaError_t err = cudaMalloc(&kv->d_q8_old_k, elems * sizeof(int8_t));
+        if (err != cudaSuccess) return false;
+        err = cudaMalloc(&kv->d_q8_old_v, elems * sizeof(int8_t));
+        if (err != cudaSuccess) return false;
+        err = cudaMalloc(&kv->d_q8_old_k_scale, vectors * sizeof(float));
+        if (err != cudaSuccess) return false;
+        err = cudaMalloc(&kv->d_q8_old_v_scale, vectors * sizeof(float));
+        if (err != cudaSuccess) return false;
+        cudaMemset(kv->d_q8_old_k, 0, elems * sizeof(int8_t));
+        cudaMemset(kv->d_q8_old_v, 0, elems * sizeof(int8_t));
+        cudaMemset(kv->d_q8_old_k_scale, 0, vectors * sizeof(float));
+        cudaMemset(kv->d_q8_old_v_scale, 0, vectors * sizeof(float));
+        kv->q8_old_backing = 1;
+        return true;
+    }
+
+    static bool allocate_fp16_old_k_backing(M40llmKVCache* kv) {
+        const size_t elems = kv_storage_elems(
+            kv->max_seq_len,
+            kv->max_batch_size,
+            kv->num_heads,
+            kv->head_dim);
+        cudaError_t err = cudaMalloc(&kv->d_fp16_old_k, elems * sizeof(__half));
+        if (err != cudaSuccess) return false;
+        cudaMemset(kv->d_fp16_old_k, 0, elems * sizeof(__half));
+        kv->fp16_k_q4_v_old_backing = 1;
+        return true;
+    }
+
+    static bool allocate_q4_old_v_backing(M40llmKVCache* kv) {
+        if ((kv->head_dim != 64 && kv->head_dim != 128) || (kv->head_dim % 2u) != 0u) return false;
+        const size_t elems = (size_t)kv->max_seq_len
+            * (size_t)kv->max_batch_size
+            * (size_t)kv->num_heads
+            * (size_t)(kv->head_dim / 2u);
+        const size_t vectors = (size_t)kv->max_seq_len * (size_t)kv->max_batch_size * (size_t)kv->num_heads;
+        cudaError_t err = cudaMalloc(&kv->d_q4_old_v, elems * sizeof(uint8_t));
+        if (err != cudaSuccess) return false;
+        err = cudaMalloc(&kv->d_q4_old_v_scale, vectors * sizeof(float));
+        if (err != cudaSuccess) return false;
+        cudaMemset(kv->d_q4_old_v, 0, elems * sizeof(uint8_t));
+        cudaMemset(kv->d_q4_old_v_scale, 0, vectors * sizeof(float));
+        kv->q4_old_v_backing = 1;
+        return true;
+    }
+
     M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx,
                                          uint32_t max_seq_len,
                                          uint32_t max_batch_size,
@@ -2378,6 +5396,24 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         kv->max_batch_size = max_batch_size;
         kv->num_heads = num_heads;
         kv->head_dim = head_dim;
+        kv->compressed = 0;
+        kv->recent_window = 0;
+        kv->block_size = 0;
+        kv->max_blocks = 0;
+        kv->top_blocks = 0;
+        kv->representatives = 0;
+        kv->representative_policy = 0;
+        kv->d_recent_k = nullptr;
+        kv->d_recent_v = nullptr;
+        kv->d_summary_k_acc = nullptr;
+        kv->d_summary_v_acc = nullptr;
+        kv->d_summary_k = nullptr;
+        kv->d_summary_v = nullptr;
+        kv->d_block_counts = nullptr;
+        kv->d_rep_k = nullptr;
+        kv->d_rep_v = nullptr;
+        kv->d_rep_positions = nullptr;
+        init_q8_old_backing_fields(kv);
 
         size_t elems = kv_storage_elems(max_seq_len, max_batch_size, num_heads, head_dim);
         size_t bytes = elems * sizeof(__half);
@@ -2390,9 +5426,118 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) { cudaFree(kv->d_k); delete kv; return nullptr; }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { cudaFree(kv->d_k); cudaFree(kv->d_v); delete kv; return nullptr; }
-
         cudaMemset(kv->d_k, 0, bytes);
         cudaMemset(kv->d_v, 0, bytes);
+        cudaMemset(kv->d_seq_map, 0, seq_map_size);
+        return kv;
+    }
+
+    M40llmKVCache* m40llm_kvcache_create_compressed(M40llmCudaContext* ctx,
+                                         uint32_t max_seq_len,
+                                         uint32_t max_batch_size,
+                                         uint32_t num_heads,
+                                         uint32_t head_dim,
+                                         uint32_t recent_window,
+                                         uint32_t block_size,
+                                         uint32_t top_blocks,
+                                         uint32_t representatives,
+                                         uint32_t representative_policy,
+                                         uint32_t exact_old_backing) {
+        if (!ctx || recent_window == 0 || block_size == 0) return nullptr;
+        if (ensure_device(ctx) != 0) return nullptr;
+        M40llmKVCache* kv = new M40llmKVCache();
+        kv->d_k = nullptr;
+        kv->d_v = nullptr;
+        kv->d_seq_map = nullptr;
+        kv->d_recent_k = nullptr;
+        kv->d_recent_v = nullptr;
+        kv->d_summary_k_acc = nullptr;
+        kv->d_summary_v_acc = nullptr;
+        kv->d_summary_k = nullptr;
+        kv->d_summary_v = nullptr;
+        kv->d_block_counts = nullptr;
+        kv->d_rep_k = nullptr;
+        kv->d_rep_v = nullptr;
+        kv->d_rep_positions = nullptr;
+        init_q8_old_backing_fields(kv);
+        kv->max_seq_len = max_seq_len;
+        kv->max_batch_size = max_batch_size;
+        kv->num_heads = num_heads;
+        kv->head_dim = head_dim;
+        kv->compressed = 1;
+        kv->recent_window = recent_window;
+        kv->block_size = block_size;
+        kv->top_blocks = top_blocks;
+        kv->representatives = representatives;
+        kv->representative_policy = representative_policy;
+        const uint32_t old_capacity = max_seq_len > recent_window ? max_seq_len - recent_window : 0;
+        kv->max_blocks = old_capacity == 0 ? 1 : (old_capacity + block_size - 1) / block_size;
+
+        const size_t elems_per_token = (size_t)num_heads * (size_t)head_dim;
+        const size_t recent_elems = (size_t)max_batch_size * (size_t)recent_window * elems_per_token;
+        const size_t summary_elems = (size_t)max_batch_size * (size_t)kv->max_blocks * elems_per_token;
+        const size_t rep_elems = (size_t)max_batch_size * (size_t)kv->max_blocks * (size_t)representatives * elems_per_token;
+        const size_t seq_map_size = (size_t)max_batch_size * sizeof(uint32_t);
+        const size_t block_count_size = (size_t)max_batch_size * (size_t)kv->max_blocks * sizeof(uint32_t);
+        const size_t rep_position_size = (size_t)max_batch_size * (size_t)kv->max_blocks * (size_t)representatives * sizeof(uint32_t);
+        cudaError_t err = cudaMalloc(&kv->d_recent_k, recent_elems * sizeof(__half));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_recent_v, recent_elems * sizeof(__half));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_summary_k_acc, summary_elems * sizeof(float));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_summary_v_acc, summary_elems * sizeof(float));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_summary_k, summary_elems * sizeof(__half));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_summary_v, summary_elems * sizeof(__half));
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        err = cudaMalloc(&kv->d_block_counts, block_count_size);
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        if (representatives > 0) {
+            err = cudaMalloc(&kv->d_rep_k, rep_elems * sizeof(__half));
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            err = cudaMalloc(&kv->d_rep_v, rep_elems * sizeof(__half));
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            err = cudaMalloc(&kv->d_rep_positions, rep_position_size);
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        }
+        if (exact_old_backing == 1u && !allocate_q8_old_backing(kv)) {
+            m40llm_kvcache_destroy(kv);
+            return nullptr;
+        }
+        if (exact_old_backing == 2u && (!allocate_fp16_old_k_backing(kv) || !allocate_q4_old_v_backing(kv))) {
+            m40llm_kvcache_destroy(kv);
+            return nullptr;
+        }
+        if (exact_old_backing == 1u && q4_old_v_diag_from_env() && !allocate_q4_old_v_backing(kv)) {
+            m40llm_kvcache_destroy(kv);
+            return nullptr;
+        }
+        if (exact_old_backing == 1u && q8_dense_shadow_from_env()) {
+            const size_t dense_elems = kv_storage_elems(max_seq_len, max_batch_size, num_heads, head_dim);
+            const size_t dense_bytes = dense_elems * sizeof(__half);
+            err = cudaMalloc(&kv->d_k, dense_bytes);
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            err = cudaMalloc(&kv->d_v, dense_bytes);
+            if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+            cudaMemset(kv->d_k, 0, dense_bytes);
+            cudaMemset(kv->d_v, 0, dense_bytes);
+        }
+        err = cudaMalloc(&kv->d_seq_map, seq_map_size);
+        if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
+        cudaMemset(kv->d_recent_k, 0, recent_elems * sizeof(__half));
+        cudaMemset(kv->d_recent_v, 0, recent_elems * sizeof(__half));
+        cudaMemset(kv->d_summary_k_acc, 0, summary_elems * sizeof(float));
+        cudaMemset(kv->d_summary_v_acc, 0, summary_elems * sizeof(float));
+        cudaMemset(kv->d_summary_k, 0, summary_elems * sizeof(__half));
+        cudaMemset(kv->d_summary_v, 0, summary_elems * sizeof(__half));
+        cudaMemset(kv->d_block_counts, 0, block_count_size);
+        if (representatives > 0) {
+            cudaMemset(kv->d_rep_k, 0, rep_elems * sizeof(__half));
+            cudaMemset(kv->d_rep_v, 0, rep_elems * sizeof(__half));
+            cudaMemset(kv->d_rep_positions, 0xff, rep_position_size);
+        }
         cudaMemset(kv->d_seq_map, 0, seq_map_size);
         return kv;
     }
@@ -2419,6 +5564,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    static constexpr uint32_t M40LLM_ROPE_LAYOUT_ADJACENT = 0u;
+    static constexpr uint32_t M40LLM_ROPE_LAYOUT_NEOX = 1u;
+
+    __device__ __forceinline__ void rope_pair_indices(
+        uint32_t head,
+        uint32_t offset_in_head,
+        uint32_t head_dim,
+        uint32_t rope_layout,
+        size_t* i0,
+        size_t* i1) {
+        const size_t head_base = (size_t)head * (size_t)head_dim;
+        if (rope_layout == M40LLM_ROPE_LAYOUT_NEOX) {
+            *i0 = head_base + (size_t)offset_in_head;
+            *i1 = *i0 + (size_t)(head_dim / 2u);
+        } else {
+            *i0 = head_base + (size_t)(2u * offset_in_head);
+            *i1 = *i0 + 1u;
+        }
+    }
+
     __global__ void rope_k_append_f32_to_f16_h2_kernel(
         const float* __restrict__ k_in,
         const float* __restrict__ v_in,
@@ -2429,33 +5594,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale,
+        uint32_t rope_layout,
         size_t pairs_per_token) {
         const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
         if (pair >= pairs_per_token) return;
 
-        const size_t i = pair * 2u;
-        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
-        const uint32_t head = (uint32_t)(i / (size_t)head_dim);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = (uint32_t)(pair % (size_t)half_dim);
+        const uint32_t head = (uint32_t)(pair / (size_t)half_dim);
         if (head >= num_heads) return;
 
-        const uint32_t offset_in_head = dim / 2u;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
         const float pos = static_cast<float>(past_len) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float k0 = k_in[i];
-        const float k1 = k_in[i + 1u];
-        const float v0 = v_in[i];
-        const float v1 = v_in[i + 1u];
-
-        const __half2 k_h2 = __halves2half2(
-            __float2half_rn(k0 * c - k1 * s),
-            __float2half_rn(k0 * s + k1 * c));
-        const __half2 v_h2 = __halves2half2(__float2half_rn(v0), __float2half_rn(v1));
-        reinterpret_cast<__half2*>(k_out)[pair] = k_h2;
-        reinterpret_cast<__half2*>(v_out)[pair] = v_h2;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        k_out[i0] = __float2half_rn(k0 * c - k1 * s);
+        k_out[i1] = __float2half_rn(k0 * s + k1 * c);
+        v_out[i0] = __float2half_rn(v_in[i0]);
+        v_out[i1] = __float2half_rn(v_in[i1]);
     }
 
     __global__ void rope_k_append_f32_to_f16_h2_at_kernel(
@@ -2472,6 +5635,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t* __restrict__ position_dev,
         float freq_base,
         float freq_scale,
+        uint32_t rope_layout,
         size_t pairs_per_token) {
         const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
         if (pair >= pairs_per_token) return;
@@ -2486,30 +5650,142 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         __half* k_out = k_base + token_offset;
         __half* v_out = v_base + token_offset;
 
-        const size_t i = pair * 2u;
-        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
-        const uint32_t head = (uint32_t)(i / (size_t)head_dim);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = (uint32_t)(pair % (size_t)half_dim);
+        const uint32_t head = (uint32_t)(pair / (size_t)half_dim);
         if (head >= num_heads) return;
 
-        const uint32_t offset_in_head = dim / 2u;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
         const float pos = static_cast<float>(position) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float k0 = k_in[i];
-        const float k1 = k_in[i + 1u];
-        const float v0 = v_in[i];
-        const float v1 = v_in[i + 1u];
-
-        const __half2 k_h2 = __halves2half2(
-            __float2half_rn(k0 * c - k1 * s),
-            __float2half_rn(k0 * s + k1 * c));
-        const __half2 v_h2 = __halves2half2(__float2half_rn(v0), __float2half_rn(v1));
-        reinterpret_cast<__half2*>(k_out)[pair] = k_h2;
-        reinterpret_cast<__half2*>(v_out)[pair] = v_h2;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        k_out[i0] = __float2half_rn(k0 * c - k1 * s);
+        k_out[i1] = __float2half_rn(k0 * s + k1 * c);
+        v_out[i0] = __float2half_rn(v_in[i0]);
+        v_out[i1] = __float2half_rn(v_in[i1]);
         if (pair == 0) {
+            seq_map[seq_id] = position + 1u;
+        }
+    }
+
+    __device__ __forceinline__ uint32_t representative_slot_for_policy(
+        uint32_t old_pos_in_block,
+        uint32_t block_size,
+        uint32_t representatives,
+        uint32_t representative_policy) {
+        if (representatives == 0) return 0xffffffffu;
+        if (representative_policy == 1u) {
+            const uint32_t slot = ((uint64_t)old_pos_in_block * (uint64_t)representatives) / (uint64_t)block_size;
+            return slot < representatives ? slot : representatives - 1u;
+        }
+        return old_pos_in_block % representatives;
+    }
+
+    __global__ void compressed_rope_k_append_f32_to_f16_kernel(
+        const float* __restrict__ k_in,
+        const float* __restrict__ v_in,
+        __half* __restrict__ recent_k,
+        __half* __restrict__ recent_v,
+        float* __restrict__ summary_k_acc,
+        float* __restrict__ summary_v_acc,
+        __half* __restrict__ summary_k,
+        __half* __restrict__ summary_v,
+        uint32_t* __restrict__ block_counts,
+        __half* __restrict__ rep_k,
+        __half* __restrict__ rep_v,
+        uint32_t* __restrict__ rep_positions,
+        uint32_t* __restrict__ seq_map,
+        uint32_t seq_id,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t max_blocks,
+        uint32_t representatives,
+        uint32_t representative_policy,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t position,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout,
+        size_t elems_per_token) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= elems_per_token) return;
+        const size_t recent_token = (size_t)position % (size_t)recent_window;
+        const size_t recent_base =
+            ((size_t)seq_id * (size_t)recent_window + recent_token) * elems_per_token;
+        const uint32_t dim = (uint32_t)(i % (size_t)head_dim);
+        const uint32_t head = (uint32_t)((i / (size_t)head_dim) % (size_t)num_heads);
+        const uint32_t half_dim = head_dim / 2u;
+        const uint32_t offset_in_head = rope_layout == M40LLM_ROPE_LAYOUT_NEOX
+            ? (dim % half_dim)
+            : (dim / 2u);
+        const float pos = static_cast<float>(position) * freq_scale;
+        const float theta = pos * powf(
+            freq_base,
+            -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
+        const float c = cosf(theta);
+        const float s = sinf(theta);
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t token_head_base =
+            (i / ((size_t)num_heads * (size_t)head_dim)) * ((size_t)num_heads * (size_t)head_dim);
+        i0 += token_head_base;
+        i1 += token_head_base;
+        const float k0 = k_in[i0];
+        const float k1 = k_in[i1];
+        const float rotated = i == i0
+            ? (k0 * c - k1 * s)
+            : (k0 * s + k1 * c);
+        const float v = v_in[i];
+
+        if (position >= recent_window) {
+            const uint32_t old_pos = position - recent_window;
+            const uint32_t block = old_pos / block_size;
+            if (block < max_blocks) {
+                const uint32_t count = (old_pos % block_size) + 1u;
+                const float old_k = __half2float(recent_k[recent_base + i]);
+                const float old_v = __half2float(recent_v[recent_base + i]);
+                const size_t summary_base =
+                    ((size_t)seq_id * (size_t)max_blocks + (size_t)block) * elems_per_token;
+                const float k_sum = summary_k_acc[summary_base + i] + old_k;
+                const float v_sum = summary_v_acc[summary_base + i] + old_v;
+                summary_k_acc[summary_base + i] = k_sum;
+                summary_v_acc[summary_base + i] = v_sum;
+                summary_k[summary_base + i] = __float2half_rn(k_sum / (float)count);
+                summary_v[summary_base + i] = __float2half_rn(v_sum / (float)count);
+                if (representatives > 0 && rep_k && rep_v && rep_positions) {
+                    const uint32_t within = old_pos % block_size;
+                    const uint32_t rep_slot = representative_slot_for_policy(
+                        within, block_size, representatives, representative_policy);
+                    if (rep_slot < representatives) {
+                        const size_t rep_base =
+                            (((size_t)seq_id * (size_t)max_blocks + (size_t)block)
+                                * (size_t)representatives + (size_t)rep_slot) * elems_per_token;
+                        rep_k[rep_base + i] = recent_k[recent_base + i];
+                        rep_v[rep_base + i] = recent_v[recent_base + i];
+                        if (i == 0) {
+                            rep_positions[((size_t)seq_id * (size_t)max_blocks + (size_t)block)
+                                * (size_t)representatives + (size_t)rep_slot] = old_pos;
+                        }
+                    }
+                }
+                if (i == 0) {
+                    block_counts[(size_t)seq_id * (size_t)max_blocks + (size_t)block] = count;
+                }
+            }
+        }
+
+        recent_k[recent_base + i] = __float2half_rn(rotated);
+        recent_v[recent_base + i] = __float2half_rn(v);
+        if (i == 0) {
             seq_map[seq_id] = position + 1u;
         }
     }
@@ -2630,6 +5906,44 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_kvcache_append_token_f32_rope_k_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+    int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         const uint32_t* position_dev,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout);
+
     int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx,
                                          M40llmKVCache* kv,
                                          uint32_t seq_id,
@@ -2654,6 +5968,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t past_len,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
@@ -2685,6 +6013,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             past_len,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -2708,7 +6037,26 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          uint32_t past_len,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         uint32_t past_len,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (kv->compressed) {
+            return m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(
+                ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, freq_base, freq_scale, rope_layout);
+        }
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
         if (kv->head_dim % 2 != 0) return -4;
@@ -2733,6 +6081,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             nullptr,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -2740,6 +6089,163 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -6;
         }
 
+        return 0;
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_compressed_at_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         float freq_base,
+                                         float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_compressed_at_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         uint32_t position,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
+        if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (!kv->compressed) return -2;
+        if (seq_id >= kv->max_batch_size) return -3;
+        if ((kv->head_dim != 64 && kv->head_dim != 128) || kv->num_heads == 0 || kv->recent_window == 0 || kv->block_size == 0) return -4;
+        if (position >= kv->max_seq_len) return -5;
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const int threads = 256;
+        if (kv->q8_old_backing && position >= kv->recent_window) {
+            quantize_evicted_recent_to_q8_old_head64_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_k,
+                kv->d_recent_v,
+                kv->d_q8_old_k,
+                kv->d_q8_old_v,
+                kv->d_q8_old_k_scale,
+                kv->d_q8_old_v_scale,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                seq_id,
+                position);
+            cudaError_t q8_err = cudaGetLastError();
+            if (q8_err != cudaSuccess) {
+                fprintf(stderr, "compressed q8 old append kernel launch error: %s\n", cudaGetErrorString(q8_err));
+                return -7;
+            }
+            if (kv->q4_old_v_backing) {
+                quantize_evicted_recent_v_to_q4_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                    kv->d_recent_v,
+                    kv->d_q4_old_v,
+                    kv->d_q4_old_v_scale,
+                    kv->max_seq_len,
+                    kv->recent_window,
+                    kv->num_heads,
+                    kv->head_dim,
+                    seq_id,
+                    position);
+                cudaError_t q4_err = cudaGetLastError();
+                if (q4_err != cudaSuccess) {
+                    fprintf(stderr, "compressed q4 old V append kernel launch error: %s\n", cudaGetErrorString(q4_err));
+                    return -9;
+                }
+            }
+        }
+        if (kv->fp16_k_q4_v_old_backing && position >= kv->recent_window) {
+            copy_evicted_recent_k_to_fp16_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_k,
+                kv->d_fp16_old_k,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                kv->head_dim,
+                seq_id,
+                position);
+            cudaError_t old_k_err = cudaGetLastError();
+            if (old_k_err != cudaSuccess) {
+                fprintf(stderr, "compressed fp16 old K append kernel launch error: %s\n", cudaGetErrorString(old_k_err));
+                return -10;
+            }
+            quantize_evicted_recent_v_to_q4_old_kernel<<<(int)kv->num_heads, 128, 0, ctx->decode_stream>>>(
+                kv->d_recent_v,
+                kv->d_q4_old_v,
+                kv->d_q4_old_v_scale,
+                kv->max_seq_len,
+                kv->recent_window,
+                kv->num_heads,
+                kv->head_dim,
+                seq_id,
+                position);
+            cudaError_t q4_err = cudaGetLastError();
+            if (q4_err != cudaSuccess) {
+                fprintf(stderr, "compressed fp16-k/q4-v old append kernel launch error: %s\n", cudaGetErrorString(q4_err));
+                return -11;
+            }
+        }
+        if (kv->d_k && kv->d_v) {
+            const size_t pairs_per_token = elems_per_token / 2u;
+            const int shadow_blocks = (int)((pairs_per_token + threads - 1) / threads);
+            rope_k_append_f32_to_f16_h2_at_kernel<<<shadow_blocks, threads, 0, ctx->decode_stream>>>(
+                reinterpret_cast<const float*>(k_dev_f32),
+                reinterpret_cast<const float*>(v_dev_f32),
+                kv->d_k,
+                kv->d_v,
+                kv->d_seq_map,
+                seq_id,
+                kv->max_seq_len,
+                kv->num_heads,
+                kv->head_dim,
+                position,
+                nullptr,
+                freq_base,
+                freq_scale,
+                rope_layout,
+                pairs_per_token);
+            cudaError_t shadow_err = cudaGetLastError();
+            if (shadow_err != cudaSuccess) {
+                fprintf(stderr, "compressed dense-shadow append kernel launch error: %s\n", cudaGetErrorString(shadow_err));
+                return -8;
+            }
+        }
+        const int blocks = (int)((elems_per_token + threads - 1) / threads);
+        compressed_rope_k_append_f32_to_f16_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            reinterpret_cast<const float*>(k_dev_f32),
+            reinterpret_cast<const float*>(v_dev_f32),
+            kv->d_recent_k,
+            kv->d_recent_v,
+            kv->d_summary_k_acc,
+            kv->d_summary_v_acc,
+            kv->d_summary_k,
+            kv->d_summary_v,
+            kv->d_block_counts,
+            kv->d_rep_k,
+            kv->d_rep_v,
+            kv->d_rep_positions,
+            kv->d_seq_map,
+            seq_id,
+            kv->recent_window,
+            kv->block_size,
+            kv->max_blocks,
+            kv->representatives,
+            kv->representative_policy,
+            kv->num_heads,
+            kv->head_dim,
+            position,
+            freq_base,
+            freq_scale,
+            rope_layout,
+            elems_per_token);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "compressed append kernel launch error: %s\n", cudaGetErrorString(err));
+            return -6;
+        }
         return 0;
     }
 
@@ -2751,6 +6257,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          const uint32_t* position_dev,
                                          float freq_base,
                                          float freq_scale) {
+        return m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
+            ctx, kv, seq_id, k_dev_f32, v_dev_f32, position_dev, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(M40llmCudaContext* ctx,
+                                         M40llmKVCache* kv,
+                                         uint32_t seq_id,
+                                         const void* k_dev_f32,
+                                         const void* v_dev_f32,
+                                         const uint32_t* position_dev,
+                                         float freq_base,
+                                         float freq_scale,
+                                         uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32 || !position_dev) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
@@ -2774,6 +6294,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             position_dev,
             freq_base,
             freq_scale,
+            rope_layout,
             pairs_per_token);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
@@ -2790,6 +6311,47 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const size_t seq_map_size = (size_t)kv->max_batch_size * sizeof(uint32_t);
         cudaError_t err = cudaMemsetAsync(kv->d_seq_map, 0, seq_map_size, ctx->decode_stream);
         if (err != cudaSuccess) return -3;
+        if (kv->compressed) {
+            const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+            const size_t recent_elems = (size_t)kv->max_batch_size * (size_t)kv->recent_window * elems_per_token;
+            const size_t summary_elems = (size_t)kv->max_batch_size * (size_t)kv->max_blocks * elems_per_token;
+            const size_t block_count_size = (size_t)kv->max_batch_size * (size_t)kv->max_blocks * sizeof(uint32_t);
+            const size_t rep_elems = (size_t)kv->max_batch_size * (size_t)kv->max_blocks * (size_t)kv->representatives * elems_per_token;
+            const size_t rep_position_size = (size_t)kv->max_batch_size * (size_t)kv->max_blocks * (size_t)kv->representatives * sizeof(uint32_t);
+            cudaMemsetAsync(kv->d_recent_k, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_recent_v, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_summary_k_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_summary_v_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_summary_k, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_summary_v, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(kv->d_block_counts, 0, block_count_size, ctx->decode_stream);
+            if (kv->representatives > 0) {
+                cudaMemsetAsync(kv->d_rep_k, 0, rep_elems * sizeof(__half), ctx->decode_stream);
+                cudaMemsetAsync(kv->d_rep_v, 0, rep_elems * sizeof(__half), ctx->decode_stream);
+                cudaMemsetAsync(kv->d_rep_positions, 0xff, rep_position_size, ctx->decode_stream);
+            }
+            if (kv->d_fp16_old_k) {
+                const size_t old_k_elems = kv_storage_elems(
+                    kv->max_seq_len,
+                    kv->max_batch_size,
+                    kv->num_heads,
+                    kv->head_dim);
+                cudaMemsetAsync(kv->d_fp16_old_k, 0, old_k_elems * sizeof(__half), ctx->decode_stream);
+            }
+            if (kv->d_q4_old_v) {
+                const size_t q4_elems = (size_t)kv->max_seq_len
+                    * (size_t)kv->max_batch_size
+                    * (size_t)kv->num_heads
+                    * (size_t)(kv->head_dim / 2u);
+                cudaMemsetAsync(kv->d_q4_old_v, 0, q4_elems * sizeof(uint8_t), ctx->decode_stream);
+            }
+            if (kv->d_q4_old_v_scale) {
+                const size_t q4_scales = (size_t)kv->max_seq_len
+                    * (size_t)kv->max_batch_size
+                    * (size_t)kv->num_heads;
+                cudaMemsetAsync(kv->d_q4_old_v_scale, 0, q4_scales * sizeof(float), ctx->decode_stream);
+            }
+        }
         err = cudaStreamSynchronize(ctx->decode_stream);
         if (err != cudaSuccess) return -4;
         return 0;
@@ -2816,11 +6378,875 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_kvcache_debug_read_compressed_state(M40llmCudaContext* ctx,
+                                                    M40llmKVCache* kv,
+                                                    uint32_t seq_id,
+                                                    uint32_t* out_seq_len,
+                                                    uint32_t* out_block_counts,
+                                                    void* out_recent_k_f16,
+                                                    void* out_recent_v_f16,
+                                                    float* out_summary_k_acc,
+                                                    float* out_summary_v_acc,
+                                                    void* out_summary_k_f16,
+                                                    void* out_summary_v_f16,
+                                                    void* out_rep_k_f16,
+                                                    void* out_rep_v_f16,
+                                                    uint32_t* out_rep_positions) {
+        (void)ctx;
+        if (!kv || !kv->compressed) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (!out_seq_len || !out_block_counts || !out_recent_k_f16 || !out_recent_v_f16 ||
+            !out_summary_k_acc || !out_summary_v_acc || !out_summary_k_f16 || !out_summary_v_f16) {
+            return -3;
+        }
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        const size_t recent_elems = (size_t)kv->recent_window * elems_per_token;
+        const size_t summary_elems = (size_t)kv->max_blocks * elems_per_token;
+        const size_t rep_elems = (size_t)kv->max_blocks * (size_t)kv->representatives * elems_per_token;
+        const size_t rep_positions = (size_t)kv->max_blocks * (size_t)kv->representatives;
+        cudaError_t err = cudaMemcpy(out_seq_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -4;
+        err = cudaMemcpy(out_block_counts,
+                         kv->d_block_counts + (size_t)seq_id * (size_t)kv->max_blocks,
+                         (size_t)kv->max_blocks * sizeof(uint32_t),
+                         cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -5;
+        const size_t recent_base = (size_t)seq_id * (size_t)kv->recent_window * elems_per_token;
+        err = cudaMemcpy(out_recent_k_f16, kv->d_recent_k + recent_base, recent_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -6;
+        err = cudaMemcpy(out_recent_v_f16, kv->d_recent_v + recent_base, recent_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -7;
+        const size_t summary_base = (size_t)seq_id * (size_t)kv->max_blocks * elems_per_token;
+        err = cudaMemcpy(out_summary_k_acc, kv->d_summary_k_acc + summary_base, summary_elems * sizeof(float), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -8;
+        err = cudaMemcpy(out_summary_v_acc, kv->d_summary_v_acc + summary_base, summary_elems * sizeof(float), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -9;
+        err = cudaMemcpy(out_summary_k_f16, kv->d_summary_k + summary_base, summary_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -10;
+        err = cudaMemcpy(out_summary_v_f16, kv->d_summary_v + summary_base, summary_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -11;
+        if (kv->representatives > 0) {
+            if (!out_rep_k_f16 || !out_rep_v_f16 || !out_rep_positions) return -12;
+            const size_t rep_base =
+                (size_t)seq_id * (size_t)kv->max_blocks * (size_t)kv->representatives * elems_per_token;
+            const size_t rep_pos_base =
+                (size_t)seq_id * (size_t)kv->max_blocks * (size_t)kv->representatives;
+            err = cudaMemcpy(out_rep_k_f16, kv->d_rep_k + rep_base, rep_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -13;
+            err = cudaMemcpy(out_rep_v_f16, kv->d_rep_v + rep_base, rep_elems * sizeof(__half), cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -14;
+            err = cudaMemcpy(out_rep_positions, kv->d_rep_positions + rep_pos_base, rep_positions * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -15;
+        }
+        return 0;
+    }
+
+    int m40llm_kvcache_debug_select_old_blocks(M40llmCudaContext* ctx,
+                                                const M40llmKVCache* kv,
+                                                uint32_t seq_id,
+                                                const void* q_dev_f32,
+                                                uint32_t q_heads,
+                                                uint32_t seq_len,
+                                                uint32_t recent_window,
+                                                  uint32_t block_size,
+                                                  uint32_t top_blocks,
+                                                  uint32_t* out_blocks_host,
+                                                  float* out_scores_host,
+                                                  uint32_t* out_start_host,
+                                                  uint32_t* out_end_host,
+                                                  uint32_t* out_count,
+                                                  uint32_t max_out,
+                                                  uint32_t* out_total_old_blocks) {
+        if (!ctx || !kv || !q_dev_f32 || !out_blocks_host || !out_scores_host ||
+            !out_start_host || !out_end_host || !out_count || !out_total_old_blocks) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim == 0) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len || block_size == 0 || max_out == 0) return -4;
+
+        const uint32_t effective_recent = kv->compressed ? kv->recent_window : recent_window;
+        const uint32_t effective_block = kv->compressed ? kv->block_size : block_size;
+        if (effective_recent == 0 || effective_block == 0) return -5;
+        const uint32_t old_len = seq_len > effective_recent ? seq_len - effective_recent : 0;
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + effective_block - 1) / effective_block;
+        *out_total_old_blocks = old_blocks;
+        *out_count = 0;
+        if (old_blocks == 0) return 0;
+
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -6;
+
+        const uint32_t head_dim = kv->head_dim;
+        const float scale = head_dim == 64u ? 0.125f : 0.08838834764831845f;
+        std::vector<float> q(head_dim);
+        err = cudaMemcpy(q.data(), q_dev_f32, q.size() * sizeof(float), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -7;
+
+        std::vector<std::pair<float, uint32_t>> scored;
+        scored.reserve(old_blocks);
+        const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
+        std::vector<__half> k_buf(head_dim);
+        const bool use_q8_old_host =
+            kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        const bool use_fp16_old_host =
+            kv->compressed && kv->fp16_k_q4_v_old_backing && kv->d_fp16_old_k;
+        std::vector<int8_t> q8_old_k_host;
+        std::vector<float> q8_old_k_scale_host;
+        std::vector<__half> fp16_old_k_host;
+        if (use_q8_old_host) {
+            q8_old_k_host.resize((size_t)old_len * elems_per_token);
+            q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
+            const size_t q8_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * (size_t)kv->num_heads;
+            err = cudaMemcpy(q8_old_k_host.data(),
+                             kv->d_q8_old_k + q8_base,
+                             q8_old_k_host.size() * sizeof(int8_t),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -10;
+            err = cudaMemcpy(q8_old_k_scale_host.data(),
+                             kv->d_q8_old_k_scale + scale_base,
+                             q8_old_k_scale_host.size() * sizeof(float),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -11;
+        }
+        if (use_fp16_old_host) {
+            fp16_old_k_host.resize((size_t)old_len * elems_per_token);
+            const size_t old_k_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            err = cudaMemcpy(fp16_old_k_host.data(),
+                             kv->d_fp16_old_k + old_k_base,
+                             fp16_old_k_host.size() * sizeof(__half),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -12;
+        }
+
+        for (uint32_t block = 0; block < old_blocks; ++block) {
+            float score = 0.0f;
+            if (use_q8_old_host || use_fp16_old_host) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                if (end <= start) continue;
+                for (uint32_t pos = start; pos < end; ++pos) {
+                    const size_t base = (size_t)pos * elems_per_token;
+                    for (uint32_t d = 0; d < head_dim; ++d) {
+                        const __half k = use_fp16_old_host
+                            ? fp16_old_k_host[base + d]
+                            : __float2half_rn(
+                                (float)q8_old_k_host[base + d]
+                                * q8_old_k_scale_host[(size_t)pos * (size_t)kv->num_heads]);
+                        score += q[d] * __half2float(k);
+                    }
+                }
+                score /= (float)(end - start);
+            } else if (kv->compressed) {
+                const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                err = cudaMemcpy(k_buf.data(), kv->d_summary_k + offset, k_buf.size() * sizeof(__half), cudaMemcpyDeviceToHost);
+                if (err != cudaSuccess) return -8;
+                for (uint32_t d = 0; d < head_dim; ++d) {
+                    score += q[d] * __half2float(k_buf[d]);
+                }
+            } else {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                std::vector<float> mean_k(head_dim, 0.0f);
+                for (uint32_t pos = start; pos < end; ++pos) {
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)pos) * elems_per_token;
+                    err = cudaMemcpy(k_buf.data(), kv->d_k + offset, k_buf.size() * sizeof(__half), cudaMemcpyDeviceToHost);
+                    if (err != cudaSuccess) return -9;
+                    for (uint32_t d = 0; d < head_dim; ++d) {
+                        mean_k[d] += __half2float(k_buf[d]);
+                    }
+                }
+                const float inv_count = 1.0f / (float)(end - start);
+                for (uint32_t d = 0; d < head_dim; ++d) {
+                    score += q[d] * (mean_k[d] * inv_count);
+                }
+            }
+            scored.emplace_back(score * scale, block);
+        }
+
+        std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+            if (a.first == b.first) return a.second < b.second;
+            return a.first > b.first;
+        });
+        const uint32_t requested = top_blocks == 0 ? old_blocks : std::min(top_blocks, old_blocks);
+        const uint32_t policy = block_select_policy_from_env();
+        const uint32_t policy_max = policy == 0u
+            ? requested
+            : std::min(block_max_blocks_from_env(64u), old_blocks);
+        const uint32_t capacity = std::min(std::min(policy_max, max_out), 64u);
+        const uint32_t base_count = std::min(requested, capacity);
+        const uint32_t min_take = std::min(std::max(block_min_blocks_from_env(), base_count), old_blocks);
+        const float best_score = scored.empty() ? -1e30f : scored[0].first;
+        const float score_delta = block_score_delta_from_env();
+        const uint64_t anchor_mask = anchor_blocks_from_env();
+        uint64_t force_include_low = 0ull, force_include_high = 0ull;
+        uint64_t force_exclude_low = 0ull, force_exclude_high = 0ull;
+        block_masks_from_env("M40LLM_KV_FORCE_INCLUDE_BLOCKS", &force_include_low, &force_include_high);
+        block_masks_from_env("M40LLM_KV_FORCE_EXCLUDE_BLOCKS", &force_exclude_low, &force_exclude_high);
+        std::vector<uint32_t> selected_blocks;
+        selected_blocks.reserve(capacity);
+        auto append_unique = [&](uint32_t block) {
+            if (block >= old_blocks || selected_blocks.size() >= capacity) return;
+            if (std::find(selected_blocks.begin(), selected_blocks.end(), block) == selected_blocks.end()) {
+                selected_blocks.push_back(block);
+            }
+        };
+        for (uint32_t i = 0; i < base_count; ++i) {
+            append_unique(scored[i].second);
+        }
+        if (policy == 1u || policy == 4u) {
+            const size_t snapshot = selected_blocks.size();
+            for (size_t i = 0; i < snapshot; ++i) {
+                const uint32_t block = selected_blocks[i];
+                if (block > 0u) append_unique(block - 1u);
+                append_unique(block + 1u);
+            }
+        }
+        if (policy == 2u) {
+            for (const auto& entry : scored) {
+                if (selected_blocks.size() < min_take || entry.first >= best_score - score_delta) {
+                    append_unique(entry.second);
+                }
+            }
+        }
+        if (policy == 6u || policy == 7u) {
+            const float cutoff = base_count > 0 && base_count <= scored.size()
+                ? scored[base_count - 1u].first - score_delta
+                : best_score;
+            for (const auto& entry : scored) {
+                if (entry.first >= cutoff) {
+                    append_unique(entry.second);
+                }
+            }
+        }
+        if (policy == 3u || policy == 4u) {
+            for (uint32_t block = 0; block < old_blocks && block < 64u; ++block) {
+                if ((anchor_mask & (1ull << block)) != 0ull) append_unique(block);
+            }
+        }
+        if (policy == 5u) {
+            for (uint32_t block = 0; block < old_blocks && block < 128u; ++block) {
+                if (block_mask_contains(force_include_low, force_include_high, block)) append_unique(block);
+            }
+        }
+        if (policy == 8u) {
+            selected_blocks.clear();
+            for (const auto& entry : scored) {
+                if (block_mask_contains(force_include_low, force_include_high, entry.second)) {
+                    append_unique(entry.second);
+                }
+            }
+        }
+        for (uint32_t i = 0; selected_blocks.size() < min_take && i < scored.size(); ++i) {
+            append_unique(scored[i].second);
+        }
+        if (policy == 5u) {
+            selected_blocks.erase(
+                std::remove_if(selected_blocks.begin(), selected_blocks.end(), [&](uint32_t block) {
+                    return block_mask_contains(force_exclude_low, force_exclude_high, block);
+                }),
+                selected_blocks.end());
+        }
+        if (selected_block_order_from_env() == 1u) {
+            std::sort(selected_blocks.begin(), selected_blocks.end());
+        } else if (selected_block_order_from_env() == 2u) {
+            std::sort(selected_blocks.begin(), selected_blocks.end(), std::greater<uint32_t>());
+        }
+        auto score_for_block = [&](uint32_t block) {
+            for (const auto& entry : scored) {
+                if (entry.second == block) return entry.first;
+            }
+            return -1e30f;
+        };
+        const uint32_t selected = (uint32_t)selected_blocks.size();
+        for (uint32_t i = 0; i < selected; ++i) {
+            const uint32_t block = selected_blocks[i];
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            out_blocks_host[i] = block;
+            out_scores_host[i] = score_for_block(block);
+            out_start_host[i] = start;
+            out_end_host[i] = end;
+        }
+        *out_count = selected;
+        return 0;
+    }
+
+    int m40llm_kvcache_debug_attention_telemetry(M40llmCudaContext* ctx,
+                                                  const M40llmKVCache* kv,
+                                                  uint32_t mode,
+                                                  uint32_t seq_id,
+                                                  const void* q_dev_f32,
+                                                  uint32_t q_heads,
+                                                  uint32_t seq_len,
+                                                  uint32_t recent_window,
+                                                  uint32_t block_size,
+                                                  uint32_t top_blocks,
+                                                  uint32_t needle_block,
+                                                  M40llmAttentionTelemetry* out) {
+        if (!ctx || !kv || !q_dev_f32 || !out) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (q_heads == 0 || kv->num_heads == 0 || kv->head_dim != 64) return -3;
+        if (seq_len == 0 || seq_len > kv->max_seq_len) return -4;
+
+        memset(out, 0, sizeof(M40llmAttentionTelemetry));
+        out->needle_block_mass = -1.0f;
+        for (uint32_t i = 0; i < 8; ++i) {
+            out->top_entries[i].block_index = 0xffffffffu;
+            out->top_entries[i].token_position = 0xffffffffu;
+        }
+        for (uint32_t i = 0; i < 64; ++i) {
+            out->selected_block_masses[i].block_index = 0xffffffffu;
+        }
+
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -5;
+
+        float q[64];
+        err = cudaMemcpy(q, q_dev_f32, sizeof(q), cudaMemcpyDeviceToHost);
+        if (err != cudaSuccess) return -6;
+
+        struct Candidate {
+            uint32_t group;
+            uint32_t block;
+            uint32_t token;
+            float score;
+            float prob;
+        };
+        std::vector<Candidate> candidates;
+        const uint32_t effective_recent = kv->compressed ? kv->recent_window : recent_window;
+        const uint32_t effective_block = kv->compressed ? kv->block_size : block_size;
+        if (effective_recent == 0 || effective_block == 0) return -7;
+        const uint32_t old_len = seq_len > effective_recent ? seq_len - effective_recent : 0;
+        const uint32_t recent_start = seq_len - (seq_len < effective_recent ? seq_len : effective_recent);
+        const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + effective_block - 1) / effective_block;
+        const uint32_t available_blocks = kv->compressed && old_blocks > kv->max_blocks ? kv->max_blocks : old_blocks;
+        const size_t elems_per_token = (size_t)kv->num_heads * 64u;
+        const float scale = 0.125f;
+        __half k_buf[64];
+        const bool use_q8_old_host =
+            kv->compressed && kv->q8_old_backing && kv->d_q8_old_k && kv->d_q8_old_k_scale;
+        const bool use_fp16_old_host =
+            kv->compressed && kv->fp16_k_q4_v_old_backing && kv->d_fp16_old_k;
+        std::vector<int8_t> q8_old_k_host;
+        std::vector<float> q8_old_k_scale_host;
+        std::vector<__half> fp16_old_k_host;
+        if (use_q8_old_host) {
+            q8_old_k_host.resize((size_t)old_len * elems_per_token);
+            q8_old_k_scale_host.resize((size_t)old_len * (size_t)kv->num_heads);
+            const size_t q8_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            const size_t scale_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * (size_t)kv->num_heads;
+            err = cudaMemcpy(q8_old_k_host.data(),
+                             kv->d_q8_old_k + q8_base,
+                             q8_old_k_host.size() * sizeof(int8_t),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -20;
+            err = cudaMemcpy(q8_old_k_scale_host.data(),
+                             kv->d_q8_old_k_scale + scale_base,
+                             q8_old_k_scale_host.size() * sizeof(float),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -21;
+        }
+        if (use_fp16_old_host) {
+            fp16_old_k_host.resize((size_t)old_len * elems_per_token);
+            const size_t old_k_base = ((size_t)seq_id * (size_t)kv->max_seq_len) * elems_per_token;
+            err = cudaMemcpy(fp16_old_k_host.data(),
+                             kv->d_fp16_old_k + old_k_base,
+                             fp16_old_k_host.size() * sizeof(__half),
+                             cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess) return -22;
+        }
+
+        auto dot_q = [&](const __half* ptr) -> float {
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) dot += q[d] * __half2float(ptr[d]);
+            return dot * scale;
+        };
+        auto dense_k_ptr = [&](uint32_t token) -> const __half* {
+            const size_t offset = ((size_t)seq_id * (size_t)kv->max_seq_len + (size_t)token) * elems_per_token;
+            return kv->d_k + offset;
+        };
+        auto recent_k_ptr = [&](uint32_t token) -> const __half* {
+            const uint32_t ring = token % kv->recent_window;
+            const size_t offset = ((size_t)seq_id * (size_t)kv->recent_window + (size_t)ring) * elems_per_token;
+            return kv->d_recent_k + offset;
+        };
+        auto copy_and_score = [&](const __half* dptr, float* score) -> int {
+            cudaError_t copy_err = cudaMemcpy(k_buf, dptr, sizeof(k_buf), cudaMemcpyDeviceToHost);
+            if (copy_err != cudaSuccess) return -1;
+            *score = dot_q(k_buf);
+            return 0;
+        };
+        auto score_q8_token = [&](uint32_t token, float* score) -> int {
+            if (!use_q8_old_host || token >= old_len) return -1;
+            const size_t base = (size_t)token * elems_per_token;
+            const float q8_scale = q8_old_k_scale_host[(size_t)token * (size_t)kv->num_heads];
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) {
+                const __half k = __float2half_rn(
+                    (float)q8_old_k_host[base + d] * q8_scale);
+                dot += q[d] * __half2float(k);
+            }
+            *score = dot * scale;
+            return 0;
+        };
+        auto score_q8_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            if (end <= start) return -1;
+            float sum = 0.0f;
+            for (uint32_t token = start; token < end; ++token) {
+                float token_score = 0.0f;
+                if (score_q8_token(token, &token_score) != 0) return -1;
+                sum += token_score;
+            }
+            *score = sum / (float)(end - start);
+            return 0;
+        };
+        auto score_fp16_old_token = [&](uint32_t token, float* score) -> int {
+            if (!use_fp16_old_host || token >= old_len) return -1;
+            const size_t base = (size_t)token * elems_per_token;
+            *score = dot_q(fp16_old_k_host.data() + base);
+            return 0;
+        };
+        auto score_fp16_old_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            if (end <= start) return -1;
+            float sum = 0.0f;
+            for (uint32_t token = start; token < end; ++token) {
+                float token_score = 0.0f;
+                if (score_fp16_old_token(token, &token_score) != 0) return -1;
+                sum += token_score;
+            }
+            *score = sum / (float)(end - start);
+            return 0;
+        };
+        auto score_dense_block_mean = [&](uint32_t block, float* score) -> int {
+            const uint32_t start = block * effective_block;
+            const uint32_t end = std::min(start + effective_block, old_len);
+            float mean_k[64] = {0.0f};
+            for (uint32_t token = start; token < end; ++token) {
+                cudaError_t copy_err = cudaMemcpy(k_buf, dense_k_ptr(token), sizeof(k_buf), cudaMemcpyDeviceToHost);
+                if (copy_err != cudaSuccess) return -1;
+                for (uint32_t d = 0; d < 64; ++d) mean_k[d] += __half2float(k_buf[d]);
+            }
+            const float inv = 1.0f / (float)(end - start);
+            float dot = 0.0f;
+            for (uint32_t d = 0; d < 64; ++d) dot += q[d] * mean_k[d] * inv;
+            *score = dot * scale;
+            return 0;
+        };
+        auto selected_blocks_by_score = [&](bool compressed_source, bool q8_source) -> std::vector<uint32_t> {
+            std::vector<std::pair<float, uint32_t>> scored;
+            for (uint32_t block = 0; block < available_blocks; ++block) {
+                if (q8_source && use_fp16_old_host) {
+                    float score = 0.0f;
+                    if (score_fp16_old_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else if (q8_source) {
+                    float score = 0.0f;
+                    if (score_q8_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else if (compressed_source) {
+                    const uint32_t count = kv->d_block_counts ? 1u : 0u;
+                    (void)count;
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                    float score = 0.0f;
+                    if (copy_and_score(kv->d_summary_k + offset, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                } else {
+                    float score = 0.0f;
+                    if (score_dense_block_mean(block, &score) != 0) continue;
+                    scored.emplace_back(score, block);
+                }
+            }
+            std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+                if (a.first == b.first) return a.second < b.second;
+                return a.first > b.first;
+            });
+            const uint32_t take = top_blocks == 0 || top_blocks > scored.size()
+                ? (uint32_t)scored.size()
+                : top_blocks;
+            std::vector<uint32_t> selected;
+            for (uint32_t i = 0; i < take; ++i) selected.push_back(scored[i].second);
+            if (selected_block_order_from_env() == 1u) {
+                std::sort(selected.begin(), selected.end());
+            } else if (selected_block_order_from_env() == 2u) {
+                std::sort(selected.begin(), selected.end(), std::greater<uint32_t>());
+            }
+            return selected;
+        };
+
+        if (mode == 1) {
+            if (!kv->d_k) return -8;
+            std::vector<uint32_t> selected = selected_blocks_by_score(false, false);
+            for (uint32_t block : selected) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                for (uint32_t token = start; token < end; ++token) {
+                    float score = 0.0f;
+                    if (copy_and_score(dense_k_ptr(token), &score) != 0) return -9;
+                    candidates.push_back({2u, block, token, score, 0.0f});
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(dense_k_ptr(token), &score) != 0) return -10;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
+        } else if (mode == 5) {
+            if (!kv->compressed || (!use_q8_old_host && !use_fp16_old_host)) return -17;
+            std::vector<uint32_t> selected = selected_blocks_by_score(false, true);
+            for (uint32_t block : selected) {
+                const uint32_t start = block * effective_block;
+                const uint32_t end = std::min(start + effective_block, old_len);
+                for (uint32_t token = start; token < end; ++token) {
+                    float score = 0.0f;
+                    if (use_fp16_old_host) {
+                        if (score_fp16_old_token(token, &score) != 0) return -18;
+                    } else if (score_q8_token(token, &score) != 0) {
+                        return -18;
+                    }
+                    candidates.push_back({2u, block, token, score, 0.0f});
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(recent_k_ptr(token), &score) != 0) return -19;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
+        } else {
+            if (!kv->compressed) return -11;
+            if (mode == 3 || mode == 4) {
+                const uint32_t selected_top = mode == 3 ? 0u : top_blocks;
+                const uint32_t saved_top = top_blocks;
+                top_blocks = selected_top;
+                std::vector<uint32_t> selected = selected_blocks_by_score(true, false);
+                top_blocks = saved_top;
+                for (uint32_t block : selected) {
+                    const size_t offset = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block) * elems_per_token;
+                    float score = 0.0f;
+                    if (copy_and_score(kv->d_summary_k + offset, &score) != 0) return -12;
+                    candidates.push_back({3u, block, 0xffffffffu, score, 0.0f});
+                    if (kv->representatives > 0 && kv->d_rep_k && kv->d_rep_positions) {
+                        for (uint32_t r = 0; r < kv->representatives; ++r) {
+                            const size_t pos_idx = ((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block)
+                                * (size_t)kv->representatives + (size_t)r;
+                            uint32_t rep_pos = 0xffffffffu;
+                            err = cudaMemcpy(&rep_pos, kv->d_rep_positions + pos_idx, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+                            if (err != cudaSuccess) return -13;
+                            if (rep_pos == 0xffffffffu) continue;
+                            const size_t rep_offset = (((size_t)seq_id * (size_t)kv->max_blocks + (size_t)block)
+                                * (size_t)kv->representatives + (size_t)r) * elems_per_token;
+                            if (copy_and_score(kv->d_rep_k + rep_offset, &score) != 0) return -14;
+                            candidates.push_back({4u, block, rep_pos, score, 0.0f});
+                        }
+                    }
+                }
+            }
+            for (uint32_t token = recent_start; token < seq_len; ++token) {
+                float score = 0.0f;
+                if (copy_and_score(recent_k_ptr(token), &score) != 0) return -15;
+                candidates.push_back({1u, 0xffffffffu, token, score, 0.0f});
+            }
+        }
+
+        if (candidates.empty()) return -16;
+        float max_score = -1e30f;
+        for (const Candidate& c : candidates) max_score = std::max(max_score, c.score);
+        float denom = 0.0f;
+        for (Candidate& c : candidates) {
+            c.prob = expf(c.score - max_score);
+            denom += c.prob;
+        }
+        if (denom <= 0.0f) denom = 1.0f;
+        for (Candidate& c : candidates) c.prob /= denom;
+
+        struct MutableStats {
+            float mass = 0.0f;
+            float max_logit = -1e30f;
+            float sum_logit = 0.0f;
+            uint32_t count = 0;
+        };
+        MutableStats stats[5];
+        std::vector<MutableStats> block_stats(available_blocks);
+        float needle_mass = 0.0f;
+        bool have_needle = needle_block != 0xffffffffu;
+        for (const Candidate& c : candidates) {
+            const uint32_t idx = c.group <= 4 ? c.group : 0;
+            stats[idx].mass += c.prob;
+            stats[idx].max_logit = std::max(stats[idx].max_logit, c.score);
+            stats[idx].sum_logit += c.score;
+            stats[idx].count++;
+            if (have_needle && c.block == needle_block) needle_mass += c.prob;
+            if (c.group == 2u && c.block < block_stats.size()) {
+                MutableStats& b = block_stats[c.block];
+                b.mass += c.prob;
+                b.max_logit = std::max(b.max_logit, c.score);
+                b.sum_logit += c.score;
+                b.count++;
+            }
+        }
+        auto finish = [](const MutableStats& s) -> M40llmAttentionGroupStats {
+            M40llmAttentionGroupStats out_stats;
+            out_stats.prob_mass = s.mass;
+            out_stats.logit_max = s.count ? s.max_logit : 0.0f;
+            out_stats.logit_mean = s.count ? s.sum_logit / (float)s.count : 0.0f;
+            out_stats.count = s.count;
+            return out_stats;
+        };
+        out->other = finish(stats[0]);
+        out->recent = finish(stats[1]);
+        out->selected_old_exact = finish(stats[2]);
+        out->summary = finish(stats[3]);
+        out->representatives = finish(stats[4]);
+        if (have_needle) out->needle_block_mass = needle_mass;
+        for (uint32_t block = 0;
+             block < block_stats.size() && out->selected_block_mass_count < 64;
+             ++block) {
+            const MutableStats& b = block_stats[block];
+            if (b.count == 0) continue;
+            M40llmAttentionBlockMass& dst =
+                out->selected_block_masses[out->selected_block_mass_count++];
+            dst.block_index = block;
+            dst.prob_mass = b.mass;
+            dst.logit_max = b.max_logit;
+            dst.logit_mean = b.sum_logit / (float)b.count;
+            dst.count = b.count;
+        }
+
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
+            if (a.prob == b.prob) return a.score > b.score;
+            return a.prob > b.prob;
+        });
+        out->top_entry_count = (uint32_t)std::min<size_t>(8, candidates.size());
+        for (uint32_t i = 0; i < out->top_entry_count; ++i) {
+            out->top_entries[i].group = candidates[i].group;
+            out->top_entries[i].block_index = candidates[i].block;
+            out->top_entries[i].token_position = candidates[i].token;
+            out->top_entries[i].score = candidates[i].score;
+            out->top_entries[i].probability = candidates[i].prob;
+        }
+        return 0;
+    }
+
+    __global__ void build_compressed_recent_from_dense_kernel(
+        const __half* __restrict__ dense_k,
+        const __half* __restrict__ dense_v,
+        __half* __restrict__ recent_k,
+        __half* __restrict__ recent_v,
+        uint32_t* __restrict__ seq_map,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t seq_len,
+        size_t elems_per_token,
+        size_t total) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= total) return;
+        const size_t recent_elems = (size_t)recent_window * elems_per_token;
+        const uint32_t seq = (uint32_t)(i / recent_elems);
+        const size_t rem = i % recent_elems;
+        const uint32_t recent_idx = (uint32_t)(rem / elems_per_token);
+        const size_t elem = rem % elems_per_token;
+        const uint32_t recent_count = seq_len < recent_window ? seq_len : recent_window;
+        if (recent_idx < recent_count) {
+            const uint32_t pos = seq_len - recent_count + recent_idx;
+            const uint32_t ring = pos % recent_window;
+            const size_t dst = ((size_t)seq * (size_t)recent_window + (size_t)ring) * elems_per_token + elem;
+            const size_t src = ((size_t)seq * (size_t)max_seq_len + (size_t)pos) * elems_per_token + elem;
+            recent_k[dst] = dense_k[src];
+            recent_v[dst] = dense_v[src];
+        }
+        if (rem == 0) {
+            seq_map[seq] = seq_len;
+        }
+    }
+
+    __global__ void build_compressed_summaries_from_dense_kernel(
+        const __half* __restrict__ dense_k,
+        const __half* __restrict__ dense_v,
+        float* __restrict__ summary_k_acc,
+        float* __restrict__ summary_v_acc,
+        __half* __restrict__ summary_k,
+        __half* __restrict__ summary_v,
+        uint32_t* __restrict__ block_counts,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t max_blocks,
+        uint32_t seq_len,
+        size_t elems_per_token,
+        size_t total) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= total) return;
+        const size_t summary_elems_per_seq = (size_t)max_blocks * elems_per_token;
+        const uint32_t seq = (uint32_t)(i / summary_elems_per_seq);
+        const size_t rem = i % summary_elems_per_seq;
+        const uint32_t block = (uint32_t)(rem / elems_per_token);
+        const size_t elem = rem % elems_per_token;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        if (block >= max_blocks || block * block_size >= old_len) return;
+        const uint32_t start = block * block_size;
+        const uint32_t end = min(start + block_size, old_len);
+        float k_sum = 0.0f;
+        float v_sum = 0.0f;
+        for (uint32_t pos = start; pos < end; ++pos) {
+            const size_t src = ((size_t)seq * (size_t)max_seq_len + (size_t)pos) * elems_per_token + elem;
+            k_sum += __half2float(dense_k[src]);
+            v_sum += __half2float(dense_v[src]);
+        }
+        const uint32_t count = end - start;
+        const size_t dst = ((size_t)seq * (size_t)max_blocks + (size_t)block) * elems_per_token + elem;
+        summary_k_acc[dst] = k_sum;
+        summary_v_acc[dst] = v_sum;
+        summary_k[dst] = __float2half_rn(k_sum / (float)count);
+        summary_v[dst] = __float2half_rn(v_sum / (float)count);
+        if (elem == 0) {
+            block_counts[(size_t)seq * (size_t)max_blocks + (size_t)block] = count;
+        }
+    }
+
+    __global__ void build_compressed_representatives_from_dense_kernel(
+        const __half* __restrict__ dense_k,
+        const __half* __restrict__ dense_v,
+        __half* __restrict__ rep_k,
+        __half* __restrict__ rep_v,
+        uint32_t* __restrict__ rep_positions,
+        uint32_t max_seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t max_blocks,
+        uint32_t representatives,
+        uint32_t representative_policy,
+        uint32_t seq_len,
+        size_t elems_per_token,
+        size_t total) {
+        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= total || representatives == 0) return;
+        const size_t rep_elems_per_seq = (size_t)max_blocks * (size_t)representatives * elems_per_token;
+        const uint32_t seq = (uint32_t)(i / rep_elems_per_seq);
+        const size_t rem = i % rep_elems_per_seq;
+        const uint32_t block = (uint32_t)(rem / ((size_t)representatives * elems_per_token));
+        const size_t block_rem = rem % ((size_t)representatives * elems_per_token);
+        const uint32_t rep_slot = (uint32_t)(block_rem / elems_per_token);
+        const size_t elem = block_rem % elems_per_token;
+        const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
+        if (block >= max_blocks || rep_slot >= representatives || block * block_size >= old_len) return;
+
+        const uint32_t start = block * block_size;
+        const uint32_t end = min(start + block_size, old_len);
+        const uint32_t count = end - start;
+        uint32_t old_pos = 0xffffffffu;
+        if (representative_policy == 1u) {
+            const uint32_t range_start = (uint32_t)(((uint64_t)rep_slot * (uint64_t)block_size + (uint64_t)representatives - 1ull) / (uint64_t)representatives);
+            const uint32_t range_end = min(block_size, (uint32_t)((((uint64_t)rep_slot + 1ull) * (uint64_t)block_size + (uint64_t)representatives - 1ull) / (uint64_t)representatives));
+            if (range_start < count) {
+                old_pos = start + min(count, range_end) - 1u;
+            }
+        } else {
+            if (rep_slot < count) {
+                const uint32_t last_with_slot =
+                    (count - 1u) - ((count - 1u + representatives - rep_slot) % representatives);
+                old_pos = start + last_with_slot;
+            }
+        }
+        const size_t rep_pos_idx = ((size_t)seq * (size_t)max_blocks + (size_t)block) * (size_t)representatives + (size_t)rep_slot;
+        if (old_pos == 0xffffffffu) {
+            if (elem == 0) rep_positions[rep_pos_idx] = 0xffffffffu;
+            return;
+        }
+        const size_t src = ((size_t)seq * (size_t)max_seq_len + (size_t)old_pos) * elems_per_token + elem;
+        const size_t dst = (((size_t)seq * (size_t)max_blocks + (size_t)block)
+            * (size_t)representatives + (size_t)rep_slot) * elems_per_token + elem;
+        rep_k[dst] = dense_k[src];
+        rep_v[dst] = dense_v[src];
+        if (elem == 0) {
+            rep_positions[rep_pos_idx] = old_pos;
+        }
+    }
+
+    int m40llm_kvcache_build_compressed_from_dense(M40llmCudaContext* ctx,
+                                                    M40llmKVCache* compressed,
+                                                    const M40llmKVCache* dense,
+                                                    uint32_t seq_len) {
+        if (!ctx || !compressed || !dense) return -1;
+        if (!compressed->compressed || dense->compressed) return -2;
+        if (compressed->max_batch_size != dense->max_batch_size ||
+            compressed->num_heads != dense->num_heads ||
+            compressed->head_dim != dense->head_dim) return -3;
+        if (seq_len > compressed->max_seq_len || seq_len > dense->max_seq_len) return -4;
+        const size_t elems_per_token = (size_t)compressed->num_heads * (size_t)compressed->head_dim;
+        const size_t recent_elems = (size_t)compressed->max_batch_size * (size_t)compressed->recent_window * elems_per_token;
+        const size_t summary_elems = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * elems_per_token;
+        const size_t rep_elems = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * (size_t)compressed->representatives * elems_per_token;
+        const size_t block_count_size = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * sizeof(uint32_t);
+        const size_t rep_position_size = (size_t)compressed->max_batch_size * (size_t)compressed->max_blocks * (size_t)compressed->representatives * sizeof(uint32_t);
+        cudaMemsetAsync(compressed->d_recent_k, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_recent_v, 0, recent_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_k_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_v_acc, 0, summary_elems * sizeof(float), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_k, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_summary_v, 0, summary_elems * sizeof(__half), ctx->decode_stream);
+        cudaMemsetAsync(compressed->d_block_counts, 0, block_count_size, ctx->decode_stream);
+        if (compressed->representatives > 0) {
+            cudaMemsetAsync(compressed->d_rep_k, 0, rep_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(compressed->d_rep_v, 0, rep_elems * sizeof(__half), ctx->decode_stream);
+            cudaMemsetAsync(compressed->d_rep_positions, 0xff, rep_position_size, ctx->decode_stream);
+        }
+        cudaMemsetAsync(compressed->d_seq_map, 0, (size_t)compressed->max_batch_size * sizeof(uint32_t), ctx->decode_stream);
+        const int threads = 256;
+        if (recent_elems > 0) {
+            const int blocks = (int)((recent_elems + threads - 1) / threads);
+            build_compressed_recent_from_dense_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+                dense->d_k, dense->d_v, compressed->d_recent_k, compressed->d_recent_v,
+                compressed->d_seq_map, dense->max_seq_len, compressed->recent_window,
+                seq_len, elems_per_token, recent_elems);
+        }
+        if (summary_elems > 0) {
+            const int blocks = (int)((summary_elems + threads - 1) / threads);
+            build_compressed_summaries_from_dense_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+                dense->d_k, dense->d_v, compressed->d_summary_k_acc, compressed->d_summary_v_acc,
+                compressed->d_summary_k, compressed->d_summary_v, compressed->d_block_counts,
+                dense->max_seq_len, compressed->recent_window, compressed->block_size,
+                compressed->max_blocks, seq_len, elems_per_token, summary_elems);
+        }
+        if (rep_elems > 0) {
+            const int blocks = (int)((rep_elems + threads - 1) / threads);
+            build_compressed_representatives_from_dense_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+                dense->d_k, dense->d_v, compressed->d_rep_k, compressed->d_rep_v,
+                compressed->d_rep_positions, dense->max_seq_len, compressed->recent_window,
+                compressed->block_size, compressed->max_blocks, compressed->representatives,
+                compressed->representative_policy, seq_len, elems_per_token, rep_elems);
+        }
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -5;
+        err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -6;
+        return 0;
+    }
+
     void m40llm_kvcache_destroy(M40llmKVCache* kv) {
         if (!kv) return;
         if (kv->d_k) cudaFree(kv->d_k);
         if (kv->d_v) cudaFree(kv->d_v);
         if (kv->d_seq_map) cudaFree(kv->d_seq_map);
+        if (kv->d_recent_k) cudaFree(kv->d_recent_k);
+        if (kv->d_recent_v) cudaFree(kv->d_recent_v);
+        if (kv->d_summary_k_acc) cudaFree(kv->d_summary_k_acc);
+        if (kv->d_summary_v_acc) cudaFree(kv->d_summary_v_acc);
+        if (kv->d_summary_k) cudaFree(kv->d_summary_k);
+        if (kv->d_summary_v) cudaFree(kv->d_summary_v);
+        if (kv->d_block_counts) cudaFree(kv->d_block_counts);
+        if (kv->d_rep_k) cudaFree(kv->d_rep_k);
+        if (kv->d_rep_v) cudaFree(kv->d_rep_v);
+        if (kv->d_rep_positions) cudaFree(kv->d_rep_positions);
+        if (kv->d_q8_old_k) cudaFree(kv->d_q8_old_k);
+        if (kv->d_q8_old_v) cudaFree(kv->d_q8_old_v);
+        if (kv->d_q8_old_k_scale) cudaFree(kv->d_q8_old_k_scale);
+        if (kv->d_q8_old_v_scale) cudaFree(kv->d_q8_old_v_scale);
+        if (kv->d_fp16_old_k) cudaFree(kv->d_fp16_old_k);
+        if (kv->d_q4_old_v) cudaFree(kv->d_q4_old_v);
+        if (kv->d_q4_old_v_scale) cudaFree(kv->d_q4_old_v_scale);
         delete kv;
     }
 
@@ -2832,7 +7258,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         uint32_t past_len,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
         const uint32_t total_pairs = rows * pairs_per_row;
@@ -2843,7 +7270,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
 
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
@@ -2851,15 +7281,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float c = cosf(theta);
         const float s = sinf(theta);
 
-        const float q0 = q[base];
-        const float q1 = q[base + 1];
-        q[base] = q0 * c - q1 * s;
-        q[base + 1] = q0 * s + q1 * c;
+        const float q0 = q[base + i0];
+        const float q1 = q[base + i1];
+        q[base + i0] = q0 * c - q1 * s;
+        q[base + i1] = q0 * s + q1 * c;
 
-        const float k0 = k[base];
-        const float k1 = k[base + 1];
-        k[base] = k0 * c - k1 * s;
-        k[base + 1] = k0 * s + k1 * c;
+        const float k0 = k[base + i0];
+        const float k1 = k[base + i1];
+        k[base + i0] = k0 * c - k1 * s;
+        k[base + i1] = k0 * s + k1 * c;
     }
 
     __global__ void rope_f32_inplace_kernel(
@@ -2869,7 +7299,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         uint32_t past_len,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
         const uint32_t total_pairs = rows * pairs_per_row;
@@ -2879,17 +7310,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t pair_in_row = pair_idx % pairs_per_row;
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float x0 = x[base];
-        const float x1 = x[base + 1];
-        x[base] = x0 * c - x1 * s;
-        x[base + 1] = x0 * s + x1 * c;
+        const float x0 = x[base + i0];
+        const float x1 = x[base + i1];
+        x[base + i0] = x0 * c - x1 * s;
+        x[base + i1] = x0 * s + x1 * c;
     }
 
     __global__ void rope_f32_inplace_position_dev_kernel(
@@ -2899,7 +7333,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t head_dim,
         const uint32_t* __restrict__ past_len_dev,
         float freq_base,
-        float freq_scale) {
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!past_len_dev) return;
         const uint32_t past_len = *past_len_dev;
         const uint32_t pair_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -2911,18 +7346,53 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t pair_in_row = pair_idx % pairs_per_row;
         const uint32_t head = pair_in_row / (head_dim / 2);
         const uint32_t offset_in_head = pair_in_row % (head_dim / 2);
-        const uint32_t base = row * num_heads * head_dim + head * head_dim + 2 * offset_in_head;
+        size_t i0 = 0;
+        size_t i1 = 0;
+        rope_pair_indices(head, offset_in_head, head_dim, rope_layout, &i0, &i1);
+        const size_t base = (size_t)row * (size_t)num_heads * (size_t)head_dim;
         const float pos = static_cast<float>(past_len + row) * freq_scale;
         const float theta = pos * powf(
             freq_base,
             -2.0f * static_cast<float>(offset_in_head) / static_cast<float>(head_dim));
         const float c = cosf(theta);
         const float s = sinf(theta);
-        const float x0 = x[base];
-        const float x1 = x[base + 1];
-        x[base] = x0 * c - x1 * s;
-        x[base + 1] = x0 * s + x1 * c;
+        const float x0 = x[base + i0];
+        const float x1 = x[base + i1];
+        x[base + i0] = x0 * c - x1 * s;
+        x[base + i1] = x0 * s + x1 * c;
     }
+
+    int m40llm_rope_f32_layout_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
+    int m40llm_rope_f32_inplace_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
+    int m40llm_rope_f32_inplace_position_dev_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout);
 
     int m40llm_rope_f32(
         M40llmCudaContext* ctx,
@@ -2951,6 +7421,22 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_layout_async(
+            ctx, q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_layout_async(
+        M40llmCudaContext* ctx,
+        float* q,
+        float* k,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !q || !k || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -2958,7 +7444,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+            q, k, rows, num_heads, head_dim, past_len, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;
@@ -2989,6 +7475,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t past_len,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_inplace_layout_async(
+            ctx, x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_inplace_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        uint32_t past_len,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !x || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -2996,7 +7497,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_inplace_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            x, rows, num_heads, head_dim, past_len, freq_base, freq_scale);
+            x, rows, num_heads, head_dim, past_len, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;
@@ -3011,6 +7512,21 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t* past_len_dev,
         float freq_base,
         float freq_scale) {
+        return m40llm_rope_f32_inplace_position_dev_layout_async(
+            ctx, x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale,
+            M40LLM_ROPE_LAYOUT_ADJACENT);
+    }
+
+    int m40llm_rope_f32_inplace_position_dev_layout_async(
+        M40llmCudaContext* ctx,
+        float* x,
+        uint32_t rows,
+        uint32_t num_heads,
+        uint32_t head_dim,
+        const uint32_t* past_len_dev,
+        float freq_base,
+        float freq_scale,
+        uint32_t rope_layout) {
         if (!ctx || !x || !past_len_dev || head_dim == 0 || num_heads == 0) return -1;
         if (head_dim % 2 != 0) return -2;
         const uint32_t pairs_per_row = (num_heads * head_dim) / 2;
@@ -3018,7 +7534,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int threads_per_block = 256;
         const int blocks = (total_pairs + threads_per_block - 1) / threads_per_block;
         rope_f32_inplace_position_dev_kernel<<<blocks, threads_per_block, 0, ctx->decode_stream>>>(
-            x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale);
+            x, rows, num_heads, head_dim, past_len_dev, freq_base, freq_scale, rope_layout);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;

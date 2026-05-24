@@ -162,6 +162,18 @@ impl LoadedModel {
             format!("layers.{layer}.attention.wv.weight"),
             format!("blk.{layer}.attn_v.weight"),
         ];
+        let bq_names = vec![
+            format!("layers.{layer}.attention.wq.bias"),
+            format!("blk.{layer}.attn_q.bias"),
+        ];
+        let bk_names = vec![
+            format!("layers.{layer}.attention.wk.bias"),
+            format!("blk.{layer}.attn_k.bias"),
+        ];
+        let bv_names = vec![
+            format!("layers.{layer}.attention.wv.bias"),
+            format!("blk.{layer}.attn_v.bias"),
+        ];
         let wo_names = vec![
             format!("layers.{layer}.attention.wo.weight"),
             format!("blk.{layer}.attn_output.weight"),
@@ -193,6 +205,9 @@ impl LoadedModel {
         let wq = self.find_tensor_any(&wq_names)?.clone();
         let wk = self.find_tensor_any(&wk_names)?.clone();
         let wv = self.find_tensor_any(&wv_names)?.clone();
+        let bq = self.find_tensor_any_optional(&bq_names);
+        let bk = self.find_tensor_any_optional(&bk_names);
+        let bv = self.find_tensor_any_optional(&bv_names);
         let wo = self.find_tensor_any(&wo_names)?.clone();
         let w_gate = self.find_tensor_any(&w_gate_names)?.clone();
         let w_up = self.find_tensor_any(&w_up_names)?.clone();
@@ -250,6 +265,23 @@ impl LoadedModel {
         if on != expect_no {
             anyhow::bail!("wo second dim {} != expected {}", on, expect_no);
         }
+        for (name, bias, expected) in [
+            ("bq", &bq, expect_nq),
+            ("bk", &bk, expect_nk),
+            ("bv", &bv, expect_nv),
+        ] {
+            if let Some(t) = bias {
+                if t.dtype != GgmlDType::F32 {
+                    anyhow::bail!("{name} expected F32 bias, got {:?}", t.dtype);
+                }
+                if t.shape.len() != 1 || t.shape[0] as usize != expected {
+                    anyhow::bail!(
+                        "{name} shape invalid: expected [{expected}], got {:?}",
+                        t.shape
+                    );
+                }
+            }
+        }
         // Infer hidden_dim from up/gate
         for (name, t) in [("w_gate", &w_gate), ("w_up", &w_up)] {
             let k = *t.shape.first().unwrap_or(&0) as usize;
@@ -305,6 +337,9 @@ impl LoadedModel {
             wq,
             wk,
             wv,
+            bq,
+            bk,
+            bv,
             wo,
             w_gate,
             w_up,
@@ -313,9 +348,11 @@ impl LoadedModel {
             ffn_norm,
         })
     }
-    /// Map the language modeling head (output projection) tensor if present.
+    /// Map the language modeling head (output projection) tensor.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
-    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings=false).
+    /// If absent, accepts tied F16 embeddings only when they already have the
+    /// same GGUF-native [d_model, vocab] layout expected by the projection path.
+    /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings).
     pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
         let candidates = vec![
@@ -348,8 +385,44 @@ impl LoadedModel {
             }
             return Ok((name, t.clone(), d_model, vocab, false));
         }
+        let embedding_candidates = vec![
+            "tok_embeddings.weight".to_string(),
+            "token_embd.weight".to_string(),
+            "token_embd".to_string(),
+            "token_embeddings.weight".to_string(),
+        ];
+        if let Ok(t) = self.find_tensor_any(&embedding_candidates) {
+            let name = embedding_candidates
+                .iter()
+                .find(|candidate| self.device_tensor(candidate).is_some())
+                .context("embedding tensor name not found after candidate match")?
+                .clone();
+            if t.dtype != GgmlDType::F16 {
+                anyhow::bail!(
+                    "tied lm_head requires F16 embeddings when output head is absent; tensor {name} has {:?}",
+                    t.dtype
+                );
+            }
+            if t.shape.len() != 2 {
+                anyhow::bail!(
+                    "tied lm_head embedding shape invalid: expected [d_model, vocab], got {:?}",
+                    t.shape
+                );
+            }
+            let d_model = self.model_config.embedding_length as usize;
+            let vocab = self.model_config.vocab_size as usize;
+            if t.shape[0] as usize != d_model || t.shape[1] as usize != vocab {
+                anyhow::bail!(
+                    "tied lm_head embedding layout unsupported: expected [d_model, vocab]=[{}, {}], got {:?}",
+                    d_model,
+                    vocab,
+                    t.shape
+                );
+            }
+            return Ok((name, t.clone(), d_model, vocab, true));
+        }
         anyhow::bail!(
-            "lm_head tensor not found; expected one of {}",
+            "output projection tensor not found; expected one of {} or tied F16 embeddings in [d_model, vocab] layout",
             candidates.join(", ")
         )
     }

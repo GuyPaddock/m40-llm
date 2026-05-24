@@ -2,6 +2,10 @@
 #![allow(clippy::uninlined_format_args)]
 
 #[cfg(feature = "cuda")]
+use crate::kv_selection::{
+    KvAttentionGroupStats, KvAttentionTelemetrySummary, KvAttentionTopEntry,
+};
+#[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
 use std::ffi::c_void;
@@ -17,6 +21,9 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
+pub const ROPE_LAYOUT_NEOX: u32 = 1;
+
 #[cfg(feature = "cuda")]
 mod ffi {
     use super::*;
@@ -31,6 +38,50 @@ mod ffi {
     #[repr(C)]
     pub struct M40llmCudaGraphExec {
         _private: [u8; 0],
+    }
+    #[repr(C)]
+    pub struct M40llmCudaEvent {
+        _private: [u8; 0],
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, Default)]
+    pub struct M40llmAttentionGroupStats {
+        pub prob_mass: f32,
+        pub logit_max: f32,
+        pub logit_mean: f32,
+        pub count: u32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionTopEntry {
+        pub group: u32,
+        pub block_index: u32,
+        pub token_position: u32,
+        pub score: f32,
+        pub probability: f32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionBlockMass {
+        pub block_index: u32,
+        pub prob_mass: f32,
+        pub logit_max: f32,
+        pub logit_mean: f32,
+        pub count: u32,
+    }
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy)]
+    pub struct M40llmAttentionTelemetry {
+        pub recent: M40llmAttentionGroupStats,
+        pub selected_old_exact: M40llmAttentionGroupStats,
+        pub summary: M40llmAttentionGroupStats,
+        pub representatives: M40llmAttentionGroupStats,
+        pub other: M40llmAttentionGroupStats,
+        pub needle_block_mass: f32,
+        pub selected_block_masses: [M40llmAttentionBlockMass; 64],
+        pub selected_block_mass_count: u32,
+        pub top_entries: [M40llmAttentionTopEntry; 8],
+        pub top_entry_count: u32,
     }
 
     extern "C" {
@@ -102,6 +153,22 @@ mod ffi {
             elapsed_ms: *mut f32,
         ) -> i32;
         pub fn m40llm_cuda_graph_destroy(graph: *mut M40llmCudaGraphExec);
+        pub fn m40llm_cuda_event_create(
+            ctx: *mut M40llmCudaContext,
+            out_event: *mut *mut M40llmCudaEvent,
+        ) -> i32;
+        pub fn m40llm_cuda_event_record(
+            ctx: *mut M40llmCudaContext,
+            event: *mut M40llmCudaEvent,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_event_elapsed_sync(
+            ctx: *mut M40llmCudaContext,
+            start: *mut M40llmCudaEvent,
+            stop: *mut M40llmCudaEvent,
+            elapsed_ms: *mut f32,
+        ) -> i32;
+        pub fn m40llm_cuda_event_destroy(event: *mut M40llmCudaEvent);
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -185,7 +252,7 @@ mod ffi {
             weight_dtype: u32,
         ) -> i32;
 
-        pub fn m40llm_rope_f32_async(
+        pub fn m40llm_rope_f32_layout_async(
             ctx: *mut M40llmCudaContext,
             d_q: *mut c_void,
             d_k: *mut c_void,
@@ -195,8 +262,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_rope_f32_inplace_async(
+        pub fn m40llm_rope_f32_inplace_layout_async(
             ctx: *mut M40llmCudaContext,
             d_x: *mut c_void,
             rows: u32,
@@ -205,8 +273,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_rope_f32_inplace_position_dev_async(
+        pub fn m40llm_rope_f32_inplace_position_dev_layout_async(
             ctx: *mut M40llmCudaContext,
             d_x: *mut c_void,
             rows: u32,
@@ -215,6 +284,7 @@ mod ffi {
             past_len_dev: *const u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
         pub fn m40llm_residual_add_f32_async(
             ctx: *mut M40llmCudaContext,
@@ -238,6 +308,19 @@ mod ffi {
             num_heads: u32,
             head_dim: u32,
         ) -> *mut M40llmKVCache;
+        pub fn m40llm_kvcache_create_compressed(
+            ctx: *mut M40llmCudaContext,
+            max_seq_len: u32,
+            max_batch_size: u32,
+            num_heads: u32,
+            head_dim: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            representatives: u32,
+            representative_policy: u32,
+            exact_old_backing: u32,
+        ) -> *mut M40llmKVCache;
         pub fn m40llm_kvcache_append_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -252,7 +335,7 @@ mod ffi {
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -261,8 +344,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_at_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -272,8 +356,9 @@ mod ffi {
             past_len: u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+        pub fn m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
@@ -282,6 +367,7 @@ mod ffi {
             position_dev: *const u32,
             freq_base: f32,
             freq_scale: f32,
+            rope_layout: u32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
@@ -291,6 +377,60 @@ mod ffi {
             token: u32,
             out_k_f16: *mut c_void,
             out_v_f16: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_kvcache_debug_read_compressed_state(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            out_seq_len: *mut u32,
+            out_block_counts: *mut u32,
+            out_recent_k_f16: *mut c_void,
+            out_recent_v_f16: *mut c_void,
+            out_summary_k_acc: *mut f32,
+            out_summary_v_acc: *mut f32,
+            out_summary_k_f16: *mut c_void,
+            out_summary_v_f16: *mut c_void,
+            out_rep_k_f16: *mut c_void,
+            out_rep_v_f16: *mut c_void,
+            out_rep_positions: *mut u32,
+        ) -> i32;
+        pub fn m40llm_kvcache_debug_select_old_blocks(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            out_blocks_host: *mut u32,
+            out_scores_host: *mut f32,
+            out_start_host: *mut u32,
+            out_end_host: *mut u32,
+            out_count: *mut u32,
+            max_out: u32,
+            out_total_old_blocks: *mut u32,
+        ) -> i32;
+        pub fn m40llm_kvcache_debug_attention_telemetry(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            mode: u32,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            needle_block: u32,
+            out: *mut M40llmAttentionTelemetry,
+        ) -> i32;
+        pub fn m40llm_kvcache_build_compressed_from_dense(
+            ctx: *mut M40llmCudaContext,
+            compressed: *mut M40llmKVCache,
+            dense: *const M40llmKVCache,
+            seq_len: u32,
         ) -> i32;
 
         pub fn m40llm_attention_last_token_f32(
@@ -319,6 +459,143 @@ mod ffi {
             d_seq_len: *const u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_dense_recent_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            staged_k_dev: *mut c_void,
+            staged_v_dev: *mut c_void,
+            staged_positions_dev: *mut c_void,
+            staged_counts_dev: *mut c_void,
+            staged_capacity_tokens: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_kvcache_build_q8_old_from_dense(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            seq_len: u32,
+            recent_window: u32,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            staged_k_dev: *mut c_void,
+            staged_v_dev: *mut c_void,
+            staged_positions_dev: *mut c_void,
+            staged_counts_dev: *mut c_void,
+            staged_capacity_tokens: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            staged_k_dev: *mut c_void,
+            staged_v_dev: *mut c_void,
+            staged_positions_dev: *mut c_void,
+            staged_counts_dev: *mut c_void,
+            staged_capacity_tokens: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_batched(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -339,7 +616,7 @@ mod ffi {
             q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
-        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64(
+        pub fn m40llm_attention_prefill_f32_gqa_varlen(
             ctx: *mut M40llmCudaContext,
             d_q_f32: *const c_void,
             d_k_f32: *const c_void,
@@ -351,9 +628,10 @@ mod ffi {
             batch_size: u32,
             q_heads: u32,
             kv_heads: u32,
+            head_dim: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
-        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_async(
             ctx: *mut M40llmCudaContext,
             d_q_f32: *const c_void,
             d_k_f32: *const c_void,
@@ -365,6 +643,7 @@ mod ffi {
             batch_size: u32,
             q_heads: u32,
             kv_heads: u32,
+            head_dim: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
 
@@ -522,10 +801,201 @@ impl DeviceBuffer {
 }
 
 #[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct ExactBlockStagingWorkspace {
+    q_heads: u32,
+    head_dim: u32,
+    capacity_tokens: u32,
+    staged_k: DeviceBuffer,
+    staged_v: DeviceBuffer,
+    staged_positions: DeviceBuffer,
+    staged_counts: DeviceBuffer,
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy)]
+pub struct ExactBlockStagingPtrs {
+    pub staged_k: *mut c_void,
+    pub staged_v: *mut c_void,
+    pub staged_positions: *mut c_void,
+    pub staged_counts: *mut c_void,
+    pub capacity_tokens: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExactOldBacking {
+    Dense,
+    Q8,
+    Fp16KQ4V,
+}
+
+impl ExactOldBacking {
+    pub fn from_env() -> Self {
+        match std::env::var("M40LLM_KV_EXACT_OLD_BACKING").ok().as_deref() {
+            Some("q8") | Some("Q8") => Self::Q8,
+            Some("fp16-k-q4-v") | Some("FP16-K-Q4-V") => Self::Fp16KQ4V,
+            _ => Self::Dense,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Dense => "dense",
+            Self::Q8 => "q8",
+            Self::Fp16KQ4V => "fp16-k-q4-v",
+        }
+    }
+
+    pub fn as_ffi(self) -> u32 {
+        match self {
+            Self::Dense => 0,
+            Self::Q8 => 1,
+            Self::Fp16KQ4V => 2,
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for ExactBlockStagingWorkspace {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for ExactBlockStagingWorkspace {}
+
+#[cfg(feature = "cuda")]
+impl ExactBlockStagingWorkspace {
+    pub fn new(
+        ctx: &CudaContext,
+        q_heads: u32,
+        head_dim: u32,
+        capacity_tokens: u32,
+    ) -> Result<Self> {
+        if q_heads == 0 || head_dim == 0 || capacity_tokens == 0 {
+            anyhow::bail!(
+                "ExactBlockStagingWorkspace invalid shape q_heads={q_heads} head_dim={head_dim} capacity_tokens={capacity_tokens}"
+            );
+        }
+        let elems = (q_heads as usize)
+            .checked_mul(capacity_tokens as usize)
+            .and_then(|v| v.checked_mul(head_dim as usize))
+            .ok_or_else(|| anyhow!("exact block staging element count overflow"))?;
+        let kv_bytes = elems
+            .checked_mul(std::mem::size_of::<half::f16>())
+            .ok_or_else(|| anyhow!("exact block staging K/V byte size overflow"))?;
+        let positions_bytes = (q_heads as usize)
+            .checked_mul(capacity_tokens as usize)
+            .and_then(|v| v.checked_mul(std::mem::size_of::<u32>()))
+            .ok_or_else(|| anyhow!("exact block staging positions byte size overflow"))?;
+        let counts_bytes = (q_heads as usize)
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or_else(|| anyhow!("exact block staging counts byte size overflow"))?;
+        Ok(Self {
+            q_heads,
+            head_dim,
+            capacity_tokens,
+            staged_k: DeviceBuffer::new_tagged(ctx, kv_bytes, "kv_staging:k_f16")?,
+            staged_v: DeviceBuffer::new_tagged(ctx, kv_bytes, "kv_staging:v_f16")?,
+            staged_positions: DeviceBuffer::new_tagged(
+                ctx,
+                positions_bytes,
+                "kv_staging:positions_u32",
+            )?,
+            staged_counts: DeviceBuffer::new_tagged(ctx, counts_bytes, "kv_staging:counts_u32")?,
+        })
+    }
+
+    pub fn ptrs(&self) -> ExactBlockStagingPtrs {
+        ExactBlockStagingPtrs {
+            staged_k: self.staged_k.as_mut_ptr(),
+            staged_v: self.staged_v.as_mut_ptr(),
+            staged_positions: self.staged_positions.as_mut_ptr(),
+            staged_counts: self.staged_counts.as_mut_ptr(),
+            capacity_tokens: self.capacity_tokens,
+        }
+    }
+
+    pub fn q_heads(&self) -> u32 {
+        self.q_heads
+    }
+
+    pub fn head_dim(&self) -> u32 {
+        self.head_dim
+    }
+
+    pub fn capacity_tokens(&self) -> u32 {
+        self.capacity_tokens
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.staged_k.bytes()
+            + self.staged_v.bytes()
+            + self.staged_positions.bytes()
+            + self.staged_counts.bytes()
+    }
+}
+
+#[cfg(feature = "cuda")]
 impl Drop for DeviceBuffer {
     fn drop(&mut self) {
         unsafe {
             let _ = self.ctx.device_free(self.ptr.as_ptr());
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct CudaEvent {
+    ctx: CudaContext,
+    raw: NonNull<ffi::M40llmCudaEvent>,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for CudaEvent {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for CudaEvent {}
+
+#[cfg(feature = "cuda")]
+impl CudaEvent {
+    pub fn record(&self, stream: CudaStream) -> Result<()> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_record(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_event_record failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    pub fn elapsed_sync(&self, stop: &CudaEvent, op: &'static str) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_cuda_event_elapsed_sync failed for {op}: {rc}"
+            ));
+        }
+        crate::profile::record_stream_sync(op);
+        Ok(elapsed_ms)
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for CudaEvent {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::m40llm_cuda_event_destroy(self.raw.as_ptr());
         }
     }
 }
@@ -803,6 +1273,24 @@ impl CudaContext {
             let _ = (waiting, signal, op);
             Ok(())
         }
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn create_event(&self) -> Result<CudaEvent> {
+        let _g = self.inner.lock.lock().unwrap();
+        let mut out: *mut ffi::M40llmCudaEvent = std::ptr::null_mut();
+        let rc =
+            unsafe { ffi::m40llm_cuda_event_create(self.inner.raw.as_ptr(), &mut out as *mut _) };
+        if rc != 0 || out.is_null() {
+            return Err(anyhow!(
+                "m40llm_cuda_event_create failed: rc={rc}, out_null={}",
+                out.is_null()
+            ));
+        }
+        Ok(CudaEvent {
+            ctx: self.clone(),
+            raw: NonNull::new(out).ok_or_else(|| anyhow!("CUDA event create returned null"))?,
+        })
     }
 
     pub fn capture_graph(
@@ -1132,6 +1620,65 @@ impl CudaContext {
         {
             let _g = self.inner.lock.lock().unwrap();
             let _ = (max_seq_len, max_batch_size, num_heads, head_dim);
+            Ok(std::ptr::null_mut())
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_compressed_kvcache(
+        &self,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        representatives: u32,
+        representative_policy: crate::kv_compression::KvRepresentativePolicy,
+        exact_old_backing: ExactOldBacking,
+    ) -> Result<*mut ffi::M40llmKVCache> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let kv = unsafe {
+                ffi::m40llm_kvcache_create_compressed(
+                    self.inner.raw.as_ptr(),
+                    max_seq_len,
+                    max_batch_size,
+                    num_heads,
+                    head_dim,
+                    recent_window,
+                    block_size,
+                    top_blocks,
+                    representatives,
+                    representative_policy.as_ffi(),
+                    exact_old_backing.as_ffi(),
+                )
+            };
+            if kv.is_null() {
+                return Err(anyhow::anyhow!(
+                    "m40llm_kvcache_create_compressed returned null"
+                ));
+            }
+            Ok(kv)
+        }
+
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let _ = (
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+                representative_policy,
+                exact_old_backing,
+            );
             Ok(std::ptr::null_mut())
         }
     }
@@ -1515,10 +2062,10 @@ impl CudaContext {
     }
 
     /// # Safety
-    /// Packed buffers must use [total_tokens, heads, 64] row-major f32 layout.
+    /// Packed buffers must use [total_tokens, heads, head_dim] row-major f32 layout.
     /// Offset/lens arrays must contain `batch_size` u32 entries.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn attention_prefill_f32_gqa_varlen_head64(
+    pub unsafe fn attention_prefill_f32_gqa_varlen(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -1530,12 +2077,13 @@ impl CudaContext {
         batch_size: u32,
         q_heads: u32,
         kv_heads: u32,
+        head_dim: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64(
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen(
                 self.inner.raw.as_ptr(),
                 d_q_f32,
                 d_k_f32,
@@ -1547,14 +2095,15 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_attention_prefill_f32_gqa_varlen_head64 failed: {rc}"
+                    "m40llm_attention_prefill_f32_gqa_varlen failed: {rc}"
                 ));
             }
-            record_sync_kernel("attention_prefill_f32_gqa_varlen_head64");
+            record_sync_kernel("attention_prefill_f32_gqa_varlen");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1570,6 +2119,7 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             Ok(())
@@ -1581,7 +2131,7 @@ impl CudaContext {
     /// launch validation. Call `synchronize_stream(CudaStream::Prefill)` before
     /// reading `d_out_f32` or reusing input/output buffers.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn attention_prefill_f32_gqa_varlen_head64_async(
+    pub unsafe fn attention_prefill_f32_gqa_varlen_async(
         &self,
         d_q_f32: *const c_void,
         d_k_f32: *const c_void,
@@ -1593,12 +2143,13 @@ impl CudaContext {
         batch_size: u32,
         q_heads: u32,
         kv_heads: u32,
+        head_dim: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_async(
                 self.inner.raw.as_ptr(),
                 d_q_f32,
                 d_k_f32,
@@ -1610,14 +2161,15 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_attention_prefill_f32_gqa_varlen_head64_async failed: {rc}"
+                    "m40llm_attention_prefill_f32_gqa_varlen_async failed: {rc}"
                 ));
             }
-            record_async_kernel("attention_prefill_f32_gqa_varlen_head64");
+            record_async_kernel("attention_prefill_f32_gqa_varlen");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1633,6 +2185,7 @@ impl CudaContext {
                 batch_size,
                 q_heads,
                 kv_heads,
+                head_dim,
                 d_out_f32,
             );
             Ok(())
@@ -1800,10 +2353,42 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_layout_async(
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues RoPE with an explicit layout. `rope_layout` is
+    /// `ROPE_LAYOUT_ADJACENT` for GGUF-permuted adjacent pairs or
+    /// `ROPE_LAYOUT_NEOX` for split-half rotary pairs.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_layout_async(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_async(
+            let rc = ffi::m40llm_rope_f32_layout_async(
                 self.inner.raw.as_ptr(),
                 d_q,
                 d_k,
@@ -1813,9 +2398,10 @@ impl CudaContext {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32_async failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_layout_async failed: {rc}"));
             }
             record_async_kernel("rope_f32");
             Ok(())
@@ -1823,7 +2409,15 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (
-                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+                d_q,
+                d_k,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -1869,10 +2463,38 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_inplace_layout_async(
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE with an explicit rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_inplace_layout_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_inplace_async(
+            let rc = ffi::m40llm_rope_f32_inplace_layout_async(
                 self.inner.raw.as_ptr(),
                 d_x,
                 rows,
@@ -1881,9 +2503,10 @@ impl CudaContext {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32_inplace_async failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_inplace_layout_async failed: {rc}"));
             }
             record_async_kernel("rope_f32_inplace");
             Ok(())
@@ -1891,7 +2514,14 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (
-                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len,
+                freq_base,
+                freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -1910,10 +2540,39 @@ impl CudaContext {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.rope_f32_inplace_position_dev_layout_async(
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE with a device-resident position and explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn rope_f32_inplace_position_dev_layout_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_inplace_position_dev_async(
+            let rc = ffi::m40llm_rope_f32_inplace_position_dev_layout_async(
                 self.inner.raw.as_ptr(),
                 d_x,
                 rows,
@@ -1922,10 +2581,11 @@ impl CudaContext {
                 past_len_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             if rc != 0 {
                 return Err(anyhow!(
-                    "m40llm_rope_f32_inplace_position_dev_async failed: {rc}"
+                    "m40llm_rope_f32_inplace_position_dev_layout_async failed: {rc}"
                 ));
             }
             record_async_kernel("rope_f32_inplace_position_dev");
@@ -1941,6 +2601,7 @@ impl CudaContext {
                 past_len_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             );
             Ok(())
         }
@@ -2200,9 +2861,50 @@ impl Drop for CudaContextInner {
     }
 }
 
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompressedKvDebugSnapshot {
+    pub seq_len: u32,
+    pub recent_window: u32,
+    pub block_size: u32,
+    pub max_blocks: u32,
+    pub representatives: u32,
+    pub block_counts: Vec<u32>,
+    pub recent_k_f16: Vec<u16>,
+    pub recent_v_f16: Vec<u16>,
+    pub summary_k_acc: Vec<f32>,
+    pub summary_v_acc: Vec<f32>,
+    pub summary_k_f16: Vec<u16>,
+    pub summary_v_f16: Vec<u16>,
+    pub rep_k_f16: Vec<u16>,
+    pub rep_v_f16: Vec<u16>,
+    pub rep_positions: Vec<u32>,
+}
+
 #[derive(Debug, Clone)]
 pub struct KVCache {
     inner: Arc<KVCacheInner>,
+}
+
+#[cfg(feature = "cuda")]
+fn convert_group(raw: ffi::M40llmAttentionGroupStats) -> KvAttentionGroupStats {
+    KvAttentionGroupStats {
+        prob_mass: raw.prob_mass,
+        logit_max: raw.logit_max,
+        logit_mean: raw.logit_mean,
+        count: raw.count,
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn attention_group_name(group: u32) -> &'static str {
+    match group {
+        1 => "recent",
+        2 => "selected_old_exact",
+        3 => "summary",
+        4 => "representative",
+        _ => "other",
+    }
 }
 
 impl KVCache {
@@ -2217,6 +2919,284 @@ impl KVCache {
     }
     pub fn max_seq_len(&self) -> u32 {
         self.inner.max_seq_len
+    }
+    pub fn is_compressed(&self) -> bool {
+        self.inner.compressed
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn debug_compressed_snapshot(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+    ) -> Result<CompressedKvDebugSnapshot> {
+        if !self.inner.compressed {
+            anyhow::bail!("debug_compressed_snapshot requires compressed KV cache");
+        }
+        if seq_id >= self.inner.max_batch_size {
+            anyhow::bail!(
+                "debug_compressed_snapshot seq_id {seq_id} >= max_batch_size {}",
+                self.inner.max_batch_size
+            );
+        }
+        let elems_per_token = self.elems_per_token();
+        let recent_elems = (self.inner.recent_window as usize) * elems_per_token;
+        let summary_elems = (self.inner.max_blocks as usize) * elems_per_token;
+        let rep_elems = (self.inner.max_blocks as usize)
+            * (self.inner.representatives as usize)
+            * elems_per_token;
+        let rep_slots = (self.inner.max_blocks as usize) * (self.inner.representatives as usize);
+        let mut snapshot = CompressedKvDebugSnapshot {
+            seq_len: 0,
+            recent_window: self.inner.recent_window,
+            block_size: self.inner.block_size,
+            max_blocks: self.inner.max_blocks,
+            representatives: self.inner.representatives,
+            block_counts: vec![0; self.inner.max_blocks as usize],
+            recent_k_f16: vec![0; recent_elems],
+            recent_v_f16: vec![0; recent_elems],
+            summary_k_acc: vec![0.0; summary_elems],
+            summary_v_acc: vec![0.0; summary_elems],
+            summary_k_f16: vec![0; summary_elems],
+            summary_v_f16: vec![0; summary_elems],
+            rep_k_f16: vec![0; rep_elems],
+            rep_v_f16: vec![0; rep_elems],
+            rep_positions: vec![0; rep_slots],
+        };
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_read_compressed_state(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                &mut snapshot.seq_len as *mut u32,
+                snapshot.block_counts.as_mut_ptr(),
+                snapshot.recent_k_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.recent_v_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.summary_k_acc.as_mut_ptr(),
+                snapshot.summary_v_acc.as_mut_ptr(),
+                snapshot.summary_k_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.summary_v_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.rep_k_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.rep_v_f16.as_mut_ptr().cast::<c_void>(),
+                snapshot.rep_positions.as_mut_ptr(),
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_read_compressed_state failed: {rc}");
+        }
+        Ok(snapshot)
+    }
+
+    #[cfg(feature = "cuda")]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn debug_select_old_blocks(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+    ) -> Result<(Vec<crate::kv_selection::KvSelectedBlock>, u32)> {
+        const MAX_BLOCKS: u32 = 2048;
+        let mut blocks = vec![0u32; MAX_BLOCKS as usize];
+        let mut scores = vec![0f32; MAX_BLOCKS as usize];
+        let mut starts = vec![0u32; MAX_BLOCKS as usize];
+        let mut ends = vec![0u32; MAX_BLOCKS as usize];
+        let mut count = 0u32;
+        let mut total_old_blocks = 0u32;
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_select_old_blocks(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                blocks.as_mut_ptr(),
+                scores.as_mut_ptr(),
+                starts.as_mut_ptr(),
+                ends.as_mut_ptr(),
+                &mut count as *mut u32,
+                MAX_BLOCKS,
+                &mut total_old_blocks as *mut u32,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_select_old_blocks failed: {rc}");
+        }
+        let selected = (0..count as usize)
+            .map(|idx| crate::kv_selection::KvSelectedBlock {
+                rank: idx as u32,
+                block_index: blocks[idx],
+                score: scores[idx],
+                absolute_start: starts[idx],
+                absolute_end: ends[idx],
+            })
+            .collect();
+        Ok((selected, total_old_blocks))
+    }
+
+    #[cfg(feature = "cuda")]
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn debug_attention_telemetry(
+        &self,
+        ctx: &CudaContext,
+        mode: u32,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        needle_block: Option<u32>,
+    ) -> Result<KvAttentionTelemetrySummary> {
+        let empty_entry = ffi::M40llmAttentionTopEntry {
+            group: 0,
+            block_index: u32::MAX,
+            token_position: u32::MAX,
+            score: 0.0,
+            probability: 0.0,
+        };
+        let empty_block_mass = ffi::M40llmAttentionBlockMass {
+            block_index: u32::MAX,
+            prob_mass: 0.0,
+            logit_max: 0.0,
+            logit_mean: 0.0,
+            count: 0,
+        };
+        let mut raw = ffi::M40llmAttentionTelemetry {
+            recent: ffi::M40llmAttentionGroupStats::default(),
+            selected_old_exact: ffi::M40llmAttentionGroupStats::default(),
+            summary: ffi::M40llmAttentionGroupStats::default(),
+            representatives: ffi::M40llmAttentionGroupStats::default(),
+            other: ffi::M40llmAttentionGroupStats::default(),
+            needle_block_mass: -1.0,
+            selected_block_masses: [empty_block_mass; 64],
+            selected_block_mass_count: 0,
+            top_entries: [empty_entry; 8],
+            top_entry_count: 0,
+        };
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_attention_telemetry(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                mode,
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                needle_block.unwrap_or(u32::MAX),
+                &mut raw as *mut ffi::M40llmAttentionTelemetry,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_debug_attention_telemetry failed: {rc}");
+        }
+        let top_entry_count = raw.top_entry_count.min(raw.top_entries.len() as u32) as usize;
+        Ok(KvAttentionTelemetrySummary {
+            recent: convert_group(raw.recent),
+            selected_old_exact: convert_group(raw.selected_old_exact),
+            summary: convert_group(raw.summary),
+            representatives: convert_group(raw.representatives),
+            other: convert_group(raw.other),
+            needle_block_mass: (raw.needle_block_mass >= 0.0).then_some(raw.needle_block_mass),
+            selected_block_masses: raw.selected_block_masses
+                [..raw.selected_block_mass_count.min(64) as usize]
+                .iter()
+                .filter(|mass| mass.block_index != u32::MAX)
+                .map(|mass| crate::kv_selection::KvAttentionBlockMass {
+                    block_index: mass.block_index,
+                    prob_mass: mass.prob_mass,
+                    logit_max: mass.logit_max,
+                    logit_mean: mass.logit_mean,
+                    count: mass.count,
+                })
+                .collect(),
+            top_entries: raw.top_entries[..top_entry_count]
+                .iter()
+                .map(|entry| KvAttentionTopEntry {
+                    group: attention_group_name(entry.group).to_string(),
+                    block_index: (entry.block_index != u32::MAX).then_some(entry.block_index),
+                    token_position: (entry.token_position != u32::MAX)
+                        .then_some(entry.token_position),
+                    score: entry.score,
+                    probability: entry.probability,
+                })
+                .collect(),
+        })
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn build_compressed_from_dense(
+        &self,
+        ctx: &CudaContext,
+        dense: &KVCache,
+        seq_len: u32,
+    ) -> Result<()> {
+        if !self.inner.compressed {
+            anyhow::bail!("build_compressed_from_dense target must be compressed");
+        }
+        if dense.inner.compressed {
+            anyhow::bail!("build_compressed_from_dense source must be dense");
+        }
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_build_compressed_from_dense(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                dense.inner.raw.as_ptr(),
+                seq_len,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_build_compressed_from_dense failed: {rc}");
+        }
+        record_sync_kernel("kvcache_build_compressed_from_dense");
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn build_q8_old_from_dense(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        seq_len: u32,
+        recent_window: u32,
+    ) -> Result<()> {
+        if self.inner.compressed {
+            anyhow::bail!("build_q8_old_from_dense requires a dense KV cache");
+        }
+        if self.inner.exact_old_backing != "q8" {
+            anyhow::bail!("build_q8_old_from_dense requires M40LLM_KV_EXACT_OLD_BACKING=q8");
+        }
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_build_q8_old_from_dense(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                seq_len,
+                recent_window,
+            )
+        };
+        if rc != 0 {
+            anyhow::bail!("m40llm_kvcache_build_q8_old_from_dense failed: {rc}");
+        }
+        record_async_kernel("kvcache_build_q8_old_from_dense");
+        Ok(())
     }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
@@ -2245,6 +3225,7 @@ impl KVCache {
 }
 
 #[derive(Debug)]
+#[cfg_attr(not(feature = "cuda"), allow(dead_code))]
 struct KVCacheInner {
     // Layout: [seq][token][head][head_dim]
     // - seq in [0, max_batch_size)
@@ -2260,6 +3241,21 @@ struct KVCacheInner {
     max_batch_size: u32,
     num_heads: u32,
     head_dim: u32,
+    compressed: bool,
+    recent_window: u32,
+    block_size: u32,
+    max_blocks: u32,
+    representatives: u32,
+    exact_old_backing: String,
+    q8_old_backing_bytes: usize,
+    q8_old_backing_scale_bytes: usize,
+    old_k_fp16_bytes: usize,
+    q4_old_v_payload_bytes: usize,
+    q4_old_v_scale_bytes: usize,
+    recent_fp16_bytes: usize,
+    summary_index_bytes: usize,
+    actual_bytes: usize,
+    dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
     raw: NonNull<ffi::M40llmKVCache>,
     #[cfg(not(feature = "cuda"))]
@@ -2292,6 +3288,31 @@ impl KVCache {
                     max_batch_size,
                     num_heads,
                     head_dim,
+                    compressed: false,
+                    recent_window: 0,
+                    block_size: 0,
+                    max_blocks: 0,
+                    representatives: 0,
+                    exact_old_backing: ExactOldBacking::Dense.as_str().to_string(),
+                    q8_old_backing_bytes: 0,
+                    q8_old_backing_scale_bytes: 0,
+                    old_k_fp16_bytes: 0,
+                    q4_old_v_payload_bytes: 0,
+                    q4_old_v_scale_bytes: 0,
+                    recent_fp16_bytes: 0,
+                    summary_index_bytes: 0,
+                    actual_bytes: (max_seq_len as usize)
+                        * (max_batch_size as usize)
+                        * (num_heads as usize)
+                        * (head_dim as usize)
+                        * std::mem::size_of::<half::f16>()
+                        * 2,
+                    dense_equivalent_bytes: (max_seq_len as usize)
+                        * (max_batch_size as usize)
+                        * (num_heads as usize)
+                        * (head_dim as usize)
+                        * std::mem::size_of::<half::f16>()
+                        * 2,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
@@ -2314,6 +3335,21 @@ impl KVCache {
                     max_batch_size,
                     num_heads,
                     head_dim,
+                    compressed: false,
+                    recent_window: 0,
+                    block_size: 0,
+                    max_blocks: 0,
+                    representatives: 0,
+                    exact_old_backing: "dense".to_string(),
+                    q8_old_backing_bytes: 0,
+                    q8_old_backing_scale_bytes: 0,
+                    old_k_fp16_bytes: 0,
+                    q4_old_v_payload_bytes: 0,
+                    q4_old_v_scale_bytes: 0,
+                    recent_fp16_bytes: 0,
+                    summary_index_bytes: 0,
+                    actual_bytes: cap * std::mem::size_of::<half::f16>() * 2,
+                    dense_equivalent_bytes: cap * std::mem::size_of::<half::f16>() * 2,
                     k: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
                     v: Mutex::new(vec![half::f16::from_f32(0.0); cap]),
                     len_by_seq: Mutex::new(vec![0u32; max_batch_size as usize]),
@@ -2322,6 +3358,237 @@ impl KVCache {
                 }),
             })
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_compressed_with_context(
+        ctx: &CudaContext,
+        max_seq_len: u32,
+        max_batch_size: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        representatives: u32,
+        representative_policy: crate::kv_compression::KvRepresentativePolicy,
+        exact_old_backing: ExactOldBacking,
+    ) -> Result<Self> {
+        #[cfg(feature = "cuda")]
+        {
+            let raw = ctx.create_compressed_kvcache(
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+                representative_policy,
+                exact_old_backing,
+            )?;
+            let elems_per_token = (num_heads as usize) * (head_dim as usize);
+            let old_capacity = max_seq_len.saturating_sub(recent_window);
+            let max_blocks = if old_capacity == 0 {
+                1usize
+            } else {
+                (old_capacity as usize).div_ceil(block_size as usize)
+            };
+            let recent_bytes = (max_batch_size as usize)
+                * (recent_window as usize)
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let summary_f16_bytes = (max_batch_size as usize)
+                * max_blocks
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let summary_acc_bytes = (max_batch_size as usize)
+                * max_blocks
+                * elems_per_token
+                * std::mem::size_of::<f32>()
+                * 2;
+            let representative_bytes = (max_batch_size as usize)
+                * max_blocks
+                * (representatives as usize)
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            let representative_position_bytes = (max_batch_size as usize)
+                * max_blocks
+                * (representatives as usize)
+                * std::mem::size_of::<u32>();
+            let count_bytes = (max_batch_size as usize) * max_blocks * std::mem::size_of::<u32>();
+            let seq_map_bytes = (max_batch_size as usize) * std::mem::size_of::<u32>();
+            let q8_old_backing_bytes = if exact_old_backing == ExactOldBacking::Q8 {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<i8>()
+                    * 2
+            } else {
+                0
+            };
+            let q8_old_backing_scale_bytes = if exact_old_backing == ExactOldBacking::Q8 {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * (num_heads as usize)
+                    * std::mem::size_of::<f32>()
+                    * 2
+            } else {
+                0
+            };
+            let old_k_fp16_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<half::f16>()
+            } else {
+                0
+            };
+            let q8_dense_shadow_bytes = if exact_old_backing == ExactOldBacking::Q8
+                && std::env::var("M40LLM_KV_Q8_DENSE_SHADOW")
+                    .map(|value| value == "1")
+                    .unwrap_or(false)
+            {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * elems_per_token
+                    * std::mem::size_of::<half::f16>()
+                    * 2
+            } else {
+                0
+            };
+            let q4_v_diag = std::env::var("M40LLM_KV_Q4_V_DIAG")
+                .map(|value| value == "1")
+                .unwrap_or(false);
+            let q4_old_v_payload_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V
+                || (exact_old_backing == ExactOldBacking::Q8 && q4_v_diag)
+            {
+                (max_seq_len as usize) * (max_batch_size as usize) * elems_per_token / 2
+                    * std::mem::size_of::<u8>()
+            } else {
+                0
+            };
+            let q4_old_v_scale_bytes = if exact_old_backing == ExactOldBacking::Fp16KQ4V
+                || (exact_old_backing == ExactOldBacking::Q8 && q4_v_diag)
+            {
+                (max_seq_len as usize)
+                    * (max_batch_size as usize)
+                    * (num_heads as usize)
+                    * std::mem::size_of::<f32>()
+            } else {
+                0
+            };
+            let summary_index_bytes = summary_f16_bytes
+                + summary_acc_bytes
+                + representative_bytes
+                + representative_position_bytes
+                + count_bytes
+                + seq_map_bytes;
+            let actual_bytes = recent_bytes
+                + summary_index_bytes
+                + q8_old_backing_bytes
+                + q8_old_backing_scale_bytes
+                + q8_dense_shadow_bytes
+                + old_k_fp16_bytes
+                + q4_old_v_payload_bytes
+                + q4_old_v_scale_bytes;
+            let dense_equivalent_bytes = (max_seq_len as usize)
+                * (max_batch_size as usize)
+                * elems_per_token
+                * std::mem::size_of::<half::f16>()
+                * 2;
+            Ok(KVCache {
+                inner: Arc::new(KVCacheInner {
+                    max_seq_len,
+                    max_batch_size,
+                    num_heads,
+                    head_dim,
+                    compressed: true,
+                    recent_window,
+                    block_size,
+                    max_blocks: max_blocks as u32,
+                    representatives,
+                    exact_old_backing: exact_old_backing.as_str().to_string(),
+                    q8_old_backing_bytes,
+                    q8_old_backing_scale_bytes,
+                    old_k_fp16_bytes,
+                    q4_old_v_payload_bytes,
+                    q4_old_v_scale_bytes,
+                    recent_fp16_bytes: recent_bytes,
+                    summary_index_bytes,
+                    actual_bytes,
+                    dense_equivalent_bytes,
+                    raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
+                    #[cfg(not(feature = "cuda"))]
+                    k: Mutex::new(Vec::new()),
+                    #[cfg(not(feature = "cuda"))]
+                    v: Mutex::new(Vec::new()),
+                    #[cfg(not(feature = "cuda"))]
+                    len_by_seq: Mutex::new(Vec::new()),
+                }),
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                ctx,
+                max_seq_len,
+                max_batch_size,
+                num_heads,
+                head_dim,
+                recent_window,
+                block_size,
+                top_blocks,
+                representatives,
+                representative_policy,
+                exact_old_backing,
+            );
+            anyhow::bail!("compressed KV cache requires cuda")
+        }
+    }
+
+    pub fn actual_bytes(&self) -> usize {
+        self.inner.actual_bytes
+    }
+
+    pub fn dense_equivalent_bytes(&self) -> usize {
+        self.inner.dense_equivalent_bytes
+    }
+
+    pub fn exact_old_backing(&self) -> &str {
+        &self.inner.exact_old_backing
+    }
+
+    pub fn q8_old_backing_bytes(&self) -> usize {
+        self.inner.q8_old_backing_bytes
+    }
+
+    pub fn q8_old_backing_scale_bytes(&self) -> usize {
+        self.inner.q8_old_backing_scale_bytes
+    }
+
+    pub fn old_k_fp16_bytes(&self) -> usize {
+        self.inner.old_k_fp16_bytes
+    }
+
+    pub fn q4_old_v_payload_bytes(&self) -> usize {
+        self.inner.q4_old_v_payload_bytes
+    }
+
+    pub fn q4_old_v_scale_bytes(&self) -> usize {
+        self.inner.q4_old_v_scale_bytes
+    }
+
+    pub fn recent_fp16_bytes(&self) -> usize {
+        self.inner.recent_fp16_bytes
+    }
+
+    pub fn summary_index_bytes(&self) -> usize {
+        self.inner.summary_index_bytes
     }
 
     #[inline]
@@ -2476,9 +3743,37 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and KV append with an explicit rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -2487,11 +3782,12 @@ impl KVCache {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k");
@@ -2514,9 +3810,40 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_at_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position,
+                past_len,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues explicit-position fused K RoPE and KV append with an explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_at_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_at_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_at_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -2526,11 +3853,12 @@ impl KVCache {
                 past_len,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_at_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_at_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k_at");
@@ -2551,9 +3879,38 @@ impl KVCache {
         freq_base: f32,
         freq_scale: f32,
     ) -> Result<()> {
+        unsafe {
+            self.append_token_f32_rope_k_position_dev_layout_async(
+                ctx,
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position_dev,
+                freq_base,
+                freq_scale,
+                ROPE_LAYOUT_ADJACENT,
+            )
+        }
+    }
+
+    /// # Safety
+    /// Enqueues device-position fused K RoPE and KV append with an explicit
+    /// rotary layout.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn append_token_f32_rope_k_position_dev_layout_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+        rope_layout: u32,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+            ffi::m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -2562,11 +3919,12 @@ impl KVCache {
                 position_dev,
                 freq_base,
                 freq_scale,
+                rope_layout,
             )
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_kvcache_append_token_f32_rope_k_position_dev_async failed: {rc}"
+                "m40llm_kvcache_append_token_f32_rope_k_position_dev_layout_async failed: {rc}"
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k_position_dev");
@@ -2682,6 +4040,424 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues dense GQA last-token attention restricted to the absolute
+    /// recent window `[seq_len - recent_window, seq_len)` on the decode stream.
+    /// This diagnostic path preserves absolute KV positions and requires
+    /// head_dim=64.
+    pub unsafe fn attention_last_token_f32_gqa_dense_recent_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_dense_recent_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_dense_recent_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_dense_recent");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues experimental exact block-select GQA attention on the decode stream.
+    /// Full exact KV remains allocated; only the attention read set is sparse.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues diagnostic staged exact block-select GQA attention on the
+    /// decode stream. This path first gathers the selected exact old K/V plus
+    /// recent K/V into temporary compact buffers, then attends over that
+    /// working set.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues diagnostic staged exact block-select GQA attention using
+    /// caller-owned staging buffers. The buffers must be sized for
+    /// `q_heads * staging.capacity_tokens * 64` FP16 K/V entries, positions,
+    /// and per-query-head counts.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        staging: ExactBlockStagingPtrs,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                staging.staged_k,
+                staging.staged_v,
+                staging.staged_positions,
+                staging.staged_counts,
+                staging.capacity_tokens,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged_reuse");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues staged exact block-select GQA attention using q8 old-token
+    /// backing for selected old blocks and FP16 dense KV for recent tokens.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        staging: ExactBlockStagingPtrs,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                staging.staged_k,
+                staging.staged_v,
+                staging.staged_positions,
+                staging.staged_counts,
+                staging.capacity_tokens,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_staged_q8_old");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues staged exact block-select GQA attention using FP16 old K,
+    /// q4 old V, and FP16 recent KV.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        staging: ExactBlockStagingPtrs,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                staging.staged_k,
+                staging.staged_v,
+                staging.staged_positions,
+                staging.staged_counts,
+                staging.capacity_tokens,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async failed: {rc}"
+            ));
+        }
+        record_async_kernel(
+            "attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old",
+        );
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues direct exact block-select GQA attention over q8 old-token
+    /// backing and FP16 recent KV without materializing staged FP16 K/V.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_select_exact_q8_old_direct");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues direct exact block-select GQA attention over FP16 old K,
+    /// packed q4 old V, and FP16 recent KV without materializing selected old V
+    /// into the staged FP16 workspace.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async failed: {rc}"
+            ));
+        }
+        record_async_kernel(
+            "attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct",
+        );
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues experimental lossy block-summary GQA attention on the decode
+    /// stream. `top_blocks=0` attends all old block summaries; nonzero selects
+    /// the top scoring old summaries before attending.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_summary_lossy_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_summary_lossy_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_block_summary_lossy");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues diagnostic compressed attention that attends only the exact recent ring.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_compressed_recent_only_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_compressed_recent_only_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_compressed_recent_only_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_compressed_recent_only");
         Ok(())
     }
 

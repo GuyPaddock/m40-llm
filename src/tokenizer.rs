@@ -10,6 +10,8 @@ pub enum TokenizerKind {
     ByteLevel,
     SentencePiece,
     Bpe,
+    Llama3,
+    Qwen2,
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +25,8 @@ pub struct Tokenizer {
     vocab: Vec<String>,
     token_to_id: HashMap<String, u32>,
     bpe_ranks: HashMap<(String, String), usize>,
+    non_content_special_ids: Vec<u32>,
+    has_chat_template: bool,
 }
 
 impl Tokenizer {
@@ -36,6 +40,8 @@ impl Tokenizer {
             vocab: Vec::new(),
             token_to_id: HashMap::new(),
             bpe_ranks: HashMap::new(),
+            non_content_special_ids: Vec::new(),
+            has_chat_template: false,
         }
     }
 
@@ -54,6 +60,43 @@ impl Tokenizer {
     }
     pub fn unk_id(&self) -> Option<u32> {
         self.unk_id
+    }
+    pub fn is_llama3(&self) -> bool {
+        self.kind == TokenizerKind::Llama3
+    }
+    pub fn is_qwen2(&self) -> bool {
+        self.kind == TokenizerKind::Qwen2
+    }
+    pub fn has_chat_template(&self) -> bool {
+        self.has_chat_template
+    }
+    pub fn token_id(&self, token: &str) -> Option<u32> {
+        self.token_to_id.get(token).copied()
+    }
+    pub fn stop_ids(&self) -> Vec<u32> {
+        let mut ids = Vec::new();
+        if let Some(eos) = self.eos_id {
+            ids.push(eos);
+        }
+        if self.is_llama3() {
+            if let Some(eot) = self.token_id("<|eot_id|>") {
+                ids.push(eot);
+            }
+            if let Some(end_text) = self.token_id("<|end_of_text|>") {
+                ids.push(end_text);
+            }
+        }
+        if self.is_qwen2() {
+            if let Some(im_end) = self.token_id("<|im_end|>") {
+                ids.push(im_end);
+            }
+            if let Some(end_text) = self.token_id("<|endoftext|>") {
+                ids.push(end_text);
+            }
+        }
+        ids.sort_unstable();
+        ids.dedup();
+        ids
     }
 
     // Mutable setters used in tests to simulate GGUF-provided IDs
@@ -78,12 +121,22 @@ impl Tokenizer {
     pub fn from_gguf_metadata(
         metadata: &std::collections::HashMap<String, crate::gguf::GgufValue>,
     ) -> Result<Self> {
+        use crate::gguf::{GgufScalar, GgufValue};
         // Heuristic detection of tokenizer kind:
         let model_str = metadata
             .get("tokenizer.ggml.model")
             .and_then(|v| v.as_str())
             .map(|s| s.to_ascii_lowercase());
+        let pre_str = metadata
+            .get("tokenizer.ggml.pre")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_ascii_lowercase());
         let has_tokens = metadata.get("tokenizer.ggml.tokens").is_some();
+        let has_chat_template = metadata.get("tokenizer.chat_template").is_some();
+        let architecture = metadata
+            .get("general.architecture")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_ascii_lowercase());
         let has_sp = metadata
             .get("sentencepiece.model")
             .and_then(|v| v.as_str())
@@ -98,8 +151,25 @@ impl Tokenizer {
             .is_some()
             || matches!(model_str.as_deref(), Some("bpe"))
             || has_tokens;
+        let is_llama_bpe = model_str.as_deref() == Some("gpt2")
+            && pre_str.as_deref() == Some("llama-bpe")
+            && metadata.get("llama.vocab_size").and_then(|v| match v {
+                GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
+                GgufValue::Scalar(GgufScalar::I32(x)) => u32::try_from(*x).ok(),
+                _ => None,
+            }) == Some(128_256);
+        let is_qwen_bpe = architecture
+            .as_deref()
+            .is_some_and(|arch| arch.starts_with("qwen"))
+            || pre_str
+                .as_deref()
+                .is_some_and(|pre| pre.starts_with("qwen"));
 
-        let kind = if has_sp {
+        let kind = if is_llama_bpe {
+            TokenizerKind::Llama3
+        } else if is_qwen_bpe {
+            TokenizerKind::Qwen2
+        } else if has_sp {
             TokenizerKind::SentencePiece
         } else if has_bpe {
             TokenizerKind::Bpe
@@ -108,7 +178,6 @@ impl Tokenizer {
         };
 
         // Special token IDs are optional; try GGUF keys commonly used by GGUF/llama.cpp
-        use crate::gguf::{GgufScalar, GgufValue};
         let get_u32 = |k: &str| -> Option<u32> {
             metadata.get(k).and_then(|v| match v {
                 GgufValue::Scalar(GgufScalar::U32(x)) => Some(*x),
@@ -133,6 +202,14 @@ impl Tokenizer {
             .enumerate()
             .map(|(i, t)| (t.clone(), i as u32))
             .collect();
+        let non_content_special_ids = vocab
+            .iter()
+            .enumerate()
+            .filter_map(|(i, token)| {
+                let is_special = token.starts_with("<|") && token.ends_with("|>");
+                is_special.then_some(i as u32)
+            })
+            .collect();
         let merges =
             extract_string_array(metadata, "tokenizer.ggml.bpe_merges").unwrap_or_else(|| {
                 extract_string_array(metadata, "tokenizer.ggml.merges").unwrap_or_default()
@@ -154,6 +231,8 @@ impl Tokenizer {
             vocab,
             token_to_id,
             bpe_ranks,
+            non_content_special_ids,
+            has_chat_template,
         })
     }
 
@@ -164,6 +243,32 @@ impl Tokenizer {
             TokenizerKind::ByteLevel => Ok(text.as_bytes().iter().map(|&b| b as u32).collect()),
             TokenizerKind::SentencePiece => Ok(self.encode_sentencepiece(text)),
             TokenizerKind::Bpe => Ok(self.encode_bpe(text)),
+            TokenizerKind::Qwen2 => {
+                let enc = tiktoken::get_encoding("qwen2")
+                    .ok_or_else(|| anyhow!("qwen2 tokenizer encoding unavailable"))?;
+                Ok(enc.encode(text))
+            }
+            TokenizerKind::Llama3 => {
+                let enc = tiktoken::get_encoding("llama3")
+                    .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
+                Ok(enc.encode(text))
+            }
+        }
+    }
+
+    pub fn encode_allowing_specials(&self, text: &str) -> Result<Vec<u32>> {
+        match self.kind {
+            TokenizerKind::Llama3 => {
+                let enc = tiktoken::get_encoding("llama3")
+                    .ok_or_else(|| anyhow!("llama3 tokenizer encoding unavailable"))?;
+                Ok(enc.encode_with_special_tokens(text))
+            }
+            TokenizerKind::Qwen2 => {
+                let enc = tiktoken::get_encoding("qwen2")
+                    .ok_or_else(|| anyhow!("qwen2 tokenizer encoding unavailable"))?;
+                Ok(enc.encode_with_special_tokens(text))
+            }
+            _ => self.encode(text),
         }
     }
 
@@ -174,7 +279,7 @@ impl Tokenizer {
         add_bos: bool,
         add_eos: bool,
     ) -> Result<Vec<u32>> {
-        let mut ids = self.encode(text)?;
+        let mut ids = self.encode_allowing_specials(text)?;
         if add_bos {
             if let Some(bos) = self.bos_id {
                 ids.insert(0, bos);
@@ -199,7 +304,10 @@ impl Tokenizer {
         ids.iter()
             .copied()
             .filter(|&id| {
-                Some(id) != self.bos_id && Some(id) != self.eos_id && Some(id) != self.pad_id
+                Some(id) != self.bos_id
+                    && Some(id) != self.eos_id
+                    && Some(id) != self.pad_id
+                    && !self.non_content_special_ids.contains(&id)
             })
             .collect()
     }
@@ -214,6 +322,19 @@ impl Tokenizer {
                 .map(|&id| if id <= 255 { id as u8 } else { b'?' })
                 .collect();
             return String::from_utf8(bytes)
+                .map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"));
+        }
+
+        if self.kind == TokenizerKind::Llama3 || self.kind == TokenizerKind::Qwen2 {
+            let encoding_name = if self.kind == TokenizerKind::Qwen2 {
+                "qwen2"
+            } else {
+                "llama3"
+            };
+            let enc = tiktoken::get_encoding(encoding_name)
+                .ok_or_else(|| anyhow!("{encoding_name} tokenizer encoding unavailable"))?;
+            return enc
+                .decode_to_string(ids)
                 .map_err(|e| anyhow!("decode produced invalid UTF-8: {e}"));
         }
 
@@ -241,6 +362,7 @@ impl Tokenizer {
                 }
                 replaced
             }
+            TokenizerKind::Qwen2 => joined.replace('Ġ', " ").replace('Ċ', "\n"),
             _ => joined,
         };
 

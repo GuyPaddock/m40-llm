@@ -3,13 +3,1356 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::KVCache;
+use half::f16;
+use m40_llm::cuda::{
+    ffi_debug_read_kv_token, ExactBlockStagingWorkspace, ExactOldBacking, KVCache,
+};
+use m40_llm::kv_compression::{set_runtime_config, KvCompressionConfig, KvRepresentativePolicy};
 use std::ffi::c_void;
 
 fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
     vals.iter()
         .map(|&x| half::f16::from_f32(x).to_f32())
         .collect()
+}
+
+fn f16_words_to_f32(vals: &[u16]) -> Vec<f32> {
+    vals.iter().map(|&x| f16::from_bits(x).to_f32()).collect()
+}
+
+fn read_dense_kv_token(
+    ctx: &m40_llm::cuda::CudaContext,
+    kv: &KVCache,
+    token: u32,
+    elems_per_token: usize,
+) -> (Vec<u16>, Vec<u16>) {
+    let mut k_bytes = vec![0u8; elems_per_token * 2];
+    let mut v_bytes = vec![0u8; elems_per_token * 2];
+    let rc = unsafe {
+        ffi_debug_read_kv_token(
+            ctx,
+            kv,
+            0,
+            token,
+            k_bytes.as_mut_ptr(),
+            v_bytes.as_mut_ptr(),
+        )
+    };
+    assert_eq!(rc, 0, "ffi_debug_read_kv_token failed for token {token}");
+    let k = k_bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    let v = v_bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    (k, v)
+}
+
+#[test]
+fn attention_dense_recent_window_matches_reference() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 2u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let seq_len = 12u32;
+    let recent_window = 5u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+
+    let mut k_tokens = Vec::new();
+    let mut v_tokens = Vec::new();
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 29 + i * 3) as f32) * 0.001 - 0.25)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 11 + kv_dim - i) as f32) * 0.002 - 0.15)
+            .collect();
+        let k_stored = cast_f32_to_f16_then_back(&k);
+        let v_stored = cast_f32_to_f16_then_back(&v);
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+        k_tokens.push(k_stored);
+        v_tokens.push(v_stored);
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0015 - 0.12).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense = ctx.device_malloc(bytes_q)?;
+    let d_full_window = ctx.device_malloc(bytes_q)?;
+    let d_recent = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa(&ctx, 0, d_q as *const c_void, q_heads, seq_len, d_dense)?;
+        kv.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            seq_len,
+            d_full_window,
+        )?;
+        kv.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            d_recent,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense = vec![0f32; q_dim];
+    let mut full_window = vec![0f32; q_dim];
+    let mut recent = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense.as_mut_ptr() as *mut c_void,
+            d_dense as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            full_window.as_mut_ptr() as *mut c_void,
+            d_full_window as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            recent.as_mut_ptr() as *mut c_void,
+            d_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense)?;
+        ctx.device_free(d_full_window)?;
+        ctx.device_free(d_recent)?;
+    }
+
+    let start = (seq_len - recent_window) as usize;
+    let recent_ref = cpu_last_token_attention(
+        &q,
+        &k_tokens[start..],
+        &v_tokens[start..],
+        q_heads as usize,
+        head_dim as usize,
+    );
+
+    for (idx, ((&dense_val, &full_window_val), (&recent_val, &ref_val))) in dense
+        .iter()
+        .zip(&full_window)
+        .zip(recent.iter().zip(&recent_ref))
+        .enumerate()
+    {
+        assert!(
+            (dense_val - full_window_val).abs() < 1e-3,
+            "full-window dense mismatch at {idx}: dense={dense_val} window={full_window_val}"
+        );
+        assert!(
+            (recent_val - ref_val).abs() < 1e-3,
+            "recent-window reference mismatch at {idx}: cuda={recent_val} cpu={ref_val}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> Result<()> {
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, previous }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.previous {
+                    Some(value) => std::env::set_var(self.key, value),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+    let _q8_env = EnvGuard::set("M40LLM_KV_EXACT_OLD_BACKING", "q8");
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let seq_len = 16u32;
+    let recent_window = 4u32;
+    let block_size = 4u32;
+    let top_blocks = 3u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+    let kv_q8 = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Q8,
+    )?;
+    let kv_mixed = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Fp16KQ4V,
+    )?;
+    assert_eq!(kv_mixed.q8_old_backing_bytes(), 0);
+    assert_eq!(kv_mixed.q8_old_backing_scale_bytes(), 0);
+    assert!(kv_mixed.old_k_fp16_bytes() > 0);
+    assert!(kv_mixed.q4_old_v_payload_bytes() > 0);
+    assert!(kv_mixed.q4_old_v_scale_bytes() > 0);
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 31 + i * 7) as f32) * 0.002 - 0.4)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 17 + kv_dim - i) as f32) * 0.003 - 0.2)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            kv_q8.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            kv_mixed.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.001 - 0.1).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense = ctx.device_malloc(bytes_q)?;
+    let d_sparse = ctx.device_malloc(bytes_q)?;
+    let d_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_direct = ctx.device_malloc(bytes_q)?;
+    let d_mixed_staged = ctx.device_malloc(bytes_q)?;
+    let d_mixed_direct = ctx.device_malloc(bytes_q)?;
+    let staging_capacity_tokens = recent_window + top_blocks * block_size;
+    let staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
+    let q8_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
+    let mixed_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, staging_capacity_tokens)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa(&ctx, 0, d_q as *const c_void, q_heads, seq_len, d_dense)?;
+        kv.attention_last_token_f32_gqa_block_select_exact_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_sparse,
+        )?;
+        kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            staging.ptrs(),
+            d_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            q8_staging.ptrs(),
+            d_q8_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_q8_direct,
+        )?;
+        kv_mixed
+            .attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                &ctx,
+                0,
+                d_q as *const c_void,
+                q_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                mixed_staging.ptrs(),
+                d_mixed_staged,
+            )?;
+        kv_mixed.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_mixed_direct,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense = vec![0f32; q_dim];
+    let mut sparse = vec![0f32; q_dim];
+    let mut staged = vec![0f32; q_dim];
+    let mut q8_staged = vec![0f32; q_dim];
+    let mut q8_direct = vec![0f32; q_dim];
+    let mut mixed_staged = vec![0f32; q_dim];
+    let mut mixed_direct = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense.as_mut_ptr() as *mut c_void,
+            d_dense as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            sparse.as_mut_ptr() as *mut c_void,
+            d_sparse as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            staged.as_mut_ptr() as *mut c_void,
+            d_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_staged.as_mut_ptr() as *mut c_void,
+            d_q8_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_direct.as_mut_ptr() as *mut c_void,
+            d_q8_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            mixed_staged.as_mut_ptr() as *mut c_void,
+            d_mixed_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            mixed_direct.as_mut_ptr() as *mut c_void,
+            d_mixed_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense)?;
+        ctx.device_free(d_sparse)?;
+        ctx.device_free(d_staged)?;
+        ctx.device_free(d_q8_staged)?;
+        ctx.device_free(d_q8_direct)?;
+        ctx.device_free(d_mixed_staged)?;
+        ctx.device_free(d_mixed_direct)?;
+    }
+
+    for (idx, ((((((&a, &b), &c), &q8), &q8_direct), &mixed), &mixed_direct)) in dense
+        .iter()
+        .zip(&sparse)
+        .zip(&staged)
+        .zip(&q8_staged)
+        .zip(&q8_direct)
+        .zip(&mixed_staged)
+        .zip(&mixed_direct)
+        .enumerate()
+    {
+        assert!(
+            (a - b).abs() < 1e-3,
+            "block-select-exact mismatch at {idx}: dense={a} sparse={b}"
+        );
+        assert!(
+            (b - c).abs() < 1e-3,
+            "staged block-select-exact mismatch at {idx}: direct={b} staged={c}"
+        );
+        assert!(
+            (c - q8).abs() < 2e-2,
+            "q8 staged block-select-exact mismatch at {idx}: staged={c} q8={q8}"
+        );
+        assert!(
+            (q8 - q8_direct).abs() < 1e-3,
+            "q8 direct block-select-exact mismatch at {idx}: staged={q8} direct={q8_direct}"
+        );
+        assert!(
+            (c - mixed).abs() < 5e-2,
+            "fp16-k/q4-v staged block-select-exact mismatch at {idx}: staged={c} mixed={mixed}"
+        );
+        assert!(
+            (mixed - mixed_direct).abs() < 1e-3,
+            "fp16-k/q4-v direct block-select-exact mismatch at {idx}: staged={mixed} direct={mixed_direct}"
+        );
+    }
+
+    let partial_top_blocks = 2u32;
+    let partial_capacity_tokens = recent_window + partial_top_blocks * block_size;
+    let partial_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, partial_capacity_tokens)?;
+    let d_q_partial = ctx.device_malloc(bytes_q)?;
+    let d_q8_partial_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_partial_direct = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q_partial, q.as_ptr() as *const c_void, bytes_q)?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q_partial as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            partial_staging.ptrs(),
+            d_q8_partial_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q_partial as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            d_q8_partial_direct,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+    let mut q8_partial_staged = vec![0f32; q_dim];
+    let mut q8_partial_direct = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            q8_partial_staged.as_mut_ptr() as *mut c_void,
+            d_q8_partial_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_partial_direct.as_mut_ptr() as *mut c_void,
+            d_q8_partial_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q8_partial_staged)?;
+        ctx.device_free(d_q8_partial_direct)?;
+        ctx.device_free(d_q_partial)?;
+    }
+    for (idx, (&staged, &direct)) in q8_partial_staged.iter().zip(&q8_partial_direct).enumerate() {
+        assert!(
+            (staged - direct).abs() < 1e-3,
+            "partial q8 direct block-select-exact mismatch at {idx}: staged={staged} direct={direct}"
+        );
+    }
+
+    let _order_env = EnvGuard::set("M40LLM_KV_SELECTED_BLOCK_ORDER", "chronological");
+    let chrono_staging =
+        ExactBlockStagingWorkspace::new(&ctx, q_heads, head_dim, partial_capacity_tokens)?;
+    let d_q_chrono = ctx.device_malloc(bytes_q)?;
+    let d_q8_chrono_staged = ctx.device_malloc(bytes_q)?;
+    let d_q8_chrono_direct = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q_chrono, q.as_ptr() as *const c_void, bytes_q)?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+            &ctx,
+            0,
+            d_q_chrono as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            chrono_staging.ptrs(),
+            d_q8_chrono_staged,
+        )?;
+        kv_q8.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+            &ctx,
+            0,
+            d_q_chrono as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            partial_top_blocks,
+            d_q8_chrono_direct,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+    let mut q8_chrono_staged = vec![0f32; q_dim];
+    let mut q8_chrono_direct = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            q8_chrono_staged.as_mut_ptr() as *mut c_void,
+            d_q8_chrono_staged as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            q8_chrono_direct.as_mut_ptr() as *mut c_void,
+            d_q8_chrono_direct as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q8_chrono_staged)?;
+        ctx.device_free(d_q8_chrono_direct)?;
+        ctx.device_free(d_q_chrono)?;
+    }
+    for (idx, (&staged, &direct)) in q8_chrono_staged.iter().zip(&q8_chrono_direct).enumerate() {
+        assert!(
+            (staged - direct).abs() < 1e-3,
+            "chronological q8 direct block-select-exact mismatch at {idx}: staged={staged} direct={direct}"
+        );
+    }
+
+    set_runtime_config(KvCompressionConfig::dense_reference());
+    Ok(())
+}
+
+#[test]
+fn attention_fp16_k_q4_v_direct_handles_partial_old_block() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 128u32;
+    let seq_len = 5u32;
+    let recent_window = 4u32;
+    let block_size = 32u32;
+    let top_blocks = 8u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Fp16KQ4V,
+    )?;
+
+    let mut k_tokens = Vec::new();
+    let mut v_tokens = Vec::new();
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 17 + i * 3) as f32) * 0.0005 - 0.2)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 23 + kv_dim - i) as f32) * 0.0006 - 0.1)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+        k_tokens.push(cast_f32_to_f16_then_back(&k));
+        v_tokens.push(v);
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0002 - 0.04).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_out = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_out,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut actual = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            actual.as_mut_ptr() as *mut c_void,
+            d_out as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_out)?;
+    }
+
+    let old_len = (seq_len - recent_window) as usize;
+    let v_ref =
+        quantize_old_v_q4_reference(&v_tokens, old_len, kv_heads as usize, head_dim as usize);
+    let expected = cpu_last_token_attention_gqa(
+        &q,
+        &k_tokens,
+        &v_ref,
+        q_heads as usize,
+        kv_heads as usize,
+        head_dim as usize,
+    );
+    for (idx, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 2e-3,
+            "partial old-block fp16-k/q4-v direct mismatch at {idx}: actual={a} expected={e}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn attention_fp16_k_q4_v_direct_supports_head128() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 128u32;
+    let seq_len = 16u32;
+    let recent_window = 4u32;
+    let block_size = 4u32;
+    let top_blocks = 3u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_compressed_with_context(
+        &ctx,
+        seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        top_blocks,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Fp16KQ4V,
+    )?;
+    assert_eq!(kv.old_k_fp16_bytes(), 8192);
+    assert_eq!(kv.q4_old_v_payload_bytes(), 2048);
+    assert_eq!(kv.q4_old_v_scale_bytes(), 128);
+
+    let mut k_tokens = Vec::new();
+    let mut v_tokens = Vec::new();
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + i * 5) as f32) * 0.0007 - 0.35)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 19 + kv_dim - i) as f32) * 0.0009 - 0.15)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10000.0,
+                0.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+        k_tokens.push(cast_f32_to_f16_then_back(&k));
+        v_tokens.push(v);
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0003 - 0.05).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_out = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            top_blocks,
+            d_out,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+    let mut actual = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            actual.as_mut_ptr() as *mut c_void,
+            d_out as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_out)?;
+    }
+
+    let old_len = (seq_len - recent_window) as usize;
+    let v_ref =
+        quantize_old_v_q4_reference(&v_tokens, old_len, kv_heads as usize, head_dim as usize);
+    let expected = cpu_last_token_attention_gqa(
+        &q,
+        &k_tokens,
+        &v_ref,
+        q_heads as usize,
+        kv_heads as usize,
+        head_dim as usize,
+    );
+    for (idx, (&a, &e)) in actual.iter().zip(&expected).enumerate() {
+        assert!(
+            (a - e).abs() < 2e-3,
+            "head128 fp16-k/q4-v direct mismatch at {idx}: actual={a} expected={e}"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn attention_block_summary_lossy_is_finite_and_deterministic() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let seq_len = 20u32;
+    let recent_window = 4u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + i * 5) as f32).sin() * 0.02)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 19 + i * 3) as f32).cos() * 0.03)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32).sin() * 0.01).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_summary_a = ctx.device_malloc(bytes_q)?;
+    let d_summary_b = ctx.device_malloc(bytes_q)?;
+    let d_select_lossy = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_summary_a,
+        )?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_summary_b,
+        )?;
+        kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            2,
+            d_select_lossy,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut summary_a = vec![0f32; q_dim];
+    let mut summary_b = vec![0f32; q_dim];
+    let mut select_lossy = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            summary_a.as_mut_ptr() as *mut c_void,
+            d_summary_a as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            summary_b.as_mut_ptr() as *mut c_void,
+            d_summary_b as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            select_lossy.as_mut_ptr() as *mut c_void,
+            d_select_lossy as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_summary_a)?;
+        ctx.device_free(d_summary_b)?;
+        ctx.device_free(d_select_lossy)?;
+    }
+
+    for idx in 0..q_dim {
+        assert!(
+            summary_a[idx].is_finite(),
+            "summary output {idx} is not finite"
+        );
+        assert!(
+            select_lossy[idx].is_finite(),
+            "select-lossy output {idx} is not finite"
+        );
+        assert!(
+            (summary_a[idx] - summary_b[idx]).abs() < 1e-6,
+            "summary output not deterministic at {idx}: {} vs {}",
+            summary_a[idx],
+            summary_b[idx]
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn compressed_kv_recent_window_matches_dense_attention() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let max_seq_len = 32u32;
+    let seq_len = 8u32;
+    let recent_window = 16u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let dense = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+    let compressed = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
+    )?;
+    assert!(compressed.is_compressed());
+    assert!(compressed.actual_bytes() < compressed.dense_equivalent_bytes());
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 11 + i * 3) as f32) * 0.001 - 0.05)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + kv_dim - i) as f32) * 0.0015 - 0.07)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            dense.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            compressed.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0007 - 0.02).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense = ctx.device_malloc(bytes_q)?;
+    let d_compressed = ctx.device_malloc(bytes_q)?;
+    let d_recent_only = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        dense.attention_last_token_f32_gqa(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_dense,
+        )?;
+        compressed.attention_last_token_f32_gqa_block_summary_lossy_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            block_size,
+            0,
+            d_compressed,
+        )?;
+        compressed.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_recent_only,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense_out = vec![0f32; q_dim];
+    let mut compressed_out = vec![0f32; q_dim];
+    let mut recent_only_out = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense_out.as_mut_ptr() as *mut c_void,
+            d_dense as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            compressed_out.as_mut_ptr() as *mut c_void,
+            d_compressed as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            recent_only_out.as_mut_ptr() as *mut c_void,
+            d_recent_only as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense)?;
+        ctx.device_free(d_compressed)?;
+        ctx.device_free(d_recent_only)?;
+    }
+
+    for (idx, ((&a, &b), &c)) in dense_out
+        .iter()
+        .zip(&compressed_out)
+        .zip(&recent_only_out)
+        .enumerate()
+    {
+        assert!(
+            (a - b).abs() < 1e-3,
+            "compressed recent mismatch at {idx}: dense={a} compressed={b}"
+        );
+        assert!(
+            (a - c).abs() < 1e-3,
+            "recent-only mismatch at {idx}: dense={a} recent_only={c}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn compressed_kv_recent_ring_matches_dense_window_after_wrap() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 4u32;
+    let kv_heads = 2u32;
+    let head_dim = 64u32;
+    let max_seq_len = 32u32;
+    let seq_len = 18u32;
+    let recent_window = 7u32;
+    let block_size = 4u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let dense = KVCache::new_with_context(&ctx, max_seq_len, 1, kv_heads, head_dim)?;
+    let compressed_seq = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
+    )?;
+    let compressed_built = KVCache::new_compressed_with_context(
+        &ctx,
+        max_seq_len,
+        1,
+        kv_heads,
+        head_dim,
+        recent_window,
+        block_size,
+        2,
+        0,
+        KvRepresentativePolicy::Last,
+        ExactOldBacking::Dense,
+    )?;
+
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 17 + i * 5) as f32).sin() * 0.08 + (i as f32) * 0.0003)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 19 + i * 7) as f32).cos() * 0.07 - (i as f32) * 0.0002)
+            .collect();
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            dense.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            compressed_seq.append_token_f32_rope_k_at_async(
+                &ctx,
+                0,
+                d_k as *const c_void,
+                d_v as *const c_void,
+                t as u32,
+                t as u32,
+                10_000.0,
+                1.0,
+            )?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+    }
+    compressed_built.build_compressed_from_dense(&ctx, &dense, seq_len)?;
+
+    let seq_snapshot = compressed_seq.debug_compressed_snapshot(&ctx, 0)?;
+    let built_snapshot = compressed_built.debug_compressed_snapshot(&ctx, 0)?;
+    assert_eq!(seq_snapshot.seq_len, seq_len);
+    assert_eq!(built_snapshot.seq_len, seq_len);
+
+    let sampled_positions = [
+        seq_len - recent_window,
+        seq_len - recent_window + 1,
+        seq_len - 2,
+        seq_len - 1,
+    ];
+    for pos in sampled_positions {
+        let ring = (pos % recent_window) as usize;
+        let base = ring * kv_dim;
+        let (dense_k, dense_v) = read_dense_kv_token(&ctx, &dense, pos, kv_dim);
+        for i in 0..kv_dim {
+            assert_eq!(
+                seq_snapshot.recent_k_f16[base + i],
+                dense_k[i],
+                "sequential compressed K mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                seq_snapshot.recent_v_f16[base + i],
+                dense_v[i],
+                "sequential compressed V mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                built_snapshot.recent_k_f16[base + i],
+                dense_k[i],
+                "built compressed K mismatch pos={pos} ring={ring} elem={i}"
+            );
+            assert_eq!(
+                built_snapshot.recent_v_f16[base + i],
+                dense_v[i],
+                "built compressed V mismatch pos={pos} ring={ring} elem={i}"
+            );
+        }
+    }
+
+    let q: Vec<f32> = (0..q_dim).map(|i| (i as f32) * 0.0009 - 0.04).collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_dense_window = ctx.device_malloc(bytes_q)?;
+    let d_seq_recent = ctx.device_malloc(bytes_q)?;
+    let d_built_recent = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        dense.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            d_dense_window,
+        )?;
+        compressed_seq.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_seq_recent,
+        )?;
+        compressed_built.attention_last_token_f32_gqa_compressed_recent_only_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            d_built_recent,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut dense_window = vec![0f32; q_dim];
+    let mut seq_recent = vec![0f32; q_dim];
+    let mut built_recent = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            dense_window.as_mut_ptr() as *mut c_void,
+            d_dense_window as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            seq_recent.as_mut_ptr() as *mut c_void,
+            d_seq_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.memcpy_d2h(
+            built_recent.as_mut_ptr() as *mut c_void,
+            d_built_recent as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_dense_window)?;
+        ctx.device_free(d_seq_recent)?;
+        ctx.device_free(d_built_recent)?;
+    }
+
+    for (idx, ((&dense_val, &seq_val), &built_val)) in dense_window
+        .iter()
+        .zip(&seq_recent)
+        .zip(&built_recent)
+        .enumerate()
+    {
+        assert!(
+            (dense_val - seq_val).abs() < 1e-3,
+            "sequential compressed recent attention mismatch at {idx}: dense_window={dense_val} compressed={seq_val}"
+        );
+        assert!(
+            (dense_val - built_val).abs() < 1e-3,
+            "built compressed recent attention mismatch at {idx}: dense_window={dense_val} compressed={built_val}"
+        );
+    }
+
+    let recent_start = (seq_len - recent_window) as usize;
+    let mut recent_k = Vec::new();
+    let mut recent_v = Vec::new();
+    for pos in recent_start..seq_len as usize {
+        let (k, v) = read_dense_kv_token(&ctx, &dense, pos as u32, kv_dim);
+        recent_k.push(f16_words_to_f32(&k));
+        recent_v.push(f16_words_to_f32(&v));
+    }
+    let cpu_ref = cpu_last_token_attention_gqa(
+        &q,
+        &recent_k,
+        &recent_v,
+        q_heads as usize,
+        kv_heads as usize,
+        head_dim as usize,
+    );
+    for (idx, (&dense_val, &ref_val)) in dense_window.iter().zip(&cpu_ref).enumerate() {
+        assert!(
+            (dense_val - ref_val).abs() < 1e-3,
+            "dense recent-window CPU reference mismatch at {idx}: cuda={dense_val} cpu={ref_val}"
+        );
+    }
+
+    Ok(())
 }
 
 fn cpu_last_token_attention(
@@ -123,6 +1466,42 @@ fn cpu_last_token_attention_gqa(
     }
 
     out
+}
+
+fn quantize_old_v_q4_reference(
+    v_tokens: &[Vec<f32>],
+    old_len: usize,
+    kv_heads: usize,
+    head_dim: usize,
+) -> Vec<Vec<f32>> {
+    v_tokens
+        .iter()
+        .enumerate()
+        .map(|(token_idx, token)| {
+            let f16_token = cast_f32_to_f16_then_back(token);
+            if token_idx >= old_len {
+                return f16_token;
+            }
+
+            let mut quantized = f16_token.clone();
+            for head in 0..kv_heads {
+                let base = head * head_dim;
+                let max_abs = f16_token[base..base + head_dim]
+                    .iter()
+                    .fold(0.0f32, |acc, &v| acc.max(v.abs()));
+                let scale = if max_abs > 0.0 {
+                    max_abs / 7.0
+                } else {
+                    1.0 / 7.0
+                };
+                for d in 0..head_dim {
+                    let q = (f16_token[base + d] / scale).round().clamp(-8.0, 7.0);
+                    quantized[base + d] = f16::from_f32(q * scale).to_f32();
+                }
+            }
+            quantized
+        })
+        .collect()
 }
 
 #[test]
@@ -243,7 +1622,7 @@ fn attention_last_token_cuda_gqa_parity_grid() -> Result<()> {
         return Ok(());
     }
 
-    let head_dims = [1u32, 5, 8, 16, 32];
+    let head_dims = [1u32, 5, 8, 16, 32, 128];
     let head_pairs = [(2u32, 1u32), (4, 1), (8, 2), (32, 4)];
     let seq_lens = [1u32, 2, 3, 4, 8, 16];
     let max_seq_len = *seq_lens.iter().max().unwrap();

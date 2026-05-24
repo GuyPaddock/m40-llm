@@ -1,7 +1,77 @@
 use super::LoadedModel;
-use crate::cuda::KVCache;
+#[cfg(feature = "cuda")]
+use crate::cuda::ExactBlockStagingPtrs;
+use crate::cuda::{ExactOldBacking, KVCache};
+use crate::kv_compression::{
+    runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking,
+};
+#[cfg(feature = "cuda")]
+use crate::kv_selection;
 use anyhow::{anyhow, Result};
+#[cfg(feature = "cuda")]
+use std::cell::Cell;
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+thread_local! {
+    static EXACT_BLOCK_STAGING_PTRS: Cell<Option<ExactBlockStagingPtrs>> = const { Cell::new(None) };
+}
+
+fn exact_block_staging_enabled() -> bool {
+    std::env::var("M40LLM_KV_EXACT_BLOCK_STAGING")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn exact_old_backing() -> KvExactOldBacking {
+    runtime_config().effective_exact_old_backing()
+}
+
+fn exact_old_attention() -> KvExactOldAttention {
+    runtime_config().effective_exact_old_attention()
+}
+
+fn q8_exact_old_backing_enabled() -> bool {
+    exact_old_backing() == KvExactOldBacking::Q8
+}
+
+fn fp16_k_q4_v_exact_old_backing_enabled() -> bool {
+    exact_old_backing() == KvExactOldBacking::Fp16KQ4V
+}
+
+fn q8_direct_exact_old_attention_enabled() -> bool {
+    exact_old_attention() == KvExactOldAttention::Q8Direct
+}
+
+fn fp16_k_q4_v_direct_exact_old_attention_enabled() -> bool {
+    exact_old_attention() == KvExactOldAttention::Fp16KQ4VDirect
+}
+
+#[cfg(feature = "cuda")]
+pub fn with_exact_block_staging<R>(
+    staging: Option<ExactBlockStagingPtrs>,
+    f: impl FnOnce() -> Result<R>,
+) -> Result<R> {
+    struct Reset(Option<ExactBlockStagingPtrs>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            EXACT_BLOCK_STAGING_PTRS.with(|slot| slot.set(self.0));
+        }
+    }
+
+    let previous = EXACT_BLOCK_STAGING_PTRS.with(|slot| {
+        let previous = slot.get();
+        slot.set(staging);
+        previous
+    });
+    let _reset = Reset(previous);
+    f()
+}
+
+#[cfg(feature = "cuda")]
+fn current_exact_block_staging() -> Option<ExactBlockStagingPtrs> {
+    EXACT_BLOCK_STAGING_PTRS.with(Cell::get)
+}
 
 impl LoadedModel {
     pub(super) fn kv_physical_slot_for_layer_sequence(
@@ -168,6 +238,7 @@ impl LoadedModel {
         if head_dim == 0 {
             anyhow::bail!("attention_key_length must be > 0");
         }
+        self.kv_cache = None;
         let kv = KVCache::new_with_context(
             &self.cuda,
             max_seq_len,
@@ -201,6 +272,81 @@ impl LoadedModel {
         self.allocate_kv_cache(max_seq_len, physical_slots)
     }
 
+    pub fn allocate_compressed_kv_cache_for_layers(
+        &mut self,
+        max_seq_len: u32,
+        config: &KvCompressionConfig,
+    ) -> Result<()> {
+        let layer_count = self.model_config.block_count;
+        if layer_count == 0 {
+            anyhow::bail!("model_config.block_count must be > 0");
+        }
+        let exact_old_backing = if config.mode == KvCompressMode::BlockSelectExact {
+            match config.effective_exact_old_backing() {
+                KvExactOldBacking::Dense => ExactOldBacking::Dense,
+                KvExactOldBacking::Q8 => ExactOldBacking::Q8,
+                KvExactOldBacking::Fp16KQ4V => ExactOldBacking::Fp16KQ4V,
+            }
+        } else {
+            ExactOldBacking::Dense
+        };
+        if !matches!(
+            config.mode,
+            KvCompressMode::RecentOnly
+                | KvCompressMode::BlockSummary
+                | KvCompressMode::BlockSelectLossy
+        ) && matches!(exact_old_backing, ExactOldBacking::Dense)
+        {
+            anyhow::bail!(
+                "allocate_compressed_kv_cache_for_layers requires a compressed sidecar mode"
+            );
+        }
+        config.validate()?;
+        let num_heads = self.model_config.attention_head_count_kv;
+        let head_dim = self.model_config.attention_key_length;
+        let supports_head128 = config.mode == KvCompressMode::BlockSelectExact
+            && matches!(exact_old_backing, ExactOldBacking::Fp16KQ4V);
+        if head_dim != 64 && !(head_dim == 128 && supports_head128) {
+            anyhow::bail!(
+                "compressed KV cache currently requires head_dim=64, or head_dim=128 with block-select-exact fp16-k-q4-v backing"
+            );
+        }
+        let recent_window = config.recent_window.min(max_seq_len);
+        self.kv_cache = None;
+        let kv = KVCache::new_compressed_with_context(
+            &self.cuda,
+            max_seq_len,
+            layer_count,
+            num_heads,
+            head_dim,
+            recent_window,
+            config.block_size,
+            config.top_blocks,
+            config.representatives,
+            config.representative_policy,
+            exact_old_backing,
+        )?;
+        let dense = kv.dense_equivalent_bytes();
+        let actual = kv.actual_bytes();
+        eprintln!(
+            "[kv-compress] mode={:?} selection_policy=topk top_blocks={} exact_old_backing={} exact_old_attention={} dense_equivalent_bytes={} actual_allocated_bytes={} recent_fp16_bytes={} old_k_fp16_bytes={} q4_old_v_payload_bytes={} q4_old_v_scale_bytes={} summary_index_bytes={} compression_ratio={:.3}",
+            config.mode,
+            config.top_blocks,
+            exact_old_backing.as_str(),
+            config.effective_exact_old_attention().as_str(),
+            dense,
+            actual,
+            kv.recent_fp16_bytes(),
+            kv.old_k_fp16_bytes(),
+            kv.q4_old_v_payload_bytes(),
+            kv.q4_old_v_scale_bytes(),
+            kv.summary_index_bytes(),
+            if dense > 0 { actual as f64 / dense as f64 } else { 1.0 }
+        );
+        self.kv_cache = Some(kv);
+        Ok(())
+    }
+
     pub fn kv_cache_can_address_layers(&self) -> bool {
         self.kv_cache
             .as_ref()
@@ -218,6 +364,7 @@ impl LoadedModel {
         if num_heads == 0 || head_dim == 0 {
             anyhow::bail!("allocate_kv_cache_with_layout: invalid layout");
         }
+        self.kv_cache = None;
         let kv = KVCache::new_with_context(
             &self.cuda,
             max_seq_len,
@@ -328,6 +475,290 @@ impl LoadedModel {
                 head_dim
             );
         }
+        let compression = runtime_config();
+        if compression.mode == KvCompressMode::DenseRecentOnly {
+            if head_dim != 64 {
+                anyhow::bail!("dense-recent-only requires head_dim=64");
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                return kv.attention_last_token_f32_gqa_dense_recent_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    d_out,
+                );
+            }
+        } else if compression.mode == KvCompressMode::BlockSelectExact {
+            let direct_fp16_k_q4_v = fp16_k_q4_v_exact_old_backing_enabled()
+                && fp16_k_q4_v_direct_exact_old_attention_enabled();
+            if head_dim != 64 && !(head_dim == 128 && direct_fp16_k_q4_v) {
+                anyhow::bail!(
+                    "block-select-exact requires head_dim=64, or head_dim=128 with direct fp16-k-q4-v exact-old attention"
+                );
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                if kv_selection::enabled() {
+                    if kv_selection::should_capture_attention() {
+                        let attention_mode = if q8_exact_old_backing_enabled()
+                            || fp16_k_q4_v_exact_old_backing_enabled()
+                        {
+                            5
+                        } else {
+                            1
+                        };
+                        if let Ok(attention) = kv.debug_attention_telemetry(
+                            &self.cuda,
+                            attention_mode,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            kv_selection::needle_block(),
+                        ) {
+                            kv_selection::record_attention(attention);
+                        }
+                    }
+                    let selection_start = std::time::Instant::now();
+                    if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        compression.top_blocks,
+                    ) {
+                        kv_selection::record_scored_timed(
+                            blocks,
+                            total_old_blocks,
+                            compression.top_blocks,
+                            Some(selection_start.elapsed().as_secs_f32() * 1000.0),
+                        );
+                    }
+                }
+                if q8_exact_old_backing_enabled() && q8_direct_exact_old_attention_enabled() {
+                    if !kv.is_compressed() {
+                        kv.build_q8_old_from_dense(
+                            &self.cuda,
+                            seq_id,
+                            seq_len,
+                            compression.recent_window,
+                        )?;
+                    }
+                    return kv.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        compression.top_blocks,
+                        d_out,
+                    );
+                }
+                if direct_fp16_k_q4_v {
+                    return kv
+                        .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                            &self.cuda,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            d_out,
+                        );
+                }
+                if exact_block_staging_enabled() {
+                    if let Some(staging) = current_exact_block_staging() {
+                        if q8_exact_old_backing_enabled() {
+                            if !kv.is_compressed() {
+                                kv.build_q8_old_from_dense(
+                                    &self.cuda,
+                                    seq_id,
+                                    seq_len,
+                                    compression.recent_window,
+                                )?;
+                            }
+                            return kv.attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+                                &self.cuda,
+                                seq_id,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                compression.recent_window,
+                                compression.block_size,
+                                compression.top_blocks,
+                                staging,
+                                d_out,
+                            );
+                        }
+                        if fp16_k_q4_v_exact_old_backing_enabled() {
+                            return kv.attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                                &self.cuda,
+                                seq_id,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                compression.recent_window,
+                                compression.block_size,
+                                compression.top_blocks,
+                                staging,
+                                d_out,
+                            );
+                        }
+                        return kv.attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                            &self.cuda,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            compression.top_blocks,
+                            staging,
+                            d_out,
+                        );
+                    }
+                    return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        compression.top_blocks,
+                        d_out,
+                    );
+                }
+                if kv.is_compressed() {
+                    anyhow::bail!(
+                        "compressed block-select-exact KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
+                    );
+                }
+                return kv.attention_last_token_f32_gqa_block_select_exact_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    compression.block_size,
+                    compression.top_blocks,
+                    d_out,
+                );
+            }
+        } else if compression.mode == KvCompressMode::RecentOnly {
+            if head_dim != 64 {
+                anyhow::bail!("recent-only requires head_dim=64");
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                if kv_selection::should_capture_attention() {
+                    if let Ok(attention) = kv.debug_attention_telemetry(
+                        &self.cuda,
+                        2,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        0,
+                        kv_selection::needle_block(),
+                    ) {
+                        kv_selection::record_attention(attention);
+                    }
+                }
+                return kv.attention_last_token_f32_gqa_compressed_recent_only_async(
+                    &self.cuda, seq_id, d_q, num_heads, seq_len, d_out,
+                );
+            }
+        } else if matches!(
+            compression.mode,
+            KvCompressMode::BlockSummary | KvCompressMode::BlockSelectLossy
+        ) {
+            if head_dim != 64 {
+                anyhow::bail!("{:?} requires head_dim=64", compression.mode);
+            }
+            #[cfg(feature = "cuda")]
+            unsafe {
+                let top_blocks = if compression.mode == KvCompressMode::BlockSummary {
+                    0
+                } else {
+                    compression.top_blocks
+                };
+                if kv_selection::enabled() {
+                    if kv_selection::should_capture_attention() {
+                        let mode_code = if compression.mode == KvCompressMode::BlockSummary {
+                            3
+                        } else {
+                            4
+                        };
+                        if let Ok(attention) = kv.debug_attention_telemetry(
+                            &self.cuda,
+                            mode_code,
+                            seq_id,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            compression.recent_window,
+                            compression.block_size,
+                            top_blocks,
+                            kv_selection::needle_block(),
+                        ) {
+                            kv_selection::record_attention(attention);
+                        }
+                    }
+                    let selection_start = std::time::Instant::now();
+                    if let Ok((blocks, total_old_blocks)) = kv.debug_select_old_blocks(
+                        &self.cuda,
+                        seq_id,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        compression.recent_window,
+                        compression.block_size,
+                        top_blocks,
+                    ) {
+                        kv_selection::record_scored_timed(
+                            blocks,
+                            total_old_blocks,
+                            top_blocks,
+                            Some(selection_start.elapsed().as_secs_f32() * 1000.0),
+                        );
+                    }
+                }
+                return kv.attention_last_token_f32_gqa_block_summary_lossy_async(
+                    &self.cuda,
+                    seq_id,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    compression.recent_window,
+                    compression.block_size,
+                    top_blocks,
+                    d_out,
+                );
+            }
+        } else if compression.mode.is_enabled() {
+            anyhow::bail!(
+                "KV compression mode {:?} is not implemented in decode attention yet",
+                compression.mode
+            );
+        }
         #[cfg(feature = "cuda")]
         unsafe {
             kv.attention_last_token_f32_gqa_async(
@@ -416,6 +847,186 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA
+    /// attention. This experimental path keeps exact old KV and sparsifies only
+    /// the read set.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn run_attention_block_select_exact_for_layer_async(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        layer_id: u32,
+        sequence_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+    ) -> Result<()> {
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention_block_select_exact: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
+            anyhow::bail!(
+                "run_attention_block_select_exact: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        #[cfg(feature = "cuda")]
+        unsafe {
+            if q8_exact_old_backing_enabled() && q8_direct_exact_old_attention_enabled() {
+                if !kv.is_compressed() {
+                    kv.build_q8_old_from_dense(&self.cuda, physical_slot, seq_len, recent_window)?;
+                }
+                return kv.attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(
+                    &self.cuda,
+                    physical_slot,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    recent_window,
+                    block_size,
+                    top_blocks,
+                    d_out,
+                );
+            }
+            if fp16_k_q4_v_exact_old_backing_enabled()
+                && fp16_k_q4_v_direct_exact_old_attention_enabled()
+            {
+                return kv
+                    .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
+                        &self.cuda,
+                        physical_slot,
+                        d_q,
+                        num_heads,
+                        seq_len,
+                        recent_window,
+                        block_size,
+                        top_blocks,
+                        d_out,
+                    );
+            }
+            if exact_block_staging_enabled() {
+                if let Some(staging) = current_exact_block_staging() {
+                    if q8_exact_old_backing_enabled() {
+                        if !kv.is_compressed() {
+                            kv.build_q8_old_from_dense(
+                                &self.cuda,
+                                physical_slot,
+                                seq_len,
+                                recent_window,
+                            )?;
+                        }
+                        return kv
+                            .attention_last_token_f32_gqa_block_select_exact_staged_q8_old_with_buffers_async(
+                                &self.cuda,
+                                physical_slot,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                recent_window,
+                                block_size,
+                                top_blocks,
+                                staging,
+                                d_out,
+                            );
+                    }
+                    if fp16_k_q4_v_exact_old_backing_enabled() {
+                        return kv
+                            .attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
+                                &self.cuda,
+                                physical_slot,
+                                d_q,
+                                num_heads,
+                                seq_len,
+                                recent_window,
+                                block_size,
+                                top_blocks,
+                                staging,
+                                d_out,
+                            );
+                    }
+                    return kv
+                        .attention_last_token_f32_gqa_block_select_exact_staged_with_buffers_async(
+                            &self.cuda,
+                            physical_slot,
+                            d_q,
+                            num_heads,
+                            seq_len,
+                            recent_window,
+                            block_size,
+                            top_blocks,
+                            staging,
+                            d_out,
+                        );
+                }
+                return kv.attention_last_token_f32_gqa_block_select_exact_staged_async(
+                    &self.cuda,
+                    physical_slot,
+                    d_q,
+                    num_heads,
+                    seq_len,
+                    recent_window,
+                    block_size,
+                    top_blocks,
+                    d_out,
+                );
+            }
+            if kv.is_compressed() {
+                anyhow::bail!(
+                    "compressed block-select-exact KV requires M40LLM_KV_EXACT_BLOCK_STAGING=1"
+                );
+            }
+            kv.attention_last_token_f32_gqa_block_select_exact_async(
+                &self.cuda,
+                physical_slot,
+                d_q,
+                num_heads,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q,
+                d_out,
+                physical_slot,
+                seq_len,
+                recent_window,
+                block_size,
+                top_blocks,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers containing one token's K/V in f32 layout.
     pub unsafe fn append_kv_token_f32(
         &self,
@@ -465,9 +1076,18 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
-                )
+                kv.append_token_f32_rope_k_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
+                )?;
+                self.cuda
+                    .synchronize_stream(crate::cuda::CudaStream::Decode)
             }
         }
         #[cfg(not(feature = "cuda"))]
@@ -497,8 +1117,15 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_async(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                kv.append_token_f32_rope_k_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }
@@ -531,8 +1158,16 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_at_async(
-                    &self.cuda, seq_id, d_k_f32, d_v_f32, position, past_len, freq_base, freq_scale,
+                kv.append_token_f32_rope_k_at_layout_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    position,
+                    past_len,
+                    freq_base,
+                    freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }
@@ -568,7 +1203,7 @@ impl LoadedModel {
                 .as_ref()
                 .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
             unsafe {
-                kv.append_token_f32_rope_k_position_dev_async(
+                kv.append_token_f32_rope_k_position_dev_layout_async(
                     &self.cuda,
                     seq_id,
                     d_k_f32,
@@ -576,6 +1211,7 @@ impl LoadedModel {
                     position_dev,
                     freq_base,
                     freq_scale,
+                    self.model_config.rope_layout_code(),
                 )
             }
         }
