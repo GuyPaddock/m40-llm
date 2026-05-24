@@ -130,7 +130,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64/128 buffered scheduler
   batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
   speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
-  speedup with all HTTP requests successful.
+  speedup with all HTTP requests successful. The dense server scheduler now
+  partitions each tick into pending-prefill, decode-ready, and complete groups
+  so mixed ticks can run packed prefill and packed decode in the same scheduler
+  cycle. `M40LLM_SERVER_BATCH_LOG=1` reports queue size, per-tick composition,
+  and packed-decode fallback reasons. Compressed KV remains serialized for
+  server batching: `M40LLM_SERVER_BATCH_DECODE=1` is ignored for compressed KV
+  configs and users should pass `--kv-compress-mode off` when they want dense
+  batched decode/prefill.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

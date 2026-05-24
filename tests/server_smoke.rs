@@ -91,7 +91,41 @@ async fn server_generate_default_compressed_kv_smoke() -> Result<()> {
         eprintln!("skipping server smoke tests without CUDA upload support");
         return Ok(());
     }
-    run_non_stream_generate_smoke(server_smoke_compressed_config(8)).await
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layers(16, &kv_compression)?;
+
+    let state = AppState::new_with_kv_config(model, kv_compression);
+    assert!(
+        !state.decode_batching_requested,
+        "compressed KV should stay on the serialized server path until the scheduler is cache-layout-aware"
+    );
+    assert!(
+        state.decode_sequence_pool.is_none(),
+        "compressed KV should not allocate dense scheduler sequence leases"
+    );
+    let server = start_test_server_with_kv_config_state(state).await?;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req = GenerateRequest {
+        prompt: "A".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let resp = client.post(&url).json(&req).send().await?;
+    assert!(resp.status().is_success());
+    let raw = resp.bytes().await?;
+    assert!(raw.iter().all(|b| *b != 0));
+    let jr: GenerateResponse = serde_json::from_slice(&raw)?;
+    assert!(!jr.output.is_empty());
+    assert!(!jr.output.starts_with(&req.prompt));
+    server.shutdown().await?;
+    Ok(())
 }
 
 #[tokio::test]
@@ -191,7 +225,12 @@ async fn start_test_server_with_kv_config(
     model: LoadedModel,
     kv_compression: KvCompressionConfig,
 ) -> Result<TestServer> {
-    let state = Arc::new(AppState::new_with_kv_config(model, kv_compression));
+    start_test_server_with_kv_config_state(AppState::new_with_kv_config(model, kv_compression))
+        .await
+}
+
+async fn start_test_server_with_kv_config_state(state: AppState) -> Result<TestServer> {
+    let state = Arc::new(state);
     let router = app_router(state);
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;

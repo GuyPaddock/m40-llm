@@ -2,6 +2,58 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Dense Scheduler Mixed Tick Guardrails
+
+This checkpoint returns to the pre-KV-compression server batching path and keeps
+the current rule explicit: dense server batching can use packed prefill/decode,
+while compressed KV remains on the serialized path until the scheduler becomes
+compressed-cache-layout-aware.
+
+Implementation notes:
+
+- `M40LLM_SERVER_BATCH_LOG=1` now logs scheduler queue size, per-tick
+  prefill/decode/complete row counts, and packed-decode fallback reasons.
+- Scheduler ticks now partition active requests into pending-prefill,
+  decode-ready, and complete groups instead of treating a tick as all-prefill or
+  all-decode.
+- Dense pending-prefill groups can use packed varlen prefill when
+  `M40LLM_SERVER_BATCH_PREFILL=1`; dense decode groups can use packed batched
+  GQA decode when `M40LLM_SERVER_BATCH_DECODE=1` and the model is compatible.
+- `AppState::new_with_kv_config` ignores `M40LLM_SERVER_BATCH_DECODE=1` for
+  compressed KV configs and logs that dense batching requires
+  `--kv-compress-mode off`.
+
+Validation:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_prefill_varlen -- --nocapture --test-threads=1
+```
+
+Results:
+
+| Check | Result |
+| --- | --- |
+| Formatting | pass |
+| Non-CUDA warnings-as-errors test matrix | pass |
+| CUDA/server clippy warnings-as-errors | pass |
+| `server_smoke` | pass, 7 tests |
+| Batched varlen decode attention | pass |
+| Packed varlen prefill attention | pass |
+
+Additional CUDA smoke:
+
+- The full `forward_with_layer_smoke` suite was rerun. It failed in different
+  packed-then-compress representative/debug-read cases across two attempts
+  (`m40llm_kvcache_debug_read_compressed_state failed: -15`, then
+  `m40llm_memcpy_d2h failed: -2`). The isolated first failing test passed on
+  rerun. These failures are in older compressed-KV quality/parity cases and did
+  not reproduce in the dense scheduler-specific coverage above.
+
 ## 2026-05-24: Default Compressed KV Long-Decode Smoke
 
 This checkpoint adds low-volume long-generation diagnostics and validates the

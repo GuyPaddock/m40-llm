@@ -355,6 +355,10 @@ impl DecodeSchedulerRequest {
             && !self.stopping.should_stop(&self.generated)
     }
 
+    fn is_decode_ready(&self) -> bool {
+        !self.is_pending_prefill() && !self.stopping.should_stop(&self.generated)
+    }
+
     fn prefill_sequence(&self) -> Result<crate::infer::ForwardPrefillSequence<'_>> {
         if self.prompt_token_len == 0 || self.prompt_token_len > self.ids.len() {
             anyhow::bail!(
@@ -457,13 +461,33 @@ impl DecodeSchedulerRequest {
 
 #[cfg(feature = "cuda")]
 fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBatchToken]) -> bool {
-    prepared.len() > 1
-        && state
-            .model
-            .kv_cache
-            .as_ref()
-            .map(|kv| kv.head_dim() == 64)
-            .unwrap_or(false)
+    if prepared.len() <= 1 {
+        log_batch_decode_fallback("batch size <= 1");
+        return false;
+    }
+    if !state
+        .model
+        .kv_cache
+        .as_ref()
+        .map(|kv| kv.head_dim() == 64)
+        .unwrap_or(false)
+    {
+        log_batch_decode_fallback("model KV head_dim is not 64");
+        return false;
+    }
+    true
+}
+
+#[cfg(feature = "cuda")]
+fn server_batch_log_enabled() -> bool {
+    std::env::var("M40LLM_SERVER_BATCH_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn log_batch_decode_fallback(reason: &str) {
+    if server_batch_log_enabled() {
+        eprintln!("[server] packed decode fallback: {reason}");
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -507,6 +531,29 @@ fn scheduler_can_use_batched_prefill(
         return false;
     }
     true
+}
+
+#[cfg(feature = "cuda")]
+fn split_scheduler_requests(
+    requests: Vec<DecodeSchedulerRequest>,
+) -> (
+    Vec<DecodeSchedulerRequest>,
+    Vec<DecodeSchedulerRequest>,
+    Vec<DecodeSchedulerRequest>,
+) {
+    let mut prefill = Vec::new();
+    let mut decode = Vec::new();
+    let mut complete = Vec::new();
+    for request in requests {
+        if request.stopping.should_stop(&request.generated) {
+            complete.push(request);
+        } else if request.is_pending_prefill() {
+            prefill.push(request);
+        } else {
+            decode.push(request);
+        }
+    }
+    (prefill, decode, complete)
 }
 
 #[cfg(feature = "cuda")]
@@ -563,9 +610,36 @@ fn process_scheduler_batch_tick(
     current_requests: Vec<DecodeSchedulerRequest>,
     active: &mut VecDeque<DecodeSchedulerRequest>,
 ) {
-    let mut requests = current_requests;
-    if scheduler_can_use_batched_prefill(state, &requests) {
-        process_scheduler_prefill_tick(state, requests, active);
+    let (prefill_requests, decode_requests, complete_requests) =
+        split_scheduler_requests(current_requests);
+    if server_batch_log_enabled() {
+        eprintln!(
+            "[server] scheduler tick prefill_rows={} decode_rows={} complete_rows={}",
+            prefill_requests.len(),
+            decode_requests.len(),
+            complete_requests.len()
+        );
+    }
+    for request in complete_requests {
+        request.send_complete();
+    }
+
+    if !prefill_requests.is_empty() {
+        if scheduler_can_use_batched_prefill(state, &prefill_requests) {
+            process_scheduler_prefill_tick(state, prefill_requests, active);
+        } else {
+            for mut request in prefill_requests {
+                match request.step() {
+                    Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                    Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                    Err(err) => request.send_error(err),
+                }
+            }
+        }
+    }
+
+    let mut requests = decode_requests;
+    if requests.is_empty() {
         return;
     }
 
@@ -587,6 +661,9 @@ fn process_scheduler_batch_tick(
     }
 
     if fallback || !scheduler_can_use_batched_attention(state, &prepared) {
+        if fallback {
+            log_batch_decode_fallback("at least one request could not prepare a batch token");
+        }
         for mut request in requests {
             match request.step() {
                 Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
@@ -650,7 +727,9 @@ async fn decode_scheduler_loop(
             enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
         }
 
+        let mut queued_drained = 0usize;
         while let Ok(command) = rx.try_recv() {
+            queued_drained += 1;
             enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
         }
 
@@ -669,6 +748,12 @@ async fn decode_scheduler_loop(
             continue;
         }
 
+        if server_batch_log_enabled() {
+            eprintln!(
+                "[server] scheduler queue active_requests={} queued_drained={queued_drained}",
+                active.len()
+            );
+        }
         log_decode_batch_plan(&active);
         {
             let _generation_guard = state.generation_lock.lock().await;
@@ -851,7 +936,15 @@ impl AppState {
     }
 
     pub fn new_with_kv_config(model: LoadedModel, kv_compression: KvCompressionConfig) -> Self {
-        let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
+        let batch_decode_env_requested = crate::decode_batch::server_batch_decode_requested();
+        let decode_batching_requested =
+            batch_decode_env_requested && !kv_compression.mode.is_enabled();
+        if batch_decode_env_requested && kv_compression.mode.is_enabled() {
+            eprintln!(
+                "[server] M40LLM_SERVER_BATCH_DECODE=1 ignored for compressed KV mode {:?}; use --kv-compress-mode off for dense batched decode",
+                kv_compression.mode
+            );
+        }
         let decode_sequence_pool = decode_batching_requested
             .then(|| model.kv_cache_logical_sequence_capacity())
             .filter(|capacity| *capacity > 0)
