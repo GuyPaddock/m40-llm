@@ -6392,19 +6392,24 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                                     void* out_rep_k_f16,
                                                     void* out_rep_v_f16,
                                                     uint32_t* out_rep_positions) {
-        (void)ctx;
+        if (!ctx) return -16;
+        if (ensure_device(ctx) != 0) return -17;
         if (!kv || !kv->compressed) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (!out_seq_len || !out_block_counts || !out_recent_k_f16 || !out_recent_v_f16 ||
             !out_summary_k_acc || !out_summary_v_acc || !out_summary_k_f16 || !out_summary_v_f16) {
             return -3;
         }
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return -18;
+        err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -19;
         const size_t elems_per_token = (size_t)kv->num_heads * (size_t)kv->head_dim;
         const size_t recent_elems = (size_t)kv->recent_window * elems_per_token;
         const size_t summary_elems = (size_t)kv->max_blocks * elems_per_token;
         const size_t rep_elems = (size_t)kv->max_blocks * (size_t)kv->representatives * elems_per_token;
         const size_t rep_positions = (size_t)kv->max_blocks * (size_t)kv->representatives;
-        cudaError_t err = cudaMemcpy(out_seq_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        err = cudaMemcpy(out_seq_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
         if (err != cudaSuccess) return -4;
         err = cudaMemcpy(out_block_counts,
                          kv->d_block_counts + (size_t)seq_id * (size_t)kv->max_blocks,
