@@ -328,8 +328,9 @@ impl LoadedModel {
         let dense = kv.dense_equivalent_bytes();
         let actual = kv.actual_bytes();
         eprintln!(
-            "[kv-compress] mode={:?} exact_old_backing={} exact_old_attention={} dense_equivalent_bytes={} actual_allocated_bytes={} recent_fp16_bytes={} old_k_fp16_bytes={} q4_old_v_payload_bytes={} q4_old_v_scale_bytes={} summary_index_bytes={} compression_ratio={:.3}",
+            "[kv-compress] mode={:?} selection_policy=topk top_blocks={} exact_old_backing={} exact_old_attention={} dense_equivalent_bytes={} actual_allocated_bytes={} recent_fp16_bytes={} old_k_fp16_bytes={} q4_old_v_payload_bytes={} q4_old_v_scale_bytes={} summary_index_bytes={} compression_ratio={:.3}",
             config.mode,
+            config.top_blocks,
             exact_old_backing.as_str(),
             config.effective_exact_old_attention().as_str(),
             dense,

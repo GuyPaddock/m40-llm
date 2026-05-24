@@ -534,20 +534,20 @@ batched decode path before touching persistent decode or large-model fused-dequa
   extraction, and code/config lookup. The Llama 2048 checkpoint passed dense
   plus top4/top8 for chat and document QA; the multifact row is inconclusive
   because dense chose the wrong region; and the config row is dense-valid
-  policy evidence where top4 chose the archived value but top8/top16 recovered
-  the active setting. Keep top4 as the efficiency comparison and top8 as the
-  safer realistic-prompt comparison. The preferred direct FP16-K/q4-V path is
-  now production-shaped for CLI generation via explicit
-  `--kv-exact-old-backing fp16-k-q4-v` and
-  `--kv-exact-old-attention fp16-k-q4-v-direct` flags, instead of relying only
-  on harness environment variables. Dense `off` remains the default; exact-old
-  compressed KV is opt-in and validates incompatible backend combinations
-  before generation. A TinyLlama CLI smoke, `attention_parity_cuda_grid`, and
-  `forward_with_layer_smoke` pass with the new config path; the focused Llama
-  2048 realistic config lookup still shows dense/top8 pass and top4 selecting
-  the archived value, with direct FP16-K/q4-V accounting reported in JSONL.
+  policy evidence where top4 chose the archived value `M40_BATCH_LIMIT=73` but
+  top8/top16 recovered the active setting `M40_BATCH_LIMIT=37`. Compressed KV
+  is now the project default when supported: `block-select-exact`,
+  `fp16-k-q4-v` exact-old backing, `fp16-k-q4-v-direct` attention, plain
+  score-ranked top-k, and `top_blocks=8`. Dense `off` remains the explicit
+  reference/compatibility mode through `--kv-compress-mode off` and
+  `KvCompressionConfig::dense_reference()`. Top4 is the efficiency/YMMV
+  override; top16 is diagnostic/escalation-only. Score-cluster-adaptive,
+  fallback, and anchor-neighbor policies remain opt-in diagnostics. The
+  `KvCompressionConfig::default()` audit intentionally leaves runtime
+  generation/server defaults compressed while moving dense correctness tests
+  and quality dense rows to `dense_reference()` or explicit per-mode configs.
   Do not increase representative count, tune pure summary modes, run 8192, or
-  expand compressed KV into server scheduling yet.
+  expand compressed KV into deeper server scheduling yet.
 
 ## Strict Reconciled Task Order
 1. Add warm/cold benchmark split.

@@ -77,6 +77,7 @@ fn generate_stock_quotes(model: &LoadedModel, seed: u64) -> Result<(Vec<u32>, St
             temperature: Some(0.7),
             seed: Some(seed),
             log_prefix: "tinyllama_canary",
+            kv_compression: m40_llm::kv_compression::KvCompressionConfig::dense_reference(),
             ..Default::default()
         },
     )?;

@@ -24,6 +24,7 @@ use crate::generate::{
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
+use crate::kv_compression::KvCompressionConfig;
 use crate::tokenizer::Tokenizer;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
@@ -112,7 +113,11 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     Ok(Bytes::from(buf))
 }
 
-fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> GenerateOptions {
+fn options_from_request(
+    req: &GenerateRequest,
+    log_prefix: &'static str,
+    kv_compression: KvCompressionConfig,
+) -> GenerateOptions {
     GenerateOptions {
         prompt: req.prompt.clone(),
         max_tokens: req.max_tokens,
@@ -123,7 +128,7 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         log_prefix,
         sequence_id: 0,
         reset_kv_cache: true,
-        kv_compression: Default::default(),
+        kv_compression,
         prompt_format: req.prompt_format,
     }
 }
@@ -245,7 +250,7 @@ impl DecodeSchedulerRequest {
             .or(Some(state.model.model_config.context_length as usize))
             .unwrap_or(32);
         let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
-        let mut options = options_from_request(&req, "server");
+        let mut options = options_from_request(&req, "server", state.kv_compression.clone());
         options.sequence_id = sequence_lease.sequence_id();
         options.reset_kv_cache = false;
         let sampler = sampler_from_options(&options)?;
@@ -745,8 +750,12 @@ mod tests {
             seed: Some(7),
             ..Default::default()
         };
-        let mut sampler =
-            sampler_from_options(&options_from_request(&req, "test")).expect("build sampler");
+        let mut sampler = sampler_from_options(&options_from_request(
+            &req,
+            "test",
+            KvCompressionConfig::dense_reference(),
+        ))
+        .expect("build sampler");
         let logits = [0.2f32, 0.8, 0.1];
         // top_k=1 should force the max logit (index 1)
         for _ in 0..5 {
@@ -761,7 +770,12 @@ mod tests {
             top_p: Some(1.5),
             ..Default::default()
         };
-        assert!(sampler_from_options(&options_from_request(&req, "test")).is_err());
+        assert!(sampler_from_options(&options_from_request(
+            &req,
+            "test",
+            KvCompressionConfig::dense_reference(),
+        ))
+        .is_err());
     }
 
     #[test]
@@ -815,6 +829,7 @@ mod tests {
 
 pub struct AppState {
     pub model: LoadedModel,
+    pub kv_compression: KvCompressionConfig,
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
     pub decode_batching_requested: bool,
     pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
@@ -824,6 +839,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(model: LoadedModel) -> Self {
+        Self::new_with_kv_config(model, KvCompressionConfig::default())
+    }
+
+    pub fn new_with_kv_config(model: LoadedModel, kv_compression: KvCompressionConfig) -> Self {
         let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
         let decode_sequence_pool = decode_batching_requested
             .then(|| model.kv_cache_logical_sequence_capacity())
@@ -834,6 +853,7 @@ impl AppState {
         }
         Self {
             model,
+            kv_compression,
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
             decode_batching_requested,
             decode_sequence_pool,
@@ -891,7 +911,7 @@ async fn generate(
 
         let sequence_lease = lease_decode_sequence(&state)?;
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
-        let mut options = options_from_request(&req, "server");
+        let mut options = options_from_request(&req, "server", state.kv_compression.clone());
         if let Some(lease) = sequence_lease.as_ref() {
             options.sequence_id = lease.sequence_id();
             options.reset_kv_cache = false;
@@ -930,8 +950,12 @@ async fn generate(
         .or_else(|| Some(state.model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
-    let sampler =
-        sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
+    let sampler = sampler_from_options(&options_from_request(
+        &req,
+        "server",
+        state.kv_compression.clone(),
+    ))
+    .map_err(internal_error)?;
 
     let sequence_lease = lease_decode_sequence(&state)?;
     #[cfg(feature = "cuda")]

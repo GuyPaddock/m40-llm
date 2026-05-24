@@ -1818,7 +1818,7 @@ fn prepare_kv_cache(
         top_blocks,
         representatives: rep_case.representatives,
         representative_policy: rep_case.policy,
-        ..Default::default()
+        ..KvCompressionConfig::for_mode(mode)
     };
     let use_compressed_kv = matches!(
         mode,
@@ -1961,7 +1961,7 @@ fn run_retrieval_case(
             top_blocks,
             representatives: rep_case.representatives,
             representative_policy: rep_case.policy,
-            ..Default::default()
+            ..KvCompressionConfig::for_mode(mode)
         },
         ..Default::default()
     };
@@ -3698,7 +3698,7 @@ fn run_multitask_generate(
                 top_blocks,
                 representatives: 0,
                 representative_policy: KvRepresentativePolicy::Last,
-                ..Default::default()
+                ..KvCompressionConfig::for_mode(mode)
             },
             ..Default::default()
         },

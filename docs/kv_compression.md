@@ -2,7 +2,9 @@
 
 The compressed KV-cache work is experimental. It exists to measure whether an
 M40 can support longer effective contexts by combining exact recent KV with
-older compressed summaries or selected exact blocks.
+older compressed summaries or selected exact blocks. The project default is now
+compressed KV when the runtime/model supports the preferred exact-old backend.
+Dense `off` remains available as an explicit reference/compatibility mode.
 
 This work is inspired by DeepSeek-V4, but it does not reproduce that
 architecture exactly:
@@ -23,14 +25,16 @@ CLI generation accepts:
 --kv-compress-mode off|dense-recent-only|block-select-exact|recent-only|block-summary|block-select-lossy
 --kv-recent-window 1024
 --kv-compress-block 32
---kv-compress-top-blocks 16
+--kv-compress-top-blocks 8
 --kv-compress-representatives 0
 --kv-compress-representative-policy last|stride
 --kv-exact-old-backing dense|q8|fp16-k-q4-v
 --kv-exact-old-attention staged|q8-direct|fp16-k-q4-v-direct
 ```
 
-- `off`: dense exact KV.
+- default: `block-select-exact` with direct FP16-K/q4-V exact-old backing,
+  plain score-ranked top-k, and `top_blocks=8`.
+- `off`: dense exact KV reference/compatibility mode.
 - `dense-recent-only`: diagnostic dense-KV sliding-window attention over the
   same absolute recent-token range used by the compressed sidecar. It preserves
   absolute RoPE positions and does not renumber the window.
@@ -42,22 +46,26 @@ CLI generation accepts:
 - `block-select-lossy`: scores old blocks cheaply, attends to selected lossy
   summaries and optional representatives.
 
-The preferred experimental runtime path is explicit and opt-in:
+The preferred experimental runtime path is the default compressed-KV path:
 
 ```bash
 m40-llm generate model.gguf "..." \
-  --kv-compress-mode block-select-exact \
-  --kv-exact-old-backing fp16-k-q4-v \
-  --kv-exact-old-attention fp16-k-q4-v-direct \
-  --kv-compress-top-blocks 8
+  --kv-compress-mode block-select-exact
 ```
 
-Use `--kv-compress-top-blocks 4` for efficiency-oriented runs and
-`--kv-compress-top-blocks 8` for quality/retrieval-oriented runs. Top16 remains
-diagnostic/escalation-only. This path preserves recent K/V as FP16, stores old
-K as FP16, stores old V as packed signed q4 with scales, and dequantizes old V
-directly inside selected-block attention instead of staging selected old V into
-FP16.
+With no KV flags, `generate` and `run` select `block-select-exact`,
+`fp16-k-q4-v`, `fp16-k-q4-v-direct`, and `top_blocks=8` when supported. Use
+`--kv-compress-mode off` for dense reference mode. Use
+`--kv-compress-top-blocks 4` only for efficiency/YMMV runs where minimizing
+active KV and decode cost matters more than retrieval robustness. Top16 remains
+diagnostic/escalation-only rather than a blanket robustness default. This path
+preserves recent K/V as FP16, stores old K as FP16, stores old V as packed
+signed q4 with scales, and dequantizes old V directly inside selected-block
+attention instead of staging selected old V into FP16.
+
+In the realistic code/config lookup validation, top4 selected the archived
+value `M40_BATCH_LIMIT=73`, while default top8 recovered the active value
+`M40_BATCH_LIMIT=37`.
 
 Representative storage is opt-in. For `block-summary` and
 `block-select-lossy`, `--kv-compress-representatives N` stores up to `N` exact
@@ -214,13 +222,13 @@ top-block robustness is still under investigation.
 
 Current long-context quality evidence makes direct FP16-K/q4-V the preferred
 experimental backend and plain score-ranked top-k the preferred selection
-policy. In the current 4096 multi-task matrix, `top_blocks=4` is the best
-efficiency setting: it passes single-needle, distractor retrieval, early-fact
-QA, and long-chat smoke with the smallest active attended KV. `top_blocks=8`
-is useful for the multi-needle row, but it is not universally superior.
-`top_blocks=16` is not a safe robustness default because quality is
-non-monotonic. Dense `off` also fails the multi-needle row, so treat that row
-as model/task brittleness rather than compression-only failure.
+policy. `top_blocks=8` is the recommended compressed-KV default because it is
+the safer retrieval/quality setting and passed dense-valid Llama and Qwen
+validation. `top_blocks=4` remains the efficiency/YMMV setting with the
+smallest active attended KV. `top_blocks=16` is not a safe robustness default
+because quality is non-monotonic. Dense `off` remains useful for reference
+tests, and compression conclusions should be drawn only from rows where dense
+also passes.
 
 Score-cluster evidence is promising but not enough to promote it. The Llama
 4096 multi-needle row is useful for selection anatomy, but it is formally

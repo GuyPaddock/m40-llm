@@ -7,9 +7,7 @@ use half::f16;
 use m40_llm::cuda::{
     ffi_debug_read_kv_token, ExactBlockStagingWorkspace, ExactOldBacking, KVCache,
 };
-use m40_llm::kv_compression::{
-    set_runtime_config, KvCompressMode, KvCompressionConfig, KvRepresentativePolicy,
-};
+use m40_llm::kv_compression::{set_runtime_config, KvCompressionConfig, KvRepresentativePolicy};
 use std::ffi::c_void;
 
 fn cast_f32_to_f16_then_back(vals: &[f32]) -> Vec<f32> {
@@ -602,10 +600,7 @@ fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> 
         );
     }
 
-    set_runtime_config(KvCompressionConfig {
-        mode: KvCompressMode::Off,
-        ..Default::default()
-    });
+    set_runtime_config(KvCompressionConfig::dense_reference());
     Ok(())
 }
 

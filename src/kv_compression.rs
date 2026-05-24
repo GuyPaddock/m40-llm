@@ -84,19 +84,42 @@ pub struct KvCompressionConfig {
 impl Default for KvCompressionConfig {
     fn default() -> Self {
         Self {
+            mode: KvCompressMode::BlockSelectExact,
+            recent_window: 1024,
+            block_size: 32,
+            top_blocks: 8,
+            representatives: 0,
+            representative_policy: KvRepresentativePolicy::Last,
+            exact_old_backing: KvExactOldBacking::Fp16KQ4V,
+            exact_old_attention: KvExactOldAttention::Fp16KQ4VDirect,
+        }
+    }
+}
+
+impl KvCompressionConfig {
+    pub fn dense_reference() -> Self {
+        Self {
             mode: KvCompressMode::Off,
             recent_window: 1024,
             block_size: 32,
-            top_blocks: 16,
+            top_blocks: 8,
             representatives: 0,
             representative_policy: KvRepresentativePolicy::Last,
             exact_old_backing: KvExactOldBacking::Dense,
             exact_old_attention: KvExactOldAttention::Staged,
         }
     }
-}
 
-impl KvCompressionConfig {
+    pub fn for_mode(mode: KvCompressMode) -> Self {
+        let mut config = if mode == KvCompressMode::BlockSelectExact {
+            Self::default()
+        } else {
+            Self::dense_reference()
+        };
+        config.mode = mode;
+        config
+    }
+
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.recent_window == 0 {
             anyhow::bail!("kv_recent_window must be > 0");
@@ -199,24 +222,26 @@ pub fn runtime_config() -> KvCompressionConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking,
-        KvRepresentativePolicy,
-    };
+    use super::{KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking};
 
     #[test]
     fn validates_direct_fp16_k_q4_v_runtime_config() {
-        let cfg = KvCompressionConfig {
-            mode: KvCompressMode::BlockSelectExact,
-            recent_window: 1024,
-            block_size: 32,
-            top_blocks: 8,
-            representatives: 0,
-            representative_policy: KvRepresentativePolicy::Last,
-            exact_old_backing: KvExactOldBacking::Fp16KQ4V,
-            exact_old_attention: KvExactOldAttention::Fp16KQ4VDirect,
-        };
+        let cfg = KvCompressionConfig::default();
         cfg.validate().expect("preferred runtime config validates");
+        assert_eq!(cfg.mode, KvCompressMode::BlockSelectExact);
+        assert_eq!(cfg.top_blocks, 8);
+        assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Fp16KQ4V);
+        assert_eq!(cfg.exact_old_attention, KvExactOldAttention::Fp16KQ4VDirect);
+    }
+
+    #[test]
+    fn dense_reference_config_is_explicit() {
+        let cfg = KvCompressionConfig::dense_reference();
+        cfg.validate().expect("dense reference config validates");
+        assert_eq!(cfg.mode, KvCompressMode::Off);
+        assert_eq!(cfg.top_blocks, 8);
+        assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Dense);
+        assert_eq!(cfg.exact_old_attention, KvExactOldAttention::Staged);
     }
 
     #[test]
@@ -224,7 +249,7 @@ mod tests {
         let cfg = KvCompressionConfig {
             mode: KvCompressMode::BlockSelectExact,
             exact_old_attention: KvExactOldAttention::Fp16KQ4VDirect,
-            ..Default::default()
+            ..KvCompressionConfig::dense_reference()
         };
         let err = cfg.validate().expect_err("mismatched backend must fail");
         assert!(
@@ -238,7 +263,7 @@ mod tests {
         let cfg = KvCompressionConfig {
             mode: KvCompressMode::Off,
             exact_old_backing: KvExactOldBacking::Fp16KQ4V,
-            ..Default::default()
+            ..KvCompressionConfig::dense_reference()
         };
         let err = cfg.validate().expect_err("mismatched mode must fail");
         assert!(

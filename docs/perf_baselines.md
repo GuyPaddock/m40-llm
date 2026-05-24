@@ -2,6 +2,35 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-23: Compressed KV Is the Runtime Default
+
+The shared `KvCompressionConfig::default()` now selects the preferred
+compressed-KV path:
+
+- mode: `block-select-exact`
+- exact-old backing: `fp16-k-q4-v`
+- exact-old attention: `fp16-k-q4-v-direct`
+- selection policy: plain score-ranked top-k
+- top blocks: `8`
+
+Dense `off` remains the explicit reference/compatibility mode via
+`--kv-compress-mode off` and `KvCompressionConfig::dense_reference()`. Runtime
+and generation defaults intentionally moved to compressed top8; dense
+correctness tests and dense quality rows were audited to use
+`dense_reference()` or explicit per-mode configs instead of relying on
+`Default::default()`.
+
+Top8 is now the recommended compressed-KV default because it is the safer
+quality/retrieval setting. Top4 remains an efficiency/YMMV override, and top16
+remains diagnostic/escalation-only. Score-cluster-adaptive, fallback, and
+anchor-neighbor policies remain opt-in diagnostics.
+
+The realistic code/config lookup validation motivated the default change:
+top4 selected the archived value `M40_BATCH_LIMIT=73`, while top8 recovered the
+active value `M40_BATCH_LIMIT=37`. Dense `off` remains the reference for
+quality conclusions; compressed results are only interpreted on dense-valid
+rows.
+
 ## 2026-05-23: Production-Shaped Direct FP16-K/q4-V Runtime Config
 
 This checkpoint moves the preferred exact-old KV strategy from harness-only
@@ -17,8 +46,8 @@ m40-llm generate model.gguf "..." \
 
 Use `--kv-compress-top-blocks 4` for efficiency-oriented runs and
 `--kv-compress-top-blocks 8` for quality/retrieval-oriented runs. Top16 remains
-diagnostic/escalation-only. Dense `off` remains the default unless compressed
-KV is explicitly requested.
+diagnostic/escalation-only. This entry predates the default flip above; dense
+`off` is now explicit reference/compatibility mode.
 
 The runtime path now validates incompatible exact-old combinations up front and
 logs the key KV accounting fields when compressed KV is allocated:

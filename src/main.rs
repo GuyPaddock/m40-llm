@@ -2,7 +2,10 @@
 // Use the library crate instead of re-declaring modules to avoid duplicate code
 use anyhow::Result;
 use clap::Parser;
-use m40_llm::cli::{Cli, Commands};
+use m40_llm::cli::{
+    Cli, Commands, KvCompressModeArg, KvExactOldAttentionArg, KvExactOldBackingArg,
+    KvRepresentativePolicyArg,
+};
 use m40_llm::generate::{generate_text, GenerateOptions};
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 #[cfg(not(feature = "server"))]
@@ -19,6 +22,37 @@ use {
 #[cfg(all(feature = "server", feature = "gguf_ext"))]
 #[allow(unused_imports)]
 use m40_llm::gguf_ext;
+
+struct CliKvOptions {
+    mode: KvCompressModeArg,
+    recent_window: u32,
+    block_size: u32,
+    top_blocks: Option<u32>,
+    representatives: u32,
+    representative_policy: KvRepresentativePolicyArg,
+    exact_old_backing: KvExactOldBackingArg,
+    exact_old_attention: KvExactOldAttentionArg,
+}
+
+fn kv_config_from_cli(options: CliKvOptions) -> KvCompressionConfig {
+    let mode: KvCompressMode = options.mode.into();
+    let mut config = if mode == KvCompressMode::Off {
+        KvCompressionConfig::dense_reference()
+    } else {
+        KvCompressionConfig::default()
+    };
+    config.mode = mode;
+    config.recent_window = options.recent_window;
+    config.block_size = options.block_size;
+    config.top_blocks = options.top_blocks.unwrap_or(config.top_blocks);
+    config.representatives = options.representatives;
+    config.representative_policy = options.representative_policy.into();
+    if mode != KvCompressMode::Off {
+        config.exact_old_backing = options.exact_old_backing.into();
+        config.exact_old_attention = options.exact_old_attention.into();
+    }
+    config
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -89,17 +123,21 @@ async fn main() -> Result<()> {
             );
 
             let max_len = loaded.model_config.context_length as usize;
-            let kv_compression = KvCompressionConfig {
-                mode: kv_compress_mode.into(),
+            let kv_compression = kv_config_from_cli(CliKvOptions {
+                mode: kv_compress_mode,
                 recent_window: kv_recent_window,
                 block_size: kv_compress_block,
                 top_blocks: kv_compress_top_blocks,
                 representatives: kv_compress_representatives,
-                representative_policy: kv_compress_representative_policy.into(),
-                exact_old_backing: kv_exact_old_backing.into(),
-                exact_old_attention: kv_exact_old_attention.into(),
-            };
-            kv_compression.validate()?;
+                representative_policy: kv_compress_representative_policy,
+                exact_old_backing: kv_exact_old_backing,
+                exact_old_attention: kv_exact_old_attention,
+            });
+            kv_compression.validate().map_err(|err| {
+                anyhow::anyhow!(
+                    "{err}; use --kv-compress-mode off for dense reference/compatibility mode"
+                )
+            })?;
             let use_compressed_kv = matches!(
                 kv_compression.mode,
                 KvCompressMode::RecentOnly
@@ -137,11 +175,47 @@ async fn main() -> Result<()> {
             addr,
             device_id,
             require_sm52,
+            kv_compress_mode,
+            kv_recent_window,
+            kv_compress_block,
+            kv_compress_top_blocks,
+            kv_compress_representatives,
+            kv_compress_representative_policy,
+            kv_exact_old_backing,
+            kv_exact_old_attention,
         } => {
             // Silence unused variable warnings when server feature is off
-            let _ = (&model, &addr, device_id, require_sm52);
+            let _ = (
+                &model,
+                &addr,
+                device_id,
+                require_sm52,
+                kv_compress_mode,
+                kv_recent_window,
+                kv_compress_block,
+                kv_compress_top_blocks,
+                kv_compress_representatives,
+                kv_compress_representative_policy,
+                kv_exact_old_backing,
+                kv_exact_old_attention,
+            );
             #[cfg(feature = "server")]
             {
+                let kv_compression = kv_config_from_cli(CliKvOptions {
+                    mode: kv_compress_mode,
+                    recent_window: kv_recent_window,
+                    block_size: kv_compress_block,
+                    top_blocks: kv_compress_top_blocks,
+                    representatives: kv_compress_representatives,
+                    representative_policy: kv_compress_representative_policy,
+                    exact_old_backing: kv_exact_old_backing,
+                    exact_old_attention: kv_exact_old_attention,
+                });
+                kv_compression.validate().map_err(|err| {
+                    anyhow::anyhow!(
+                        "{err}; use --kv-compress-mode off for dense reference/compatibility mode"
+                    )
+                })?;
                 let local = model::resolve_model_arg(&model)?;
 
                 // If gguf_ext feature is enabled, inspect via gguf-llms for a quick overview
@@ -190,7 +264,6 @@ async fn main() -> Result<()> {
                     );
                 }
 
-                // Allocate one KV slot per layer and logical sequence.
                 let max_len = loaded.model_config.context_length as usize;
                 let max_sequences =
                     if std::env::var("M40LLM_SERVER_BATCH_DECODE").ok().as_deref() == Some("1") {
@@ -202,12 +275,34 @@ async fn main() -> Result<()> {
                     } else {
                         1
                     };
-                loaded.allocate_kv_cache_for_layer_sequences(
-                    max_len.try_into().unwrap(),
-                    max_sequences,
-                )?;
+                let use_compressed_kv = matches!(
+                    kv_compression.mode,
+                    KvCompressMode::RecentOnly
+                        | KvCompressMode::BlockSummary
+                        | KvCompressMode::BlockSelectLossy
+                ) || kv_compression.uses_compressed_exact_old_backing();
+                if use_compressed_kv {
+                    if max_sequences != 1 {
+                        anyhow::bail!(
+                            "compressed KV server startup currently supports one logical sequence; use --kv-compress-mode off for dense batched decode"
+                        );
+                    }
+                    loaded
+                        .allocate_compressed_kv_cache_for_layers(max_len.try_into().unwrap(), &kv_compression)
+                        .map_err(|err| {
+                            anyhow::anyhow!(
+                                "{err}; use --kv-compress-mode off for dense reference/compatibility mode"
+                            )
+                        })?;
+                } else {
+                    // Allocate one KV slot per layer and logical sequence.
+                    loaded.allocate_kv_cache_for_layer_sequences(
+                        max_len.try_into().unwrap(),
+                        max_sequences,
+                    )?;
+                }
 
-                let state = Arc::new(server::AppState::new(loaded));
+                let state = Arc::new(server::AppState::new_with_kv_config(loaded, kv_compression));
                 let router = server::app_router(state);
 
                 let listener = TcpListener::bind(&addr).await?;
