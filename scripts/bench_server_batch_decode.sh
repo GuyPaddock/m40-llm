@@ -15,6 +15,7 @@ MODEL=${MODEL:-/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1
 PORT_BASE=${PORT_BASE:-52240}
 TRIALS=${TRIALS:-3}
 MAX_TOKENS=${MAX_TOKENS:-2}
+MAX_CONTEXT_TOKENS=${MAX_CONTEXT_TOKENS:-}
 SLOTS=${M40LLM_SERVER_BATCH_DECODE_SLOTS:-8}
 BATCH_DECODE_MODES=${BATCH_DECODE_MODES:-"0 1"}
 PREFILL_MODES=${PREFILL_MODES:-"0"}
@@ -98,6 +99,10 @@ run_case() {
 
   cleanup
   SERVER_PID=""
+  local context_args=()
+  if [ -n "$MAX_CONTEXT_TOKENS" ]; then
+    context_args=(--max-context-tokens "$MAX_CONTEXT_TOKENS")
+  fi
 
   M40LLM_DECODE_GRAPH=0 \
   M40LLM_SERVER_BATCH_DECODE="$batch_decode" \
@@ -106,7 +111,8 @@ run_case() {
   M40LLM_ENABLE_NVCC="${M40LLM_ENABLE_NVCC:-1}" \
   M40LLM_ENABLE_CUBLAS="${M40LLM_ENABLE_CUBLAS:-1}" \
     "$CARGO" run $CARGO_RUN_ARGS --features cuda,server -- run "$MODEL" \
-      --addr "$addr" --require-sm52 $SERVER_EXTRA_ARGS >"$server_log" 2>&1 &
+      --addr "$addr" --require-sm52 "${context_args[@]}" \
+      $SERVER_EXTRA_ARGS >"$server_log" 2>&1 &
   SERVER_PID=$!
   wait_for_server "$addr" "$server_log"
 
@@ -163,7 +169,7 @@ run_case() {
 main() {
   echo "log_dir=${LOG_DIR}"
   echo "model=${MODEL}"
-  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES} cases=${CASES}"
+  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} max_context_tokens=${MAX_CONTEXT_TOKENS:-model} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES} cases=${CASES}"
   echo "cargo_run_args=${CARGO_RUN_ARGS}"
   echo "server_extra_args=${SERVER_EXTRA_ARGS}"
 

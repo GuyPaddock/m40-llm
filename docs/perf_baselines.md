@@ -4,13 +4,14 @@ This file tracks measured CUDA baselines before M40-specific optimization work.
 
 ## 2026-05-24: Dense Server Batch Head128 Admission
 
-This checkpoint lifts the dense server batched decode/prefill admission gates
-from head64-only to `head_dim=64` or `head_dim=128`. It adds a dedicated
-head128 batched last-token GQA CUDA specialization, keeps the existing head64
-`ldg_kv` cache experiment head64-only, and extends the scheduler/forward guards
-so Qwen-style dense KV batches can use the same packed decode and packed prefill
-path as TinyLlama-style head64 models. Compressed KV batching remains disabled;
-the dense scheduler path still requires `--kv-compress-mode off`.
+This checkpoint lifts dense server batched decode admission from head64-only to
+`head_dim=64` or `head_dim=128`. It adds a dedicated head128 batched last-token
+GQA CUDA specialization and keeps the existing head64 `ldg_kv` cache experiment
+head64-only. Server packed prefill remains head64-only for now: a bounded
+Qwen2.5 run showed HTTP success with capped dense KV, but mixed head128 packed
+prefill produced suspicious two-token outputs compared with dense serial and
+decode-only batching. Compressed KV batching remains disabled; the dense
+scheduler path still requires `--kv-compress-mode off`.
 
 Validation commands:
 
@@ -40,10 +41,60 @@ Results:
   row-batched full-layer decode smoke that asserts packed GQA attention was
   used.
 - `server_smoke` passes 8 CUDA/server tests, including a two-request head128
-  buffered `/generate` smoke that records both
-  `server_scheduler_batched_decode_tick` and
-  `server_scheduler_batched_prefill_tick`.
+  buffered `/generate` smoke that records `server_scheduler_batched_decode_tick`
+  and asserts packed prefill stays disabled for head128.
 - CUDA/server clippy and the non-CUDA warning-as-error matrix are clean.
+
+Qwen2.5 release benchmark follow-up:
+
+- Uncapped dense Qwen batching with `M40LLM_SERVER_BATCH_DECODE_SLOTS=8` fails
+  during FP32 MLP materialization because full-context dense KV for eight
+  logical sequences leaves insufficient VRAM.
+- `--max-context-tokens` / `MAX_CONTEXT_TOKENS` was added for bounded server
+  benchmarking. With `MAX_CONTEXT_TOKENS=512`, dense serial and head128
+  decode-only batching return HTTP 200 for batch1, batch2, and batch4 mixed
+  prompts.
+- Head128 server packed prefill is intentionally gated off until a real Qwen
+  packed-prefill-vs-sequential parity test is added.
+
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="batch1_hello batch2_same batch4_mixed" \
+  PORT_BASE=55080 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_114220`
+- Model: `Qwen2.5-3B-Instruct-f16.gguf`
+- Cargo profile: release
+- Server args: `--max-context-tokens 512 --kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 847 ms | 0.837 s | 2.36 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 849 ms | 0.840 s | 2.36 | 1.00x |
+| batched decode+prefill requested | batch1 hello | 1 | 1 | 840 ms | 0.830 s | 2.38 | 1.01x |
+| dense serial | batch2 same | 2 | 2 | 1705 ms | 1.275 s | 2.35 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 1619 ms | 1.583 s | 2.47 | 1.05x |
+| batched decode+prefill requested | batch2 same | 2 | 2 | 1610 ms | 1.576 s | 2.48 | 1.06x |
+| dense serial | batch4 mixed | 4 | 4 | 5197 ms | 3.134 s | 1.54 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 4989 ms | 4.893 s | 1.60 | 1.04x |
+| batched decode+prefill requested | batch4 mixed | 4 | 4 | 4989 ms | 4.892 s | 1.60 | 1.04x |
+
+Interpretation:
+
+- All bounded Qwen2.5 rows returned HTTP 200 and the batch-enabled rows matched
+  dense serial two-token smoke outputs.
+- Head128 decode-only batching is correct but only modestly faster for this
+  two-token Qwen matrix; prompt prefill and logits dominate.
+- `M40LLM_SERVER_BATCH_PREFILL=1` is effectively a no-op for head128 server
+  rows after the safety gate, so those timings match decode-only batching.
 
 ## 2026-05-24: Dense Server Batch Script Refresh
 

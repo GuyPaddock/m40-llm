@@ -24,7 +24,9 @@ use crate::generate::{
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
+use crate::kv_compression::KvCompressionConfig;
+#[cfg(feature = "cuda")]
+use crate::kv_compression::ScopedRuntimeConfig;
 use crate::tokenizer::Tokenizer;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
@@ -524,10 +526,10 @@ fn scheduler_can_use_batched_prefill(
         .model
         .kv_cache
         .as_ref()
-        .map(|kv| kv.head_dim() == 64 || kv.head_dim() == 128)
+        .map(|kv| kv.head_dim() == 64)
         .unwrap_or(false)
     {
-        log_batch_prefill_fallback("model KV head_dim is not 64 or 128");
+        log_batch_prefill_fallback("model KV head_dim is not 64");
         return false;
     }
     true

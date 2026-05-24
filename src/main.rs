@@ -54,6 +54,17 @@ fn kv_config_from_cli(options: CliKvOptions) -> KvCompressionConfig {
     config
 }
 
+fn bounded_context_len(
+    model_context_len: usize,
+    max_context_tokens: Option<usize>,
+) -> Result<usize> {
+    match max_context_tokens {
+        Some(0) => anyhow::bail!("--max-context-tokens must be greater than zero"),
+        Some(limit) => Ok(limit.min(model_context_len)),
+        None => Ok(model_context_len),
+    }
+}
+
 fn warn_if_gpu_has_other_compute_processes(device_id: i32) {
     if std::env::var("M40LLM_GPU_BUSY_WARN").ok().as_deref() == Some("0") {
         return;
@@ -142,6 +153,7 @@ async fn main() -> Result<()> {
             seed,
             device_id,
             require_sm52,
+            max_context_tokens,
             kv_compress_mode,
             kv_recent_window,
             kv_compress_block,
@@ -173,7 +185,10 @@ async fn main() -> Result<()> {
             );
             warn_if_gpu_has_other_compute_processes(props.device_id);
 
-            let max_len = loaded.model_config.context_length as usize;
+            let max_len = bounded_context_len(
+                loaded.model_config.context_length as usize,
+                max_context_tokens,
+            )?;
             let kv_compression = kv_config_from_cli(CliKvOptions {
                 mode: kv_compress_mode,
                 recent_window: kv_recent_window,
@@ -226,6 +241,7 @@ async fn main() -> Result<()> {
             addr,
             device_id,
             require_sm52,
+            max_context_tokens,
             kv_compress_mode,
             kv_recent_window,
             kv_compress_block,
@@ -241,6 +257,7 @@ async fn main() -> Result<()> {
                 &addr,
                 device_id,
                 require_sm52,
+                max_context_tokens,
                 kv_compress_mode,
                 kv_recent_window,
                 kv_compress_block,
@@ -317,7 +334,16 @@ async fn main() -> Result<()> {
                     warn_if_gpu_has_other_compute_processes(props.device_id);
                 }
 
-                let max_len = loaded.model_config.context_length as usize;
+                let max_len = bounded_context_len(
+                    loaded.model_config.context_length as usize,
+                    max_context_tokens,
+                )?;
+                if max_len < loaded.model_config.context_length as usize {
+                    eprintln!(
+                        "[server] limiting allocated KV context to {} tokens (model context {})",
+                        max_len, loaded.model_config.context_length
+                    );
+                }
                 let max_sequences =
                     if std::env::var("M40LLM_SERVER_BATCH_DECODE").ok().as_deref() == Some("1") {
                         std::env::var("M40LLM_SERVER_BATCH_DECODE_SLOTS")

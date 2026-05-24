@@ -313,7 +313,7 @@ pub fn server_batch_prefill_requested() -> bool {
 
 #[cfg(feature = "server")]
 pub fn server_batch_prefill_status() -> &'static str {
-    "M40LLM_SERVER_BATCH_PREFILL=1 requested; compatible buffered scheduler ticks batch initial prompt prefill with packed varlen attention"
+    "M40LLM_SERVER_BATCH_PREFILL=1 requested; compatible head64 dense buffered scheduler ticks batch initial prompt prefill with packed varlen attention"
 }
 
 #[cfg(feature = "server")]

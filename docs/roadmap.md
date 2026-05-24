@@ -41,8 +41,10 @@ models while the shared workspace lock remains in place.
 count.
 
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
-for compatible server cases. Unsupported or single-request cases fall back to
-the normal path.
+for compatible server cases. Server packed prefill is currently admitted for
+head64 dense-KV models; head128 server requests fall back to sequential prefill
+until real-model Qwen parity is validated. Unsupported or single-request cases
+fall back to the normal path.
 
 The intended order is:
 

@@ -137,6 +137,9 @@ pub enum Commands {
         /// If set, abort if the active device is not sm_52 (Tesla M40)
         #[arg(long, default_value_t = false)]
         require_sm52: bool,
+        /// Cap allocated KV context tokens below the model maximum for bounded runs
+        #[arg(long)]
+        max_context_tokens: Option<usize>,
         /// Experimental compressed KV-cache mode; use `off` for dense reference mode
         #[arg(long, value_enum, default_value_t = KvCompressModeArg::BlockSelectExact)]
         kv_compress_mode: KvCompressModeArg,
@@ -177,6 +180,9 @@ pub enum Commands {
         /// If set, abort if the active device is not sm_52 (Tesla M40)
         #[arg(long, default_value_t = false)]
         require_sm52: bool,
+        /// Cap allocated KV context tokens below the model maximum for bounded server runs
+        #[arg(long)]
+        max_context_tokens: Option<usize>,
         /// Experimental compressed KV-cache mode; use `off` for dense reference mode
         #[arg(long, value_enum, default_value_t = KvCompressModeArg::BlockSelectExact)]
         kv_compress_mode: KvCompressModeArg,
@@ -236,6 +242,7 @@ mod tests {
                 top_k,
                 seed,
                 require_sm52,
+                max_context_tokens,
                 kv_compress_mode,
                 kv_recent_window,
                 kv_compress_block,
@@ -253,6 +260,7 @@ mod tests {
                 assert_eq!(top_k, Some(1));
                 assert_eq!(seed, Some(7));
                 assert!(require_sm52);
+                assert_eq!(max_context_tokens, None);
                 assert_eq!(kv_compress_mode, KvCompressModeArg::BlockSelectExact);
                 assert_eq!(kv_recent_window, 1024);
                 assert_eq!(kv_compress_block, 32);
@@ -356,6 +364,8 @@ mod tests {
             "m40-llm",
             "run",
             "llama.gguf",
+            "--max-context-tokens",
+            "2048",
             "--kv-compress-mode",
             "off",
             "--kv-compress-top-blocks",
@@ -366,10 +376,12 @@ mod tests {
             Commands::Run {
                 kv_compress_mode,
                 kv_compress_top_blocks,
+                max_context_tokens,
                 ..
             } => {
                 assert_eq!(kv_compress_mode, KvCompressModeArg::Off);
                 assert_eq!(kv_compress_top_blocks, Some(4));
+                assert_eq!(max_context_tokens, Some(2048));
             }
             other => panic!("expected run command, got {other:?}"),
         }

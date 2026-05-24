@@ -287,9 +287,9 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
         .get("server_scheduler_batched_prefill_tick")
         .map(|counts| counts.launches)
         .unwrap_or_default();
-    assert!(
-        batched_prefill_ticks >= 1,
-        "head128 server batch scheduler should record at least one batched prefill tick"
+    assert_eq!(
+        batched_prefill_ticks, 0,
+        "head128 server batch scheduler should keep packed prefill disabled until real-model parity is validated"
     );
     server.shutdown().await?;
     Ok(())

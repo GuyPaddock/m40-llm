@@ -128,7 +128,7 @@ batched decode path before touching persistent decode or large-model fused-dequa
   for skewed batch size 4, with all requests returning HTTP 200. Results and
   validation commands are recorded in `docs/perf_baselines.md`.
 - Packed varlen prefill is now available behind
-  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64/128 buffered scheduler
+  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head64 dense buffered scheduler
   batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
   speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
   speedup with all HTTP requests successful. The dense server scheduler now
@@ -152,11 +152,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   scheduler-level profile events for batched prefill/decode ticks in addition
   to the underlying CUDA kernel launches, making scheduler decisions visible
   through `profile::snapshot()` and `M40LLM_LAUNCH_LOG=1`. Dense server
-  batched decode/prefill now also admits `head_dim=128` models through a
-  dedicated batched GQA head128 CUDA specialization and lifted
-  scheduler/forward guards. CUDA parity, full-layer forward smoke, and server
-  smoke tests cover head128 batched decode while compressed KV batching remains
-  serialized.
+  batched decode now also admits `head_dim=128` models through a dedicated
+  batched GQA head128 CUDA specialization and lifted scheduler/forward guards.
+  `--max-context-tokens` / `MAX_CONTEXT_TOKENS` is available for bounded dense
+  KV server benchmarking; uncapped Qwen2.5 dense batching can exceed M40 VRAM
+  when eight full-context slots and materialized FP32 weights are both present.
+  CUDA parity, full-layer forward smoke, and server smoke tests cover head128
+  batched decode while compressed KV batching remains serialized. Head128
+  server packed prefill is gated off until a real Qwen packed-prefill parity
+  test is added.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA
