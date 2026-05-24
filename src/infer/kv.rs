@@ -277,9 +277,21 @@ impl LoadedModel {
         max_seq_len: u32,
         config: &KvCompressionConfig,
     ) -> Result<()> {
+        self.allocate_compressed_kv_cache_for_layer_sequences(max_seq_len, 1, config)
+    }
+
+    pub fn allocate_compressed_kv_cache_for_layer_sequences(
+        &mut self,
+        max_seq_len: u32,
+        max_sequences: u32,
+        config: &KvCompressionConfig,
+    ) -> Result<()> {
         let layer_count = self.model_config.block_count;
         if layer_count == 0 {
             anyhow::bail!("model_config.block_count must be > 0");
+        }
+        if max_sequences == 0 {
+            anyhow::bail!("max_sequences must be > 0");
         }
         let exact_old_backing = if config.mode == KvCompressMode::BlockSelectExact {
             match config.effective_exact_old_backing() {
@@ -305,11 +317,14 @@ impl LoadedModel {
         let head_dim = self.model_config.attention_key_length;
         config.validate_runtime_support(max_seq_len, head_dim)?;
         let recent_window = config.recent_window.min(max_seq_len);
+        let physical_slots = layer_count
+            .checked_mul(max_sequences)
+            .ok_or_else(|| anyhow!("compressed KV physical slot count overflow"))?;
         self.kv_cache = None;
         let kv = KVCache::new_compressed_with_context(
             &self.cuda,
             max_seq_len,
-            layer_count,
+            physical_slots,
             num_heads,
             head_dim,
             recent_window,

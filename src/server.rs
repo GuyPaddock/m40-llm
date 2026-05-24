@@ -170,6 +170,10 @@ fn lease_decode_sequence(
     })
 }
 
+fn kv_config_supports_server_batching(kv_compression: &KvCompressionConfig) -> bool {
+    !kv_compression.mode.is_enabled() || kv_compression.is_preferred_batched_runtime()
+}
+
 #[cfg(feature = "cuda")]
 fn log_top_logits(logits: &[f32], k: usize) {
     if std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1") {
@@ -450,6 +454,12 @@ impl DecodeSchedulerRequest {
 
 #[cfg(feature = "cuda")]
 fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBatchToken]) -> bool {
+    if state.kv_compression.mode.is_enabled() {
+        log_batch_decode_fallback(
+            "compressed KV uses per-request decode until batched compressed attention is available",
+        );
+        return false;
+    }
     if prepared.len() <= 1 {
         log_batch_decode_fallback("batch size <= 1");
         return false;
@@ -496,6 +506,12 @@ fn scheduler_can_use_batched_prefill(
     requests: &[DecodeSchedulerRequest],
 ) -> bool {
     if !crate::decode_batch::server_batch_prefill_requested() {
+        return false;
+    }
+    if state.kv_compression.mode.is_enabled() {
+        log_batch_prefill_fallback(
+            "compressed KV uses sequential prompt processing until compressed packed prefill is available",
+        );
         return false;
     }
     if requests.len() <= 1 {
@@ -668,6 +684,11 @@ fn process_scheduler_batch_tick(
             process_scheduler_prefill_tick(state, prefill_requests, active);
         } else {
             crate::profile::record_launch("server_scheduler_sequential_prefill_tick");
+            if state.kv_compression.mode.is_enabled() {
+                crate::profile::record_launch(
+                    "server_scheduler_compressed_sequential_prefill_tick",
+                );
+            }
             for mut request in prefill_requests {
                 match request.step() {
                     Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
@@ -705,6 +726,9 @@ fn process_scheduler_batch_tick(
             log_batch_decode_fallback("at least one request could not prepare a batch token");
         }
         crate::profile::record_launch("server_scheduler_sequential_decode_tick");
+        if state.kv_compression.mode.is_enabled() {
+            crate::profile::record_launch("server_scheduler_compressed_sequential_decode_tick");
+        }
         for mut request in requests {
             match request.step() {
                 Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
@@ -980,10 +1004,15 @@ impl AppState {
     pub fn new_with_kv_config(model: LoadedModel, kv_compression: KvCompressionConfig) -> Self {
         let batch_decode_env_requested = crate::decode_batch::server_batch_decode_requested();
         let decode_batching_requested =
-            batch_decode_env_requested && !kv_compression.mode.is_enabled();
-        if batch_decode_env_requested && kv_compression.mode.is_enabled() {
+            batch_decode_env_requested && kv_config_supports_server_batching(&kv_compression);
+        if batch_decode_env_requested && !decode_batching_requested {
             eprintln!(
-                "[server] M40LLM_SERVER_BATCH_DECODE=1 ignored for compressed KV mode {:?}; use --kv-compress-mode off for dense batched decode",
+                "[server] M40LLM_SERVER_BATCH_DECODE=1 ignored for unsupported compressed KV mode {:?}; supported batch modes are dense off or block-select-exact with fp16-k-q4-v direct exact-old attention",
+                kv_compression.mode
+            );
+        } else if batch_decode_env_requested && kv_compression.mode.is_enabled() {
+            eprintln!(
+                "[server] M40LLM_SERVER_BATCH_DECODE=1 requested with compressed KV mode {:?}; using per-request compressed decode scheduler until batched compressed attention is enabled",
                 kv_compression.mode
             );
         }

@@ -1,6 +1,8 @@
 use anyhow::Result;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufValue};
 use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
+#[cfg(feature = "cuda")]
+use m40_llm::kv_compression::KvCompressionConfig;
 use std::collections::HashMap;
 
 fn strides_from(shape: &[u64]) -> Vec<usize> {
@@ -428,7 +430,7 @@ fn validate_full_layer_decode_requires_layer_kv_slots() -> Result<()> {
 
 #[test]
 fn kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
-    let mut lm = match make_model_with_layer(2, 32, 64, true) {
+    let mut lm = match make_model_with_layer(2, 64, 64, true) {
         Ok(lm) => lm,
         Err(e) => {
             eprintln!("skipping: {}", e);
@@ -436,6 +438,38 @@ fn kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
         }
     };
     lm.allocate_kv_cache_for_layer_sequences(16, 3)?;
+
+    assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 0)?, 0);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 0)?, 2);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 1)?, 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 2)?, 8);
+
+    let err = lm
+        .kv_cache_physical_slot_for_layer_sequence(0, 3)
+        .unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("sequence_id 3 out of range"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+fn compressed_kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
+    let mut lm = match make_model_with_layer(2, 64, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    let mut config = KvCompressionConfig::default();
+    config.recent_window = 4;
+    config.block_size = 4;
+    lm.allocate_compressed_kv_cache_for_layer_sequences(16, 3, &config)?;
 
     assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);
     assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 0)?, 0);

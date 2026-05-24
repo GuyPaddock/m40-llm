@@ -100,12 +100,12 @@ async fn server_generate_default_compressed_kv_smoke() -> Result<()> {
 
     let state = AppState::new_with_kv_config(model, kv_compression);
     assert!(
-        !state.decode_batching_requested,
-        "compressed KV should stay on the serialized server path until the scheduler is cache-layout-aware"
+        state.decode_batching_requested,
+        "preferred compressed KV should use the scheduler with per-request compressed decode"
     );
     assert!(
-        state.decode_sequence_pool.is_none(),
-        "compressed KV should not allocate dense scheduler sequence leases"
+        state.decode_sequence_pool.is_some(),
+        "preferred compressed KV should allocate scheduler sequence leases"
     );
     let server = start_test_server_with_kv_config_state(state).await?;
 
@@ -136,6 +136,78 @@ async fn server_generate_compressed_top_block_overrides_smoke() -> Result<()> {
     }
     run_non_stream_generate_smoke(server_smoke_compressed_config(4)).await?;
     run_non_stream_generate_smoke(server_smoke_compressed_config(16)).await
+}
+
+#[tokio::test]
+async fn server_generate_batch_decode_supports_preferred_compressed_kv() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layer_sequences(16, 2, &kv_compression)?;
+
+    let state = AppState::new_with_kv_config(model, kv_compression);
+    assert!(state.decode_batching_requested);
+    assert!(state.decode_sequence_pool.is_some());
+    let server = start_test_server_with_kv_config_state(state).await?;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "CD".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let sequential_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_sequential_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        sequential_decode_ticks >= 1,
+        "compressed scheduler should use per-request decode until batched compressed attention lands"
+    );
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert_eq!(
+        batched_decode_ticks, 0,
+        "compressed scheduler must not route through dense batched attention"
+    );
+    server.shutdown().await?;
+    Ok(())
 }
 
 #[tokio::test]

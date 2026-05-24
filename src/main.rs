@@ -361,13 +361,17 @@ async fn main() -> Result<()> {
                         | KvCompressMode::BlockSelectLossy
                 ) || kv_compression.uses_compressed_exact_old_backing();
                 if use_compressed_kv {
-                    if max_sequences != 1 {
+                    if max_sequences != 1 && !kv_compression.is_preferred_batched_runtime() {
                         anyhow::bail!(
-                            "compressed KV server startup currently supports one logical sequence; use --kv-compress-mode off for dense batched decode"
+                            "compressed KV server batching currently supports only block-select-exact with fp16-k-q4-v direct exact-old attention; use --kv-compress-mode off for dense batched decode"
                         );
                     }
                     loaded
-                        .allocate_compressed_kv_cache_for_layers(max_len.try_into().unwrap(), &kv_compression)
+                        .allocate_compressed_kv_cache_for_layer_sequences(
+                            max_len.try_into().unwrap(),
+                            max_sequences,
+                            &kv_compression,
+                        )
                         .map_err(|err| {
                             anyhow::anyhow!(
                                 "{err}; use --kv-compress-mode off for dense reference/compatibility mode"
