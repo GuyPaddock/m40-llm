@@ -2,6 +2,48 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-23: Realistic Prompt Validation Suite
+
+This checkpoint stops synthetic score-cluster tuning and adds a small
+realistic-prompt suite for the preferred experimental path:
+
+- backend: `M40LLM_KV_EXACT_OLD_BACKING=fp16-k-q4-v`
+- attention: `M40LLM_KV_EXACT_OLD_ATTENTION=fp16-k-q4-v-direct`
+- policy: plain score-ranked top-k
+- target: 2048 tokens on `Llama-3.2-1B-Instruct-f16.gguf`
+
+Command shape:
+
+- `M40LLM_KV_REALISTIC_PROMPT_VALIDATE=1
+  M40LLM_KV_QUALITY_TARGETS=2048
+  M40LLM_KV_MULTITASK_MAX_TOKENS=32 ...`
+  emitted `/tmp/llama32-realistic-prompts-2048.jsonl` and completed in
+  3144.64 s.
+
+Results:
+
+| Task | Dense `off` | Top4 | Top8 | Top16 |
+| --- | --- | --- | --- | --- |
+| long chat history QA | pass, `Triton Ridge` | pass, 36.0 MiB, 2.33 s decode | pass, 40.0 MiB, 2.54 s decode | skipped |
+| document QA early fact | pass, `Cedar-17` | pass, 36.0 MiB, 2.34 s | pass, 40.0 MiB, 2.56 s | skipped |
+| document QA middle fact | pass, `Falcon-42` | pass, 36.0 MiB, 2.99 s | pass, 40.0 MiB, 3.29 s | skipped |
+| document QA late fact | pass, `Harbor-09` | pass, 36.0 MiB, 2.36 s | pass, 40.0 MiB, 2.58 s | skipped |
+| multi-fact distractor extraction | dense failed, `INV-7319; ap-south-1` | inconclusive | inconclusive | skipped |
+| code/config lookup | pass, `M40_BATCH_LIMIT=37` | fail, selected archived value `M40_BATCH_LIMIT=73`, 36.0 MiB, 3.45 s | pass, 40.0 MiB, 3.80 s | pass, 48.0 MiB, 4.52 s |
+
+Interpretation:
+
+- Dense `off` passed five of six realistic prompt families. The multifact
+  distractor extraction row is not compression-policy evidence because dense
+  chose the wrong region.
+- Top4 and top8 both passed long chat QA and early/middle/late document QA.
+- The code/config lookup row is useful dense-valid policy evidence: top4
+  retrieved the archived value, while top8 recovered the active config value.
+  Top16 also passed because the runner only adds top16 when top4/top8 disagree.
+- Plain top-k remains the preferred policy. This result argues for reporting
+  top4 as the efficiency setting and top8 as the safer realistic-prompt
+  comparison, without promoting fallback, anchor-neighbor, or score-cluster.
+
 ## 2026-05-23: Targeted Score-Cluster Differentiation
 
 This checkpoint tried to find dense-valid prompts where

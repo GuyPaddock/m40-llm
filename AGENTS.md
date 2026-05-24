@@ -529,6 +529,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   not find a dense-valid top9-top12 score-cluster case: dense-valid targeted
   rows collapsed to top8-sized support and passed, while the Llama clustered
   distractor row was formally inconclusive because dense `off` chose a decoy.
+  `M40LLM_KV_REALISTIC_PROMPT_VALIDATE=1` now runs a realistic prompt suite
+  over long chat QA, early/middle/late document QA, multifact distractor
+  extraction, and code/config lookup. The Llama 2048 checkpoint passed dense
+  plus top4/top8 for chat and document QA; the multifact row is inconclusive
+  because dense chose the wrong region; and the config row is dense-valid
+  policy evidence where top4 chose the archived value but top8/top16 recovered
+  the active setting. Keep top4 as the efficiency comparison and top8 as the
+  safer realistic-prompt comparison.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

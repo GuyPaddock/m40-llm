@@ -230,6 +230,23 @@ top9-top12 score-cluster case: all dense-valid targeted rows collapsed to
 top8-sized support and passed, so score-cluster remains opt-in rather than a
 preferred default.
 
+`M40LLM_KV_REALISTIC_PROMPT_VALIDATE=1` runs a small realistic-prompt suite for
+the preferred backend/policy instead of synthetic selection tuning. It compares
+dense `off`, top4, and top8 over long chat history QA, document QA over
+early/middle/late facts, multi-fact extraction with distractors, and
+code/config lookup. Top16 is skipped unless top4/top8 disagree, or unless
+`M40LLM_KV_REALISTIC_INCLUDE_TOP16=1` is set. Dense `off` remains the
+reference; compressed rows are inconclusive for compression-policy conclusions
+when dense fails the same prompt. Use `M40LLM_KV_MULTITASK_TASKS=...` to run a
+subset of realistic task names:
+
+- `real-chat-history-qa`
+- `real-doc-qa-early`
+- `real-doc-qa-middle`
+- `real-doc-qa-late`
+- `real-multifact-distractor-extract`
+- `real-code-config-lookup`
+
 Top-block selection diagnostics are also opt-in:
 
 - `M40LLM_KV_BLOCK_SELECT_POLICY=topk|neighbors|threshold|anchor|anchor-neighbors|explicit|explicit-score-order`
