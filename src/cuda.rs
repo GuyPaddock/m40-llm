@@ -28,6 +28,10 @@ mod ffi {
     pub struct M40llmKVCache {
         _private: [u8; 0],
     }
+    #[repr(C)]
+    pub struct M40llmCudaGraphExec {
+        _private: [u8; 0],
+    }
 
     extern "C" {
         pub fn m40llm_current_device_props(
@@ -55,11 +59,49 @@ mod ffi {
             src_device: *const c_void,
             bytes: usize,
         ) -> i32;
+        pub fn m40llm_memcpy_d2d_async(
+            ctx: *mut M40llmCudaContext,
+            dst_device: *mut c_void,
+            src_device: *const c_void,
+            bytes: usize,
+            stream_kind: u32,
+        ) -> i32;
 
         pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
 
         pub fn m40llm_create_context(device_id: i32) -> *mut M40llmCudaContext;
         pub fn m40llm_destroy_context(ctx: *mut M40llmCudaContext);
+        pub fn m40llm_stream_synchronize(ctx: *mut M40llmCudaContext, stream_kind: u32) -> i32;
+        pub fn m40llm_stream_wait_for_stream(
+            ctx: *mut M40llmCudaContext,
+            waiting_stream_kind: u32,
+            signal_stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_begin_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_end_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+            out_graph: *mut *mut M40llmCudaGraphExec,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_cancel_capture(
+            ctx: *mut M40llmCudaContext,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_launch(
+            ctx: *mut M40llmCudaContext,
+            graph: *mut M40llmCudaGraphExec,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_launch_timed_sync(
+            ctx: *mut M40llmCudaContext,
+            graph: *mut M40llmCudaGraphExec,
+            stream_kind: u32,
+            elapsed_ms: *mut f32,
+        ) -> i32;
+        pub fn m40llm_cuda_graph_destroy(graph: *mut M40llmCudaGraphExec);
 
         pub fn m40llm_upload_weights(
             ctx: *mut M40llmCudaContext,
@@ -97,7 +139,7 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
-        pub fn m40llm_gemm_f32xf32_f32(
+        pub fn m40llm_gemm_f32xf32_f32_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
             d_B_f32_colmajor_nt: *const c_void,
@@ -124,7 +166,7 @@ mod ffi {
             K: i32,
         ) -> i32;
 
-        pub fn m40llm_rms_norm_f32(
+        pub fn m40llm_rms_norm_f32_async(
             ctx: *mut M40llmCudaContext,
             d_in: *const c_void,
             d_out: *mut c_void,
@@ -132,7 +174,7 @@ mod ffi {
             dim: u32,
             eps: f32,
         ) -> i32;
-        pub fn m40llm_rms_norm_f32_weighted(
+        pub fn m40llm_rms_norm_f32_weighted_async(
             ctx: *mut M40llmCudaContext,
             d_in: *const c_void,
             d_weight: *const c_void,
@@ -143,7 +185,7 @@ mod ffi {
             weight_dtype: u32,
         ) -> i32;
 
-        pub fn m40llm_rope_f32(
+        pub fn m40llm_rope_f32_async(
             ctx: *mut M40llmCudaContext,
             d_q: *mut c_void,
             d_k: *mut c_void,
@@ -154,7 +196,7 @@ mod ffi {
             freq_base: f32,
             freq_scale: f32,
         ) -> i32;
-        pub fn m40llm_rope_f32_inplace(
+        pub fn m40llm_rope_f32_inplace_async(
             ctx: *mut M40llmCudaContext,
             d_x: *mut c_void,
             rows: u32,
@@ -164,14 +206,24 @@ mod ffi {
             freq_base: f32,
             freq_scale: f32,
         ) -> i32;
-        pub fn m40llm_residual_add_f32(
+        pub fn m40llm_rope_f32_inplace_position_dev_async(
+            ctx: *mut M40llmCudaContext,
+            d_x: *mut c_void,
+            rows: u32,
+            num_heads: u32,
+            head_dim: u32,
+            past_len_dev: *const u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
+        pub fn m40llm_residual_add_f32_async(
             ctx: *mut M40llmCudaContext,
             d_a_f32: *const c_void,
             d_b_f32: *const c_void,
             d_out_f32: *mut c_void,
             n: usize,
         ) -> i32;
-        pub fn m40llm_swiglu_f32(
+        pub fn m40llm_swiglu_f32_async(
             ctx: *mut M40llmCudaContext,
             d_gate_f32: *const c_void,
             d_up_f32: *const c_void,
@@ -193,12 +245,43 @@ mod ffi {
             k_dev: *const c_void,
             v_dev: *const c_void,
         ) -> i32;
-        pub fn m40llm_kvcache_append_token_f32(
+        pub fn m40llm_kvcache_append_token_f32_async(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
             seq_id: u32,
             k_dev_f32: *const c_void,
             v_dev_f32: *const c_void,
+        ) -> i32;
+        pub fn m40llm_kvcache_append_token_f32_rope_k_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev_f32: *const c_void,
+            v_dev_f32: *const c_void,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
+        pub fn m40llm_kvcache_append_token_f32_rope_k_at_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev_f32: *const c_void,
+            v_dev_f32: *const c_void,
+            position: u32,
+            past_len: u32,
+            freq_base: f32,
+            freq_scale: f32,
+        ) -> i32;
+        pub fn m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            k_dev_f32: *const c_void,
+            v_dev_f32: *const c_void,
+            position_dev: *const u32,
+            freq_base: f32,
+            freq_scale: f32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
@@ -218,13 +301,22 @@ mod ffi {
             seq_len: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
-        pub fn m40llm_attention_last_token_f32_gqa(
+        pub fn m40llm_attention_last_token_f32_gqa_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
             seq_id: u32,
             d_q_f32: *const c_void,
             q_heads: u32,
             seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            d_seq_len: *const u32,
             d_out_f32: *mut c_void,
         ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_batched(
@@ -237,11 +329,64 @@ mod ffi {
             q_heads: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_batched_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64(
+            ctx: *mut M40llmCudaContext,
+            d_q_f32: *const c_void,
+            d_k_f32: *const c_void,
+            d_v_f32: *const c_void,
+            d_q_offsets: *const u32,
+            d_kv_offsets: *const u32,
+            d_q_lens: *const u32,
+            d_kv_lens: *const u32,
+            batch_size: u32,
+            q_heads: u32,
+            kv_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+            ctx: *mut M40llmCudaContext,
+            d_q_f32: *const c_void,
+            d_k_f32: *const c_void,
+            d_v_f32: *const c_void,
+            d_q_offsets: *const u32,
+            d_kv_offsets: *const u32,
+            d_q_lens: *const u32,
+            d_kv_lens: *const u32,
+            batch_size: u32,
+            q_heads: u32,
+            kv_heads: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
 
         pub fn m40llm_kvcache_destroy(kv: *mut M40llmKVCache);
 
         pub fn m40llm_start_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
         pub fn m40llm_stop_persistent_decode(ctx: *mut M40llmCudaContext) -> i32;
+        pub fn m40llm_persistent_decode_submit_vec(
+            ctx: *mut M40llmCudaContext,
+            d_in_f32: *const c_void,
+            d_out_f32: *mut c_void,
+            n: u32,
+            scale: f32,
+            bias: f32,
+            iterations: u32,
+            out_command_id: *mut u32,
+        ) -> i32;
+        pub fn m40llm_persistent_decode_poll(
+            ctx: *mut M40llmCudaContext,
+            out_status: *mut u32,
+            out_command_id: *mut u32,
+        ) -> i32;
         // Utility conversion/dequant kernels
         pub fn m40llm_f16_to_f32(
             ctx: *mut M40llmCudaContext,
@@ -302,6 +447,27 @@ fn log_gemm_backend_once(once: &'static Once, name: &str, backend: &str) {
 }
 
 #[cfg(feature = "cuda")]
+fn record_sync_kernel(op: &'static str) {
+    crate::profile::record_launch(op);
+    crate::profile::record_stream_sync(op);
+}
+
+#[cfg(feature = "cuda")]
+fn record_async_kernel(op: &'static str) {
+    crate::profile::record_launch(op);
+}
+
+#[cfg(feature = "cuda")]
+fn record_sync_gemm(op: &'static str) {
+    if cfg!(have_cublas) {
+        crate::profile::record_cublas_call(op);
+    } else {
+        crate::profile::record_launch(op);
+    }
+    crate::profile::record_stream_sync(op);
+}
+
+#[cfg(feature = "cuda")]
 #[derive(Debug, Clone)]
 struct AllocInfo {
     size: usize,
@@ -313,6 +479,173 @@ struct AllocInfo {
 pub struct CudaContext {
     #[allow(dead_code)]
     inner: Arc<CudaContextInner>,
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct DeviceBuffer {
+    ctx: CudaContext,
+    ptr: NonNull<c_void>,
+    bytes: usize,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for DeviceBuffer {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for DeviceBuffer {}
+
+#[cfg(feature = "cuda")]
+impl DeviceBuffer {
+    #[track_caller]
+    pub fn new_tagged(ctx: &CudaContext, bytes: usize, tag: &str) -> Result<Self> {
+        let ptr = ctx.device_malloc_tagged(bytes, tag)?;
+        let ptr = NonNull::new(ptr)
+            .ok_or_else(|| anyhow!("device_malloc_tagged returned null for tag={tag}"))?;
+        Ok(Self {
+            ctx: ctx.clone(),
+            ptr,
+            bytes,
+        })
+    }
+
+    pub fn as_ptr(&self) -> *const c_void {
+        self.ptr.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
+
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for DeviceBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self.ctx.device_free(self.ptr.as_ptr());
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct CudaGraphExec {
+    ctx: CudaContext,
+    raw: NonNull<ffi::M40llmCudaGraphExec>,
+}
+
+#[cfg(feature = "cuda")]
+unsafe impl Send for CudaGraphExec {}
+#[cfg(feature = "cuda")]
+unsafe impl Sync for CudaGraphExec {}
+
+#[cfg(feature = "cuda")]
+impl CudaGraphExec {
+    pub fn launch(&self, stream: CudaStream) -> Result<()> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_cuda_graph_launch(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_graph_launch failed: {rc}"));
+        }
+        crate::profile::record_launch("cuda_graph_launch");
+        Ok(())
+    }
+
+    pub fn launch_timed_sync(&self, stream: CudaStream) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_graph_launch_timed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stream.ffi_kind(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_cuda_graph_launch_timed_sync failed: {rc}"));
+        }
+        crate::profile::record_launch("cuda_graph_launch");
+        crate::profile::record_stream_sync("cuda_graph_launch_timed_sync");
+        Ok(elapsed_ms)
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for CudaGraphExec {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::m40llm_cuda_graph_destroy(self.raw.as_ptr());
+        }
+    }
+}
+
+#[cfg(not(feature = "cuda"))]
+#[derive(Debug)]
+pub struct CudaGraphExec;
+
+#[cfg(not(feature = "cuda"))]
+impl CudaGraphExec {
+    pub fn launch(&self, stream: CudaStream) -> Result<()> {
+        let _ = stream;
+        anyhow::bail!("CUDA graph launch is unavailable without the cuda feature")
+    }
+
+    pub fn launch_timed_sync(&self, stream: CudaStream) -> Result<f32> {
+        let _ = stream;
+        anyhow::bail!("CUDA graph timed launch is unavailable without the cuda feature")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CudaStream {
+    Prefill,
+    Decode,
+}
+
+impl CudaStream {
+    #[cfg(feature = "cuda")]
+    #[inline]
+    fn ffi_kind(self) -> u32 {
+        match self {
+            Self::Prefill => 0,
+            Self::Decode => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PersistentDecodeStatus {
+    Idle,
+    Pending,
+    Done,
+    Unknown(u32),
+}
+
+impl From<u32> for PersistentDecodeStatus {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => Self::Idle,
+            1 => Self::Pending,
+            2 => Self::Done,
+            other => Self::Unknown(other),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PersistentDecodePoll {
+    pub status: PersistentDecodeStatus,
+    pub command_id: u32,
 }
 
 #[derive(Debug)]
@@ -420,6 +753,126 @@ impl CudaContext {
             })
         }
     }
+
+    pub fn synchronize_stream(&self, stream: CudaStream) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
+            }
+            crate::profile::record_stream_sync("stream_synchronize");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = stream;
+            Ok(())
+        }
+    }
+
+    pub fn stream_wait_for_stream(
+        &self,
+        waiting: CudaStream,
+        signal: CudaStream,
+        op: &'static str,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_stream_wait_for_stream(
+                    self.inner.raw.as_ptr(),
+                    waiting.ffi_kind(),
+                    signal.ffi_kind(),
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_stream_wait_for_stream failed for {op}: {rc}"
+                ));
+            }
+            crate::profile::record_stream_wait(op);
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (waiting, signal, op);
+            Ok(())
+        }
+    }
+
+    pub fn capture_graph(
+        &self,
+        stream: CudaStream,
+        capture: impl FnOnce() -> Result<()>,
+    ) -> Result<CudaGraphExec> {
+        #[cfg(feature = "cuda")]
+        {
+            {
+                let _g = self.inner.lock.lock().unwrap();
+                let rc = unsafe {
+                    ffi::m40llm_cuda_graph_begin_capture(self.inner.raw.as_ptr(), stream.ffi_kind())
+                };
+                if rc != 0 {
+                    return Err(anyhow!("m40llm_cuda_graph_begin_capture failed: {rc}"));
+                }
+            }
+
+            if let Err(err) = capture() {
+                let _g = self.inner.lock.lock().unwrap();
+                unsafe {
+                    let _ = ffi::m40llm_cuda_graph_cancel_capture(
+                        self.inner.raw.as_ptr(),
+                        stream.ffi_kind(),
+                    );
+                }
+                return Err(err);
+            }
+
+            let mut out: *mut ffi::M40llmCudaGraphExec = std::ptr::null_mut();
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_cuda_graph_end_capture(
+                    self.inner.raw.as_ptr(),
+                    stream.ffi_kind(),
+                    &mut out as *mut _,
+                )
+            };
+            if rc != 0 || out.is_null() {
+                return Err(anyhow!(
+                    "m40llm_cuda_graph_end_capture failed: rc={rc}, out_null={}",
+                    out.is_null()
+                ));
+            }
+            crate::profile::record_launch("cuda_graph_instantiate");
+            Ok(CudaGraphExec {
+                ctx: self.clone(),
+                raw: NonNull::new(out).ok_or_else(|| anyhow!("graph capture returned null"))?,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = stream;
+            capture()?;
+            anyhow::bail!("CUDA graph capture is unavailable without the cuda feature")
+        }
+    }
+
+    #[cfg(feature = "cuda")]
+    fn synchronize_stream_for_op(&self, stream: CudaStream, op: &'static str) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        let rc =
+            unsafe { ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind()) };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_stream_synchronize failed for {op}: {rc}"));
+        }
+        crate::profile::record_stream_sync(op);
+        Ok(())
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -454,6 +907,7 @@ impl CudaContext {
                 },
             );
         }
+        crate::profile::record_device_alloc("device_malloc", bytes);
         if alloc_log_enabled() {
             let caller = std::panic::Location::caller();
             let total = TOTAL_DEVICE_BYTES.load(Ordering::SeqCst);
@@ -498,6 +952,7 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_device_free failed: {rc}"));
         }
+        crate::profile::record_device_free("device_free");
         // Decrement tracked total if we know this allocation size
         let mut dec = 0usize;
         let mut tag: Option<String> = None;
@@ -546,6 +1001,7 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
         }
+        crate::profile::record_h2d_copy("memcpy_h2d", bytes);
         Ok(())
     }
     /// # Safety
@@ -563,9 +1019,37 @@ impl CudaContext {
         if rc != 0 {
             return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
         }
+        crate::profile::record_d2h_copy("memcpy_d2h", bytes);
         Ok(())
     }
 
+    /// # Safety
+    /// `dst_device` and `src_device` must be valid device pointers to at least
+    /// `bytes` bytes on this context's device. Regions must not overlap.
+    pub unsafe fn memcpy_d2d_async(
+        &self,
+        dst_device: *mut c_void,
+        src_device: *const c_void,
+        bytes: usize,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _g = self.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_memcpy_d2d_async(
+                self.inner.raw.as_ptr(),
+                dst_device,
+                src_device,
+                bytes,
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_memcpy_d2d_async failed: {rc}"));
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
         let rc = unsafe { ffi::m40llm_validate_device_ptr(ptr) };
@@ -641,7 +1125,7 @@ impl CudaContext {
             if kv.is_null() {
                 return Err(anyhow::anyhow!("m40llm_kvcache_create returned null"));
             }
-            return Ok(kv);
+            Ok(kv)
         }
 
         #[cfg(not(feature = "cuda"))]
@@ -671,6 +1155,7 @@ impl CudaContext {
                 unsafe {
                     let _ = ffi::m40llm_device_free(self.inner.raw.as_ptr(), prev.as_ptr());
                 }
+                crate::profile::record_device_free("upload_weights.free_prev");
                 eprintln!(
                     "[cuda] upload_weights: freed prev {} bytes (total={})",
                     wbytes,
@@ -695,6 +1180,8 @@ impl CudaContext {
             }
             // Upload uses cudaMalloc + copy under the hood; conservatively track bytes
             TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
+            crate::profile::record_device_alloc("upload_weights", data.len());
+            crate::profile::record_h2d_copy("upload_weights", data.len());
             if let Ok(mut map) = self.inner.alloc_map.lock() {
                 map.insert(
                     d_ptr,
@@ -759,6 +1246,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf16_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f32xf16_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -805,6 +1293,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f32xf16_gguf_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f32xf16_gguf_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -838,8 +1327,42 @@ impl CudaContext {
                     "unavailable without cuBLAS"
                 },
             );
+            self.gemm_f32xf32_f32_async(d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k)?;
+            self.synchronize_stream_for_op(CudaStream::Prefill, "gemm_f32xf32_f32")?;
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues materialized-FP32 GEMM on the prefill stream without synchronizing.
+    pub unsafe fn gemm_f32xf32_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xf32_f32_async",
+                if cfg!(have_cublas) {
+                    "cuBLAS sgemm materialized-f32 async enqueue"
+                } else {
+                    "unavailable without cuBLAS"
+                },
+            );
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_gemm_f32xf32_f32(
+            let rc = ffi::m40llm_gemm_f32xf32_f32_async(
                 self.inner.raw.as_ptr(),
                 d_a_f32,
                 d_b_f32_colmajor_nt,
@@ -849,8 +1372,9 @@ impl CudaContext {
                 k,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_gemm_f32xf32_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_gemm_f32xf32_f32_async failed: {rc}"));
             }
+            crate::profile::record_cublas_call("gemm_f32xf32_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -885,6 +1409,7 @@ impl CudaContext {
                     "m40llm_materialize_gguf_f16_to_f32_colmajor_nt failed: {rc}"
                 ));
             }
+            record_sync_kernel("materialize_gguf_f16_to_f32_colmajor_nt");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -930,6 +1455,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f16xf16_f32 failed: {rc}"));
             }
+            record_sync_gemm("gemm_f16xf16_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -978,11 +1504,137 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_gemm_f16_storage_f32_compute failed: {rc}"));
             }
+            record_sync_gemm("gemm_f16_storage_f32_compute");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a, d_b, d_c, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Packed buffers must use [total_tokens, heads, 64] row-major f32 layout.
+    /// Offset/lens arrays must contain `batch_size` u32 entries.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_prefill_f32_gqa_varlen_head64(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        d_q_offsets: *const u32,
+        d_kv_offsets: *const u32,
+        d_q_lens: *const u32,
+        d_kv_lens: *const u32,
+        batch_size: u32,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64(
+                self.inner.raw.as_ptr(),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_attention_prefill_f32_gqa_varlen_head64 failed: {rc}"
+                ));
+            }
+            record_sync_kernel("attention_prefill_f32_gqa_varlen_head64");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues packed prefill attention on the prefill stream and returns after
+    /// launch validation. Call `synchronize_stream(CudaStream::Prefill)` before
+    /// reading `d_out_f32` or reusing input/output buffers.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_prefill_f32_gqa_varlen_head64_async(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        d_q_offsets: *const u32,
+        d_kv_offsets: *const u32,
+        d_q_lens: *const u32,
+        d_kv_lens: *const u32,
+        batch_size: u32,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+                self.inner.raw.as_ptr(),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_attention_prefill_f32_gqa_varlen_head64_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("attention_prefill_f32_gqa_varlen_head64");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                batch_size,
+                q_heads,
+                kv_heads,
+                d_out_f32,
+            );
             Ok(())
         }
     }
@@ -999,11 +1651,41 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.rms_norm_f32_async(d_in, d_out, rows, dim, eps)?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "rms_norm_f32")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_out, rows, dim, eps);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues RMSNorm on the decode stream. Callers must synchronize before reading `d_out`.
+    pub unsafe fn rms_norm_f32_async(
+        &self,
+        d_in: *const c_void,
+        d_out: *mut c_void,
+        rows: u32,
+        dim: u32,
+        eps: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rms_norm_f32(self.inner.raw.as_ptr(), d_in, d_out, rows, dim, eps);
+            let rc = ffi::m40llm_rms_norm_f32_async(
+                self.inner.raw.as_ptr(),
+                d_in,
+                d_out,
+                rows,
+                dim,
+                eps,
+            );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rms_norm_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_rms_norm_f32_async failed: {rc}"));
             }
+            record_async_kernel("rms_norm_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1028,8 +1710,32 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.rms_norm_f32_weighted_async(d_in, d_weight, d_out, rows, dim, eps, weight_dtype)?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "rms_norm_f32_weighted")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in, d_weight, d_out, rows, dim, eps, weight_dtype);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues weighted RMSNorm on the decode stream. Callers must synchronize before reading `d_out`.
+    pub unsafe fn rms_norm_f32_weighted_async(
+        &self,
+        d_in: *const c_void,
+        d_weight: *const c_void,
+        d_out: *mut c_void,
+        rows: u32,
+        dim: u32,
+        eps: f32,
+        weight_dtype: u32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rms_norm_f32_weighted(
+            let rc = ffi::m40llm_rms_norm_f32_weighted_async(
                 self.inner.raw.as_ptr(),
                 d_in,
                 d_weight,
@@ -1040,8 +1746,9 @@ impl CudaContext {
                 weight_dtype,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rms_norm_f32_weighted failed: {rc}"));
+                return Err(anyhow!("m40llm_rms_norm_f32_weighted_async failed: {rc}"));
             }
+            record_async_kernel("rms_norm_f32_weighted");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1066,8 +1773,37 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.rope_f32_async(
+                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            )?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "rope_f32")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_q, d_k, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues RoPE on the decode stream. Callers must synchronize before reusing Q/K.
+    pub unsafe fn rope_f32_async(
+        &self,
+        d_q: *mut c_void,
+        d_k: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32(
+            let rc = ffi::m40llm_rope_f32_async(
                 self.inner.raw.as_ptr(),
                 d_q,
                 d_k,
@@ -1079,8 +1815,9 @@ impl CudaContext {
                 freq_scale,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_async failed: {rc}"));
             }
+            record_async_kernel("rope_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1106,8 +1843,36 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.rope_f32_inplace_async(
+                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            )?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "rope_f32_inplace")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE on the decode stream. Callers must synchronize before reusing `d_x`.
+    pub unsafe fn rope_f32_inplace_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_rope_f32_inplace(
+            let rc = ffi::m40llm_rope_f32_inplace_async(
                 self.inner.raw.as_ptr(),
                 d_x,
                 rows,
@@ -1118,14 +1883,64 @@ impl CudaContext {
                 freq_scale,
             );
             if rc != 0 {
-                return Err(anyhow!("m40llm_rope_f32_inplace failed: {rc}"));
+                return Err(anyhow!("m40llm_rope_f32_inplace_async failed: {rc}"));
             }
+            record_async_kernel("rope_f32_inplace");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (
                 d_x, rows, num_heads, head_dim, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues in-place RoPE on the decode stream using a device-resident
+    /// `past_len` parameter. Callers must synchronize before reusing `d_x`.
+    pub unsafe fn rope_f32_inplace_position_dev_async(
+        &self,
+        d_x: *mut c_void,
+        rows: u32,
+        num_heads: u32,
+        head_dim: u32,
+        past_len_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_rope_f32_inplace_position_dev_async(
+                self.inner.raw.as_ptr(),
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_rope_f32_inplace_position_dev_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("rope_f32_inplace_position_dev");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_x,
+                rows,
+                num_heads,
+                head_dim,
+                past_len_dev,
+                freq_base,
+                freq_scale,
             );
             Ok(())
         }
@@ -1142,11 +1957,34 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.residual_add_f32_async(d_a, d_b, d_out, n)?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "residual_add_f32")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a, d_b, d_out, n);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues residual add on the decode stream. Callers must synchronize before reading `d_out`.
+    pub unsafe fn residual_add_f32_async(
+        &self,
+        d_a: *const c_void,
+        d_b: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_residual_add_f32(self.inner.raw.as_ptr(), d_a, d_b, d_out, n);
+            let rc =
+                ffi::m40llm_residual_add_f32_async(self.inner.raw.as_ptr(), d_a, d_b, d_out, n);
             if rc != 0 {
-                return Err(anyhow!("m40llm_residual_add_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_residual_add_f32_async failed: {rc}"));
             }
+            record_async_kernel("residual_add_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1167,11 +2005,33 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            self.swiglu_f32_async(d_gate, d_up, d_out, n)?;
+            self.synchronize_stream_for_op(CudaStream::Decode, "swiglu_f32")
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_gate, d_up, d_out, n);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues SwiGLU on the decode stream. Callers must synchronize before reading `d_out`.
+    pub unsafe fn swiglu_f32_async(
+        &self,
+        d_gate: *const c_void,
+        d_up: *const c_void,
+        d_out: *mut c_void,
+        n: usize,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_swiglu_f32(self.inner.raw.as_ptr(), d_gate, d_up, d_out, n);
+            let rc = ffi::m40llm_swiglu_f32_async(self.inner.raw.as_ptr(), d_gate, d_up, d_out, n);
             if rc != 0 {
-                return Err(anyhow!("m40llm_swiglu_f32 failed: {rc}"));
+                return Err(anyhow!("m40llm_swiglu_f32_async failed: {rc}"));
             }
+            record_async_kernel("swiglu_f32");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1189,9 +2049,79 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_start_persistent_decode failed: {rc}"));
             }
+            record_async_kernel("persistent_decode_start");
         }
         Ok(())
     }
+
+    /// # Safety
+    /// `d_in_f32` and `d_out_f32` must point to `n` f32 values on this context's device.
+    pub unsafe fn persistent_decode_submit_vec(
+        &self,
+        d_in_f32: *const c_void,
+        d_out_f32: *mut c_void,
+        n: u32,
+        scale: f32,
+        bias: f32,
+        iterations: u32,
+    ) -> Result<u32> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let mut command_id = 0u32;
+            let rc = ffi::m40llm_persistent_decode_submit_vec(
+                self.inner.raw.as_ptr(),
+                d_in_f32,
+                d_out_f32,
+                n,
+                scale,
+                bias,
+                iterations,
+                &mut command_id as *mut u32,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_persistent_decode_submit_vec failed: {rc}"));
+            }
+            record_async_kernel("persistent_decode_submit_vec");
+            Ok(command_id)
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_in_f32, d_out_f32, n, scale, bias, iterations);
+            Ok(0)
+        }
+    }
+
+    pub fn persistent_decode_poll(&self) -> Result<PersistentDecodePoll> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let mut status = 0u32;
+            let mut command_id = 0u32;
+            let rc = unsafe {
+                ffi::m40llm_persistent_decode_poll(
+                    self.inner.raw.as_ptr(),
+                    &mut status as *mut u32,
+                    &mut command_id as *mut u32,
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_persistent_decode_poll failed: {rc}"));
+            }
+            Ok(PersistentDecodePoll {
+                status: status.into(),
+                command_id,
+            })
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            Ok(PersistentDecodePoll {
+                status: PersistentDecodeStatus::Idle,
+                command_id: 0,
+            })
+        }
+    }
+
     pub fn stop_persistent_decode(&self) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
@@ -1200,6 +2130,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_stop_persistent_decode failed: {rc}"));
             }
+            crate::profile::record_stream_sync("persistent_decode_stop");
         }
         Ok(())
     }
@@ -1219,6 +2150,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_f16_to_f32 failed: {rc}"));
             }
+            record_sync_kernel("f16_to_f32");
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1242,6 +2174,7 @@ impl CudaContext {
             if rc != 0 {
                 return Err(anyhow!("m40llm_q80_to_f32 failed: {rc}"));
             }
+            record_sync_kernel("q80_to_f32");
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1282,6 +2215,9 @@ impl KVCache {
     pub fn max_batch_size(&self) -> u32 {
         self.inner.max_batch_size
     }
+    pub fn max_seq_len(&self) -> u32 {
+        self.inner.max_seq_len
+    }
 
     pub fn reset(&self, ctx: &CudaContext) -> Result<()> {
         #[cfg(feature = "cuda")]
@@ -1293,6 +2229,7 @@ impl KVCache {
             if rc != 0 {
                 return Err(anyhow!("m40llm_kvcache_reset failed: {rc}"));
             }
+            record_sync_kernel("kvcache_reset");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -1460,6 +2397,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
         }
+        record_sync_kernel("kvcache_append_token");
         Ok(())
     }
 
@@ -1473,9 +2411,22 @@ impl KVCache {
         k_dev_f32: *const c_void,
         v_dev_f32: *const c_void,
     ) -> Result<()> {
+        self.append_token_f32_async(ctx, seq_id, k_dev_f32, v_dev_f32)?;
+        ctx.synchronize_stream_for_op(CudaStream::Decode, "kvcache_append_token_f32")
+    }
+
+    /// # Safety
+    /// Enqueues f32-to-f16 KV append on the decode stream. Callers must synchronize before reading from the cache.
+    pub unsafe fn append_token_f32_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_kvcache_append_token_f32(
+            ffi::m40llm_kvcache_append_token_f32_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -1484,8 +2435,141 @@ impl KVCache {
             )
         };
         if rc != 0 {
-            return Err(anyhow!("m40llm_kvcache_append_token_f32 failed: {rc}"));
+            return Err(anyhow!(
+                "m40llm_kvcache_append_token_f32_async failed: {rc}"
+            ));
         }
+        record_async_kernel("kvcache_append_token_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// `k_dev_f32` and `v_dev_f32` must contain one token of K/V in f32 layout.
+    /// K is RoPE-rotated for `past_len` while both K and V are converted to f16
+    /// and appended to the cache. Context/device must match.
+    pub unsafe fn append_token_f32_rope_k(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        self.append_token_f32_rope_k_async(
+            ctx, seq_id, k_dev_f32, v_dev_f32, past_len, freq_base, freq_scale,
+        )?;
+        ctx.synchronize_stream_for_op(CudaStream::Decode, "kvcache_append_token_f32_rope_k")
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and f32-to-f16 KV append on the decode stream.
+    /// Callers must synchronize before reading from the cache.
+    pub unsafe fn append_token_f32_rope_k_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_append_token_f32_rope_k_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                past_len,
+                freq_base,
+                freq_scale,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_kvcache_append_token_f32_rope_k_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("kvcache_append_token_f32_rope_k");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and f32-to-f16 KV append at an explicit cache
+    /// position. Unlike `append_token_f32_rope_k_async`, this does not read the
+    /// current KV length back to the host; the launched kernel writes
+    /// `seq_map[seq_id] = position + 1` on device.
+    pub unsafe fn append_token_f32_rope_k_at_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_append_token_f32_rope_k_at_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position,
+                past_len,
+                freq_base,
+                freq_scale,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_kvcache_append_token_f32_rope_k_at_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("kvcache_append_token_f32_rope_k_at");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues fused K RoPE and f32-to-f16 KV append using a device-resident
+    /// position parameter. The graph can bind `position_dev` once and update the
+    /// pointed-to value between launches.
+    pub unsafe fn append_token_f32_rope_k_position_dev_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        k_dev_f32: *const c_void,
+        v_dev_f32: *const c_void,
+        position_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_kvcache_append_token_f32_rope_k_position_dev_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                k_dev_f32,
+                v_dev_f32,
+                position_dev,
+                freq_base,
+                freq_scale,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_kvcache_append_token_f32_rope_k_position_dev_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("kvcache_append_token_f32_rope_k_position_dev");
         Ok(())
     }
 
@@ -1514,6 +2598,7 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_attention_last_token_f32 failed: {}", rc));
         }
+        record_sync_kernel("attention_last_token_f32");
         Ok(())
     }
 
@@ -1529,9 +2614,24 @@ impl KVCache {
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        self.attention_last_token_f32_gqa_async(ctx, seq_id, d_q_f32, q_heads, seq_len, d_out_f32)?;
+        ctx.synchronize_stream_for_op(CudaStream::Decode, "attention_last_token_f32_gqa")
+    }
+
+    /// # Safety
+    /// Enqueues GQA last-token attention on the decode stream. Callers must synchronize before reading `d_out_f32`.
+    pub unsafe fn attention_last_token_f32_gqa_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        seq_len: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_attention_last_token_f32_gqa(
+            ffi::m40llm_attention_last_token_f32_gqa_async(
                 ctx.inner.raw.as_ptr(),
                 self.inner.raw.as_ptr(),
                 seq_id,
@@ -1542,8 +2642,46 @@ impl KVCache {
             )
         };
         if rc != 0 {
-            return Err(anyhow!("m40llm_attention_last_token_f32_gqa failed: {rc}"));
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_async failed: {rc}"
+            ));
         }
+        record_async_kernel("attention_last_token_f32_gqa");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues GQA last-token attention on the decode stream using a
+    /// device-resident `seq_len` parameter. The initial implementation uses the
+    /// generic attention kernel so graph replay can vary sequence length without
+    /// host-updated kernel parameters.
+    pub unsafe fn attention_last_token_f32_gqa_seq_len_dev_async(
+        &self,
+        ctx: &CudaContext,
+        seq_id: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_seq_len: *const u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                seq_id,
+                d_q_f32,
+                q_heads,
+                d_seq_len,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_seq_len_dev_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
         Ok(())
     }
 
@@ -1578,6 +2716,43 @@ impl KVCache {
                 "m40llm_attention_last_token_f32_gqa_batched failed: {rc}"
             ));
         }
+        record_sync_kernel("attention_last_token_f32_gqa_batched");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues batched GQA decode attention on the decode stream and returns
+    /// after launch validation. Call `ctx.synchronize_stream(CudaStream::Decode)`
+    /// before reading `d_out_f32` or reusing input/output buffers.
+    pub unsafe fn attention_last_token_f32_gqa_batched_async(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_batched_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_batched_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("attention_last_token_f32_gqa_batched");
         Ok(())
     }
 }

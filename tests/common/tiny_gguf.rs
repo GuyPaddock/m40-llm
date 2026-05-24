@@ -7,6 +7,7 @@ pub struct TinyGgufConfig {
     pub d_model: usize,
     pub hidden: usize,
     pub head_count: u32,
+    pub block_count: u32,
     pub context_length: u32,
 }
 
@@ -17,6 +18,7 @@ impl Default for TinyGgufConfig {
             d_model: 256,
             hidden: 16,
             head_count: 1,
+            block_count: 1,
             context_length: 512,
         }
     }
@@ -48,6 +50,7 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
     assert!(cfg.d_model > 0);
     assert!(cfg.hidden > 0);
     assert!(cfg.head_count > 0);
+    assert!(cfg.block_count > 0);
     assert!(cfg.d_model.is_multiple_of(cfg.head_count as usize));
     if let TinyOutput::ForceToken(token) = output {
         assert!(token < cfg.vocab);
@@ -72,7 +75,7 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
     );
     metadata.insert(
         "llama.block_count".to_string(),
-        GgufValue::Scalar(GgufScalar::U32(1)),
+        GgufValue::Scalar(GgufScalar::U32(cfg.block_count)),
     );
     metadata.insert(
         "llama.attention.head_count".to_string(),
@@ -163,26 +166,31 @@ fn make_tiny_gguf(cfg: TinyGgufConfig, output: TinyOutput) -> (GgufModel, Vec<u8
         add_tensor(name, GgmlDType::F16, shape, &mut fill);
     };
 
-    for name in [
-        "layers.0.attention.wq.weight",
-        "layers.0.attention.wk.weight",
-        "layers.0.attention.wv.weight",
-        "layers.0.attention.wo.weight",
-    ] {
-        add_zeros(name, &[cfg.d_model as u64, cfg.d_model as u64]);
+    for layer in 0..cfg.block_count {
+        for suffix in [
+            "attention.wq.weight",
+            "attention.wk.weight",
+            "attention.wv.weight",
+            "attention.wo.weight",
+        ] {
+            add_zeros(
+                &format!("layers.{layer}.{suffix}"),
+                &[cfg.d_model as u64, cfg.d_model as u64],
+            );
+        }
+        add_zeros(
+            &format!("layers.{layer}.feed_forward.w3.weight"),
+            &[cfg.d_model as u64, cfg.hidden as u64],
+        );
+        add_zeros(
+            &format!("layers.{layer}.feed_forward.w1.weight"),
+            &[cfg.d_model as u64, cfg.hidden as u64],
+        );
+        add_zeros(
+            &format!("layers.{layer}.feed_forward.w2.weight"),
+            &[cfg.hidden as u64, cfg.d_model as u64],
+        );
     }
-    add_zeros(
-        "layers.0.feed_forward.w3.weight",
-        &[cfg.d_model as u64, cfg.hidden as u64],
-    );
-    add_zeros(
-        "layers.0.feed_forward.w1.weight",
-        &[cfg.d_model as u64, cfg.hidden as u64],
-    );
-    add_zeros(
-        "layers.0.feed_forward.w2.weight",
-        &[cfg.hidden as u64, cfg.d_model as u64],
-    );
 
     let gguf = GgufModel {
         version: 1,

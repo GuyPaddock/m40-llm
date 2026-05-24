@@ -182,14 +182,20 @@ impl ModelConfig {
                 self.attention_key_length
             );
         }
-        if self.embedding_length % self.attention_head_count != 0 {
+        if !self
+            .embedding_length
+            .is_multiple_of(self.attention_head_count)
+        {
             anyhow::bail!(
                 "embedding_length {} not divisible by attention_head_count {}",
                 self.embedding_length,
                 self.attention_head_count
             );
         }
-        if self.attention_head_count % self.attention_head_count_kv != 0 {
+        if !self
+            .attention_head_count
+            .is_multiple_of(self.attention_head_count_kv)
+        {
             anyhow::bail!(
                 "attention_head_count {} not divisible by attention_head_count_kv {}",
                 self.attention_head_count,
@@ -240,9 +246,13 @@ pub struct LoadedModel {
 }
 
 #[cfg(feature = "cuda")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MaterializedWeightKey {
     pub src: usize,
+    pub tensor_name: Option<String>,
+    pub byte_offset: u64,
+    pub dtype: GgmlDType,
+    pub shape: Vec<u64>,
     pub n: i32,
     pub k: i32,
 }

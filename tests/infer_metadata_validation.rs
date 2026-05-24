@@ -58,10 +58,7 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> Result<LoadedModel> {
         GgufValue::Scalar(GgufScalar::U32(vocab as u32)),
     );
 
-    let cuda = match m40_llm::cuda::CudaContext::new(-1) {
-        Ok(ctx) => ctx,
-        Err(e) => return Err(e),
-    };
+    let cuda = m40_llm::cuda::CudaContext::new(-1)?;
 
     let mut device_tensors: HashMap<String, DeviceTensorView> = HashMap::new();
     device_tensors.insert(

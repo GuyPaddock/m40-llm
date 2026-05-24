@@ -72,6 +72,17 @@ fn batch_metadata_groups_by_length_bucket() {
     assert_eq!(buckets[2].sequence_indices, vec![3]);
     assert_eq!(buckets[3].bucket, LengthBucket::Tokens257To512);
     assert_eq!(buckets[3].sequence_indices, vec![2]);
+
+    let stats = meta.bucket_stats(&buckets[2]);
+    assert_eq!(stats.max_query_len, 1);
+    assert_eq!(stats.max_kv_len, 130);
+    assert_eq!(stats.total_query_tokens, 1);
+    assert_eq!(stats.total_kv_tokens, 130);
+
+    assert_eq!(
+        meta.bucket_sequence_indices(LengthBucket::Tokens65To128),
+        vec![1]
+    );
 }
 
 #[test]

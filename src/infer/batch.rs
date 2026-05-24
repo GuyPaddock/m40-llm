@@ -1,4 +1,9 @@
 use anyhow::{Context, Result};
+#[cfg(feature = "cuda")]
+use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+use crate::cuda::CudaContext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatchSequence {
@@ -42,6 +47,218 @@ pub enum LengthBucket {
 pub struct BucketedBatch {
     pub bucket: LengthBucket,
     pub sequence_indices: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BucketStats {
+    pub max_query_len: u32,
+    pub max_kv_len: u32,
+    pub total_query_tokens: u32,
+    pub total_kv_tokens: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VarlenPrefillTile {
+    pub tile_m: u32,
+    pub tile_n: u32,
+    pub tile_k: u32,
+}
+
+impl VarlenPrefillTile {
+    pub const CONSERVATIVE_HEAD64: Self = Self {
+        tile_m: 1,
+        tile_n: 128,
+        tile_k: 64,
+    };
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VarlenPrefillTileSelection {
+    pub head_dim: u32,
+    pub max_query_len: u32,
+    pub max_kv_len: u32,
+    pub tile: VarlenPrefillTile,
+}
+
+impl VarlenPrefillTileSelection {
+    pub fn select(meta: &BatchMetadata, head_dim: u32) -> Result<Self> {
+        if head_dim != 64 {
+            anyhow::bail!(
+                "variable-length prefill currently supports head_dim=64 only, got {head_dim}"
+            );
+        }
+        let max_query_len = meta
+            .sequences()
+            .iter()
+            .map(|seq| seq.query_len)
+            .max()
+            .unwrap_or(0);
+        let max_kv_len = meta
+            .sequences()
+            .iter()
+            .map(|seq| seq.kv_len)
+            .max()
+            .unwrap_or(0);
+        Ok(Self {
+            head_dim,
+            max_query_len,
+            max_kv_len,
+            tile: VarlenPrefillTile::CONSERVATIVE_HEAD64,
+        })
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[derive(Debug)]
+pub struct VarlenPrefillPlan {
+    meta: BatchMetadata,
+    selection: VarlenPrefillTileSelection,
+    ctx: CudaContext,
+    d_q_offsets: *mut c_void,
+    d_kv_offsets: *mut c_void,
+    d_q_lens: *mut c_void,
+    d_kv_lens: *mut c_void,
+    bytes: usize,
+}
+
+#[cfg(feature = "cuda")]
+impl VarlenPrefillPlan {
+    pub fn new(ctx: &CudaContext, meta: BatchMetadata, head_dim: u32) -> Result<Self> {
+        let selection = VarlenPrefillTileSelection::select(&meta, head_dim)?;
+        let batch_size = meta.sequences().len();
+        let bytes = batch_size
+            .checked_mul(std::mem::size_of::<u32>())
+            .context("variable-length prefill metadata size overflow")?;
+        let q_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.query_len).collect();
+        let kv_lens: Vec<u32> = meta.sequences().iter().map(|seq| seq.kv_len).collect();
+
+        let mut allocations = Vec::new();
+        let result = (|| -> Result<Self> {
+            let d_q_offsets = ctx.device_malloc_tagged(bytes, "varlen_prefill.q_offsets")?;
+            allocations.push(d_q_offsets);
+            let d_kv_offsets = ctx.device_malloc_tagged(bytes, "varlen_prefill.kv_offsets")?;
+            allocations.push(d_kv_offsets);
+            let d_q_lens = ctx.device_malloc_tagged(bytes, "varlen_prefill.q_lens")?;
+            allocations.push(d_q_lens);
+            let d_kv_lens = ctx.device_malloc_tagged(bytes, "varlen_prefill.kv_lens")?;
+            allocations.push(d_kv_lens);
+
+            unsafe {
+                ctx.memcpy_h2d(
+                    d_q_offsets,
+                    meta.q_offsets().as_ptr() as *const c_void,
+                    bytes,
+                )?;
+                ctx.memcpy_h2d(
+                    d_kv_offsets,
+                    meta.kv_offsets().as_ptr() as *const c_void,
+                    bytes,
+                )?;
+                ctx.memcpy_h2d(d_q_lens, q_lens.as_ptr() as *const c_void, bytes)?;
+                ctx.memcpy_h2d(d_kv_lens, kv_lens.as_ptr() as *const c_void, bytes)?;
+            }
+
+            allocations.clear();
+            Ok(Self {
+                meta,
+                selection,
+                ctx: ctx.clone(),
+                d_q_offsets,
+                d_kv_offsets,
+                d_q_lens,
+                d_kv_lens,
+                bytes,
+            })
+        })();
+
+        if result.is_err() {
+            for ptr in allocations {
+                unsafe {
+                    let _ = ctx.device_free(ptr);
+                }
+            }
+        }
+        result
+    }
+
+    pub fn metadata(&self) -> &BatchMetadata {
+        &self.meta
+    }
+
+    pub fn tile_selection(&self) -> VarlenPrefillTileSelection {
+        self.selection
+    }
+
+    pub fn batch_size(&self) -> u32 {
+        self.meta.sequences().len() as u32
+    }
+
+    /// # Safety
+    /// Packed buffers must use [total_q_tokens, q_heads, 64] and
+    /// [total_kv_tokens, kv_heads, 64] row-major f32 layouts.
+    pub unsafe fn dispatch_head64(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.ctx.attention_prefill_f32_gqa_varlen_head64(
+            d_q_f32,
+            d_k_f32,
+            d_v_f32,
+            self.d_q_offsets as *const u32,
+            self.d_kv_offsets as *const u32,
+            self.d_q_lens as *const u32,
+            self.d_kv_lens as *const u32,
+            self.batch_size(),
+            q_heads,
+            kv_heads,
+            d_out_f32,
+        )
+    }
+
+    /// # Safety
+    /// Same layout requirements as `dispatch_head64`. The call only enqueues
+    /// work on the prefill stream; synchronize before reading outputs.
+    pub unsafe fn dispatch_head64_async(
+        &self,
+        d_q_f32: *const c_void,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        q_heads: u32,
+        kv_heads: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        self.ctx.attention_prefill_f32_gqa_varlen_head64_async(
+            d_q_f32,
+            d_k_f32,
+            d_v_f32,
+            self.d_q_offsets as *const u32,
+            self.d_kv_offsets as *const u32,
+            self.d_q_lens as *const u32,
+            self.d_kv_lens as *const u32,
+            self.batch_size(),
+            q_heads,
+            kv_heads,
+            d_out_f32,
+        )
+    }
+}
+
+#[cfg(feature = "cuda")]
+impl Drop for VarlenPrefillPlan {
+    fn drop(&mut self) {
+        let _ = self.bytes;
+        unsafe {
+            let _ = self.ctx.device_free(self.d_q_offsets);
+            let _ = self.ctx.device_free(self.d_kv_offsets);
+            let _ = self.ctx.device_free(self.d_q_lens);
+            let _ = self.ctx.device_free(self.d_kv_lens);
+        }
+    }
 }
 
 impl BatchMetadata {
@@ -180,6 +397,33 @@ impl BatchMetadata {
         }
         grouped.sort_by_key(|g| g.bucket);
         grouped
+    }
+
+    pub fn bucket_stats(&self, bucket: &BucketedBatch) -> BucketStats {
+        let mut stats = BucketStats {
+            max_query_len: 0,
+            max_kv_len: 0,
+            total_query_tokens: 0,
+            total_kv_tokens: 0,
+        };
+        for &idx in &bucket.sequence_indices {
+            let seq = self.sequences[idx];
+            stats.max_query_len = stats.max_query_len.max(seq.query_len);
+            stats.max_kv_len = stats.max_kv_len.max(seq.kv_len);
+            stats.total_query_tokens = stats.total_query_tokens.saturating_add(seq.query_len);
+            stats.total_kv_tokens = stats.total_kv_tokens.saturating_add(seq.kv_len);
+        }
+        stats
+    }
+
+    pub fn bucket_sequence_indices(&self, bucket: LengthBucket) -> Vec<usize> {
+        self.sequences
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, seq)| {
+                (LengthBucket::for_len(seq.kv_len.max(seq.query_len)) == bucket).then_some(idx)
+            })
+            .collect()
     }
 }
 

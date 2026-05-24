@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 typedef struct M40llmCudaContext { int device_id; } M40llmCudaContext;
+typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
@@ -36,6 +37,28 @@ int m40llm_memcpy_h2d(M40llmCudaContext* ctx, void* dst_device, const void* src_
 int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_device, size_t bytes) {
     (void)ctx; (void)dst_host; (void)src_device; (void)bytes; return -1;
 }
+int m40llm_memcpy_d2d_async(M40llmCudaContext* ctx, void* dst_device, const void* src_device, size_t bytes, uint32_t stream_kind) {
+    (void)ctx; (void)dst_device; (void)src_device; (void)bytes; (void)stream_kind; return -1;
+}
+int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
+    (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
+}
+int m40llm_cuda_graph_begin_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
+}
+int m40llm_cuda_graph_end_capture(M40llmCudaContext* ctx, uint32_t stream_kind, M40llmCudaGraphExec** out_graph) {
+    (void)ctx; (void)stream_kind; (void)out_graph; return -1;
+}
+int m40llm_cuda_graph_cancel_capture(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
+}
+int m40llm_cuda_graph_launch(M40llmCudaContext* ctx, M40llmCudaGraphExec* graph, uint32_t stream_kind) {
+    (void)ctx; (void)graph; (void)stream_kind; return -1;
+}
+int m40llm_cuda_graph_launch_timed_sync(M40llmCudaContext* ctx, M40llmCudaGraphExec* graph, uint32_t stream_kind, float* elapsed_ms) {
+    (void)ctx; (void)graph; (void)stream_kind; (void)elapsed_ms; return -1;
+}
+void m40llm_cuda_graph_destroy(M40llmCudaGraphExec* graph) { (void)graph; }
 
 M40llmCudaContext* m40llm_create_context(int device_id) {
     (void)device_id; return (M40llmCudaContext*)0x1; // non-null stub
@@ -62,6 +85,10 @@ int m40llm_gemm_f32xf32_f32(M40llmCudaContext* ctx, const void* d_A_f32, const v
     (void)ctx; (void)d_A_f32; (void)d_B_f32_colmajor_nt; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
 }
 
+int m40llm_gemm_f32xf32_f32_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f32_colmajor_nt, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_f32_colmajor_nt; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+
 int m40llm_materialize_gguf_f16_to_f32_colmajor_nt(M40llmCudaContext* ctx, const void* d_B_f16, void* d_B_f32_colmajor_nt, int N, int K) {
     (void)ctx; (void)d_B_f16; (void)d_B_f32_colmajor_nt; (void)N; (void)K; return -1;
 }
@@ -74,17 +101,45 @@ int m40llm_gemm_f16xf16_f32(M40llmCudaContext* ctx, const void* d_A_f16, const v
 int m40llm_rms_norm_f32(M40llmCudaContext* ctx, const void* d_in, void* d_out, uint32_t rows, uint32_t dim, float eps) {
     (void)ctx; (void)d_in; (void)d_out; (void)rows; (void)dim; (void)eps; return -1;
 }
+int m40llm_rms_norm_f32_async(M40llmCudaContext* ctx, const void* d_in, void* d_out, uint32_t rows, uint32_t dim, float eps) {
+    (void)ctx; (void)d_in; (void)d_out; (void)rows; (void)dim; (void)eps; return -1;
+}
 
 int m40llm_rms_norm_f32_weighted(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
+    (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
+}
+int m40llm_rms_norm_f32_weighted_async(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
     (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
 }
 
 int m40llm_rope_f32(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
 }
+int m40llm_rope_f32_async(M40llmCudaContext* ctx, void* d_q, void* d_k, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)d_q; (void)d_k; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
 
 int m40llm_rope_f32_inplace(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
     (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_rope_f32_inplace_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_rope_f32_inplace_position_dev_async(M40llmCudaContext* ctx, void* d_x, uint32_t rows, uint32_t num_heads, uint32_t head_dim, const uint32_t* past_len_dev, float freq_base, float freq_scale) {
+    (void)ctx; (void)d_x; (void)rows; (void)num_heads; (void)head_dim; (void)past_len_dev; (void)freq_base; (void)freq_scale; return -1;
+}
+
+int m40llm_residual_add_f32(M40llmCudaContext* ctx, const void* d_a, const void* d_b, void* d_out, size_t n) {
+    (void)ctx; (void)d_a; (void)d_b; (void)d_out; (void)n; return -1;
+}
+int m40llm_residual_add_f32_async(M40llmCudaContext* ctx, const void* d_a, const void* d_b, void* d_out, size_t n) {
+    (void)ctx; (void)d_a; (void)d_b; (void)d_out; (void)n; return -1;
+}
+int m40llm_swiglu_f32(M40llmCudaContext* ctx, const void* d_gate, const void* d_up, void* d_out, size_t n) {
+    (void)ctx; (void)d_gate; (void)d_up; (void)d_out; (void)n; return -1;
+}
+int m40llm_swiglu_f32_async(M40llmCudaContext* ctx, const void* d_gate, const void* d_up, void* d_out, size_t n) {
+    (void)ctx; (void)d_gate; (void)d_up; (void)d_out; (void)n; return -1;
 }
 
 M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx, uint32_t max_seq_len, uint32_t max_batch_size, uint32_t num_heads, uint32_t head_dim) {
@@ -97,6 +152,21 @@ void m40llm_kvcache_destroy(M40llmKVCache* kv) { (void)kv; }
 
 int m40llm_kvcache_append_token_f32(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; return -1;
+}
+int m40llm_kvcache_append_token_f32_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k_at_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, uint32_t position, uint32_t past_len, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position; (void)past_len; (void)freq_base; (void)freq_scale; return -1;
+}
+int m40llm_kvcache_append_token_f32_rope_k_position_dev_async(M40llmCudaContext* ctx, M40llmKVCache* kv, uint32_t seq_id, const void* k_dev_f32, const void* v_dev_f32, const uint32_t* position_dev, float freq_base, float freq_scale) {
+    (void)ctx; (void)kv; (void)seq_id; (void)k_dev_f32; (void)v_dev_f32; (void)position_dev; (void)freq_base; (void)freq_scale; return -1;
 }
 int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
     (void)ctx; (void)kv; return -1;
@@ -126,6 +196,26 @@ int m40llm_attention_last_token_f32_gqa(
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
 }
+int m40llm_attention_last_token_f32_gqa_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    uint32_t seq_len,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
+}
+int m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    uint32_t seq_id,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    const uint32_t* seq_len_dev,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len_dev; (void)out_dev_f32; return -1;
+}
 
 int m40llm_attention_last_token_f32_gqa_batched(
     M40llmCudaContext* ctx,
@@ -139,8 +229,73 @@ int m40llm_attention_last_token_f32_gqa_batched(
     (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
 }
 
+int m40llm_attention_last_token_f32_gqa_batched_async(
+    M40llmCudaContext* ctx,
+    const M40llmKVCache* kv,
+    const uint32_t* seq_ids_dev,
+    const uint32_t* seq_lens_dev,
+    uint32_t batch_size,
+    const void* q_dev_f32,
+    uint32_t q_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)kv; (void)seq_ids_dev; (void)seq_lens_dev; (void)batch_size; (void)q_dev_f32; (void)q_heads; (void)out_dev_f32; return -1;
+}
+
+int m40llm_attention_prefill_f32_gqa_varlen_head64(
+    M40llmCudaContext* ctx,
+    const void* q_dev_f32,
+    const void* k_dev_f32,
+    const void* v_dev_f32,
+    const uint32_t* q_offsets_dev,
+    const uint32_t* kv_offsets_dev,
+    const uint32_t* q_lens_dev,
+    const uint32_t* kv_lens_dev,
+    uint32_t batch_size,
+    uint32_t q_heads,
+    uint32_t kv_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)q_dev_f32; (void)k_dev_f32; (void)v_dev_f32; (void)q_offsets_dev; (void)kv_offsets_dev; (void)q_lens_dev; (void)kv_lens_dev; (void)batch_size; (void)q_heads; (void)kv_heads; (void)out_dev_f32; return -1;
+}
+
+int m40llm_attention_prefill_f32_gqa_varlen_head64_async(
+    M40llmCudaContext* ctx,
+    const void* q_dev_f32,
+    const void* k_dev_f32,
+    const void* v_dev_f32,
+    const uint32_t* q_offsets_dev,
+    const uint32_t* kv_offsets_dev,
+    const uint32_t* q_lens_dev,
+    const uint32_t* kv_lens_dev,
+    uint32_t batch_size,
+    uint32_t q_heads,
+    uint32_t kv_heads,
+    void* out_dev_f32) {
+    (void)ctx; (void)q_dev_f32; (void)k_dev_f32; (void)v_dev_f32; (void)q_offsets_dev; (void)kv_offsets_dev; (void)q_lens_dev; (void)kv_lens_dev; (void)batch_size; (void)q_heads; (void)kv_heads; (void)out_dev_f32; return -1;
+}
+
+int m40llm_stream_synchronize(M40llmCudaContext* ctx, uint32_t stream_kind) {
+    (void)ctx; (void)stream_kind; return -1;
+}
+
 int m40llm_start_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
 int m40llm_stop_persistent_decode(M40llmCudaContext* ctx) { (void)ctx; return -1; }
+int m40llm_persistent_decode_submit_vec(
+    M40llmCudaContext* ctx,
+    const void* d_in_f32,
+    void* d_out_f32,
+    uint32_t n,
+    float scale,
+    float bias,
+    uint32_t iterations,
+    uint32_t* out_command_id) {
+    (void)ctx; (void)d_in_f32; (void)d_out_f32; (void)n; (void)scale; (void)bias; (void)iterations; (void)out_command_id; return -1;
+}
+int m40llm_persistent_decode_poll(
+    M40llmCudaContext* ctx,
+    uint32_t* out_status,
+    uint32_t* out_command_id) {
+    (void)ctx; (void)out_status; (void)out_command_id; return -1;
+}
 
 
   int m40llm_f16_to_f32(M40llmCudaContext* ctx, const void* d_in_f16, void* d_out_f32, size_t n) {

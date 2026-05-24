@@ -31,17 +31,150 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
   - Projection/MLP wrappers: `tests/proj_wrappers.rs`, `tests/mlp_wrappers.rs`.
   - Forward smoke: `tests/forward_with_layer_smoke.rs`.
 
-## Phase Ordering
-- **Phase 1 (Functional, critical path):** Goal is to load a real GGUF and print decoded tokens on Tesla M40 with no silent CPU fallback.
-  - Acceptance highlights: fast-fail invalid GGUFs, logits parity across CUDA/CPU, deterministic sampler, and a CLI decode loop that visibly exercises the GPU.
-- **Phase 2 (Fast, M40 optimization):** Optimize cuBLAS wiring and attention while keeping parity grid green.
-  - Focus areas: cuBLAS GEMM wrappers (t23-cublas-gemm), full projection wiring (t23-5-integration continuation), attention parity guardrail (t23-5e-attn-green), microbenchmarks (t31b-microbench-attn), stream separation (t33-stream-sep), and persistent decode prototype (t32-persistent-kernel).
-- **Phase 3 (Infrastructure, QA, polish):** Stabilize CI, logging, and server polish.
-  - Focus areas: clippy cleanups (t23-6-warnings), CUDA benchmark unification (t23-6-benches-ctx), expanded CI matrix (t35-ci-matrix), better errors/telemetry (t34-robustness), `/generate` server parity (t30-server), prefill-vs-decode validation plan (t26-tests-plan), and completing `llm-context` indexing (t41-lc-index).
+## Active Performance Plan
+The current plan still prioritizes measurement, ownership, and correctness before deeper scheduling and backend expansion.
+Packed varlen attention integration is now moving into scheduler execution after request/session
+ownership and KV addressing are established; larger experiments should wait for a validated
+batched decode path before touching persistent decode or large-model fused-dequant.
 
 ## Selecting Work
-- **Task selection rule:** when choosing work, pick the lowest-numbered unfinished task in the lowest-numbered phase.
+- **Task selection rule:** use the strict reconciled task order below. The historical
+  task JSON remains useful context, but this strict order takes precedence when the
+  two conflict.
 - Update this file (`AGENTS.md`) as you complete high-level tasks. 
+
+## Current Progress
+- Completed: warm/cold benchmark mode names, launch/sync/allocation/copy counter
+  instrumentation, per-forward-operation profile counter deltas, HTTP generation
+  serialization, and a shared CUDA `DecodeSession` for CLI/server decode with
+  reusable `d_x`/`d_out` scratch. `ForwardWorkspace` and decode-session scratch
+  now use RAII `DeviceBuffer` cleanup. Full-layer forward now uses explicit
+  model-level KV layer/sequence addressing instead of passing `layer as seq_id`
+  directly. FP32 materialized projection weights have budget reporting and
+  over-budget fallback logging plus tensor identity metadata in the cache key.
+  `DecodeSession` now also owns reusable `d_logits` and optional
+  `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
+  enqueue variants while preserving existing sync wrappers for tests/simple
+  callers. Warm second-token launch/sync profiling after async wrapper cleanup
+  is recorded in `docs/perf_baselines.md`. The forward path now fuses K RoPE
+  with FP32-to-FP16 KV append while leaving Q RoPE separate; profiling reduced
+  RoPE/KV operation groups from 66 to 44 launches/syncs per steady TinyLlama
+  token. Full-layer forward now enqueues the already-fused SwiGLU kernel
+  asynchronously and uses an explicit decode-to-prefill stream wait before the
+  MLP down projection, removing 22 explicit SwiGLU stream synchronizations per
+  steady token. Full-layer forward now also uses async enqueue paths for RMSNorm,
+  Q RoPE, fused K RoPE + KV append, GQA attention, and residual adds; steady
+  TinyLlama profiling shows non-GEMM forward ops now contribute zero stream
+  synchronizations, while the remaining forward syncs are cuBLAS GEMM wrappers.
+  CUDA Graph capture/instantiate/launch/destroy infrastructure is in place and
+  validated with fixed-pointer decode-style async elementwise work on M40;
+  whole-token capture is still blocked by synchronous cuBLAS wrappers and
+  host-side KV sequence length updates. Packed varlen decode scheduling now has
+  a request-state `DecodeBatchPlan`, device metadata upload, and CUDA dispatch
+  through the batched GQA decode attention primitive; HTTP `/generate` remains
+  serialized. Model-level KV addressing now maps logical
+  `KV[layer][sequence]` onto sequence-major physical slots, and the server has a
+  small decode sequence lease pool. With `M40LLM_SERVER_BATCH_DECODE=1`,
+  `/generate` requests lease per-request KV sequence slots and skip whole-cache
+  resets; buffered scheduler ticks can now use the packed batched GQA decode
+  attention path for head_dim=64 models. Materialized
+  FP32 cuBLAS projection calls now have async enqueue wrappers, and full-layer
+  decode uses those wrappers with explicit stream waits; steady TinyLlama
+  profiling shows projection groups issue 154 cuBLAS calls with zero stream
+  synchronizations inside full-layer forward. KV append now has explicit-position
+  and device-position async APIs; production full-layer decode uses the
+  explicit-position path, which removes the prior host-side KV length D2H read
+  and updates `seq_map` on device. A one-layer-shaped CUDA Graph prototype now
+  captures and replays seven async materialized-FP32 cuBLAS projection GEMMs on
+  M40. A cross-stream graph prototype also captures the production dependency
+  topology: decode-stream elementwise work, prefill-stream async cuBLAS, and a
+  return wait back to decode-stream elementwise work. A production one-layer
+  graph smoke now captures a warmed `forward_one_token_with_layer` call using
+  real model/workspace pointers, KV append, attention, and projection wrappers.
+  Graph-compatible device-parameter wrappers now cover Q RoPE position and GQA
+  attention sequence length, complementing the existing device-position KV
+  append API. `DecodeSession` can now cache and replay an opt-in full-token
+  decode CUDA Graph with `M40LLM_DECODE_GRAPH=1`, including multi-layer models.
+  The async materialized-GEMM path briefly regressed generation by letting
+  SwiGLU read MLP gate/up outputs before the prefill-stream cuBLAS work
+  completed; `mlp_gate_up_to_swiglu` now restores the decode-stream wait, and a
+  TinyLlama token canary covers the reported prompt. Full-token graph replay was
+  benchmarked against the normal async path across three TinyLlama trials:
+  graph replay reduces host-side `forward_all_layers` enqueue time, but
+  end-to-end steady token latency regresses because logits/output-norm absorbs
+  much larger GPU completion time. Keep `M40LLM_DECODE_GRAPH=1` experimental and
+  off by default. With `M40LLM_SERVER_BATCH_DECODE=1`, buffered `/generate`
+  requests now route through a queued decode scheduler that owns request state,
+  leases distinct KV sequence slots, steps active requests round-robin, and
+  builds `DecodeBatchPlan` snapshots for active mixed-length requests. The
+  scheduler keeps the server generation lock around each CUDA token step to
+  protect shared workspace use across scheduler and streaming paths. The
+  scheduler now steps all active requests every scheduler tick and can execute
+  row-batched full-layer decode with packed GQA attention for compatible
+  head64 models. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
+  now synchronizes graph replay immediately after launch and reports CUDA-event
+  GPU elapsed time; this showed the graph replay itself is slow, while
+  logits/output-norm was previously absorbing graph completion time. The server
+  batch scheduler now has an opt-in batched full-layer decode path for
+  head_dim=64 models: it packs active request rows into the shared forward
+  workspace, runs row-batched projections/MLP, uses the existing packed batched
+  GQA decode attention primitive, and scatters per-request outputs back into
+  `DecodeSession` scratch. It falls back to the prior per-request path when the
+  batch is size 1 or the model cannot use the head64 batched attention kernel.
+  TinyLlama concurrent buffered `/generate` benchmarking shows
+  `M40LLM_SERVER_BATCH_DECODE=1` is neutral for batch size 1 and improves
+  throughput by 1.18x for batch size 2, 1.69x for mixed batch size 4, and 1.61x
+  for skewed batch size 4, with all requests returning HTTP 200. Results and
+  validation commands are recorded in `docs/perf_baselines.md`.
+- Packed varlen prefill is now available behind
+  `M40LLM_SERVER_BATCH_PREFILL=1` for compatible head_dim=64 buffered scheduler
+  batches; TinyLlama benchmarking shows neutral batch-1 behavior, 1.12x batch-2
+  speedup, 1.88x mixed batch-4 speedup, and 2.51x skewed batch-4 wall-time
+  speedup with all HTTP requests successful.
+- Next: keep packed prefill opt-in while planning either mixed prefill/decode
+  overlap or broader prefill compatibility/fallback coverage.
+
+## Strict Reconciled Task Order
+1. Add warm/cold benchmark split.
+2. Add launch/sync/allocation/copy count instrumentation.
+3. Profile warm steady second-token decode with per-kernel launch counts.
+4. Add request-level generation serialization to protect shared workspace.
+5. Extract shared `DecodeSession` used by CLI and server.
+6. Move `d_x` and `d_out` into `DecodeSession` scratch.
+7. Make `ForwardWorkspace` / device allocations RAII-safe.
+8. Fix KV cache API/addressing to distinguish `layer_id` from `sequence_id`.
+9. Add FP32 materialization memory-budget reporting and fallback logging.
+10. Improve materialized weight cache key with tensor identity/offset/name.
+11. Move `d_logits` and `d_norm_hidden` into `DecodeSession` scratch.
+12. Add async enqueue variants for hot CUDA kernels; keep sync wrappers.
+13. Re-profile launch/sync counts after async/session cleanup.
+14. Fuse RoPE + KV append if still visible.
+15. Treat SwiGLU as already fused; remove sync/graph it before deeper fusion.
+16. Prototype CUDA Graph capture for warm one-token decode.
+17. Integrate packed varlen decode attention into the server scheduler.
+18. Integrate packed varlen prefill after decode batching is correct.
+19. Add fast-fits vs large-model backend selection.
+20. Start large-model fused-dequant projection backend.
+21. Leave `__ldg`/texture experiments off by default unless profiling reopens them.
+
+## Reconciled Phase Details
+- **Phase 0 (Measurement):** add warm/cold benchmark modes and per-token counts for
+  CUDA launches, cuBLAS calls, stream synchronizations, allocations/frees, H2D
+  copies, and D2H copies. Use env gates such as `M40LLM_LAUNCH_LOG=1`,
+  `M40LLM_SYNC_LOG=1`, and `M40LLM_ALLOC_LOG=1`.
+- **Phase 1 (Ownership):** serialize generation first, then introduce
+  `DecodeSession`, reusable token scratch, RAII `DeviceBuffer`, and explicit
+  `KV[layer][sequence][position][kv_head][head_dim]` addressing.
+- **Phase 2 (Fast-fits):** preserve materialized FP32 projection weights plus
+  cuBLAS as the TinyLlama-class backend, add materialization budget/fallback
+  logging, improve cache keys, and split sync wrappers from async enqueue wrappers.
+- **Phase 3 (Graphs):** prototype CUDA Graph capture only after stable session
+  scratch, async wrappers, stable workspace pointers, and explicit KV addressing
+  exist.
+- **Phase 4 (Scheduler):** integrate packed varlen decode first, packed prefill
+  second, and mixed prefill/decode overlap last.
+- **Phase 5 (Backends):** add fast-fits vs large-model selection before any
+  large-model fused-dequant projection backend.
 
 ## Current Tasks
 ```
@@ -296,32 +429,35 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
     {
       "id": "t33-stream-sep",
       "priority": 7,
-      "status": "todo",
+      "status": "done",
       "title": "Prefill and decode stream separation",
       "rationale": "Separate CUDA streams allow better overlap and latency hiding after projection and norm costs are reduced.",
       "scope": [
         "Introduce distinct CUDA streams for prefill and decode.",
-        "Tune stream priorities where applicable."
+        "Tune stream priorities where applicable.",
+        "Add async enqueue variants for independent prefill/decode attention benchmarks."
       ],
       "acceptance": [
-        "Prefill and decode run on separate streams.",
-        "No correctness regressions.",
-        "Measured latency improvement or neutrality."
+        "Prefill and decode streams are non-blocking, with best-effort decode priority.",
+        "Async prefill and decode attention paths have CUDA parity coverage.",
+        "Measured overlap benchmark improved from ~47.07 ms sequential to ~45.75 ms async final-sync on M40."
       ]
     },
     {
       "id": "t32-persistent-kernel",
       "priority": 8,
-      "status": "todo",
+      "status": "done",
       "title": "Persistent decode kernel prototype",
       "rationale": "Optional advanced optimization to reduce kernel launch overhead.",
       "scope": [
         "Prototype persistent kernel for decode loop.",
-        "Limit scope to experimentation and benchmarking."
+        "Limit scope to experimentation and benchmarking.",
+        "Use a synthetic decode-style vector command before attempting full transformer integration."
       ],
       "acceptance": [
-        "Prototype builds and runs behind a feature flag.",
-        "Performance impact is measured and documented."
+        "Prototype builds and runs behind Rust lifecycle wrappers.",
+        "CUDA lifecycle test covers start, submit, poll, and idempotent stop.",
+        "Synthetic M40 benchmark improved from ~32.3 us launch-based work to ~28.2 us persistent-worker work."
       ]
     },
     {
@@ -355,8 +491,27 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
         "Batch metadata exposes valid lengths, packed offsets, and deterministic length buckets.",
         "Batched last-token GQA attention supports mixed KV lengths for decode.",
         "Mixed-length batches avoid full max_seq padding work where possible.",
-        "Prefill and attention operate over valid regions end-to-end.",
-        "Benchmarks cover skewed, 0.6*max_seq average, and near-uniform length distributions."
+        "Packed prefill GQA attention supports mixed query/KV lengths.",
+        "Benchmarks cover padded, packed, and bucketed prefill dispatch for skewed, 0.6*max_seq average, and near-uniform length distributions.",
+        "Remaining work: tune variable tile selection and integrate packed prefill above the kernel/benchmark layer."
+      ]
+    },
+    {
+      "id": "t31f-readonly-cache-experiments",
+      "priority": 11,
+      "status": "in_progress",
+      "title": "Read-only cache experiments for non-GEMM paths",
+      "rationale": "M40 read-only cache and texture paths may help read-heavy kernels, but only measured wins should become defaults.",
+      "scope": [
+        "Benchmark opt-in `__ldg` and texture-cache variants for embeddings, RoPE constants, dequant tables, KV reads, norms, and activation LUTs.",
+        "Keep experiments gated until parity and performance justify default use."
+      ],
+      "acceptance": [
+        "Weighted RMSNorm has an opt-in `M40LLM_CACHE_EXPERIMENT=ldg` path with parity coverage.",
+        "RMSNorm default-vs-`__ldg` benchmark results are recorded.",
+        "KV-cache GQA attention has an opt-in `M40LLM_CACHE_EXPERIMENT=ldg_kv` path with parity coverage.",
+        "KV-cache default-vs-`ldg_kv` benchmark results are recorded.",
+        "Remaining work: defer texture objects until profiling identifies a stronger read-cache target."
       ]
     }
   ]

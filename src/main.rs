@@ -90,6 +90,8 @@ async fn main() -> Result<()> {
                     top_p,
                     seed,
                     log_prefix: "cli",
+                    sequence_id: 0,
+                    reset_kv_cache: true,
                 },
             )?;
             print!("{}", generated.output);
@@ -152,11 +154,24 @@ async fn main() -> Result<()> {
                     );
                 }
 
-                // Allocate one KV slot per layer for the single-request full-stack decode path.
+                // Allocate one KV slot per layer and logical sequence.
                 let max_len = loaded.model_config.context_length as usize;
-                loaded.allocate_kv_cache_for_layers(max_len.try_into().unwrap())?;
+                let max_sequences =
+                    if std::env::var("M40LLM_SERVER_BATCH_DECODE").ok().as_deref() == Some("1") {
+                        std::env::var("M40LLM_SERVER_BATCH_DECODE_SLOTS")
+                            .ok()
+                            .and_then(|value| value.parse::<u32>().ok())
+                            .filter(|value| *value > 0)
+                            .unwrap_or(2)
+                    } else {
+                        1
+                    };
+                loaded.allocate_kv_cache_for_layer_sequences(
+                    max_len.try_into().unwrap(),
+                    max_sequences,
+                )?;
 
-                let state = Arc::new(server::AppState { model: loaded });
+                let state = Arc::new(server::AppState::new(loaded));
                 let router = server::app_router(state);
 
                 let listener = TcpListener::bind(&addr).await?;

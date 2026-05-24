@@ -66,7 +66,7 @@ pub(super) fn build_device_tensor_views(
         let n_elems_u64: u64 = t.shape.iter().copied().product::<u64>();
         let n_elems: usize =
             usize::try_from(n_elems_u64).context("tensor element count does not fit in usize")?;
-        let n_blocks = (n_elems + layout.block_elems - 1) / layout.block_elems;
+        let n_blocks = n_elems.div_ceil(layout.block_elems);
         let need = n_blocks
             .checked_mul(layout.block_bytes)
             .context("tensor size overflow")?;

@@ -292,7 +292,7 @@ Notes:
   KV append, RoPE, norms, and logits/sampling overhead rather than projection
   math.
 
-## Variable-Length Batched Attention Benchmarks
+## 2026-05-10: Variable-Length Batched Attention Benchmarks
 
 Benchmark scaffolding now includes `attention_last_token_f32_gqa_batched_varlen`
 with three mixed-length decode distributions:
@@ -318,8 +318,1164 @@ Measured on Tesla M40:
 
 Notes:
 
-- This benchmark measures mixed-KV-length batched decode, not full prefill.
 - The current batched kernel uses one grid launch for all batch entries and
   skips invalid KV regions via per-sequence lengths.
-- Next work should add bucketed and packed prefill attention so prompt batches
-  also avoid padded-token computation.
+- Packed prefill now has a separate baseline using
+  `attention_prefill_f32_gqa_varlen`.
+
+Prefill dispatch distributions:
+
+| Distribution | Query/KV lengths | Padded max | Packed varlen | Bucketed varlen |
+| --- | ---: | ---: | ---: | ---: |
+| `avg_0p6_max` | 384/384, 512/512, 640/640, 768/768 | 296.31 ms | 177.91 ms | 178.68 ms |
+| `skewed` | 16/16, 64/64, 256/256, 1024/1024 | 525.79 ms | 141.25 ms | 141.66 ms |
+| `near_uniform` | 896/896, 960/960, 1000/1000, 1024/1024 | 526.12 ms | 473.59 ms | 473.83 ms |
+| `prefix_query` | 16/512, 32/640, 64/768, 128/1024 | 123.86 ms | 50.564 ms | 51.276 ms |
+
+Packed prefill notes:
+
+- The first prefill kernel is correctness-first: one CUDA block handles one
+  sequence/query-head/query-token and skips invalid KV regions through
+  per-sequence query and KV lengths.
+- The prefix-query case demonstrates the intended savings when query tokens are
+  much fewer than cached KV tokens.
+- Bucketed dispatch is currently neutral to slightly slower than packed dispatch
+  in this microbenchmark because the kernel already consumes true per-sequence
+  lengths and extra bucket launches dominate.
+- Remaining `t31e-varlen-batch` work should tune tile choices for M40 occupancy
+  and shared-memory limits, then integrate the packed path into higher-level
+  batched prefill instead of leaving it as an exposed kernel/benchmark.
+
+## 2026-05-10: Read-Only Cache Experiment Baseline
+
+Weighted RMSNorm now has an opt-in `__ldg` read-only cache experiment selected
+with `M40LLM_CACHE_EXPERIMENT=ldg`. The default path is unchanged.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench rmsnorm -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Shape | Default | `__ldg` experiment | Result |
+| --- | ---: | ---: | --- |
+| rows=1, dim=2048 | 13.677 us | 14.599 us | slower |
+| rows=4, dim=2048 | 13.748 us | 13.594 us | neutral/slightly faster |
+| rows=1, dim=4096 | 17.167 us | 18.778 us | slower |
+| rows=4, dim=4096 | 17.063 us | 17.807 us | slower |
+
+Notes:
+
+- Keep the `__ldg` RMSNorm path experimental; the first measurements do not
+  justify changing the default kernel.
+- The next read-only cache target should be KV-cache attention reads, where the
+  same K/V rows are revisited across score and value passes.
+
+## 2026-05-10: KV-Cache `__ldg` Attention Experiment
+
+Last-token GQA attention now has an opt-in `__ldg` KV-cache read experiment
+selected with `M40LLM_CACHE_EXPERIMENT=ldg_kv`. The default path is unchanged.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench attention -- attention_last_token_f32_gqa --sample-size 10
+```
+
+Single-sequence decode:
+
+| Sequence length | Default | `ldg_kv` experiment | Result |
+| ---: | ---: | ---: | --- |
+| 1 | 10.679 us | 10.712 us | neutral/slower |
+| 16 | 40.075 us | 40.148 us | neutral/slower |
+| 128 | 260.00 us | 260.37 us | neutral/slower |
+| 512 | 1.0969 ms | 1.0976 ms | neutral/slower |
+| 1024 | 2.2133 ms | 2.2136 ms | neutral/slower |
+
+Batched mixed-length decode:
+
+| Distribution | Default batched | `ldg_kv` batched | Result |
+| --- | ---: | ---: | --- |
+| `avg_0p6_max` | 1.5727 ms | 1.5753 ms | neutral/slower |
+| `skewed` | 2.1113 ms | 2.1129 ms | neutral/slower |
+| `near_uniform` | 2.4353 ms | 2.4351 ms | neutral/noise |
+
+Notes:
+
+- Keep `ldg_kv` experimental; it does not justify changing the default attention
+  kernel on these M40 measurements.
+- Future cache work should avoid more `__ldg` duplication unless a profile shows
+  a stronger read-cache bottleneck. Texture-object experiments should remain
+  deferred until there is a more promising target.
+
+## 2026-05-10: Prefill/Decode Stream Separation
+
+CUDA contexts now create separate non-blocking prefill and decode streams. The
+decode stream uses best-effort higher priority when the driver reports a useful
+priority range. Set `M40LLM_STREAM_LOG=1` to print the selected priorities.
+
+Async enqueue variants were added for independent variable-length prefill
+attention and batched last-token decode attention. The default CLI/server decode
+path remains synchronous; this benchmark isolates the potential overlap benefit
+without changing request scheduling semantics.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench stream_overlap -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Workload | Time estimate |
+| --- | ---: |
+| `sequential_sync` | 47.066 ms |
+| `split_async_final_sync` | 45.746 ms |
+
+Notes:
+
+- The benchmark uses independent prefill and decode attention buffers, enqueues
+  prefill on the prefill stream and decode on the decode stream, then
+  synchronizes both streams at the end.
+- This is a small isolated win, not an end-to-end server scheduling change.
+  Keep the normal generate path synchronous until a batched scheduler can avoid
+  shared KV/workspace hazards.
+
+## 2026-05-10: Persistent Decode Prototype
+
+Persistent decode now has an experimental synthetic worker path. The prototype
+keeps one CUDA block resident, polls a mapped host command slot, applies a small
+decode-style vector transform to device buffers, and reports completion through
+the same command slot. It is intentionally not wired into CLI/server generation.
+
+Command:
+
+```bash
+cargo bench --features cuda --bench persistent_decode -- --sample-size 10
+```
+
+Measured on Tesla M40:
+
+| Workload | Time estimate | Throughput estimate |
+| --- | ---: | ---: |
+| `launch_residual_add/2048` | 32.305 us | 63.397 Melem/s |
+| `persistent_worker/2048` | 28.239 us | 72.524 Melem/s |
+
+Notes:
+
+- This shows a small launch-overhead reduction for a synthetic workload, enough
+  to keep the persistent path as a candidate for future decode scheduling work.
+- The prototype should remain isolated until the remaining host fallbacks and
+  shared workspace/KV hazards are cleaned up.
+
+## 2026-05-10: Ownership Hardening and Materialization Budget Refresh
+
+This refresh was taken after request-level server serialization, shared
+`DecodeSession` scratch, RAII `DeviceBuffer` cleanup, explicit model-level KV
+layer/sequence addressing, and FP32 materialization budget/key hardening.
+
+Commands:
+
+```bash
+cargo bench --features cuda --bench gemm -- --sample-size 10
+cargo bench --features cuda --bench attention -- attention_last_token_f32_gqa --sample-size 10
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TIMING_LOG=1 \
+  M40LLM_GEMM_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+GEMM microbench, measured on Tesla M40:
+
+| Shape | Time estimate | Throughput |
+| --- | ---: | ---: |
+| `64x64x64` | 8.868 us | 3.441 GiB/s |
+| `128x128x128` | 13.161 us | 9.275 GiB/s |
+| `256x256x256` | 21.266 us | 22.961 GiB/s |
+| `512x512x512` | 97.404 us | 20.052 GiB/s |
+
+Last-token GQA attention guardrail, measured on Tesla M40:
+
+| Sequence length | Default | `ldg_kv` experiment | Result |
+| ---: | ---: | ---: | --- |
+| 1 | 11.166 us | 11.151 us | neutral/slower vs prior baseline |
+| 16 | 40.644 us | 40.709 us | neutral/slower vs prior baseline |
+| 128 | 261.58 us | 261.25 us | within noise |
+| 512 | 1.1015 ms | 1.1015 ms | within noise |
+| 1024 | 2.2223 ms | 2.2198 ms | within noise |
+
+Batched mixed-length decode guardrail:
+
+| Distribution | Individual dispatch | Batched varlen | `ldg_kv` batched |
+| --- | ---: | ---: | ---: |
+| `avg_0p6_max` | 4.5803 ms | 1.5820 ms | 1.5823 ms |
+| `skewed` | 2.8137 ms | 2.1178 ms | 2.1140 ms |
+| `near_uniform` | 8.5964 ms | 2.4362 ms | 2.4363 ms |
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Mode | `generate_text_total` | `token.0.forward_all_layers` | `token.1.forward_all_layers` | Final tracked device bytes |
+| --- | ---: | ---: | ---: | ---: |
+| Materialized FP32 default | 624.282 ms | 499.420 ms | 36.047 ms | 6.338 GB |
+| `M40LLM_MATERIALIZE_F32_WEIGHTS=0` | 2210.434 ms | 1056.148 ms | 1055.661 ms | 2.200 GB |
+| `M40LLM_MATERIALIZE_F32_BUDGET_MB=0` | 2218.500 ms | 1058.227 ms | 1057.396 ms | 2.200 GB |
+
+Notes:
+
+- The shared `DecodeSession` and RAII cleanup did not introduce an obvious
+  regression in the steady materialized path.
+- A follow-up `M40LLM_ALLOC_LOG=1` CLI run on 2026-05-11 confirmed
+  `decode_session:logits_f32` and `decode_session:logits_norm_hidden_f32`
+  allocate once at session start and free once at session teardown, instead of
+  reallocating in each token's logits path.
+- The materialized FP32 path remains the fast-fits backend: steady second-token
+  full-layer forward was about 29x faster than the GGUF F16 fallback.
+- The default run logged an estimated 4.400 GB of F16 2D tensors eligible for
+  materialization and materialized 4.138 GB of projection/output weights for
+  this short prompt.
+- The zero-budget run confirms the new memory-budget fallback behaves like the
+  explicit disabled-materialization mode: it preserves correctness and memory
+  headroom, but is not the fast path.
+
+## 2026-05-11: Async Wrapper Launch/Sync Decode Profile
+
+This profile was taken after adding native and Rust async enqueue wrappers for
+hot CUDA kernels while keeping the normal generate path on sync compatibility
+wrappers.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 48.024 ms |
+| `cli.token.1.logits` | 4.313 ms |
+| `cli.token.1.total` | 52.446 ms |
+| `cli.generate_text_total` | 652.373 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Elapsed |
+| --- | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 5.803 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 11.467 ms |
+| `mlp_down` | 0 | 22 | 22 | 6.460 ms |
+| `out_project` | 0 | 22 | 22 | 3.051 ms |
+| `rope_qk` | 44 | 0 | 44 | 1.443 ms |
+| `kv_append` | 22 | 0 | 22 | 1.056 ms |
+| `attention` | 22 | 0 | 22 | 1.698 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 2.111 ms |
+| `residual_add` | 44 | 0 | 44 | 0.886 ms |
+| `swiglu` | 22 | 0 | 22 | 0.450 ms |
+
+Notes:
+
+- The sync compatibility path still performs one stream synchronization for
+  each hot wrapper call. The steady token had 352 stream syncs inside
+  `forward_all_layers`: 154 from materialized-FP32 cuBLAS projection calls and
+  198 from non-GEMM kernels.
+- RoPE plus KV append is visible: 66 launches, 66 stream syncs, and roughly
+  2.50 ms per steady token. This supports the next strict task, fusing K RoPE
+  with KV append, while keeping Q RoPE separate for now.
+- cuBLAS synchronization is the largest remaining sync source, so after the
+  RoPE/KV fusion task the larger scheduling lever is an async full-layer decode
+  path that reduces sync boundaries across GEMM and elementwise operations.
+
+## 2026-05-11: Fused K RoPE + KV Append Decode Profile
+
+This profile was taken after replacing the forward path's separate K RoPE plus
+KV append with a fused K-RoPE/f32-to-f16 KV append kernel. Q RoPE remains a
+separate in-place operation because attention consumes Q directly.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 49.907 ms |
+| `cli.token.1.logits` | 4.749 ms |
+| `cli.token.1.total` | 54.769 ms |
+| `cli.generate_text_total` | 692.045 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Elapsed |
+| --- | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 5.896 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 11.765 ms |
+| `mlp_down` | 0 | 22 | 22 | 6.507 ms |
+| `out_project` | 0 | 22 | 22 | 3.171 ms |
+| `rope_q` | 22 | 0 | 22 | 0.809 ms |
+| `kv_append_rope_k` | 22 | 0 | 22 | 1.600 ms |
+| `attention` | 22 | 0 | 22 | 1.752 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 2.175 ms |
+| `residual_add` | 44 | 0 | 44 | 0.934 ms |
+| `swiglu` | 22 | 0 | 22 | 0.487 ms |
+
+Notes:
+
+- The fused path reduced RoPE/KV operation groups from 66 launches/syncs to 44
+  launches/syncs per steady token. The measured RoPE/KV elapsed time moved from
+  about 2.50 ms to about 2.41 ms in this run, which is a small win and within
+  expected M40 run-to-run noise.
+- The fused kernel uses one thread per RoPE pair and half2 stores for K/V cache
+  writes. A scalar first version reduced launch count but was slower, so it was
+  replaced before landing.
+- The remaining dominant synchronization source is still the sync compatibility
+  path around cuBLAS and elementwise kernels. The next strict task should focus
+  on removing sync boundaries from already-fused SwiGLU and preparing graph or
+  async full-layer scheduling rather than adding more local micro-fusions.
+
+## 2026-05-11: Async SwiGLU Stream-Wait Decode Profile
+
+This profile was taken after changing full-layer forward to enqueue SwiGLU on
+the decode stream asynchronously, then make the prefill stream wait on that
+work before the MLP down-projection GEMM consumes `dhid`.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 52.390 ms |
+| `cli.token.1.logits` | 5.573 ms |
+| `cli.token.1.total` | 58.050 ms |
+| `cli.generate_text_total` | 650.119 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 0 | 6.179 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 0 | 11.800 ms |
+| `mlp_down` | 0 | 22 | 22 | 22 | 13.477 ms |
+| `out_project` | 0 | 22 | 22 | 0 | 3.394 ms |
+| `rope_q` | 22 | 0 | 22 | 0 | 0.832 ms |
+| `kv_append_rope_k` | 22 | 0 | 22 | 0 | 1.537 ms |
+| `attention` | 22 | 0 | 22 | 0 | 1.752 ms |
+| `rms_norm_weighted` | 44 | 0 | 44 | 0 | 2.210 ms |
+| `residual_add` | 44 | 0 | 44 | 0 | 1.076 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.339 ms |
+
+Notes:
+
+- SwiGLU explicit stream synchronizations dropped from 22 to 0 per steady token.
+  The required dependency is now represented as 22 stream waits in `mlp_down`,
+  because cuBLAS GEMM still runs on the prefill stream.
+- This is primarily a scheduling prerequisite for CUDA Graph capture rather than
+  a standalone latency win. The per-run timing was mixed: `swiglu` elapsed fell,
+  while `mlp_down` now includes the event wait plus normal GEMM sync cost.
+- The next strict task is to prototype CUDA Graph capture for warm one-token
+  decode now that the hot path has stable scratch buffers and explicit stream
+  dependencies.
+
+## 2026-05-11: CUDA Graph Capture Prototype
+
+This checkpoint added CUDA Graph capture/instantiate/launch/destroy plumbing and
+validated it with fixed-pointer decode-style async elementwise work on the M40.
+
+Validation command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise -- --nocapture --test-threads=1
+```
+
+Observed result:
+
+| Test | Result |
+| --- | --- |
+| `cuda_graph_replays_decode_elementwise_work` | pass |
+| `async_elementwise_wrappers_match_cpu` | pass |
+| `stream_wait_allows_prefill_gemm_to_consume_decode_swiglu` | pass |
+
+Notes:
+
+- The prototype captures and replays a decode-stream graph containing fixed
+  device pointers and async kernel enqueues. This validates the CUDA Graph
+  lifecycle on Tesla M40 without changing the production decode path yet.
+- Whole-token graph capture is not ready to enable: the hot path still has sync
+  compatibility wrappers around cuBLAS and other kernels, and KV append still
+  reads the sequence length through a host-side `cudaMemcpy`.
+- The next graph-specific step, when it becomes the priority again, should be to
+  make a one-layer decode subgraph fully async and device-parameterized. The
+  immediate strict-plan task now moves to reducing the remaining production
+  decode sync boundaries before packed variable-length decode scheduling.
+
+## 2026-05-11: Async Full-Layer Decode Boundary Profile
+
+This profile was taken after changing full-layer forward to enqueue RMSNorm,
+Q RoPE, fused K RoPE + KV append, GQA attention, and residual adds
+asynchronously. Dependencies between decode-stream kernels and prefill-stream
+cuBLAS GEMMs are now represented as explicit stream waits. The stream-wait FFI
+uses one event per dependency so alternating waits cannot reuse and overwrite a
+single bridge event.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 53.197 ms |
+| `cli.token.1.logits` | 4.559 ms |
+| `cli.token.1.total` | 57.857 ms |
+| `cli.generate_text_total` | 691.421 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 66 | 22 | 6.142 ms |
+| `mlp_gate_up` | 0 | 44 | 44 | 22 | 11.767 ms |
+| `mlp_down` | 0 | 22 | 22 | 22 | 6.711 ms |
+| `out_project` | 0 | 22 | 22 | 22 | 3.409 ms |
+| `rope_q` | 22 | 0 | 0 | 22 | 0.500 ms |
+| `kv_append_rope_k` | 22 | 0 | 0 | 0 | 0.839 ms |
+| `attention` | 22 | 0 | 0 | 0 | 0.333 ms |
+| `attn_norm` | 22 | 0 | 0 | 0 | 0.415 ms |
+| `ffn_norm` | 22 | 0 | 0 | 0 | 0.290 ms |
+| `attn_residual` | 22 | 0 | 0 | 22 | 0.507 ms |
+| `mlp_residual` | 22 | 0 | 0 | 22 | 0.501 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.325 ms |
+
+Notes:
+
+- Converted non-GEMM forward operations now contribute zero stream
+  synchronizations in the steady token. Remaining forward synchronizations are
+  the 154 materialized-FP32 cuBLAS projection calls.
+- Explicit stream waits increased because each prefill-stream GEMM boundary now
+  waits for decode-stream producers, and decode-stream consumers wait for
+  prefill-stream GEMM outputs. This is graph/scheduling groundwork, not an
+  immediate latency win.
+- Whole-token graph capture is still blocked by synchronous cuBLAS wrappers and
+  host-side KV sequence length updates. The next narrow step is to add async
+  cuBLAS enqueue wrappers or a one-layer graph capture path that can keep GEMM
+  dependencies inside capture without host stream synchronizations.
+
+## 2026-05-11: Async Materialized cuBLAS Decode Profile
+
+This profile was taken after adding an async cuBLAS enqueue wrapper for
+materialized FP32 GGUF projection weights and routing full-layer decode
+projections through explicit stream waits instead of per-GEMM stream
+synchronizations. Synchronous wrappers remain available for tests and simple
+callers.
+
+Command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 24.090 ms |
+| `cli.token.1.logits` | 4.985 ms |
+| `cli.token.1.total` | 29.140 ms |
+| `cli.generate_text_total` | 619.592 ms |
+
+Steady second-token aggregate over 22 layers:
+
+| Operation group | Launches | cuBLAS calls | Stream syncs | Stream waits | Elapsed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qkv_project` | 0 | 66 | 0 | 22 | 4.060 ms |
+| `mlp_gate_up` | 0 | 44 | 0 | 22 | 2.838 ms |
+| `mlp_down` | 0 | 22 | 0 | 22 | 2.179 ms |
+| `out_project` | 0 | 22 | 0 | 22 | 1.769 ms |
+| `rope_q` | 22 | 0 | 0 | 22 | 0.791 ms |
+| `kv_append_rope_k` | 22 | 0 | 0 | 0 | 0.611 ms |
+| `attention` | 22 | 0 | 0 | 0 | 0.235 ms |
+| `attn_norm` | 22 | 0 | 0 | 0 | 0.307 ms |
+| `ffn_norm` | 22 | 0 | 0 | 0 | 0.199 ms |
+| `attn_residual` | 22 | 0 | 0 | 22 | 0.743 ms |
+| `mlp_residual` | 22 | 0 | 0 | 22 | 0.771 ms |
+| `swiglu` | 22 | 0 | 0 | 0 | 0.239 ms |
+
+Notes:
+
+- Materialized projection groups still issue 154 cuBLAS calls per steady token,
+  but they now contribute zero stream synchronizations in the full-layer
+  forward profile.
+- The remaining observed synchronizations are host boundaries: output norm still
+  uses its sync compatibility wrapper, logits explicitly synchronizes before
+  D2H copyback for host sampling, and CLI shutdown synchronizes streams.
+- This clears the per-GEMM sync blocker for one-layer CUDA Graph experiments.
+  The next graph blocker is host-managed KV position/length state.
+
+## 2026-05-11: Packed Varlen Decode Scheduler Foundation
+
+This checkpoint adds a scheduler-facing decode batch plan for mixed-length
+last-token attention. The plan filters active requests, preserves per-request
+sequence IDs, builds `BatchMetadata` with `query_len=1`, uploads sequence IDs
+and KV lengths to device metadata buffers, and dispatches the existing batched
+GQA decode attention primitive.
+
+Validation target:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
+
+Coverage:
+
+| Path | Shape | Expected result |
+| --- | --- | --- |
+| Direct batched decode attention | `seq_lens=[1,3,5]` | matches individual decode |
+| Async batched decode attention | `seq_lens=[1,3,5]` | matches sync batched decode |
+| Scheduler-built CUDA plan | active requests with `kv_len=[1,3,5]` | matches direct batched decode |
+| Opt-in `ldg_kv` cache experiment | `seq_lens=[1,3,5]` | matches default batched decode |
+
+Notes:
+
+- `/generate` remains serialized by default. Setting
+  `M40LLM_SERVER_BATCH_DECODE=1` enables leased per-request KV sequence slots,
+  and the later server scheduler checkpoint adds packed batched decode attention
+  for compatible buffered requests.
+- Model-level KV ownership supports sequence-major physical slots for
+  `KV[layer][sequence]`; multi-request generation can use separate logical
+  sequences.
+- Packed prefill should wait until decode batching has real request/session
+  ownership above this scheduler foundation.
+
+## 2026-05-11: Explicit-Position KV Append
+
+This checkpoint adds graph-friendly KV append APIs for fused K RoPE plus FP32 to
+FP16 KV storage:
+
+- `m40llm_kvcache_append_token_f32_rope_k_at_async` takes an explicit token
+  position and updates `seq_map[seq_id]` on device.
+- `m40llm_kvcache_append_token_f32_rope_k_position_dev_async` reads the token
+  position from a device pointer so a captured graph can bind a stable parameter
+  address.
+- Full-layer decode now uses the explicit-position path because the Rust decode
+  loop already knows `pos = seq_len - 1`.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test kv_f32_to_f16_append -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+TinyLlama profile spot-check:
+
+```text
+forward.layer.N.seq_len.2.kv_append_rope_k:
+  op=kvcache_append_token_f32_rope_k_at
+  launches=1 syncs=0 h2d=0(0 bytes) d2h=0(0 bytes)
+```
+
+This removes the previous host-side `cudaMemcpyDeviceToHost` length read from
+the production KV append path. The next graph-specific step is to capture a
+one-layer decode segment that includes async cuBLAS and a stable device position
+parameter.
+
+## 2026-05-12: One-Layer cuBLAS Graph Prototype
+
+This checkpoint validates CUDA Graph capture with materialized FP32 cuBLAS
+projection work on the Tesla M40. The test captures a one-layer-shaped prefill
+stream graph containing seven async `cublasSgemm` calls:
+
+- Q, K, V projections
+- attention output projection
+- MLP gate and up projections
+- MLP down projection
+
+The test warms cuBLAS before capture, captures the async GEMM sequence, launches
+the graph, synchronizes once at the graph boundary, and compares all projection
+outputs against CPU references.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise \
+  -- cuda_graph_replays_one_layer_projection_gemms --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- This proves async materialized cuBLAS calls can participate in CUDA Graph
+  capture on the target GPU/toolchain.
+- The prototype is still projection-only and single-stream. The next production
+  step is to capture a true one-layer decode segment that also includes
+  decode-stream elementwise/attention/KV work and cross-stream dependencies.
+
+## 2026-05-12: Cross-Stream Decode Graph Prototype
+
+This checkpoint validates a graph segment with the same stream topology as the
+warm decode path:
+
+1. decode stream enqueues elementwise work,
+2. prefill stream waits and runs async materialized cuBLAS,
+3. decode stream waits and enqueues a follow-up elementwise op.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test cuda_elementwise \
+  -- cuda_graph_replays_cross_stream_decode_gemm_segment --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- CUDA graph capture can now cover the production stream dependency pattern,
+  not just isolated prefill-stream cuBLAS work.
+- This is still synthetic. The next step is to capture a real one-layer decode
+  slice using model/workspace pointers, KV append, attention, and projection
+  wrappers.
+
+## 2026-05-12: Production One-Layer Decode Graph Smoke
+
+This checkpoint captures a real `forward_one_token_with_layer` call after
+warming the model's materialized weights and forward workspace. The graph covers
+the production one-layer decode path, including:
+
+- RMSNorm
+- async materialized projection GEMMs
+- Q RoPE
+- fused K RoPE + KV append
+- GQA attention
+- residual adds
+- SwiGLU and MLP projections
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  -- cuda_graph_replays_forward_one_token_with_layer --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- The test compares graph replay output against a normal one-layer forward on a
+  separate KV sequence.
+- This proves a warmed, fixed-shape, fixed-pointer one-layer decode graph can be
+  captured and replayed. The next step is deciding how to cache and launch this
+  in production sessions, then expanding from one layer toward full-token graph
+  coverage.
+
+## 2026-05-12: Device-Parameter Graph Wrappers
+
+This checkpoint adds graph-compatible wrappers for per-token values that need to
+vary between graph launches:
+
+- Q RoPE can read `past_len` from a device `u32`.
+- GQA last-token attention can read `seq_len` from a device `u32`.
+- KV append already has a device-position variant from the prior checkpoint.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test rmsnorm_rope -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_last_token -- --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Notes:
+
+- Device-seq-len attention intentionally starts with the generic GQA kernel.
+  This keeps graph replay correctness simple; a tuned head64 device-parameter
+  kernel can be added after graph-mode performance is measured.
+
+## 2026-05-12: Opt-In DecodeSession One-Layer Graph Cache
+
+`DecodeSession` now caches and replays a warmed one-layer decode CUDA Graph when
+`M40LLM_DECODE_GRAPH=1`. The graph binds stable session scratch/workspace
+pointers and uses device-resident `position` and `seq_len` parameters for Q
+RoPE, fused K RoPE + KV append, and GQA attention. Multi-layer sessions log once
+and continue using the normal async decode path.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+Result on M40: pass, including `decode_session_uses_one_layer_graph_when_enabled`
+with observed `cuda_graph_launch` profile events.
+
+Notes:
+
+- First use warms the normal one-layer path before capture so lazy workspace
+  allocation and FP32 weight materialization do not occur inside stream capture.
+- The current graph parameter update uses two small host-to-device copies before
+  graph launch. That keeps the graph topology stable; a future device-side token
+  counter can remove those copies if profiling shows they matter.
+- This is intentionally not enabled for TinyLlama-class 22-layer sessions yet.
+  The next graph step is expanding from one layer to a full-token graph once
+  pointer stability and replay behavior are validated.
+
+## 2026-05-12: Async MLP Stream-Order Regression Canary
+
+The async materialized-GEMM path briefly regressed TinyLlama generation because
+`swiglu_f32_async` read `dgate`/`dup` on the decode stream before the async MLP
+gate/up cuBLAS calls on the prefill stream completed. The fix adds an explicit
+decode-stream wait named `mlp_gate_up_to_swiglu`.
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test tinyllama_generation_canary -- --nocapture --test-threads=1
+```
+
+Result on M40: pass. The TinyLlama canary uses the stock-quotes prompt, disables
+graph mode, and asserts the exact deterministic generated token sequence:
+
+```text
+[13, 13, 29896, 29889, 22402, 385, 1409, 310, 10961, 29879,
+ 411, 1009, 5829, 29892, 1024, 29892, 322, 8666, 472, 278]
+```
+
+Corrected warm decode profile command:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_DECODE_GRAPH=0 \
+  M40LLM_LAUNCH_LOG=1 M40LLM_SYNC_LOG=1 M40LLM_PROFILE_LOG=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+TinyLlama CLI timing, measured on Tesla M40:
+
+| Region | Time |
+| --- | ---: |
+| `cli.token.1.forward_all_layers` | 28.887 ms |
+| `cli.token.1.logits` | 4.511 ms |
+| `cli.token.1.total` | 33.482 ms |
+| `cli.generate_text_total` | 604.047 ms |
+
+Steady second-token notes:
+
+- Full-layer forward still has zero stream synchronizations inside the 22-layer
+  body, but now has the required 22 additional `mlp_gate_up_to_swiglu` stream
+  waits.
+- Expected steady-token projection count remains 154 async cuBLAS calls
+  (7 projections x 22 layers).
+- The corrected profile confirms the restored wait is visible in every
+  `forward.layer.N.seq_len.2.swiglu` timing region.
+
+## 2026-05-12: Opt-In Full-Token Decode Graph Capture
+
+`DecodeSession` graph mode now captures the full all-layer decode token instead
+of only one layer. Capture still stays behind `M40LLM_DECODE_GRAPH=1` and warms
+the normal async path first so workspace allocation and FP32 weight
+materialization happen outside CUDA stream capture.
+
+Implementation notes:
+
+- `forward_one_token_all_layers_for_sequence_graph_params` mirrors the normal
+  all-layer forward loop but passes device-resident `position` and `seq_len`
+  through every layer.
+- The shared tiny GGUF fixture can now generate multi-layer test models, and the
+  CUDA smoke covers both one-layer and two-layer `DecodeSession` graph replay.
+- TinyLlama graph smoke captured all 22 layers with:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_DECODE_GRAPH=1 \
+  cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 1 --top-k 1 --require-sm52
+```
+
+Observed log evidence:
+
+```text
+[cli] captured full-token decode CUDA graph layers=22
+```
+
+Validation:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+```
+
+Result on M40: pass.
+
+Next graph work should benchmark `M40LLM_DECODE_GRAPH=1` versus the normal async
+path for steady TinyLlama decode. If graph replay does not materially reduce
+latency, move the strict plan forward to packed varlen decode scheduling instead
+of adding more graph complexity.
+
+## 2026-05-12: Full-Token Decode Graph Benchmark
+
+Benchmark command, run three times for each graph setting on Tesla M40:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 M40LLM_TIMING_LOG=1 \
+  M40LLM_DECODE_GRAPH={0,1} cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 4 --top-k 1 --require-sm52
+```
+
+Both modes generated the expected text:
+
+```text
+, World!
+```
+
+Median timing across steady tokens 2-4 and three trials:
+
+| Mode | `forward_all_layers` | `logits` | token total | `generate_text_total` |
+| --- | ---: | ---: | ---: | ---: |
+| `M40LLM_DECODE_GRAPH=0` | 8.386 ms | 21.295 ms | 29.833 ms | 744.079 ms |
+| `M40LLM_DECODE_GRAPH=1` | 0.095 ms | 713.868 ms | 714.058 ms | 3341.133 ms |
+
+Interpretation:
+
+- Graph replay greatly reduces host-side `forward_all_layers` enqueue time, which
+  confirms the graph launches rather than re-enqueueing every layer operation.
+- End-to-end token latency regresses by roughly 24x for steady tokens because
+  the following logits/output-norm region absorbs much larger GPU completion
+  time.
+- Keep `M40LLM_DECODE_GRAPH=1` experimental and off by default.
+- Do not expand graph coverage yet. Either investigate graph replay stream
+  completion/accounting against logits, or move the strict plan forward to real
+  packed varlen decode scheduling.
+
+## 2026-05-12: Server Decode Scheduler Skeleton
+
+`M40LLM_SERVER_BATCH_DECODE=1` now routes buffered `/generate` requests through a
+queued decode scheduler instead of serializing each whole request behind the
+HTTP handler. The scheduler owns per-request `DecodeSession` state, holds leased
+KV sequence slots for the request lifetime, steps active requests round-robin,
+builds `DecodeBatchPlan` snapshots from active mixed-length requests, and still
+uses the server generation lock around each CUDA token step to protect shared
+workspace use across scheduler and streaming paths.
+
+Current boundary:
+
+- Superseded by the packed batched decode attention checkpoint below.
+- Streaming `/generate` remains on the previous serialized path for this slice.
+
+Validation:
+
+```bash
+cargo fmt --all -- --check
+cargo test --no-default-features --locked
+cargo test --no-default-features --features server --locked
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
+
+The CUDA server smoke showed two concurrent buffered requests assigned sequence
+IDs 0 and 1 and stepped alternately by the scheduler. The follow-up checkpoint
+below replaces the per-request attention region with packed batched GQA decode
+attention while keeping the same request/session ownership model.
+
+## 2026-05-12: Packed Batched Decode Attention in Server Scheduler
+
+`M40LLM_SERVER_BATCH_DECODE=1` now has a real batched full-layer decode path for
+head_dim=64 models. Each scheduler tick prepares one token per active request,
+packs request hidden rows into a row-aware forward workspace, runs row-batched
+projection and MLP GEMMs, applies per-row RoPE/KV append for mixed positions,
+uses `attention_last_token_f32_gqa_batched_async` for the shared decode
+attention step, and scatters rows back into each request's `DecodeSession`
+scratch before host sampling.
+
+Current boundary:
+
+- Batch size 1 and non-head64 models fall back to the previous per-request path.
+- Buffered `/generate` is covered; streaming `/generate` remains on the
+  serialized path.
+- This is a correctness/scheduler integration checkpoint; TinyLlama concurrency
+  latency measurements are still pending.
+
+Validation:
+
+```bash
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+
+source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+```
+
+## 2026-05-12: Decode Graph Replay Diagnostic Sync
+
+`M40LLM_DECODE_GRAPH_DIAG_SYNC=1` adds a diagnostic-only graph replay path:
+
+- records CUDA events before and after `cudaGraphLaunch`,
+- synchronizes the graph stream immediately after launch,
+- logs graph replay GPU elapsed time, and
+- inserts an explicit decode-stream event dependency before logits consumes the
+  graph output buffer.
+
+Diagnostic command on Tesla M40:
+
+```bash
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_DECODE_GRAPH=1 M40LLM_DECODE_GRAPH_DIAG_SYNC=1 \
+  M40LLM_TIMING_LOG=1 cargo run --features cuda -- generate \
+  /mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf \
+  Hello --max-tokens 4 --top-k 1 --require-sm52
+```
+
+Observed graph replay GPU elapsed time:
+
+| Token | Graph replay GPU elapsed | `forward_all_layers` | `logits` | token total |
+| --- | ---: | ---: | ---: | ---: |
+| 2 | 539.041 ms | 539.133 ms | 3.947 ms | 543.176 ms |
+| 3 | 709.210 ms | 709.280 ms | 3.979 ms | 713.334 ms |
+| 4 | 883.275 ms | 883.375 ms | 3.995 ms | 887.439 ms |
+
+Interpretation:
+
+- The previous graph benchmark's large `logits` timing was stream-completion
+  accounting: logits was waiting for slow graph replay to finish.
+- With explicit post-launch synchronization, logits/output norm returns to the
+  expected small timing, but graph replay itself is far slower than the normal
+  async path.
+- Keep `M40LLM_DECODE_GRAPH=1` experimental and off by default.
+- Do not expand graph coverage until graph replay performance is understood;
+  move the main strict plan forward to packed varlen decode scheduling.
+
+## 2026-05-12: Attention Bench Rebaseline (Latest Run)
+
+Command:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench attention -- --sample-size 10
+```
+
+Observations:
+
+- Full benchmark set completed successfully on Tesla M40.
+- The first few `attention_last_token_f32_gqa` cases showed unusually large variance;
+  this run is still useful for relative packed-batched comparisons, but individual
+  single-case absolute values for very short sequence lengths should be re-run in a
+  standalone bench if absolute confidence is required.
+
+### Last-token attention
+
+| Case | Throughput (ns) | Notes |
+| --- | ---: | --- |
+| `s1` | 2.6589 ms (baseline) | includes no `ldg` |
+| `s1_ldg_kv` | 1.2593 ms (median) | high variance |
+| `s16` | 1.9324 ms | no `ldg` |
+| `s16_ldg_kv` | 623.92 µs (median) | high variance |
+| `s128` | 3.4103 ms | no `ldg` |
+| `s128_ldg_kv` | 3.0305 ms | slight improvement vs no-ldg |
+| `s512` | 3.7727 ms | no `ldg` |
+| `s512_ldg_kv` | 1.2235 ms (median) | best path here |
+| `s1024` | 2.230 ms | no `ldg` |
+| `s1024_ldg_kv` | 2.2322 ms | similar |
+
+### Batched last-token decode attention (`attention_last_token_f32_gqa_batched_varlen`)
+
+All times are median reported by Criterion.
+
+| Distribution | Baseline (individual) | Packed batched | `ldg_kv` packed | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `avg_0p6_max` | 4.594 ms | 1.584 ms | 1.585 ms | 2.9x |
+| `skewed` | 2.822 ms | 2.122 ms | 2.120 ms | 1.3x |
+| `near_uniform` | 8.601 ms | 2.445 ms | 2.444 ms | 3.5x |
+
+### Prefill attention (`attention_prefill_f32_gqa_varlen`)
+
+Times are median over 10 samples for each case.
+
+| Distribution | Padded max | Packed varlen | Bucketed varlen | Best |
+| --- | ---: | ---: | ---: | --- |
+| `avg_0p6_max` | 297.29 ms | 178.34 ms | 179.08 ms | Packed 1.67x |
+| `skewed` | 526.91 ms | 141.66 ms | 142.05 ms | Packed 3.72x |
+| `near_uniform` | 527.27 ms | 474.53 ms | 474.59 ms | Packed 1.11x |
+| `prefix_query` | 123.97 ms | 50.61 ms | 51.35 ms | Packed 2.45x |
+
+Key interpretation:
+
+- Padded-varlen prefill remains the baseline; packed/bucketed variants materially
+  improve throughput on mixed and skewed workloads.
+- For near-uniform sequences, packed varlen narrows toward padded behavior, as
+  expected.
+- `ldg_kv` is now only used in last-token batched decode and provides no strong
+  win or loss relative to default in this run.
+
+## 2026-05-12: TinyLlama Buffered Server Batch-Decode Benchmark
+
+This checkpoint compares buffered `/generate` with and without the queued
+batched decode scheduler. CUDA Graph replay stayed disabled because graph replay
+diagnostics showed it is slower than the normal async path.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Features: `cuda,server`
+- Command prefix: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1`
+- Benchmark script: `TRIALS=3 MAX_TOKENS=2 PORT_BASE=52680 scripts/bench_server_batch_decode.sh`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260512_183735`
+
+Each case starts a fresh server, performs one warmup request, then sends the case
+requests concurrently. Times below are means across three trials.
+
+| Case | Batch decode | Requests | Mean wall | Mean avg request latency | Mean tokens/s | HTTP |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `batch1_hello` | off | 1 | 174.0 ms | 0.164952 s | 11.495 | 3/3 ok |
+| `batch1_hello` | on | 1 | 176.0 ms | 0.167599 s | 11.364 | 3/3 ok |
+| `batch2_same` | off | 2 | 338.7 ms | 0.247982 s | 11.811 | 6/6 ok |
+| `batch2_same` | on | 2 | 287.3 ms | 0.274962 s | 13.924 | 6/6 ok |
+| `batch4_mixed` | off | 4 | 1537.0 ms | 0.913495 s | 5.205 | 12/12 ok |
+| `batch4_mixed` | on | 4 | 909.3 ms | 0.679747 s | 8.798 | 12/12 ok |
+| `batch4_skewed` | off | 4 | 2456.0 ms | 1.653452 s | 3.257 | 12/12 ok |
+| `batch4_skewed` | on | 4 | 1523.7 ms | 0.966136 s | 5.250 | 12/12 ok |
+
+Speedups from enabling `M40LLM_SERVER_BATCH_DECODE=1`:
+
+| Case | Wall-time speedup | Throughput speedup |
+| --- | ---: | ---: |
+| `batch1_hello` | 0.99x | 0.99x |
+| `batch2_same` | 1.18x | 1.18x |
+| `batch4_mixed` | 1.69x | 1.69x |
+| `batch4_skewed` | 1.61x | 1.61x |
+
+Correctness checks:
+
+- All benchmarked requests returned HTTP 200.
+- Batch scheduler logs showed distinct leased sequence IDs for concurrent
+  requests.
+- `cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1`
+  passed.
+- `M40LLM_TINYLLAMA_CANARY_MODEL=<TinyLlama path> cargo test --features cuda
+  --test tinyllama_generation_canary -- --nocapture --test-threads=1` passed.
+
+Interpretation:
+
+- The batched decode scheduler is neutral for batch size 1 and improves
+  concurrent buffered request throughput for batch sizes 2 and 4.
+- The mixed and skewed prompt cases are the important validation signal: they
+  show the scheduler can share decode work across active requests with different
+  prompt/KV lengths while preserving per-request outputs.
+- This is enough to keep moving the strict plan forward. The next task is packed
+  varlen prefill integration, starting behind an opt-in server flag or internal
+  scheduler path until correctness and perf are characterized.
+
+## 2026-05-12: TinyLlama Opt-In Packed Prefill Server Benchmark
+
+This checkpoint integrates packed variable-length prompt prefill into the
+buffered server scheduler behind `M40LLM_SERVER_BATCH_PREFILL=1`. The comparison
+below keeps `M40LLM_SERVER_BATCH_DECODE=1` enabled and toggles only packed
+prefill.
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Features: `cuda,server`
+- Command prefix: `source scripts/dev-env.sh && M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1`
+- Benchmark script: `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1" TRIALS=3 MAX_TOKENS=2 PORT_BASE=53180 scripts/bench_server_batch_decode.sh`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260512_191709`
+
+Times below are means across three trials.
+
+| Case | Packed prefill | Requests | Mean wall | Mean avg request latency | Mean tokens/s | HTTP |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `batch1_hello` | off | 1 | 175.7 ms | 0.167317 s | 11.386 | 3/3 ok |
+| `batch1_hello` | on | 1 | 176.0 ms | 0.167416 s | 11.364 | 3/3 ok |
+| `batch2_same` | off | 2 | 286.0 ms | 0.274211 s | 13.987 | 6/6 ok |
+| `batch2_same` | on | 2 | 255.7 ms | 0.243096 s | 15.646 | 6/6 ok |
+| `batch4_mixed` | off | 4 | 904.3 ms | 0.676625 s | 8.846 | 12/12 ok |
+| `batch4_mixed` | on | 4 | 481.7 ms | 0.412279 s | 16.609 | 12/12 ok |
+| `batch4_skewed` | off | 4 | 1535.7 ms | 0.975667 s | 5.211 | 12/12 ok |
+| `batch4_skewed` | on | 4 | 610.7 ms | 0.545692 s | 13.112 | 12/12 ok |
+
+Speedups from enabling `M40LLM_SERVER_BATCH_PREFILL=1` while batched decode is
+already enabled:
+
+| Case | Wall-time speedup | Throughput speedup |
+| --- | ---: | ---: |
+| `batch1_hello` | 1.00x | 1.00x |
+| `batch2_same` | 1.12x | 1.12x |
+| `batch4_mixed` | 1.88x | 1.88x |
+| `batch4_skewed` | 2.51x | 2.52x |
+
+Validation:
+
+- All benchmarked requests returned HTTP 200.
+- `forward_batched_prefill_uses_varlen_attention` compares packed prefill final
+  hidden output against sequential token prefill on a tiny CUDA model.
+- `server_smoke` now enables `M40LLM_SERVER_BATCH_PREFILL=1` and asserts that
+  server batching launches `attention_prefill_f32_gqa_varlen_head64`.
+- `attention_prefill_varlen`, `forward_with_layer_smoke`, and CUDA/server Clippy
+  passed after the integration.
+
+Interpretation:
+
+- Packed prefill is neutral for batch size 1 because the opt-in path falls back.
+- Mixed and skewed prompts benefit the most because the scheduler avoids running
+  all prompt attention at the largest prompt length.
+- The next scheduler task is mixed prefill/decode overlap or broader prefill
+  compatibility; keep this opt-in until more server workloads are characterized.

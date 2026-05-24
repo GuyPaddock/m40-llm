@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 #[cfg(feature = "cuda")]
-use crate::cuda::CudaContext;
+use crate::cuda::{CudaContext, CudaStream};
 use crate::decode::{decode_loop_with, StoppingCriteria};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
@@ -19,6 +19,8 @@ pub struct GenerateOptions {
     pub top_p: Option<f32>,
     pub seed: Option<u64>,
     pub log_prefix: &'static str,
+    pub sequence_id: u32,
+    pub reset_kv_cache: bool,
 }
 
 impl Default for GenerateOptions {
@@ -31,6 +33,8 @@ impl Default for GenerateOptions {
             top_p: None,
             seed: None,
             log_prefix: "generate",
+            sequence_id: 0,
+            reset_kv_cache: true,
         }
     }
 }
@@ -42,7 +46,39 @@ pub struct GeneratedText {
 }
 
 pub fn sanitize_output(text: &str) -> String {
-    text.chars().filter(|c| *c != '\0').collect()
+    let bytes = text.as_bytes();
+    let mut cleaned = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] == b'\0' {
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'<'
+            && i + 5 < bytes.len()
+            && bytes[i + 1] == b'0'
+            && (bytes[i + 2] == b'x' || bytes[i + 2] == b'X')
+            && bytes[i + 3].is_ascii_hexdigit()
+            && bytes[i + 4].is_ascii_hexdigit()
+            && bytes[i + 5] == b'>'
+        {
+            i += 6;
+            continue;
+        }
+
+        let b = bytes[i];
+        if b.is_ascii_control() && b != b'\n' && b != b'\r' && b != b'\t' {
+            i += 1;
+            continue;
+        }
+
+        cleaned.push(b);
+        i += 1;
+    }
+
+    String::from_utf8_lossy(&cleaned).into_owned()
 }
 
 pub fn decode_generated_text(
@@ -118,12 +154,12 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     );
     let max_tokens = options
         .max_tokens
-        .or_else(|| Some(model.model_config.context_length as usize))
+        .or(Some(model.model_config.context_length as usize))
         .unwrap_or(32);
     let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
     let sampler = sampler_from_options(&options)?;
 
-    if model.kv_cache.is_some() {
+    if options.reset_kv_cache && model.kv_cache.is_some() {
         let reset_start = std::time::Instant::now();
         model.reset_kv_cache()?;
         timing::timing_log!(reset_start.elapsed(), "{}.kv_reset", options.log_prefix);
@@ -144,25 +180,25 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     };
 
     let log_prefix = options.log_prefix;
+    #[cfg(feature = "cuda")]
+    let mut decode_session = {
+        eprintln!(
+            "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
+            model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
+        );
+        crate::decode_session::DecodeSession::new_for_sequence(
+            model,
+            options.sequence_id,
+            full_decode_d_model,
+            true,
+            log_prefix,
+            "generate:d_x_embed_f32",
+            "generate:d_out_hidden_f32",
+        )?
+    };
     let mut logits_fn = {
-        #[cfg(feature = "cuda")]
-        let mut step: usize = 0;
-        #[cfg(feature = "cuda")]
-        let mut processed_len: usize = 0;
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let logits_fn_start = std::time::Instant::now();
-            eprintln!("[{log_prefix}] logits_fn called with {} tokens", ids.len());
-            #[cfg(feature = "cuda")]
-            {
-                step += 1;
-                eprintln!(
-                    "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-                    step,
-                    std::process::id(),
-                    model.cuda.device_id(),
-                    CudaContext::total_device_bytes()
-                );
-            }
 
             #[cfg(not(feature = "cuda"))]
             let embed_names = [
@@ -190,14 +226,6 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 eprintln!("[{log_prefix}] embeddings shape: {:?}", tensor.shape);
             }
 
-            #[cfg(feature = "cuda")]
-            let (d, can_forward) = {
-                eprintln!(
-                    "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
-                    model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
-                );
-                (full_decode_d_model, true)
-            };
             #[cfg(not(feature = "cuda"))]
             let (d, can_forward) = match model.validate_standard_layers() {
                 Ok((d_model, hidden_dim)) => {
@@ -237,120 +265,16 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                     (d_try, false)
                 }
             };
-            let bytes = d * std::mem::size_of::<f32>();
-
             #[cfg(not(feature = "cuda"))]
             {
+                let bytes = d * std::mem::size_of::<f32>();
                 let _ = (can_forward, bytes);
             }
 
             #[cfg(feature = "cuda")]
             {
-                if ids.is_empty() {
-                    return Err(anyhow::anyhow!("empty ids"));
-                }
-                if processed_len > ids.len() {
-                    processed_len = 0;
-                    if model.kv_cache.is_some() {
-                        model.reset_kv_cache()?;
-                    }
-                }
-
-                let start = if can_forward {
-                    processed_len
-                } else {
-                    ids.len().saturating_sub(1)
-                };
-                let mut logits: Option<Vec<f32>> = None;
-                for token_idx in start..ids.len() {
-                    let token_start = std::time::Instant::now();
-                    let tok_id = ids[token_idx] as u64;
-                    eprintln!("[{log_prefix}] token id {}", tok_id);
-
-                    let d_x = model
-                        .cuda
-                        .device_malloc_tagged(bytes, "generate:d_x_embed_f32")?;
-
-                    let token_logits = (|| -> anyhow::Result<Vec<f32>> {
-                        let embed_start = std::time::Instant::now();
-                        unsafe {
-                            model.load_token_embedding_to_f32(tok_id, d_x)?;
-                        }
-                        timing::timing_log!(
-                            embed_start.elapsed(),
-                            "{log_prefix}.token.{token_idx}.embedding_load"
-                        );
-
-                        if can_forward {
-                            let d_out = model
-                                .cuda
-                                .device_malloc_tagged(bytes, "generate:d_out_hidden_f32")?;
-                            let result = (|| -> anyhow::Result<Vec<f32>> {
-                                unsafe {
-                                    let forward_start = std::time::Instant::now();
-                                    let layers = model.forward_one_token_all_layers(
-                                        d_x as *const _,
-                                        (token_idx + 1) as u32,
-                                        d_out,
-                                    )?;
-                                    timing::timing_log!(
-                                        forward_start.elapsed(),
-                                        "{log_prefix}.token.{token_idx}.forward_all_layers"
-                                    );
-                                    if token_idx == start {
-                                        eprintln!(
-                                            "[{log_prefix}] full-layer forward enabled layers={layers}"
-                                        );
-                                    }
-                                    let logits_start = std::time::Instant::now();
-                                    let logits = model.logits_from_hidden(d_out as *const _);
-                                    timing::timing_log!(
-                                        logits_start.elapsed(),
-                                        "{log_prefix}.token.{token_idx}.logits"
-                                    );
-                                    logits
-                                }
-                            })();
-                            unsafe {
-                                let _ = model.cuda.device_free(d_out);
-                            }
-                            result
-                        } else {
-                            unsafe {
-                                let logits_start = std::time::Instant::now();
-                                let logits = model.logits_from_hidden(d_x as *const _);
-                                timing::timing_log!(
-                                    logits_start.elapsed(),
-                                    "{log_prefix}.token.{token_idx}.logits"
-                                );
-                                logits
-                            }
-                        }
-                    })();
-
-                    unsafe {
-                        let _ = model.cuda.device_free(d_x);
-                    }
-
-                    let token_logits = token_logits?;
-                    log_top_logits(&token_logits, 8, log_prefix);
-                    timing::timing_log!(
-                        token_start.elapsed(),
-                        "{log_prefix}.token.{token_idx}.total"
-                    );
-                    logits = Some(token_logits);
-                }
-                if can_forward {
-                    processed_len = ids.len();
-                }
-
-                let result = logits.ok_or_else(|| anyhow::anyhow!("no token processed for logits"));
-                timing::timing_log!(
-                    logits_fn_start.elapsed(),
-                    "{log_prefix}.logits_fn.ids_len_{}",
-                    ids.len()
-                );
-                result
+                let _ = logits_fn_start;
+                decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8, log_prefix))
             }
 
             #[cfg(not(feature = "cuda"))]
@@ -438,6 +362,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         "{}.output_decode",
         options.log_prefix
     );
+    #[cfg(feature = "cuda")]
+    {
+        model.cuda.synchronize_stream(CudaStream::Decode)?;
+        model.cuda.synchronize_stream(CudaStream::Prefill)?;
+    }
 
     #[cfg(feature = "cuda")]
     eprintln!(
@@ -457,4 +386,22 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         output: sanitize_output(&text),
         token_ids: ids,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_output_drops_nuls_and_byte_markers() {
+        let input = "Catalog\0 yesterday \u{0003}<0xAA> Chile <0x7f>";
+        let output = sanitize_output(input);
+        assert_eq!(output, "Catalog yesterday  Chile ");
+    }
+
+    #[test]
+    fn sanitize_output_keeps_printable_text() {
+        let input = "Hello, world!";
+        assert_eq!(sanitize_output(input), "Hello, world!");
+    }
 }

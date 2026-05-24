@@ -4,6 +4,75 @@ use anyhow::{anyhow, Result};
 use std::ffi::c_void;
 
 impl LoadedModel {
+    pub(super) fn kv_physical_slot_for_layer_sequence(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+    ) -> Result<u32> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if layer_id >= self.model_config.block_count {
+            anyhow::bail!(
+                "KV layer_id {} out of range for {} layers",
+                layer_id,
+                self.model_config.block_count
+            );
+        }
+        let layer_count = self.model_config.block_count;
+        let sequence_capacity = kv.max_batch_size() / layer_count;
+        if sequence_id >= sequence_capacity {
+            anyhow::bail!(
+                "KV sequence_id {} out of range for {} logical sequences",
+                sequence_id,
+                sequence_capacity
+            );
+        }
+        if kv.max_batch_size() < layer_count {
+            anyhow::bail!(
+                "KV cache has {} physical slots, but layer-addressed decode needs {}",
+                kv.max_batch_size(),
+                layer_count
+            );
+        }
+        let physical_slot = sequence_id
+            .checked_mul(layer_count)
+            .and_then(|base| base.checked_add(layer_id))
+            .ok_or_else(|| anyhow!("KV physical slot overflow"))?;
+        if physical_slot >= kv.max_batch_size() {
+            anyhow::bail!(
+                "KV physical slot {} out of range for {} slots",
+                physical_slot,
+                kv.max_batch_size()
+            );
+        }
+        Ok(physical_slot)
+    }
+
+    pub fn kv_cache_can_address_layer_sequence(&self, layer_id: u32, sequence_id: u32) -> bool {
+        self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)
+            .is_ok()
+    }
+
+    pub fn kv_cache_logical_sequence_capacity(&self) -> u32 {
+        self.kv_cache
+            .as_ref()
+            .and_then(|kv| {
+                let layer_count = self.model_config.block_count;
+                (layer_count > 0).then_some(kv.max_batch_size() / layer_count)
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn kv_cache_physical_slot_for_layer_sequence(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+    ) -> Result<u32> {
+        self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)
+    }
+
     // Convenience: Append K/V from host FP32 slices. Copies to device then calls append.
     pub fn append_kv_token_f32_from_host(
         &self,
@@ -57,6 +126,29 @@ impl LoadedModel {
         }
     }
 
+    pub fn append_kv_token_f32_from_host_for_layer(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+        position: u32,
+        k_host: &[f32],
+        v_host: &[f32],
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if position >= kv.max_seq_len() {
+            anyhow::bail!(
+                "KV position {} out of range for max_seq_len {}",
+                position,
+                kv.max_seq_len()
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.append_kv_token_f32_from_host(physical_slot, k_host, v_host)
+    }
+
     pub fn allocate_kv_cache(&mut self, max_seq_len: u32, max_batch_size: u32) -> Result<()> {
         let num_heads = self.model_config.attention_head_count_kv;
         let d_model = self.model_config.embedding_length;
@@ -88,11 +180,25 @@ impl LoadedModel {
     }
 
     pub fn allocate_kv_cache_for_layers(&mut self, max_seq_len: u32) -> Result<()> {
+        self.allocate_kv_cache_for_layer_sequences(max_seq_len, 1)
+    }
+
+    pub fn allocate_kv_cache_for_layer_sequences(
+        &mut self,
+        max_seq_len: u32,
+        max_sequences: u32,
+    ) -> Result<()> {
         let layer_count = self.model_config.block_count;
         if layer_count == 0 {
             anyhow::bail!("model_config.block_count must be > 0");
         }
-        self.allocate_kv_cache(max_seq_len, layer_count)
+        if max_sequences == 0 {
+            anyhow::bail!("max_sequences must be > 0");
+        }
+        let physical_slots = layer_count
+            .checked_mul(max_sequences)
+            .ok_or_else(|| anyhow!("KV physical slot count overflow"))?;
+        self.allocate_kv_cache(max_seq_len, physical_slots)
     }
 
     pub fn kv_cache_can_address_layers(&self) -> bool {
@@ -183,6 +289,133 @@ impl LoadedModel {
     }
 
     /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA attention.
+    pub unsafe fn run_attention_async(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        seq_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
+            anyhow::bail!(
+                "run_attention: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
+        }
+        #[cfg(feature = "cuda")]
+        unsafe {
+            kv.attention_last_token_f32_gqa_async(
+                &self.cuda, seq_id, d_q, num_heads, seq_len, d_out,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            kv.attention_last_token_f32_gqa(&self.cuda, seq_id, d_q, num_heads, seq_len, d_out)
+        }
+    }
+
+    /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA
+    /// attention. `d_seq_len` must point to one device-resident u32 sequence length.
+    pub unsafe fn run_attention_seq_len_dev_async(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        seq_id: u32,
+        d_seq_len: *const u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        if d_seq_len.is_null() {
+            anyhow::bail!("run_attention_seq_len_dev_async: d_seq_len is null");
+        }
+        if dim != num_heads.saturating_mul(head_dim) {
+            anyhow::bail!(
+                "run_attention: dim {} != num_heads {} * head_dim {}",
+                dim,
+                num_heads,
+                head_dim
+            );
+        }
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if kv.num_heads() > num_heads || !num_heads.is_multiple_of(kv.num_heads()) {
+            anyhow::bail!(
+                "run_attention: query heads {} must be a multiple of kv heads {}",
+                num_heads,
+                kv.num_heads()
+            );
+        }
+        if kv.head_dim() != head_dim {
+            anyhow::bail!(
+                "KVCache layout mismatch: kv has (heads={}, dim={}), requested query heads {} dim {}",
+                kv.num_heads(),
+                kv.head_dim(),
+                num_heads,
+                head_dim
+            );
+        }
+        #[cfg(feature = "cuda")]
+        unsafe {
+            kv.attention_last_token_f32_gqa_seq_len_dev_async(
+                &self.cuda, seq_id, d_q, num_heads, d_seq_len, d_out,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_q, d_out, seq_id, d_seq_len, dim, num_heads, head_dim);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_q` and `d_out` must be valid device pointers sized for one-token GQA attention.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn run_attention_for_layer(
+        &self,
+        d_q: *const c_void,
+        d_out: *mut c_void,
+        layer_id: u32,
+        sequence_id: u32,
+        seq_len: u32,
+        dim: u32,
+        num_heads: u32,
+        head_dim: u32,
+    ) -> Result<()> {
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.run_attention(d_q, d_out, physical_slot, seq_len, dim, num_heads, head_dim)
+    }
+
+    /// # Safety
     /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers containing one token's K/V in f32 layout.
     pub unsafe fn append_kv_token_f32(
         &self,
@@ -210,6 +443,180 @@ impl LoadedModel {
             let _ = (seq_id, d_k_f32, d_v_f32);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. K is RoPE-rotated for
+    /// `past_len` while appending to the FP16 KV cache.
+    pub unsafe fn append_kv_token_f32_rope_k(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k(
+                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. K is RoPE-rotated for
+    /// `past_len` while appending to the FP16 KV cache.
+    pub unsafe fn append_kv_token_f32_rope_k_async(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k_async(
+                    &self.cuda, seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (seq_id, d_k_f32, d_v_f32, past_len, freq_base, freq_scale);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. K is RoPE-rotated for
+    /// `past_len` and appended at explicit `position`, avoiding a host-side KV
+    /// length read.
+    pub unsafe fn append_kv_token_f32_rope_k_at_async(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        position: u32,
+        past_len: u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k_at_async(
+                    &self.cuda, seq_id, d_k_f32, d_v_f32, position, past_len, freq_base, freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                seq_id, d_k_f32, d_v_f32, position, past_len, freq_base, freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid pointers to device buffers
+    /// containing one token's K/V in f32 layout. `position_dev` must point to
+    /// one device-resident u32 used both as KV position and RoPE position.
+    pub unsafe fn append_kv_token_f32_rope_k_position_dev_async(
+        &self,
+        seq_id: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+        position_dev: *const u32,
+        freq_base: f32,
+        freq_scale: f32,
+    ) -> Result<()> {
+        if position_dev.is_null() {
+            anyhow::bail!("append_kv_token_f32_rope_k_position_dev_async: position_dev is null");
+        }
+        #[cfg(feature = "cuda")]
+        {
+            let kv = self
+                .kv_cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+            unsafe {
+                kv.append_token_f32_rope_k_position_dev_async(
+                    &self.cuda,
+                    seq_id,
+                    d_k_f32,
+                    d_v_f32,
+                    position_dev,
+                    freq_base,
+                    freq_scale,
+                )
+            }
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                seq_id,
+                d_k_f32,
+                d_v_f32,
+                position_dev,
+                freq_base,
+                freq_scale,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_k_f32` and `d_v_f32` must be valid device pointers containing one token's
+    /// K/V vectors in f32 layout for `layer_id`, `sequence_id`, and `position`.
+    pub unsafe fn append_kv_token_f32_for_layer(
+        &self,
+        layer_id: u32,
+        sequence_id: u32,
+        position: u32,
+        d_k_f32: *const c_void,
+        d_v_f32: *const c_void,
+    ) -> Result<()> {
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .ok_or_else(|| anyhow!("kv_cache not allocated; call allocate_kv_cache first"))?;
+        if position >= kv.max_seq_len() {
+            anyhow::bail!(
+                "KV position {} out of range for max_seq_len {}",
+                position,
+                kv.max_seq_len()
+            );
+        }
+        let physical_slot = self.kv_physical_slot_for_layer_sequence(layer_id, sequence_id)?;
+        self.append_kv_token_f32(physical_slot, d_k_f32, d_v_f32)
     }
 
     pub fn run_mlp(

@@ -3,7 +3,8 @@
 mod cuda_env;
 
 use anyhow::Result;
-use m40_llm::cuda::KVCache;
+use m40_llm::cuda::{CudaStream, KVCache};
+use m40_llm::decode_batch::{CudaDecodeBatchPlan, DecodeBatchPlan, DecodeRequestState};
 use std::ffi::c_void;
 
 fn f32s_to_bytes(vals: &[f32]) -> Vec<u8> {
@@ -72,6 +73,8 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
     let bytes_out = bytes_q;
     let d_q = ctx.device_malloc(bytes_q)?;
     let d_out_batch = ctx.device_malloc(bytes_out)?;
+    let d_out_async = ctx.device_malloc(bytes_out)?;
+    let d_out_scheduler = ctx.device_malloc(bytes_out)?;
     let d_out_one = ctx.device_malloc(q_dim * std::mem::size_of::<f32>())?;
     let d_seq_ids = ctx.device_malloc(seq_ids.len() * std::mem::size_of::<u32>())?;
     let d_seq_lens = ctx.device_malloc(seq_lens.len() * std::mem::size_of::<u32>())?;
@@ -97,6 +100,101 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
             q_heads,
             d_out_batch,
         )?;
+        kv.attention_last_token_f32_gqa_batched_async(
+            &ctx,
+            d_seq_ids as *const u32,
+            d_seq_lens as *const u32,
+            batch_size,
+            d_q as *const c_void,
+            q_heads,
+            d_out_async,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let scheduler_plan = DecodeBatchPlan::from_requests(&[
+        DecodeRequestState::active(100, 0, 1),
+        DecodeRequestState::completed(101, 9, 7),
+        DecodeRequestState::active(102, 1, 3),
+        DecodeRequestState::cancelled(103, 10, 4),
+        DecodeRequestState::active(104, 2, 5),
+    ])?;
+    assert_eq!(scheduler_plan.metadata().total_q_tokens(), batch_size);
+    assert_eq!(
+        scheduler_plan.metadata().total_kv_tokens(),
+        seq_lens.iter().sum::<u32>()
+    );
+    let scheduler_plan = CudaDecodeBatchPlan::new(&ctx, scheduler_plan)?;
+    unsafe {
+        scheduler_plan.dispatch_attention(
+            &ctx,
+            &kv,
+            d_q as *const c_void,
+            q_heads,
+            d_out_scheduler,
+        )?;
+    }
+
+    let mut default_bytes = vec![0u8; bytes_out];
+    unsafe {
+        ctx.memcpy_d2h(
+            default_bytes.as_mut_ptr() as *mut c_void,
+            d_out_batch,
+            bytes_out,
+        )?;
+    }
+    let default = bytes_to_f32s(&default_bytes);
+    let mut async_bytes = vec![0u8; bytes_out];
+    unsafe {
+        ctx.memcpy_d2h(
+            async_bytes.as_mut_ptr() as *mut c_void,
+            d_out_async,
+            bytes_out,
+        )?;
+    }
+    let async_result = bytes_to_f32s(&async_bytes);
+    for (i, (g, e)) in async_result.iter().zip(default.iter()).enumerate() {
+        let diff = (g - e).abs();
+        assert!(diff <= 1e-6, "async mismatch at {i}: got {g}, expected {e}");
+    }
+    let mut scheduler_bytes = vec![0u8; bytes_out];
+    unsafe {
+        ctx.memcpy_d2h(
+            scheduler_bytes.as_mut_ptr() as *mut c_void,
+            d_out_scheduler,
+            bytes_out,
+        )?;
+    }
+    let scheduler_result = bytes_to_f32s(&scheduler_bytes);
+    for (i, (g, e)) in scheduler_result.iter().zip(default.iter()).enumerate() {
+        let diff = (g - e).abs();
+        assert!(
+            diff <= 1e-6,
+            "scheduler mismatch at {i}: got {g}, expected {e}"
+        );
+    }
+
+    let d_out_ldg = ctx.device_malloc(bytes_out)?;
+    unsafe {
+        std::env::set_var("M40LLM_CACHE_EXPERIMENT", "ldg_kv");
+        let ldg_result = kv.attention_last_token_f32_gqa_batched(
+            &ctx,
+            d_seq_ids as *const u32,
+            d_seq_lens as *const u32,
+            batch_size,
+            d_q as *const c_void,
+            q_heads,
+            d_out_ldg,
+        );
+        std::env::remove_var("M40LLM_CACHE_EXPERIMENT");
+        ldg_result?;
+        let mut ldg_bytes = vec![0u8; bytes_out];
+        ctx.memcpy_d2h(ldg_bytes.as_mut_ptr() as *mut c_void, d_out_ldg, bytes_out)?;
+        let ldg = bytes_to_f32s(&ldg_bytes);
+        for (i, (g, e)) in ldg.iter().zip(default.iter()).enumerate() {
+            let diff = (g - e).abs();
+            assert!(diff <= 1e-6, "ldg mismatch at {i}: got {g}, expected {e}");
+        }
     }
 
     let mut expected = Vec::with_capacity(q.len());
@@ -117,16 +215,7 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         }
     }
 
-    let mut got_bytes = vec![0u8; bytes_out];
-    unsafe {
-        ctx.memcpy_d2h(
-            got_bytes.as_mut_ptr() as *mut c_void,
-            d_out_batch,
-            bytes_out,
-        )?;
-    }
-    let got = bytes_to_f32s(&got_bytes);
-    for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+    for (i, (g, e)) in default.iter().zip(expected.iter()).enumerate() {
         let diff = (g - e).abs();
         assert!(diff <= 1e-4, "mismatch at {i}: got {g}, expected {e}");
     }
@@ -136,6 +225,9 @@ fn batched_gqa_attention_matches_individual_varlen_decode() -> Result<()> {
         ctx.device_free(d_v)?;
         ctx.device_free(d_q)?;
         ctx.device_free(d_out_batch)?;
+        ctx.device_free(d_out_async)?;
+        ctx.device_free(d_out_scheduler)?;
+        ctx.device_free(d_out_ldg)?;
         ctx.device_free(d_out_one)?;
         ctx.device_free(d_seq_ids)?;
         ctx.device_free(d_seq_lens)?;

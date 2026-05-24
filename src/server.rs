@@ -8,6 +8,8 @@ use axum::{
     Json, Router,
 };
 use bytes::Bytes;
+#[cfg(feature = "cuda")]
+use std::collections::VecDeque;
 use std::{io, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -22,11 +24,48 @@ use crate::generate::{
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::tokenizer::Tokenizer;
+#[cfg(feature = "cuda")]
+use anyhow::Context;
 use anyhow::Result;
 use axum::http::{header::CONTENT_TYPE, HeaderName, HeaderValue, StatusCode};
 use tower_http::{cors::CorsLayer, set_header::SetResponseHeaderLayer};
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[cfg(feature = "cuda")]
+type SchedulerResult = std::result::Result<GenerateResponse, String>;
+
+#[cfg(feature = "cuda")]
+#[derive(Clone)]
+struct DecodeSchedulerHandle {
+    tx: mpsc::Sender<DecodeSchedulerCommand>,
+}
+
+#[cfg(feature = "cuda")]
+struct DecodeSchedulerCommand {
+    req: GenerateRequest,
+    respond_to: tokio::sync::oneshot::Sender<SchedulerResult>,
+}
+
+#[cfg(feature = "cuda")]
+impl DecodeSchedulerHandle {
+    fn start(state: Arc<AppState>) -> Self {
+        let (tx, rx) = mpsc::channel(64);
+        tokio::spawn(decode_scheduler_loop(state, rx));
+        Self { tx }
+    }
+
+    async fn generate(&self, req: GenerateRequest) -> SchedulerResult {
+        let (respond_to, response) = tokio::sync::oneshot::channel();
+        self.tx
+            .send(DecodeSchedulerCommand { req, respond_to })
+            .await
+            .map_err(|_| "decode scheduler is unavailable".to_string())?;
+        response
+            .await
+            .map_err(|_| "decode scheduler stopped before responding".to_string())?
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct GenerateRequest {
     pub prompt: String,
     pub max_tokens: Option<usize>,
@@ -65,8 +104,7 @@ fn chunk_to_bytes(chunk: &GenerateStreamChunk) -> io::Result<Bytes> {
     };
 
     let mut buf: Vec<u8> = Vec::with_capacity(safe_chunk.output.len() + 16);
-    serde_json::to_writer(&mut buf, &safe_chunk)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    serde_json::to_writer(&mut buf, &safe_chunk).map_err(io::Error::other)?;
     buf.push(b'\n');
     Ok(Bytes::from(buf))
 }
@@ -80,6 +118,8 @@ fn options_from_request(req: &GenerateRequest, log_prefix: &'static str) -> Gene
         top_p: req.top_p,
         seed: req.seed,
         log_prefix,
+        sequence_id: 0,
+        reset_kv_cache: true,
     }
 }
 
@@ -92,6 +132,32 @@ fn internal_error(err: anyhow::Error) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
+fn unavailable_error(message: impl Into<String>) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(ErrorResponse {
+            error: message.into(),
+        }),
+    )
+}
+
+fn lease_decode_sequence(
+    state: &AppState,
+) -> std::result::Result<
+    Option<crate::decode_batch::DecodeSequenceLease>,
+    (StatusCode, Json<ErrorResponse>),
+> {
+    if !state.decode_batching_requested {
+        return Ok(None);
+    }
+    let pool = state.decode_sequence_pool.as_ref().ok_or_else(|| {
+        unavailable_error("decode sequence pool unavailable; allocate KV cache for layer sequences")
+    })?;
+    pool.try_lease().map(Some).ok_or_else(|| {
+        unavailable_error("all decode sequence slots are busy; retry when a request completes")
+    })
+}
+
 #[cfg(feature = "cuda")]
 fn log_top_logits(logits: &[f32], k: usize) {
     if std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1") {
@@ -101,6 +167,541 @@ fn log_top_logits(logits: &[f32], k: usize) {
     top.sort_by(|a, b| f32::total_cmp(&b.1, &a.1));
     top.truncate(k);
     eprintln!("[server] top_logits={top:?}");
+}
+
+#[cfg(feature = "cuda")]
+async fn scheduler_generate(
+    state: Arc<AppState>,
+    req: GenerateRequest,
+) -> std::result::Result<GenerateResponse, (StatusCode, Json<ErrorResponse>)> {
+    let handle = state
+        .decode_scheduler
+        .get_or_init(|| async { DecodeSchedulerHandle::start(state.clone()) })
+        .await
+        .clone();
+    handle.generate(req).await.map_err(internal_error_string)
+}
+
+fn internal_error_string(message: String) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(ErrorResponse { error: message }),
+    )
+}
+
+#[cfg(feature = "cuda")]
+struct DecodeSchedulerRequest {
+    request_id: crate::decode_batch::DecodeRequestId,
+    sequence_lease: crate::decode_batch::DecodeSequenceLease,
+    session: crate::decode_session::DecodeSession,
+    ids: Vec<u32>,
+    generated: Vec<u32>,
+    prompt_token_len: usize,
+    sampler: crate::sampling::Sampler,
+    stopping: StoppingCriteria,
+    tokenizer: Tokenizer,
+    respond_to: Option<tokio::sync::oneshot::Sender<SchedulerResult>>,
+}
+
+#[cfg(feature = "cuda")]
+enum DecodeSchedulerStep {
+    Continue,
+    Complete,
+}
+
+#[cfg(feature = "cuda")]
+struct PreparedBatchToken {
+    request_id: crate::decode_batch::DecodeRequestId,
+    token_idx: usize,
+    item: crate::infer::ForwardBatchItem,
+}
+
+#[cfg(feature = "cuda")]
+impl DecodeSchedulerRequest {
+    fn new(
+        state: &AppState,
+        request_id: crate::decode_batch::DecodeRequestId,
+        req: GenerateRequest,
+    ) -> Result<Self> {
+        let sequence_lease = lease_decode_sequence(state).map_err(|(_, Json(err))| {
+            anyhow::anyhow!("decode sequence lease failed: {}", err.error)
+        })?;
+        let sequence_lease = sequence_lease
+            .ok_or_else(|| anyhow::anyhow!("decode batching requires a sequence lease"))?;
+        let tokenizer = Tokenizer::from_gguf_metadata(&state.model.gguf.metadata)
+            .unwrap_or_else(|_| Tokenizer::byte_level());
+        let add_bos = true;
+        let ids = tokenizer
+            .encode_with_specials(&req.prompt, add_bos, false)
+            .context("encode prompt")?;
+        let prompt_token_len = ids.len();
+        let max_tokens = req
+            .max_tokens
+            .or(Some(state.model.model_config.context_length as usize))
+            .unwrap_or(32);
+        let stopping = StoppingCriteria::new(Some(max_tokens), tokenizer.eos_id());
+        let mut options = options_from_request(&req, "server");
+        options.sequence_id = sequence_lease.sequence_id();
+        options.reset_kv_cache = false;
+        let sampler = sampler_from_options(&options)?;
+        let (d_model, hidden_dim) = state
+            .model
+            .validate_full_layer_decode()
+            .context("CUDA full-layer decode is unavailable")?;
+        eprintln!(
+            "[server] scheduler request {request_id} mapped {} standard layers d_model={} hidden_dim={} sequence_id={}",
+            state.model.model_config.block_count,
+            d_model,
+            hidden_dim,
+            sequence_lease.sequence_id()
+        );
+        let session = crate::decode_session::DecodeSession::new_for_sequence(
+            &state.model,
+            sequence_lease.sequence_id(),
+            d_model,
+            true,
+            "server",
+            "server:scheduler:d_x_embed_f32",
+            "server:scheduler:d_out_hidden_f32",
+        )?;
+        Ok(Self {
+            request_id,
+            sequence_lease,
+            session,
+            ids,
+            generated: Vec::new(),
+            prompt_token_len,
+            sampler,
+            stopping,
+            tokenizer,
+            respond_to: None,
+        })
+    }
+
+    fn state(&self) -> crate::decode_batch::DecodeRequestState {
+        crate::decode_batch::DecodeRequestState::active(
+            self.request_id,
+            self.sequence_lease.sequence_id(),
+            self.ids.len() as u32,
+        )
+    }
+
+    fn step(&mut self) -> Result<DecodeSchedulerStep> {
+        if self.stopping.should_stop(&self.generated) {
+            return Ok(DecodeSchedulerStep::Complete);
+        }
+        let logits = self
+            .session
+            .logits_for_ids(&self.ids, |logits| log_top_logits(logits, 8))?;
+        if logits.is_empty() {
+            anyhow::bail!("logits_fn returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
+    fn prepare_batch_token(&mut self) -> Result<Option<PreparedBatchToken>> {
+        if self.stopping.should_stop(&self.generated) {
+            return Ok(None);
+        }
+        if !self.session.can_forward() {
+            return Ok(None);
+        }
+        let Some(token_idx) = (unsafe { self.session.load_next_unprocessed_token(&self.ids)? })
+        else {
+            return Ok(None);
+        };
+        let item = self.session.forward_batch_item((token_idx + 1) as u32)?;
+        Ok(Some(PreparedBatchToken {
+            request_id: self.request_id,
+            token_idx,
+            item,
+        }))
+    }
+
+    fn is_pending_prefill(&self) -> bool {
+        self.session.can_forward()
+            && self.session.processed_len() == 0
+            && self.generated.is_empty()
+            && !self.ids.is_empty()
+            && !self.stopping.should_stop(&self.generated)
+    }
+
+    fn prefill_sequence(&self) -> Result<crate::infer::ForwardPrefillSequence<'_>> {
+        if self.prompt_token_len == 0 || self.prompt_token_len > self.ids.len() {
+            anyhow::bail!(
+                "invalid prompt token length {} for request {} with ids_len {}",
+                self.prompt_token_len,
+                self.request_id,
+                self.ids.len()
+            );
+        }
+        Ok(crate::infer::ForwardPrefillSequence {
+            token_ids: &self.ids[..self.prompt_token_len],
+            sequence_id: self.sequence_lease.sequence_id(),
+            d_out_f32: self.session.d_out_ptr()?,
+        })
+    }
+
+    fn finish_prefill(&mut self) -> Result<DecodeSchedulerStep> {
+        let token_idx = self.prompt_token_len.saturating_sub(1);
+        let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
+        log_top_logits(&logits, 8);
+        self.session.mark_processed_through(self.prompt_token_len);
+        if logits.is_empty() {
+            anyhow::bail!("batched prefill logits returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} prefill sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
+    fn finish_batch_token(&mut self, token_idx: usize) -> Result<DecodeSchedulerStep> {
+        let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
+        log_top_logits(&logits, 8);
+        self.session.mark_processed_through(token_idx + 1);
+        if self.session.processed_len() < self.ids.len() {
+            return Ok(DecodeSchedulerStep::Continue);
+        }
+        if logits.is_empty() {
+            anyhow::bail!("batched logits returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
+    fn send_complete(mut self) {
+        let result = decode_generated_text(&self.tokenizer, &self.ids, self.prompt_token_len)
+            .map(|text| sanitize_output(&text))
+            .map(|output| GenerateResponse { output })
+            .map_err(|err| err.to_string());
+        self.send_result(result);
+    }
+
+    fn send_error(mut self, err: anyhow::Error) {
+        self.send_result(Err(format!("generation failed: {err}")));
+    }
+
+    fn send_result(&mut self, result: SchedulerResult) {
+        if let Some(respond_to) = self.respond_to.take() {
+            let _ = respond_to.send(result);
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.respond_to
+            .as_ref()
+            .map(|respond_to| respond_to.is_closed())
+            .unwrap_or(true)
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBatchToken]) -> bool {
+    prepared.len() > 1
+        && state
+            .model
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.head_dim() == 64)
+            .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn log_batch_prefill_fallback(reason: &str) {
+    if std::env::var("M40LLM_SERVER_BATCH_PREFILL_LOG")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        eprintln!("[server] packed prefill fallback: {reason}");
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn scheduler_can_use_batched_prefill(
+    state: &AppState,
+    requests: &[DecodeSchedulerRequest],
+) -> bool {
+    if !crate::decode_batch::server_batch_prefill_requested() {
+        return false;
+    }
+    if requests.len() <= 1 {
+        log_batch_prefill_fallback("batch size <= 1");
+        return false;
+    }
+    if !requests
+        .iter()
+        .all(DecodeSchedulerRequest::is_pending_prefill)
+    {
+        log_batch_prefill_fallback("not all active requests are pending prompt prefill");
+        return false;
+    }
+    if !state
+        .model
+        .kv_cache
+        .as_ref()
+        .map(|kv| kv.head_dim() == 64)
+        .unwrap_or(false)
+    {
+        log_batch_prefill_fallback("model KV head_dim is not 64");
+        return false;
+    }
+    true
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_prefill_tick(
+    state: &AppState,
+    requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    let items = match requests
+        .iter()
+        .map(DecodeSchedulerRequest::prefill_sequence)
+        .collect::<Result<Vec<_>>>()
+    {
+        Ok(items) => items,
+        Err(err) => {
+            for request in requests {
+                request.send_error(anyhow::anyhow!(
+                    "batched prefill preparation failed: {err:#}"
+                ));
+            }
+            return;
+        }
+    };
+
+    let forward_result = unsafe {
+        state
+            .model
+            .forward_prefill_all_layers_varlen_for_sequences(&items)
+    };
+    drop(items);
+
+    if let Err(err) = forward_result {
+        for request in requests {
+            request.send_error(anyhow::anyhow!("batched prefill forward failed: {err:#}"));
+        }
+        return;
+    }
+
+    for mut request in requests {
+        match request.finish_prefill() {
+            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_batch_tick(
+    state: &AppState,
+    current_requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    let mut requests = current_requests;
+    if scheduler_can_use_batched_prefill(state, &requests) {
+        process_scheduler_prefill_tick(state, requests, active);
+        return;
+    }
+
+    let mut prepared = Vec::with_capacity(requests.len());
+    let mut fallback = false;
+    for request in &mut requests {
+        match request.prepare_batch_token() {
+            Ok(Some(token)) => prepared.push(token),
+            Ok(None) => fallback = true,
+            Err(err) => {
+                fallback = true;
+                eprintln!(
+                    "[server] scheduler request {} batch preparation failed: {err:#}",
+                    request.request_id
+                );
+                break;
+            }
+        }
+    }
+
+    if fallback || !scheduler_can_use_batched_attention(state, &prepared) {
+        for mut request in requests {
+            match request.step() {
+                Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                Err(err) => request.send_error(err),
+            }
+        }
+        return;
+    }
+
+    let items: Vec<_> = prepared.iter().map(|token| token.item).collect();
+    let forward_result = unsafe {
+        state
+            .model
+            .forward_one_token_all_layers_batched_for_sequences(&items)
+    };
+    if let Err(err) = forward_result {
+        for request in requests {
+            request.send_error(anyhow::anyhow!("batched decode forward failed: {err:#}"));
+        }
+        return;
+    }
+
+    for mut request in requests {
+        let token_idx = prepared
+            .iter()
+            .find(|token| token.request_id == request.request_id)
+            .map(|token| token.token_idx);
+        let Some(token_idx) = token_idx else {
+            let request_id = request.request_id;
+            request.send_error(anyhow::anyhow!(
+                "batched decode missing prepared token for request {}",
+                request_id
+            ));
+            continue;
+        };
+        match request.finish_batch_token(token_idx) {
+            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+async fn decode_scheduler_loop(
+    state: Arc<AppState>,
+    mut rx: mpsc::Receiver<DecodeSchedulerCommand>,
+) {
+    let mut next_request_id: crate::decode_batch::DecodeRequestId = 1;
+    let mut active: VecDeque<DecodeSchedulerRequest> = VecDeque::new();
+
+    loop {
+        if active.is_empty() {
+            let Some(command) = rx.recv().await else {
+                break;
+            };
+            enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
+        }
+
+        while let Ok(command) = rx.try_recv() {
+            enqueue_scheduler_request(&state, &mut next_request_id, &mut active, command);
+        }
+
+        active.retain(|request| {
+            let keep = !request.is_cancelled();
+            if !keep {
+                eprintln!(
+                    "[server] scheduler request {} cancelled",
+                    request.request_id
+                );
+            }
+            keep
+        });
+
+        if active.is_empty() {
+            continue;
+        }
+
+        log_decode_batch_plan(&active);
+        {
+            let _generation_guard = state.generation_lock.lock().await;
+
+            let current_requests: Vec<DecodeSchedulerRequest> = active.drain(..).collect();
+            process_scheduler_batch_tick(&state, current_requests, &mut active);
+        }
+
+        tokio::task::yield_now().await;
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn enqueue_scheduler_request(
+    state: &AppState,
+    next_request_id: &mut crate::decode_batch::DecodeRequestId,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+    command: DecodeSchedulerCommand,
+) {
+    let request_id = *next_request_id;
+    *next_request_id = next_request_id.saturating_add(1);
+    let DecodeSchedulerCommand { req, respond_to } = command;
+    match DecodeSchedulerRequest::new(state, request_id, req) {
+        Ok(mut request) => {
+            request.respond_to = Some(respond_to);
+            active.push_back(request);
+        }
+        Err(err) => {
+            let _ = respond_to.send(Err(format!("generation failed: {err}")));
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn log_decode_batch_plan(active: &VecDeque<DecodeSchedulerRequest>) {
+    let states: Vec<_> = active.iter().map(DecodeSchedulerRequest::state).collect();
+    match crate::decode_batch::DecodeBatchPlan::from_requests(&states) {
+        Ok(plan) => {
+            if std::env::var("M40LLM_SERVER_BATCH_LOG").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[server] scheduler batch_size={} sequence_ids={:?} kv_lens={:?}",
+                    plan.batch_size(),
+                    plan.sequence_ids(),
+                    plan.sequence_lens()
+                );
+            }
+        }
+        Err(err) => {
+            eprintln!("[server] scheduler batch plan failed: {err}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -155,7 +756,7 @@ mod tests {
             top_p: Some(1.5),
             ..Default::default()
         };
-        assert!(sampler_from_request(&req).is_err());
+        assert!(sampler_from_options(&options_from_request(&req, "test")).is_err());
     }
 
     #[test]
@@ -197,7 +798,7 @@ mod tests {
             GgufValue::Scalar(GgufScalar::U32(0)),
         );
         let tokenizer = Tokenizer::from_gguf_metadata(&meta).expect("tokenizer");
-        let prompt_ids = vec![0, 1];
+        let prompt_ids = [0, 1];
         let ids = vec![0, 1, 2];
 
         let generated =
@@ -209,6 +810,32 @@ mod tests {
 
 pub struct AppState {
     pub model: LoadedModel,
+    pub generation_lock: Arc<tokio::sync::Mutex<()>>,
+    pub decode_batching_requested: bool,
+    pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
+    #[cfg(feature = "cuda")]
+    decode_scheduler: tokio::sync::OnceCell<DecodeSchedulerHandle>,
+}
+
+impl AppState {
+    pub fn new(model: LoadedModel) -> Self {
+        let decode_batching_requested = crate::decode_batch::server_batch_decode_requested();
+        let decode_sequence_pool = decode_batching_requested
+            .then(|| model.kv_cache_logical_sequence_capacity())
+            .filter(|capacity| *capacity > 0)
+            .map(crate::decode_batch::DecodeSequencePool::new);
+        if decode_batching_requested {
+            crate::decode_batch::maybe_log_server_batch_decode_status();
+        }
+        Self {
+            model,
+            generation_lock: Arc::new(tokio::sync::Mutex::new(())),
+            decode_batching_requested,
+            decode_sequence_pool,
+            #[cfg(feature = "cuda")]
+            decode_scheduler: tokio::sync::OnceCell::new(),
+        }
+    }
 }
 
 // LoadedModel contains raw device pointers behind cfg(feature = "cuda"). For Axum state,
@@ -245,17 +872,34 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if state.decode_batching_requested {
+        crate::decode_batch::maybe_log_server_batch_decode_status();
+        crate::decode_batch::maybe_log_server_batch_prefill_status();
+    }
+
     if !req.stream {
-        let generated =
-            generate_text(&state.model, options_from_request(&req, "server")).map_err(|e| {
-                eprintln!("[server] decode_loop failed: {e}");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        error: e.to_string(),
-                    }),
-                )
-            })?;
+        #[cfg(feature = "cuda")]
+        if state.decode_batching_requested {
+            let generated = scheduler_generate(state.clone(), req).await?;
+            return Ok(Json(generated).into_response());
+        }
+
+        let sequence_lease = lease_decode_sequence(&state)?;
+        let _generation_guard = state.generation_lock.clone().lock_owned().await;
+        let mut options = options_from_request(&req, "server");
+        if let Some(lease) = sequence_lease.as_ref() {
+            options.sequence_id = lease.sequence_id();
+            options.reset_kv_cache = false;
+        }
+        let generated = generate_text(&state.model, options).map_err(|e| {
+            eprintln!("[server] decode_loop failed: {e:?}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
         return Ok(Json(GenerateResponse {
             output: generated.output,
         })
@@ -284,7 +928,14 @@ async fn generate(
     let sampler =
         sampler_from_options(&options_from_request(&req, "server")).map_err(internal_error)?;
 
-    if state.model.kv_cache.is_some() {
+    let sequence_lease = lease_decode_sequence(&state)?;
+    #[cfg(feature = "cuda")]
+    let sequence_id = sequence_lease
+        .as_ref()
+        .map(|lease| lease.sequence_id())
+        .unwrap_or(0);
+
+    if !state.decode_batching_requested && state.model.kv_cache.is_some() {
         state.model.reset_kv_cache().map_err(internal_error)?;
     }
 
@@ -298,25 +949,28 @@ async fn generate(
     let logits_fn = {
         let state_for_logits = state.clone();
         #[cfg(feature = "cuda")]
-        let mut step: usize = 0;
-        #[cfg(feature = "cuda")]
-        let mut processed_len: usize = 0;
+        let mut decode_session = {
+            eprintln!(
+                "[server] mapped {} standard layers d_model={} hidden_dim={}",
+                state_for_logits.model.model_config.block_count,
+                full_decode_d_model,
+                full_decode_hidden_dim
+            );
+            crate::decode_session::DecodeSession::new_for_sequence(
+                &state_for_logits.model,
+                sequence_id,
+                full_decode_d_model,
+                true,
+                "server",
+                "server:d_x_embed_f32",
+                "server:d_out_hidden_f32",
+            )
+            .map_err(internal_error)?
+        };
         move |ids: &[u32]| -> anyhow::Result<Vec<f32>> {
             let model = &state_for_logits.model;
             // KV cache is pre-allocated at startup on the real model instance
 
-            eprintln!("[server] logits_fn called with {} tokens", ids.len());
-            #[cfg(feature = "cuda")]
-            {
-                step += 1;
-                eprintln!(
-                    "[mem] (token) step={} pid={} device_id={} TOTAL_DEVICE_BYTES={}",
-                    step,
-                    std::process::id(),
-                    model.cuda.device_id(),
-                    CudaContext::total_device_bytes()
-                );
-            }
             // Determine d_model and whether we can run the full transformer stack.
             // Try to infer d_model from embeddings or lm_head as fallback
             #[cfg(not(feature = "cuda"))]
@@ -344,14 +998,6 @@ async fn generate(
                 eprintln!("[server] embeddings shape: {:?}", t.shape);
             }
 
-            #[cfg(feature = "cuda")]
-            let (d, can_forward) = {
-                eprintln!(
-                    "[server] mapped {} standard layers d_model={} hidden_dim={}",
-                    model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
-                );
-                (full_decode_d_model, true)
-            };
             #[cfg(not(feature = "cuda"))]
             let (d, can_forward) = match model.validate_standard_layers() {
                 Ok((d_model, hidden_dim)) => {
@@ -389,90 +1035,16 @@ async fn generate(
                     (d_try, false)
                 }
             };
-            let bytes = d * std::mem::size_of::<f32>();
-
             #[cfg(not(feature = "cuda"))]
             {
+                let bytes = d * std::mem::size_of::<f32>();
                 let _ = (can_forward, bytes);
             }
 
             #[cfg(feature = "cuda")]
             {
-                // Last token id to embed
-                if ids.is_empty() {
-                    return Err(anyhow::anyhow!("empty ids"));
-                }
-                if processed_len > ids.len() {
-                    processed_len = 0;
-                    if model.kv_cache.is_some() {
-                        model.reset_kv_cache()?;
-                    }
-                }
-
-                let start = if can_forward {
-                    processed_len
-                } else {
-                    ids.len().saturating_sub(1)
-                };
-                let mut logits: Option<Vec<f32>> = None;
-                for token_idx in start..ids.len() {
-                    let tok_id = ids[token_idx] as u64;
-                    eprintln!("[server] token id {}", tok_id);
-
-                    // Allocate device buffer for embedding row (f32)
-                    let d_x = model
-                        .cuda
-                        .device_malloc_tagged(bytes, "server:d_x_embed_f32")?;
-
-                    let token_logits = (|| -> anyhow::Result<Vec<f32>> {
-                        // Load embedding row for the token into d_x (f32)
-                        unsafe {
-                            model.load_token_embedding_to_f32(tok_id, d_x)?;
-                        }
-
-                        // If we have layer weights and KV, run prompt tokens as prefill and sampled tokens as decode.
-                        if can_forward {
-                            let d_out = model
-                                .cuda
-                                .device_malloc_tagged(bytes, "server:d_out_hidden_f32")?;
-                            let result = (|| -> anyhow::Result<Vec<f32>> {
-                                unsafe {
-                                    let layers = model.forward_one_token_all_layers(
-                                        d_x as *const _,
-                                        (token_idx + 1) as u32,
-                                        d_out,
-                                    )?;
-                                    if token_idx == start {
-                                        eprintln!(
-                                            "[server] full-layer forward enabled layers={layers}"
-                                        );
-                                    }
-                                    model.logits_from_hidden(d_out as *const _)
-                                }
-                            })();
-                            unsafe {
-                                let _ = model.cuda.device_free(d_out);
-                            }
-                            result
-                        } else {
-                            // Fallback: treat embedding as hidden and compute logits.
-                            unsafe { model.logits_from_hidden(d_x as *const _) }
-                        }
-                    })();
-
-                    unsafe {
-                        let _ = model.cuda.device_free(d_x);
-                    }
-
-                    let token_logits = token_logits?;
-                    log_top_logits(&token_logits, 8);
-                    logits = Some(token_logits);
-                }
-                if can_forward {
-                    processed_len = ids.len();
-                }
-
-                logits.ok_or_else(|| anyhow::anyhow!("no token processed for logits"))
+                let _ = model;
+                decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8))
             }
 
             #[cfg(not(feature = "cuda"))]
@@ -543,6 +1115,7 @@ async fn generate(
     let base_sampler = sampler;
 
     if req.stream {
+        let generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut sampler = base_sampler.clone();
         let tokenizer_stream = tokenizer.clone();
         let prompt = req.prompt.clone();
@@ -551,14 +1124,13 @@ async fn generate(
         let stopping_stream = stopping.clone();
         let (tx, rx) = mpsc::channel::<Result<Bytes, io::Error>>(8);
         tokio::spawn(async move {
+            let _generation_guard = generation_guard;
+            let _sequence_lease = sequence_lease;
             let mut ids = match tokenizer_stream.encode_with_specials(&prompt, add_bos, false) {
                 Ok(ids) => ids,
                 Err(e) => {
                     let _ = tx
-                        .send(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("encode failed: {e}"),
-                        )))
+                        .send(Err(io::Error::other(format!("encode failed: {e}"))))
                         .await;
                     return;
                 }
@@ -586,27 +1158,20 @@ async fn generate(
                 let logits = match logits_fn(&ids) {
                     Ok(logits) => logits,
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 };
                 if logits.is_empty() {
                     let _ = tx
-                        .send(Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "logits_fn returned empty logits",
-                        )))
+                        .send(Err(io::Error::other("logits_fn returned empty logits")))
                         .await;
                     return;
                 }
                 let next = match sampler.sample(&logits) {
                     Ok(n) => n as u32,
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 };
@@ -629,9 +1194,7 @@ async fn generate(
                         .await;
                     }
                     Err(e) => {
-                        let _ = tx
-                            .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                            .await;
+                        let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                         return;
                     }
                 }
@@ -651,9 +1214,7 @@ async fn generate(
             let final_text = match tokenizer_stream.decode_ignoring_specials(&generated) {
                 Ok(t) => t,
                 Err(e) => {
-                    let _ = tx
-                        .send(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
-                        .await;
+                    let _ = tx.send(Err(io::Error::other(e.to_string()))).await;
                     return;
                 }
             };
@@ -703,7 +1264,7 @@ async fn generate(
     ) {
         Ok(ids) => ids,
         Err(e) => {
-            eprintln!("[server] decode_loop failed: {e}");
+            eprintln!("[server] decode_loop failed: {e:?}");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
