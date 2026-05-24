@@ -557,6 +557,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   original 3000-token request stopped naturally after 1024 tokens without a
   CUDA error. Llama-3.2-1B default compressed top8 was also validated with 512
   and 1024 token caps, stopping naturally after 256 tokens.
+  Server smoke coverage now includes default compressed non-streaming,
+  compressed top4/top16 non-streaming overrides, and default compressed
+  streaming. Real Qwen2.5 and Llama-3.2 server `/generate` smokes return HTTP
+  200 with default compressed top8; Qwen dense/top4/top16 server overrides also
+  return HTTP 200. Unsupported Qwen q8-direct exact-old server startup fails
+  clearly for head_dim=128 and suggests dense `off`.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into deeper server scheduling yet.
 

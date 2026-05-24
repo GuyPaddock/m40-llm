@@ -51,6 +51,34 @@ CLI generation and server startup now print a non-fatal warning when
 `nvidia-smi` reports other compute processes on the selected GPU; set
 `M40LLM_GPU_BUSY_WARN=0` to suppress it.
 
+## 2026-05-24: Server Default Compressed KV Smoke
+
+This checkpoint validates the default compressed-KV runtime path through HTTP
+`/generate`, not just the CLI path.
+
+Automated CUDA/server smoke coverage now includes:
+
+- non-streaming default compressed `block-select-exact` with direct
+  FP16-K/q4-V exact-old attention and `top_blocks=8`
+- non-streaming explicit compressed `top_blocks=4` and `top_blocks=16`
+- streaming default compressed `top_blocks=8`
+- existing dense streaming and dense non-streaming reference paths
+
+Real model server smokes used `cargo run --release --features cuda,server` with
+`M40LLM_ENABLE_NVCC=1`, `M40LLM_ENABLE_CUBLAS=1`, and Tesla M40 `sm_52`:
+
+| Model | Server KV config | Request | Result |
+| --- | --- | --- | --- |
+| Qwen2.5-3B-Instruct F16 | default compressed top8 | `Say OK.`, 8 tokens | HTTP 200, `Okay. Is there something specific you need` |
+| Qwen2.5-3B-Instruct F16 | dense `off` | `Say OK.`, 2 tokens | HTTP 200, `Okay.` |
+| Qwen2.5-3B-Instruct F16 | compressed top4 | `Say OK.`, 2 tokens | HTTP 200, `Okay.` |
+| Qwen2.5-3B-Instruct F16 | compressed top16 | `Say OK.`, 2 tokens | HTTP 200, `Okay.` |
+| Llama-3.2-1B-Instruct F16 | default compressed top8 | `Say OK.`, 8 tokens | HTTP 200, `OK.` |
+
+Qwen server startup with unsupported `--kv-exact-old-backing q8`
+`--kv-exact-old-attention q8-direct` fails before serving with the expected
+head_dim=128 support error and suggests `--kv-compress-mode off`.
+
 ## 2026-05-24: Release-Build Compressed KV Timing Confirmation
 
 This checkpoint reruns a small timing matrix with optimized Rust code before
