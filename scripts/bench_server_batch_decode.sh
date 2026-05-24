@@ -5,6 +5,10 @@
 #   source scripts/dev-env.sh
 #   M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 #     scripts/bench_server_batch_decode.sh
+#
+# The server runtime now defaults to compressed KV. Dense batched prefill/decode
+# is the path this script measures, so it passes --kv-compress-mode off unless
+# SERVER_EXTRA_ARGS overrides the full argument list behavior for diagnostics.
 set -euo pipefail
 
 MODEL=${MODEL:-/mnt/array-fastest/home/guyep/.cache/m40-llm/models/TinyLlama-1.1B-Chat-v1.0.f16.gguf}
@@ -17,6 +21,7 @@ PREFILL_MODES=${PREFILL_MODES:-"0"}
 LOG_DIR=${LOG_DIR:-/tmp/m40llm_batch_decode_bench_$(date +%Y%m%d_%H%M%S)}
 CARGO=${CARGO:-cargo}
 CURL=${CURL:-curl}
+SERVER_EXTRA_ARGS=${SERVER_EXTRA_ARGS:---kv-compress-mode off}
 
 mkdir -p "$LOG_DIR"
 RESULTS_TSV="${LOG_DIR}/results.tsv"
@@ -99,7 +104,7 @@ run_case() {
   M40LLM_ENABLE_NVCC="${M40LLM_ENABLE_NVCC:-1}" \
   M40LLM_ENABLE_CUBLAS="${M40LLM_ENABLE_CUBLAS:-1}" \
     "$CARGO" run --features cuda,server -- run "$MODEL" \
-      --addr "$addr" --require-sm52 >"$server_log" 2>&1 &
+      --addr "$addr" --require-sm52 $SERVER_EXTRA_ARGS >"$server_log" 2>&1 &
   SERVER_PID=$!
   wait_for_server "$addr" "$server_log"
 
@@ -157,6 +162,7 @@ main() {
   echo "log_dir=${LOG_DIR}"
   echo "model=${MODEL}"
   echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES}"
+  echo "server_extra_args=${SERVER_EXTRA_ARGS}"
 
   for batch_decode in $BATCH_DECODE_MODES; do
     for batch_prefill in $PREFILL_MODES; do

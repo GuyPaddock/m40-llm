@@ -57,8 +57,9 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   TRIALS=3 MAX_TOKENS=2 scripts/bench_server_batch_decode.sh
 ```
 
-The script compares batch-decode modes and writes detailed logs and
-`results.tsv` under `/tmp` by default. Set
+The script compares dense batch-decode modes and writes detailed logs and
+`results.tsv` under `/tmp` by default. It passes `--kv-compress-mode off`
+because the current server scheduler batching path is dense-KV-only. Set
 `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1"` to compare batched decode with
 packed prefill disabled versus enabled.
 

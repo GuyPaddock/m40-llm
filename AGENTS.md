@@ -137,7 +137,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   and packed-decode fallback reasons. Compressed KV remains serialized for
   server batching: `M40LLM_SERVER_BATCH_DECODE=1` is ignored for compressed KV
   configs and users should pass `--kv-compress-mode off` when they want dense
-  batched decode/prefill.
+  batched decode/prefill. `scripts/bench_server_batch_decode.sh` now passes
+  dense `--kv-compress-mode off` by default and a 2026-05-24 single-trial
+  TinyLlama check shows packed prefill plus batched decode remains the useful
+  path for short mixed/skewed batches.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

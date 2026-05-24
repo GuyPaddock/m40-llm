@@ -2,6 +2,57 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Dense Server Batch Script Refresh
+
+This checkpoint updates `scripts/bench_server_batch_decode.sh` for the current
+runtime defaults. Since compressed KV is now the default runtime mode and the
+server batch scheduler is still dense-cache-only, the script now passes
+`--kv-compress-mode off` by default. Override `SERVER_EXTRA_ARGS` only for
+diagnostic runs.
+
+Benchmark command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=53480 scripts/bench_server_batch_decode.sh
+```
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: development `cargo run --features cuda,server`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_030057`
+- Server args: `--kv-compress-mode off`
+
+Single-trial wall-time results:
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 174 ms | 0.165 s | 11.49 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 175 ms | 0.166 s | 11.43 | 0.99x |
+| batched decode+prefill | batch1 hello | 1 | 1 | 176 ms | 0.168 s | 11.36 | 0.99x |
+| dense serial | batch2 same | 2 | 2 | 337 ms | 0.246 s | 11.87 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 327 ms | 0.315 s | 12.23 | 1.03x |
+| batched decode+prefill | batch2 same | 2 | 2 | 251 ms | 0.240 s | 15.94 | 1.34x |
+| dense serial | batch4 mixed | 4 | 4 | 1549 ms | 1.030 s | 5.17 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1543 ms | 1.363 s | 5.19 | 1.00x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 496 ms | 0.426 s | 16.13 | 3.12x |
+| dense serial | batch4 skewed | 4 | 4 | 2471 ms | 1.440 s | 3.24 | 1.00x |
+| batched decode | batch4 skewed | 4 | 4 | 2468 ms | 2.398 s | 3.24 | 1.00x |
+| batched decode+prefill | batch4 skewed | 4 | 4 | 697 ms | 0.617 s | 11.48 | 3.55x |
+
+Interpretation:
+
+- Decode-only batching is neutral for these 2-token requests because prompt
+  prefill dominates.
+- Enabling packed prefill with batched decode materially improves mixed/skewed
+  batch-4 wall time in this bounded run.
+- This is a single development-build confirmation, not a release latency claim.
+
 ## 2026-05-24: Dense Scheduler Mixed Tick Guardrails
 
 This checkpoint returns to the pre-KV-compression server batching path and keeps
