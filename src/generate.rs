@@ -122,6 +122,28 @@ fn decode_session_log_enabled() -> bool {
     std::env::var("M40LLM_DECODE_SESSION_LOG").ok().as_deref() == Some("1")
 }
 
+fn long_decode_log_interval() -> Option<usize> {
+    let value = std::env::var("M40LLM_LONG_DECODE_LOG").ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("0")
+        || trimmed.eq_ignore_ascii_case("false")
+        || trimmed.eq_ignore_ascii_case("no")
+    {
+        return None;
+    }
+    if trimmed.eq_ignore_ascii_case("1")
+        || trimmed.eq_ignore_ascii_case("true")
+        || trimmed.eq_ignore_ascii_case("yes")
+    {
+        return Some(64);
+    }
+    trimmed
+        .parse::<usize>()
+        .ok()
+        .filter(|interval| *interval > 0)
+}
+
 #[cfg(feature = "cuda")]
 fn prefill_chunk_size_from_env() -> Result<Option<usize>> {
     let Some(value) = std::env::var("M40LLM_PREFILL_CHUNK_SIZE")
@@ -835,11 +857,34 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let mut ids = prompt_ids;
     let start_len = ids.len();
     let mut generated = Vec::new();
+    let long_decode_log_interval = long_decode_log_interval();
     loop {
         if stopping.should_stop(&generated) {
             break;
         }
-        let logits = logits_fn(&ids).context("generation failed")?;
+        let logits = logits_fn(&ids).with_context(|| {
+            format!(
+                concat!(
+                    "generation failed after {} generated tokens ",
+                    "(seq_len={}, prompt_tokens={}, context_remaining={}, ",
+                    "kv_mode={:?}, top_blocks={}, exact_old_backing={}, exact_old_attention={})"
+                ),
+                generated.len(),
+                ids.len(),
+                prompt_token_len,
+                context_len.saturating_sub(ids.len()),
+                options.kv_compression.mode,
+                options.kv_compression.top_blocks,
+                options
+                    .kv_compression
+                    .effective_exact_old_backing()
+                    .as_str(),
+                options
+                    .kv_compression
+                    .effective_exact_old_attention()
+                    .as_str()
+            )
+        })?;
         if logits.is_empty() {
             anyhow::bail!("logits_fn returned empty logits");
         }
@@ -855,6 +900,33 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         generated.push(next);
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             eprintln!("[decode] sampled token id={next}");
+        }
+        if long_decode_log_interval.is_some_and(|interval| {
+            generated.len() == 1 || generated.len() % interval == 0 || generated.len() == max_tokens
+        }) {
+            eprintln!(
+                concat!(
+                    "[{}] long_decode generated={} seq_len={} prompt_tokens={} ",
+                    "context_remaining={} sampled_token={} kv_mode={:?} top_blocks={} ",
+                    "exact_old_backing={} exact_old_attention={}"
+                ),
+                options.log_prefix,
+                generated.len(),
+                ids.len(),
+                prompt_token_len,
+                context_len.saturating_sub(ids.len()),
+                next,
+                options.kv_compression.mode,
+                options.kv_compression.top_blocks,
+                options
+                    .kv_compression
+                    .effective_exact_old_backing()
+                    .as_str(),
+                options
+                    .kv_compression
+                    .effective_exact_old_attention()
+                    .as_str()
+            );
         }
         if stopping.stop_ids.contains(&next) {
             break;

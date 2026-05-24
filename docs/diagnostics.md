@@ -44,6 +44,13 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 - `M40LLM_STREAM_LOG=1`: print prefill/decode stream creation details and
   best-effort priority selection.
 - `M40LLM_DECODE_SESSION_LOG=1`: print verbose decode-session token logs.
+- `M40LLM_LONG_DECODE_LOG=1`: print bounded long-generation progress at the
+  first token, every 64 generated tokens, and the configured generation cap.
+  Set `M40LLM_LONG_DECODE_LOG=N` to log every `N` generated tokens instead.
+  Progress rows include sequence length, remaining context, sampled token, KV
+  compression mode, selected exact-old backend, exact-old attention backend, and
+  `top_blocks`. Generation failures also include this state in the error
+  context even when the progress logger is disabled.
 
 Use `docs/perf_baselines.md` to record repeatable benchmark results rather than
 leaving one-off timing notes in the README.

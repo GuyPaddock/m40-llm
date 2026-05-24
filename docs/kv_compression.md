@@ -70,6 +70,13 @@ In the realistic code/config lookup validation, top4 selected the archived
 value `M40_BATCH_LIMIT=73`, while default top8 recovered the active value
 `M40_BATCH_LIMIT=37`.
 
+Long generations should keep `--max-tokens` within the model context remaining
+after prompt tokenization. The CLI rejects requests whose prompt plus requested
+generation length would exceed the model context instead of relying on a later
+KV-cache failure. For long default-compressed runs, use
+`M40LLM_LONG_DECODE_LOG=1` or `M40LLM_LONG_DECODE_LOG=N` to print low-volume
+progress and KV configuration state while preserving the normal decode path.
+
 Representative storage is opt-in. For `block-summary` and
 `block-select-lossy`, `--kv-compress-representatives N` stores up to `N` exact
 old-token K/V representatives per compressed block. `last` keeps the last `N`

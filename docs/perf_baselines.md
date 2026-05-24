@@ -2,6 +2,44 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Default Compressed KV Long-Decode Smoke
+
+This checkpoint adds low-volume long-generation diagnostics and validates the
+default compressed-KV runtime path on bounded CLI generations.
+
+New diagnostic:
+
+- `M40LLM_LONG_DECODE_LOG=1`: report generation progress at token 1, every 64
+  tokens, and the configured cap.
+- `M40LLM_LONG_DECODE_LOG=N`: report every `N` generated tokens.
+- Generation failures now include generated token count, sequence length,
+  prompt token count, remaining context, KV mode, `top_blocks`, exact-old
+  backing, and exact-old attention backend.
+
+Validation commands used `cargo run --release --features cuda` with
+`M40LLM_ENABLE_NVCC=1`, `M40LLM_ENABLE_CUBLAS=1`, and Tesla M40 `sm_52`.
+
+| Model | Prompt | KV config | Max generated | Result |
+| --- | --- | --- | ---: | --- |
+| Qwen2.5-3B-Instruct F16 | `Say OK.` | default compressed top8 | 8 | pass, `Okay. Is there something specific you need` |
+| Qwen2.5-3B-Instruct F16 | `Say OK.` | dense `off` override | 2 | pass, `Okay.` |
+| Qwen2.5-3B-Instruct F16 | `Say OK.` | explicit top4 | 2 | pass, `Okay.` |
+| Qwen2.5-3B-Instruct F16 | `Say OK.` | explicit top16 | 2 | pass, `Okay.` |
+| Qwen2.5-3B-Instruct F16 | reported long relationship prompt | default compressed top8 | 128 | pass, completed all 128 tokens |
+| Llama-3.2-1B-Instruct F16 | CUDA runtime checklist | default compressed top8 | 128 | pass, completed all 128 tokens |
+
+The reported Qwen long prompt previously failed inside
+`fp16-k-q4-v-direct` attention with a 3000-token request. The bounded 128-token
+rerun did not reproduce the CUDA failure and logged progress at generated
+tokens 1/32/64/96/128 with `kv_mode=BlockSelectExact`,
+`top_blocks=8`, `exact_old_backing=fp16-k-q4-v`, and
+`exact_old_attention=fp16-k-q4-v-direct`.
+
+An attempted parallel dense/top4 override smoke produced token-0 GGUF GEMM
+errors while two Qwen processes were resident on the M40. Sequential reruns of
+the same overrides passed, so those parallel failures are treated as GPU memory
+contention rather than KV-mode failures.
+
 ## 2026-05-24: Release-Build Compressed KV Timing Confirmation
 
 This checkpoint reruns a small timing matrix with optimized Rust code before
