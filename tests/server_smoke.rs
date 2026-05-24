@@ -206,6 +206,15 @@ async fn server_generate_batch_decode_supports_preferred_compressed_kv() -> Resu
         batched_decode_ticks, 0,
         "compressed scheduler must not route through dense batched attention"
     );
+    let compressed_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_packed_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_prefill_ticks >= 1,
+        "preferred compressed scheduler should use head64 packed-prefix prefill"
+    );
     server.shutdown().await?;
     Ok(())
 }

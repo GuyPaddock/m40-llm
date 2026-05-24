@@ -2,6 +2,56 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Preferred Compressed KV Server Batch Admission
+
+This checkpoint makes the preferred compressed-KV runtime available through the
+queued server batch scheduler:
+
+- KV mode: `block-select-exact`
+- Exact-old backing: `fp16-k-q4-v`
+- Exact-old attention: `fp16-k-q4-v-direct`
+- Selection policy: plain top-k, default `top_blocks=8`
+
+The scheduler now allocates multi-sequence compressed KV slots and leases one
+logical sequence per active request. For the verified head64 path, pending
+prompt rows can use compressed packed-prefix prefill when
+`M40LLM_SERVER_BATCH_PREFILL=1`; compressed decode then continues through the
+per-request direct FP16-K/q4-V exact-old attention path. Dense packed batched
+decode is still not used for compressed KV, and true batched compressed
+exact-old attention remains the next kernel-level integration task.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  packed_prefill_logits_match_sequential_block_select_exact -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- Compressed packed-prefix prefill matches sequential `block-select-exact`
+  logits and compressed KV debug snapshots on the head64 CUDA parity smoke.
+- `server_smoke` passes 10 CUDA/server tests.
+- The preferred compressed scheduler smoke returns HTTP 200 for two concurrent
+  buffered `/generate` requests, records
+  `server_scheduler_compressed_packed_prefill_tick`, and confirms compressed
+  requests do not route through dense `server_scheduler_batched_decode_tick`.
+
+Current limitation:
+
+- Compressed KV is now batch-scheduler-safe and uses separate sequence slots,
+  but compressed decode is not yet row-batched. Performance claims for batched
+  compressed decode should wait for a dedicated batched direct FP16-K/q4-V
+  exact-old attention kernel.
+
 ## 2026-05-24: Dense Server Staggered Scheduler Overlap
 
 This checkpoint adds an explicit scheduler profile marker for ticks that contain

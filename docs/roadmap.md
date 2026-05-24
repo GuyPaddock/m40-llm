@@ -41,16 +41,22 @@ models while the shared workspace lock remains in place.
 count.
 
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
-for compatible head64/head128 dense-KV server cases. Head64 uses multi-request
-packed prefill; head128/Qwen uses per-request packed-prefix prefill inside the
-scheduler tick until real-model multi-row head128 parity is established.
-Unsupported or single-request cases fall back to the normal path.
+for compatible server cases. Dense head64 uses multi-request packed prefill;
+dense head128/Qwen uses per-request packed-prefix prefill inside the scheduler
+tick until real-model multi-row head128 parity is established. The preferred
+compressed-KV runtime (`block-select-exact`, `fp16-k-q4-v`,
+`fp16-k-q4-v-direct`, top-k) now participates in the queued batch scheduler
+with distinct logical KV sequence slots; verified head64 compressed requests
+can use packed-prefix prefill and then continue through per-request compressed
+decode. Unsupported or single-request cases fall back to the normal path.
 
 The intended order is:
 
 1. Batched decode with safe request/session ownership.
 2. Packed prefill once decode batching is correct.
 3. Mixed prefill/decode overlap after scheduler behavior is stable.
+4. Batched compressed exact-old decode attention once the compressed scheduler
+   path is stable.
 
 Benchmark the buffered batch-decode path with:
 
@@ -61,8 +67,9 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 ```
 
 The script compares dense batch-decode modes and writes detailed logs and
-`results.tsv` under `/tmp` by default. It passes `--kv-compress-mode off`
-because the current server scheduler batching path is dense-KV-only. Set
+`results.tsv` under `/tmp` by default. It still passes `--kv-compress-mode off`
+for dense batching baselines; pass `SERVER_EXTRA_ARGS="--kv-compress-mode
+block-select-exact"` to exercise the default compressed-KV runtime. Set
 `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1"` to compare batched decode with
 packed prefill disabled versus enabled. Set `CARGO_RUN_ARGS="--release"` for
 optimized Rust timing checks. Set `CASES="batch2_same batch4_mixed"` or another

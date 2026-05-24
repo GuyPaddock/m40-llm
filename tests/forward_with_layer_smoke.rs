@@ -599,6 +599,91 @@ fn packed_prefill_logits_match_sequential_dense() -> Result<()> {
 }
 
 #[test]
+fn packed_prefill_logits_match_sequential_block_select_exact() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let config = KvCompressionConfig {
+        recent_window: 4,
+        block_size: 2,
+        top_blocks: 2,
+        ..KvCompressionConfig::default()
+    };
+    let _runtime_guard = ScopedRuntimeConfig::new(config.clone());
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 256,
+        d_model: 128,
+        hidden: 16,
+        head_count: 2,
+        block_count: 2,
+        context_length: 32,
+    };
+    let (gg_seq, weights_seq) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let (gg_packed, weights_packed) = tiny_gguf::make_identity_tiny_gguf(cfg.clone());
+    let mut sequential = LoadedModel::from_gguf(gg_seq, weights_seq, -1)?;
+    let mut packed = LoadedModel::from_gguf(gg_packed, weights_packed, -1)?;
+    sequential.allocate_compressed_kv_cache_for_layers(cfg.context_length, &config)?;
+    packed.allocate_compressed_kv_cache_for_layers(cfg.context_length, &config)?;
+
+    let ids = [3, 4, 5, 6, 7, 8, 9];
+    let mut sequential_session = DecodeSession::new_for_sequence_with_kv_config(
+        &sequential,
+        0,
+        config.clone(),
+        cfg.d_model,
+        true,
+        "test_seq_block_select_prefill",
+        "test_seq_block_select_prefill:x",
+        "test_seq_block_select_prefill:out",
+    )?;
+    let mut packed_session = DecodeSession::new_for_sequence_with_kv_config(
+        &packed,
+        0,
+        config.clone(),
+        cfg.d_model,
+        true,
+        "test_packed_block_select_prefill",
+        "test_packed_block_select_prefill:x",
+        "test_packed_block_select_prefill:out",
+    )?;
+    let sequential_logits = sequential_session.logits_for_ids(&ids, |_| {})?;
+    let packed_logits = packed_session.logits_for_packed_prefix_then_ids(&ids, |_| {})?;
+    sequential.cuda.synchronize_stream(CudaStream::Decode)?;
+    sequential.cuda.synchronize_stream(CudaStream::Prefill)?;
+    packed.cuda.synchronize_stream(CudaStream::Decode)?;
+    packed.cuda.synchronize_stream(CudaStream::Prefill)?;
+    assert_close_logits(&packed_logits, &sequential_logits, 2e-3);
+    assert_eq!(packed_session.processed_len(), ids.len());
+    assert_eq!(sequential_session.processed_len(), ids.len());
+
+    let sequential_kv = sequential
+        .kv_cache
+        .as_ref()
+        .expect("sequential compressed kv cache");
+    let packed_kv = packed
+        .kv_cache
+        .as_ref()
+        .expect("packed compressed kv cache");
+    for physical_seq in 0..cfg.block_count {
+        let seq_snapshot =
+            sequential_kv.debug_compressed_snapshot(&sequential.cuda, physical_seq)?;
+        let packed_snapshot = packed_kv.debug_compressed_snapshot(&packed.cuda, physical_seq)?;
+        assert_eq!(
+            packed_snapshot, seq_snapshot,
+            "packed block-select-exact KV snapshot mismatch for physical sequence {physical_seq}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn packed_prefill_logits_match_sequential_with_qkv_biases() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

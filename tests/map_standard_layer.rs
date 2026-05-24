@@ -466,9 +466,11 @@ fn compressed_kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()
             return Ok(());
         }
     };
-    let mut config = KvCompressionConfig::default();
-    config.recent_window = 4;
-    config.block_size = 4;
+    let config = KvCompressionConfig {
+        recent_window: 4,
+        block_size: 4,
+        ..KvCompressionConfig::default()
+    };
     lm.allocate_compressed_kv_cache_for_layer_sequences(16, 3, &config)?;
 
     assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);

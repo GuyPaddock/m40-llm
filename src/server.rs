@@ -336,6 +336,42 @@ impl DecodeSchedulerRequest {
         }
     }
 
+    fn step_with_packed_prefix_prefill(&mut self) -> Result<DecodeSchedulerStep> {
+        if self.stopping.should_stop(&self.generated) {
+            return Ok(DecodeSchedulerStep::Complete);
+        }
+        if !self.is_pending_prefill() {
+            return self.step();
+        }
+        let _kv_runtime_guard = ScopedRuntimeConfig::new(self.session.kv_compression().clone());
+        let logits = self
+            .session
+            .logits_for_packed_prefix_then_ids(&self.ids[..self.prompt_token_len], |logits| {
+                log_top_logits(logits, 8)
+            })?;
+        if logits.is_empty() {
+            anyhow::bail!("packed-prefix prefill returned empty logits");
+        }
+        let next = self.sampler.sample(&logits)? as u32;
+        self.ids.push(next);
+        self.generated.push(next);
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let text = self
+                .tokenizer
+                .decode_ignoring_specials(&[next])
+                .unwrap_or_else(|_| "<decode-error>".to_string());
+            eprintln!(
+                "[server] scheduler request {} sampled token id={} text={text:?}",
+                self.request_id, next
+            );
+        }
+        if self.stopping.should_stop(&self.generated) {
+            Ok(DecodeSchedulerStep::Complete)
+        } else {
+            Ok(DecodeSchedulerStep::Continue)
+        }
+    }
+
     fn prepare_batch_token(&mut self) -> Result<Option<PreparedBatchToken>> {
         if self.stopping.should_stop(&self.generated) {
             return Ok(None);
@@ -534,6 +570,33 @@ fn scheduler_can_use_batched_prefill(
 }
 
 #[cfg(feature = "cuda")]
+fn scheduler_can_use_compressed_packed_prefill(
+    state: &AppState,
+    requests: &[DecodeSchedulerRequest],
+) -> bool {
+    if !crate::decode_batch::server_batch_prefill_requested() {
+        return false;
+    }
+    if !state.kv_compression.is_preferred_batched_runtime() {
+        return false;
+    }
+    if !requests
+        .iter()
+        .all(DecodeSchedulerRequest::is_pending_prefill)
+    {
+        return false;
+    }
+    let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
+    if head_dim != Some(64) {
+        log_batch_prefill_fallback(
+            "compressed packed-prefix prefill currently enabled only for head_dim=64",
+        );
+        return false;
+    }
+    true
+}
+
+#[cfg(feature = "cuda")]
 fn split_scheduler_requests(
     requests: Vec<DecodeSchedulerRequest>,
 ) -> (
@@ -682,6 +745,15 @@ fn process_scheduler_batch_tick(
         if scheduler_can_use_batched_prefill(state, &prefill_requests) {
             crate::profile::record_launch("server_scheduler_batched_prefill_tick");
             process_scheduler_prefill_tick(state, prefill_requests, active);
+        } else if scheduler_can_use_compressed_packed_prefill(state, &prefill_requests) {
+            crate::profile::record_launch("server_scheduler_compressed_packed_prefill_tick");
+            for mut request in prefill_requests {
+                match request.step_with_packed_prefix_prefill() {
+                    Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                    Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                    Err(err) => request.send_error(err),
+                }
+            }
         } else {
             crate::profile::record_launch("server_scheduler_sequential_prefill_tick");
             if state.kv_compression.mode.is_enabled() {
