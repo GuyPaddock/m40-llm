@@ -18,6 +18,7 @@ MAX_TOKENS=${MAX_TOKENS:-2}
 SLOTS=${M40LLM_SERVER_BATCH_DECODE_SLOTS:-8}
 BATCH_DECODE_MODES=${BATCH_DECODE_MODES:-"0 1"}
 PREFILL_MODES=${PREFILL_MODES:-"0"}
+CASES=${CASES:-"batch1_hello batch2_same batch4_mixed batch4_skewed"}
 LOG_DIR=${LOG_DIR:-/tmp/m40llm_batch_decode_bench_$(date +%Y%m%d_%H%M%S)}
 CARGO=${CARGO:-cargo}
 CARGO_RUN_ARGS=${CARGO_RUN_ARGS:-}
@@ -162,7 +163,7 @@ run_case() {
 main() {
   echo "log_dir=${LOG_DIR}"
   echo "model=${MODEL}"
-  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES}"
+  echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES} cases=${CASES}"
   echo "cargo_run_args=${CARGO_RUN_ARGS}"
   echo "server_extra_args=${SERVER_EXTRA_ARGS}"
 
@@ -173,21 +174,37 @@ main() {
       fi
 
       for trial in $(seq 1 "$TRIALS"); do
-        run_case "$batch_decode" "$batch_prefill" "batch1_hello" "$trial" \
-          "Hello"
-        run_case "$batch_decode" "$batch_prefill" "batch2_same" "$trial" \
-          "Hello" \
-          "Hello"
-        run_case "$batch_decode" "$batch_prefill" "batch4_mixed" "$trial" \
-          "Hello" \
-          "Please write a small Java program to check for stock quotes: " \
-          "Summarize CUDA streams in one sentence." \
-          "Name one benefit of batching LLM decode requests."
-        run_case "$batch_decode" "$batch_prefill" "batch4_skewed" "$trial" \
-          "Hi" \
-          "Please write a small Java program to check for stock quotes: " \
-          "Explain why the Tesla M40 has no Tensor Cores and what that means for GEMM optimization." \
-          "Give a concise checklist for validating a CUDA kernel on sm_52."
+        for case_name in $CASES; do
+          case "$case_name" in
+            batch1_hello)
+              run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
+                "Hello"
+              ;;
+            batch2_same)
+              run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
+                "Hello" \
+                "Hello"
+              ;;
+            batch4_mixed)
+              run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
+                "Hello" \
+                "Please write a small Java program to check for stock quotes: " \
+                "Summarize CUDA streams in one sentence." \
+                "Name one benefit of batching LLM decode requests."
+              ;;
+            batch4_skewed)
+              run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
+                "Hi" \
+                "Please write a small Java program to check for stock quotes: " \
+                "Explain why the Tesla M40 has no Tensor Cores and what that means for GEMM optimization." \
+                "Give a concise checklist for validating a CUDA kernel on sm_52."
+              ;;
+            *)
+              echo "unknown benchmark case '${case_name}'" >&2
+              exit 2
+              ;;
+          esac
+        done
       done
     done
   done

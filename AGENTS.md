@@ -144,6 +144,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `CARGO_RUN_ARGS="--release"`; release TinyLlama confirmation shows
   decode+prefill batching reaches 6.35x to 9.41x wall-time speedup on short
   batch-4 mixed/skewed prompts, while decode-only batching remains neutral.
+  `CASES="..."` filters the benchmark matrix; a bounded release
+  `MAX_TOKENS=16` run shows decode-only batching becomes useful once decode work
+  is visible, improving batch2 by 1.51x and batch4 mixed by 1.21x, while
+  decode+prefill remains strongest.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

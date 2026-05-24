@@ -62,7 +62,8 @@ The script compares dense batch-decode modes and writes detailed logs and
 because the current server scheduler batching path is dense-KV-only. Set
 `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1"` to compare batched decode with
 packed prefill disabled versus enabled. Set `CARGO_RUN_ARGS="--release"` for
-optimized Rust timing checks.
+optimized Rust timing checks. Set `CASES="batch2_same batch4_mixed"` or another
+space-separated subset to keep longer decode-focused checks bounded.
 
 ## CUDA Graph Direction
 

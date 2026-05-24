@@ -93,6 +93,40 @@ Release interpretation:
   short concurrent prompts, reaching 6.35x to 9.41x wall-time speedup on the
   batch-4 mixed/skewed cases in this single-trial confirmation.
 
+Longer decode-focused release check:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=16 \
+  CASES="batch2_same batch4_mixed" \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=54080 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_031036`
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch2 same | 2 | 2 | 875 ms | 0.651 s | 36.57 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 578 ms | 0.566 s | 55.36 | 1.51x |
+| batched decode+prefill | batch2 same | 2 | 2 | 515 ms | 0.503 s | 62.14 | 1.70x |
+| dense serial | batch4 mixed | 4 | 4 | 1711 ms | 1.235 s | 37.41 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1418 ms | 1.086 s | 45.13 | 1.21x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 582 ms | 0.338 s | 109.97 | 2.94x |
+
+Longer-token interpretation:
+
+- With `MAX_TOKENS=16`, decode-only batching is no longer neutral:
+  throughput improves by 1.51x for batch2 same-prompt and 1.21x for batch4
+  mixed prompts.
+- Packed prefill still matters because these prompts include varied prompt
+  lengths; decode+prefill remains the strongest dense scheduler configuration.
+- `CASES="..."` now filters the benchmark script to bounded subsets for longer
+  decode-focused checks.
+
 ## 2026-05-24: Dense Scheduler Mixed Tick Guardrails
 
 This checkpoint returns to the pre-KV-compression server batching path and keeps
