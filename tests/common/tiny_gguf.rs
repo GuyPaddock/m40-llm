@@ -296,6 +296,24 @@ pub fn make_attention_bias_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>
     (gguf, weights)
 }
 
+#[allow(dead_code)]
+pub fn make_qwen2_attention_bias_tiny_gguf(cfg: TinyGgufConfig) -> (GgufModel, Vec<u8>) {
+    let (mut gguf, weights) = make_attention_bias_tiny_gguf(cfg);
+    gguf.metadata.insert(
+        "general.architecture".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("qwen2".to_string())),
+    );
+    gguf.metadata.insert(
+        "tokenizer.ggml.model".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("gpt2".to_string())),
+    );
+    gguf.metadata.insert(
+        "tokenizer.ggml.pre".to_string(),
+        GgufValue::Scalar(GgufScalar::Str("qwen2".to_string())),
+    );
+    (gguf, weights)
+}
+
 fn make_tiny_gguf(
     cfg: TinyGgufConfig,
     output: TinyOutput,

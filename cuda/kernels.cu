@@ -1272,8 +1272,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         void** out_device_ptr) {
         if (!ctx || !host_ptr || !out_device_ptr) return -1;
 
-        // Register memory if coming from mmap
-        cudaHostRegister((void*)host_ptr, num_bytes, cudaHostRegisterDefault);
+        // Register memory if coming from mmap. This is a best-effort fast path:
+        // test fixtures and Vec-backed buffers may not be registerable, and the
+        // ignored registration error must not poison the following cudaMemcpy.
+        cudaError_t reg_err = cudaHostRegister((void*)host_ptr, num_bytes, cudaHostRegisterDefault);
+        bool registered_for_copy = (reg_err == cudaSuccess);
+        if (reg_err != cudaSuccess) {
+            cudaGetLastError();
+        }
         
         void* d_ptr = nullptr;
         cudaError_t err = cudaMalloc(&d_ptr, num_bytes);
@@ -1282,6 +1288,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -2;
         }
         err = cudaMemcpy(d_ptr, host_ptr, num_bytes, cudaMemcpyHostToDevice);
+        if (registered_for_copy) {
+            cudaHostUnregister((void*)host_ptr);
+            cudaGetLastError();
+        }
         if (err != cudaSuccess) {
             fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(err));
             cudaFree(d_ptr);

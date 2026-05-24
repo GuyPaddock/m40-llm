@@ -158,9 +158,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   KV server benchmarking; uncapped Qwen2.5 dense batching can exceed M40 VRAM
   when eight full-context slots and materialized FP32 weights are both present.
   CUDA parity, full-layer forward smoke, and server smoke tests cover head128
-  batched decode while compressed KV batching remains serialized. Head128
-  server packed prefill is gated off until a real Qwen packed-prefill parity
-  test is added.
+  batched decode while compressed KV batching remains serialized. Qwen-shaped
+  head128 packed-prefix and batched-prefill parity tests now pass with Q/K/V
+  biases and split-half RoPE, but head128 server packed prefill remains gated
+  off because a real Qwen mixed-prompt server run still changed two-token
+  outputs when packed prefill was admitted.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

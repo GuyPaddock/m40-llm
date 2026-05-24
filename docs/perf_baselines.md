@@ -37,9 +37,10 @@ Results:
 - `attention_batched_varlen` passes for both `head_dim=64` and `head_dim=128`,
   covering sync batched dispatch, async batched dispatch, scheduler-built
   dispatch, and individual decode parity.
-- `forward_with_layer_smoke` passes 18 CUDA tests, including a head128
+- `forward_with_layer_smoke` passes 20 CUDA tests, including a head128
   row-batched full-layer decode smoke that asserts packed GQA attention was
-  used.
+  used plus Qwen-shaped head128 packed-prefix and multi-sequence packed-prefill
+  parity tests with Q/K/V biases and split-half RoPE.
 - `server_smoke` passes 8 CUDA/server tests, including a two-request head128
   buffered `/generate` smoke that records `server_scheduler_batched_decode_tick`
   and asserts packed prefill stays disabled for head128.
@@ -54,8 +55,12 @@ Qwen2.5 release benchmark follow-up:
   benchmarking. With `MAX_CONTEXT_TOKENS=512`, dense serial and head128
   decode-only batching return HTTP 200 for batch1, batch2, and batch4 mixed
   prompts.
-- Head128 server packed prefill is intentionally gated off until a real Qwen
-  packed-prefill-vs-sequential parity test is added.
+- Qwen-shaped head128 packed-prefix and batched-prefill parity tests now pass,
+  but head128 server packed prefill remains intentionally gated off because a
+  real Qwen mixed-prompt server run with packed prefill still produced changed
+  two-token outputs. The remaining bug is in the server multi-request
+  integration path, not the low-level head128 packed attention parity covered
+  by the new tests.
 
 Bounded release command:
 
@@ -95,6 +100,43 @@ Interpretation:
   two-token Qwen matrix; prompt prefill and logits dominate.
 - `M40LLM_SERVER_BATCH_PREFILL=1` is effectively a no-op for head128 server
   rows after the safety gate, so those timings match decode-only batching.
+
+Qwen-shaped parity and rejected server admission check:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke qwen_head128 -- \
+  --nocapture --test-threads=1
+```
+
+- Result: both Qwen-shaped head128 tests pass. The tests cover packed-prefix
+  logits-vs-sequential parity and multi-sequence packed-prefill final-hidden
+  parity with Q/K/V biases, split-half RoPE, `head_dim=128`, and dense
+  reference KV config.
+
+Re-enabling head128 server packed prefill was tested and rejected with:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="batch1_hello batch2_same batch4_mixed" \
+  PORT_BASE=55480 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_133941`
+- Dense serial and decode-only rows returned HTTP 200 with expected two-token
+  smoke outputs.
+- With head128 packed prefill admitted, batch2 improved to 538 ms wall time
+  versus 1722 ms dense serial, but batch4 mixed outputs changed to
+  `---</textarea`, `Sure,`, `CUDA streams`, and ` Help Batch`.
+- Interpretation: do not admit head128 server packed prefill yet. The speedup
+  opportunity is real, but correctness is not established for real Qwen
+  multi-request server state.
 
 ## 2026-05-24: Dense Server Batch Script Refresh
 

@@ -289,7 +289,7 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
         .unwrap_or_default();
     assert_eq!(
         batched_prefill_ticks, 0,
-        "head128 server batch scheduler should keep packed prefill disabled until real-model parity is validated"
+        "head128 server batch scheduler should keep packed prefill disabled until real-model server output parity is validated"
     );
     server.shutdown().await?;
     Ok(())
