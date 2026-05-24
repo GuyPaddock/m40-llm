@@ -20,6 +20,7 @@ BATCH_DECODE_MODES=${BATCH_DECODE_MODES:-"0 1"}
 PREFILL_MODES=${PREFILL_MODES:-"0"}
 LOG_DIR=${LOG_DIR:-/tmp/m40llm_batch_decode_bench_$(date +%Y%m%d_%H%M%S)}
 CARGO=${CARGO:-cargo}
+CARGO_RUN_ARGS=${CARGO_RUN_ARGS:-}
 CURL=${CURL:-curl}
 SERVER_EXTRA_ARGS=${SERVER_EXTRA_ARGS:---kv-compress-mode off}
 
@@ -103,7 +104,7 @@ run_case() {
   M40LLM_SERVER_BATCH_DECODE_SLOTS="$SLOTS" \
   M40LLM_ENABLE_NVCC="${M40LLM_ENABLE_NVCC:-1}" \
   M40LLM_ENABLE_CUBLAS="${M40LLM_ENABLE_CUBLAS:-1}" \
-    "$CARGO" run --features cuda,server -- run "$MODEL" \
+    "$CARGO" run $CARGO_RUN_ARGS --features cuda,server -- run "$MODEL" \
       --addr "$addr" --require-sm52 $SERVER_EXTRA_ARGS >"$server_log" 2>&1 &
   SERVER_PID=$!
   wait_for_server "$addr" "$server_log"
@@ -162,6 +163,7 @@ main() {
   echo "log_dir=${LOG_DIR}"
   echo "model=${MODEL}"
   echo "trials=${TRIALS} max_tokens=${MAX_TOKENS} slots=${SLOTS} batch_decode_modes=${BATCH_DECODE_MODES} prefill_modes=${PREFILL_MODES}"
+  echo "cargo_run_args=${CARGO_RUN_ARGS}"
   echo "server_extra_args=${SERVER_EXTRA_ARGS}"
 
   for batch_decode in $BATCH_DECODE_MODES; do

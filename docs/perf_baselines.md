@@ -9,6 +9,8 @@ runtime defaults. Since compressed KV is now the default runtime mode and the
 server batch scheduler is still dense-cache-only, the script now passes
 `--kv-compress-mode off` by default. Override `SERVER_EXTRA_ARGS` only for
 diagnostic runs.
+`CARGO_RUN_ARGS="--release"` now selects an optimized Rust server build for
+release timing checks.
 
 Benchmark command:
 
@@ -52,6 +54,44 @@ Interpretation:
 - Enabling packed prefill with batched decode materially improves mixed/skewed
   batch-4 wall time in this bounded run.
 - This is a single development-build confirmation, not a release latency claim.
+
+Release-mode confirmation:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=53780 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_030533`
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 90 ms | 0.082 s | 22.22 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 92 ms | 0.084 s | 21.74 | 0.98x |
+| batched decode+prefill | batch1 hello | 1 | 1 | 93 ms | 0.084 s | 21.51 | 0.97x |
+| dense serial | batch2 same | 2 | 2 | 172 ms | 0.123 s | 23.26 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 160 ms | 0.149 s | 25.00 | 1.08x |
+| batched decode+prefill | batch2 same | 2 | 2 | 99 ms | 0.088 s | 40.40 | 1.74x |
+| dense serial | batch4 mixed | 4 | 4 | 1004 ms | 0.538 s | 7.97 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1000 ms | 0.954 s | 8.00 | 1.00x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 158 ms | 0.126 s | 50.63 | 6.35x |
+| dense serial | batch4 skewed | 4 | 4 | 1591 ms | 0.976 s | 5.03 | 1.00x |
+| batched decode | batch4 skewed | 4 | 4 | 1587 ms | 1.467 s | 5.04 | 1.00x |
+| batched decode+prefill | batch4 skewed | 4 | 4 | 169 ms | 0.135 s | 47.34 | 9.41x |
+
+Release interpretation:
+
+- Optimized Rust roughly halves single-request latency in this short benchmark.
+- Decode-only batching remains neutral for short generations with prompt-heavy
+  work.
+- Packed prefill plus batched decode is the meaningful dense scheduler lever for
+  short concurrent prompts, reaching 6.35x to 9.41x wall-time speedup on the
+  batch-4 mixed/skewed cases in this single-trial confirmation.
 
 ## 2026-05-24: Dense Scheduler Mixed Tick Guardrails
 

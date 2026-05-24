@@ -140,7 +140,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   batched decode/prefill. `scripts/bench_server_batch_decode.sh` now passes
   dense `--kv-compress-mode off` by default and a 2026-05-24 single-trial
   TinyLlama check shows packed prefill plus batched decode remains the useful
-  path for short mixed/skewed batches.
+  path for short mixed/skewed batches. The script now accepts
+  `CARGO_RUN_ARGS="--release"`; release TinyLlama confirmation shows
+  decode+prefill batching reaches 6.35x to 9.41x wall-time speedup on short
+  batch-4 mixed/skewed prompts, while decode-only batching remains neutral.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA
