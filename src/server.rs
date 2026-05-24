@@ -209,6 +209,7 @@ struct DecodeSchedulerRequest {
     ids: Vec<u32>,
     generated: Vec<u32>,
     prompt_token_len: usize,
+    force_sequential_steps: bool,
     sampler: crate::sampling::Sampler,
     stopping: StoppingCriteria,
     tokenizer: Tokenizer,
@@ -284,6 +285,7 @@ impl DecodeSchedulerRequest {
             ids,
             generated: Vec::new(),
             prompt_token_len,
+            force_sequential_steps: false,
             sampler,
             stopping,
             tokenizer,
@@ -337,6 +339,9 @@ impl DecodeSchedulerRequest {
         if !self.session.can_forward() {
             return Ok(None);
         }
+        if self.force_sequential_steps {
+            return Ok(None);
+        }
         let Some(token_idx) = (unsafe { self.session.load_next_unprocessed_token(&self.ids)? })
         else {
             return Ok(None);
@@ -353,7 +358,7 @@ impl DecodeSchedulerRequest {
         self.session.can_forward()
             && self.session.processed_len() == 0
             && self.generated.is_empty()
-            && !self.ids.is_empty()
+            && self.prompt_token_len > 1
             && !self.stopping.should_stop(&self.generated)
     }
 
@@ -362,7 +367,7 @@ impl DecodeSchedulerRequest {
     }
 
     fn prefill_sequence(&self) -> Result<crate::infer::ForwardPrefillSequence<'_>> {
-        if self.prompt_token_len == 0 || self.prompt_token_len > self.ids.len() {
+        if self.prompt_token_len <= 1 || self.prompt_token_len > self.ids.len() {
             anyhow::bail!(
                 "invalid prompt token length {} for request {} with ids_len {}",
                 self.prompt_token_len,
@@ -370,39 +375,21 @@ impl DecodeSchedulerRequest {
                 self.ids.len()
             );
         }
+        let prefix_len = self.prompt_token_len - 1;
         Ok(crate::infer::ForwardPrefillSequence {
-            token_ids: &self.ids[..self.prompt_token_len],
+            token_ids: &self.ids[..prefix_len],
             sequence_id: self.sequence_lease.sequence_id(),
             d_out_f32: self.session.d_out_ptr()?,
         })
     }
 
     fn finish_prefill(&mut self) -> Result<DecodeSchedulerStep> {
-        let token_idx = self.prompt_token_len.saturating_sub(1);
-        let logits = unsafe { self.session.logits_after_batched_forward(token_idx)? };
-        log_top_logits(&logits, 8);
-        self.session.mark_processed_through(self.prompt_token_len);
-        if logits.is_empty() {
-            anyhow::bail!("batched prefill logits returned empty logits");
+        let prefix_len = self.prompt_token_len.saturating_sub(1);
+        if prefix_len == 0 {
+            anyhow::bail!("batched prefill cannot finish empty prefix");
         }
-        let next = self.sampler.sample(&logits)? as u32;
-        self.ids.push(next);
-        self.generated.push(next);
-        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
-            let text = self
-                .tokenizer
-                .decode_ignoring_specials(&[next])
-                .unwrap_or_else(|_| "<decode-error>".to_string());
-            eprintln!(
-                "[server] scheduler request {} prefill sampled token id={} text={text:?}",
-                self.request_id, next
-            );
-        }
-        if self.stopping.should_stop(&self.generated) {
-            Ok(DecodeSchedulerStep::Complete)
-        } else {
-            Ok(DecodeSchedulerStep::Continue)
-        }
+        self.session.mark_processed_through(prefix_len);
+        Ok(DecodeSchedulerStep::Continue)
     }
 
     fn finish_batch_token(&mut self, token_idx: usize) -> Result<DecodeSchedulerStep> {
@@ -523,27 +510,9 @@ fn scheduler_can_use_batched_prefill(
         return false;
     }
     let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
-    let head128_diag = std::env::var("M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG")
-        .ok()
-        .as_deref()
-        == Some("1");
-    if !head_dim
-        .map(|dim| dim == 64 || (dim == 128 && head128_diag))
-        .unwrap_or(false)
-    {
-        if head_dim == Some(128) {
-            log_batch_prefill_fallback(
-                "model KV head_dim is 128; set M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1 for unsafe diagnostics",
-            );
-        } else {
-            log_batch_prefill_fallback("model KV head_dim is not 64");
-        }
+    if !head_dim.map(|dim| dim == 64 || dim == 128).unwrap_or(false) {
+        log_batch_prefill_fallback("model KV head_dim is not 64 or 128");
         return false;
-    }
-    if head_dim == Some(128) && head128_diag && server_batch_log_enabled() {
-        eprintln!(
-            "[server] head128 packed prefill diagnostic enabled; real Qwen multi-request output parity is not validated"
-        );
     }
     true
 }
@@ -577,6 +546,12 @@ fn process_scheduler_prefill_tick(
     requests: Vec<DecodeSchedulerRequest>,
     active: &mut VecDeque<DecodeSchedulerRequest>,
 ) {
+    let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
+    if head_dim == Some(128) {
+        process_scheduler_head128_prefill_tick(state, requests, active);
+        return;
+    }
+
     let items = match requests
         .iter()
         .map(DecodeSchedulerRequest::prefill_sequence)
@@ -611,6 +586,51 @@ fn process_scheduler_prefill_tick(
     }
 
     for mut request in requests {
+        match request.finish_prefill() {
+            Ok(DecodeSchedulerStep::Continue) => {
+                request.force_sequential_steps = true;
+                active.push_back(request)
+            }
+            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+            Err(err) => request.send_error(err),
+        }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_head128_prefill_tick(
+    state: &AppState,
+    requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    // The multi-sequence head128 packed-prefill path passes synthetic parity,
+    // but real Qwen mixed-prompt server rows still diverge. Use the same
+    // single-sequence packed-prefix shape as CLI until real-model multi-row
+    // parity is established.
+    for mut request in requests {
+        let item = match request.prefill_sequence() {
+            Ok(item) => item,
+            Err(err) => {
+                request.send_error(anyhow::anyhow!(
+                    "head128 packed prefill preparation failed: {err:#}"
+                ));
+                continue;
+            }
+        };
+        let forward_result = {
+            let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
+            unsafe {
+                state
+                    .model
+                    .forward_prefill_all_layers_varlen_for_sequences(&[item])
+            }
+        };
+        if let Err(err) = forward_result {
+            request.send_error(anyhow::anyhow!(
+                "head128 packed prefill forward failed: {err:#}"
+            ));
+            continue;
+        }
         match request.finish_prefill() {
             Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
             Ok(DecodeSchedulerStep::Complete) => request.send_complete(),

@@ -41,11 +41,10 @@ models while the shared workspace lock remains in place.
 count.
 
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
-for compatible head64 dense-KV server cases. Head128/Qwen server requests fall
-back to sequential prompt prefill until real-model multi-request output parity
-is validated. `M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1` can force head128
-packed prefill for diagnostics only. Unsupported or single-request cases fall
-back to the normal path.
+for compatible head64/head128 dense-KV server cases. Head64 uses multi-request
+packed prefill; head128/Qwen uses per-request packed-prefix prefill inside the
+scheduler tick until real-model multi-row head128 parity is established.
+Unsupported or single-request cases fall back to the normal path.
 
 The intended order is:
 

@@ -160,12 +160,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   CUDA parity, full-layer forward smoke, and server smoke tests cover head128
   batched decode while compressed KV batching remains serialized. Qwen-shaped
   head128 packed-prefix and batched-prefill parity tests now pass with Q/K/V
-  biases and split-half RoPE, but head128 server packed prefill remains gated
-  off because a real Qwen mixed-prompt server run still changed two-token
-  outputs when packed prefill was admitted.
-  `M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1` can force head128 packed prefill
-  for diagnostics only; keep it off for normal server benchmarking until the
-  real Qwen multi-request divergence is fixed.
+  biases and split-half RoPE. Server packed prefill now uses prompt-prefix
+  semantics, leaving the final prompt token on the normal one-token path.
+  Head128/Qwen server admission uses per-request packed-prefix prefill inside
+  scheduler ticks and keeps those prefilled requests on sequential decode for
+  the rest of the short request, rather than using the still-unvalidated
+  multi-request head128 packed-prefill/scheduler shape. A bounded Qwen2.5
+  release run with `MAX_CONTEXT_TOKENS=512` shows batch4 mixed output parity
+  and a 4.32x wall-time speedup versus dense serial.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA
