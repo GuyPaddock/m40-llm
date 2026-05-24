@@ -45,6 +45,36 @@ Results:
   `server_scheduler_compressed_packed_prefill_tick`, and confirms compressed
   requests do not route through dense `server_scheduler_batched_decode_tick`.
 
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact" \
+  PORT_BASE=56780 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_191936`
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: release
+- Server args: `--kv-compress-mode block-select-exact`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| compressed scheduler decode+prefill | batch2 same | 2 | 2 | 181 ms | 0.168 s | 22.10 |
+
+Server log confirmation:
+
+- The scheduler admitted compressed KV with logical sequence ids `[1, 2]`.
+- The prefill tick used compressed packed-prefix prefill.
+- The decode tick logged the expected fallback:
+  `compressed KV uses per-request decode until batched compressed attention is
+  available`.
+
 Current limitation:
 
 - Compressed KV is now batch-scheduler-safe and uses separate sequence slots,
