@@ -2,6 +2,68 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Release-Build Compressed KV Timing Confirmation
+
+This checkpoint reruns a small timing matrix with optimized Rust code before
+using compressed-KV timings for performance claims.
+
+Build profile and CUDA path:
+
+- Rust: `cargo test --release --features cuda`
+- Env: `M40LLM_ENABLE_NVCC=1`, `M40LLM_ENABLE_CUBLAS=1`
+- CUDA build path: `build.rs` NVCC compilation with `-O3`, `sm_52` SASS,
+  `compute_52` PTX, shared cudart, and cuBLAS enabled. No separate release-only
+  CUDA path was used.
+
+Reports:
+
+- `/tmp/m40llm-release-llama-realistic-2048.jsonl`
+- `/tmp/m40llm-release-qwen-topk-2048.jsonl`
+- `/tmp/m40llm-release-llama-single-4096.jsonl`
+
+Llama 2048 realistic prompts, `Llama-3.2-1B-Instruct-f16.gguf`:
+
+| Task | Mode | Status / output | Prefill | Decode | Total | Selection | Active KV | Final KV | Dense-equiv KV |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| doc QA early | dense `off` | pass, `Cedar-17` | 12.650 s | 0.387 s | 13.256 s | n/a | 61.8 MiB | 4.00 GiB | 4.00 GiB |
+| doc QA early | top4 | pass, `Cedar-17` | 10.821 s | 0.380 s | 11.444 s | 5.86 ms | 36.0 MiB | 2.97 GiB | 4.00 GiB |
+| doc QA early | top8 | pass, `Cedar-17` | 10.798 s | 0.403 s | 11.430 s | 6.14 ms | 40.0 MiB | 2.97 GiB | 4.00 GiB |
+| code/config lookup | dense `off` | pass, `M40_BATCH_LIMIT=37` | 10.797 s | 0.585 s | 11.616 s | n/a | 62.3 MiB | 4.00 GiB | 4.00 GiB |
+| code/config lookup | top4 | fail, `M40_BATCH_LIMIT=73` | 10.964 s | 0.570 s | 11.794 s | 5.54 ms | 36.0 MiB | 2.97 GiB | 4.00 GiB |
+| code/config lookup | top8 | pass, `M40_BATCH_LIMIT=37` | 10.941 s | 0.603 s | 11.792 s | 6.24 ms | 40.0 MiB | 2.97 GiB | 4.00 GiB |
+| code/config lookup | top16 | pass, `M40_BATCH_LIMIT=37` | 10.960 s | 0.671 s | 11.877 s | 6.83 ms | 48.0 MiB | 2.97 GiB | 4.00 GiB |
+
+Qwen 2048, `Qwen2.5-3B-Instruct-f16.gguf`:
+
+| Task | Mode | Status / output | Prefill | Decode | Total | Selection | Active KV | Final KV | Dense-equiv KV |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| single needle | dense `off` | pass, `ZXQ-NEEDLE-41729` | 15.984 s | 2.654 s | 18.879 s | n/a | 70.0 MiB | 1.13 GiB | 1.13 GiB |
+| single needle | top4 | pass, `ZXQ-NEEDLE-41729` | 15.868 s | 2.475 s | 18.583 s | 5.81 ms | 40.5 MiB | 0.85 GiB | 1.13 GiB |
+| single needle | top8 | pass, `ZXQ-NEEDLE-41729` | 15.894 s | 2.608 s | 18.743 s | 5.97 ms | 45.0 MiB | 0.85 GiB | 1.13 GiB |
+| multi needle | dense `off` | pass, `ALPHA-13579`, `BRAVO-24680` | 15.691 s | 4.007 s | 19.994 s | n/a | 70.3 MiB | 1.13 GiB | 1.13 GiB |
+| multi needle | top4 | pass, `ALPHA-13579`, `BRAVO-24680` | 16.010 s | 3.729 s | 20.041 s | 5.75 ms | 40.5 MiB | 0.85 GiB | 1.13 GiB |
+| multi needle | top8 | pass, `ALPHA-13579`, `BRAVO-24680` | 16.022 s | 3.935 s | 20.263 s | 6.13 ms | 45.0 MiB | 0.85 GiB | 1.13 GiB |
+
+Optional Llama 4096 single-needle row:
+
+| Mode | Status / output | Prefill | Decode | Total | Selection | Active KV | Final KV | Dense-equiv KV |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense `off` | pass, `ZXQ-NEEDLE-41729` | 76.366 s | 1.524 s | 78.166 s | n/a | 126.2 MiB | 4.00 GiB | 4.00 GiB |
+| top4 | pass, `ZXQ-NEEDLE-41729` | 76.792 s | 1.252 s | 78.324 s | 8.50 ms | 36.0 MiB | 2.97 GiB | 4.00 GiB |
+| top8 | pass, `ZXQ-NEEDLE-41729` | 76.820 s | 1.304 s | 78.422 s | 9.12 ms | 40.0 MiB | 2.97 GiB | 4.00 GiB |
+
+Interpretation:
+
+- Release builds materially reduce decode timing versus prior dev-build rows;
+  use these release rows for future performance percentages.
+- Quality matches prior runs. The Llama config lookup row remains the motivating
+  top8 default case: top4 retrieves archived `M40_BATCH_LIMIT=73`, while top8
+  retrieves active `M40_BATCH_LIMIT=37`.
+- Resident KV savings are unchanged: Llama drops from 4.00 GiB dense-equivalent
+  to 2.97 GiB, and Qwen drops from 1.13 GiB to 0.85 GiB.
+- Active attended KV remains substantially lower than dense. Top8 costs modestly
+  more active KV than top4, but remains the safer compressed-KV default.
+
 ## 2026-05-23: Compressed KV Is the Runtime Default
 
 The shared `KvCompressionConfig::default()` now selects the preferred
