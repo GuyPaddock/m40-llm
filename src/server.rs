@@ -490,9 +490,11 @@ impl DecodeSchedulerRequest {
 
 #[cfg(feature = "cuda")]
 fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBatchToken]) -> bool {
-    if state.kv_compression.mode.is_enabled() {
+    if state.kv_compression.mode.is_enabled()
+        && !state.kv_compression.is_preferred_batched_runtime()
+    {
         log_batch_decode_fallback(
-            "compressed KV uses per-request decode until batched compressed attention is available",
+            "compressed KV config is not supported by batched compressed attention",
         );
         return false;
     }
@@ -1084,7 +1086,7 @@ impl AppState {
             );
         } else if batch_decode_env_requested && kv_compression.mode.is_enabled() {
             eprintln!(
-                "[server] M40LLM_SERVER_BATCH_DECODE=1 requested with compressed KV mode {:?}; using per-request compressed decode scheduler until batched compressed attention is enabled",
+                "[server] M40LLM_SERVER_BATCH_DECODE=1 requested with compressed KV mode {:?}; preferred FP16-K/q4-V direct exact-old attention can use batched decode",
                 kv_compression.mode
             );
         }

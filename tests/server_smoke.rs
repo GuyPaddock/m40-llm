@@ -101,7 +101,7 @@ async fn server_generate_default_compressed_kv_smoke() -> Result<()> {
     let state = AppState::new_with_kv_config(model, kv_compression);
     assert!(
         state.decode_batching_requested,
-        "preferred compressed KV should use the scheduler with per-request compressed decode"
+        "preferred compressed KV should use the batch scheduler"
     );
     assert!(
         state.decode_sequence_pool.is_some(),
@@ -193,18 +193,27 @@ async fn server_generate_batch_decode_supports_preferred_compressed_kv() -> Resu
         .get("server_scheduler_compressed_sequential_decode_tick")
         .map(|counts| counts.launches)
         .unwrap_or_default();
-    assert!(
-        sequential_decode_ticks >= 1,
-        "compressed scheduler should use per-request decode until batched compressed attention lands"
+    assert_eq!(
+        sequential_decode_ticks, 0,
+        "preferred compressed scheduler should use batched compressed decode"
     );
     let batched_decode_ticks = snapshot
         .by_op
         .get("server_scheduler_batched_decode_tick")
         .map(|counts| counts.launches)
         .unwrap_or_default();
-    assert_eq!(
-        batched_decode_ticks, 0,
-        "compressed scheduler must not route through dense batched attention"
+    assert!(
+        batched_decode_ticks >= 1,
+        "preferred compressed scheduler should record a batched decode tick"
+    );
+    let compressed_attention_launches = snapshot
+        .by_op
+        .get("attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_attention_launches >= 1,
+        "preferred compressed scheduler should launch batched direct FP16-K/q4-V attention"
     );
     let compressed_prefill_ticks = snapshot
         .by_op

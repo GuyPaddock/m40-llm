@@ -140,11 +140,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   participates in the queued server scheduler with distinct logical KV
   sequence leases. The scheduler admits that preferred compressed runtime,
   allocates multi-sequence compressed KV slots, uses packed-prefix prefill for
-  the verified head64 compressed path, and then keeps compressed decode on the
-  per-request exact-old attention path until a true batched compressed
-  attention kernel exists. Unsupported compressed batching configs fail or log
-  clear fallback reasons instead of silently routing through dense batched
-  attention. `scripts/bench_server_batch_decode.sh` now passes
+  the verified head64 compressed path, and routes compatible compressed decode
+  rows through a batched direct FP16-K/q4-V exact-old attention kernel. The
+  CUDA parity test compares batched compressed attention against individual
+  direct compressed decode for `head_dim=64` and `head_dim=128`; server smoke
+  asserts the preferred compressed scheduler launches the batched compressed
+  attention op. Unsupported compressed batching configs fail or log clear
+  fallback reasons instead of silently routing through dense batched attention.
+  `scripts/bench_server_batch_decode.sh` now passes
   dense `--kv-compress-mode off` by default and a 2026-05-24 single-trial
   TinyLlama check shows packed prefill plus batched decode remains the useful
   path for short mixed/skewed batches. The script now accepts
@@ -164,8 +167,7 @@ batched decode path before touching persistent decode or large-model fused-dequa
   KV server benchmarking; uncapped Qwen2.5 dense batching can exceed M40 VRAM
   when eight full-context slots and materialized FP32 weights are both present.
   CUDA parity, full-layer forward smoke, and server smoke tests cover head128
-  batched decode while compressed KV batching remains on per-request compressed
-  decode. Qwen-shaped
+  batched decode and preferred compressed-KV batched decode. Qwen-shaped
   head128 packed-prefix and batched-prefill parity tests now pass with Q/K/V
   biases and split-half RoPE. Server packed prefill now uses prompt-prefix
   semantics, leaving the final prompt token on the normal one-token path.

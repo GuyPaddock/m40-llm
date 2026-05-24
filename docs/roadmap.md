@@ -47,16 +47,17 @@ tick until real-model multi-row head128 parity is established. The preferred
 compressed-KV runtime (`block-select-exact`, `fp16-k-q4-v`,
 `fp16-k-q4-v-direct`, top-k) now participates in the queued batch scheduler
 with distinct logical KV sequence slots; verified head64 compressed requests
-can use packed-prefix prefill and then continue through per-request compressed
-decode. Unsupported or single-request cases fall back to the normal path.
+can use packed-prefix prefill and compatible compressed decode rows use batched
+direct FP16-K/q4-V exact-old attention. Unsupported or single-request cases fall
+back to the normal path.
 
 The intended order is:
 
 1. Batched decode with safe request/session ownership.
 2. Packed prefill once decode batching is correct.
 3. Mixed prefill/decode overlap after scheduler behavior is stable.
-4. Batched compressed exact-old decode attention once the compressed scheduler
-   path is stable.
+4. Head128 compressed packed-prefix prefill parity before Qwen compressed
+   server prefill admission.
 
 Benchmark the buffered batch-decode path with:
 

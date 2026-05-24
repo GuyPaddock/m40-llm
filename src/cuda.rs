@@ -575,6 +575,19 @@ mod ffi {
             top_blocks: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_block_summary_lossy_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -4388,6 +4401,57 @@ impl KVCache {
         }
         record_async_kernel(
             "attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct",
+        );
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues batched direct FP16-K/q4-V exact-old GQA decode attention.
+    /// `d_q_f32` and `d_out_f32` must be packed as
+    /// `[batch, q_heads, head_dim]` in the same order as `d_seq_ids` and
+    /// `d_seq_lens`.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async failed: {rc} (batch_size={batch_size}, q_heads={q_heads}, kv_heads={}, head_dim={}, recent_window={recent_window}, block_size={block_size}, top_blocks={top_blocks}, max_seq_len={}, compressed={}, backing={})",
+                self.inner.num_heads,
+                self.inner.head_dim,
+                self.inner.max_seq_len,
+                self.inner.compressed,
+                self.exact_old_backing()
+            ));
+        }
+        record_async_kernel(
+            "attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched",
         );
         Ok(())
     }

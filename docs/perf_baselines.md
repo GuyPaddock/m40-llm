@@ -5,7 +5,8 @@ This file tracks measured CUDA baselines before M40-specific optimization work.
 ## 2026-05-24: Preferred Compressed KV Server Batch Admission
 
 This checkpoint makes the preferred compressed-KV runtime available through the
-queued server batch scheduler:
+queued server batch scheduler and adds a true batched decode attention launch
+for the preferred exact-old backend:
 
 - KV mode: `block-select-exact`
 - Exact-old backing: `fp16-k-q4-v`
@@ -13,12 +14,11 @@ queued server batch scheduler:
 - Selection policy: plain top-k, default `top_blocks=8`
 
 The scheduler now allocates multi-sequence compressed KV slots and leases one
-logical sequence per active request. For the verified head64 path, pending
-prompt rows can use compressed packed-prefix prefill when
-`M40LLM_SERVER_BATCH_PREFILL=1`; compressed decode then continues through the
-per-request direct FP16-K/q4-V exact-old attention path. Dense packed batched
-decode is still not used for compressed KV, and true batched compressed
-exact-old attention remains the next kernel-level integration task.
+logical sequence per active request. Pending prompt rows can use compressed
+packed-prefix prefill when `M40LLM_SERVER_BATCH_PREFILL=1` on the verified
+head64 path. Decode rows dispatch one batched direct FP16-K/q4-V exact-old
+attention kernel over `[batch, q_heads]` instead of falling back to one
+compressed attention launch per request.
 
 Validation commands:
 
@@ -27,23 +27,34 @@ source scripts/dev-env.sh && cargo fmt --all -- --check
 source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
 source scripts/dev-env.sh && \
   M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   cargo test --features cuda --test forward_with_layer_smoke \
   packed_prefill_logits_match_sequential_block_select_exact -- --nocapture --test-threads=1
 source scripts/dev-env.sh && \
   M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
 ```
 
 Results:
 
 - Non-CUDA warning-as-error tests pass.
+- `attention_batched_varlen` passes both dense batched attention parity and
+  direct FP16-K/q4-V compressed batched attention parity against individual
+  decode for `head_dim=64` and `head_dim=128`.
 - Compressed packed-prefix prefill matches sequential `block-select-exact`
   logits and compressed KV debug snapshots on the head64 CUDA parity smoke.
 - `server_smoke` passes 10 CUDA/server tests.
 - The preferred compressed scheduler smoke returns HTTP 200 for two concurrent
   buffered `/generate` requests, records
   `server_scheduler_compressed_packed_prefill_tick`, and confirms compressed
-  requests do not route through dense `server_scheduler_batched_decode_tick`.
+  requests launch
+  `attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched`.
+- CUDA/server clippy passes with `-D warnings`.
 
 Bounded release command:
 
@@ -55,32 +66,34 @@ source scripts/dev-env.sh && \
   BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
   CASES="batch2_same" \
   SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact" \
-  PORT_BASE=56780 scripts/bench_server_batch_decode.sh
+  PORT_BASE=56880 scripts/bench_server_batch_decode.sh
 ```
 
-- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_191936`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_193513`
 - Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
 - Cargo profile: release
 - Server args: `--kv-compress-mode block-select-exact`
 
 | Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| compressed scheduler decode+prefill | batch2 same | 2 | 2 | 181 ms | 0.168 s | 22.10 |
+| compressed batched decode+prefill | batch2 same | 2 | 2 | 170 ms | 0.156 s | 23.53 |
 
 Server log confirmation:
 
 - The scheduler admitted compressed KV with logical sequence ids `[1, 2]`.
 - The prefill tick used compressed packed-prefix prefill.
-- The decode tick logged the expected fallback:
-  `compressed KV uses per-request decode until batched compressed attention is
-  available`.
+- The warmup single-request decode logged `batch size <= 1`; the measured
+  two-request decode tick did not take the fallback and used the batched
+  compressed attention path.
 
-Current limitation:
+Remaining limitations:
 
-- Compressed KV is now batch-scheduler-safe and uses separate sequence slots,
-  but compressed decode is not yet row-batched. Performance claims for batched
-  compressed decode should wait for a dedicated batched direct FP16-K/q4-V
-  exact-old attention kernel.
+- Compressed packed-prefix prefill is currently verified and admitted for
+  head64 server prompts. Head128/Qwen compressed prefill still needs dedicated
+  parity before admission.
+- Only the preferred direct FP16-K/q4-V exact-old runtime is admitted for
+  batched compressed decode. Diagnostic compressed modes still fall back or fail
+  clearly.
 
 ## 2026-05-24: Dense Server Staggered Scheduler Overlap
 

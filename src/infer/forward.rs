@@ -10,6 +10,8 @@ use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
 #[cfg(feature = "cuda")]
+use crate::kv_compression;
+#[cfg(feature = "cuda")]
 use crate::kv_selection;
 #[cfg(feature = "cuda")]
 use crate::profile;
@@ -1941,18 +1943,36 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let kv_runtime_config = kv_compression::runtime_config();
                 unsafe {
-                    cuda_plan.dispatch_attention_async(
-                        &self.cuda,
-                        kv,
-                        ws.dq as *const c_void,
-                        q_heads,
-                        ws.datt,
-                    )?;
+                    if kv.is_compressed() && kv_runtime_config.is_preferred_batched_runtime() {
+                        cuda_plan.dispatch_fp16_k_q4_v_direct_attention_async(
+                            &self.cuda,
+                            kv,
+                            ws.dq as *const c_void,
+                            q_heads,
+                            kv_runtime_config.recent_window,
+                            kv_runtime_config.block_size,
+                            kv_runtime_config.top_blocks,
+                            ws.datt,
+                        )?;
+                    } else {
+                        cuda_plan.dispatch_attention_async(
+                            &self.cuda,
+                            kv,
+                            ws.dq as *const c_void,
+                            q_heads,
+                            ws.datt,
+                        )?;
+                    }
                 }
                 log_profiled_op(
                     &label,
-                    "attention_batched",
+                    if kv.is_compressed() {
+                        "attention_batched_compressed"
+                    } else {
+                        "attention_batched"
+                    },
                     profile_before.as_ref(),
                     op_start.elapsed(),
                 );
