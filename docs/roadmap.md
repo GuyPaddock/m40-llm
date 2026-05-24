@@ -43,7 +43,9 @@ count.
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
 for compatible head64 dense-KV server cases. Head128/Qwen server requests fall
 back to sequential prompt prefill until real-model multi-request output parity
-is validated. Unsupported or single-request cases fall back to the normal path.
+is validated. `M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1` can force head128
+packed prefill for diagnostics only. Unsupported or single-request cases fall
+back to the normal path.
 
 The intended order is:
 

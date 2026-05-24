@@ -225,6 +225,16 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
 
 #[tokio::test]
 async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
+    run_head128_batch_decode_smoke(false).await
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_prefill_head128_diag_uses_packed_prefill() -> Result<()> {
+    let _diag_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG", "1");
+    run_head128_batch_decode_smoke(true).await
+}
+
+async fn run_head128_batch_decode_smoke(expect_batched_prefill: bool) -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
         eprintln!("skipping server smoke tests without CUDA upload support");
         return Ok(());
@@ -287,10 +297,17 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
         .get("server_scheduler_batched_prefill_tick")
         .map(|counts| counts.launches)
         .unwrap_or_default();
-    assert_eq!(
-        batched_prefill_ticks, 0,
-        "head128 server batch scheduler should keep packed prefill disabled until real-model server output parity is validated"
-    );
+    if expect_batched_prefill {
+        assert!(
+            batched_prefill_ticks >= 1,
+            "head128 diagnostic override should record at least one batched prefill tick"
+        );
+    } else {
+        assert_eq!(
+            batched_prefill_ticks, 0,
+            "head128 server batch scheduler should keep packed prefill disabled until real-model server output parity is validated"
+        );
+    }
     server.shutdown().await?;
     Ok(())
 }

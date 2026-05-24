@@ -522,15 +522,28 @@ fn scheduler_can_use_batched_prefill(
         log_batch_prefill_fallback("not all active requests are pending prompt prefill");
         return false;
     }
-    if !state
-        .model
-        .kv_cache
-        .as_ref()
-        .map(|kv| kv.head_dim() == 64)
+    let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
+    let head128_diag = std::env::var("M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG")
+        .ok()
+        .as_deref()
+        == Some("1");
+    if !head_dim
+        .map(|dim| dim == 64 || (dim == 128 && head128_diag))
         .unwrap_or(false)
     {
-        log_batch_prefill_fallback("model KV head_dim is not 64");
+        if head_dim == Some(128) {
+            log_batch_prefill_fallback(
+                "model KV head_dim is 128; set M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1 for unsafe diagnostics",
+            );
+        } else {
+            log_batch_prefill_fallback("model KV head_dim is not 64");
+        }
         return false;
+    }
+    if head_dim == Some(128) && head128_diag && server_batch_log_enabled() {
+        eprintln!(
+            "[server] head128 packed prefill diagnostic enabled; real Qwen multi-request output parity is not validated"
+        );
     }
     true
 }

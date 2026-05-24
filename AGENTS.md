@@ -163,6 +163,9 @@ batched decode path before touching persistent decode or large-model fused-dequa
   biases and split-half RoPE, but head128 server packed prefill remains gated
   off because a real Qwen mixed-prompt server run still changed two-token
   outputs when packed prefill was admitted.
+  `M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1` can force head128 packed prefill
+  for diagnostics only; keep it off for normal server benchmarking until the
+  real Qwen multi-request divergence is fixed.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

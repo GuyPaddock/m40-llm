@@ -41,9 +41,10 @@ Results:
   row-batched full-layer decode smoke that asserts packed GQA attention was
   used plus Qwen-shaped head128 packed-prefix and multi-sequence packed-prefill
   parity tests with Q/K/V biases and split-half RoPE.
-- `server_smoke` passes 8 CUDA/server tests, including a two-request head128
+- `server_smoke` passes 9 CUDA/server tests, including a two-request head128
   buffered `/generate` smoke that records `server_scheduler_batched_decode_tick`
-  and asserts packed prefill stays disabled for head128.
+  and asserts packed prefill stays disabled for head128 unless the unsafe
+  diagnostic override is explicitly enabled.
 - CUDA/server clippy and the non-CUDA warning-as-error matrix are clean.
 
 Qwen2.5 release benchmark follow-up:
@@ -137,6 +138,13 @@ source scripts/dev-env.sh && \
 - Interpretation: do not admit head128 server packed prefill yet. The speedup
   opportunity is real, but correctness is not established for real Qwen
   multi-request server state.
+- Follow-up: `M40LLM_SERVER_BATCH_PREFILL_HEAD128_DIAG=1` now provides an
+  explicit unsafe diagnostic override for head128 server packed prefill. Normal
+  server admission still keeps head128 on sequential prompt prefill.
+- The Qwen-shaped low-level parity test now covers a mixed four-sequence batch
+  with lengths 1/2/4/5. It still matches sequential hidden states, so the
+  remaining divergence is specific to the real-model server request path or
+  model-scale state, not the small head128 varlen attention primitive.
 
 ## 2026-05-24: Dense Server Batch Script Refresh
 

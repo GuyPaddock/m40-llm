@@ -747,50 +747,52 @@ fn qwen_head128_batched_prefill_matches_sequential_with_qkv_biases() -> Result<(
     let (gg, weights) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(cfg.clone());
     let (gg_seq, weights_seq) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(cfg.clone());
     let mut lm = LoadedModel::from_gguf(gg, weights, -1)?;
-    lm.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count * 2, 1, 128)?;
+    lm.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count * 4, 1, 128)?;
     let mut lm_seq = LoadedModel::from_gguf(gg_seq, weights_seq, -1)?;
-    lm_seq.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count * 2, 1, 128)?;
+    lm_seq.allocate_kv_cache_with_layout(cfg.context_length, cfg.block_count * 4, 1, 128)?;
 
-    let d_out0 = lm.cuda.device_malloc(128 * 4)?;
-    let d_out1 = lm.cuda.device_malloc(128 * 4)?;
+    let seqs: [&[u32]; 4] = [&[1], &[2, 3], &[4, 5, 6, 7], &[8, 9, 10, 11, 12]];
+    let mut d_out = Vec::with_capacity(seqs.len());
+    for idx in 0..seqs.len() {
+        d_out.push(
+            lm.cuda
+                .device_malloc_tagged(128 * 4, &format!("test_qwen_head128_prefill:out{idx}"))?,
+        );
+    }
     let d_seq_x = lm_seq.cuda.device_malloc(128 * 4)?;
-    let d_seq_out0 = lm_seq.cuda.device_malloc(128 * 4)?;
-    let d_seq_out1 = lm_seq.cuda.device_malloc(128 * 4)?;
-    let seq0 = [1, 2, 3, 4];
-    let seq1 = [5, 6];
+    let mut d_seq_out = Vec::with_capacity(seqs.len());
+    for idx in 0..seqs.len() {
+        d_seq_out.push(
+            lm_seq.cuda.device_malloc_tagged(
+                128 * 4,
+                &format!("test_qwen_head128_prefill:seq_out{idx}"),
+            )?,
+        );
+    }
     unsafe {
-        lm.forward_prefill_all_layers_varlen_for_sequences(&[
-            m40_llm::infer::ForwardPrefillSequence {
-                token_ids: &seq0,
-                sequence_id: 0,
-                d_out_f32: d_out0,
-            },
-            m40_llm::infer::ForwardPrefillSequence {
-                token_ids: &seq1,
-                sequence_id: 1,
-                d_out_f32: d_out1,
-            },
-        ])?;
+        let items: Vec<_> = seqs
+            .iter()
+            .enumerate()
+            .map(|(idx, token_ids)| m40_llm::infer::ForwardPrefillSequence {
+                token_ids,
+                sequence_id: idx as u32,
+                d_out_f32: d_out[idx],
+            })
+            .collect();
+        lm.forward_prefill_all_layers_varlen_for_sequences(&items)?;
         lm.cuda.synchronize_stream(CudaStream::Decode)?;
         lm.cuda.synchronize_stream(CudaStream::Prefill)?;
 
-        for (idx, &tok) in seq0.iter().enumerate() {
-            lm_seq.load_token_embedding_f16_to_f32(tok as u64, d_seq_x)?;
-            lm_seq.forward_one_token_all_layers_for_sequence(
-                d_seq_x,
-                0,
-                (idx + 1) as u32,
-                d_seq_out0,
-            )?;
-        }
-        for (idx, &tok) in seq1.iter().enumerate() {
-            lm_seq.load_token_embedding_f16_to_f32(tok as u64, d_seq_x)?;
-            lm_seq.forward_one_token_all_layers_for_sequence(
-                d_seq_x,
-                1,
-                (idx + 1) as u32,
-                d_seq_out1,
-            )?;
+        for (seq_idx, seq) in seqs.iter().enumerate() {
+            for (tok_idx, &tok) in seq.iter().enumerate() {
+                lm_seq.load_token_embedding_f16_to_f32(tok as u64, d_seq_x)?;
+                lm_seq.forward_one_token_all_layers_for_sequence(
+                    d_seq_x,
+                    seq_idx as u32,
+                    (tok_idx + 1) as u32,
+                    d_seq_out[seq_idx],
+                )?;
+            }
         }
         lm_seq.cuda.synchronize_stream(CudaStream::Decode)?;
         lm_seq.cuda.synchronize_stream(CudaStream::Prefill)?;
@@ -807,32 +809,21 @@ fn qwen_head128_batched_prefill_matches_sequential_with_qkv_biases() -> Result<(
         "Qwen head128 batched prefill should use packed varlen GQA attention"
     );
 
-    let mut out0_host = vec![0u8; 128 * 4];
-    let mut out1_host = vec![0u8; 128 * 4];
-    let mut seq0_host = vec![0u8; 128 * 4];
-    let mut seq1_host = vec![0u8; 128 * 4];
-    unsafe {
-        lm.cuda
-            .memcpy_d2h(out0_host.as_mut_ptr() as *mut c_void, d_out0, 128 * 4)?;
-        lm.cuda
-            .memcpy_d2h(out1_host.as_mut_ptr() as *mut c_void, d_out1, 128 * 4)?;
-        lm_seq
-            .cuda
-            .memcpy_d2h(seq0_host.as_mut_ptr() as *mut c_void, d_seq_out0, 128 * 4)?;
-        lm_seq
-            .cuda
-            .memcpy_d2h(seq1_host.as_mut_ptr() as *mut c_void, d_seq_out1, 128 * 4)?;
-        lm.cuda.device_free(d_out0)?;
-        lm.cuda.device_free(d_out1)?;
-        lm_seq.cuda.device_free(d_seq_x)?;
-        lm_seq.cuda.device_free(d_seq_out0)?;
-        lm_seq.cuda.device_free(d_seq_out1)?;
-    }
-
-    for (label, packed_bytes, sequential_bytes) in [
-        ("seq0", out0_host.as_slice(), seq0_host.as_slice()),
-        ("seq1", out1_host.as_slice(), seq1_host.as_slice()),
-    ] {
+    for seq_idx in 0..seqs.len() {
+        let mut packed_bytes = vec![0u8; 128 * 4];
+        let mut sequential_bytes = vec![0u8; 128 * 4];
+        unsafe {
+            lm.cuda.memcpy_d2h(
+                packed_bytes.as_mut_ptr() as *mut c_void,
+                d_out[seq_idx],
+                128 * 4,
+            )?;
+            lm_seq.cuda.memcpy_d2h(
+                sequential_bytes.as_mut_ptr() as *mut c_void,
+                d_seq_out[seq_idx],
+                128 * 4,
+            )?;
+        }
         let packed_vals: Vec<f32> = packed_bytes
             .chunks_exact(4)
             .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
@@ -845,8 +836,18 @@ fn qwen_head128_batched_prefill_matches_sequential_with_qkv_biases() -> Result<(
             let diff = (packed - sequential).abs();
             assert!(
                 diff <= 2e-3,
-                "{label} Qwen head128 packed prefill differs from sequential decode at {idx}: packed={packed} sequential={sequential} diff={diff}"
+                "seq{seq_idx} Qwen head128 packed prefill differs from sequential decode at {idx}: packed={packed} sequential={sequential} diff={diff}"
             );
+        }
+    }
+
+    unsafe {
+        for ptr in d_out {
+            lm.cuda.device_free(ptr)?;
+        }
+        lm_seq.cuda.device_free(d_seq_x)?;
+        for ptr in d_seq_out {
+            lm_seq.cuda.device_free(ptr)?;
         }
     }
 
