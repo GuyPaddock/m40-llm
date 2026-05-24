@@ -7,7 +7,7 @@ use crate::decode::StoppingCriteria;
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
 use crate::kv_compression::{
-    runtime_config, set_runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention,
+    runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention, ScopedRuntimeConfig,
 };
 use crate::kv_selection::{self, KvSelectionSummary};
 use crate::sampling::{Sampler, SamplerConfig};
@@ -252,11 +252,16 @@ pub fn prepare_prompt(
     prompt: &str,
     prompt_format: PromptFormat,
 ) -> (String, bool) {
+    fn llama3_prompt_is_preformatted(prompt: &str) -> bool {
+        prompt.trim_start().starts_with("<|begin_of_text|>")
+            || prompt.contains("<|start_header_id|>")
+    }
+
     let selected = match prompt_format {
         PromptFormat::Auto => {
             if tokenizer.is_llama3()
                 && tokenizer.has_chat_template()
-                && !prompt.contains("<|start_header_id|>")
+                && !llama3_prompt_is_preformatted(prompt)
             {
                 PromptFormat::Llama3Chat
             } else if tokenizer.is_qwen2()
@@ -286,7 +291,10 @@ pub fn prepare_prompt(
             ),
             false,
         ),
-        PromptFormat::Auto | PromptFormat::Raw => (prompt.to_string(), true),
+        PromptFormat::Auto | PromptFormat::Raw => {
+            let add_bos = !(tokenizer.is_llama3() && llama3_prompt_is_preformatted(prompt));
+            (prompt.to_string(), add_bos)
+        }
     }
 }
 
@@ -340,7 +348,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let (materialized_f32_cache_entries_before, materialized_f32_cache_bytes_before) =
         (0usize, 0usize);
     options.kv_compression.validate()?;
-    set_runtime_config(options.kv_compression.clone());
+    let _kv_runtime_guard = ScopedRuntimeConfig::new(options.kv_compression.clone());
     kv_selection::reset();
     #[cfg(not(feature = "cuda"))]
     if options.kv_compression.mode.is_enabled() {
@@ -420,9 +428,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             "[{log_prefix}] mapped {} standard layers d_model={} hidden_dim={}",
             model.model_config.block_count, full_decode_d_model, full_decode_hidden_dim
         );
-        crate::decode_session::DecodeSession::new_for_sequence(
+        crate::decode_session::DecodeSession::new_for_sequence_with_kv_config(
             model,
             options.sequence_id,
+            options.kv_compression.clone(),
             full_decode_d_model,
             true,
             log_prefix,

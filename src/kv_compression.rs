@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -207,12 +208,38 @@ impl KvCompressionConfig {
 
 static RUNTIME_CONFIG: OnceLock<Mutex<KvCompressionConfig>> = OnceLock::new();
 
+thread_local! {
+    static SCOPED_RUNTIME_CONFIG: RefCell<Option<KvCompressionConfig>> = const { RefCell::new(None) };
+}
+
+pub struct ScopedRuntimeConfig {
+    previous: Option<KvCompressionConfig>,
+}
+
+impl ScopedRuntimeConfig {
+    pub fn new(config: KvCompressionConfig) -> Self {
+        let previous = SCOPED_RUNTIME_CONFIG.with(|slot| slot.replace(Some(config)));
+        Self { previous }
+    }
+}
+
+impl Drop for ScopedRuntimeConfig {
+    fn drop(&mut self) {
+        SCOPED_RUNTIME_CONFIG.with(|slot| {
+            slot.replace(self.previous.take());
+        });
+    }
+}
+
 pub fn set_runtime_config(config: KvCompressionConfig) {
     let cell = RUNTIME_CONFIG.get_or_init(|| Mutex::new(KvCompressionConfig::default()));
     *cell.lock().expect("kv compression runtime config lock") = config;
 }
 
 pub fn runtime_config() -> KvCompressionConfig {
+    if let Some(config) = SCOPED_RUNTIME_CONFIG.with(|slot| slot.borrow().clone()) {
+        return config;
+    }
     RUNTIME_CONFIG
         .get_or_init(|| Mutex::new(KvCompressionConfig::default()))
         .lock()
@@ -222,7 +249,10 @@ pub fn runtime_config() -> KvCompressionConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking};
+    use super::{
+        runtime_config, set_runtime_config, KvCompressMode, KvCompressionConfig,
+        KvExactOldAttention, KvExactOldBacking, ScopedRuntimeConfig,
+    };
 
     #[test]
     fn validates_direct_fp16_k_q4_v_runtime_config() {
@@ -270,5 +300,21 @@ mod tests {
             err.to_string().contains("requires kv_compress_mode"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn scoped_runtime_config_shadows_global_config() {
+        set_runtime_config(KvCompressionConfig::dense_reference());
+
+        let scoped = KvCompressionConfig {
+            top_blocks: 4,
+            ..KvCompressionConfig::default()
+        };
+        {
+            let _guard = ScopedRuntimeConfig::new(scoped.clone());
+            assert_eq!(runtime_config(), scoped);
+        }
+
+        assert_eq!(runtime_config(), KvCompressionConfig::dense_reference());
     }
 }

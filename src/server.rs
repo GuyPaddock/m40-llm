@@ -265,9 +265,10 @@ impl DecodeSchedulerRequest {
             hidden_dim,
             sequence_lease.sequence_id()
         );
-        let session = crate::decode_session::DecodeSession::new_for_sequence(
+        let session = crate::decode_session::DecodeSession::new_for_sequence_with_kv_config(
             &state.model,
             sequence_lease.sequence_id(),
+            options.kv_compression.clone(),
             d_model,
             true,
             "server",
@@ -985,9 +986,10 @@ async fn generate(
                 full_decode_d_model,
                 full_decode_hidden_dim
             );
-            crate::decode_session::DecodeSession::new_for_sequence(
+            crate::decode_session::DecodeSession::new_for_sequence_with_kv_config(
                 &state_for_logits.model,
                 sequence_id,
+                state_for_logits.kv_compression.clone(),
                 full_decode_d_model,
                 true,
                 "server",
@@ -1073,6 +1075,9 @@ async fn generate(
             #[cfg(feature = "cuda")]
             {
                 let _ = model;
+                let _kv_runtime_guard = crate::kv_compression::ScopedRuntimeConfig::new(
+                    state_for_logits.kv_compression.clone(),
+                );
                 decode_session.logits_for_ids(ids, |logits| log_top_logits(logits, 8))
             }
 

@@ -83,6 +83,30 @@ fn auto_prompt_format_selects_llama3_chat_for_unformatted_prompt() {
 }
 
 #[test]
+fn auto_prompt_format_preserves_preformatted_llama3_without_extra_bos() {
+    let tokenizer = Tokenizer::from_gguf_metadata(&llama3_meta()).expect("tokenizer");
+    let preformatted = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nHello<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n";
+    let (prompt, add_bos) = prepare_prompt(&tokenizer, preformatted, PromptFormat::Auto);
+    assert_eq!(prompt, preformatted);
+    assert!(!add_bos);
+
+    let ids = tokenizer
+        .encode_with_specials(&prompt, add_bos, false)
+        .expect("encode prompt");
+    assert_eq!(ids.first().copied(), Some(128_000));
+    assert_eq!(ids.iter().filter(|&&id| id == 128_000).count(), 1);
+}
+
+#[test]
+fn raw_preformatted_llama3_does_not_add_extra_bos() {
+    let tokenizer = Tokenizer::from_gguf_metadata(&llama3_meta()).expect("tokenizer");
+    let preformatted = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\nHello";
+    let (prompt, add_bos) = prepare_prompt(&tokenizer, preformatted, PromptFormat::Raw);
+    assert_eq!(prompt, preformatted);
+    assert!(!add_bos);
+}
+
+#[test]
 fn llama3_stop_ids_include_end_of_turn() {
     let tokenizer = Tokenizer::from_gguf_metadata(&llama3_meta()).expect("tokenizer");
     let stopping = StoppingCriteria::with_stop_ids(Some(8), tokenizer.stop_ids());

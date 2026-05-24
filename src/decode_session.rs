@@ -97,6 +97,7 @@ impl PrefillSyncDiag {
 pub struct DecodeSession {
     model: *const LoadedModel,
     sequence_id: u32,
+    kv_compression: crate::kv_compression::KvCompressionConfig,
     processed_len: usize,
     can_forward: bool,
     d_x: DeviceBuffer,
@@ -143,6 +144,29 @@ impl DecodeSession {
     pub fn new_for_sequence(
         model: &LoadedModel,
         sequence_id: u32,
+        d_model: usize,
+        can_forward: bool,
+        log_prefix: &'static str,
+        d_x_tag: &'static str,
+        d_out_tag: &'static str,
+    ) -> Result<Self> {
+        Self::new_for_sequence_with_kv_config(
+            model,
+            sequence_id,
+            crate::kv_compression::runtime_config(),
+            d_model,
+            can_forward,
+            log_prefix,
+            d_x_tag,
+            d_out_tag,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_sequence_with_kv_config(
+        model: &LoadedModel,
+        sequence_id: u32,
+        kv_compression: crate::kv_compression::KvCompressionConfig,
         d_model: usize,
         can_forward: bool,
         log_prefix: &'static str,
@@ -214,7 +238,7 @@ impl DecodeSession {
             None => (None, None),
         };
         let exact_block_staging = if can_forward && exact_block_staging_enabled() {
-            let kv_cfg = crate::kv_compression::runtime_config();
+            let kv_cfg = &kv_compression;
             if kv_cfg.mode == crate::kv_compression::KvCompressMode::BlockSelectExact {
                 let requested_tokens = kv_cfg
                     .recent_window
@@ -236,6 +260,7 @@ impl DecodeSession {
         Ok(Self {
             model: model as *const LoadedModel,
             sequence_id,
+            kv_compression,
             processed_len: 0,
             can_forward,
             d_x,
@@ -803,10 +828,9 @@ impl DecodeSession {
     ) -> Result<usize> {
         let seq_len = (token_idx + 1) as u32;
         self.last_forward_used_graph = false;
-        if self.graph_disabled
-            || !decode_graph_enabled()
-            || crate::kv_compression::runtime_config().mode.is_enabled()
-        {
+        if self.graph_disabled || !decode_graph_enabled() || self.kv_compression.mode.is_enabled() {
+            let _kv_runtime_guard =
+                crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());
             return self.with_exact_block_staging(|| {
                 (*self.model).forward_one_token_all_layers_for_sequence(
                     self.d_x.as_ptr(),
@@ -830,6 +854,8 @@ impl DecodeSession {
         if self.decode_graph.is_none() {
             // Warm once through the normal path so lazy workspace and FP32 weight
             // materialization do not occur inside CUDA stream capture.
+            let _kv_runtime_guard =
+                crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());
             let warmed_layers = self.with_exact_block_staging(|| {
                 (*self.model).forward_one_token_all_layers_for_sequence(
                     self.d_x.as_ptr(),
@@ -896,6 +922,8 @@ impl DecodeSession {
                     self.log_prefix
                 );
                 self.graph_disabled = true;
+                let _kv_runtime_guard =
+                    crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());
                 return self.with_exact_block_staging(|| {
                     (*self.model).forward_one_token_all_layers_for_sequence(
                         self.d_x.as_ptr(),
@@ -908,6 +936,8 @@ impl DecodeSession {
             self.last_forward_used_graph = true;
             Ok((*self.model).model_config.block_count as usize)
         } else {
+            let _kv_runtime_guard =
+                crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());
             self.with_exact_block_staging(|| {
                 (*self.model).forward_one_token_all_layers_for_sequence(
                     self.d_x.as_ptr(),
