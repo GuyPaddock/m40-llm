@@ -600,6 +600,7 @@ fn run_compressed_chunked_prefill_logit_parity(mode: KvCompressMode) -> Result<(
         top_blocks: 2,
         representatives: 0,
         representative_policy: Default::default(),
+        ..Default::default()
     };
     set_runtime_config(config.clone());
     let _guard = ConfigGuard;
@@ -698,6 +699,7 @@ fn run_packed_then_compress_prefill_logit_parity(
         top_blocks: 2,
         representatives,
         representative_policy,
+        ..Default::default()
     };
     set_runtime_config(config.clone());
     let _guard = ConfigGuard;

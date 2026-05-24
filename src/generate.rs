@@ -6,7 +6,9 @@ use crate::decode::StoppingCriteria;
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
-use crate::kv_compression::{set_runtime_config, KvCompressMode, KvCompressionConfig};
+use crate::kv_compression::{
+    runtime_config, set_runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention,
+};
 use crate::kv_selection::{self, KvSelectionSummary};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::timing;
@@ -146,16 +148,10 @@ fn compressed_prefill_chunk_size_from_env() -> Result<Option<usize>> {
     Ok((parsed > 0).then_some(parsed))
 }
 
-fn exact_old_attention_backend_from_env() -> Option<String> {
-    match std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
-        .ok()
-        .as_deref()
-    {
-        Some("q8-direct") | Some("Q8-DIRECT") | Some("direct-q8") => Some("direct-q8".to_string()),
-        Some("fp16-k-q4-v-direct") | Some("FP16-K-Q4-V-DIRECT") | Some("direct-fp16-k-q4-v") => {
-            Some("fp16-k-q4-v-direct".to_string())
-        }
-        _ => None,
+fn exact_old_attention_backend_name() -> Option<String> {
+    match runtime_config().effective_exact_old_attention() {
+        KvExactOldAttention::Staged => None,
+        other => Some(other.as_str().to_string()),
     }
 }
 
@@ -948,13 +944,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
             .map(|kv| kv.exact_old_backing().to_string()),
         exact_old_attention_backend: model.kv_cache.as_ref().and_then(|kv| {
             if kv.exact_old_backing() == "q8" {
-                Some(
-                    exact_old_attention_backend_from_env()
-                        .unwrap_or_else(|| "staged-q8".to_string()),
-                )
+                Some(exact_old_attention_backend_name().unwrap_or_else(|| "staged-q8".to_string()))
             } else if kv.exact_old_backing() == "fp16-k-q4-v" {
                 Some(
-                    exact_old_attention_backend_from_env()
+                    exact_old_attention_backend_name()
                         .unwrap_or_else(|| "staged-fp16-k-q4-v".to_string()),
                 )
             } else {

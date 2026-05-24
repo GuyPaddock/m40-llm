@@ -2,7 +2,9 @@ use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::ExactBlockStagingPtrs;
 use crate::cuda::{ExactOldBacking, KVCache};
-use crate::kv_compression::{runtime_config, KvCompressMode, KvCompressionConfig};
+use crate::kv_compression::{
+    runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking,
+};
 use crate::kv_selection;
 use anyhow::{anyhow, Result};
 #[cfg(feature = "cuda")]
@@ -20,33 +22,28 @@ fn exact_block_staging_enabled() -> bool {
         .unwrap_or(false)
 }
 
+fn exact_old_backing() -> KvExactOldBacking {
+    runtime_config().effective_exact_old_backing()
+}
+
+fn exact_old_attention() -> KvExactOldAttention {
+    runtime_config().effective_exact_old_attention()
+}
+
 fn q8_exact_old_backing_enabled() -> bool {
-    std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
-        .map(|value| matches!(value.as_str(), "q8" | "Q8"))
-        .unwrap_or(false)
+    exact_old_backing() == KvExactOldBacking::Q8
 }
 
 fn fp16_k_q4_v_exact_old_backing_enabled() -> bool {
-    std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
-        .map(|value| matches!(value.as_str(), "fp16-k-q4-v" | "FP16-K-Q4-V"))
-        .unwrap_or(false)
+    exact_old_backing() == KvExactOldBacking::Fp16KQ4V
 }
 
 fn q8_direct_exact_old_attention_enabled() -> bool {
-    std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
-        .map(|value| matches!(value.as_str(), "q8-direct" | "Q8-DIRECT" | "direct-q8"))
-        .unwrap_or(false)
+    exact_old_attention() == KvExactOldAttention::Q8Direct
 }
 
 fn fp16_k_q4_v_direct_exact_old_attention_enabled() -> bool {
-    std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
-        .map(|value| {
-            matches!(
-                value.as_str(),
-                "fp16-k-q4-v-direct" | "FP16-K-Q4-V-DIRECT" | "direct-fp16-k-q4-v"
-            )
-        })
-        .unwrap_or(false)
+    exact_old_attention() == KvExactOldAttention::Fp16KQ4VDirect
 }
 
 #[cfg(feature = "cuda")]
@@ -283,16 +280,15 @@ impl LoadedModel {
         if layer_count == 0 {
             anyhow::bail!("model_config.block_count must be > 0");
         }
-        let exact_old_backing =
-            if config.mode == KvCompressMode::BlockSelectExact && q8_exact_old_backing_enabled() {
-                ExactOldBacking::Q8
-            } else if config.mode == KvCompressMode::BlockSelectExact
-                && fp16_k_q4_v_exact_old_backing_enabled()
-            {
-                ExactOldBacking::Fp16KQ4V
-            } else {
-                ExactOldBacking::Dense
-            };
+        let exact_old_backing = if config.mode == KvCompressMode::BlockSelectExact {
+            match config.effective_exact_old_backing() {
+                KvExactOldBacking::Dense => ExactOldBacking::Dense,
+                KvExactOldBacking::Q8 => ExactOldBacking::Q8,
+                KvExactOldBacking::Fp16KQ4V => ExactOldBacking::Fp16KQ4V,
+            }
+        } else {
+            ExactOldBacking::Dense
+        };
         if !matches!(
             config.mode,
             KvCompressMode::RecentOnly
@@ -332,10 +328,17 @@ impl LoadedModel {
         let dense = kv.dense_equivalent_bytes();
         let actual = kv.actual_bytes();
         eprintln!(
-            "[kv-compress] mode={:?} dense_equivalent_bytes={} actual_allocated_bytes={} compression_ratio={:.3}",
+            "[kv-compress] mode={:?} exact_old_backing={} exact_old_attention={} dense_equivalent_bytes={} actual_allocated_bytes={} recent_fp16_bytes={} old_k_fp16_bytes={} q4_old_v_payload_bytes={} q4_old_v_scale_bytes={} summary_index_bytes={} compression_ratio={:.3}",
             config.mode,
+            exact_old_backing.as_str(),
+            config.effective_exact_old_attention().as_str(),
             dense,
             actual,
+            kv.recent_fp16_bytes(),
+            kv.old_k_fp16_bytes(),
+            kv.q4_old_v_payload_bytes(),
+            kv.q4_old_v_scale_bytes(),
+            kv.summary_index_bytes(),
             if dense > 0 { actual as f64 / dense as f64 } else { 1.0 }
         );
         self.kv_cache = Some(kv);

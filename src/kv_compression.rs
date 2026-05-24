@@ -33,6 +33,42 @@ impl KvRepresentativePolicy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KvExactOldBacking {
+    #[default]
+    Dense,
+    Q8,
+    Fp16KQ4V,
+}
+
+impl KvExactOldBacking {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Dense => "dense",
+            Self::Q8 => "q8",
+            Self::Fp16KQ4V => "fp16-k-q4-v",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KvExactOldAttention {
+    #[default]
+    Staged,
+    Q8Direct,
+    Fp16KQ4VDirect,
+}
+
+impl KvExactOldAttention {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Staged => "staged",
+            Self::Q8Direct => "q8-direct",
+            Self::Fp16KQ4VDirect => "fp16-k-q4-v-direct",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KvCompressionConfig {
     pub mode: KvCompressMode,
@@ -41,6 +77,8 @@ pub struct KvCompressionConfig {
     pub top_blocks: u32,
     pub representatives: u32,
     pub representative_policy: KvRepresentativePolicy,
+    pub exact_old_backing: KvExactOldBacking,
+    pub exact_old_attention: KvExactOldAttention,
 }
 
 impl Default for KvCompressionConfig {
@@ -52,6 +90,8 @@ impl Default for KvCompressionConfig {
             top_blocks: 16,
             representatives: 0,
             representative_policy: KvRepresentativePolicy::Last,
+            exact_old_backing: KvExactOldBacking::Dense,
+            exact_old_attention: KvExactOldAttention::Staged,
         }
     }
 }
@@ -71,7 +111,74 @@ impl KvCompressionConfig {
         {
             anyhow::bail!("kv_compress_top_blocks must be > 0 for block-select modes");
         }
+        let backing = if self.mode == KvCompressMode::BlockSelectExact {
+            self.effective_exact_old_backing()
+        } else {
+            self.exact_old_backing
+        };
+        let attention = if self.mode == KvCompressMode::BlockSelectExact {
+            self.effective_exact_old_attention()
+        } else {
+            self.exact_old_attention
+        };
+        if backing != KvExactOldBacking::Dense && self.mode != KvCompressMode::BlockSelectExact {
+            anyhow::bail!(
+                "kv_exact_old_backing={} requires kv_compress_mode=block-select-exact",
+                backing.as_str()
+            );
+        }
+        match attention {
+            KvExactOldAttention::Staged => {}
+            KvExactOldAttention::Q8Direct => {
+                if backing != KvExactOldBacking::Q8 {
+                    anyhow::bail!(
+                        "kv_exact_old_attention=q8-direct requires kv_exact_old_backing=q8"
+                    );
+                }
+            }
+            KvExactOldAttention::Fp16KQ4VDirect => {
+                if backing != KvExactOldBacking::Fp16KQ4V {
+                    anyhow::bail!(
+                        "kv_exact_old_attention=fp16-k-q4-v-direct requires kv_exact_old_backing=fp16-k-q4-v"
+                    );
+                }
+            }
+        }
         Ok(())
+    }
+
+    pub fn effective_exact_old_backing(&self) -> KvExactOldBacking {
+        if self.exact_old_backing != KvExactOldBacking::Dense {
+            return self.exact_old_backing;
+        }
+        match std::env::var("M40LLM_KV_EXACT_OLD_BACKING").ok().as_deref() {
+            Some("q8") | Some("Q8") => KvExactOldBacking::Q8,
+            Some("fp16-k-q4-v") | Some("FP16-K-Q4-V") => KvExactOldBacking::Fp16KQ4V,
+            _ => KvExactOldBacking::Dense,
+        }
+    }
+
+    pub fn effective_exact_old_attention(&self) -> KvExactOldAttention {
+        if self.exact_old_attention != KvExactOldAttention::Staged {
+            return self.exact_old_attention;
+        }
+        match std::env::var("M40LLM_KV_EXACT_OLD_ATTENTION")
+            .ok()
+            .as_deref()
+        {
+            Some("q8-direct") | Some("Q8-DIRECT") | Some("direct-q8") => {
+                KvExactOldAttention::Q8Direct
+            }
+            Some("fp16-k-q4-v-direct")
+            | Some("FP16-K-Q4-V-DIRECT")
+            | Some("direct-fp16-k-q4-v") => KvExactOldAttention::Fp16KQ4VDirect,
+            _ => KvExactOldAttention::Staged,
+        }
+    }
+
+    pub fn uses_compressed_exact_old_backing(&self) -> bool {
+        self.mode == KvCompressMode::BlockSelectExact
+            && self.effective_exact_old_backing() != KvExactOldBacking::Dense
     }
 }
 
@@ -88,4 +195,55 @@ pub fn runtime_config() -> KvCompressionConfig {
         .lock()
         .expect("kv compression runtime config lock")
         .clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking,
+        KvRepresentativePolicy,
+    };
+
+    #[test]
+    fn validates_direct_fp16_k_q4_v_runtime_config() {
+        let cfg = KvCompressionConfig {
+            mode: KvCompressMode::BlockSelectExact,
+            recent_window: 1024,
+            block_size: 32,
+            top_blocks: 8,
+            representatives: 0,
+            representative_policy: KvRepresentativePolicy::Last,
+            exact_old_backing: KvExactOldBacking::Fp16KQ4V,
+            exact_old_attention: KvExactOldAttention::Fp16KQ4VDirect,
+        };
+        cfg.validate().expect("preferred runtime config validates");
+    }
+
+    #[test]
+    fn rejects_direct_attention_without_matching_backing() {
+        let cfg = KvCompressionConfig {
+            mode: KvCompressMode::BlockSelectExact,
+            exact_old_attention: KvExactOldAttention::Fp16KQ4VDirect,
+            ..Default::default()
+        };
+        let err = cfg.validate().expect_err("mismatched backend must fail");
+        assert!(
+            err.to_string().contains("requires kv_exact_old_backing"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn rejects_exact_old_backing_outside_block_select_exact() {
+        let cfg = KvCompressionConfig {
+            mode: KvCompressMode::Off,
+            exact_old_backing: KvExactOldBacking::Fp16KQ4V,
+            ..Default::default()
+        };
+        let err = cfg.validate().expect_err("mismatched mode must fail");
+        assert!(
+            err.to_string().contains("requires kv_compress_mode"),
+            "unexpected error: {err}"
+        );
+    }
 }

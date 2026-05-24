@@ -40,6 +40,43 @@ impl From<KvRepresentativePolicyArg> for crate::kv_compression::KvRepresentative
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KvExactOldBackingArg {
+    Dense,
+    Q8,
+    #[value(name = "fp16-k-q4-v")]
+    Fp16KQ4V,
+}
+
+impl From<KvExactOldBackingArg> for crate::kv_compression::KvExactOldBacking {
+    fn from(value: KvExactOldBackingArg) -> Self {
+        match value {
+            KvExactOldBackingArg::Dense => Self::Dense,
+            KvExactOldBackingArg::Q8 => Self::Q8,
+            KvExactOldBackingArg::Fp16KQ4V => Self::Fp16KQ4V,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KvExactOldAttentionArg {
+    Staged,
+    #[value(name = "q8-direct")]
+    Q8Direct,
+    #[value(name = "fp16-k-q4-v-direct")]
+    Fp16KQ4VDirect,
+}
+
+impl From<KvExactOldAttentionArg> for crate::kv_compression::KvExactOldAttention {
+    fn from(value: KvExactOldAttentionArg) -> Self {
+        match value {
+            KvExactOldAttentionArg::Staged => Self::Staged,
+            KvExactOldAttentionArg::Q8Direct => Self::Q8Direct,
+            KvExactOldAttentionArg::Fp16KQ4VDirect => Self::Fp16KQ4VDirect,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum PromptFormatArg {
     Auto,
     Raw,
@@ -118,6 +155,12 @@ pub enum Commands {
         /// Representative token selection policy for lossy compressed KV modes
         #[arg(long, value_enum, default_value_t = KvRepresentativePolicyArg::Last)]
         kv_compress_representative_policy: KvRepresentativePolicyArg,
+        /// Exact-old KV backing for block-select-exact mode
+        #[arg(long, value_enum, default_value_t = KvExactOldBackingArg::Dense)]
+        kv_exact_old_backing: KvExactOldBackingArg,
+        /// Exact-old attention backend for block-select-exact mode
+        #[arg(long, value_enum, default_value_t = KvExactOldAttentionArg::Staged)]
+        kv_exact_old_attention: KvExactOldAttentionArg,
         /// Prompt wrapper to use before tokenization
         #[arg(long, value_enum, default_value_t = PromptFormatArg::Auto)]
         prompt_format: PromptFormatArg,
@@ -139,7 +182,10 @@ pub enum Commands {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, KvCompressModeArg, KvRepresentativePolicyArg, PromptFormatArg};
+    use super::{
+        Cli, Commands, KvCompressModeArg, KvExactOldAttentionArg, KvExactOldBackingArg,
+        KvRepresentativePolicyArg, PromptFormatArg,
+    };
     use clap::Parser;
 
     #[test]
@@ -172,6 +218,8 @@ mod tests {
                 kv_compress_top_blocks,
                 kv_compress_representatives,
                 kv_compress_representative_policy,
+                kv_exact_old_backing,
+                kv_exact_old_attention,
                 prompt_format,
                 ..
             } => {
@@ -190,6 +238,8 @@ mod tests {
                     kv_compress_representative_policy,
                     KvRepresentativePolicyArg::Last
                 );
+                assert_eq!(kv_exact_old_backing, KvExactOldBackingArg::Dense);
+                assert_eq!(kv_exact_old_attention, KvExactOldAttentionArg::Staged);
                 assert_eq!(prompt_format, PromptFormatArg::Auto);
             }
             other => panic!("expected generate command, got {other:?}"),
@@ -210,6 +260,43 @@ mod tests {
         match cli.command {
             Commands::Generate { prompt_format, .. } => {
                 assert_eq!(prompt_format, PromptFormatArg::QwenChat);
+            }
+            other => panic!("expected generate command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_exact_old_kv_runtime_flags() {
+        let cli = Cli::parse_from([
+            "m40-llm",
+            "generate",
+            "llama.gguf",
+            "Find the config value",
+            "--kv-compress-mode",
+            "block-select-exact",
+            "--kv-compress-top-blocks",
+            "8",
+            "--kv-exact-old-backing",
+            "fp16-k-q4-v",
+            "--kv-exact-old-attention",
+            "fp16-k-q4-v-direct",
+        ]);
+
+        match cli.command {
+            Commands::Generate {
+                kv_compress_mode,
+                kv_compress_top_blocks,
+                kv_exact_old_backing,
+                kv_exact_old_attention,
+                ..
+            } => {
+                assert_eq!(kv_compress_mode, KvCompressModeArg::BlockSelectExact);
+                assert_eq!(kv_compress_top_blocks, 8);
+                assert_eq!(kv_exact_old_backing, KvExactOldBackingArg::Fp16KQ4V);
+                assert_eq!(
+                    kv_exact_old_attention,
+                    KvExactOldAttentionArg::Fp16KQ4VDirect
+                );
             }
             other => panic!("expected generate command, got {other:?}"),
         }

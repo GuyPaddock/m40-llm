@@ -1818,16 +1818,14 @@ fn prepare_kv_cache(
         top_blocks,
         representatives: rep_case.representatives,
         representative_policy: rep_case.policy,
+        ..Default::default()
     };
     let use_compressed_kv = matches!(
         mode,
         KvCompressMode::RecentOnly
             | KvCompressMode::BlockSummary
             | KvCompressMode::BlockSelectLossy
-    ) || (mode == KvCompressMode::BlockSelectExact
-        && std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
-            .map(|value| matches!(value.as_str(), "q8" | "Q8" | "fp16-k-q4-v" | "FP16-K-Q4-V"))
-            .unwrap_or(false));
+    ) || config.uses_compressed_exact_old_backing();
     if use_compressed_kv {
         model.allocate_compressed_kv_cache_for_layers(max_len, &config)
     } else {
@@ -1963,6 +1961,7 @@ fn run_retrieval_case(
             top_blocks,
             representatives: rep_case.representatives,
             representative_policy: rep_case.policy,
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -3699,6 +3698,7 @@ fn run_multitask_generate(
                 top_blocks,
                 representatives: 0,
                 representative_policy: KvRepresentativePolicy::Last,
+                ..Default::default()
             },
             ..Default::default()
         },

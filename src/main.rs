@@ -64,6 +64,8 @@ async fn main() -> Result<()> {
             kv_compress_top_blocks,
             kv_compress_representatives,
             kv_compress_representative_policy,
+            kv_exact_old_backing,
+            kv_exact_old_attention,
             prompt_format,
         } => {
             let local = model::resolve_model_arg(&model)?;
@@ -94,18 +96,16 @@ async fn main() -> Result<()> {
                 top_blocks: kv_compress_top_blocks,
                 representatives: kv_compress_representatives,
                 representative_policy: kv_compress_representative_policy.into(),
+                exact_old_backing: kv_exact_old_backing.into(),
+                exact_old_attention: kv_exact_old_attention.into(),
             };
+            kv_compression.validate()?;
             let use_compressed_kv = matches!(
                 kv_compression.mode,
                 KvCompressMode::RecentOnly
                     | KvCompressMode::BlockSummary
                     | KvCompressMode::BlockSelectLossy
-            ) || (kv_compression.mode == KvCompressMode::BlockSelectExact
-                && std::env::var("M40LLM_KV_EXACT_OLD_BACKING")
-                    .map(|value| {
-                        matches!(value.as_str(), "q8" | "Q8" | "fp16-k-q4-v" | "FP16-K-Q4-V")
-                    })
-                    .unwrap_or(false));
+            ) || kv_compression.uses_compressed_exact_old_backing();
             if use_compressed_kv {
                 loaded.allocate_compressed_kv_cache_for_layers(
                     max_len.try_into().unwrap(),
