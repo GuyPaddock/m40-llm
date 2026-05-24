@@ -243,6 +243,7 @@ impl LoadedModel {
         f(ptrs)
     }
 
+    #[cfg(feature = "cuda")]
     pub unsafe fn forward_one_token_minimal_with_norms(
         &self,
         d_x_f32: *const c_void,
@@ -695,6 +696,7 @@ impl LoadedModel {
     /// # Safety
     /// All device pointers must be valid on this context's device. `d_position`
     /// and `d_seq_len` must each point to one device-resident u32.
+    #[cfg(feature = "cuda")]
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn forward_one_token_minimal_with_norms_graph_params(
         &self,
@@ -1067,6 +1069,7 @@ impl LoadedModel {
     ///
     /// # Safety
     /// All device pointers must be valid on this context's device.
+    #[cfg(feature = "cuda")]
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn forward_one_token_minimal(
         &self,
@@ -2157,6 +2160,7 @@ impl LoadedModel {
         unsafe { self.forward_prefill_all_layers_varlen_for_sequences_with_kv(items, kv) }
     }
 
+    #[cfg(feature = "cuda")]
     pub unsafe fn forward_prefill_all_layers_varlen_for_sequences_with_kv(
         &self,
         items: &[ForwardPrefillSequence<'_>],
