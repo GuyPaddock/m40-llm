@@ -192,6 +192,15 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
         batched_attention_launches >= 1,
         "server batch scheduler should use packed GQA decode attention"
     );
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks >= 1,
+        "server batch scheduler should record at least one batched decode tick"
+    );
     let prefill_attention_launches = snapshot
         .by_op
         .get("attention_prefill_f32_gqa_varlen")
@@ -200,6 +209,15 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     assert!(
         prefill_attention_launches >= 1,
         "server batch scheduler should use packed varlen prefill attention"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "server batch scheduler should record at least one batched prefill tick"
     );
     server.shutdown().await?;
     Ok(())

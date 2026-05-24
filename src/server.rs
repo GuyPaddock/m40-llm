@@ -626,8 +626,10 @@ fn process_scheduler_batch_tick(
 
     if !prefill_requests.is_empty() {
         if scheduler_can_use_batched_prefill(state, &prefill_requests) {
+            crate::profile::record_launch("server_scheduler_batched_prefill_tick");
             process_scheduler_prefill_tick(state, prefill_requests, active);
         } else {
+            crate::profile::record_launch("server_scheduler_sequential_prefill_tick");
             for mut request in prefill_requests {
                 match request.step() {
                     Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
@@ -664,6 +666,7 @@ fn process_scheduler_batch_tick(
         if fallback {
             log_batch_decode_fallback("at least one request could not prepare a batch token");
         }
+        crate::profile::record_launch("server_scheduler_sequential_decode_tick");
         for mut request in requests {
             match request.step() {
                 Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
@@ -689,6 +692,7 @@ fn process_scheduler_batch_tick(
         }
         return;
     }
+    crate::profile::record_launch("server_scheduler_batched_decode_tick");
 
     for mut request in requests {
         let token_idx = prepared

@@ -147,7 +147,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `CASES="..."` filters the benchmark matrix; a bounded release
   `MAX_TOKENS=16` run shows decode-only batching becomes useful once decode work
   is visible, improving batch2 by 1.51x and batch4 mixed by 1.21x, while
-  decode+prefill remains strongest.
+  decode+prefill remains strongest. Dense scheduler tests now assert
+  scheduler-level profile events for batched prefill/decode ticks in addition
+  to the underlying CUDA kernel launches, making scheduler decisions visible
+  through `profile::snapshot()` and `M40LLM_LAUNCH_LOG=1`.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

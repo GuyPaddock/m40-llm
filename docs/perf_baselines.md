@@ -138,6 +138,11 @@ Implementation notes:
 
 - `M40LLM_SERVER_BATCH_LOG=1` now logs scheduler queue size, per-tick
   prefill/decode/complete row counts, and packed-decode fallback reasons.
+- Dense scheduler decisions are also visible through profile event names:
+  `server_scheduler_batched_prefill_tick`,
+  `server_scheduler_batched_decode_tick`,
+  `server_scheduler_sequential_prefill_tick`, and
+  `server_scheduler_sequential_decode_tick`.
 - Scheduler ticks now partition active requests into pending-prefill,
   decode-ready, and complete groups instead of treating a tick as all-prefill or
   all-decode.
