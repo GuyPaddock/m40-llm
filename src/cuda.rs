@@ -3225,6 +3225,7 @@ impl KVCache {
 }
 
 #[derive(Debug)]
+#[cfg_attr(not(feature = "cuda"), allow(dead_code))]
 struct KVCacheInner {
     // Layout: [seq][token][head][head_dim]
     // - seq in [0, max_batch_size)

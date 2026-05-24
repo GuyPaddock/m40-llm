@@ -6,8 +6,10 @@ use crate::decode::StoppingCriteria;
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
+#[cfg(feature = "cuda")]
+use crate::kv_compression::KvCompressMode;
 use crate::kv_compression::{
-    runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention, ScopedRuntimeConfig,
+    runtime_config, KvCompressionConfig, KvExactOldAttention, ScopedRuntimeConfig,
 };
 use crate::kv_selection::{self, KvSelectionSummary};
 use crate::sampling::{Sampler, SamplerConfig};
@@ -420,8 +422,14 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let compressed_prefill_chunk_size = compressed_prefill_chunk_size_from_env()?;
     #[cfg(not(feature = "cuda"))]
     let compressed_prefill_chunk_size = None;
+    #[cfg(feature = "cuda")]
     let mut prefill_mode = "sequential".to_string();
+    #[cfg(not(feature = "cuda"))]
+    let prefill_mode = "sequential".to_string();
+    #[cfg(feature = "cuda")]
     let mut temporary_dense_kv_bytes = None;
+    #[cfg(not(feature = "cuda"))]
+    let temporary_dense_kv_bytes = None;
     #[cfg(feature = "cuda")]
     let mut decode_session = {
         eprintln!(

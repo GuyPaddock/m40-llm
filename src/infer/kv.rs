@@ -5,6 +5,7 @@ use crate::cuda::{ExactOldBacking, KVCache};
 use crate::kv_compression::{
     runtime_config, KvCompressMode, KvCompressionConfig, KvExactOldAttention, KvExactOldBacking,
 };
+#[cfg(feature = "cuda")]
 use crate::kv_selection;
 use anyhow::{anyhow, Result};
 #[cfg(feature = "cuda")]
