@@ -536,7 +536,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   because dense chose the wrong region; and the config row is dense-valid
   policy evidence where top4 chose the archived value but top8/top16 recovered
   the active setting. Keep top4 as the efficiency comparison and top8 as the
-  safer realistic-prompt comparison.
+  safer realistic-prompt comparison. The preferred direct FP16-K/q4-V path is
+  now production-shaped for CLI generation via explicit
+  `--kv-exact-old-backing fp16-k-q4-v` and
+  `--kv-exact-old-attention fp16-k-q4-v-direct` flags, instead of relying only
+  on harness environment variables. Dense `off` remains the default; exact-old
+  compressed KV is opt-in and validates incompatible backend combinations
+  before generation. A TinyLlama CLI smoke, `attention_parity_cuda_grid`, and
+  `forward_with_layer_smoke` pass with the new config path; the focused Llama
+  2048 realistic config lookup still shows dense/top8 pass and top4 selecting
+  the archived value, with direct FP16-K/q4-V accounting reported in JSONL.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into server scheduling yet.
 

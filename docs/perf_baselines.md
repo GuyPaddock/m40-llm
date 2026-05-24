@@ -2,6 +2,44 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-23: Production-Shaped Direct FP16-K/q4-V Runtime Config
+
+This checkpoint moves the preferred exact-old KV strategy from harness-only
+environment selection into explicit CLI/runtime configuration:
+
+```bash
+m40-llm generate model.gguf "..." \
+  --kv-compress-mode block-select-exact \
+  --kv-exact-old-backing fp16-k-q4-v \
+  --kv-exact-old-attention fp16-k-q4-v-direct \
+  --kv-compress-top-blocks 8
+```
+
+Use `--kv-compress-top-blocks 4` for efficiency-oriented runs and
+`--kv-compress-top-blocks 8` for quality/retrieval-oriented runs. Top16 remains
+diagnostic/escalation-only. Dense `off` remains the default unless compressed
+KV is explicitly requested.
+
+The runtime path now validates incompatible exact-old combinations up front and
+logs the key KV accounting fields when compressed KV is allocated:
+dense-equivalent KV, resident final KV, recent FP16 K/V, old FP16 K, q4 V
+payload/scales, summary/index bytes, exact-old backing, and exact-old attention
+backend.
+
+Validation:
+
+- CLI smoke with TinyLlama and the explicit flags completed on Tesla M40 and
+  logged `exact_old_backing=fp16-k-q4-v` plus
+  `exact_old_attention=fp16-k-q4-v-direct`.
+- `attention_parity_cuda_grid` passed all 9 tests, including head128 direct
+  FP16-K/q4-V parity.
+- `forward_with_layer_smoke` passed all 17 CUDA tests.
+- Focused Llama 2048 realistic config lookup emitted
+  `/tmp/llama32-realistic-config-runtime-2048.jsonl` and completed in 684.55 s:
+  dense `off` passed with `M40_BATCH_LIMIT=37`, top4 failed with the archived
+  value `M40_BATCH_LIMIT=73` at 36.0 MiB active KV, top8 passed at 40.0 MiB,
+  and top16 passed at 48.0 MiB.
+
 ## 2026-05-23: Realistic Prompt Validation Suite
 
 This checkpoint stops synthetic score-cluster tuning and adds a small

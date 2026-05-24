@@ -26,6 +26,8 @@ CLI generation accepts:
 --kv-compress-top-blocks 16
 --kv-compress-representatives 0
 --kv-compress-representative-policy last|stride
+--kv-exact-old-backing dense|q8|fp16-k-q4-v
+--kv-exact-old-attention staged|q8-direct|fp16-k-q4-v-direct
 ```
 
 - `off`: dense exact KV.
@@ -39,6 +41,23 @@ CLI generation accepts:
 - `block-summary`: attends to exact recent KV plus old block mean K/V summaries.
 - `block-select-lossy`: scores old blocks cheaply, attends to selected lossy
   summaries and optional representatives.
+
+The preferred experimental runtime path is explicit and opt-in:
+
+```bash
+m40-llm generate model.gguf "..." \
+  --kv-compress-mode block-select-exact \
+  --kv-exact-old-backing fp16-k-q4-v \
+  --kv-exact-old-attention fp16-k-q4-v-direct \
+  --kv-compress-top-blocks 8
+```
+
+Use `--kv-compress-top-blocks 4` for efficiency-oriented runs and
+`--kv-compress-top-blocks 8` for quality/retrieval-oriented runs. Top16 remains
+diagnostic/escalation-only. This path preserves recent K/V as FP16, stores old
+K as FP16, stores old V as packed signed q4 with scales, and dequantizes old V
+directly inside selected-block attention instead of staging selected old V into
+FP16.
 
 Representative storage is opt-in. For `block-summary` and
 `block-select-lossy`, `--kv-compress-representatives N` stores up to `N` exact
