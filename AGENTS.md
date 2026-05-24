@@ -168,6 +168,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   multi-request head128 packed-prefill/scheduler shape. A bounded Qwen2.5
   release run with `MAX_CONTEXT_TOKENS=512` shows batch4 mixed output parity
   and a 4.32x wall-time speedup versus dense serial.
+  Staggered server scheduler coverage now records
+  `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
+  decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports
+  `STAGGER_MS` plus `staggered_mixed` / `staggered_skewed` cases and enables
+  scheduler tick logs by default. A bounded TinyLlama release run with
+  `staggered_mixed` shows packed prefill plus decode scheduling improving wall
+  time from 1362 ms dense serial to 398 ms, while a wider-stagger run confirms
+  mixed ticks with both `prefill_rows` and `decode_rows` nonzero.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

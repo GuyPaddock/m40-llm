@@ -206,6 +206,103 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
 }
 
 #[tokio::test]
+async fn zz_server_generate_batch_decode_mixes_prefill_and_decode_ticks() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_kv_cache_for_layer_sequences(24, 3)?;
+
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let long_req = GenerateRequest {
+        prompt: "ABCDEFGH".to_string(),
+        max_tokens: Some(16),
+        stream: false,
+        ..Default::default()
+    };
+    let late_req_a = GenerateRequest {
+        prompt: "EF".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let late_req_b = GenerateRequest {
+        prompt: "GH".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let first_client = client.clone();
+    let first_url = url.clone();
+    let first =
+        tokio::spawn(async move { first_client.post(&first_url).json(&long_req).send().await });
+    tokio::task::yield_now().await;
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    let second = client.post(&url).json(&late_req_a).send();
+    let third = client.post(&url).json(&late_req_b).send();
+    let (resp_a, resp_b, resp_c) = tokio::join!(first, second, third);
+    let resp_a = resp_a??;
+    let resp_b = resp_b?;
+    let resp_c = resp_c?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+    assert!(resp_c.status().is_success());
+
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    let out_c: GenerateResponse = serde_json::from_slice(&resp_c.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+    assert!(!out_c.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let mixed_ticks = snapshot
+        .by_op
+        .get("server_scheduler_mixed_prefill_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        mixed_ticks >= 1,
+        "staggered requests should produce at least one scheduler tick with active decode plus new prefill"
+    );
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    let sequential_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_sequential_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks + sequential_decode_ticks >= 1,
+        "staggered scheduler should continue processing decode rows"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "staggered scheduler should continue using packed prefill ticks"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
         eprintln!("skipping server smoke tests without CUDA upload support");

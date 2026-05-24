@@ -67,6 +67,10 @@ because the current server scheduler batching path is dense-KV-only. Set
 packed prefill disabled versus enabled. Set `CARGO_RUN_ARGS="--release"` for
 optimized Rust timing checks. Set `CASES="batch2_same batch4_mixed"` or another
 space-separated subset to keep longer decode-focused checks bounded.
+Set `CASES="staggered_mixed staggered_skewed" STAGGER_MS=25` to measure mixed
+arrival traffic where active decode requests and late-arriving prompt-prefill
+requests share scheduler ticks. The server logs scheduler tick composition by
+default during this benchmark.
 
 ## CUDA Graph Direction
 

@@ -2,6 +2,83 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Dense Server Staggered Scheduler Overlap
+
+This checkpoint adds an explicit scheduler profile marker for ticks that contain
+both prompt-prefill rows and decode rows:
+`server_scheduler_mixed_prefill_decode_tick`. It also extends
+`scripts/bench_server_batch_decode.sh` with staggered request launch offsets via
+`STAGGER_MS` plus `staggered_mixed` and `staggered_skewed` cases. The benchmark
+enables `M40LLM_SERVER_BATCH_LOG=1` by default so server logs show per-tick row
+composition.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- `server_smoke` passes 9 CUDA/server tests, including a staggered three-request
+  scheduler smoke that records at least one mixed prefill/decode tick and keeps
+  packed prefill plus decode-row processing active.
+
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=8 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="staggered_mixed" STAGGER_MS=5 \
+  PORT_BASE=56480 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_183813`
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: release
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | staggered mixed | 4 | 4 | 1362 ms | 0.848 s | 23.50 | 1.00x |
+| batched decode | staggered mixed | 4 | 4 | 1389 ms | 1.158 s | 23.04 | 0.98x |
+| batched decode+prefill | staggered mixed | 4 | 4 | 398 ms | 0.233 s | 80.40 | 3.42x |
+
+Mixed-tick confirmation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=8 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="staggered_mixed" STAGGER_MS=50 \
+  PORT_BASE=56580 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_183859`
+- Result: all four requests returned HTTP 200.
+- Server log included mixed scheduler ticks, including
+  `prefill_rows=1 decode_rows=1` and `prefill_rows=2 decode_rows=1`.
+
+Interpretation:
+
+- The scheduler can now be tested under late-arriving prompt-prefill work while
+  earlier requests remain active in decode.
+- Packed prefill remains the main short-request speed lever. Decode-only
+  batching is neutral/slightly negative in this staggered TinyLlama smoke.
+- The CUDA smoke fixture may process decode rows sequentially after packed
+  prefill by design; this checkpoint validates mixed scheduler execution, not a
+  claim that every mixed tick uses row-batched decode.
+
 ## 2026-05-24: Dense Server Batch Head128 Admission
 
 This checkpoint lifts dense server batched decode and packed prompt-prefix

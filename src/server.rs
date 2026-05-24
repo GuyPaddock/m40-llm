@@ -655,6 +655,9 @@ fn process_scheduler_batch_tick(
             complete_requests.len()
         );
     }
+    if !prefill_requests.is_empty() && !decode_requests.is_empty() {
+        crate::profile::record_launch("server_scheduler_mixed_prefill_decode_tick");
+    }
     for request in complete_requests {
         request.send_complete();
     }
