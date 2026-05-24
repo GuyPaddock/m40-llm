@@ -386,10 +386,42 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         "{}.prompt_encode",
         options.log_prefix
     );
-    let max_tokens = options
-        .max_tokens
-        .or(Some(model.model_config.context_length as usize))
-        .unwrap_or(32);
+    let context_len = model.model_config.context_length as usize;
+    if prompt_token_len >= context_len {
+        anyhow::bail!(
+            "prompt has {prompt_token_len} tokens, but model context_length is {context_len}; shorten the prompt"
+        );
+    }
+    #[cfg(feature = "cuda")]
+    if options.kv_compression.mode.is_enabled() {
+        options
+            .kv_compression
+            .validate_runtime_support(
+                model.model_config.context_length,
+                model.model_config.attention_key_length,
+            )
+            .map_err(|err| {
+                anyhow::anyhow!(
+                    "{err}; use --kv-compress-mode off for dense reference/compatibility mode"
+                )
+            })?;
+    }
+    let max_tokens = match options.max_tokens {
+        Some(max_tokens) => {
+            let remaining = context_len - prompt_token_len;
+            if max_tokens > remaining {
+                anyhow::bail!(
+                    "requested max_tokens={} but only {} token slots remain in context_length={} after {} prompt tokens",
+                    max_tokens,
+                    remaining,
+                    context_len,
+                    prompt_token_len
+                );
+            }
+            max_tokens
+        }
+        None => context_len - prompt_token_len,
+    };
     let stopping = StoppingCriteria::with_stop_ids(Some(max_tokens), tokenizer.stop_ids());
     let mut sampler = sampler_from_options(&options)?;
 

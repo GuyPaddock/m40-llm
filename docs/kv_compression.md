@@ -62,6 +62,9 @@ diagnostic/escalation-only rather than a blanket robustness default. This path
 preserves recent K/V as FP16, stores old K as FP16, stores old V as packed
 signed q4 with scales, and dequantizes old V directly inside selected-block
 attention instead of staging selected old V into FP16.
+Compressed modes fail early when the model context/head dimension cannot support
+the selected backend, for example when `--kv-recent-window` exceeds the model
+context or a head_dim=128 model requests a non-FP16-K/q4-V direct backend.
 
 In the realistic code/config lookup validation, top4 selected the archived
 value `M40_BATCH_LIMIT=73`, while default top8 recovered the active value

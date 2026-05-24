@@ -301,16 +301,9 @@ impl LoadedModel {
                 "allocate_compressed_kv_cache_for_layers requires a compressed sidecar mode"
             );
         }
-        config.validate()?;
         let num_heads = self.model_config.attention_head_count_kv;
         let head_dim = self.model_config.attention_key_length;
-        let supports_head128 = config.mode == KvCompressMode::BlockSelectExact
-            && matches!(exact_old_backing, ExactOldBacking::Fp16KQ4V);
-        if head_dim != 64 && !(head_dim == 128 && supports_head128) {
-            anyhow::bail!(
-                "compressed KV cache currently requires head_dim=64, or head_dim=128 with block-select-exact fp16-k-q4-v backing"
-            );
-        }
+        config.validate_runtime_support(max_seq_len, head_dim)?;
         let recent_window = config.recent_window.min(max_seq_len);
         self.kv_cache = None;
         let kv = KVCache::new_compressed_with_context(

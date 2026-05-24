@@ -4378,7 +4378,12 @@ impl KVCache {
         };
         if rc != 0 {
             return Err(anyhow!(
-                "m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async failed: {rc}"
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async failed: {rc} (seq_id={seq_id}, seq_len={seq_len}, q_heads={q_heads}, kv_heads={}, head_dim={}, recent_window={recent_window}, block_size={block_size}, top_blocks={top_blocks}, max_seq_len={}, compressed={}, backing={})",
+                self.inner.num_heads,
+                self.inner.head_dim,
+                self.inner.max_seq_len,
+                self.inner.compressed,
+                self.exact_old_backing()
             ));
         }
         record_async_kernel(

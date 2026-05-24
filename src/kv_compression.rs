@@ -171,6 +171,75 @@ impl KvCompressionConfig {
         Ok(())
     }
 
+    pub fn validate_runtime_support(&self, max_seq_len: u32, head_dim: u32) -> anyhow::Result<()> {
+        self.validate()?;
+        if self.mode == KvCompressMode::Off {
+            return Ok(());
+        }
+        if max_seq_len == 0 {
+            anyhow::bail!("compressed KV requires model context_length > 0");
+        }
+        if self.recent_window > max_seq_len {
+            anyhow::bail!(
+                "kv_recent_window {} exceeds model context_length {}; use a smaller --kv-recent-window or --kv-compress-mode off",
+                self.recent_window,
+                max_seq_len
+            );
+        }
+        if self.block_size > max_seq_len {
+            anyhow::bail!(
+                "kv_compress_block {} exceeds model context_length {}",
+                self.block_size,
+                max_seq_len
+            );
+        }
+        if matches!(
+            self.mode,
+            KvCompressMode::BlockSelectExact | KvCompressMode::BlockSelectLossy
+        ) && self.top_blocks > 64
+        {
+            anyhow::bail!(
+                "kv_compress_top_blocks {} exceeds the CUDA block-select limit of 64",
+                self.top_blocks
+            );
+        }
+        match self.mode {
+            KvCompressMode::Off => Ok(()),
+            KvCompressMode::DenseRecentOnly
+            | KvCompressMode::RecentOnly
+            | KvCompressMode::BlockSummary
+            | KvCompressMode::BlockSelectLossy => {
+                if head_dim != 64 {
+                    anyhow::bail!(
+                        "{:?} currently requires head_dim=64, got head_dim={}",
+                        self.mode,
+                        head_dim
+                    );
+                }
+                Ok(())
+            }
+            KvCompressMode::BlockSelectExact => {
+                let backing = self.effective_exact_old_backing();
+                let attention = self.effective_exact_old_attention();
+                if head_dim == 64 {
+                    return Ok(());
+                }
+                if head_dim == 128
+                    && backing == KvExactOldBacking::Fp16KQ4V
+                    && attention == KvExactOldAttention::Fp16KQ4VDirect
+                {
+                    return Ok(());
+                }
+                anyhow::bail!(
+                    "block-select-exact currently requires head_dim=64, or head_dim=128 with --kv-exact-old-backing fp16-k-q4-v and --kv-exact-old-attention fp16-k-q4-v-direct; got head_dim={} backing={} attention={}",
+                    head_dim,
+                    backing.as_str(),
+                    attention.as_str()
+                )
+            }
+        }
+    }
+
     pub fn effective_exact_old_backing(&self) -> KvExactOldBacking {
         if self.exact_old_backing != KvExactOldBacking::Dense {
             return self.exact_old_backing;
@@ -258,6 +327,10 @@ mod tests {
     fn validates_direct_fp16_k_q4_v_runtime_config() {
         let cfg = KvCompressionConfig::default();
         cfg.validate().expect("preferred runtime config validates");
+        cfg.validate_runtime_support(2048, 64)
+            .expect("preferred runtime config supports head64");
+        cfg.validate_runtime_support(2048, 128)
+            .expect("preferred runtime config supports head128");
         assert_eq!(cfg.mode, KvCompressMode::BlockSelectExact);
         assert_eq!(cfg.top_blocks, 8);
         assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Fp16KQ4V);
@@ -268,10 +341,45 @@ mod tests {
     fn dense_reference_config_is_explicit() {
         let cfg = KvCompressionConfig::dense_reference();
         cfg.validate().expect("dense reference config validates");
+        cfg.validate_runtime_support(16, 128)
+            .expect("dense reference has no compressed-KV head_dim restriction");
         assert_eq!(cfg.mode, KvCompressMode::Off);
         assert_eq!(cfg.top_blocks, 8);
         assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Dense);
         assert_eq!(cfg.exact_old_attention, KvExactOldAttention::Staged);
+    }
+
+    #[test]
+    fn runtime_support_rejects_oversized_recent_window() {
+        let err = KvCompressionConfig::default()
+            .validate_runtime_support(512, 64)
+            .expect_err("recent window larger than context should fail");
+        assert!(err.to_string().contains("kv_recent_window"));
+    }
+
+    #[test]
+    fn runtime_support_rejects_unsupported_head128_combo() {
+        let cfg = KvCompressionConfig {
+            exact_old_backing: KvExactOldBacking::Q8,
+            exact_old_attention: KvExactOldAttention::Q8Direct,
+            ..KvCompressionConfig::default()
+        };
+        let err = cfg
+            .validate_runtime_support(2048, 128)
+            .expect_err("q8 direct head128 should fail");
+        assert!(err.to_string().contains("head_dim=128"));
+    }
+
+    #[test]
+    fn runtime_support_rejects_top_blocks_above_cuda_limit() {
+        let cfg = KvCompressionConfig {
+            top_blocks: 65,
+            ..KvCompressionConfig::default()
+        };
+        let err = cfg
+            .validate_runtime_support(2048, 64)
+            .expect_err("top_blocks above CUDA limit should fail");
+        assert!(err.to_string().contains("limit of 64"));
     }
 
     #[test]
