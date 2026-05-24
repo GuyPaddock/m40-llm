@@ -546,6 +546,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `KvCompressionConfig::default()` audit intentionally leaves runtime
   generation/server defaults compressed while moving dense correctness tests
   and quality dense rows to `dense_reference()` or explicit per-mode configs.
+  Long-generation diagnostics now include `M40LLM_LONG_DECODE_LOG=1|N`, and
+  generation failures report generated-token count, sequence length, remaining
+  context, KV mode, `top_blocks`, exact-old backing, and exact-old attention.
+  CLI generation and server startup now emit a best-effort `nvidia-smi` warning
+  when other compute processes are using the selected GPU because parallel Qwen
+  release smokes produced token-0 GGUF GEMM failures while sequential reruns
+  passed. Default compressed top8 long-generation validation now covers the
+  reported Qwen relationship prompt at 512 and 1024 generated tokens, and the
+  original 3000-token request stopped naturally after 1024 tokens without a
+  CUDA error. Llama-3.2-1B default compressed top8 was also validated with 512
+  and 1024 token caps, stopping naturally after 256 tokens.
   Do not increase representative count, tune pure summary modes, run 8192, or
   expand compressed KV into deeper server scheduling yet.
 

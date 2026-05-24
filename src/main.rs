@@ -54,6 +54,56 @@ fn kv_config_from_cli(options: CliKvOptions) -> KvCompressionConfig {
     config
 }
 
+fn warn_if_gpu_has_other_compute_processes(device_id: i32) {
+    if std::env::var("M40LLM_GPU_BUSY_WARN").ok().as_deref() == Some("0") {
+        return;
+    }
+    let Ok(output) = std::process::Command::new("nvidia-smi")
+        .args([
+            "--query-compute-apps=pid,used_memory",
+            "--format=csv,noheader,nounits",
+            "-i",
+            &device_id.to_string(),
+        ])
+        .output()
+    else {
+        return;
+    };
+    if !output.status.success() {
+        return;
+    }
+
+    let current_pid = std::process::id();
+    let mut other_processes = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let line = line.trim();
+        if line.is_empty() || line.eq_ignore_ascii_case("[not supported]") {
+            continue;
+        }
+        let mut parts = line.split(',').map(str::trim);
+        let Some(pid_text) = parts.next() else {
+            continue;
+        };
+        let Ok(pid) = pid_text.parse::<u32>() else {
+            continue;
+        };
+        if pid == current_pid {
+            continue;
+        }
+        let used_memory_mib = parts.next().unwrap_or("unknown");
+        other_processes.push(format!("pid={pid} used_memory_mib={used_memory_mib}"));
+    }
+
+    if !other_processes.is_empty() {
+        eprintln!(
+            "[cuda] warning: device {device_id} has other compute process(es): {}; \
+             concurrent large generation can cause CUDA allocation/GEMM failures. \
+             Set M40LLM_GPU_BUSY_WARN=0 to suppress this warning.",
+            other_processes.join("; ")
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -121,6 +171,7 @@ async fn main() -> Result<()> {
                 "[cuda] device: '{}' (id {}), sm_{}{}",
                 props.name, props.device_id, props.major, props.minor
             );
+            warn_if_gpu_has_other_compute_processes(props.device_id);
 
             let max_len = loaded.model_config.context_length as usize;
             let kv_compression = kv_config_from_cli(CliKvOptions {
@@ -255,6 +306,7 @@ async fn main() -> Result<()> {
                             props.device_id
                         );
                     }
+                    warn_if_gpu_has_other_compute_processes(props.device_id);
                 } else {
                     // Informative log of active device
                     let props = loaded.cuda.current_device_props()?;
@@ -262,6 +314,7 @@ async fn main() -> Result<()> {
                         "[cuda] device: '{}' (id {}), sm_{}{}",
                         props.name, props.device_id, props.major, props.minor
                     );
+                    warn_if_gpu_has_other_compute_processes(props.device_id);
                 }
 
                 let max_len = loaded.model_config.context_length as usize;

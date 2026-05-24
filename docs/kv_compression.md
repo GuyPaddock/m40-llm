@@ -76,6 +76,10 @@ generation length would exceed the model context instead of relying on a later
 KV-cache failure. For long default-compressed runs, use
 `M40LLM_LONG_DECODE_LOG=1` or `M40LLM_LONG_DECODE_LOG=N` to print low-volume
 progress and KV configuration state while preserving the normal decode path.
+Avoid running multiple large model generations on the same M40 unless you are
+explicitly testing contention. The CLI and server emit a best-effort warning
+when `nvidia-smi` reports other compute processes on the selected GPU; set
+`M40LLM_GPU_BUSY_WARN=0` only when that warning is expected.
 
 Representative storage is opt-in. For `block-summary` and
 `block-select-lossy`, `--kv-compress-representatives N` stores up to `N` exact

@@ -51,6 +51,11 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
   compression mode, selected exact-old backend, exact-old attention backend, and
   `top_blocks`. Generation failures also include this state in the error
   context even when the progress logger is disabled.
+- `M40LLM_GPU_BUSY_WARN=0`: suppress the best-effort `nvidia-smi` warning when
+  CLI generation or server startup sees other compute processes on the selected
+  GPU. The warning is non-fatal because `nvidia-smi` may be unavailable or
+  permission-limited, but concurrent large generations can still cause CUDA
+  allocation or GEMM failures on the M40.
 
 Use `docs/perf_baselines.md` to record repeatable benchmark results rather than
 leaving one-off timing notes in the README.

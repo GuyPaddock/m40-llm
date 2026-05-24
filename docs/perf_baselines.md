@@ -26,7 +26,12 @@ Validation commands used `cargo run --release --features cuda` with
 | Qwen2.5-3B-Instruct F16 | `Say OK.` | explicit top4 | 2 | pass, `Okay.` |
 | Qwen2.5-3B-Instruct F16 | `Say OK.` | explicit top16 | 2 | pass, `Okay.` |
 | Qwen2.5-3B-Instruct F16 | reported long relationship prompt | default compressed top8 | 128 | pass, completed all 128 tokens |
+| Qwen2.5-3B-Instruct F16 | reported long relationship prompt | default compressed top8 | 512 | pass, completed all 512 tokens in 82.15 s |
+| Qwen2.5-3B-Instruct F16 | reported long relationship prompt | default compressed top8 | 1024 | pass, completed all 1024 tokens in 158.83 s |
+| Qwen2.5-3B-Instruct F16 | reported long relationship prompt | default compressed top8 | 3000 | pass, stopped naturally after 1024 tokens in 188.67 s |
 | Llama-3.2-1B-Instruct F16 | CUDA runtime checklist | default compressed top8 | 128 | pass, completed all 128 tokens |
+| Llama-3.2-1B-Instruct F16 | CUDA runtime checklist | default compressed top8 | 512 | pass, stopped naturally after 256 tokens in 31.43 s |
+| Llama-3.2-1B-Instruct F16 | CUDA runtime checklist | default compressed top8 | 1024 | pass, stopped naturally after 256 tokens in 30.83 s |
 
 The reported Qwen long prompt previously failed inside
 `fp16-k-q4-v-direct` attention with a 3000-token request. The bounded 128-token
@@ -34,11 +39,17 @@ rerun did not reproduce the CUDA failure and logged progress at generated
 tokens 1/32/64/96/128 with `kv_mode=BlockSelectExact`,
 `top_blocks=8`, `exact_old_backing=fp16-k-q4-v`, and
 `exact_old_attention=fp16-k-q4-v-direct`.
+Follow-up 512-token and 1024-token Qwen runs completed, and rerunning the
+original 3000-token request stopped naturally after 1024 generated tokens
+without a CUDA error.
 
 An attempted parallel dense/top4 override smoke produced token-0 GGUF GEMM
 errors while two Qwen processes were resident on the M40. Sequential reruns of
 the same overrides passed, so those parallel failures are treated as GPU memory
 contention rather than KV-mode failures.
+CLI generation and server startup now print a non-fatal warning when
+`nvidia-smi` reports other compute processes on the selected GPU; set
+`M40LLM_GPU_BUSY_WARN=0` to suppress it.
 
 ## 2026-05-24: Release-Build Compressed KV Timing Confirmation
 
