@@ -111,16 +111,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   protect shared workspace use across scheduler and streaming paths. The
   scheduler now steps all active requests every scheduler tick and can execute
   row-batched full-layer decode with packed GQA attention for compatible
-  head64 models. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
+  head64/head128 dense-KV models. `M40LLM_DECODE_GRAPH_DIAG_SYNC=1`
   now synchronizes graph replay immediately after launch and reports CUDA-event
   GPU elapsed time; this showed the graph replay itself is slow, while
   logits/output-norm was previously absorbing graph completion time. The server
   batch scheduler now has an opt-in batched full-layer decode path for
-  head_dim=64 models: it packs active request rows into the shared forward
+  head_dim=64/128 models: it packs active request rows into the shared forward
   workspace, runs row-batched projections/MLP, uses the existing packed batched
   GQA decode attention primitive, and scatters per-request outputs back into
   `DecodeSession` scratch. It falls back to the prior per-request path when the
-  batch is size 1 or the model cannot use the head64 batched attention kernel.
+  batch is size 1 or the model cannot use the head64/head128 batched attention
+  kernel.
   TinyLlama concurrent buffered `/generate` benchmarking shows
   `M40LLM_SERVER_BATCH_DECODE=1` is neutral for batch size 1 and improves
   throughput by 1.18x for batch size 2, 1.69x for mixed batch size 4, and 1.61x
@@ -150,7 +151,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   decode+prefill remains strongest. Dense scheduler tests now assert
   scheduler-level profile events for batched prefill/decode ticks in addition
   to the underlying CUDA kernel launches, making scheduler decisions visible
-  through `profile::snapshot()` and `M40LLM_LAUNCH_LOG=1`.
+  through `profile::snapshot()` and `M40LLM_LAUNCH_LOG=1`. Dense server
+  batched decode/prefill now also admits `head_dim=128` models through a
+  dedicated batched GQA head128 CUDA specialization and lifted
+  scheduler/forward guards. CUDA parity, full-layer forward smoke, and server
+  smoke tests cover head128 batched decode while compressed KV batching remains
+  serialized.
 - Experimental KV compression modes are available for CLI decode attention:
   `block-select-exact` keeps old exact KV while sparsifying attention, and
   `block-summary` / `block-select-lossy` now use a physical compressed CUDA

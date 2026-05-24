@@ -329,6 +329,87 @@ fn forward_batched_decode_uses_packed_attention() -> Result<()> {
 }
 
 #[test]
+fn forward_batched_decode_supports_head128_attention() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    profile::reset();
+
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 256,
+        d_model: 128,
+        hidden: 16,
+        head_count: 1,
+        block_count: 2,
+        context_length: 16,
+    };
+    let (gg, weights) = tiny_gguf::make_identity_tiny_gguf(cfg);
+    let mut lm = LoadedModel::from_gguf(gg, weights, -1)?;
+    lm.allocate_kv_cache_with_layout(16, 4, 1, 128)?;
+
+    let d_x0 = lm.cuda.device_malloc(128 * 4)?;
+    let d_x1 = lm.cuda.device_malloc(128 * 4)?;
+    let d_out0 = lm.cuda.device_malloc(128 * 4)?;
+    let d_out1 = lm.cuda.device_malloc(128 * 4)?;
+    unsafe {
+        lm.load_token_embedding_f16_to_f32(1, d_x0)?;
+        lm.load_token_embedding_f16_to_f32(2, d_x1)?;
+        lm.forward_one_token_all_layers_batched_for_sequences(&[
+            m40_llm::infer::ForwardBatchItem {
+                d_x_f32: d_x0,
+                sequence_id: 0,
+                seq_len: 1,
+                d_out_f32: d_out0,
+            },
+            m40_llm::infer::ForwardBatchItem {
+                d_x_f32: d_x1,
+                sequence_id: 1,
+                seq_len: 1,
+                d_out_f32: d_out1,
+            },
+        ])?;
+        lm.cuda.synchronize_stream(CudaStream::Decode)?;
+        lm.cuda.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let snapshot = profile::snapshot();
+    let batched_attention_launches = snapshot
+        .by_op
+        .get("attention_last_token_f32_gqa_batched")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_attention_launches >= 1,
+        "head128 batched decode forward should use packed GQA attention"
+    );
+
+    let mut out_host = vec![0u8; 128 * 4];
+    unsafe {
+        lm.cuda
+            .memcpy_d2h(out_host.as_mut_ptr() as *mut c_void, d_out0, 128 * 4)?;
+    }
+    let out_vals: Vec<f32> = out_host
+        .chunks_exact(4)
+        .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+        .collect();
+    assert!(out_vals.iter().all(|v| v.is_finite()));
+
+    unsafe {
+        lm.cuda.device_free(d_x0)?;
+        lm.cuda.device_free(d_x1)?;
+        lm.cuda.device_free(d_out0)?;
+        lm.cuda.device_free(d_out1)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn forward_batched_prefill_uses_varlen_attention() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

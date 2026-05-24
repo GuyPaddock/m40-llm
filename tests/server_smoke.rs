@@ -223,6 +223,78 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let (gguf, bytes) = tiny_gguf::make_identity_tiny_gguf(tiny_gguf::TinyGgufConfig {
+        vocab: 128,
+        d_model: 128,
+        head_count: 1,
+        ..Default::default()
+    });
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_kv_cache_with_layout(16, 2, 1, 128)?;
+
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "A".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "B".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks >= 1,
+        "head128 server batch scheduler should record at least one batched decode tick"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "head128 server batch scheduler should record at least one batched prefill tick"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
 struct TestServer {
     addr: SocketAddr,
     shutdown_tx: Option<oneshot::Sender<()>>,

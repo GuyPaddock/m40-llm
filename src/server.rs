@@ -469,10 +469,10 @@ fn scheduler_can_use_batched_attention(state: &AppState, prepared: &[PreparedBat
         .model
         .kv_cache
         .as_ref()
-        .map(|kv| kv.head_dim() == 64)
+        .map(|kv| kv.head_dim() == 64 || kv.head_dim() == 128)
         .unwrap_or(false)
     {
-        log_batch_decode_fallback("model KV head_dim is not 64");
+        log_batch_decode_fallback("model KV head_dim is not 64 or 128");
         return false;
     }
     true
@@ -524,10 +524,10 @@ fn scheduler_can_use_batched_prefill(
         .model
         .kv_cache
         .as_ref()
-        .map(|kv| kv.head_dim() == 64)
+        .map(|kv| kv.head_dim() == 64 || kv.head_dim() == 128)
         .unwrap_or(false)
     {
-        log_batch_prefill_fallback("model KV head_dim is not 64");
+        log_batch_prefill_fallback("model KV head_dim is not 64 or 128");
         return false;
     }
     true

@@ -1741,9 +1741,9 @@ impl LoadedModel {
         let kv = self.kv_cache.as_ref().ok_or_else(|| {
             anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
         })?;
-        if kv.head_dim() != 64 {
+        if kv.head_dim() != 64 && kv.head_dim() != 128 {
             anyhow::bail!(
-                "batched decode attention currently requires head_dim=64, got {}",
+                "batched decode attention currently requires head_dim=64 or 128, got {}",
                 kv.head_dim()
             );
         }

@@ -2,6 +2,49 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Dense Server Batch Head128 Admission
+
+This checkpoint lifts the dense server batched decode/prefill admission gates
+from head64-only to `head_dim=64` or `head_dim=128`. It adds a dedicated
+head128 batched last-token GQA CUDA specialization, keeps the existing head64
+`ldg_kv` cache experiment head64-only, and extends the scheduler/forward guards
+so Qwen-style dense KV batches can use the same packed decode and packed prefill
+path as TinyLlama-style head64 models. Compressed KV batching remains disabled;
+the dense scheduler path still requires `--kv-compress-mode off`.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+```
+
+Results:
+
+- `attention_batched_varlen` passes for both `head_dim=64` and `head_dim=128`,
+  covering sync batched dispatch, async batched dispatch, scheduler-built
+  dispatch, and individual decode parity.
+- `forward_with_layer_smoke` passes 18 CUDA tests, including a head128
+  row-batched full-layer decode smoke that asserts packed GQA attention was
+  used.
+- `server_smoke` passes 8 CUDA/server tests, including a two-request head128
+  buffered `/generate` smoke that records both
+  `server_scheduler_batched_decode_tick` and
+  `server_scheduler_batched_prefill_tick`.
+- CUDA/server clippy and the non-CUDA warning-as-error matrix are clean.
+
 ## 2026-05-24: Dense Server Batch Script Refresh
 
 This checkpoint updates `scripts/bench_server_batch_decode.sh` for the current

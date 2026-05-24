@@ -35,9 +35,10 @@ Physical KV slots are mapped internally from logical layer and sequence IDs.
 
 `M40LLM_SERVER_BATCH_DECODE=1` enables the experimental buffered decode
 scheduler path. Requests lease logical KV sequence slots and can use packed
-batched GQA decode attention for compatible `head_dim=64` models while the
-shared workspace lock remains in place. `M40LLM_SERVER_BATCH_DECODE_SLOTS=N`
-overrides the default logical sequence slot count.
+batched GQA decode attention for compatible `head_dim=64` and `head_dim=128`
+models while the shared workspace lock remains in place.
+`M40LLM_SERVER_BATCH_DECODE_SLOTS=N` overrides the default logical sequence slot
+count.
 
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
 for compatible server cases. Unsupported or single-request cases fall back to
