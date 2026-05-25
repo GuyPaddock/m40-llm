@@ -71,6 +71,15 @@ Implementation/diagnostic notes:
   decode_ms=1134 total_ms=2652 decode_tps=28.22 total_tps=12.07`, compared
   with a prior short best around 11.95 E2E tok/s, but that did not carry through
   to the authoritative 512-token target row above.
+- `M40LLM_Q8_DECODE_STREAM=decode` moves single-token GGUF Q8_0 decode
+  projections onto the decode stream when the active layer/output weights are
+  actually Q8_0. This reduced a 32-token Qwen2.5 Q8_0 short probe from
+  `decode_tps=7.40 total_tps=3.15` to `decode_tps=8.20 total_tps=3.48`.
+  Adding opt-in fused Q8 decode projections with `M40LLM_FUSED_Q8_QKV=1
+  M40LLM_FUSED_Q8_MLP_SWIGLU=1` improved the same short probe further to
+  `prefill_ms=4192 decode_ms=3275 total_ms=7648 decode_tps=9.77
+  total_tps=4.18`. This is useful Q8 integration progress, but still far below
+  the F16 best and the Ollama target.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
   The profiled short run still shows roughly 16.5 ms host enqueue time plus

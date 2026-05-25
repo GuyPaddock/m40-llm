@@ -157,6 +157,14 @@ extern "C" {
         return ctx->prefill_stream;
     }
 
+    static cudaStream_t q8_decode_projection_stream(M40llmCudaContext* ctx) {
+        const char* value = std::getenv("M40LLM_Q8_DECODE_STREAM");
+        if (value && (std::strcmp(value, "decode") == 0 || std::strcmp(value, "DECODE") == 0)) {
+            return ctx->decode_stream;
+        }
+        return ctx->prefill_stream;
+    }
+
     static uint32_t q8_old_k_source_from_env() {
         const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
         if (!value || value[0] == '\0') return 0u;
@@ -5919,6 +5927,126 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ W_gate,
+        const unsigned char* __restrict__ W_up,
+        float* __restrict__ C,
+        int H, int K) {
+        const int col = blockIdx.x;
+        const int tid = threadIdx.x;
+        if (col >= H) return;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = K / qk;
+        float gate_acc = 0.0f;
+        float up_acc = 0.0f;
+        for (int block_idx = tid; block_idx < blocks_per_col; block_idx += blockDim.x) {
+            const int k_base = block_idx * qk;
+            const size_t gate_base =
+                (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+            const size_t up_base = gate_base;
+            const float gate_scale =
+                __half2float(*reinterpret_cast<const __half*>(W_gate + gate_base));
+            const float up_scale =
+                __half2float(*reinterpret_cast<const __half*>(W_up + up_base));
+            #pragma unroll
+            for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                const float a = A[k_base + q_idx];
+                const int8_t gate_q =
+                    *reinterpret_cast<const int8_t*>(W_gate + gate_base + 2 + q_idx);
+                const int8_t up_q =
+                    *reinterpret_cast<const int8_t*>(W_up + up_base + 2 + q_idx);
+                gate_acc += a * (static_cast<float>(gate_q) * gate_scale);
+                up_acc += a * (static_cast<float>(up_q) * up_scale);
+            }
+        }
+        extern __shared__ float q8_mlp_reduce[];
+        float* gate_reduce = q8_mlp_reduce;
+        float* up_reduce = q8_mlp_reduce + blockDim.x;
+        gate_reduce[tid] = gate_acc;
+        up_reduce[tid] = up_acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                gate_reduce[tid] += gate_reduce[tid + stride];
+                up_reduce[tid] += up_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            const float gate = gate_reduce[0];
+            const float up = up_reduce[0];
+            C[col] = gate * (1.0f / (1.0f + expf(-gate))) * up;
+        }
+    }
+
+    __global__ void qkv_f32xq8_0_gguf_decode_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ Wq,
+        const unsigned char* __restrict__ Wk,
+        const unsigned char* __restrict__ Wv,
+        const float* __restrict__ bq,
+        const float* __restrict__ bk,
+        const float* __restrict__ bv,
+        float* __restrict__ Q,
+        float* __restrict__ Kout,
+        float* __restrict__ Vout,
+        int Nq, int Nk, int Nv, int Kdim) {
+        const int out_col = blockIdx.x;
+        const int tid = threadIdx.x;
+        const int total = Nq + Nk + Nv;
+        if (out_col >= total) return;
+
+        const unsigned char* W = Wq;
+        const float* bias = bq;
+        float* out = Q;
+        int local_col = out_col;
+        if (out_col >= Nq + Nk) {
+            W = Wv;
+            bias = bv;
+            out = Vout;
+            local_col = out_col - Nq - Nk;
+        } else if (out_col >= Nq) {
+            W = Wk;
+            bias = bk;
+            out = Kout;
+            local_col = out_col - Nq;
+        }
+
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = Kdim / qk;
+        float acc = 0.0f;
+        for (int block_idx = tid; block_idx < blocks_per_col; block_idx += blockDim.x) {
+            const int k_base = block_idx * qk;
+            const size_t block_base =
+                (static_cast<size_t>(local_col) * blocks_per_col + block_idx) * block_bytes;
+            const float scale = __half2float(*reinterpret_cast<const __half*>(W + block_base));
+            #pragma unroll
+            for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                const int8_t q = *reinterpret_cast<const int8_t*>(W + block_base + 2 + q_idx);
+                acc += A[k_base + q_idx] * (static_cast<float>(q) * scale);
+            }
+        }
+        extern __shared__ float q8_qkv_reduce[];
+        q8_qkv_reduce[tid] = acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                q8_qkv_reduce[tid] += q8_qkv_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            float value = q8_qkv_reduce[0];
+            if (bias) {
+                value += bias[local_col];
+            }
+            out[local_col] = value;
+        }
+    }
+
     // Materialize GGUF [K,N] F16 weights into column-major [N,K] FP32.
     // This lets cublasSgemm compute row-major C=A*B via C_col=B^T*A^T.
     __global__ void materialize_gguf_f16_to_f32_colmajor_nt_kernel(
@@ -6164,6 +6292,81 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_W_gate_q8_0,
+        const void* d_W_up_q8_0,
+        void* d_C_f32,
+        int H, int K) {
+        if (!ctx || !d_A_f32 || !d_W_gate_q8_0 || !d_W_up_q8_0 || !d_C_f32) return -1;
+        if (H <= 0 || K <= 0 || (K % 32) != 0) return -2;
+        const int threads = 128;
+        const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
+        mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel<<<
+            H,
+            threads,
+            shmem,
+            q8_decode_projection_stream(ctx)>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const unsigned char*>(d_W_gate_q8_0),
+            reinterpret_cast<const unsigned char*>(d_W_up_q8_0),
+            reinterpret_cast<float*>(d_C_f32),
+            H,
+            K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "mlp_gate_up_swiglu_f32xq8_0_gguf_decode kernel launch error: %s\n", cudaGetErrorString(err));
+            return -3;
+        }
+        return 0;
+    }
+
+    int m40llm_qkv_f32xq8_0_gguf_decode_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_Wq_q8_0,
+        const void* d_Wk_q8_0,
+        const void* d_Wv_q8_0,
+        const void* d_bq_f32,
+        const void* d_bk_f32,
+        const void* d_bv_f32,
+        void* d_Q_f32,
+        void* d_K_f32,
+        void* d_V_f32,
+        int Nq, int Nk, int Nv, int Kdim) {
+        if (!ctx || !d_A_f32 || !d_Wq_q8_0 || !d_Wk_q8_0 || !d_Wv_q8_0 ||
+            !d_Q_f32 || !d_K_f32 || !d_V_f32) return -1;
+        if (Nq <= 0 || Nk <= 0 || Nv <= 0 || Kdim <= 0 || (Kdim % 32) != 0) return -2;
+        const int threads = 128;
+        const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
+        qkv_f32xq8_0_gguf_decode_kernel<<<
+            Nq + Nk + Nv,
+            threads,
+            shmem,
+            q8_decode_projection_stream(ctx)>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const unsigned char*>(d_Wq_q8_0),
+            reinterpret_cast<const unsigned char*>(d_Wk_q8_0),
+            reinterpret_cast<const unsigned char*>(d_Wv_q8_0),
+            reinterpret_cast<const float*>(d_bq_f32),
+            reinterpret_cast<const float*>(d_bk_f32),
+            reinterpret_cast<const float*>(d_bv_f32),
+            reinterpret_cast<float*>(d_Q_f32),
+            reinterpret_cast<float*>(d_K_f32),
+            reinterpret_cast<float*>(d_V_f32),
+            Nq,
+            Nk,
+            Nv,
+            Kdim);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "qkv_f32xq8_0_gguf_decode kernel launch error: %s\n", cudaGetErrorString(err));
+            return -3;
+        }
+        return 0;
+    }
+
     int m40llm_gemm_f32xq8_0_gguf_f32_generic_async(
         M40llmCudaContext* ctx,
         const void* d_A_f32,
@@ -6234,7 +6437,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         float* C = reinterpret_cast<float*>(d_C_f32);
         const int threads = 128;
         const size_t shmem = threads * sizeof(float);
-        gemm_f32xq8_0_gguf_f32_decode_kernel<<<N, threads, shmem, ctx->prefill_stream>>>(A, B, C, N, K);
+        gemm_f32xq8_0_gguf_f32_decode_kernel<<<
+            N,
+            threads,
+            shmem,
+            q8_decode_projection_stream(ctx)>>>(A, B, C, N, K);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         return 0;

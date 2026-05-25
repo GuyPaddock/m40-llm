@@ -1,10 +1,15 @@
 #[cfg(feature = "cuda")]
-use super::gemm::{decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled};
+use super::gemm::{
+    decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
+    q8_decode_kernel_decode_stream_enabled,
+};
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::DeviceBuffer;
+#[cfg(feature = "cuda")]
+use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
@@ -65,8 +70,11 @@ impl LoadedModel {
     ) -> Result<(usize, CudaStream)> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
-        let logits_on_decode_stream =
-            decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
+        let q8_logits_on_decode_stream = q8_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0;
+        let logits_on_decode_stream = decode_cublas_single_stream_enabled()
+            || f16_decode_kernel_decode_stream_enabled()
+            || q8_logits_on_decode_stream;
         let stream = if logits_on_decode_stream {
             CudaStream::Decode
         } else {

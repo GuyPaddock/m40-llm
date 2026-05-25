@@ -1,5 +1,8 @@
 #[cfg(feature = "cuda")]
-use super::gemm::{decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled};
+use super::gemm::{
+    decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
+    q8_decode_kernel_decode_stream_enabled,
+};
 use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
 use super::workspace::ForwardWorkspacePtrs;
@@ -298,8 +301,21 @@ impl LoadedModel {
                     head_dim
                 );
             }
-            let single_stream_decode =
-                decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
+            let q8_decode_single_stream = q8_decode_kernel_decode_stream_enabled()
+                && [
+                    d_wq_f16,
+                    d_wk_f16,
+                    d_wv_f16,
+                    d_wo_f16,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    d_w_down_f16,
+                ]
+                .iter()
+                .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
+            let single_stream_decode = decode_cublas_single_stream_enabled()
+                || f16_decode_kernel_decode_stream_enabled()
+                || q8_decode_single_stream;
 
             self.with_forward_workspace(
                 d_model as usize,
@@ -816,8 +832,21 @@ impl LoadedModel {
                     head_dim
                 );
             }
-            let single_stream_decode =
-                decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
+            let q8_decode_single_stream = q8_decode_kernel_decode_stream_enabled()
+                && [
+                    d_wq_f16,
+                    d_wk_f16,
+                    d_wv_f16,
+                    d_wo_f16,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    d_w_down_f16,
+                ]
+                .iter()
+                .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
+            let single_stream_decode = decode_cublas_single_stream_enabled()
+                || f16_decode_kernel_decode_stream_enabled()
+                || q8_decode_single_stream;
 
             self.with_forward_workspace(
                 d_model as usize,

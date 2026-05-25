@@ -66,6 +66,14 @@ pub(crate) fn f16_decode_kernel_decode_stream_enabled() -> bool {
 }
 
 #[cfg(feature = "cuda")]
+pub(crate) fn q8_decode_kernel_decode_stream_enabled() -> bool {
+    matches!(
+        std::env::var("M40LLM_Q8_DECODE_STREAM").ok().as_deref(),
+        Some("decode") | Some("DECODE")
+    )
+}
+
+#[cfg(feature = "cuda")]
 fn fused_mlp_swiglu_decode_enabled() -> bool {
     f16_decode_kernel_enabled()
         && matches!(
@@ -75,12 +83,28 @@ fn fused_mlp_swiglu_decode_enabled() -> bool {
 }
 
 #[cfg(feature = "cuda")]
+fn fused_q8_mlp_swiglu_decode_enabled() -> bool {
+    matches!(
+        std::env::var("M40LLM_FUSED_Q8_MLP_SWIGLU").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    )
+}
+
+#[cfg(feature = "cuda")]
 fn fused_qkv_decode_enabled() -> bool {
     f16_decode_kernel_enabled()
         && matches!(
             std::env::var("M40LLM_FUSED_QKV").ok().as_deref(),
             Some("1") | Some("true") | Some("TRUE")
         )
+}
+
+#[cfg(feature = "cuda")]
+fn fused_q8_qkv_decode_enabled() -> bool {
+    matches!(
+        std::env::var("M40LLM_FUSED_Q8_QKV").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    )
 }
 
 #[cfg(feature = "cuda")]
@@ -195,6 +219,27 @@ impl LoadedModel {
     ) -> Result<bool> {
         #[cfg(feature = "cuda")]
         {
+            if m == 1
+                && k > 0
+                && h > 0
+                && fused_q8_mlp_swiglu_decode_enabled()
+                && self.gguf_weight_dtype(d_w_gate_f16) == GgmlDType::Q8_0
+                && self.gguf_weight_dtype(d_w_up_f16) == GgmlDType::Q8_0
+            {
+                self.cuda
+                    .mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+                        d_x_f32,
+                        d_w_gate_f16,
+                        d_w_up_f16,
+                        d_out_f32,
+                        h,
+                        k,
+                    )
+                    .with_context(|| {
+                        format!("fused Q8 MLP gate/up SwiGLU failed: m={m} h={h} k={k}")
+                    })?;
+                return Ok(true);
+            }
             if m == 1
                 && k > 0
                 && h > 0
@@ -620,7 +665,7 @@ impl LoadedModel {
     }
 
     #[cfg(feature = "cuda")]
-    fn gguf_weight_dtype(&self, d_b: *const c_void) -> GgmlDType {
+    pub(crate) fn gguf_weight_dtype(&self, d_b: *const c_void) -> GgmlDType {
         self.device_tensors
             .values()
             .find_map(|tensor| std::ptr::eq(tensor.dptr.cast_const(), d_b).then_some(tensor.dtype))
@@ -758,6 +803,40 @@ impl LoadedModel {
     ) -> Result<bool> {
         #[cfg(feature = "cuda")]
         {
+            if m == 1
+                && k > 0
+                && n_q > 0
+                && n_k > 0
+                && n_v > 0
+                && fused_q8_qkv_decode_enabled()
+                && self.gguf_weight_dtype(d_wq_f16) == GgmlDType::Q8_0
+                && self.gguf_weight_dtype(d_wk_f16) == GgmlDType::Q8_0
+                && self.gguf_weight_dtype(d_wv_f16) == GgmlDType::Q8_0
+            {
+                self.cuda
+                    .qkv_f32xq8_0_gguf_decode_async(
+                        d_x_f32,
+                        d_wq_f16,
+                        d_wk_f16,
+                        d_wv_f16,
+                        d_bq_f32,
+                        d_bk_f32,
+                        d_bv_f32,
+                        d_q_out_f32,
+                        d_k_out_f32,
+                        d_v_out_f32,
+                        n_q,
+                        n_k,
+                        n_v,
+                        k,
+                    )
+                    .with_context(|| {
+                        format!(
+                            "fused Q8 QKV projection failed: m={m} n_q={n_q} n_k={n_k} n_v={n_v} k={k}"
+                        )
+                    })?;
+                return Ok(true);
+            }
             if m == 1
                 && k > 0
                 && n_q > 0

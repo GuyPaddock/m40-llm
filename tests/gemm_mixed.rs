@@ -790,6 +790,7 @@ fn gemm_f32xq8_0_decode_kernel_matches_generic_1x2048x2048() -> Result<()> {
             k,
         )?;
         ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
     }
 
     let mut generic_bytes = vec![0u8; bytes_c];

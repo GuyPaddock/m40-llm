@@ -122,6 +122,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   residual add with weighted RMSNorm; it was neutral on the same 512-token
   target run (29.83 s total, 17.17 E2E tok/s), so preserve it only as reference
   unless a broader fusion reuses the interface.
+  Q8_0 decode now has an opt-in decode-stream scheduling mode
+  (`M40LLM_Q8_DECODE_STREAM=decode`) and opt-in fused Q8 QKV / fused Q8
+  gate-up-SwiGLU decode kernels (`M40LLM_FUSED_Q8_QKV=1` and
+  `M40LLM_FUSED_Q8_MLP_SWIGLU=1`). A 32-token Qwen2.5 Q8_0 short probe improved
+  from 3.15 E2E tok/s to 3.48 with decode-stream scheduling and 4.18 with the
+  fused Q8 kernels, but this remains below the F16 best and far below the
+  Ollama comparison target.
   The decode-stream F16 path is opt-in and now synchronizes logits on the
   actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
   throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy
