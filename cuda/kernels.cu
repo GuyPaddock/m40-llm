@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <float.h>
 #include <algorithm>
 #include <vector>
 #include "common.h"
@@ -308,6 +309,45 @@ extern "C" {
         return nullptr;
     }
 
+    __global__ void argmax_f32_kernel(
+        const float* __restrict__ values,
+        uint32_t len,
+        uint32_t* __restrict__ out_idx) {
+        constexpr int threads = 256;
+        __shared__ float best_values[threads];
+        __shared__ uint32_t best_indices[threads];
+
+        const uint32_t tid = threadIdx.x;
+        float best = -FLT_MAX;
+        uint32_t best_idx = 0;
+        for (uint32_t i = tid; i < len; i += blockDim.x) {
+            const float v = values[i];
+            if (v > best || (v == best && i < best_idx)) {
+                best = v;
+                best_idx = i;
+            }
+        }
+        best_values[tid] = best;
+        best_indices[tid] = best_idx;
+        __syncthreads();
+
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                const float other = best_values[tid + stride];
+                const uint32_t other_idx = best_indices[tid + stride];
+                if (other > best_values[tid] ||
+                    (other == best_values[tid] && other_idx < best_indices[tid])) {
+                    best_values[tid] = other;
+                    best_indices[tid] = other_idx;
+                }
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            *out_idx = best_indices[0];
+        }
+    }
+
     static size_t m40llm_strnlen_host(const char* s, size_t max_len) {
         size_t n = 0;
         while (n < max_len && s[n] != '\0') {
@@ -367,6 +407,25 @@ extern "C" {
             bytes,
             cudaMemcpyDeviceToDevice,
             stream);
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_argmax_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_values_f32,
+        uint32_t len,
+        void* d_out_u32,
+        uint32_t stream_kind) {
+        if (!ctx || !d_values_f32 || !d_out_u32 || len == 0) return -1;
+        if (ensure_device(ctx) != 0) return -3;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -4;
+        argmax_f32_kernel<<<1, 256, 0, stream>>>(
+            reinterpret_cast<const float*>(d_values_f32),
+            len,
+            reinterpret_cast<uint32_t*>(d_out_u32));
+        cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         return 0;
     }
@@ -5605,6 +5664,121 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void mlp_gate_up_swiglu_f32xf16_gguf_decode_kernel(
+        const float* __restrict__ A,       // 1xK row-major activations
+        const __half* __restrict__ W_gate, // GGUF [K,H], K-fastest
+        const __half* __restrict__ W_up,   // GGUF [K,H], K-fastest
+        float* __restrict__ C,             // 1xH row-major SwiGLU output
+        int H, int K) {
+        const int col = blockIdx.x;
+        const int tid = threadIdx.x;
+        if (col >= H) return;
+        float gate_acc = 0.0f;
+        float up_acc = 0.0f;
+        const size_t col_base = static_cast<size_t>(col) * static_cast<size_t>(K);
+        if ((K & 1) == 0) {
+            for (int kk = tid * 2; kk < K; kk += blockDim.x * 2) {
+                const float a0 = A[kk];
+                const float a1 = A[kk + 1];
+                const __half2 gate_h2 = *reinterpret_cast<const __half2*>(W_gate + col_base + kk);
+                const __half2 up_h2 = *reinterpret_cast<const __half2*>(W_up + col_base + kk);
+                const float2 gate_f2 = __half22float2(gate_h2);
+                const float2 up_f2 = __half22float2(up_h2);
+                gate_acc += a0 * gate_f2.x + a1 * gate_f2.y;
+                up_acc += a0 * up_f2.x + a1 * up_f2.y;
+            }
+        } else {
+            for (int kk = tid; kk < K; kk += blockDim.x) {
+                const float a = A[kk];
+                gate_acc += a * __half2float(W_gate[col_base + kk]);
+                up_acc += a * __half2float(W_up[col_base + kk]);
+            }
+        }
+        extern __shared__ float mlp_gate_up_reduce[];
+        float* gate_reduce = mlp_gate_up_reduce;
+        float* up_reduce = mlp_gate_up_reduce + blockDim.x;
+        gate_reduce[tid] = gate_acc;
+        up_reduce[tid] = up_acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                gate_reduce[tid] += gate_reduce[tid + stride];
+                up_reduce[tid] += up_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            const float gate = gate_reduce[0];
+            const float up = up_reduce[0];
+            C[col] = gate * (1.0f / (1.0f + expf(-gate))) * up;
+        }
+    }
+
+    __global__ void qkv_f32xf16_gguf_decode_kernel(
+        const float* __restrict__ A,      // 1xK row-major activations
+        const __half* __restrict__ Wq,    // GGUF [K,Nq], K-fastest
+        const __half* __restrict__ Wk,    // GGUF [K,Nk], K-fastest
+        const __half* __restrict__ Wv,    // GGUF [K,Nv], K-fastest
+        const float* __restrict__ bq,
+        const float* __restrict__ bk,
+        const float* __restrict__ bv,
+        float* __restrict__ Q,
+        float* __restrict__ Kout,
+        float* __restrict__ Vout,
+        int Nq, int Nk, int Nv, int Kdim) {
+        const int out_col = blockIdx.x;
+        const int tid = threadIdx.x;
+        const int total = Nq + Nk + Nv;
+        if (out_col >= total) return;
+
+        const __half* W = Wq;
+        const float* bias = bq;
+        float* out = Q;
+        int local_col = out_col;
+        if (out_col >= Nq + Nk) {
+            W = Wv;
+            bias = bv;
+            out = Vout;
+            local_col = out_col - Nq - Nk;
+        } else if (out_col >= Nq) {
+            W = Wk;
+            bias = bk;
+            out = Kout;
+            local_col = out_col - Nq;
+        }
+
+        float acc = 0.0f;
+        const size_t col_base =
+            static_cast<size_t>(local_col) * static_cast<size_t>(Kdim);
+        if ((Kdim & 1) == 0) {
+            for (int kk = tid * 2; kk < Kdim; kk += blockDim.x * 2) {
+                const __half2 w2 = *reinterpret_cast<const __half2*>(W + col_base + kk);
+                const float2 wf = __half22float2(w2);
+                acc += A[kk] * wf.x + A[kk + 1] * wf.y;
+            }
+        } else {
+            for (int kk = tid; kk < Kdim; kk += blockDim.x) {
+                acc += A[kk] * __half2float(W[col_base + kk]);
+            }
+        }
+        extern __shared__ float qkv_decode_reduce[];
+        qkv_decode_reduce[tid] = acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                qkv_decode_reduce[tid] += qkv_decode_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            float value = qkv_decode_reduce[0];
+            if (bias) {
+                value += bias[local_col];
+            }
+            out[local_col] = value;
+        }
+    }
+
     __global__ void gemm_f32xq8_0_gguf_f32_kernel(
         const float* __restrict__ A,           // MxK row-major activations
         const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
@@ -5910,6 +6084,81 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             fprintf(stderr, "gemm_f32xf16_gguf_f32_decode kernel launch error: %s\n", cudaGetErrorString(err));
+            return -3;
+        }
+        return 0;
+    }
+
+    int m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_W_gate_f16,
+        const void* d_W_up_f16,
+        void* d_C_f32,
+        int H, int K) {
+        if (!ctx || !d_A_f32 || !d_W_gate_f16 || !d_W_up_f16 || !d_C_f32) return -1;
+        if (H <= 0 || K <= 0) return -2;
+        const int threads = 128;
+        const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
+        mlp_gate_up_swiglu_f32xf16_gguf_decode_kernel<<<
+            H,
+            threads,
+            shmem,
+            f16_decode_projection_stream(ctx)>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const __half*>(d_W_gate_f16),
+            reinterpret_cast<const __half*>(d_W_up_f16),
+            reinterpret_cast<float*>(d_C_f32),
+            H,
+            K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "mlp_gate_up_swiglu_f32xf16_gguf_decode kernel launch error: %s\n", cudaGetErrorString(err));
+            return -3;
+        }
+        return 0;
+    }
+
+    int m40llm_qkv_f32xf16_gguf_decode_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_Wq_f16,
+        const void* d_Wk_f16,
+        const void* d_Wv_f16,
+        const void* d_bq_f32,
+        const void* d_bk_f32,
+        const void* d_bv_f32,
+        void* d_Q_f32,
+        void* d_K_f32,
+        void* d_V_f32,
+        int Nq, int Nk, int Nv, int Kdim) {
+        if (!ctx || !d_A_f32 || !d_Wq_f16 || !d_Wk_f16 || !d_Wv_f16 ||
+            !d_Q_f32 || !d_K_f32 || !d_V_f32) return -1;
+        if (Nq <= 0 || Nk <= 0 || Nv <= 0 || Kdim <= 0) return -2;
+        const int threads = 128;
+        const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
+        qkv_f32xf16_gguf_decode_kernel<<<
+            Nq + Nk + Nv,
+            threads,
+            shmem,
+            f16_decode_projection_stream(ctx)>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const __half*>(d_Wq_f16),
+            reinterpret_cast<const __half*>(d_Wk_f16),
+            reinterpret_cast<const __half*>(d_Wv_f16),
+            reinterpret_cast<const float*>(d_bq_f32),
+            reinterpret_cast<const float*>(d_bk_f32),
+            reinterpret_cast<const float*>(d_bv_f32),
+            reinterpret_cast<float*>(d_Q_f32),
+            reinterpret_cast<float*>(d_K_f32),
+            reinterpret_cast<float*>(d_V_f32),
+            Nq,
+            Nk,
+            Nv,
+            Kdim);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "qkv_f32xf16_gguf_decode kernel launch error: %s\n", cudaGetErrorString(err));
             return -3;
         }
         return 0;

@@ -41,6 +41,15 @@ int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_de
 int m40llm_memcpy_d2d_async(M40llmCudaContext* ctx, void* dst_device, const void* src_device, size_t bytes, uint32_t stream_kind) {
     (void)ctx; (void)dst_device; (void)src_device; (void)bytes; (void)stream_kind; return -1;
 }
+int m40llm_argmax_f32_async(M40llmCudaContext* ctx, const void* d_values_f32, uint32_t len, void* d_out_u32, uint32_t stream_kind) {
+    (void)ctx; (void)d_values_f32; (void)len; (void)d_out_u32; (void)stream_kind; return -1;
+}
+int m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_f16, const void* d_W_up_f16, void* d_C_f32, int H, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_W_gate_f16; (void)d_W_up_f16; (void)d_C_f32; (void)H; (void)K; return -1;
+}
+int m40llm_qkv_f32xf16_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_f16, const void* d_Wk_f16, const void* d_Wv_f16, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
+    (void)ctx; (void)d_A_f32; (void)d_Wq_f16; (void)d_Wk_f16; (void)d_Wv_f16; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
+}
 int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
     (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
 }

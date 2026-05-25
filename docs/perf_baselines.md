@@ -38,6 +38,10 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | fast-fits | dense off | materialized FP32 cuBLAS | 44 | 512 | 3993 ms | 54141 ms | 63339 ms | 9.46 | 8.08 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | `M40LLM_F16_DECODE_KERNEL=1 M40LLM_F16_DECODE_STREAM=decode` | 44 | 512 | 1744 ms | 31268 ms | 38579 ms | 16.38 | 13.27 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_PREFILL_CHUNK_SIZE=128` | 44 | 512 | 2826 ms | 31236 ms | 39335 ms | 16.39 | 13.02 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CPU greedy `top_k=1` fast path | 44 | 512 | 1749 ms | 31249 ms | 33294 ms | 16.39 | 15.38 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_CUDA_GREEDY_ARGMAX=1` | 44 | 512 | 1586 ms | 31218 ms | 32990 ms | 16.40 | 15.52 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1573 ms | 30344 ms | 32113 ms | 16.87 | 15.94 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_QKV=1 M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1343 ms | 28277 ms | 29826 ms | 18.11 | 17.17 | coherent |
 
 Implementation/diagnostic notes:
 
@@ -50,10 +54,20 @@ Implementation/diagnostic notes:
   floor separately from the existing generated-token decode TPS floor.
 - Packed-prefix prefill is not useful for this short Qwen prompt on the current
   path; it increased prompt prefill time from 1744 ms to 2826 ms.
-- Current m40-llm best E2E is 13.27 tok/s, about 32.5% of Ollama's measured
-  E2E rate and far below the 53.06 tok/s target. The next required
-  optimization must attack per-token forward/logits cost, not just prompt
-  prefill or measurement overhead.
+- `top_k=1` now uses greedy sampling without a full softmax/sort. The opt-in
+  CUDA argmax path avoids full-logits D2H for this benchmark, but the long-run
+  gain is small because the remaining cost is full-layer decode work.
+- `M40LLM_FUSED_MLP_SWIGLU=1` fuses single-token GGUF F16 gate/up projection
+  and SwiGLU into one decode kernel. `M40LLM_FUSED_QKV=1` fuses single-token
+  Q/K/V GGUF F16 projection and optional Q/K/V f32 bias into one decode kernel.
+  Both are opt-in while validation broadens.
+- With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
+  42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
+  The profiled short run still shows roughly 16.5 ms host enqueue time plus
+  roughly 19 ms GPU completion time per generated token. Full-token CUDA Graph
+  replay captured after fusion wiring, but replay was unusably slow on this
+  path (32-token probe: 0.25 E2E tok/s) and changed output, so graph remains
+  experimental/off.
 
 ## 2026-05-25: Qwen2.5-3B Compact F16 Decode Reaches 20+ Tok/s
 

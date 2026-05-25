@@ -54,18 +54,24 @@ impl LoadedModel {
 
 impl LoadedModel {
     /// # Safety
-    /// Reuses caller-owned device scratch for output-norm staging and logits.
+    /// Enqueues output norm (when present) and lm_head projection into
+    /// caller-owned logits scratch. Returns the stream that produces logits.
     #[cfg(feature = "cuda")]
-    pub unsafe fn logits_from_hidden_into(
+    pub unsafe fn enqueue_logits_from_hidden_into(
         &self,
         d_hidden_f32: *const c_void,
         d_logits: *mut c_void,
         d_norm_hidden: Option<*mut c_void>,
-    ) -> Result<Vec<f32>> {
+    ) -> Result<(usize, CudaStream)> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
         let logits_on_decode_stream =
             decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
+        let stream = if logits_on_decode_stream {
+            CudaStream::Decode
+        } else {
+            CudaStream::Prefill
+        };
         // Ensure any decode-stream work producing the final hidden state has
         // completed before this path (including optional output-norm) reads it.
         if !logits_on_decode_stream {
@@ -117,11 +123,21 @@ impl LoadedModel {
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
-        if logits_on_decode_stream {
-            self.cuda.synchronize_stream(CudaStream::Decode)?;
-        } else {
-            self.cuda.synchronize_stream(CudaStream::Prefill)?;
-        }
+        Ok((vocab, stream))
+    }
+
+    /// # Safety
+    /// Reuses caller-owned device scratch for output-norm staging and logits.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn logits_from_hidden_into(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+    ) -> Result<Vec<f32>> {
+        let (vocab, stream) =
+            self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
+        self.cuda.synchronize_stream(stream)?;
         let bytes_logits = vocab
             .checked_mul(std::mem::size_of::<f32>())
             .context("logits byte size overflow")?;
@@ -135,6 +151,33 @@ impl LoadedModel {
             logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
         }
         Ok(logits)
+    }
+
+    /// # Safety
+    /// Reuses caller-owned device scratch for logits, optional output norm, and
+    /// one u32 sampled-token slot. This is the CUDA greedy top_k=1 path.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn greedy_token_from_hidden_into(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+        d_token_u32: *mut c_void,
+    ) -> Result<u32> {
+        let argmax_start = std::time::Instant::now();
+        let (vocab, stream) =
+            self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
+        self.cuda
+            .argmax_f32_async(d_logits as *const c_void, vocab as u32, d_token_u32, stream)?;
+        self.cuda.synchronize_stream(stream)?;
+        let mut token = 0u32;
+        self.cuda.memcpy_d2h(
+            (&mut token as *mut u32).cast::<c_void>(),
+            d_token_u32 as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
+        timing::log("logits.greedy_argmax_total", argmax_start.elapsed());
+        Ok(token)
     }
 
     /// # Safety

@@ -115,11 +115,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   Qwen2.5-3B Q8_0 baseline on Tesla M40 is 40.81 E2E tok/s, making the +30%
   target 53.06 E2E tok/s. Current m40-llm best for that exact 512-token prompt
   is Qwen2.5-3B F16 large-model with dense KV,
-  `M40LLM_F16_DECODE_KERNEL=1`, and
-  `M40LLM_F16_DECODE_STREAM=decode`: 512 tokens in 38.58 s total, 13.27 E2E
-  tok/s. The decode-stream F16 path is opt-in and now synchronizes logits on
-  the actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts
-  E2E throughput separately from decode-only TPS.
+  `M40LLM_F16_DECODE_KERNEL=1`, `M40LLM_F16_DECODE_STREAM=decode`,
+  `M40LLM_CUDA_GREEDY_ARGMAX=1`, `M40LLM_FUSED_QKV=1`, and
+  `M40LLM_FUSED_MLP_SWIGLU=1`: 512 tokens in 29.83 s total, 17.17 E2E tok/s.
+  The decode-stream F16 path is opt-in and now synchronizes logits on the
+  actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
+  throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy
+  fast path, CUDA greedy argmax is available as an opt-in logits path, and the
+  opt-in fused QKV / fused MLP SwiGLU decode kernels reduce per-token launch
+  count. A graph-enabled Qwen probe captured after fusion wiring but replay was
+  much slower and changed output, so `M40LLM_DECODE_GRAPH=1` remains
+  experimental/off.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

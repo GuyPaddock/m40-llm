@@ -104,6 +104,7 @@ pub struct DecodeSession {
     d_out: Option<DeviceBuffer>,
     d_logits: Option<DeviceBuffer>,
     d_norm_hidden: Option<DeviceBuffer>,
+    d_greedy_token: Option<DeviceBuffer>,
     d_graph_position: Option<DeviceBuffer>,
     d_graph_seq_len: Option<DeviceBuffer>,
     exact_block_staging: Option<ExactBlockStagingWorkspace>,
@@ -191,7 +192,7 @@ impl DecodeSession {
         } else {
             None
         };
-        let (d_logits, d_norm_hidden) = match model.map_lm_head() {
+        let (d_logits, d_norm_hidden, d_greedy_token) = match model.map_lm_head() {
             Ok((_name, _lm, lm_d_model, vocab, _tied)) => {
                 if lm_d_model != d_model {
                     anyhow::bail!(
@@ -217,9 +218,14 @@ impl DecodeSession {
                 } else {
                     None
                 };
-                (Some(d_logits), d_norm_hidden)
+                let d_greedy_token = DeviceBuffer::new_tagged(
+                    &model.cuda,
+                    std::mem::size_of::<u32>(),
+                    "decode_session:greedy_token_u32",
+                )?;
+                (Some(d_logits), d_norm_hidden, Some(d_greedy_token))
             }
-            Err(_) => (None, None),
+            Err(_) => (None, None, None),
         };
         let graph_params = if can_forward && decode_graph_enabled() {
             Some((
@@ -271,6 +277,7 @@ impl DecodeSession {
             d_out,
             d_logits,
             d_norm_hidden,
+            d_greedy_token,
             d_graph_position,
             d_graph_seq_len,
             exact_block_staging,
@@ -702,6 +709,62 @@ impl DecodeSession {
         result
     }
 
+    pub fn greedy_token_for_ids(&mut self, ids: &[u32]) -> Result<u32> {
+        let logits_fn_start = std::time::Instant::now();
+        self.step += 1;
+        if ids.is_empty() {
+            anyhow::bail!("empty ids");
+        }
+        if self.processed_len > ids.len() {
+            self.processed_len = 0;
+            if self.model().kv_cache.is_some() {
+                self.model().reset_kv_cache()?;
+            }
+        }
+
+        let start = if self.can_forward {
+            self.processed_len
+        } else {
+            ids.len().saturating_sub(1)
+        };
+        let final_idx = ids.len() - 1;
+        let mut next = None;
+        for (token_idx, &tok_id_u32) in ids.iter().enumerate().skip(start) {
+            let token_start = std::time::Instant::now();
+            let tok_id = tok_id_u32 as u64;
+            if token_idx == final_idx {
+                next = Some(unsafe { self.greedy_token_for_token(tok_id, token_idx, start)? });
+            } else if self.can_forward {
+                unsafe { self.forward_prefill_token_without_logits(tok_id, token_idx)? };
+            } else {
+                let logits = unsafe { self.logits_for_token(tok_id, token_idx, start)? };
+                let (idx, _) = logits
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
+                    .ok_or_else(|| anyhow::anyhow!("empty logits"))?;
+                next = Some(idx as u32);
+            }
+            timing::timing_log!(
+                token_start.elapsed(),
+                "{}.token.{token_idx}.total",
+                self.log_prefix
+            );
+        }
+        if self.can_forward {
+            self.processed_len = ids.len();
+        }
+        let result = next.ok_or_else(|| anyhow::anyhow!("no token processed for greedy sample"));
+        timing::timing_log!(
+            logits_fn_start.elapsed(),
+            "{}.greedy_fn.ids_len_{}",
+            self.log_prefix,
+            ids.len()
+        );
+        result
+    }
+
     unsafe fn logits_for_token(
         &mut self,
         tok_id: u64,
@@ -790,6 +853,95 @@ impl DecodeSession {
             );
             logits
         }
+    }
+
+    unsafe fn greedy_token_for_token(
+        &mut self,
+        tok_id: u64,
+        token_idx: usize,
+        start: usize,
+    ) -> Result<u32> {
+        let embed_start = std::time::Instant::now();
+        (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        timing::timing_log!(
+            embed_start.elapsed(),
+            "{}.token.{token_idx}.embedding_load",
+            self.log_prefix
+        );
+
+        if !self.can_forward {
+            let logits = self.logits_for_token(tok_id, token_idx, start)?;
+            let (idx, _) = logits
+                .iter()
+                .copied()
+                .enumerate()
+                .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
+                .ok_or_else(|| anyhow::anyhow!("empty logits"))?;
+            return Ok(idx as u32);
+        }
+
+        self.last_forward_sync_diag = None;
+        let forward_start = std::time::Instant::now();
+        let forward_sync_diag = if forward_sync_diag_enabled() {
+            Some(
+                PrefillSyncDiag::start(
+                    &self.model().cuda,
+                    format!("{}.token.{token_idx}.forward_sync_diag", self.log_prefix),
+                )?
+                .expect("forward sync diagnostic is enabled"),
+            )
+        } else {
+            None
+        };
+        let d_out = self
+            .d_out
+            .as_ref()
+            .expect("d_out allocated when full forward is enabled")
+            .as_mut_ptr();
+        let layers = self.forward_with_optional_graph(token_idx, d_out)?;
+        timing::timing_log!(
+            forward_start.elapsed(),
+            "{}.token.{token_idx}.forward_all_layers",
+            self.log_prefix
+        );
+        if token_idx == start && !self.logged_full_forward {
+            eprintln!(
+                "[{}] full-layer forward enabled layers={layers}",
+                self.log_prefix
+            );
+            self.logged_full_forward = true;
+        }
+        let greedy_start = std::time::Instant::now();
+        if self.last_forward_used_graph {
+            self.model().cuda.stream_wait_for_stream(
+                CudaStream::Prefill,
+                CudaStream::Decode,
+                "logits_wait_graph_replay",
+            )?;
+        }
+        if let Some(sync_diag) = forward_sync_diag {
+            self.last_forward_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
+        }
+        let d_logits = self
+            .d_logits
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing d_logits scratch for greedy sampling"))?;
+        let d_token = self
+            .d_greedy_token
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing d_greedy_token scratch"))?;
+        let token = (*self.model).greedy_token_from_hidden_into(
+            d_out as *const _,
+            d_logits.as_mut_ptr(),
+            self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
+            d_token.as_mut_ptr(),
+        )?;
+        timing::timing_log!(
+            greedy_start.elapsed(),
+            "{}.token.{token_idx}.greedy_logits",
+            self.log_prefix
+        );
+        Ok(token)
     }
 
     unsafe fn forward_prefill_token_without_logits(

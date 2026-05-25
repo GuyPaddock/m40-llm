@@ -66,6 +66,24 @@ pub(crate) fn f16_decode_kernel_decode_stream_enabled() -> bool {
 }
 
 #[cfg(feature = "cuda")]
+fn fused_mlp_swiglu_decode_enabled() -> bool {
+    f16_decode_kernel_enabled()
+        && matches!(
+            std::env::var("M40LLM_FUSED_MLP_SWIGLU").ok().as_deref(),
+            Some("1") | Some("true") | Some("TRUE")
+        )
+}
+
+#[cfg(feature = "cuda")]
+fn fused_qkv_decode_enabled() -> bool {
+    f16_decode_kernel_enabled()
+        && matches!(
+            std::env::var("M40LLM_FUSED_QKV").ok().as_deref(),
+            Some("1") | Some("true") | Some("TRUE")
+        )
+}
+
+#[cfg(feature = "cuda")]
 fn materialized_budget_bytes() -> Option<usize> {
     let mb = std::env::var("M40LLM_MATERIALIZE_F32_BUDGET_MB")
         .ok()?
@@ -160,6 +178,47 @@ impl LoadedModel {
             .with_context(|| format!("mlp gate async GGUF GEMM failed: m={m} n={h} k={k}"))?;
         self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_w_up_f16, d_up_out_f32, m, h, k)
             .with_context(|| format!("mlp up async GGUF GEMM failed: m={m} n={h} k={k}"))
+    }
+
+    /// # Safety
+    /// Optional single-token fused GGUF F16 gate/up projection plus SwiGLU.
+    /// Returns `Ok(false)` when the opt-in path is not applicable.
+    pub unsafe fn try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        h: i32,
+        d_out_f32: *mut c_void,
+    ) -> Result<bool> {
+        #[cfg(feature = "cuda")]
+        {
+            if m == 1
+                && k > 0
+                && h > 0
+                && fused_mlp_swiglu_decode_enabled()
+                && self.gguf_weight_dtype(d_w_gate_f16) == GgmlDType::F16
+                && self.gguf_weight_dtype(d_w_up_f16) == GgmlDType::F16
+            {
+                self.cuda
+                    .mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+                        d_x_f32,
+                        d_w_gate_f16,
+                        d_w_up_f16,
+                        d_out_f32,
+                        h,
+                        k,
+                    )
+                    .with_context(|| {
+                        format!("fused MLP gate/up SwiGLU failed: m={m} h={h} k={k}")
+                    })?;
+                return Ok(true);
+            }
+        }
+        let _ = (d_x_f32, m, k, d_w_gate_f16, d_w_up_f16, h, d_out_f32);
+        Ok(false)
     }
 
     /// # Safety
@@ -673,6 +732,85 @@ impl LoadedModel {
             .with_context(|| format!("K projection async GGUF GEMM failed: m={m} n={n_k} k={k}"))?;
         self.matmul_f32xf16_gguf_f32_async(d_x_f32, d_wv_f16, d_v_out_f32, m, n_v, k)
             .with_context(|| format!("V projection async GGUF GEMM failed: m={m} n={n_v} k={k}"))
+    }
+
+    /// # Safety
+    /// Optional single-token fused Q/K/V projection for GGUF F16 weights.
+    /// Bias pointers, when present, must point to f32 vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn try_qkv_project_f32xf16_gguf_f32_decode_async(
+        &self,
+        d_x_f32: *const c_void,
+        m: i32,
+        k: i32,
+        d_wq_f16: *const c_void,
+        n_q: i32,
+        d_wk_f16: *const c_void,
+        n_k: i32,
+        d_wv_f16: *const c_void,
+        n_v: i32,
+        d_bq_f32: Option<*const c_void>,
+        d_bk_f32: Option<*const c_void>,
+        d_bv_f32: Option<*const c_void>,
+        d_q_out_f32: *mut c_void,
+        d_k_out_f32: *mut c_void,
+        d_v_out_f32: *mut c_void,
+    ) -> Result<bool> {
+        #[cfg(feature = "cuda")]
+        {
+            if m == 1
+                && k > 0
+                && n_q > 0
+                && n_k > 0
+                && n_v > 0
+                && fused_qkv_decode_enabled()
+                && self.gguf_weight_dtype(d_wq_f16) == GgmlDType::F16
+                && self.gguf_weight_dtype(d_wk_f16) == GgmlDType::F16
+                && self.gguf_weight_dtype(d_wv_f16) == GgmlDType::F16
+            {
+                self.cuda
+                    .qkv_f32xf16_gguf_decode_async(
+                        d_x_f32,
+                        d_wq_f16,
+                        d_wk_f16,
+                        d_wv_f16,
+                        d_bq_f32,
+                        d_bk_f32,
+                        d_bv_f32,
+                        d_q_out_f32,
+                        d_k_out_f32,
+                        d_v_out_f32,
+                        n_q,
+                        n_k,
+                        n_v,
+                        k,
+                    )
+                    .with_context(|| {
+                        format!(
+                            "fused QKV projection failed: m={m} n_q={n_q} n_k={n_k} n_v={n_v} k={k}"
+                        )
+                    })?;
+                return Ok(true);
+            }
+        }
+        let _ = (
+            d_x_f32,
+            m,
+            k,
+            d_wq_f16,
+            n_q,
+            d_wk_f16,
+            n_k,
+            d_wv_f16,
+            n_v,
+            d_bq_f32,
+            d_bk_f32,
+            d_bv_f32,
+            d_q_out_f32,
+            d_k_out_f32,
+            d_v_out_f32,
+        );
+        Ok(false)
     }
 
     /// # Safety

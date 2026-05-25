@@ -357,7 +357,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
-                    self.qkv_project_f32xf16_gguf_f32_async(
+                    let fused_qkv = self.try_qkv_project_f32xf16_gguf_f32_decode_async(
                         ws.d_xn,
                         1,
                         d_model,
@@ -367,17 +367,49 @@ impl LoadedModel {
                         kv_dim as i32,
                         d_wv_f16,
                         kv_dim as i32,
+                        qkv_bias.map(|(d_bq, _, _)| d_bq),
+                        qkv_bias.map(|(_, d_bk, _)| d_bk),
+                        qkv_bias.map(|(_, _, d_bv)| d_bv),
                         ws.dq,
                         ws.dk,
                         ws.dv,
                     )?;
-                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
-                    log_profiled_op(
-                        &label,
-                        "qkv_project",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_qkv {
+                        log_profiled_op(
+                            &label,
+                            "qkv_project_fused",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.qkv_project_f32xf16_gguf_f32_async(
+                            ws.d_xn,
+                            1,
+                            d_model,
+                            d_wq_f16,
+                            d_model,
+                            d_wk_f16,
+                            kv_dim as i32,
+                            d_wv_f16,
+                            kv_dim as i32,
+                            ws.dq,
+                            ws.dk,
+                            ws.dv,
+                        )?;
+                        self.apply_qkv_bias_async(
+                            qkv_bias,
+                            1,
+                            d_model as usize,
+                            kv_dim as usize,
+                            ws,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "qkv_project",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.q"),
                         ws.dq as *const c_void,
@@ -568,53 +600,71 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
-                    self.mlp_gates_f32xf16_gguf_f32_async(
+                    let fused_mlp = self.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                         ws.d_x1n,
                         1,
                         d_model,
                         d_w_gate_f16,
                         d_w_up_f16,
                         hidden_dim,
-                        ws.dgate,
-                        ws.dup,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "mlp_gate_up",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
-                    self.debug_log_device_f32_finiteness(
-                        &format!("{label}.gate"),
-                        ws.dgate as *const c_void,
-                        hidden_dim as usize,
-                    )?;
-                    self.debug_log_device_f32_finiteness(
-                        &format!("{label}.up"),
-                        ws.dup as *const c_void,
-                        hidden_dim as usize,
-                    )?;
-
-                    // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    wait_cross_stream(
-                        CudaStream::Decode,
-                        CudaStream::Prefill,
-                        "mlp_gate_up_to_swiglu",
-                    )?;
-                    self.cuda.swiglu_f32_async(
-                        ws.dgate as *const c_void,
-                        ws.dup as *const c_void,
                         ws.dhid,
-                        hidden_dim as usize,
                     )?;
-                    log_profiled_op(
-                        &label,
-                        "swiglu",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_mlp {
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up_swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.mlp_gates_f32xf16_gguf_f32_async(
+                            ws.d_x1n,
+                            1,
+                            d_model,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            hidden_dim,
+                            ws.dgate,
+                            ws.dup,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                        self.debug_log_device_f32_finiteness(
+                            &format!("{label}.gate"),
+                            ws.dgate as *const c_void,
+                            hidden_dim as usize,
+                        )?;
+                        self.debug_log_device_f32_finiteness(
+                            &format!("{label}.up"),
+                            ws.dup as *const c_void,
+                            hidden_dim as usize,
+                        )?;
+
+                        // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
+                        let profile_before = profile::snapshot_if_enabled();
+                        let op_start = std::time::Instant::now();
+                        wait_cross_stream(
+                            CudaStream::Decode,
+                            CudaStream::Prefill,
+                            "mlp_gate_up_to_swiglu",
+                        )?;
+                        self.cuda.swiglu_f32_async(
+                            ws.dgate as *const c_void,
+                            ws.dup as *const c_void,
+                            ws.dhid,
+                            hidden_dim as usize,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.swiglu"),
                         ws.dhid as *const c_void,
@@ -818,7 +868,7 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
-                    self.qkv_project_f32xf16_gguf_f32_async(
+                    let fused_qkv = self.try_qkv_project_f32xf16_gguf_f32_decode_async(
                         ws.d_xn,
                         1,
                         d_model,
@@ -828,17 +878,49 @@ impl LoadedModel {
                         kv_dim as i32,
                         d_wv_f16,
                         kv_dim as i32,
+                        qkv_bias.map(|(d_bq, _, _)| d_bq),
+                        qkv_bias.map(|(_, d_bk, _)| d_bk),
+                        qkv_bias.map(|(_, _, d_bv)| d_bv),
                         ws.dq,
                         ws.dk,
                         ws.dv,
                     )?;
-                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
-                    log_profiled_op(
-                        &label,
-                        "qkv_project",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_qkv {
+                        log_profiled_op(
+                            &label,
+                            "qkv_project_fused",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.qkv_project_f32xf16_gguf_f32_async(
+                            ws.d_xn,
+                            1,
+                            d_model,
+                            d_wq_f16,
+                            d_model,
+                            d_wk_f16,
+                            kv_dim as i32,
+                            d_wv_f16,
+                            kv_dim as i32,
+                            ws.dq,
+                            ws.dk,
+                            ws.dv,
+                        )?;
+                        self.apply_qkv_bias_async(
+                            qkv_bias,
+                            1,
+                            d_model as usize,
+                            kv_dim as usize,
+                            ws,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "qkv_project",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
@@ -981,42 +1063,60 @@ impl LoadedModel {
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
-                    self.mlp_gates_f32xf16_gguf_f32_async(
+                    let fused_mlp = self.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                         ws.d_x1n,
                         1,
                         d_model,
                         d_w_gate_f16,
                         d_w_up_f16,
                         hidden_dim,
-                        ws.dgate,
-                        ws.dup,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "mlp_gate_up",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
-
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    wait_cross_stream(
-                        CudaStream::Decode,
-                        CudaStream::Prefill,
-                        "mlp_gate_up_to_swiglu",
-                    )?;
-                    self.cuda.swiglu_f32_async(
-                        ws.dgate as *const c_void,
-                        ws.dup as *const c_void,
                         ws.dhid,
-                        hidden_dim as usize,
                     )?;
-                    log_profiled_op(
-                        &label,
-                        "swiglu",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_mlp {
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up_swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.mlp_gates_f32xf16_gguf_f32_async(
+                            ws.d_x1n,
+                            1,
+                            d_model,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            hidden_dim,
+                            ws.dgate,
+                            ws.dup,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+
+                        let profile_before = profile::snapshot_if_enabled();
+                        let op_start = std::time::Instant::now();
+                        wait_cross_stream(
+                            CudaStream::Decode,
+                            CudaStream::Prefill,
+                            "mlp_gate_up_to_swiglu",
+                        )?;
+                        self.cuda.swiglu_f32_async(
+                            ws.dgate as *const c_void,
+                            ws.dup as *const c_void,
+                            ws.dhid,
+                            hidden_dim as usize,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();

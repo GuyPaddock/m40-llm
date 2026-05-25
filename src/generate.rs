@@ -516,6 +516,16 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let mut prompt_logits_snapshot = None;
     let mut first_decode_logits_snapshot = None;
     let mut generated_logit_trace = Vec::new();
+    #[cfg(feature = "cuda")]
+    let cuda_greedy_logits_enabled = options.top_k == Some(1)
+        && options.temperature.is_none()
+        && options.top_p.is_none()
+        && !capture_logits
+        && !capture_logit_trace
+        && std::env::var("M40LLM_LOGITS_LOG").ok().as_deref() != Some("1")
+        && std::env::var("M40LLM_CUDA_GREEDY_ARGMAX")
+            .map(|value| value != "0")
+            .unwrap_or(false);
     let mut prompt_prefill_elapsed = std::time::Duration::ZERO;
     let mut generated_decode_elapsed = std::time::Duration::ZERO;
     let mut materialized_f32_cache_after_prompt = None;
@@ -604,7 +614,12 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 #[cfg(feature = "cuda")]
                 {
                     let _ = logits_fn_start;
-                    if logits_call_count == 0 {
+                    if cuda_greedy_logits_enabled {
+                        let token = decode_session.greedy_token_for_ids(ids)?;
+                        let mut logits = vec![f32::NEG_INFINITY; token as usize + 1];
+                        logits[token as usize] = 0.0;
+                        Ok(logits)
+                    } else if logits_call_count == 0 {
                         if !matches!(options.kv_compression.mode, KvCompressMode::Off) {
                             if matches!(
                                 options.kv_compression.mode,

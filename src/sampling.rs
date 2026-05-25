@@ -41,6 +41,9 @@ impl Sampler {
         if logits.is_empty() {
             return Err(anyhow!("empty logits"));
         }
+        if self.cfg.top_k == Some(1) && self.cfg.top_p.is_none() {
+            return self.sample_greedy(logits);
+        }
         // 1) Temperature adjust + stable softmax
         let probs = softmax_temp(logits, self.cfg.temperature);
         // 2) Apply top-k / top-p filtering into a working buffer of (idx, prob)
@@ -203,6 +206,20 @@ mod tests {
         for _ in 0..100 {
             let idx = s.sample(&logits).unwrap();
             assert_eq!(idx, 1);
+        }
+    }
+
+    #[test]
+    fn top_k_one_uses_greedy_even_with_temperature() {
+        let mut s = Sampler::new(SamplerConfig {
+            temperature: 0.5,
+            top_k: Some(1),
+            seed: 1,
+            ..Default::default()
+        });
+        let logits = [0.1, 2.0, 1.5, -1.0];
+        for _ in 0..10 {
+            assert_eq!(s.sample(&logits).unwrap(), 1);
         }
     }
 
