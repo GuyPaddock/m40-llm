@@ -46,8 +46,8 @@ pub struct PrefillSyncDiagTimings {
 
 #[cfg(feature = "cuda")]
 impl PrefillSyncDiag {
-    fn start(cuda: &CudaContext, label: impl Into<String>) -> Result<Option<Self>> {
-        if !prefill_sync_diag_enabled() {
+    fn start(cuda: &CudaContext, label: impl Into<String>, enabled: bool) -> Result<Option<Self>> {
+        if !enabled {
             return Ok(None);
         }
         let decode_start = cuda.create_event()?;
@@ -440,6 +440,7 @@ impl DecodeSession {
         let sync_diag = PrefillSyncDiag::start(
             &self.model().cuda,
             format!("{}.packed_prefill.ids_len_{}", self.log_prefix, ids.len()),
+            prefill_sync_diag_enabled(),
         )?;
         let layers = unsafe {
             (*self.model).forward_prefill_all_layers_varlen_for_sequences(&[
@@ -588,6 +589,7 @@ impl DecodeSession {
                 self.log_prefix,
                 ids.len()
             ),
+            prefill_sync_diag_enabled(),
         )?;
         let layers = unsafe {
             (*self.model).forward_prefill_all_layers_varlen_for_sequences_with_kv(
@@ -787,6 +789,7 @@ impl DecodeSession {
                     PrefillSyncDiag::start(
                         &self.model().cuda,
                         format!("{}.token.{token_idx}.forward_sync_diag", self.log_prefix),
+                        forward_sync_diag_enabled(),
                     )?
                     .expect("forward sync diagnostic is enabled"),
                 )
@@ -887,6 +890,7 @@ impl DecodeSession {
                 PrefillSyncDiag::start(
                     &self.model().cuda,
                     format!("{}.token.{token_idx}.forward_sync_diag", self.log_prefix),
+                    forward_sync_diag_enabled(),
                 )?
                 .expect("forward sync diagnostic is enabled"),
             )

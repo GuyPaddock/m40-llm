@@ -84,7 +84,11 @@ Implementation/diagnostic notes:
   Adding opt-in fused Q8 decode projections with `M40LLM_FUSED_Q8_QKV=1
   M40LLM_FUSED_Q8_MLP_SWIGLU=1` improved the same short probe further to
   `prefill_ms=4192 decode_ms=3275 total_ms=7648 decode_tps=9.77
-  total_tps=4.18`. This is useful Q8 integration progress, but still far below
+  total_tps=4.18`. A follow-up large-`K` thread-count adjustment keeps
+  `K=2048` decode projections at 128 threads and raises larger hidden-dim Q8
+  decode projections to 256 threads; the same short probe improved to
+  `prefill_ms=3950 decode_ms=3102 total_ms=7235 decode_tps=10.32
+  total_tps=4.42`. This is useful Q8 integration progress, but still far below
   the F16 best and the Ollama target.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.

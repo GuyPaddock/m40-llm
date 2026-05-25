@@ -5927,6 +5927,12 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    static int q8_decode_threads_for_k(int K) {
+        const int blocks_per_col = K / 32;
+        if (blocks_per_col <= 128) return 128;
+        return 256;
+    }
+
     __global__ void mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel(
         const float* __restrict__ A,
         const unsigned char* __restrict__ W_gate,
@@ -6301,7 +6307,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         int H, int K) {
         if (!ctx || !d_A_f32 || !d_W_gate_q8_0 || !d_W_up_q8_0 || !d_C_f32) return -1;
         if (H <= 0 || K <= 0 || (K % 32) != 0) return -2;
-        const int threads = 128;
+        const int threads = q8_decode_threads_for_k(K);
         const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
         mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel<<<
             H,
@@ -6338,7 +6344,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (!ctx || !d_A_f32 || !d_Wq_q8_0 || !d_Wk_q8_0 || !d_Wv_q8_0 ||
             !d_Q_f32 || !d_K_f32 || !d_V_f32) return -1;
         if (Nq <= 0 || Nk <= 0 || Nv <= 0 || Kdim <= 0 || (Kdim % 32) != 0) return -2;
-        const int threads = 128;
+        const int threads = q8_decode_threads_for_k(Kdim);
         const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
         qkv_f32xq8_0_gguf_decode_kernel<<<
             Nq + Nk + Nv,
@@ -6435,7 +6441,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float* A = reinterpret_cast<const float*>(d_A_f32);
         const unsigned char* B = reinterpret_cast<const unsigned char*>(d_B_q8_0);
         float* C = reinterpret_cast<float*>(d_C_f32);
-        const int threads = 128;
+        const int threads = q8_decode_threads_for_k(K);
         const size_t shmem = threads * sizeof(float);
         gemm_f32xq8_0_gguf_f32_decode_kernel<<<
             N,

@@ -127,8 +127,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   gate-up-SwiGLU decode kernels (`M40LLM_FUSED_Q8_QKV=1` and
   `M40LLM_FUSED_Q8_MLP_SWIGLU=1`). A 32-token Qwen2.5 Q8_0 short probe improved
   from 3.15 E2E tok/s to 3.48 with decode-stream scheduling and 4.18 with the
-  fused Q8 kernels, but this remains below the F16 best and far below the
-  Ollama comparison target.
+  fused Q8 kernels. Keeping `K=2048` Q8 decode projections at 128 threads while
+  raising larger hidden-dim Q8 decode projections to 256 threads improved that
+  short probe to 4.42 E2E tok/s, but this remains below the F16 best and far
+  below the Ollama comparison target.
   The decode-stream F16 path is opt-in and now synchronizes logits on the
   actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
   throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy
