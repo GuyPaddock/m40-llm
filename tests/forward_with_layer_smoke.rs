@@ -26,6 +26,85 @@ fn halves_from_f32(vals: &[f32]) -> Vec<u8> {
     out
 }
 
+fn qwen2_gqa_attention_bias_tiny_gguf(
+    cfg: tiny_gguf::TinyGgufConfig,
+    kv_heads: u32,
+) -> (GgufModel, Vec<u8>) {
+    let (mut gguf, weights) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(cfg.clone());
+    let head_dim = cfg.d_model / cfg.head_count as usize;
+    let kv_dim = kv_heads as usize * head_dim;
+    gguf.metadata.insert(
+        "llama.attention.head_count_kv".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(kv_heads)),
+    );
+    gguf.metadata.insert(
+        "qwen2.attention.head_count_kv".to_string(),
+        GgufValue::Scalar(GgufScalar::U32(kv_heads)),
+    );
+
+    let mut rebuilt_tensors = Vec::with_capacity(gguf.tensors.len());
+    let mut rebuilt_weights = Vec::new();
+    for tensor in &gguf.tensors {
+        let replacement = if tensor.name.ends_with("attention.wk.weight")
+            || tensor.name.ends_with("attention.wv.weight")
+        {
+            Some((
+                vec![cfg.d_model as u64, kv_dim as u64],
+                GgmlDType::F16,
+                vec![0u8; cfg.d_model * kv_dim * 2],
+            ))
+        } else if tensor.name.ends_with("attention.wk.bias") {
+            let vals: Vec<f32> = (0..kv_dim).map(|idx| 0.02 * (idx as f32 + 1.0)).collect();
+            Some((
+                vec![kv_dim as u64],
+                GgmlDType::F32,
+                vals.into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<u8>>(),
+            ))
+        } else if tensor.name.ends_with("attention.wv.bias") {
+            let vals: Vec<f32> = (0..kv_dim).map(|idx| 0.03 * (idx as f32 + 1.0)).collect();
+            Some((
+                vec![kv_dim as u64],
+                GgmlDType::F32,
+                vals.into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<u8>>(),
+            ))
+        } else {
+            None
+        };
+
+        let offset = rebuilt_weights.len() as u64;
+        let (shape, dtype, bytes) = if let Some(replacement) = replacement {
+            replacement
+        } else {
+            let elem_size = match tensor.dtype {
+                GgmlDType::F16 => 2,
+                GgmlDType::F32 => 4,
+                other => panic!("unexpected tiny tensor dtype {other:?}"),
+            };
+            let len = tensor.shape.iter().product::<u64>() as usize * elem_size;
+            let start = tensor.offset as usize;
+            let end = start + len;
+            (
+                tensor.shape.clone(),
+                tensor.dtype,
+                weights[start..end].to_vec(),
+            )
+        };
+        rebuilt_weights.extend_from_slice(&bytes);
+        rebuilt_tensors.push(GgufTensor {
+            name: tensor.name.clone(),
+            dtype,
+            shape,
+            offset,
+        });
+    }
+    gguf.tensors = rebuilt_tensors;
+    (gguf, rebuilt_weights)
+}
+
 #[test]
 fn forward_one_token_with_layer_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -893,6 +972,159 @@ fn qwen_head128_compressed_packed_prefill_matches_sequential_with_qkv_biases() -
             "packed Qwen head128 compressed KV snapshot mismatch for physical sequence {physical_seq}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn qwen_head128_compressed_multirow_prefill_matches_single_row_with_qkv_biases() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    profile::reset();
+
+    let config = KvCompressionConfig {
+        recent_window: 4,
+        block_size: 2,
+        top_blocks: 2,
+        ..KvCompressionConfig::default()
+    };
+    let _runtime_guard = ScopedRuntimeConfig::new(config.clone());
+    let cfg = tiny_gguf::TinyGgufConfig {
+        vocab: 2048,
+        d_model: 2048,
+        hidden: 16,
+        head_count: 16,
+        block_count: 1,
+        context_length: 32,
+    };
+    let kv_heads = 2;
+    let (gg_multi, weights_multi) = qwen2_gqa_attention_bias_tiny_gguf(cfg.clone(), kv_heads);
+    let (gg_single, weights_single) = qwen2_gqa_attention_bias_tiny_gguf(cfg.clone(), kv_heads);
+    let mut multi = LoadedModel::from_gguf(gg_multi, weights_multi, -1)?;
+    let mut single = LoadedModel::from_gguf(gg_single, weights_single, -1)?;
+    let seq_count = 4;
+    multi.allocate_compressed_kv_cache_for_layer_sequences(
+        cfg.context_length,
+        seq_count,
+        &config,
+    )?;
+    single.allocate_compressed_kv_cache_for_layer_sequences(
+        cfg.context_length,
+        seq_count,
+        &config,
+    )?;
+
+    let seqs: [&[u32]; 4] = [&[1], &[2, 3], &[4, 5, 6, 7], &[8, 9, 10, 11, 12]];
+    let mut d_multi_out = Vec::with_capacity(seqs.len());
+    let mut d_single_out = Vec::with_capacity(seqs.len());
+    for idx in 0..seqs.len() {
+        d_multi_out.push(multi.cuda.device_malloc_tagged(
+            cfg.d_model * 4,
+            &format!("test_qwen_head128_compressed_multirow:out{idx}"),
+        )?);
+        d_single_out.push(single.cuda.device_malloc_tagged(
+            cfg.d_model * 4,
+            &format!("test_qwen_head128_compressed_single:out{idx}"),
+        )?);
+    }
+
+    unsafe {
+        let multi_items: Vec<_> = seqs
+            .iter()
+            .enumerate()
+            .map(|(idx, token_ids)| m40_llm::infer::ForwardPrefillSequence {
+                token_ids,
+                sequence_id: idx as u32,
+                d_out_f32: d_multi_out[idx],
+            })
+            .collect();
+        multi.forward_prefill_all_layers_varlen_for_sequences(&multi_items)?;
+        multi.cuda.synchronize_stream(CudaStream::Decode)?;
+        multi.cuda.synchronize_stream(CudaStream::Prefill)?;
+
+        for (idx, token_ids) in seqs.iter().enumerate() {
+            let item = m40_llm::infer::ForwardPrefillSequence {
+                token_ids,
+                sequence_id: idx as u32,
+                d_out_f32: d_single_out[idx],
+            };
+            single.forward_prefill_all_layers_varlen_for_sequences(&[item])?;
+        }
+        single.cuda.synchronize_stream(CudaStream::Decode)?;
+        single.cuda.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let snapshot = profile::snapshot();
+    let prefill_attention_launches = snapshot
+        .by_op
+        .get("attention_prefill_f32_gqa_varlen")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        prefill_attention_launches >= 1,
+        "Qwen head128 compressed multirow prefill should use packed varlen GQA attention"
+    );
+
+    for seq_idx in 0..seqs.len() {
+        let mut multi_bytes = vec![0u8; cfg.d_model * 4];
+        let mut single_bytes = vec![0u8; cfg.d_model * 4];
+        unsafe {
+            multi.cuda.memcpy_d2h(
+                multi_bytes.as_mut_ptr() as *mut c_void,
+                d_multi_out[seq_idx],
+                cfg.d_model * 4,
+            )?;
+            single.cuda.memcpy_d2h(
+                single_bytes.as_mut_ptr() as *mut c_void,
+                d_single_out[seq_idx],
+                cfg.d_model * 4,
+            )?;
+        }
+        let multi_vals: Vec<f32> = multi_bytes
+            .chunks_exact(4)
+            .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+            .collect();
+        let single_vals: Vec<f32> = single_bytes
+            .chunks_exact(4)
+            .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+            .collect();
+        for (idx, (multi, single)) in multi_vals.iter().zip(single_vals.iter()).enumerate() {
+            let diff = (multi - single).abs();
+            assert!(
+                diff <= 2e-3,
+                "seq{seq_idx} Qwen head128 compressed multirow prefill differs from single-row at {idx}: multi={multi} single={single} diff={diff}"
+            );
+        }
+    }
+
+    let multi_kv = multi.kv_cache.as_ref().expect("multi compressed kv cache");
+    let single_kv = single
+        .kv_cache
+        .as_ref()
+        .expect("single compressed kv cache");
+    for physical_seq in 0..(cfg.block_count * seq_count) {
+        let multi_snapshot = multi_kv.debug_compressed_snapshot(&multi.cuda, physical_seq)?;
+        let single_snapshot = single_kv.debug_compressed_snapshot(&single.cuda, physical_seq)?;
+        assert_eq!(
+            multi_snapshot, single_snapshot,
+            "multirow Qwen head128 compressed KV snapshot mismatch for physical sequence {physical_seq}"
+        );
+    }
+
+    unsafe {
+        for ptr in d_multi_out {
+            multi.cuda.device_free(ptr)?;
+        }
+        for ptr in d_single_out {
+            single.cuda.device_free(ptr)?;
+        }
+    }
+
     Ok(())
 }
 

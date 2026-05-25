@@ -406,6 +406,11 @@ impl DecodeSchedulerRequest {
         !self.is_pending_prefill() && !self.stopping.should_stop(&self.generated)
     }
 
+    fn prefill_prefix_len(&self) -> Option<usize> {
+        self.is_pending_prefill()
+            .then(|| self.prompt_token_len.saturating_sub(1))
+    }
+
     fn prefill_sequence(&self) -> Result<crate::infer::ForwardPrefillSequence<'_>> {
         if self.prompt_token_len <= 1 || self.prompt_token_len > self.ids.len() {
             anyhow::bail!(
@@ -539,6 +544,22 @@ fn log_batch_prefill_fallback(reason: &str) {
 }
 
 #[cfg(feature = "cuda")]
+fn server_head128_multirow_prefill_diag_requested() -> bool {
+    std::env::var("M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn server_head128_multirow_prefill_force_sequential_requested() -> bool {
+    std::env::var("M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_FORCE_SEQUENTIAL")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[cfg(feature = "cuda")]
 fn scheduler_can_use_batched_prefill(
     state: &AppState,
     requests: &[DecodeSchedulerRequest],
@@ -599,6 +620,19 @@ fn scheduler_can_use_compressed_packed_prefill(
 }
 
 #[cfg(feature = "cuda")]
+fn scheduler_requests_have_same_prefill_prefix_len(requests: &[DecodeSchedulerRequest]) -> bool {
+    let Some(first) = requests
+        .first()
+        .and_then(DecodeSchedulerRequest::prefill_prefix_len)
+    else {
+        return false;
+    };
+    requests
+        .iter()
+        .all(|request| request.prefill_prefix_len() == Some(first))
+}
+
+#[cfg(feature = "cuda")]
 fn split_scheduler_requests(
     requests: Vec<DecodeSchedulerRequest>,
 ) -> (
@@ -628,11 +662,30 @@ fn process_scheduler_prefill_tick(
     active: &mut VecDeque<DecodeSchedulerRequest>,
 ) {
     let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
-    if head_dim == Some(128) {
+    if head_dim == Some(128) && !server_head128_multirow_prefill_diag_requested() {
         process_scheduler_head128_prefill_tick(state, requests, active);
         return;
     }
 
+    process_scheduler_varlen_prefill_tick(
+        state,
+        requests,
+        active,
+        true,
+        "batched prefill preparation failed",
+        "batched prefill forward failed",
+    );
+}
+
+#[cfg(feature = "cuda")]
+fn process_scheduler_varlen_prefill_tick(
+    state: &AppState,
+    requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+    force_sequential_after_prefill: bool,
+    prepare_error: &'static str,
+    forward_error: &'static str,
+) {
     let items = match requests
         .iter()
         .map(DecodeSchedulerRequest::prefill_sequence)
@@ -641,9 +694,7 @@ fn process_scheduler_prefill_tick(
         Ok(items) => items,
         Err(err) => {
             for request in requests {
-                request.send_error(anyhow::anyhow!(
-                    "batched prefill preparation failed: {err:#}"
-                ));
+                request.send_error(anyhow::anyhow!("{prepare_error}: {err:#}"));
             }
             return;
         }
@@ -661,7 +712,7 @@ fn process_scheduler_prefill_tick(
 
     if let Err(err) = forward_result {
         for request in requests {
-            request.send_error(anyhow::anyhow!("batched prefill forward failed: {err:#}"));
+            request.send_error(anyhow::anyhow!("{forward_error}: {err:#}"));
         }
         return;
     }
@@ -669,7 +720,7 @@ fn process_scheduler_prefill_tick(
     for mut request in requests {
         match request.finish_prefill() {
             Ok(DecodeSchedulerStep::Continue) => {
-                request.force_sequential_steps = true;
+                request.force_sequential_steps = force_sequential_after_prefill;
                 active.push_back(request)
             }
             Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
@@ -721,6 +772,24 @@ fn process_scheduler_head128_prefill_tick(
 }
 
 #[cfg(feature = "cuda")]
+fn process_scheduler_compressed_prefill_tick(
+    state: &AppState,
+    requests: Vec<DecodeSchedulerRequest>,
+    active: &mut VecDeque<DecodeSchedulerRequest>,
+) {
+    let force_sequential_after_prefill =
+        server_head128_multirow_prefill_force_sequential_requested();
+    process_scheduler_varlen_prefill_tick(
+        state,
+        requests,
+        active,
+        force_sequential_after_prefill,
+        "compressed batched prefill preparation failed",
+        "compressed batched prefill forward failed",
+    );
+}
+
+#[cfg(feature = "cuda")]
 fn process_scheduler_batch_tick(
     state: &AppState,
     current_requests: Vec<DecodeSchedulerRequest>,
@@ -749,11 +818,25 @@ fn process_scheduler_batch_tick(
             process_scheduler_prefill_tick(state, prefill_requests, active);
         } else if scheduler_can_use_compressed_packed_prefill(state, &prefill_requests) {
             crate::profile::record_launch("server_scheduler_compressed_packed_prefill_tick");
-            for mut request in prefill_requests {
-                match request.step_with_packed_prefix_prefill() {
-                    Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
-                    Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
-                    Err(err) => request.send_error(err),
+            let use_multirow_head128 = state
+                .model
+                .kv_cache
+                .as_ref()
+                .map(|kv| kv.head_dim() == 128)
+                .unwrap_or(false)
+                && (server_head128_multirow_prefill_diag_requested()
+                    || scheduler_requests_have_same_prefill_prefix_len(&prefill_requests))
+                && prefill_requests.len() > 1;
+            if use_multirow_head128 {
+                crate::profile::record_launch("server_scheduler_compressed_batched_prefill_tick");
+                process_scheduler_compressed_prefill_tick(state, prefill_requests, active);
+            } else {
+                for mut request in prefill_requests {
+                    match request.step_with_packed_prefix_prefill() {
+                        Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
+                        Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
+                        Err(err) => request.send_error(err),
+                    }
                 }
             }
         } else {

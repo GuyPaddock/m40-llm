@@ -187,6 +187,17 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `--kv-recent-window 256` returns HTTP 200 for compressed top8 batch2, but is
   slightly slower than dense off on that tiny short-prompt row; treat it as
   admission evidence, not a long-context compression speed claim.
+  Same-length head128/Qwen compressed scheduler prefill now uses true
+  multi-row packed prefill by default for the preferred compressed runtime.
+  The Qwen-like parity test covers `head_dim=128`, `q_heads=16`, `kv_heads=2`,
+  Q/K/V biases, split-half RoPE, and compressed KV snapshots. A bounded real
+  Qwen2.5 release run with `MAX_CONTEXT_TOKENS=512` improves compressed top8
+  batch2 same-prompt wall time to 592 ms / 6.757 tok/s. Mixed-length real Qwen
+  head128 multi-row prefill remains diagnostic-only behind
+  `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1`: forced batch4 mixed
+  multi-row returned HTTP 200 but changed outputs, and forcing sequential
+  decode after prefill still diverged. Keep mixed-length head128/Qwen on the
+  per-request packed-prefix path until that prefill/KV state issue is isolated.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports

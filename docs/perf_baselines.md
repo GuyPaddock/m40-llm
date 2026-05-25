@@ -2,6 +2,84 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Same-Length Qwen Head128 Multi-Row Compressed Prefill
+
+This checkpoint narrows and admits a safe subset of true multi-row
+head128/Qwen compressed packed prefill:
+
+- Same-length pending prompt prefixes use true multi-row packed prefill by
+  default for the preferred compressed runtime.
+- Mixed-length head128/Qwen compressed prefixes keep the previous per-request
+  packed-prefix path.
+- `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1` still forces the diagnostic
+  mixed-length multi-row path for investigation only.
+
+Validation:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  qwen_head128_compressed_multirow -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke compressed_head128 -- \
+  --nocapture --test-threads=1
+```
+
+Results:
+
+- Qwen-like synthetic parity now covers `head_dim=128`, `q_heads=16`,
+  `kv_heads=2`, Q/K/V biases, split-half RoPE, and compressed KV snapshots.
+- Same-length compressed head128 server smoke records
+  `server_scheduler_compressed_batched_prefill_tick` without requiring the
+  diagnostic env var.
+- Mixed-length diagnostic server smoke still records the same marker only when
+  `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1` is set.
+
+Bounded real Qwen release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same batch4_mixed" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=57580 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Output note |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| compressed top8, default same-length multi-row | batch2 same | 2 | 2 | 592 ms | 0.557 s | 6.757 | both `Hello!` |
+| compressed top8, mixed-length safe fallback | batch4 mixed | 4 | 4 | 1389 ms | 1.293 s | 5.760 | matches prior safe outputs |
+
+Diagnostic mixed-length forced multi-row command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch4_mixed" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=57280 scripts/bench_server_batch_decode.sh
+```
+
+- Forced mixed-length multi-row returned HTTP 200 but changed outputs
+  (`themoment`, empty output, `CUDA streams`, `!!`) relative to the safe
+  per-request path (`Hello!`, `Certainly!`, `CUDA streams`, `One benefit`).
+- Forcing sequential decode after mixed-length multi-row prefill still
+  diverged, so the remaining issue is in real-model mixed-length prefill/KV
+  state rather than batched decode after prefill.
+- Do not promote mixed-length real Qwen head128 multi-row prefill yet.
+
 ## 2026-05-24: Qwen Head128 Compressed Packed-Prefix Admission
 
 This checkpoint admits preferred compressed-KV packed-prefix prefill for
