@@ -5927,6 +5927,47 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void gemm_f32xq8_0_gguf_f32_decode_tiled2_kernel(
+        const float* __restrict__ A,           // 1xK row-major activations
+        const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
+        float* __restrict__ C,                 // 1xN row-major output
+        int N, int K) {
+        const int local_col = threadIdx.y;
+        const int col = blockIdx.x * 2 + local_col;
+        const int tid = threadIdx.x;
+        const int threads = blockDim.x;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = K / qk;
+        float acc = 0.0f;
+        if (col < N) {
+            for (int block_idx = tid; block_idx < blocks_per_col; block_idx += threads) {
+                const size_t block_base =
+                    (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+                const float scale = __half2float(*reinterpret_cast<const __half*>(B + block_base));
+                const int k_base = block_idx * qk;
+                #pragma unroll
+                for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                    const int8_t q = *reinterpret_cast<const int8_t*>(B + block_base + 2 + q_idx);
+                    acc += A[k_base + q_idx] * (static_cast<float>(q) * scale);
+                }
+            }
+        }
+        extern __shared__ float q8_decode_tiled_reduce[];
+        float* reduce = q8_decode_tiled_reduce + local_col * threads;
+        reduce[tid] = acc;
+        __syncthreads();
+        for (int stride = threads >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                reduce[tid] += reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0 && col < N) {
+            C[col] = reduce[0];
+        }
+    }
+
     static int q8_decode_threads_for_k(int K) {
         const int blocks_per_col = K / 32;
         if (blocks_per_col <= 128) return 128;
@@ -6446,6 +6487,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         gemm_f32xq8_0_gguf_f32_decode_kernel<<<
             N,
             threads,
+            shmem,
+            q8_decode_projection_stream(ctx)>>>(A, B, C, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+        if (M != 1 || N <= 0 || K <= 0 || (K % 32) != 0) return -4;
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const unsigned char* B = reinterpret_cast<const unsigned char*>(d_B_q8_0);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        const int threads = q8_decode_threads_for_k(K);
+        dim3 block(threads, 2);
+        dim3 grid((N + 1) / 2);
+        const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
+        gemm_f32xq8_0_gguf_f32_decode_tiled2_kernel<<<
+            grid,
+            block,
             shmem,
             q8_decode_projection_stream(ctx)>>>(A, B, C, N, K);
         cudaError_t err = cudaGetLastError();

@@ -328,6 +328,15 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xf32_f32_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -1157,6 +1166,14 @@ fn q8_decode_event_stream() -> CudaStream {
     } else {
         CudaStream::Prefill
     }
+}
+
+#[cfg(feature = "cuda")]
+fn q8_decode_tiled_cols() -> i32 {
+    std::env::var("M40LLM_Q8_DECODE_TILED_COLS")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(1)
 }
 
 #[cfg(feature = "cuda")]
@@ -2374,6 +2391,11 @@ impl CudaContext {
         #[cfg(feature = "cuda")]
         {
             if m == 1 && k > 0 && (k % 32) == 0 {
+                if q8_decode_tiled_cols() == 2 && k >= 4096 && n >= 1024 {
+                    return self.gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+                        d_a_f32, d_b_q8_0, d_c_f32, m, n, k,
+                    );
+                }
                 return self
                     .gemm_f32xq8_0_gguf_f32_decode_async(d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
             }
@@ -2556,6 +2578,51 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("gemm_f32xq8_0_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues an experimental M=1 decode-specialized GGUF Q8_0 projection
+    /// where each CUDA block computes two output columns. This is opt-in via
+    /// `M40LLM_Q8_DECODE_TILED_COLS=2`.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq8_0_gguf_f32_decode_tiled2")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_decode_tiled2");
             drop(_g);
             if let Some(diag) = diag {
                 diag.finish(self)?;
