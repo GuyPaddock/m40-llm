@@ -56,7 +56,8 @@ Findings:
   path after this kernel fix; the obsolete single-row diagnostic admission gate
   was removed.
 
-Bounded real Qwen release confirmation:
+Bounded real Qwen release confirmation after dense and compressed head128
+multi-row prefill admission:
 
 ```bash
 source scripts/dev-env.sh && \
@@ -66,14 +67,26 @@ source scripts/dev-env.sh && \
   TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
   BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
   CASES="batch2_same batch4_mixed" \
-  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
-  PORT_BASE=59480 scripts/bench_server_batch_decode.sh
+  PORT_BASE=59680 scripts/bench_server_batch_decode.sh
 ```
 
 | Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Output note |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| compressed top8, multi-row | batch2 same | 2 | 2 | 639 ms | 0.603 s | 6.260 | both `Hello!` |
-| compressed top8, mixed-length multi-row | batch4 mixed | 4 | 4 | 1104 ms | 1.016 s | 7.246 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
+| dense `off`, multi-row | batch2 same | 2 | 2 | 644 ms | 0.610 s | 6.211 | both `Hello!` |
+| dense `off`, mixed-length multi-row | batch4 mixed | 4 | 4 | 1132 ms | 1.035 s | 7.067 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
+| compressed top8, multi-row | batch2 same | 2 | 2 | 649 ms | 0.613 s | 6.163 | both `Hello!` |
+| compressed top8, mixed-length multi-row | batch4 mixed | 4 | 4 | 1136 ms | 1.049 s | 7.042 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
+
+The compressed rows used:
+
+```bash
+SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=59880 scripts/bench_server_batch_decode.sh
+```
+
+For these very short prompts and bounded context, dense and compressed top8 are
+effectively tied. Treat this as scheduler admission/parity evidence, not a
+long-context compressed-KV speedup claim.
 
 ## 2026-05-24: Same-Length Qwen Head128 Multi-Row Compressed Prefill
 

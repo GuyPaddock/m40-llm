@@ -199,7 +199,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   per-wait CUDA events, and the packed-prefill attention kernel uses a fixed
   shared-memory score region separate from reduction scratch. Mixed-length
   head128/Qwen dense and preferred compressed multi-row prefill are now
-  admitted when `M40LLM_SERVER_BATCH_PREFILL=1`.
+  admitted when `M40LLM_SERVER_BATCH_PREFILL=1`. A follow-up bounded Qwen
+  release run after dense admission shows dense `off` and compressed top8 are
+  effectively tied on short 512-context prompts: batch4 mixed is 1132 ms /
+  7.067 tok/s dense versus 1136 ms / 7.042 tok/s compressed, with matching
+  outputs.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports
