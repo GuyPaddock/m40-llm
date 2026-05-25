@@ -2,6 +2,48 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Q8_0 Real-Model Generation Canary
+
+This checkpoint adds an explicit CUDA canary for validating the large-model
+GGUF Q8_0 projection path inside full generation. The canary is opt-in through
+`M40LLM_Q8_GENERATION_MODEL=/path/to/model.gguf`; when unset it skips cleanly.
+
+The canary probes the supplied GGUF before loading weights and reports:
+
+- architecture/tokenizer-relevant model family;
+- layer count, `d_model`, Q/KV head counts, head dimension, and context length;
+- tensor dtype counts and standard projection Q8_0 coverage;
+- bounded dense-KV estimate for the canary context;
+- support status and the reason for any skip.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_Q8_GENERATION_MODEL=/path/to/q8_0.gguf \
+  M40LLM_PROJECTION_BACKEND=large-model \
+  M40LLM_MATERIALIZE_F32_WEIGHTS=0 \
+  cargo test --features cuda --test q8_generation_canary -- \
+  --nocapture --test-threads=1
+```
+
+The canary bounds KV allocation with `M40LLM_Q8_CANARY_CONTEXT_TOKENS`
+(default `256`) and skips models larger than
+`M40LLM_Q8_CANARY_MAX_WEIGHT_MB` (default `8192`) unless overridden. It expects
+LLaMA/Qwen-style standard projection tensor names and at least one Q8_0
+projection tensor. Unsupported cached Q8_0 models should be documented as
+architecture/tokenizer coverage gaps rather than CUDA kernel failures.
+
+Local probe result:
+
+- `gemma-4-E2B-it-Q8_0.gguf` parses as `general.architecture=gemma4` with
+  317 Q8_0 tensors, but the current generic metadata parser rejects its
+  attention shape (`embedding_length 1536` versus
+  `head_count 8 * attention_key_length 512`). The canary skips it before weight
+  upload/allocation. Treat this as a Gemma4 config/tokenizer coverage gap, not
+  a Q8_0 projection kernel result.
+
 ## 2026-05-25: Q8_0 Shared-Activation Prefill Projection
 
 This checkpoint adds a shared-activation GGUF Q8_0 projection kernel for

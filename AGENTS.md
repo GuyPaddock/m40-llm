@@ -64,7 +64,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   work, and a block-loop kernel for smaller non-decode shapes; scalar Q8_0
   remains as a benchmark/debug baseline. Benchmarks show shared activation
   brings Qwen prefill64 Q/O below the F16 fallback, while materialized FP32
-  cuBLAS remains much faster when fast-fits is available.
+  cuBLAS remains much faster when fast-fits is available. A CUDA-only
+  `q8_generation_canary` test now probes an explicit
+  `M40LLM_Q8_GENERATION_MODEL` and runs bounded full generation only when the
+  supplied Q8_0 GGUF has supported LLaMA/Qwen-style metadata and standard Q8_0
+  projection coverage; unsupported models are reported as coverage gaps rather
+  than kernel failures.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
