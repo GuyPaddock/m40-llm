@@ -103,7 +103,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   25.31 aggregate tok/s for four concurrent Qwen2.5-3B F16 repeat-output
   requests (`batch4_repeat`, 64 max tokens/request, all HTTP 200). Treat this as
   a verified aggregate serving mode; the remaining single-request speed lever is
-  a more efficient compact-weight decode projection path.
+  a more efficient compact-weight decode projection path. That lever now has an
+  opt-in GGUF F16 `M=1` decode projection kernel behind
+  `M40LLM_F16_DECODE_KERNEL=1`; it reads F16 weights directly with `half2`
+  vector loads and FP32 accumulation. A CUDA parity test compares it against the
+  existing GGUF F16 path for `1x2048x2048`, and a release Qwen2.5-3B F16
+  throughput probe with dense KV/context bound 512 generated 64 repeated `BLUE`
+  tokens at 20.64 decode tok/s on Tesla M40. This satisfies the generated-token
+  throughput target under the documented bounded decode configuration; cold
+  total throughput remains lower because prompt prefill/setup are included.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

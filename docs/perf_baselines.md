@@ -2,6 +2,55 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5-3B Compact F16 Decode Reaches 20+ Tok/s
+
+This checkpoint adds an opt-in compact-weight GGUF F16 decode projection kernel
+for `M=1` single-token decode. The kernel reads GGUF F16 weights directly,
+uses `half2` vector loads for even `K`, and accumulates in FP32. This avoids the
+12.34 GB materialized FP32 projection cache and reduces single-request decode
+weight bandwidth enough to cross the 20 generated-token/s target on Tesla M40
+for a bounded 64-token sample.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  gemm_f32xf16_gguf_decode_kernel_matches_sync_1x2048x2048 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_F16_DECODE_KERNEL=1 \
+  M40LLM_QWEN_THROUGHPUT_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_THROUGHPUT_BACKEND=large-model \
+  M40LLM_QWEN_THROUGHPUT_KV=off \
+  M40LLM_QWEN_THROUGHPUT_CONTEXT=512 \
+  M40LLM_QWEN_THROUGHPUT_MAX_TOKENS=64 \
+  M40LLM_QWEN_THROUGHPUT_MIN_GENERATED=64 \
+  M40LLM_QWEN_THROUGHPUT_MIN_TPS=20 \
+  cargo test --release --features cuda --test qwen_decode_throughput -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Model | Backend | KV | Prompt tokens | Generated tokens | Prefill | Decode | Total | Decode tok/s | Total tok/s | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | large-model + `M40LLM_F16_DECODE_KERNEL=1` | dense off, context bound 512 | 24 | 64 | 1098 ms | 3101 ms | 5018 ms | 20.64 | 12.75 | repeated `BLUE` |
+
+Interpretation:
+
+- This satisfies the current generated-token throughput goal for Qwen2.5-3B on
+  Tesla M40: the measured decode/output rate is above 20 tok/s.
+- The measurement is generated-token decode throughput, not cold total
+  end-to-end throughput. Total throughput remains lower because prompt prefill
+  and setup are included in `total_ms`.
+- The compact F16 decode kernel is still opt-in via
+  `M40LLM_F16_DECODE_KERNEL=1`; keep it behind the env gate until it has broader
+  parity/performance coverage across more F16 GGUF models and longer contexts.
+
 ## 2026-05-25: Qwen2.5-3B Throughput Probe and Batched Server Check
 
 This checkpoint adds `tests/qwen_decode_throughput.rs`, an env-gated CUDA

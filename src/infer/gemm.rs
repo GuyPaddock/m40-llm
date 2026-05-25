@@ -49,6 +49,14 @@ fn materialized_gemm_stream(m: i32) -> CudaStream {
 }
 
 #[cfg(feature = "cuda")]
+fn f16_decode_kernel_enabled() -> bool {
+    matches!(
+        std::env::var("M40LLM_F16_DECODE_KERNEL").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    )
+}
+
+#[cfg(feature = "cuda")]
 fn materialized_budget_bytes() -> Option<usize> {
     let mb = std::env::var("M40LLM_MATERIALIZE_F32_BUDGET_MB")
         .ok()?
@@ -299,6 +307,14 @@ impl LoadedModel {
                 return self
                     .cuda
                     .gemm_f32xq8_0_gguf_f32_async(d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            }
+            if self.gguf_weight_dtype(d_b_f16) == GgmlDType::F16
+                && m == 1
+                && f16_decode_kernel_enabled()
+            {
+                return self
+                    .cuda
+                    .gemm_f32xf16_gguf_f32_decode_async(d_a_f32, d_b_f16, d_c_f32, m, n, k);
             }
             if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {

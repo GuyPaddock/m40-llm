@@ -4387,7 +4387,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (recent_window == 0) return -6;
         const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
         const int blocks = (int)q_heads;
-        const int threads = 128;
+        const int threads = 256;
         const size_t shmem = ((size_t)window_len + (size_t)threads) * sizeof(float);
         attention_last_token_gqa_dense_recent_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
             reinterpret_cast<const __half*>(kv->d_k),
@@ -5562,6 +5562,41 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         C[row * N + col] = acc;
     }
 
+    __global__ void gemm_f32xf16_gguf_f32_decode_kernel(
+        const float* __restrict__ A,  // 1xK row-major activations
+        const __half* __restrict__ B, // GGUF [K,N], K-fastest
+        float* __restrict__ C,        // 1xN row-major output
+        int N, int K) {
+        const int col = blockIdx.x;
+        const int tid = threadIdx.x;
+        if (col >= N) return;
+        float acc = 0.0f;
+        const size_t col_base = static_cast<size_t>(col) * static_cast<size_t>(K);
+        if ((K & 1) == 0) {
+            for (int kk = tid * 2; kk < K; kk += blockDim.x * 2) {
+                const __half2 b2 = *reinterpret_cast<const __half2*>(B + col_base + kk);
+                const float2 bf = __half22float2(b2);
+                acc += A[kk] * bf.x + A[kk + 1] * bf.y;
+            }
+        } else {
+            for (int kk = tid; kk < K; kk += blockDim.x) {
+                acc += A[kk] * __half2float(B[col_base + kk]);
+            }
+        }
+        extern __shared__ float f16_decode_reduce[];
+        f16_decode_reduce[tid] = acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                f16_decode_reduce[tid] += f16_decode_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            C[col] = f16_decode_reduce[0];
+        }
+    }
+
     __global__ void gemm_f32xq8_0_gguf_f32_kernel(
         const float* __restrict__ A,           // MxK row-major activations
         const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
@@ -5842,6 +5877,29 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->prefill_stream);
         if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
+    int m40llm_gemm_f32xf16_gguf_f32_decode_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f16,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx || !d_A_f32 || !d_B_f16 || !d_C_f32) return -1;
+        if (M != 1 || N <= 0 || K <= 0) return -2;
+        const int threads = 128;
+        const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const __half* B = reinterpret_cast<const __half*>(d_B_f16);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        gemm_f32xf16_gguf_f32_decode_kernel<<<N, threads, shmem, ctx->prefill_stream>>>(
+            A, B, C, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            fprintf(stderr, "gemm_f32xf16_gguf_f32_decode kernel launch error: %s\n", cudaGetErrorString(err));
+            return -3;
+        }
         return 0;
     }
 

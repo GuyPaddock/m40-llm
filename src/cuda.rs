@@ -206,6 +206,15 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xf16_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -1918,6 +1927,46 @@ impl CudaContext {
                 return Err(anyhow!("m40llm_gemm_f32xf16_gguf_f32 failed: {rc}"));
             }
             record_sync_gemm("gemm_f32xf16_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a single-token GGUF F16 decode projection on the prefill
+    /// stream. Callers must preserve stream dependencies before consuming
+    /// `d_c_f32`.
+    pub unsafe fn gemm_f32xf16_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf16_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xf16_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xf16_gguf_f32_decode");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]

@@ -78,15 +78,27 @@ impl LoadedModel {
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
             let d_norm_hidden =
                 d_norm_hidden.context("missing d_norm_hidden scratch for output norm logits")?;
-            self.run_rms_norm_weighted(
-                d_hidden_f32,
-                d_norm_w,
-                norm.dtype,
-                d_norm_hidden,
-                1,
-                d_model as u32,
-                self.model_config.layer_norm_epsilon,
-            )?;
+            if decode_cublas_single_stream_enabled() {
+                self.run_rms_norm_weighted_async(
+                    d_hidden_f32,
+                    d_norm_w,
+                    norm.dtype,
+                    d_norm_hidden,
+                    1,
+                    d_model as u32,
+                    self.model_config.layer_norm_epsilon,
+                )?;
+            } else {
+                self.run_rms_norm_weighted(
+                    d_hidden_f32,
+                    d_norm_w,
+                    norm.dtype,
+                    d_norm_hidden,
+                    1,
+                    d_model as u32,
+                    self.model_config.layer_norm_epsilon,
+                )?;
+            }
             timing::log("logits.output_norm", norm_start.elapsed());
             d_norm_hidden as *const c_void
         } else {

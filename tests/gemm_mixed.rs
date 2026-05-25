@@ -833,6 +833,86 @@ fn gemm_f32xq8_0_decode_kernel_matches_generic_1x2048x2048() -> Result<()> {
 }
 
 #[test]
+fn gemm_f32xf16_gguf_decode_kernel_matches_sync_1x2048x2048() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 2048i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_f16 = f32s_to_halves_bytes(&b);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_f16.len())?;
+    let dc_sync = ctx.device_malloc(bytes_c)?;
+    let dc_decode = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_f16.as_ptr() as *const c_void, b_f16.len())?;
+        ctx.gemm_f32xf16_gguf_f32(da as *const c_void, db as *const c_void, dc_sync, m, n, k)?;
+        ctx.gemm_f32xf16_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_decode,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut sync_bytes = vec![0u8; bytes_c];
+    let mut decode_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            sync_bytes.as_mut_ptr() as *mut c_void,
+            dc_sync as *const c_void,
+            sync_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            decode_bytes.as_mut_ptr() as *mut c_void,
+            dc_decode as *const c_void,
+            decode_bytes.len(),
+        )?;
+    }
+    let sync = bytes_to_f32s(&sync_bytes);
+    let decode = bytes_to_f32s(&decode_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (s, d) in sync.iter().zip(decode.iter()) {
+        let diff = (s - d).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / sync.len() as f32;
+    assert!(
+        max_diff <= 5e-4 && mean_diff <= 5e-5,
+        "f16 decode mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_sync)?;
+        ctx.device_free(dc_decode)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn gemm_f32xq8_0_dispatch_handles_tail_k() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
