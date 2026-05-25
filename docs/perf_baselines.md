@@ -90,6 +90,12 @@ Implementation/diagnostic notes:
   `prefill_ms=3950 decode_ms=3102 total_ms=7235 decode_tps=10.32
   total_tps=4.42`. This is useful Q8 integration progress, but still far below
   the F16 best and the Ollama target.
+- `M40LLM_Q8_DECODE_EVENT_LOG=1` adds a diagnostic CUDA-event split around Q8
+  decode projection launches. A tiny Qwen2.5 Q8_0 probe showed approximate
+  per-layer costs of `0.14 ms` for fused QKV, `0.11 ms` for the attention output
+  projection, `0.63 ms` for fused gate/up/SwiGLU, and `1.55 ms` for MLP down;
+  final `lm_head` was about `7.2 ms`. The next Q8 target should be MLP-down
+  projection throughput, not greedy sampling.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
   The profiled short run still shows roughly 16.5 ms host enqueue time plus

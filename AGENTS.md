@@ -130,7 +130,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   fused Q8 kernels. Keeping `K=2048` Q8 decode projections at 128 threads while
   raising larger hidden-dim Q8 decode projections to 256 threads improved that
   short probe to 4.42 E2E tok/s, but this remains below the F16 best and far
-  below the Ollama comparison target.
+  below the Ollama comparison target. `M40LLM_Q8_DECODE_EVENT_LOG=1` now
+  provides opt-in CUDA-event timing for Q8 decode projections; a tiny Qwen2.5
+  Q8_0 probe points to MLP down (~1.55 ms/layer) and fused gate/up/SwiGLU
+  (~0.63 ms/layer) as the next Q8 bottlenecks, with final lm_head around
+  7.2 ms.
   The decode-stream F16 path is opt-in and now synchronizes logits on the
   actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
   throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy

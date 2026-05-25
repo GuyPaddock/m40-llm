@@ -1146,6 +1146,52 @@ impl Drop for CudaEvent {
 }
 
 #[cfg(feature = "cuda")]
+fn q8_decode_event_log_enabled() -> bool {
+    std::env::var("M40LLM_Q8_DECODE_EVENT_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+fn q8_decode_event_stream() -> CudaStream {
+    if std::env::var("M40LLM_Q8_DECODE_STREAM").ok().as_deref() == Some("decode") {
+        CudaStream::Decode
+    } else {
+        CudaStream::Prefill
+    }
+}
+
+#[cfg(feature = "cuda")]
+struct Q8DecodeEventDiag {
+    label: &'static str,
+    stream: CudaStream,
+    start: CudaEvent,
+}
+
+#[cfg(feature = "cuda")]
+impl Q8DecodeEventDiag {
+    fn start(ctx: &CudaContext, label: &'static str) -> Result<Option<Self>> {
+        if !q8_decode_event_log_enabled() {
+            return Ok(None);
+        }
+        let stream = q8_decode_event_stream();
+        let start = ctx.create_event()?;
+        start.record(stream)?;
+        Ok(Some(Self {
+            label,
+            stream,
+            start,
+        }))
+    }
+
+    fn finish(self, ctx: &CudaContext) -> Result<()> {
+        let stop = ctx.create_event()?;
+        stop.record(self.stream)?;
+        let elapsed_ms = self.start.elapsed_sync(&stop, self.label)?;
+        eprintln!("[cuda-q8-event] {} {:.3} ms", self.label, elapsed_ms);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "cuda")]
 #[derive(Debug)]
 pub struct CudaGraphExec {
     ctx: CudaContext,
@@ -2176,6 +2222,7 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start(self, "mlp_gate_up_swiglu_f32xq8_0_gguf_decode")?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2192,6 +2239,10 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("mlp_gate_up_swiglu_f32xq8_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2224,6 +2275,7 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start(self, "qkv_f32xq8_0_gguf_decode")?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_qkv_f32xq8_0_gguf_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2248,6 +2300,10 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("qkv_f32xq8_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2317,6 +2373,10 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            if m == 1 && k > 0 && (k % 32) == 0 {
+                return self
+                    .gemm_f32xq8_0_gguf_f32_decode_async(d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            }
             static GEMM_LOG: Once = Once::new();
             log_gemm_backend_once(
                 &GEMM_LOG,
@@ -2479,6 +2539,7 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq8_0_gguf_f32_decode")?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2495,6 +2556,10 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("gemm_f32xq8_0_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
