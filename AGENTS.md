@@ -85,7 +85,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   compressed-KV top8 also passes short Qwen2.5 Q8_0 arithmetic/config smokes;
   at the 2048-token compatibility bound it allocates more than dense-equivalent
   KV because the 1024-token recent ring dominates, so this is compatibility
-  evidence rather than a long-context memory-saving result.
+  evidence rather than a long-context memory-saving result. Preferred
+  compressed `block-select-exact` generation now auto-enables packed-prefix
+  prefill for prompts up to 128 tokens when `M40LLM_PREFILL_CHUNK_SIZE` is
+  unset; `M40LLM_PREFILL_CHUNK_SIZE=0` disables that auto path, and dense
+  reference mode remains explicit-env only. Release Qwen2.5 Q8_0 default
+  compressed top8 now uses `packed-prefix-block-select-exact` for arithmetic
+  and config-lookup smokes, reducing the config row to about 2.24 s prefill /
+  2.65 s total. Bounded Qwen2.5 Q8_0 HTTP server smokes return `{"output":"4"}`
+  for both default compressed top8 and explicit dense `--kv-compress-mode off`;
+  the compressed server log records packed-prefix prefill.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

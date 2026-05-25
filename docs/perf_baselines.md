@@ -2,6 +2,65 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5 Q8_0 Default Compressed Auto-Packed Prefill
+
+The preferred compressed-KV runtime now automatically uses packed-prefix
+prefill for bounded `block-select-exact` prompts. `M40LLM_PREFILL_CHUNK_SIZE`
+still controls dense reference packed prefill explicitly; when unset, preferred
+compressed KV uses a conservative default bound of 128 prompt tokens. Set
+`M40LLM_PREFILL_CHUNK_SIZE=0` to disable the automatic compressed packed-prefix
+path.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed q8_0 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_Q8_GENERATION_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --features cuda --test q8_generation_canary -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Backend | KV mode | Prefill mode | Chunk | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Q8 launches | Output |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Q8_0 large-model | compressed top8 default | packed-prefix-block-select-exact | 128 | arithmetic | yes | 20 | 2 | 1192 ms | 137 ms | 1459 ms | 758 | `4` |
+| Q8_0 large-model | compressed top8 default | packed-prefix-block-select-exact | 128 | config lookup | yes | 38 | 3 | 2238 ms | 281 ms | 2653 ms | 1011 | `37` |
+
+Server smoke, release build, Qwen2.5 Q8_0, `--max-context-tokens 2048`:
+
+| Server mode | Request | Result | Log evidence |
+| --- | --- | --- | --- |
+| default compressed top8 | arithmetic | HTTP 200, `{"output":"4"}` | `packed prefix prefill enabled layers=36` |
+| explicit dense `off` | arithmetic | HTTP 200, `{"output":"4"}` | dense compatibility path used; no compressed allocation |
+
+Interpretation:
+
+- The default compressed Q8 path now gets the measured packed-prefix win without
+  requiring users to set `M40LLM_PREFILL_CHUNK_SIZE`.
+- Dense reference mode is intentionally unchanged: it still uses sequential
+  prefill unless `M40LLM_PREFILL_CHUNK_SIZE` is explicitly set.
+- The server compatibility smoke validates both the project default compressed
+  path and the explicit dense `--kv-compress-mode off` escape hatch for Qwen2.5
+  Q8_0.
+
 ## 2026-05-25: Qwen2.5 F16 Fast-Fits vs Q8_0 Large-Model Dense-KV Comparison
 
 This checkpoint adds an opt-in CUDA comparison harness for the same Qwen2.5-3B

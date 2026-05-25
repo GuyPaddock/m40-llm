@@ -145,7 +145,7 @@ fn long_decode_log_interval() -> Option<usize> {
 }
 
 #[cfg(feature = "cuda")]
-fn prefill_chunk_size_from_env() -> Result<Option<usize>> {
+fn prefill_chunk_size_setting_from_env() -> Result<Option<Option<usize>>> {
     let Some(value) = std::env::var("M40LLM_PREFILL_CHUNK_SIZE")
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -155,7 +155,7 @@ fn prefill_chunk_size_from_env() -> Result<Option<usize>> {
     let parsed = value
         .parse::<usize>()
         .with_context(|| format!("invalid M40LLM_PREFILL_CHUNK_SIZE value '{value}'"))?;
-    Ok((parsed > 0).then_some(parsed))
+    Ok(Some((parsed > 0).then_some(parsed)))
 }
 
 #[cfg(feature = "cuda")]
@@ -469,7 +469,16 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
 
     let log_prefix = options.log_prefix;
     #[cfg(feature = "cuda")]
-    let prefill_chunk_size = prefill_chunk_size_from_env()?;
+    let prefill_chunk_size_setting = prefill_chunk_size_setting_from_env()?;
+    #[cfg(feature = "cuda")]
+    let prefill_chunk_size = prefill_chunk_size_setting.flatten();
+    #[cfg(feature = "cuda")]
+    let preferred_compressed_prefill_chunk_size =
+        if options.kv_compression.is_preferred_batched_runtime() {
+            prefill_chunk_size_setting.unwrap_or(Some(128))
+        } else {
+            prefill_chunk_size
+        };
     #[cfg(not(feature = "cuda"))]
     let prefill_chunk_size = None;
     #[cfg(feature = "cuda")]
@@ -600,7 +609,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                             if matches!(
                                 options.kv_compression.mode,
                                 KvCompressMode::BlockSelectExact
-                            ) && prefill_chunk_size
+                            ) && preferred_compressed_prefill_chunk_size
                                 .is_some_and(|chunk_size| ids.len() <= chunk_size)
                             {
                                 match decode_session
@@ -1018,6 +1027,14 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         materialized_f32_cache_entries.saturating_sub(materialized_f32_cache_entries_before);
     let materialized_f32_cache_bytes_added_total =
         materialized_f32_cache_bytes.saturating_sub(materialized_f32_cache_bytes_before);
+    #[cfg(feature = "cuda")]
+    let reported_prefill_chunk_size = if options.kv_compression.is_preferred_batched_runtime() {
+        preferred_compressed_prefill_chunk_size
+    } else {
+        prefill_chunk_size
+    };
+    #[cfg(not(feature = "cuda"))]
+    let reported_prefill_chunk_size = prefill_chunk_size;
 
     Ok(GeneratedText {
         output: sanitize_output(&text),
@@ -1028,7 +1045,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         total_elapsed_ms: total_start.elapsed().as_millis(),
         attention_compression_elapsed_ms: None,
         prefill_mode,
-        prefill_chunk_size,
+        prefill_chunk_size: reported_prefill_chunk_size,
         compressed_prefill_chunk_size,
         temporary_dense_kv_bytes,
         packed_prefill_sync_wall_ms,
