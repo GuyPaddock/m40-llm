@@ -2257,6 +2257,7 @@ impl LoadedModel {
         let total_bytes_d = rows
             .checked_mul(bytes_d)
             .context("batched prefill total d_model byte size overflow")?;
+        let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
 
         self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
             for (seq_idx, item) in items.iter().enumerate() {
@@ -2275,7 +2276,6 @@ impl LoadedModel {
                 let layer_id: u32 = layer
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
-                let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
@@ -2598,6 +2598,14 @@ impl LoadedModel {
                         )?;
                     }
                 }
+                if std::env::var("M40LLM_PREFILL_SYNC_EACH_LAYER")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
+                {
+                    self.cuda.synchronize_stream(CudaStream::Decode)?;
+                    self.cuda.synchronize_stream(CudaStream::Prefill)?;
+                }
             }
 
             for (seq_idx, item) in items.iter().enumerate() {
@@ -2636,6 +2644,18 @@ impl LoadedModel {
                     padded_tokens.saturating_sub(valid_tokens)
                 );
             }
+
+            // The forward workspace is mutex-protected only while this closure
+            // owns it. Since the packed prefill path enqueues asynchronous work
+            // on both streams, drain the streams before returning so a following
+            // single-row decode cannot resize/free the workspace under queued
+            // kernels.
+            self.cuda
+                .synchronize_stream(CudaStream::Decode)
+                .context("batched prefill decode stream synchronization failed")?;
+            self.cuda
+                .synchronize_stream(CudaStream::Prefill)
+                .context("batched prefill prefill stream synchronization failed")?;
 
             Ok(layer_count)
         })

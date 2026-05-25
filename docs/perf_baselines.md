@@ -2,6 +2,53 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Real Qwen Mixed-Length Head128 Prefill Diagnostic
+
+This checkpoint narrows the remaining real Qwen mixed-length head128
+compressed multi-row prefill blocker.
+
+Validation/diagnostic commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  qwen_head128_compressed_multirow -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke compressed_head128 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_HEAD128_PREFILL_DIAG_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_HEAD128_PREFILL_DIAG_ORDER=java,hello,batching,cuda \
+  cargo test --release --features cuda --test forward_with_layer_smoke \
+  qwen_head128_real_mixed_prefill_diagnostic -- --nocapture --test-threads=1
+```
+
+Findings:
+
+- The synthetic Qwen-shaped compressed multi-row parity test still passes, and
+  compressed head128 server smokes still pass.
+- The real-model release diagnostic reproduces the mixed-length issue without
+  HTTP: single-row packed-prefix prefill remains correct, while multi-row
+  mixed-length prefill can produce non-finite prefix hidden vectors before the
+  final prompt-token decode.
+- The failure is release/timing sensitive; debug-mode diagnostics can pass for
+  the same prompt set.
+- `forward_prefill_all_layers_varlen_for_sequences` now keeps the varlen
+  metadata plan alive through the final stream drain, and drains both streams
+  before releasing the shared forward workspace so queued prefill kernels cannot
+  outlive workspace ownership.
+- CUDA stream waits now use per-wait events whose destruction is queued after
+  the waiting stream consumes them. This avoids re-recording a shared event
+  before earlier waits have drained.
+- Mixed-length real Qwen/head128 compressed multi-row prefill remains
+  diagnostic-only behind `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1`.
+  Current performance claims should use the admitted same-length multi-row path
+  or the safe mixed-length per-request packed-prefix fallback.
+
 ## 2026-05-24: Same-Length Qwen Head128 Multi-Row Compressed Prefill
 
 This checkpoint narrows and admits a safe subset of true multi-row

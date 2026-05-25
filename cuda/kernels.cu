@@ -28,6 +28,7 @@ struct M40llmCudaContext {
     cudaStream_t decode_stream;
     cudaEvent_t prefill_waits_decode_event;
     cudaEvent_t decode_waits_prefill_event;
+    std::vector<cudaEvent_t> retained_wait_events;
     int prefill_priority;
     int decode_priority;
     M40llmPersistentDecode* persistent_decode;
@@ -35,6 +36,13 @@ struct M40llmCudaContext {
     cublasHandle_t cublas;
 #endif
 };
+
+static void CUDART_CB destroy_wait_event_host_func(void* user_data) {
+    cudaEvent_t event = reinterpret_cast<cudaEvent_t>(user_data);
+    if (event) {
+        cudaEventDestroy(event);
+    }
+}
   struct M40llmDeviceProps {
       int device_id;
       int major;
@@ -492,23 +500,30 @@ extern "C" {
         cudaStream_t waiting_stream = select_stream(ctx, waiting_stream_kind);
         cudaStream_t signal_stream = select_stream(ctx, signal_stream_kind);
         if (!waiting_stream || !signal_stream) return -3;
-        cudaEvent_t event = nullptr;
-        if (waiting_stream_kind == 0 && signal_stream_kind == 1) {
-            event = ctx->prefill_waits_decode_event;
-        } else if (waiting_stream_kind == 1 && signal_stream_kind == 0) {
-            event = ctx->decode_waits_prefill_event;
-        } else if (waiting_stream_kind == signal_stream_kind) {
+        if (waiting_stream_kind == signal_stream_kind) {
             return 0;
         }
-        if (!event) return -4;
-        cudaError_t err = cudaSuccess;
+        cudaEvent_t event = nullptr;
+        cudaError_t err = cudaEventCreateWithFlags(&event, cudaEventDisableTiming);
+        if (err != cudaSuccess) {
+            return -4;
+        }
         err = cudaEventRecord(event, signal_stream);
         if (err != cudaSuccess) {
+            cudaEventDestroy(event);
             return -5;
         }
         err = cudaStreamWaitEvent(waiting_stream, event, 0);
         if (err != cudaSuccess) {
+            cudaEventDestroy(event);
             return -6;
+        }
+        err = cudaLaunchHostFunc(waiting_stream, destroy_wait_event_host_func, event);
+        if (err != cudaSuccess) {
+            // Host callbacks may be unsupported in some capture contexts. Keep
+            // the event alive until context teardown rather than destroying it
+            // before the asynchronously queued wait has consumed it.
+            ctx->retained_wait_events.push_back(event);
         }
         return 0;
     }
@@ -8529,6 +8544,9 @@ extern "C" void m40llm_residual_add_f32(M40llmCudaContext* ctx, const float* a, 
     #endif
         if (ctx->prefill_waits_decode_event) cudaEventDestroy(ctx->prefill_waits_decode_event);
         if (ctx->decode_waits_prefill_event) cudaEventDestroy(ctx->decode_waits_prefill_event);
+        for (cudaEvent_t event : ctx->retained_wait_events) {
+            if (event) cudaEventDestroy(event);
+        }
         cudaStreamDestroy(ctx->prefill_stream);
         cudaStreamDestroy(ctx->decode_stream);
         delete ctx;

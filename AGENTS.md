@@ -198,6 +198,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   multi-row returned HTTP 200 but changed outputs, and forcing sequential
   decode after prefill still diverged. Keep mixed-length head128/Qwen on the
   per-request packed-prefix path until that prefill/KV state issue is isolated.
+  A release-mode real Qwen diagnostic now reproduces the mixed-length failure
+  without HTTP and shows corruption in the prefix hidden vectors immediately
+  after multi-row prefill. The varlen prefill metadata plan is kept alive until
+  final stream drain, packed prefill drains both streams before releasing shared
+  workspace ownership, and stream waits now use per-wait CUDA events instead of
+  re-recording one shared event per direction. The real mixed-length Qwen
+  blocker remains open; do not use forced mixed-length timings as performance
+  claims.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports

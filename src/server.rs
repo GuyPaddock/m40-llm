@@ -252,6 +252,13 @@ impl DecodeSchedulerRequest {
             .encode_with_specials(&prompt, add_bos, false)
             .context("encode prompt")?;
         let prompt_token_len = ids.len();
+        if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
+            let preview: String = req.prompt.chars().take(96).collect();
+            eprintln!(
+                "[server] scheduler request {request_id} prompt_tokens={} prompt_preview={preview:?}",
+                prompt_token_len
+            );
+        }
         let max_tokens = req
             .max_tokens
             .or(Some(state.model.model_config.context_length as usize))

@@ -7,6 +7,7 @@ mod tiny_gguf;
 use anyhow::Result;
 use m40_llm::cuda::CudaStream;
 use m40_llm::decode_session::DecodeSession;
+use m40_llm::generate::{prepare_prompt, PromptFormat};
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
 use m40_llm::kv_compression::{
@@ -14,7 +15,11 @@ use m40_llm::kv_compression::{
     ScopedRuntimeConfig,
 };
 use m40_llm::profile;
+use m40_llm::sampling::{Sampler, SamplerConfig};
+use m40_llm::tokenizer::Tokenizer;
 use std::ffi::c_void;
+use std::fs;
+use std::path::PathBuf;
 
 fn halves_from_f32(vals: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(vals.len() * 2);
@@ -1155,6 +1160,274 @@ fn qwen_head128_compressed_multirow_prefill_matches_single_row_with_qkv_biases()
         }
     }
 
+    Ok(())
+}
+
+#[test]
+fn qwen_head128_real_mixed_prefill_diagnostic() -> Result<()> {
+    let Some(model_path) = std::env::var_os("M40LLM_QWEN_HEAD128_PREFILL_DIAG_MODEL") else {
+        eprintln!("skipping real Qwen mixed prefill diagnostic without M40LLM_QWEN_HEAD128_PREFILL_DIAG_MODEL");
+        return Ok(());
+    };
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let model_path = PathBuf::from(model_path);
+    let gguf_bytes = fs::read(&model_path)?;
+    let gguf_model = m40_llm::gguf::load_gguf(&model_path)?;
+    let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)?;
+    let tokenizer = Tokenizer::from_gguf_metadata(&model.gguf.metadata)?;
+    let prompt_order = std::env::var("M40LLM_QWEN_HEAD128_PREFILL_DIAG_ORDER")
+        .unwrap_or_else(|_| "java,hello,batching,cuda".to_string());
+    let prompts: Vec<&'static str> = prompt_order
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(|name| match name {
+            "java" => Ok("Please write a small Java program to check for stock quotes: "),
+            "hello" => Ok("Hello"),
+            "batching" => Ok("Name one benefit of batching LLM decode requests."),
+            "cuda" => Ok("Summarize CUDA streams in one sentence."),
+            other => Err(anyhow::anyhow!(
+                "unknown M40LLM_QWEN_HEAD128_PREFILL_DIAG_ORDER prompt {other:?}"
+            )),
+        })
+        .collect::<Result<_>>()?;
+    let ids: Vec<Vec<u32>> = prompts
+        .iter()
+        .map(|prompt| {
+            let (prepared, add_bos) = prepare_prompt(&tokenizer, prompt, PromptFormat::Auto);
+            tokenizer.encode_with_specials(&prepared, add_bos, false)
+        })
+        .collect::<Result<_>>()?;
+    let config = KvCompressionConfig {
+        recent_window: 256,
+        block_size: 32,
+        top_blocks: 8,
+        ..KvCompressionConfig::default()
+    };
+    let context_len = 512;
+    let seq_count = ids.len();
+    let sequence_id_offset = std::env::var("M40LLM_QWEN_HEAD128_PREFILL_DIAG_SEQUENCE_OFFSET")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(1);
+    let seq_slots = sequence_id_offset
+        .checked_add(seq_count.try_into()?)
+        .ok_or_else(|| anyhow::anyhow!("diagnostic sequence id overflow"))?;
+    let d_model = model.model_config.embedding_length as usize;
+    let _runtime_guard = ScopedRuntimeConfig::new(config.clone());
+    let server_sampler_config = SamplerConfig {
+        top_k: Some(1),
+        ..SamplerConfig::default()
+    };
+
+    model.allocate_compressed_kv_cache_for_layer_sequences(context_len, seq_slots, &config)?;
+    let mut safe_logits = Vec::with_capacity(seq_count);
+    let mut safe_generated = Vec::with_capacity(seq_count);
+    let mut safe_prefix_hidden = Vec::with_capacity(seq_count);
+    for (idx, token_ids) in ids.iter().enumerate() {
+        let mut session = DecodeSession::new_for_sequence_with_kv_config(
+            &model,
+            sequence_id_offset + idx as u32,
+            config.clone(),
+            d_model,
+            true,
+            "real_qwen_safe_prefill_diag",
+            "real_qwen_safe_prefill_diag:x",
+            "real_qwen_safe_prefill_diag:out",
+        )?;
+        let mut decode_ids = token_ids.clone();
+        let prefix_len = token_ids.len().saturating_sub(1);
+        anyhow::ensure!(prefix_len > 0, "diagnostic prompt {idx} has empty prefix");
+        let d_out = session.d_out_ptr()?;
+        unsafe {
+            model.forward_prefill_all_layers_varlen_for_sequences(&[
+                m40_llm::infer::ForwardPrefillSequence {
+                    token_ids: &token_ids[..prefix_len],
+                    sequence_id: sequence_id_offset + idx as u32,
+                    d_out_f32: d_out,
+                },
+            ])?;
+        }
+        let mut hidden_bytes = vec![0u8; d_model * std::mem::size_of::<f32>()];
+        unsafe {
+            model.cuda.memcpy_d2h(
+                hidden_bytes.as_mut_ptr() as *mut c_void,
+                d_out,
+                hidden_bytes.len(),
+            )?;
+        }
+        safe_prefix_hidden.push(
+            hidden_bytes
+                .chunks_exact(4)
+                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+                .collect::<Vec<_>>(),
+        );
+        session.mark_processed_through(prefix_len);
+        let mut first_logits = session.logits_for_ids(&decode_ids, |_| {})?;
+        let mut sampler = Sampler::new(server_sampler_config);
+        let mut generated = Vec::new();
+        for step in 0..2 {
+            let next = sampler.sample(&first_logits)? as u32;
+            generated.push(next);
+            decode_ids.push(next);
+            if step == 0 {
+                first_logits = session.logits_for_ids(&decode_ids, |_| {})?;
+            }
+        }
+        safe_logits.push(first_logits);
+        safe_generated.push(generated);
+    }
+
+    model.allocate_compressed_kv_cache_for_layer_sequences(context_len, seq_slots, &config)?;
+    let mut sessions = Vec::with_capacity(seq_count);
+    for idx in 0..seq_count {
+        sessions.push(DecodeSession::new_for_sequence_with_kv_config(
+            &model,
+            sequence_id_offset + idx as u32,
+            config.clone(),
+            d_model,
+            true,
+            "real_qwen_multirow_prefill_diag",
+            "real_qwen_multirow_prefill_diag:x",
+            "real_qwen_multirow_prefill_diag:out",
+        )?);
+    }
+    let items: Vec<_> = ids
+        .iter()
+        .enumerate()
+        .map(|(idx, token_ids)| {
+            let prefix_len = token_ids.len().saturating_sub(1);
+            anyhow::ensure!(prefix_len > 0, "diagnostic prompt {idx} has empty prefix");
+            Ok(m40_llm::infer::ForwardPrefillSequence {
+                token_ids: &token_ids[..prefix_len],
+                sequence_id: sequence_id_offset + idx as u32,
+                d_out_f32: sessions[idx].d_out_ptr()?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    unsafe {
+        model.forward_prefill_all_layers_varlen_for_sequences(&items)?;
+    }
+    drop(items);
+    let mut multi_prefix_hidden = Vec::with_capacity(seq_count);
+    for session in &sessions {
+        let d_out = session.d_out_ptr()?;
+        let mut hidden_bytes = vec![0u8; d_model * std::mem::size_of::<f32>()];
+        unsafe {
+            model.cuda.memcpy_d2h(
+                hidden_bytes.as_mut_ptr() as *mut c_void,
+                d_out,
+                hidden_bytes.len(),
+            )?;
+        }
+        multi_prefix_hidden.push(
+            hidden_bytes
+                .chunks_exact(4)
+                .map(|ch| f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]))
+                .collect::<Vec<_>>(),
+        );
+    }
+    let mut multi_logits = Vec::with_capacity(seq_count);
+    let mut multi_generated = Vec::with_capacity(seq_count);
+    for (idx, token_ids) in ids.iter().enumerate() {
+        let mut decode_ids = token_ids.clone();
+        sessions[idx].mark_processed_through(token_ids.len() - 1);
+        let mut first_logits = sessions[idx].logits_for_ids(&decode_ids, |_| {})?;
+        let mut sampler = Sampler::new(server_sampler_config);
+        let mut generated = Vec::new();
+        for step in 0..2 {
+            let next = sampler.sample(&first_logits)? as u32;
+            generated.push(next);
+            decode_ids.push(next);
+            if step == 0 {
+                first_logits = sessions[idx].logits_for_ids(&decode_ids, |_| {})?;
+            }
+        }
+        multi_logits.push(first_logits);
+        multi_generated.push(generated);
+    }
+
+    let mut any_top_mismatch = false;
+    for idx in 0..seq_count {
+        let safe_top = safe_logits[idx]
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(token, logit)| (token, *logit))
+            .unwrap_or((usize::MAX, f32::NAN));
+        let multi_top = multi_logits[idx]
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(token, logit)| (token, *logit))
+            .unwrap_or((usize::MAX, f32::NAN));
+        let mut max_abs_diff = 0.0f32;
+        let mut sum_abs_diff = 0.0f32;
+        for (safe, multi) in safe_logits[idx].iter().zip(multi_logits[idx].iter()) {
+            let diff = (safe - multi).abs();
+            max_abs_diff = max_abs_diff.max(diff);
+            sum_abs_diff += diff;
+        }
+        let mean_abs_diff = sum_abs_diff / safe_logits[idx].len().max(1) as f32;
+        let safe_text = tokenizer
+            .decode_ignoring_specials(&safe_generated[idx])
+            .unwrap_or_else(|_| "<decode-error>".to_string());
+        let multi_text = tokenizer
+            .decode_ignoring_specials(&multi_generated[idx])
+            .unwrap_or_else(|_| "<decode-error>".to_string());
+        let mut prefix_max_abs_diff = 0.0f32;
+        let mut prefix_sum_abs_diff = 0.0f32;
+        let mut prefix_nonfinite = 0usize;
+        for (safe, multi) in safe_prefix_hidden[idx]
+            .iter()
+            .zip(multi_prefix_hidden[idx].iter())
+        {
+            if !multi.is_finite() {
+                prefix_nonfinite += 1;
+            }
+            let diff = (safe - multi).abs();
+            prefix_max_abs_diff = prefix_max_abs_diff.max(diff);
+            prefix_sum_abs_diff += diff;
+        }
+        let prefix_mean_abs_diff =
+            prefix_sum_abs_diff / safe_prefix_hidden[idx].len().max(1) as f32;
+        any_top_mismatch |= safe_top.0 != multi_top.0;
+        eprintln!(
+            "[real-qwen-prefill-diag] row={idx} prompt_tokens={} prompt={:?} safe_generated={:?} safe_text={safe_text:?} multi_generated={:?} multi_text={multi_text:?} prefix_max_abs_diff={} prefix_mean_abs_diff={} prefix_nonfinite={} safe_final_top={}:{} multi_final_top={}:{} max_abs_diff={} mean_abs_diff={}",
+            ids[idx].len(),
+            prompts[idx],
+            safe_generated[idx],
+            multi_generated[idx],
+            prefix_max_abs_diff,
+            prefix_mean_abs_diff,
+            prefix_nonfinite,
+            safe_top.0,
+            safe_top.1,
+            multi_top.0,
+            multi_top.1,
+            max_abs_diff,
+            mean_abs_diff
+        );
+        any_top_mismatch |= safe_generated[idx] != multi_generated[idx];
+    }
+    if std::env::var("M40LLM_QWEN_HEAD128_PREFILL_DIAG_ASSERT")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        anyhow::ensure!(
+            !any_top_mismatch,
+            "real Qwen mixed-length multi-row prefill changed at least one top token"
+        );
+    }
     Ok(())
 }
 
