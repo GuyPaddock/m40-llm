@@ -177,6 +177,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   multi-request head128 packed-prefill/scheduler shape. A bounded Qwen2.5
   release run with `MAX_CONTEXT_TOKENS=512` shows batch4 mixed output parity
   and a 4.32x wall-time speedup versus dense serial.
+  Preferred compressed-KV packed-prefix prefill is now also admitted for
+  head128/Qwen-shaped server requests. CUDA parity compares Qwen-shaped
+  compressed packed-prefix prefill against sequential compressed prefill using
+  final logits and compressed-KV snapshots with Q/K/V biases and split-half
+  RoPE. A server smoke confirms two concurrent compressed head128 requests
+  record `server_scheduler_compressed_packed_prefill_tick`. A bounded Qwen2.5
+  release sanity check with `MAX_CONTEXT_TOKENS=512` and
+  `--kv-recent-window 256` returns HTTP 200 for compressed top8 batch2, but is
+  slightly slower than dense off on that tiny short-prompt row; treat it as
+  admission evidence, not a long-context compression speed claim.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports

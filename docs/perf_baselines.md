@@ -2,6 +2,89 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-24: Qwen Head128 Compressed Packed-Prefix Admission
+
+This checkpoint admits preferred compressed-KV packed-prefix prefill for
+`head_dim=128` server requests. The scheduler guard now allows `head_dim=64` or
+`head_dim=128` for compressed packed-prefix prefill when the runtime uses the
+preferred exact-old compressed path:
+
+- KV mode: `block-select-exact`
+- Exact-old backing: `fp16-k-q4-v`
+- Exact-old attention: `fp16-k-q4-v-direct`
+- Selection policy: plain top-k, default `top_blocks=8`
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke qwen_head128 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- Qwen-shaped `head_dim=128` packed-prefix prefill parity passes for dense and
+  compressed `block-select-exact` with Q/K/V biases and split-half RoPE.
+- The compressed parity test compares final logits and compressed-KV debug
+  snapshots against sequential compressed prefill.
+- `server_smoke` passes 11 CUDA/server tests, including a Qwen-shaped
+  two-request compressed head128 server smoke that records
+  `server_scheduler_compressed_packed_prefill_tick`.
+- CUDA/server clippy passes with `-D warnings`.
+
+Bounded release timing commands:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode off" \
+  PORT_BASE=56980 scripts/bench_server_batch_decode.sh
+
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=57180 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| dense off, batched decode+prefill | batch2 same | 2 | 2 | 642 ms | 0.607 s | 6.231 |
+| compressed top8, batched decode+prefill | batch2 same | 2 | 2 | 750 ms | 0.718 s | 5.333 |
+
+Interpretation:
+
+- The compressed head128 server path is now admitted and functional for
+  Qwen-shaped requests.
+- The bounded 512-context compressed timing uses `--kv-recent-window 256`
+  because the project default `kv_recent_window=1024` intentionally fails
+  against `--max-context-tokens 512` with a clear error.
+- This tiny batch2 smoke is not a compressed-KV speed claim: the prompts are
+  short and the compressed path is slightly slower than dense off. It is an
+  admission/correctness/timing sanity check.
+- Real compressed-KV quality/performance conclusions should continue to use
+  dense-valid long-context rows where old-context sparsification is exercised.
+
 ## 2026-05-24: Preferred Compressed KV Server Batch Admission
 
 This checkpoint makes the preferred compressed-KV runtime available through the
@@ -88,9 +171,10 @@ Server log confirmation:
 
 Remaining limitations:
 
-- Compressed packed-prefix prefill is currently verified and admitted for
-  head64 server prompts. Head128/Qwen compressed prefill still needs dedicated
-  parity before admission.
+- Compressed packed-prefix prefill is verified and admitted for head64 and
+  head128 server prompts. Head128 uses per-request packed-prefix prefill inside
+  scheduler ticks; true multi-row real-model Qwen prefill remains a separate
+  future optimization target.
 - Only the preferred direct FP16-K/q4-V exact-old runtime is admitted for
   batched compressed decode. Diagnostic compressed modes still fall back or fail
   clearly.

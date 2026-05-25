@@ -589,9 +589,9 @@ fn scheduler_can_use_compressed_packed_prefill(
         return false;
     }
     let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
-    if head_dim != Some(64) {
+    if !head_dim.map(|dim| dim == 64 || dim == 128).unwrap_or(false) {
         log_batch_prefill_fallback(
-            "compressed packed-prefix prefill currently enabled only for head_dim=64",
+            "compressed packed-prefix prefill currently requires head_dim=64 or 128",
         );
         return false;
     }

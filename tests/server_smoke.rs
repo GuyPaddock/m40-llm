@@ -1,6 +1,7 @@
 #![cfg(feature = "server")]
 
 use anyhow::Result;
+use m40_llm::generate::PromptFormat;
 use m40_llm::infer::LoadedModel;
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 use m40_llm::profile;
@@ -434,10 +435,22 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
     );
     let resp_a = resp_a?;
     let resp_b = resp_b?;
-    assert!(resp_a.status().is_success());
-    assert!(resp_b.status().is_success());
-    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
-    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    let status_a = resp_a.status();
+    let status_b = resp_b.status();
+    let bytes_a = resp_a.bytes().await?;
+    let bytes_b = resp_b.bytes().await?;
+    assert!(
+        status_a.is_success(),
+        "request A failed with {status_a}: {}",
+        String::from_utf8_lossy(&bytes_a)
+    );
+    assert!(
+        status_b.is_success(),
+        "request B failed with {status_b}: {}",
+        String::from_utf8_lossy(&bytes_b)
+    );
+    let out_a: GenerateResponse = serde_json::from_slice(&bytes_a)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&bytes_b)?;
     assert!(!out_a.output.is_empty());
     assert!(!out_b.output.is_empty());
 
@@ -459,6 +472,86 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
     assert!(
         batched_prefill_ticks >= 1,
         "head128 server batch scheduler should record at least one packed prefill tick"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_decode_supports_compressed_head128_prefill() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(tiny_gguf::TinyGgufConfig {
+        vocab: 50_000,
+        d_model: 128,
+        hidden: 16,
+        head_count: 1,
+        block_count: 1,
+        context_length: 16,
+    });
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layer_sequences(16, 2, &kv_compression)?;
+
+    let server = start_test_server_with_kv_config(model, kv_compression).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB CD".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "AB EF".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    let status_a = resp_a.status();
+    let status_b = resp_b.status();
+    let bytes_a = resp_a.bytes().await?;
+    let bytes_b = resp_b.bytes().await?;
+    assert!(
+        status_a.is_success(),
+        "request A failed with {status_a}: {}",
+        String::from_utf8_lossy(&bytes_a)
+    );
+    assert!(
+        status_b.is_success(),
+        "request B failed with {status_b}: {}",
+        String::from_utf8_lossy(&bytes_b)
+    );
+    let out_a: GenerateResponse = serde_json::from_slice(&bytes_a)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&bytes_b)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let compressed_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_packed_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_prefill_ticks >= 1,
+        "compressed head128 scheduler should record packed-prefix prefill"
     );
     server.shutdown().await?;
     Ok(())
