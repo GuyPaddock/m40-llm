@@ -2,6 +2,64 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Q8_0 Shared-Activation Prefill Projection
+
+This checkpoint adds a shared-activation GGUF Q8_0 projection kernel for
+multi-row prefill shapes. Production Q8_0 dispatch now uses:
+
+- decode-tiled Q8_0 when `M=1,K%32=0`;
+- shared-activation Q8_0 when `M>=4,K>=64,N>=16`;
+- block-loop Q8_0 for smaller non-decode shapes and tails;
+- scalar generic Q8_0 only through explicit benchmark/debug wrappers.
+
+Validation/benchmark commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  q8_0 -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench q8_projection -- \
+  --sample-size 10 --warm-up-time 1 --measurement-time 2
+```
+
+Correctness notes:
+
+- Shared-activation Q8_0 matches the CPU dequantized reference for medium and
+  tail shapes, including `M=5,K=96,N=65` and `M=3,K=35,N=33`.
+- A prefill-shaped CUDA parity test compares shared-activation and block-loop
+  outputs for `M=64,K=2048,N=2048` with aggregate tolerance.
+- Decode remains on the existing decode-tiled path.
+
+Timing summary on Tesla M40:
+
+| Shape | M | K | N | Q8_0 scalar | Q8_0 block-loop | Q8_0 shared-activation | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.572 us | 7.765 us | n/a | n/a | 7.619 us | 8.882 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.52 us | 160.41 us | n/a | 111.23 us | 189.09 us | 102.32 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 744.02 us | 542.61 us | n/a | 404.24 us | 544.92 us | 361.75 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 228.54 us | 160.58 us | n/a | 111.38 us | 188.97 us | 102.25 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 981.33 us | 769.24 us | n/a | 537.91 us | 787.63 us | 441.70 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.551 ms | 6.383 ms | 5.982 ms | n/a | 6.342 ms | 147.65 us |
+
+Interpretation:
+
+- Shared-activation improves the target Q8_0 prefill row beyond block-loop,
+  reducing Qwen prefill64 Q/O to 5.98 ms and beating the F16 fallback on this
+  benchmark.
+- Decode still prefers decode-tiled; shared-activation is only dispatched for
+  multi-row prefill-shaped work.
+- Materialized FP32 cuBLAS remains far faster whenever fast-fits is available.
+  The next large-model backend step should validate this projection path inside
+  real Q8_0 model generation rather than adding more micro-kernel variants.
+
 ## 2026-05-25: Q8_0 Block-Loop Prefill Projection
 
 This checkpoint adds a block-loop GGUF Q8_0 projection kernel for non-decode

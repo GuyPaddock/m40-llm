@@ -5615,6 +5615,53 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         C[row * N + col] = acc;
     }
 
+    __global__ void gemm_f32xq8_0_gguf_f32_shared_activation_kernel(
+        const float* __restrict__ A,           // MxK row-major activations
+        const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
+        float* __restrict__ C,                 // MxN row-major output
+        int M, int N, int K) {
+        const int tile_rows = 8;
+        const int tile_cols = 16;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int row = blockIdx.y * tile_rows + threadIdx.y;
+        const int col = blockIdx.x * tile_cols + threadIdx.x;
+        const int tid = threadIdx.y * tile_cols + threadIdx.x;
+        const int blocks_per_col = (K + qk - 1) / qk;
+        __shared__ float a_tile[tile_rows][qk];
+        float acc = 0.0f;
+        for (int block_idx = 0; block_idx < blocks_per_col; ++block_idx) {
+            const int k_base = block_idx * qk;
+            for (int linear = tid; linear < tile_rows * qk; linear += tile_rows * tile_cols) {
+                const int local_row = linear / qk;
+                const int q_idx = linear - local_row * qk;
+                const int global_row = blockIdx.y * tile_rows + local_row;
+                const int k_idx = k_base + q_idx;
+                a_tile[local_row][q_idx] =
+                    (global_row < M && k_idx < K) ? A[global_row * K + k_idx] : 0.0f;
+            }
+            __syncthreads();
+            if (row < M && col < N) {
+                const int valid = min(qk, K - k_base);
+                const size_t block_base =
+                    (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+                const __half scale_h = *reinterpret_cast<const __half*>(B + block_base);
+                const float scale = __half2float(scale_h);
+                #pragma unroll
+                for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                    if (q_idx < valid) {
+                        const int8_t q = *reinterpret_cast<const int8_t*>(B + block_base + 2 + q_idx);
+                        acc += a_tile[threadIdx.y][q_idx] * (static_cast<float>(q) * scale);
+                    }
+                }
+            }
+            __syncthreads();
+        }
+        if (row < M && col < N) {
+            C[row * N + col] = acc;
+        }
+    }
+
     __global__ void gemm_f32xq8_0_gguf_f32_decode_kernel(
         const float* __restrict__ A,           // 1xK row-major activations
         const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
@@ -5834,6 +5881,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_gemm_f32xq8_0_gguf_f32_shared_activation_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+        if (M <= 0 || N <= 0 || K <= 0) return -4;
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const unsigned char* B = reinterpret_cast<const unsigned char*>(d_B_q8_0);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 8);
+        dim3 grid((N + 15) / 16, (M + 7) / 8);
+        gemm_f32xq8_0_gguf_f32_shared_activation_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
     int m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
         M40llmCudaContext* ctx,
         const void* d_A_f32,
@@ -5861,6 +5927,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         int M, int N, int K) {
         if (M == 1 && K > 0 && (K % 32) == 0) {
             return m40llm_gemm_f32xq8_0_gguf_f32_decode_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
+        }
+        if (M >= 4 && K >= 64 && N >= 16) {
+            return m40llm_gemm_f32xq8_0_gguf_f32_shared_activation_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
         }
         return m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
     }

@@ -252,6 +252,28 @@ fn bench_q8_projection(c: &mut Criterion) {
                 },
             );
 
+            if m >= 4 && k >= 64 && n >= 16 {
+                group.throughput(Throughput::Bytes(moved_q8 as u64));
+                group.bench_with_input(
+                    BenchmarkId::new("q8_shared_activation", format!("{label}_{m}x{k}x{n}")),
+                    &(m, n, k),
+                    |bch, &(m, n, k)| {
+                        bch.iter(|| unsafe {
+                            ctx.gemm_f32xq8_0_gguf_f32_shared_activation_async(
+                                da as *const c_void,
+                                db_q8 as *const c_void,
+                                dc,
+                                m as i32,
+                                n as i32,
+                                k as i32,
+                            )
+                            .unwrap();
+                            ctx.synchronize_stream(CudaStream::Prefill).unwrap();
+                        })
+                    },
+                );
+            }
+
             if m == 1 && k % 32 == 0 {
                 group.throughput(Throughput::Bytes(moved_q8 as u64));
                 group.bench_with_input(

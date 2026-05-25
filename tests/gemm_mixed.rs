@@ -530,6 +530,220 @@ fn gemm_f32xq8_0_blockloop_matches_generic_prefill_shape() -> Result<()> {
 }
 
 #[test]
+fn gemm_f32xq8_0_shared_activation_matches_cpu_medium_5x96x65() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (5i32, 96i32, 65i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q8_0_gguf_dequantize(&b_q8, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_shared_activation_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut got_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            got_bytes.as_mut_ptr() as *mut c_void,
+            dc as *const c_void,
+            got_bytes.len(),
+        )?;
+    }
+    let got = bytes_to_f32s(&got_bytes);
+    for (g, e) in got.iter().zip(expect.iter()) {
+        assert!((g - e).abs() <= 1e-4, "got {g} expect {e}");
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_shared_activation_matches_cpu_tail_3x35x33() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (3i32, 35i32, 33i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 7) as f32 - 3.0) * 0.25)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 11) as f32 - 5.0) * 0.125)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q8_0_gguf_dequantize(&b_q8, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_shared_activation_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut got_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            got_bytes.as_mut_ptr() as *mut c_void,
+            dc as *const c_void,
+            got_bytes.len(),
+        )?;
+    }
+    let got = bytes_to_f32s(&got_bytes);
+    for (g, e) in got.iter().zip(expect.iter()) {
+        assert!((g - e).abs() <= 1e-4, "got {g} expect {e}");
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_shared_activation_matches_blockloop_prefill_shape() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (64i32, 2048i32, 2048i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc_blockloop = ctx.device_malloc(bytes_c)?;
+    let dc_shared = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_blockloop_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_blockloop,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.gemm_f32xq8_0_gguf_f32_shared_activation_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_shared,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut blockloop_bytes = vec![0u8; bytes_c];
+    let mut shared_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            blockloop_bytes.as_mut_ptr() as *mut c_void,
+            dc_blockloop as *const c_void,
+            blockloop_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            shared_bytes.as_mut_ptr() as *mut c_void,
+            dc_shared as *const c_void,
+            shared_bytes.len(),
+        )?;
+    }
+    let blockloop = bytes_to_f32s(&blockloop_bytes);
+    let shared = bytes_to_f32s(&shared_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (b, s) in blockloop.iter().zip(shared.iter()) {
+        let diff = (b - s).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / blockloop.len() as f32;
+    assert!(
+        max_diff <= 5e-1 && mean_diff <= 5e-3,
+        "shared mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_blockloop)?;
+        ctx.device_free(dc_shared)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn gemm_f32xq8_0_decode_kernel_matches_generic_1x2048x2048() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
