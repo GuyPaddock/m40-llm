@@ -214,11 +214,31 @@ fn bench_q8_projection(c: &mut Criterion) {
 
             group.throughput(Throughput::Bytes(moved_q8 as u64));
             group.bench_with_input(
-                BenchmarkId::new("q8_generic", format!("{label}_{m}x{k}x{n}")),
+                BenchmarkId::new("q8_scalar_generic", format!("{label}_{m}x{k}x{n}")),
                 &(m, n, k),
                 |bch, &(m, n, k)| {
                     bch.iter(|| unsafe {
                         ctx.gemm_f32xq8_0_gguf_f32_generic_async(
+                            da as *const c_void,
+                            db_q8 as *const c_void,
+                            dc,
+                            m as i32,
+                            n as i32,
+                            k as i32,
+                        )
+                        .unwrap();
+                        ctx.synchronize_stream(CudaStream::Prefill).unwrap();
+                    })
+                },
+            );
+
+            group.throughput(Throughput::Bytes(moved_q8 as u64));
+            group.bench_with_input(
+                BenchmarkId::new("q8_blockloop", format!("{label}_{m}x{k}x{n}")),
+                &(m, n, k),
+                |bch, &(m, n, k)| {
+                    bch.iter(|| unsafe {
+                        ctx.gemm_f32xq8_0_gguf_f32_blockloop_async(
                             da as *const c_void,
                             db_q8 as *const c_void,
                             dc,

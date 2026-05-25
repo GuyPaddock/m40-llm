@@ -233,6 +233,15 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -2015,6 +2024,46 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("gemm_f32xq8_0_gguf_f32_generic");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the block-loop fused GGUF Q8_0 projection kernel on the prefill
+    /// stream without synchronizing. This is the production non-decode Q8_0
+    /// path and handles K tail blocks.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_blockloop_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_blockloop");
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]

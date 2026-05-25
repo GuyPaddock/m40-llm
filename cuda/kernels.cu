@@ -5585,6 +5585,36 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         C[row * N + col] = acc;
     }
 
+    __global__ void gemm_f32xq8_0_gguf_f32_blockloop_kernel(
+        const float* __restrict__ A,           // MxK row-major activations
+        const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
+        float* __restrict__ C,                 // MxN row-major output
+        int M, int N, int K) {
+        int row = blockIdx.y * blockDim.y + threadIdx.y;
+        int col = blockIdx.x * blockDim.x + threadIdx.x;
+        if (row >= M || col >= N) return;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = (K + qk - 1) / qk;
+        float acc = 0.0f;
+        for (int block_idx = 0; block_idx < blocks_per_col; ++block_idx) {
+            const int k_base = block_idx * qk;
+            const int valid = min(qk, K - k_base);
+            const size_t block_base =
+                (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+            const __half scale_h = *reinterpret_cast<const __half*>(B + block_base);
+            const float scale = __half2float(scale_h);
+            #pragma unroll
+            for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                if (q_idx < valid) {
+                    const int8_t q = *reinterpret_cast<const int8_t*>(B + block_base + 2 + q_idx);
+                    acc += A[row * K + k_base + q_idx] * (static_cast<float>(q) * scale);
+                }
+            }
+        }
+        C[row * N + col] = acc;
+    }
+
     __global__ void gemm_f32xq8_0_gguf_f32_decode_kernel(
         const float* __restrict__ A,           // 1xK row-major activations
         const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
@@ -5785,6 +5815,25 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+        if (M <= 0 || N <= 0 || K <= 0) return -4;
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const unsigned char* B = reinterpret_cast<const unsigned char*>(d_B_q8_0);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f32xq8_0_gguf_f32_blockloop_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
     int m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
         M40llmCudaContext* ctx,
         const void* d_A_f32,
@@ -5813,7 +5862,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (M == 1 && K > 0 && (K % 32) == 0) {
             return m40llm_gemm_f32xq8_0_gguf_f32_decode_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
         }
-        return m40llm_gemm_f32xq8_0_gguf_f32_generic_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
+        return m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
     }
 
     int m40llm_gemm_f32xq8_0_gguf_f32(

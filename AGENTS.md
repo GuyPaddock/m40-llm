@@ -59,6 +59,11 @@ batched decode path before touching persistent decode or large-model fused-dequa
   fallback path without full FP32 materialization, while fused dequant
   projection kernels are starting with an opt-in GGUF Q8_0 projection primitive
   that computes `f32 x Q8_0 -> f32` and dequantizes inside the CUDA kernel.
+  Q8_0 projection dispatch now uses an `M=1,K%32=0` decode-tiled kernel for
+  single-token decode and a block-loop kernel for non-decode shapes; scalar Q8_0
+  remains as a benchmark/debug baseline. Benchmarks show block-loop brings
+  Qwen prefill64 Q/O close to the F16 fallback, while materialized FP32 cuBLAS
+  remains much faster when fast-fits is available.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

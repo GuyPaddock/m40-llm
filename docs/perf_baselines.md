@@ -2,6 +2,66 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Q8_0 Block-Loop Prefill Projection
+
+This checkpoint adds a block-loop GGUF Q8_0 projection kernel for non-decode
+shapes. The scalar generic kernel remains available as a benchmark/debug
+baseline, while production dispatch now uses:
+
+- decode-tiled Q8_0 when `M=1,K%32=0`;
+- block-loop Q8_0 for all other Q8_0 projection shapes;
+- scalar generic Q8_0 only through explicit benchmark/debug wrappers.
+
+Validation/benchmark commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  q8_0 -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench q8_projection -- \
+  --sample-size 10 --warm-up-time 1 --measurement-time 2
+```
+
+Correctness notes:
+
+- Block-loop Q8_0 matches the CPU dequantized reference for tail and medium
+  shapes, including `M=2,K=35,N=3` and `M=5,K=96,N=65`.
+- A prefill-shaped CUDA parity test compares block-loop and scalar generic
+  outputs for `M=64,K=2048,N=2048`.
+- The decode-tiled parity test uses aggregate tolerance because it changes the
+  FP32 reduction order versus the scalar baseline.
+
+Timing summary on Tesla M40:
+
+| Shape | M | K | N | Q8_0 scalar | Q8_0 block-loop | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.641 us | 7.888 us | n/a | 7.805 us | 9.355 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.55 us | 161.30 us | 111.64 us | 190.38 us | 103.87 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 744.03 us | 543.86 us | 404.87 us | 545.19 us | 363.71 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 230.75 us | 160.62 us | 111.40 us | 190.18 us | 103.14 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 980.49 us | 773.46 us | 538.03 us | 788.82 us | 443.06 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.551 ms | 6.388 ms | n/a | 6.346 ms | 148.12 us |
+
+Interpretation:
+
+- Block-loop improves the non-decode Q8_0 path by hoisting per-block scale loads
+  and avoiding repeated scale decode for every scalar K element.
+- The improvement is meaningful for prefill-shaped Q8_0 work: Qwen prefill64
+  drops from 7.55 ms to 6.39 ms, roughly matching the existing F16 fallback.
+- Decode still prefers the decode-tiled kernel; block-loop is faster than scalar
+  but slower than decode-tiled for `M=1` rows.
+- Materialized FP32 cuBLAS remains far faster whenever fast-fits is available.
+  The next Q8_0 large-model step should be true multi-row tiling/shared
+  activation reuse, not more scalar block-loop tuning.
+
 ## 2026-05-25: Q8_0 Decode Projection Tiling
 
 This checkpoint adds an `M=1` decode-specialized Q8_0 projection kernel and
