@@ -44,6 +44,12 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_QKV=1 M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1343 ms | 28277 ms | 29826 ms | 18.11 | 17.17 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | previous row + `M40LLM_FUSED_RESIDUAL_NORM=1` | 44 | 512 | 1344 ms | 28288 ms | 29826 ms | 18.10 | 17.17 | coherent |
 
+Failed/neutral fusion experiment record:
+
+| Experiment | Preserved in commit | Removed in commit | Probe result | Target result | Decision |
+| --- | --- | --- | --- | --- | --- |
+| `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
+
 Implementation/diagnostic notes:
 
 - `M40LLM_F16_DECODE_STREAM=decode` now runs the opt-in compact F16 decode
