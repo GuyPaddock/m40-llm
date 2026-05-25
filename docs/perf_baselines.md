@@ -2,10 +2,11 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
-## 2026-05-24: Real Qwen Mixed-Length Head128 Prefill Diagnostic
+## 2026-05-24: Real Qwen Mixed-Length Head128 Prefill Fix
 
-This checkpoint narrows the remaining real Qwen mixed-length head128
-compressed multi-row prefill blocker.
+This checkpoint fixes the release-only real Qwen mixed-length head128
+compressed multi-row prefill blocker and supersedes the same-day
+diagnostic-only notes below.
 
 Validation/diagnostic commands:
 
@@ -31,12 +32,13 @@ Findings:
 
 - The synthetic Qwen-shaped compressed multi-row parity test still passes, and
   compressed head128 server smokes still pass.
-- The real-model release diagnostic reproduces the mixed-length issue without
-  HTTP: single-row packed-prefix prefill remains correct, while multi-row
-  mixed-length prefill can produce non-finite prefix hidden vectors before the
-  final prompt-token decode.
-- The failure is release/timing sensitive; debug-mode diagnostics can pass for
-  the same prompt set.
+- A new standalone Qwen-shaped packed-prefill attention parity test reproduces
+  the release NaN failure at the kernel level and now passes against the CPU
+  reference.
+- The real-model release diagnostic now compares single-row packed-prefix
+  prefill with multi-row mixed-length packed prefill for the server prompt
+  order and sequence IDs. It passes with matching generated tokens and matching
+  prefix hidden vectors.
 - `forward_prefill_all_layers_varlen_for_sequences` now keeps the varlen
   metadata plan alive through the final stream drain, and drains both streams
   before releasing the shared forward workspace so queued prefill kernels cannot
@@ -44,12 +46,36 @@ Findings:
 - CUDA stream waits now use per-wait events whose destruction is queued after
   the waiting stream consumes them. This avoids re-recording a shared event
   before earlier waits have drained.
-- Mixed-length real Qwen/head128 compressed multi-row prefill remains
-  diagnostic-only behind `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1`.
-  Current performance claims should use the admitted same-length multi-row path
-  or the safe mixed-length per-request packed-prefix fallback.
+- The packed-prefill attention kernel now uses a fixed shared-memory score
+  region separate from the reduction scratch region. This removes the
+  release-mode NaNs seen with Qwen's `q_heads=16`, `kv_heads=2`,
+  `head_dim=128` shape.
+- Mixed-length real Qwen/head128 compressed multi-row prefill is now admitted
+  for the preferred compressed runtime when `M40LLM_SERVER_BATCH_PREFILL=1`.
+
+Bounded real Qwen release confirmation:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same batch4_mixed" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=59480 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Output note |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| compressed top8, multi-row | batch2 same | 2 | 2 | 639 ms | 0.603 s | 6.260 | both `Hello!` |
+| compressed top8, mixed-length multi-row | batch4 mixed | 4 | 4 | 1104 ms | 1.016 s | 7.246 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
 
 ## 2026-05-24: Same-Length Qwen Head128 Multi-Row Compressed Prefill
+
+Superseded by the real Qwen mixed-length fix above. This section records the
+intermediate same-length-only admission checkpoint.
 
 This checkpoint narrows and admits a safe subset of true multi-row
 head128/Qwen compressed packed prefill:

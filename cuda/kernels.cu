@@ -4159,7 +4159,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const uint32_t kv_offset = kv_offsets[batch_idx];
         const uint32_t causal_end = kv_len - q_len + q_idx;
         float* scores = shmem;
-        float* reduce = scores + kv_len;
+        float* reduce = scores + 8192u;
 
         const float* qh = Q + ((size_t)q_token_offset * (size_t)q_heads + (size_t)qh_idx) * head_dim;
 
@@ -5400,7 +5400,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (max_q_len_host == 0 || max_kv_len_host == 0 || max_kv_len_host > 8192) return -8;
 
         dim3 grid((int)max_q_len_host, (int)q_heads, (int)batch_size);
-        const size_t shmem = ((size_t)max_kv_len_host + (size_t)threads) * sizeof(float);
+        const size_t shmem = (8192u + (size_t)threads) * sizeof(float);
         attention_prefill_gqa_varlen_kernel<<<grid, threads, shmem, ctx->prefill_stream>>>(
             reinterpret_cast<const float*>(q_dev_f32),
             reinterpret_cast<const float*>(k_dev_f32),

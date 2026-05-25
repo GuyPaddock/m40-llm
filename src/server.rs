@@ -627,19 +627,6 @@ fn scheduler_can_use_compressed_packed_prefill(
 }
 
 #[cfg(feature = "cuda")]
-fn scheduler_requests_have_same_prefill_prefix_len(requests: &[DecodeSchedulerRequest]) -> bool {
-    let Some(first) = requests
-        .first()
-        .and_then(DecodeSchedulerRequest::prefill_prefix_len)
-    else {
-        return false;
-    };
-    requests
-        .iter()
-        .all(|request| request.prefill_prefix_len() == Some(first))
-}
-
-#[cfg(feature = "cuda")]
 fn split_scheduler_requests(
     requests: Vec<DecodeSchedulerRequest>,
 ) -> (
@@ -831,8 +818,6 @@ fn process_scheduler_batch_tick(
                 .as_ref()
                 .map(|kv| kv.head_dim() == 128)
                 .unwrap_or(false)
-                && (server_head128_multirow_prefill_diag_requested()
-                    || scheduler_requests_have_same_prefill_prefix_len(&prefill_requests))
                 && prefill_requests.len() > 1;
             if use_multirow_head128 {
                 crate::profile::record_launch("server_scheduler_compressed_batched_prefill_tick");

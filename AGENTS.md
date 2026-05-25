@@ -192,20 +192,18 @@ batched decode path before touching persistent decode or large-model fused-dequa
   The Qwen-like parity test covers `head_dim=128`, `q_heads=16`, `kv_heads=2`,
   Q/K/V biases, split-half RoPE, and compressed KV snapshots. A bounded real
   Qwen2.5 release run with `MAX_CONTEXT_TOKENS=512` improves compressed top8
-  batch2 same-prompt wall time to 592 ms / 6.757 tok/s. Mixed-length real Qwen
-  head128 multi-row prefill remains diagnostic-only behind
-  `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1`: forced batch4 mixed
-  multi-row returned HTTP 200 but changed outputs, and forcing sequential
-  decode after prefill still diverged. Keep mixed-length head128/Qwen on the
-  per-request packed-prefix path until that prefill/KV state issue is isolated.
-  A release-mode real Qwen diagnostic now reproduces the mixed-length failure
-  without HTTP and shows corruption in the prefix hidden vectors immediately
-  after multi-row prefill. The varlen prefill metadata plan is kept alive until
-  final stream drain, packed prefill drains both streams before releasing shared
-  workspace ownership, and stream waits now use per-wait CUDA events instead of
-  re-recording one shared event per direction. The real mixed-length Qwen
-  blocker remains open; do not use forced mixed-length timings as performance
-  claims.
+  batch2 same-prompt wall time to 592 ms / 6.757 tok/s. The release-only real
+  Qwen mixed-length blocker is now isolated and fixed: a standalone
+  Qwen-shaped packed-prefill attention parity test reproduces the old NaN
+  failure and now passes, and the real Qwen release diagnostic shows
+  mixed-length multi-row prefill matching the safe single-row packed-prefix
+  path for prefix hidden vectors and generated tokens. The varlen prefill
+  metadata plan is kept alive until final stream drain, packed prefill drains
+  both streams before releasing shared workspace ownership, stream waits use
+  per-wait CUDA events, and the packed-prefill attention kernel uses a fixed
+  shared-memory score region separate from reduction scratch. Mixed-length
+  head128/Qwen compressed multi-row prefill is now admitted for the preferred
+  compressed runtime when `M40LLM_SERVER_BATCH_PREFILL=1`.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports

@@ -567,7 +567,7 @@ async fn zz_server_generate_batch_decode_supports_compressed_head128_prefill() -
 }
 
 #[tokio::test]
-async fn zz_server_generate_batch_decode_supports_compressed_head128_multirow_prefill_diag(
+async fn zz_server_generate_batch_decode_supports_compressed_head128_mixed_multirow_prefill(
 ) -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
         eprintln!("skipping server smoke tests without CUDA upload support");
@@ -575,7 +575,6 @@ async fn zz_server_generate_batch_decode_supports_compressed_head128_multirow_pr
     }
     let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
     let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
-    let _multirow_env = EnvVarGuard::set("M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG", "1");
     profile::reset();
 
     let kv_compression = server_smoke_compressed_config(8);
@@ -642,7 +641,7 @@ async fn zz_server_generate_batch_decode_supports_compressed_head128_multirow_pr
         .unwrap_or_default();
     assert!(
         compressed_batched_prefill_ticks >= 1,
-        "compressed head128 diagnostic scheduler should record multi-row packed prefill"
+        "mixed-length compressed head128 scheduler should record multi-row packed prefill"
     );
     server.shutdown().await?;
     Ok(())
