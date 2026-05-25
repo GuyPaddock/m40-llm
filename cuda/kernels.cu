@@ -148,6 +148,14 @@ extern "C" {
         return value && std::strcmp(value, "1") == 0;
     }
 
+    static cudaStream_t f16_decode_projection_stream(M40llmCudaContext* ctx) {
+        const char* value = std::getenv("M40LLM_F16_DECODE_STREAM");
+        if (value && (std::strcmp(value, "decode") == 0 || std::strcmp(value, "DECODE") == 0)) {
+            return ctx->decode_stream;
+        }
+        return ctx->prefill_stream;
+    }
+
     static uint32_t q8_old_k_source_from_env() {
         const char* value = std::getenv("M40LLM_KV_EXACT_OLD_PRECISION");
         if (!value || value[0] == '\0') return 0u;
@@ -5893,7 +5901,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const float* A = reinterpret_cast<const float*>(d_A_f32);
         const __half* B = reinterpret_cast<const __half*>(d_B_f16);
         float* C = reinterpret_cast<float*>(d_C_f32);
-        gemm_f32xf16_gguf_f32_decode_kernel<<<N, threads, shmem, ctx->prefill_stream>>>(
+        gemm_f32xf16_gguf_f32_decode_kernel<<<
+            N,
+            threads,
+            shmem,
+            f16_decode_projection_stream(ctx)>>>(
             A, B, C, N, K);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {

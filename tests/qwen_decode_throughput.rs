@@ -204,6 +204,12 @@ fn qwen_decode_throughput_goal_probe() -> Result<()> {
             "Qwen decode throughput {decode_tps:.3} tok/s below required {min_tps:.3} tok/s"
         );
     }
+    if let Some(min_total_tps) = env_f64("M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS") {
+        assert!(
+            total_tps >= min_total_tps,
+            "Qwen E2E throughput {total_tps:.3} tok/s below required {min_total_tps:.3} tok/s"
+        );
+    }
 
     Ok(())
 }

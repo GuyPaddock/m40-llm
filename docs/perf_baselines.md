@@ -2,6 +2,59 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5-3B E2E Ollama Comparison Checkpoint
+
+The active E2E goal uses this exact prompt with `max_tokens=512`:
+
+```text
+Explain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible
+```
+
+Ollama baseline method:
+
+- Started an isolated Ollama server with `CUDA_VISIBLE_DEVICES=1
+  OLLAMA_HOST=127.0.0.1:11436 ollama serve`.
+- Ollama logs confirmed the runner used `Tesla M40 24GB`, compute capability
+  5.2, with `qwen2.5:3b-instruct-q8_0`.
+- Warmed once with `num_predict=1`.
+- Measured a non-streaming `/api/generate` request with `num_predict=512`,
+  `num_ctx=1024`, `temperature=0`, and `top_k=1`.
+
+Ollama result:
+
+| Model | Runtime | Prompt tokens | Generated tokens | Wall | Total duration | Eval duration | E2E tok/s | Eval tok/s | Stop |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B Instruct Q8_0 | Ollama 0.18.2 on Tesla M40 | 65 | 512 | 12.545 s | 12.534 s | 11.047 s | 40.81 | 46.35 | length |
+
+The required 30% margin over this measured E2E baseline is **53.06 generated
+tokens/s**.
+
+m40-llm release results on the same M40:
+
+| Model | Backend | KV | Extra env | Prompt tokens | Generated tokens | Prefill | Decode | Total | Decode tok/s | E2E tok/s | Output quality |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | large-model | dense off | `M40LLM_F16_DECODE_KERNEL=1` | 44 | 512 | 2049 ms | 36353 ms | 43575 ms | 14.08 | 11.75 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | current Q8_0 fused projection | 44 | 512 | 5957 ms | 82287 ms | 93430 ms | 6.22 | 5.48 | coherent |
+| Qwen2.5-3B F16 | fast-fits | dense off | materialized FP32 cuBLAS | 44 | 512 | 3993 ms | 54141 ms | 63339 ms | 9.46 | 8.08 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | `M40LLM_F16_DECODE_KERNEL=1 M40LLM_F16_DECODE_STREAM=decode` | 44 | 512 | 1744 ms | 31268 ms | 38579 ms | 16.38 | 13.27 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_PREFILL_CHUNK_SIZE=128` | 44 | 512 | 2826 ms | 31236 ms | 39335 ms | 16.39 | 13.02 | coherent |
+
+Implementation/diagnostic notes:
+
+- `M40LLM_F16_DECODE_STREAM=decode` now runs the opt-in compact F16 decode
+  projection kernel on the decode stream and makes forward/logits synchronize
+  the actual producer stream. An intermediate version synchronized the wrong
+  stream in logits and produced corrupted output; that was fixed before the
+  coherent full-run result above.
+- `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` can now assert an E2E throughput
+  floor separately from the existing generated-token decode TPS floor.
+- Packed-prefix prefill is not useful for this short Qwen prompt on the current
+  path; it increased prompt prefill time from 1744 ms to 2826 ms.
+- Current m40-llm best E2E is 13.27 tok/s, about 32.5% of Ollama's measured
+  E2E rate and far below the 53.06 tok/s target. The next required
+  optimization must attack per-token forward/logits cost, not just prompt
+  prefill or measurement overhead.
+
 ## 2026-05-25: Qwen2.5-3B Compact F16 Decode Reaches 20+ Tok/s
 
 This checkpoint adds an opt-in compact-weight GGUF F16 decode projection kernel

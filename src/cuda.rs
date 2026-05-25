@@ -1937,9 +1937,10 @@ impl CudaContext {
     }
 
     /// # Safety
-    /// Enqueues a single-token GGUF F16 decode projection on the prefill
-    /// stream. Callers must preserve stream dependencies before consuming
-    /// `d_c_f32`.
+    /// Enqueues a single-token GGUF F16 decode projection. By default this
+    /// uses the prefill stream for compatibility; `M40LLM_F16_DECODE_STREAM=decode`
+    /// runs the opt-in compact decode path on the decode stream to avoid
+    /// per-layer cross-stream waits.
     pub unsafe fn gemm_f32xf16_gguf_f32_decode_async(
         &self,
         d_a_f32: *const c_void,

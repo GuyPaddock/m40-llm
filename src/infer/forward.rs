@@ -1,5 +1,5 @@
 #[cfg(feature = "cuda")]
-use super::gemm::decode_cublas_single_stream_enabled;
+use super::gemm::{decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled};
 use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
 use super::workspace::ForwardWorkspacePtrs;
@@ -298,7 +298,8 @@ impl LoadedModel {
                     head_dim
                 );
             }
-            let single_stream_decode = decode_cublas_single_stream_enabled();
+            let single_stream_decode =
+                decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
 
             self.with_forward_workspace(
                 d_model as usize,
@@ -765,7 +766,8 @@ impl LoadedModel {
                     head_dim
                 );
             }
-            let single_stream_decode = decode_cublas_single_stream_enabled();
+            let single_stream_decode =
+                decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
 
             self.with_forward_workspace(
                 d_model as usize,

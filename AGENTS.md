@@ -110,8 +110,16 @@ batched decode path before touching persistent decode or large-model fused-dequa
   existing GGUF F16 path for `1x2048x2048`, and a release Qwen2.5-3B F16
   throughput probe with dense KV/context bound 512 generated 64 repeated `BLUE`
   tokens at 20.64 decode tok/s on Tesla M40. This satisfies the generated-token
-  throughput target under the documented bounded decode configuration; cold
-  total throughput remains lower because prompt prefill/setup are included.
+  throughput target under the documented bounded decode configuration; it does
+  not satisfy the newer Ollama E2E comparison goal. The same-prompt Ollama
+  Qwen2.5-3B Q8_0 baseline on Tesla M40 is 40.81 E2E tok/s, making the +30%
+  target 53.06 E2E tok/s. Current m40-llm best for that exact 512-token prompt
+  is Qwen2.5-3B F16 large-model with dense KV,
+  `M40LLM_F16_DECODE_KERNEL=1`, and
+  `M40LLM_F16_DECODE_STREAM=decode`: 512 tokens in 38.58 s total, 13.27 E2E
+  tok/s. The decode-stream F16 path is opt-in and now synchronizes logits on
+  the actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts
+  E2E throughput separately from decode-only TPS.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

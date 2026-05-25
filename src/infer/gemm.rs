@@ -57,6 +57,15 @@ fn f16_decode_kernel_enabled() -> bool {
 }
 
 #[cfg(feature = "cuda")]
+pub(crate) fn f16_decode_kernel_decode_stream_enabled() -> bool {
+    f16_decode_kernel_enabled()
+        && matches!(
+            std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref(),
+            Some("decode") | Some("DECODE")
+        )
+}
+
+#[cfg(feature = "cuda")]
 fn materialized_budget_bytes() -> Option<usize> {
     let mb = std::env::var("M40LLM_MATERIALIZE_F32_BUDGET_MB")
         .ok()?

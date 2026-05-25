@@ -1,5 +1,5 @@
 #[cfg(feature = "cuda")]
-use super::gemm::decode_cublas_single_stream_enabled;
+use super::gemm::{decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled};
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
@@ -64,9 +64,11 @@ impl LoadedModel {
     ) -> Result<Vec<f32>> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
+        let logits_on_decode_stream =
+            decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled();
         // Ensure any decode-stream work producing the final hidden state has
         // completed before this path (including optional output-norm) reads it.
-        if !decode_cublas_single_stream_enabled() {
+        if !logits_on_decode_stream {
             self.cuda.stream_wait_for_stream(
                 CudaStream::Prefill,
                 CudaStream::Decode,
@@ -78,7 +80,7 @@ impl LoadedModel {
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
             let d_norm_hidden =
                 d_norm_hidden.context("missing d_norm_hidden scratch for output norm logits")?;
-            if decode_cublas_single_stream_enabled() {
+            if logits_on_decode_stream {
                 self.run_rms_norm_weighted_async(
                     d_hidden_f32,
                     d_norm_w,
@@ -115,7 +117,7 @@ impl LoadedModel {
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
-        if decode_cublas_single_stream_enabled() {
+        if logits_on_decode_stream {
             self.cuda.synchronize_stream(CudaStream::Decode)?;
         } else {
             self.cuda.synchronize_stream(CudaStream::Prefill)?;
