@@ -161,22 +161,53 @@ impl LoadedModel {
                 for (i, ch) in hidden_bytes.chunks_exact(4).enumerate() {
                     hidden[i] = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
                 }
-                // Weights are row-major [D, V] in f16
+                // Weights are GGUF-native [D, V], with D fastest inside each
+                // output-column block for quantized layouts.
                 let off = lm.byte_offset as usize;
-                let w_bytes = &self.host_weights[off..off + d_model * vocab * 2];
+                let w_bytes = &self.host_weights[off..off + lm.nbytes];
                 let mut logits = vec![0f32; vocab];
-                for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
-                    let mut acc = 0f32;
-                    let mut idx = col * d_model * 2;
-                    for &hidden_val in hidden.iter().take(d_model) {
-                        let lo = w_bytes[idx] as u16;
-                        let hi = w_bytes[idx + 1] as u16;
-                        let bits = lo | (hi << 8);
-                        let w = half::f16::from_bits(bits).to_f32();
-                        acc += hidden_val * w;
-                        idx += 2;
+                match lm.dtype {
+                    crate::gguf::GgmlDType::F16 => {
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let mut idx = col * d_model * 2;
+                            for &hidden_val in hidden.iter().take(d_model) {
+                                let lo = w_bytes[idx] as u16;
+                                let hi = w_bytes[idx + 1] as u16;
+                                let bits = lo | (hi << 8);
+                                let w = half::f16::from_bits(bits).to_f32();
+                                acc += hidden_val * w;
+                                idx += 2;
+                            }
+                            *logit_ref = acc;
+                        }
                     }
-                    *logit_ref = acc;
+                    crate::gguf::GgmlDType::Q8_0 => {
+                        const Q8_0_BLOCK: usize = 32;
+                        const Q8_0_BLOCK_BYTES: usize = 34;
+                        let blocks_per_col = d_model.div_ceil(Q8_0_BLOCK);
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let col_base = col * blocks_per_col * Q8_0_BLOCK_BYTES;
+                            for block in 0..blocks_per_col {
+                                let base = col_base + block * Q8_0_BLOCK_BYTES;
+                                let scale = half::f16::from_bits(u16::from_le_bytes([
+                                    w_bytes[base],
+                                    w_bytes[base + 1],
+                                ]))
+                                .to_f32();
+                                for idx in 0..Q8_0_BLOCK {
+                                    let d = block * Q8_0_BLOCK + idx;
+                                    if d < d_model {
+                                        let q = w_bytes[base + 2 + idx] as i8 as f32;
+                                        acc += hidden[d] * q * scale;
+                                    }
+                                }
+                            }
+                            *logit_ref = acc;
+                        }
+                    }
+                    other => anyhow::bail!("unsupported lm_head dtype for host path: {:?}", other),
                 }
                 return Ok(logits);
             }

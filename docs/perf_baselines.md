@@ -35,6 +35,25 @@ LLaMA/Qwen-style standard projection tensor names and at least one Q8_0
 projection tensor. Unsupported cached Q8_0 models should be documented as
 architecture/tokenizer coverage gaps rather than CUDA kernel failures.
 
+Qwen2.5 Q8_0 validation:
+
+- Pulled `qwen2.5:3b-instruct-q8_0` with Ollama. The model blob is:
+  `/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d`.
+- Probe: `arch=qwen2`, `layers=36`, `d_model=2048`, `q_heads=16`,
+  `kv_heads=2`, `head_dim=128`, `context=32768`, `weights_bytes=3279519744`,
+  `q8_projection_tensors=252/252`, dtype counts `F32=181`, `Q8_0=253`.
+- The first canary attempt exposed a real all-Q8 GGUF blocker: Qwen2.5 Q8_0
+  has tied Q8_0 output embeddings and no separate F16 output head. The runtime
+  now accepts Q8_0 tied `[d_model, vocab]` embeddings for logits and routes them
+  through the fused Q8_0 projection path.
+- CUDA canary result with dense reference KV and large-model projections, using
+  prompt `What is 2+2? Answer with one digit.`: output `"4"`,
+  `prompt_tokens=20`, `total_tokens=22`, `prefill_ms=10376`,
+  `decode_ms=524`, `total_ms=12146`, `q8_projection_launches=5313`.
+- A prior release CLI smoke with prompt `Say OK.` returned `Say OK.` on Tesla
+  M40, which was too self-referential to be a useful quality signal. The
+  arithmetic canary above is the current quality smoke for this path.
+
 Local probe result:
 
 - `gemma-4-E2B-it-Q8_0.gguf` parses as `general.architecture=gemma4` with

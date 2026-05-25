@@ -355,9 +355,10 @@ impl LoadedModel {
         })
     }
     /// Map the language modeling head (output projection) tensor.
-    /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16.
-    /// If absent, accepts tied F16 embeddings only when they already have the
-    /// same GGUF-native [d_model, vocab] layout expected by the projection path.
+    /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16
+    /// or Q8_0. If absent, accepts tied F16/Q8_0 embeddings only when they
+    /// already have the same GGUF-native [d_model, vocab] layout expected by the
+    /// projection path.
     /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings).
     pub fn map_lm_head(&self) -> Result<(String, DeviceTensorView, usize, usize, bool)> {
         use crate::gguf::GgmlDType;
@@ -372,8 +373,8 @@ impl LoadedModel {
                 .find(|candidate| self.device_tensor(candidate).is_some())
                 .context("lm_head tensor name not found after candidate match")?
                 .clone();
-            if t.dtype != GgmlDType::F16 {
-                anyhow::bail!("lm_head expected F16, got {:?}", t.dtype);
+            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q8_0 {
+                anyhow::bail!("lm_head expected F16 or Q8_0, got {:?}", t.dtype);
             }
             if t.shape.len() != 2 {
                 anyhow::bail!(
@@ -403,9 +404,9 @@ impl LoadedModel {
                 .find(|candidate| self.device_tensor(candidate).is_some())
                 .context("embedding tensor name not found after candidate match")?
                 .clone();
-            if t.dtype != GgmlDType::F16 {
+            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q8_0 {
                 anyhow::bail!(
-                    "tied lm_head requires F16 embeddings when output head is absent; tensor {name} has {:?}",
+                    "tied lm_head requires F16 or Q8_0 embeddings when output head is absent; tensor {name} has {:?}",
                     t.dtype
                 );
             }
@@ -428,7 +429,7 @@ impl LoadedModel {
             return Ok((name, t.clone(), d_model, vocab, true));
         }
         anyhow::bail!(
-            "output projection tensor not found; expected one of {} or tied F16 embeddings in [d_model, vocab] layout",
+            "output projection tensor not found; expected one of {} or tied F16/Q8_0 embeddings in [d_model, vocab] layout",
             candidates.join(", ")
         )
     }

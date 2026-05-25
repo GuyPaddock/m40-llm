@@ -304,10 +304,10 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
     let generated = generate_text(
         &model,
         GenerateOptions {
-            prompt: "Say OK.".to_string(),
+            prompt: "What is 2+2? Answer with one digit.".to_string(),
             max_tokens: Some(env_u32("M40LLM_Q8_CANARY_MAX_TOKENS", 8) as usize),
             top_k: Some(1),
-            temperature: Some(0.0),
+            temperature: None,
             seed: Some(0),
             log_prefix: "q8_generation_canary",
             kv_compression: KvCompressionConfig::dense_reference(),
@@ -326,9 +326,15 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
         generated.total_elapsed_ms,
         q8_projection_launches()
     );
+    let trimmed = generated.output.trim();
     assert!(
-        !generated.output.trim().is_empty(),
+        !trimmed.is_empty(),
         "Q8_0 canary should produce non-empty decoded text"
+    );
+    assert!(
+        trimmed.contains('4'),
+        "Q8_0 canary should answer a simple arithmetic prompt with 4; got: {:?}",
+        generated.output
     );
     assert!(
         !generated.output.contains('\0') && !generated.output.contains('\u{fffd}'),

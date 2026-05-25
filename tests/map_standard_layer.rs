@@ -310,6 +310,32 @@ fn map_lm_head_uses_compatible_tied_embeddings() -> Result<()> {
 }
 
 #[test]
+fn map_lm_head_uses_compatible_q8_tied_embeddings() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.device_tensors.remove("output.weight");
+    let tok = lm
+        .device_tensors
+        .get_mut("tok_embeddings.weight")
+        .expect("embedding present");
+    tok.dtype = GgmlDType::Q8_0;
+    tok.shape = vec![32, 1024];
+
+    let (name, view, d_model, vocab, tied) = lm.map_lm_head()?;
+    assert_eq!(name, "tok_embeddings.weight");
+    assert_eq!(view.dtype, GgmlDType::Q8_0);
+    assert_eq!(d_model, 32);
+    assert_eq!(vocab, 1024);
+    assert!(tied);
+    Ok(())
+}
+
+#[test]
 fn map_lm_head_rejects_incompatible_tied_embedding_layout() -> Result<()> {
     let mut lm = match make_model_with_layer(0, 32, 64, true) {
         Ok(lm) => lm,

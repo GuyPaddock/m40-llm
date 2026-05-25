@@ -69,7 +69,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `M40LLM_Q8_GENERATION_MODEL` and runs bounded full generation only when the
   supplied Q8_0 GGUF has supported LLaMA/Qwen-style metadata and standard Q8_0
   projection coverage; unsupported models are reported as coverage gaps rather
-  than kernel failures.
+  than kernel failures. The Ollama `qwen2.5:3b-instruct-q8_0` blob now passes
+  that canary after enabling Q8_0 tied output embeddings for logits; the current
+  prompt asks `What is 2+2? Answer with one digit.` and generated `4` with
+  fused Q8_0 projection launches.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
