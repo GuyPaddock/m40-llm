@@ -423,7 +423,7 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
         ..Default::default()
     };
     let req_b = GenerateRequest {
-        prompt: "CD".to_string(),
+        prompt: "ABCDEFGH IJ".to_string(),
         max_tokens: Some(2),
         stream: false,
         ..Default::default()
@@ -472,6 +472,15 @@ async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
     assert!(
         batched_prefill_ticks >= 1,
         "head128 server batch scheduler should record at least one packed prefill tick"
+    );
+    let prefill_attention_launches = snapshot
+        .by_op
+        .get("attention_prefill_f32_gqa_varlen")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert_eq!(
+        prefill_attention_launches, 1,
+        "head128 mixed-length dense scheduler should use one multi-row packed prefill launch"
     );
     server.shutdown().await?;
     Ok(())
@@ -560,7 +569,7 @@ async fn zz_server_generate_batch_decode_supports_compressed_head128_prefill() -
         .unwrap_or_default();
     assert!(
         compressed_batched_prefill_ticks >= 1,
-        "same-length compressed head128 scheduler should record multi-row packed prefill"
+        "compressed head128 scheduler should record multi-row packed prefill"
     );
     server.shutdown().await?;
     Ok(())

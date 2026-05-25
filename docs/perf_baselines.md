@@ -52,6 +52,9 @@ Findings:
   `head_dim=128` shape.
 - Mixed-length real Qwen/head128 compressed multi-row prefill is now admitted
   for the preferred compressed runtime when `M40LLM_SERVER_BATCH_PREFILL=1`.
+- Dense head128 scheduler prefill also uses the same multi-row varlen prefill
+  path after this kernel fix; the obsolete single-row diagnostic admission gate
+  was removed.
 
 Bounded real Qwen release confirmation:
 
@@ -77,15 +80,15 @@ source scripts/dev-env.sh && \
 Superseded by the real Qwen mixed-length fix above. This section records the
 intermediate same-length-only admission checkpoint.
 
-This checkpoint narrows and admits a safe subset of true multi-row
-head128/Qwen compressed packed prefill:
+This checkpoint narrowed and admitted a safe subset of true multi-row
+head128/Qwen compressed packed prefill before the mixed-length fix above:
 
-- Same-length pending prompt prefixes use true multi-row packed prefill by
-  default for the preferred compressed runtime.
-- Mixed-length head128/Qwen compressed prefixes keep the previous per-request
-  packed-prefix path.
-- `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1` still forces the diagnostic
-  mixed-length multi-row path for investigation only.
+- At this intermediate checkpoint, same-length pending prompt prefixes used
+  true multi-row packed prefill by default for the preferred compressed runtime.
+- Mixed-length head128/Qwen compressed prefixes still used the previous
+  per-request packed-prefix path.
+- The temporary forced mixed-length diagnostic gate used for this checkpoint
+  has since been removed.
 
 Validation:
 
@@ -108,8 +111,8 @@ Results:
 - Same-length compressed head128 server smoke records
   `server_scheduler_compressed_batched_prefill_tick` without requiring the
   diagnostic env var.
-- Mixed-length diagnostic server smoke still records the same marker only when
-  `M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1` is set.
+- Mixed-length diagnostic server smoke at this checkpoint still required the
+  temporary forced diagnostic gate. The current runtime no longer has that gate.
 
 Bounded real Qwen release command:
 
@@ -129,21 +132,6 @@ source scripts/dev-env.sh && \
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | compressed top8, default same-length multi-row | batch2 same | 2 | 2 | 592 ms | 0.557 s | 6.757 | both `Hello!` |
 | compressed top8, mixed-length safe fallback | batch4 mixed | 4 | 4 | 1389 ms | 1.293 s | 5.760 | matches prior safe outputs |
-
-Diagnostic mixed-length forced multi-row command:
-
-```bash
-source scripts/dev-env.sh && \
-  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
-  M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG=1 \
-  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
-  CARGO_RUN_ARGS="--release" \
-  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
-  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
-  CASES="batch4_mixed" \
-  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
-  PORT_BASE=57280 scripts/bench_server_batch_decode.sh
-```
 
 - Forced mixed-length multi-row returned HTTP 200 but changed outputs
   (`themoment`, empty output, `CUDA streams`, `!!`) relative to the safe

@@ -551,14 +551,6 @@ fn log_batch_prefill_fallback(reason: &str) {
 }
 
 #[cfg(feature = "cuda")]
-fn server_head128_multirow_prefill_diag_requested() -> bool {
-    std::env::var("M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_DIAG")
-        .ok()
-        .as_deref()
-        == Some("1")
-}
-
-#[cfg(feature = "cuda")]
 fn server_head128_multirow_prefill_force_sequential_requested() -> bool {
     std::env::var("M40LLM_SERVER_HEAD128_MULTIROW_PREFILL_FORCE_SEQUENTIAL")
         .ok()
@@ -655,17 +647,11 @@ fn process_scheduler_prefill_tick(
     requests: Vec<DecodeSchedulerRequest>,
     active: &mut VecDeque<DecodeSchedulerRequest>,
 ) {
-    let head_dim = state.model.kv_cache.as_ref().map(|kv| kv.head_dim());
-    if head_dim == Some(128) && !server_head128_multirow_prefill_diag_requested() {
-        process_scheduler_head128_prefill_tick(state, requests, active);
-        return;
-    }
-
     process_scheduler_varlen_prefill_tick(
         state,
         requests,
         active,
-        true,
+        false,
         "batched prefill preparation failed",
         "batched prefill forward failed",
     );
@@ -717,48 +703,6 @@ fn process_scheduler_varlen_prefill_tick(
                 request.force_sequential_steps = force_sequential_after_prefill;
                 active.push_back(request)
             }
-            Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
-            Err(err) => request.send_error(err),
-        }
-    }
-}
-
-#[cfg(feature = "cuda")]
-fn process_scheduler_head128_prefill_tick(
-    state: &AppState,
-    requests: Vec<DecodeSchedulerRequest>,
-    active: &mut VecDeque<DecodeSchedulerRequest>,
-) {
-    // The multi-sequence head128 packed-prefill path passes synthetic parity,
-    // but real Qwen mixed-prompt server rows still diverge. Use the same
-    // single-sequence packed-prefix shape as CLI until real-model multi-row
-    // parity is established.
-    for mut request in requests {
-        let item = match request.prefill_sequence() {
-            Ok(item) => item,
-            Err(err) => {
-                request.send_error(anyhow::anyhow!(
-                    "head128 packed prefill preparation failed: {err:#}"
-                ));
-                continue;
-            }
-        };
-        let forward_result = {
-            let _kv_runtime_guard = ScopedRuntimeConfig::new(state.kv_compression.clone());
-            unsafe {
-                state
-                    .model
-                    .forward_prefill_all_layers_varlen_for_sequences(&[item])
-            }
-        };
-        if let Err(err) = forward_result {
-            request.send_error(anyhow::anyhow!(
-                "head128 packed prefill forward failed: {err:#}"
-            ));
-            continue;
-        }
-        match request.finish_prefill() {
-            Ok(DecodeSchedulerStep::Continue) => active.push_back(request),
             Ok(DecodeSchedulerStep::Complete) => request.send_complete(),
             Err(err) => request.send_error(err),
         }

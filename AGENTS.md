@@ -171,12 +171,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   head128 packed-prefix and batched-prefill parity tests now pass with Q/K/V
   biases and split-half RoPE. Server packed prefill now uses prompt-prefix
   semantics, leaving the final prompt token on the normal one-token path.
-  Head128/Qwen server admission uses per-request packed-prefix prefill inside
-  scheduler ticks and keeps those prefilled requests on sequential decode for
-  the rest of the short request, rather than using the still-unvalidated
-  multi-request head128 packed-prefill/scheduler shape. A bounded Qwen2.5
-  release run with `MAX_CONTEXT_TOKENS=512` shows batch4 mixed output parity
-  and a 4.32x wall-time speedup versus dense serial.
+  Head128/Qwen server admission now uses multi-row packed-prefix prefill in
+  scheduler ticks for dense and preferred compressed KV paths. A bounded
+  Qwen2.5 release run with `MAX_CONTEXT_TOKENS=512` shows batch4 mixed output
+  parity and a 4.32x wall-time speedup versus dense serial.
   Preferred compressed-KV packed-prefix prefill is now also admitted for
   head128/Qwen-shaped server requests. CUDA parity compares Qwen-shaped
   compressed packed-prefix prefill against sequential compressed prefill using
@@ -187,12 +185,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   `--kv-recent-window 256` returns HTTP 200 for compressed top8 batch2, but is
   slightly slower than dense off on that tiny short-prompt row; treat it as
   admission evidence, not a long-context compression speed claim.
-  Same-length head128/Qwen compressed scheduler prefill now uses true
-  multi-row packed prefill by default for the preferred compressed runtime.
   The Qwen-like parity test covers `head_dim=128`, `q_heads=16`, `kv_heads=2`,
   Q/K/V biases, split-half RoPE, and compressed KV snapshots. A bounded real
   Qwen2.5 release run with `MAX_CONTEXT_TOKENS=512` improves compressed top8
-  batch2 same-prompt wall time to 592 ms / 6.757 tok/s. The release-only real
+  mixed batch4 wall time to 1104 ms / 7.246 tok/s. The release-only real
   Qwen mixed-length blocker is now isolated and fixed: a standalone
   Qwen-shaped packed-prefill attention parity test reproduces the old NaN
   failure and now passes, and the real Qwen release diagnostic shows
@@ -202,8 +198,8 @@ batched decode path before touching persistent decode or large-model fused-dequa
   both streams before releasing shared workspace ownership, stream waits use
   per-wait CUDA events, and the packed-prefill attention kernel uses a fixed
   shared-memory score region separate from reduction scratch. Mixed-length
-  head128/Qwen compressed multi-row prefill is now admitted for the preferred
-  compressed runtime when `M40LLM_SERVER_BATCH_PREFILL=1`.
+  head128/Qwen dense and preferred compressed multi-row prefill are now
+  admitted when `M40LLM_SERVER_BATCH_PREFILL=1`.
   Staggered server scheduler coverage now records
   `server_scheduler_mixed_prefill_decode_tick` whenever prompt-prefill rows and
   decode rows share a tick. `scripts/bench_server_batch_decode.sh` supports
