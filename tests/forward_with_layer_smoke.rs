@@ -45,13 +45,43 @@ fn qwen2_gqa_attention_bias_tiny_gguf(
     let mut rebuilt_tensors = Vec::with_capacity(gguf.tensors.len());
     let mut rebuilt_weights = Vec::new();
     for tensor in &gguf.tensors {
-        let replacement = if tensor.name.ends_with("attention.wk.weight")
+        let replacement = if tensor.name.ends_with("attention.wq.weight") {
+            let n = cfg.d_model;
+            let mut bytes = Vec::with_capacity(cfg.d_model * n * 2);
+            for col in 0..n {
+                for row in 0..cfg.d_model {
+                    let v = if row == col {
+                        0.05
+                    } else {
+                        (((row * 17 + col * 31) % 19) as f32 - 9.0) * 0.0002
+                    };
+                    bytes.extend_from_slice(&halves_from_f32(&[v]));
+                }
+            }
+            Some((vec![cfg.d_model as u64, n as u64], GgmlDType::F16, bytes))
+        } else if tensor.name.ends_with("attention.wk.weight")
             || tensor.name.ends_with("attention.wv.weight")
         {
+            let scale = if tensor.name.ends_with("attention.wk.weight") {
+                0.04
+            } else {
+                0.03
+            };
+            let mut bytes = Vec::with_capacity(cfg.d_model * kv_dim * 2);
+            for col in 0..kv_dim {
+                for row in 0..cfg.d_model {
+                    let v = if row % kv_dim == col {
+                        scale
+                    } else {
+                        (((row * 13 + col * 29) % 23) as f32 - 11.0) * 0.00015
+                    };
+                    bytes.extend_from_slice(&halves_from_f32(&[v]));
+                }
+            }
             Some((
                 vec![cfg.d_model as u64, kv_dim as u64],
                 GgmlDType::F16,
-                vec![0u8; cfg.d_model * kv_dim * 2],
+                bytes,
             ))
         } else if tensor.name.ends_with("attention.wk.bias") {
             let vals: Vec<f32> = (0..kv_dim).map(|idx| 0.02 * (idx as f32 + 1.0)).collect();
