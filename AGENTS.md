@@ -72,7 +72,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   than kernel failures. The Ollama `qwen2.5:3b-instruct-q8_0` blob now passes
   that canary after enabling Q8_0 tied output embeddings for logits; the current
   prompt asks `What is 2+2? Answer with one digit.` and generated `4` with
-  fused Q8_0 projection launches.
+  fused Q8_0 projection launches. A CUDA-only
+  `qwen_projection_backend_compare` harness now compares Qwen2.5 F16 fast-fits
+  against Qwen2.5 Q8_0 large-model with dense reference KV. The release
+  checkpoint shows both backends pass arithmetic, exact-OK, and config-lookup
+  smokes; F16 fast-fits remains faster on short prompts after materializing a
+  12.34 GB FP32 projection cache, while Q8_0 large-model avoids that cache and
+  exercises fused Q8_0 projection launches end-to-end.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

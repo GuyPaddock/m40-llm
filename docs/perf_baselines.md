@@ -2,6 +2,57 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5 F16 Fast-Fits vs Q8_0 Large-Model Dense-KV Comparison
+
+This checkpoint adds an opt-in CUDA comparison harness for the same Qwen2.5-3B
+model family in two projection/runtime configurations:
+
+- F16 GGUF with `M40LLM_PROJECTION_BACKEND=fast-fits`, using materialized FP32
+  projection weights and cuBLAS.
+- Q8_0 GGUF with `M40LLM_PROJECTION_BACKEND=large-model` and
+  `M40LLM_MATERIALIZE_F32_WEIGHTS=0`, using fused GGUF Q8_0 projection kernels
+  without materialized FP32 projection weights.
+
+Both rows force dense reference KV with `KvCompressionConfig::dense_reference()`
+so this isolates projection backend behavior from compressed-KV behavior. The
+harness is skipped unless `M40LLM_QWEN_BACKEND_COMPARE=1` is set.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40, bounded to 256 context tokens:
+
+| Backend | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Materialized FP32 added | Q8 launches | cuBLAS calls | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| F16 fast-fits | arithmetic | yes | 20 | 2 | 1990 ms | 78 ms | 2279 ms | 12.34 GB | 0 | 5313 | `4` |
+| F16 fast-fits | exact OK | yes | 15 | 2 | 1161 ms | 78 ms | 1364 ms | 0 B warm | 0 | 4048 | `OK` |
+| F16 fast-fits | config lookup | yes | 38 | 3 | 2991 ms | 162 ms | 3291 ms | 0 B warm | 0 | 10120 | `37` |
+| Q8_0 large-model | arithmetic | yes | 20 | 2 | 2678 ms | 135 ms | 2942 ms | 0 B | 5313 | 0 | `4` |
+| Q8_0 large-model | exact OK | yes | 15 | 2 | 2003 ms | 134 ms | 2264 ms | 0 B | 4048 | 0 | `OK` |
+| Q8_0 large-model | config lookup | yes | 38 | 3 | 5150 ms | 277 ms | 5568 ms | 0 B | 10120 | 0 | `37` |
+
+Interpretation:
+
+- F16 fast-fits is still faster on these short dense-KV prompts because
+  materialized FP32 cuBLAS remains the fastest projection path when the model
+  and materialized cache fit in VRAM.
+- Q8_0 large-model now produces matching lightweight quality answers on the
+  same prompts while avoiding the 12.34 GB materialized FP32 projection cache.
+- The Q8_0 rows exercise fused Q8_0 projection launches end-to-end and perform
+  zero cuBLAS projection calls; the F16 rows perform cuBLAS projection calls and
+  zero Q8_0 launches.
+- This is not yet a compressed-KV or long-context comparison. Use it as the
+  current dense-KV projection backend checkpoint for Qwen2.5 F16 versus Q8_0.
+
 ## 2026-05-25: Q8_0 Real-Model Generation Canary
 
 This checkpoint adds an explicit CUDA canary for validating the large-model
