@@ -53,6 +53,62 @@ Interpretation:
 - This is not yet a compressed-KV or long-context comparison. Use it as the
   current dense-KV projection backend checkpoint for Qwen2.5 F16 versus Q8_0.
 
+## 2026-05-25: Qwen2.5 Q8_0 Packed-Prefix and Compressed-KV Compatibility
+
+The Qwen projection comparison harness now also records bounded Q8_0 prefill
+variants and a default compressed-KV compatibility row:
+
+- dense reference KV with sequential prefill;
+- dense reference KV with `M40LLM_PREFILL_CHUNK_SIZE=32/64/128`;
+- default compressed KV top8 with direct FP16-K/q4-V exact-old attention.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Backend | KV mode | Prefill mode | Chunk | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Q8 launches | Output |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Q8_0 large-model | dense off | sequential | n/a | arithmetic | yes | 20 | 2 | 2781 ms | 140 ms | 3048 ms | 5313 | `4` |
+| Q8_0 large-model | dense off | sequential | n/a | exact OK | yes | 15 | 2 | 2073 ms | 138 ms | 2338 ms | 4048 | `OK` |
+| Q8_0 large-model | dense off | sequential | n/a | config lookup | yes | 38 | 3 | 5333 ms | 288 ms | 5755 ms | 10120 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 32 | arithmetic | yes | 20 | 2 | 1203 ms | 142 ms | 1483 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 32 | exact OK | yes | 15 | 2 | 974 ms | 138 ms | 1240 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | sequential-over-bound | 32 | config lookup | yes | 38 | 3 | 5141 ms | 276 ms | 5552 ms | 10120 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | arithmetic | yes | 20 | 2 | 1193 ms | 133 ms | 1447 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | exact OK | yes | 15 | 2 | 963 ms | 134 ms | 1219 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | config lookup | yes | 38 | 3 | 2255 ms | 278 ms | 2666 ms | 1011 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | arithmetic | yes | 20 | 2 | 1190 ms | 133 ms | 1446 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | exact OK | yes | 15 | 2 | 958 ms | 134 ms | 1216 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | config lookup | yes | 38 | 3 | 2255 ms | 278 ms | 2666 ms | 1011 | `37` |
+| Q8_0 large-model | compressed top8 | sequential-kv-compressed | n/a | arithmetic | yes | 20 | 2 | 2711 ms | 138 ms | 2982 ms | 5313 | `4` |
+| Q8_0 large-model | compressed top8 | sequential-kv-compressed | n/a | config lookup | yes | 38 | 3 | 5212 ms | 279 ms | 5639 ms | 10120 | `37` |
+
+Interpretation:
+
+- Packed-prefix prefill is the first real speed lever for Q8_0 large-model
+  generation. For the 38-token config lookup prompt, chunk 64/128 reduces
+  prefill from about 5.33 s to 2.26 s and total time from 5.76 s to 2.67 s.
+- Chunk 32 is too small for the 38-token prompt and falls back to
+  `sequential-over-bound`, so it does not improve that row.
+- Arithmetic and exact-OK prompts use packed-prefix at all tested chunk sizes,
+  reducing Q8 projection launches from thousands to 758 because the prompt
+  prefix is handled as a multi-row operation.
+- Default compressed KV top8 is compatible with Qwen2.5 Q8_0 short prompts.
+  At this small 2048-token context bound, final compressed allocation is
+  89.1 MB versus 75.5 MB dense-equivalent because the 1024-token recent ring
+  dominates the allocation; do not treat this row as a long-context memory
+  saving claim.
+
 ## 2026-05-25: Q8_0 Real-Model Generation Canary
 
 This checkpoint adds an explicit CUDA canary for validating the large-model

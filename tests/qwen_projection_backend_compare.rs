@@ -11,6 +11,7 @@ use m40_llm::profile::{self, ProfileSnapshot};
 use std::path::{Path, PathBuf};
 
 const DEFAULT_CONTEXT_TOKENS: u32 = 256;
+const DEFAULT_COMPRESSED_CONTEXT_TOKENS: u32 = 2048;
 const DEFAULT_QWEN_F16: &str =
     "/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf";
 const DEFAULT_QWEN_Q8: &str = "/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d";
@@ -68,6 +69,9 @@ const PROMPTS: [PromptCase; 3] = [
     },
 ];
 
+const Q8_PREFILL_CHUNK_SIZES: [Option<usize>; 4] = [None, Some(32), Some(64), Some(128)];
+const Q8_COMPRESSED_PROMPTS: [PromptCase; 2] = [PROMPTS[0], PROMPTS[2]];
+
 fn env_flag(key: &str) -> bool {
     matches!(
         std::env::var(key).ok().as_deref(),
@@ -103,6 +107,24 @@ fn load_model(path: &Path, context_bound: u32) -> Result<LoadedModel> {
     Ok(model)
 }
 
+fn load_compressed_model(
+    path: &Path,
+    context_bound: u32,
+    kv_compression: &KvCompressionConfig,
+) -> Result<LoadedModel> {
+    let gguf_bytes = std::fs::read(path)
+        .with_context(|| format!("read model weights from {}", path.display()))?;
+    let gguf_model =
+        gguf::load_gguf(path).with_context(|| format!("parse GGUF at {}", path.display()))?;
+    let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)
+        .with_context(|| format!("load model from {}", path.display()))?;
+    let context_tokens = context_bound.min(model.model_config.context_length);
+    model
+        .allocate_compressed_kv_cache_for_layers(context_tokens, kv_compression)
+        .with_context(|| format!("allocate compressed KV cache with {context_tokens} tokens"))?;
+    Ok(model)
+}
+
 fn q8_projection_launches(snapshot: &ProfileSnapshot) -> u64 {
     snapshot
         .by_op
@@ -130,7 +152,17 @@ fn output_quality_pass(generated: &GeneratedText, expected_substring: Option<&st
             .unwrap_or(true)
 }
 
-fn run_case(model: &LoadedModel, backend: &str, prompt: PromptCase) -> Result<()> {
+fn run_case(
+    model: &LoadedModel,
+    backend: &str,
+    prompt: PromptCase,
+    kv_compression: KvCompressionConfig,
+    prefill_chunk_size: Option<usize>,
+) -> Result<()> {
+    let _prefill_chunk = match prefill_chunk_size {
+        Some(size) => EnvRestore::set("M40LLM_PREFILL_CHUNK_SIZE", &size.to_string()),
+        None => EnvRestore::unset("M40LLM_PREFILL_CHUNK_SIZE"),
+    };
     profile::reset();
     let generated = generate_text(
         model,
@@ -141,7 +173,7 @@ fn run_case(model: &LoadedModel, backend: &str, prompt: PromptCase) -> Result<()
             temperature: None,
             seed: Some(0),
             log_prefix: "qwen_backend_compare",
-            kv_compression: KvCompressionConfig::dense_reference(),
+            kv_compression,
             prompt_format: PromptFormat::Auto,
             ..Default::default()
         },
@@ -166,7 +198,7 @@ fn run_case(model: &LoadedModel, backend: &str, prompt: PromptCase) -> Result<()
     };
 
     eprintln!(
-        "[qwen-backend-compare] backend={} case={} pass={} prompt_tokens={} generated_tokens={} prefill_ms={} decode_ms={} total_ms={} prefill_tps={} decode_tps={} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} materialized_entries_before={:?} materialized_entries_after_prompt={:?} materialized_entries={:?} materialized_bytes_before={:?} materialized_bytes_after_prompt={:?} materialized_bytes={:?} materialized_bytes_added_prompt={:?} materialized_bytes_added_total={:?} q8_projection_launches={} cublas_calls={} output={:?}",
+        "[qwen-backend-compare] backend={} case={} pass={} prompt_tokens={} generated_tokens={} prefill_ms={} decode_ms={} total_ms={} prefill_tps={} decode_tps={} prefill_mode={} prefill_chunk_size={:?} final_kv_bytes={:?} dense_equiv_kv_bytes={:?} materialized_entries_before={:?} materialized_entries_after_prompt={:?} materialized_entries={:?} materialized_bytes_before={:?} materialized_bytes_after_prompt={:?} materialized_bytes={:?} materialized_bytes_added_prompt={:?} materialized_bytes_added_total={:?} q8_projection_launches={} cublas_calls={} output={:?}",
         backend,
         prompt.name,
         quality_pass,
@@ -181,6 +213,8 @@ fn run_case(model: &LoadedModel, backend: &str, prompt: PromptCase) -> Result<()
         decode_tps
             .map(|value| format!("{value:.3}"))
             .unwrap_or_else(|| "n/a".to_string()),
+        generated.prefill_mode,
+        generated.prefill_chunk_size,
         generated.final_kv_allocated_bytes,
         generated.dense_equivalent_kv_bytes,
         generated.materialized_f32_cache_entries_before,
@@ -246,7 +280,13 @@ fn qwen_f16_fast_fits_vs_q8_large_model_dense_kv() -> Result<()> {
             context_bound.min(model.model_config.context_length)
         );
         for prompt in PROMPTS {
-            run_case(&model, "f16-fast-fits", prompt)?;
+            run_case(
+                &model,
+                "f16-fast-fits",
+                prompt,
+                KvCompressionConfig::dense_reference(),
+                None,
+            )?;
         }
     }
 
@@ -260,8 +300,49 @@ fn qwen_f16_fast_fits_vs_q8_large_model_dense_kv() -> Result<()> {
             q8_path.display(),
             context_bound.min(model.model_config.context_length)
         );
-        for prompt in PROMPTS {
-            run_case(&model, "q8-large-model", prompt)?;
+        for prefill_chunk_size in Q8_PREFILL_CHUNK_SIZES {
+            for prompt in PROMPTS {
+                run_case(
+                    &model,
+                    match prefill_chunk_size {
+                        Some(_) => "q8-large-model-packed-prefix",
+                        None => "q8-large-model-sequential-prefill",
+                    },
+                    prompt,
+                    KvCompressionConfig::dense_reference(),
+                    prefill_chunk_size,
+                )?;
+            }
+        }
+    }
+
+    {
+        let _backend = EnvRestore::set("M40LLM_PROJECTION_BACKEND", "large-model");
+        let _materialize = EnvRestore::set("M40LLM_MATERIALIZE_F32_WEIGHTS", "0");
+        let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
+        let compressed_context_bound = env_u32(
+            "M40LLM_QWEN_BACKEND_COMPARE_COMPRESSED_CONTEXT_TOKENS",
+            DEFAULT_COMPRESSED_CONTEXT_TOKENS,
+        );
+        let kv_compression = KvCompressionConfig::default();
+        let model = load_compressed_model(&q8_path, compressed_context_bound, &kv_compression)?;
+        eprintln!(
+            "[qwen-backend-compare] backend=q8-large-model-compressed-top8 model={} context_bound={} kv_mode={:?} top_blocks={} exact_old_backing={} exact_old_attention={}",
+            q8_path.display(),
+            compressed_context_bound.min(model.model_config.context_length),
+            kv_compression.mode,
+            kv_compression.top_blocks,
+            kv_compression.effective_exact_old_backing().as_str(),
+            kv_compression.effective_exact_old_attention().as_str()
+        );
+        for prompt in Q8_COMPRESSED_PROMPTS {
+            run_case(
+                &model,
+                "q8-large-model-compressed-top8",
+                prompt,
+                kv_compression.clone(),
+                None,
+            )?;
         }
     }
 

@@ -78,7 +78,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   checkpoint shows both backends pass arithmetic, exact-OK, and config-lookup
   smokes; F16 fast-fits remains faster on short prompts after materializing a
   12.34 GB FP32 projection cache, while Q8_0 large-model avoids that cache and
-  exercises fused Q8_0 projection launches end-to-end.
+  exercises fused Q8_0 projection launches end-to-end. The same harness now
+  records Q8_0 packed-prefix prefill variants: dense-KV Qwen2.5 Q8_0 config
+  lookup improves from about 5.33 s sequential prefill to 2.26 s with
+  `M40LLM_PREFILL_CHUNK_SIZE=64/128`, while preserving output `37`. Default
+  compressed-KV top8 also passes short Qwen2.5 Q8_0 arithmetic/config smokes;
+  at the 2048-token compatibility bound it allocates more than dense-equivalent
+  KV because the 1024-token recent ring dominates, so this is compatibility
+  evidence rather than a long-context memory-saving result.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
