@@ -922,6 +922,178 @@ fn gemm_f32xq8_0_decode_tiled2_matches_decode_large_k() -> Result<()> {
 }
 
 #[test]
+fn gemm_f32xq8_0_decode_tiled2_matches_decode_vocab_shape() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 4097i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 19) as f32 - 9.0) * 0.02734375)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 29) as f32 - 14.0) * 0.013671875)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc_decode = ctx.device_malloc(bytes_c)?;
+    let dc_tiled = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_decode,
+            m,
+            n,
+            k,
+        )?;
+        ctx.gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_tiled,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut decode_bytes = vec![0u8; bytes_c];
+    let mut tiled_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            decode_bytes.as_mut_ptr() as *mut c_void,
+            dc_decode as *const c_void,
+            decode_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            tiled_bytes.as_mut_ptr() as *mut c_void,
+            dc_tiled as *const c_void,
+            tiled_bytes.len(),
+        )?;
+    }
+    let decode = bytes_to_f32s(&decode_bytes);
+    let tiled = bytes_to_f32s(&tiled_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (d, t) in decode.iter().zip(tiled.iter()) {
+        let diff = (d - t).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / decode.len() as f32;
+    assert!(
+        max_diff <= 1e-5 && mean_diff <= 1e-6,
+        "tiled vocab-shape decode mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_decode)?;
+        ctx.device_free(dc_tiled)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn q8_0_lm_head_argmax_matches_decode_logits_argmax() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 4099i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 31) as f32 - 15.0) * 0.01953125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 37) as f32 - 18.0) * 0.01171875)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_logits = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let d_logits = ctx.device_malloc(bytes_logits)?;
+    let d_token_ref = ctx.device_malloc(std::mem::size_of::<u32>())?;
+    let d_token_fused = ctx.device_malloc(std::mem::size_of::<u32>())?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            d_logits,
+            m,
+            n,
+            k,
+        )?;
+        ctx.argmax_f32_async(
+            d_logits as *const c_void,
+            n as u32,
+            d_token_ref,
+            CudaStream::Decode,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        ctx.q8_0_lm_head_argmax_async(
+            da as *const c_void,
+            db as *const c_void,
+            d_logits,
+            d_token_fused,
+            n,
+            k,
+            CudaStream::Decode,
+        )?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut ref_token = 0u32;
+    let mut fused_token = 0u32;
+    unsafe {
+        ctx.memcpy_d2h(
+            (&mut ref_token as *mut u32).cast::<c_void>(),
+            d_token_ref as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
+        ctx.memcpy_d2h(
+            (&mut fused_token as *mut u32).cast::<c_void>(),
+            d_token_fused as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
+    }
+    assert_eq!(fused_token, ref_token);
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(d_logits)?;
+        ctx.device_free(d_token_ref)?;
+        ctx.device_free(d_token_fused)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn gemm_f32xf16_gguf_decode_kernel_matches_sync_1x2048x2048() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

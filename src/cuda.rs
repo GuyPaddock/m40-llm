@@ -124,6 +124,16 @@ mod ffi {
             d_out_u32: *mut c_void,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_q8_0_lm_head_argmax_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_scratch_f32: *mut c_void,
+            d_out_u32: *mut c_void,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
 
         pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
 
@@ -1773,6 +1783,53 @@ impl CudaContext {
         }
         record_async_kernel("argmax_f32");
         Ok(())
+    }
+
+    /// # Safety
+    /// `d_a_f32` must point to one device-resident hidden row of length `k`.
+    /// `d_b_q8_0` must be GGUF Q8_0 `[k,n]`, `d_scratch_f32` must have at
+    /// least `2 * ceil(n / 8) * sizeof(u32)` bytes, and `d_out_u32` must point
+    /// to one writable device-resident u32.
+    pub unsafe fn q8_0_lm_head_argmax_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_scratch_f32: *mut c_void,
+        d_out_u32: *mut c_void,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "q8_0_lm_head_argmax")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_q8_0_lm_head_argmax_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_scratch_f32,
+                d_out_u32,
+                n,
+                k,
+                stream.ffi_kind(),
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_q8_0_lm_head_argmax_async failed: {rc}"));
+            }
+            record_async_kernel("q8_0_lm_head_argmax_partials");
+            record_async_kernel("q8_0_lm_head_argmax_reduce");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_scratch_f32, d_out_u32, n, k, stream);
+            Ok(())
+        }
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]

@@ -136,7 +136,10 @@ batched decode path before touching persistent decode or large-model fused-dequa
   provides opt-in CUDA-event timing for Q8 decode projections; a tiny Qwen2.5
   Q8_0 probe points to MLP down (~1.55 ms/layer, ~1.43-1.47 ms/layer with
   tiled2) and fused gate/up/SwiGLU (~0.63 ms/layer) as Q8 bottlenecks, with
-  final lm_head around 7.2 ms.
+  final lm_head around 7.2 ms. `M40LLM_Q8_LM_HEAD_ARGMAX=1` now provides an
+  opt-in diagnostic greedy-only Q8 lm-head argmax path; it is correct but
+  neutral/slightly slower on the same short Qwen2.5 Q8_0 probe, so keep it off
+  by default and treat the final vocabulary projection as still unresolved.
   The decode-stream F16 path is opt-in and now synchronizes logits on the
   actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
   throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy

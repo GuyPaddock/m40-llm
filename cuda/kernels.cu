@@ -356,6 +356,102 @@ extern "C" {
         }
     }
 
+    __global__ void q8_0_lm_head_argmax_partials_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ B,
+        float* __restrict__ partial_values,
+        uint32_t* __restrict__ partial_indices,
+        int N,
+        int K) {
+        constexpr int warps_per_block = 8;
+        __shared__ float warp_values[warps_per_block];
+        __shared__ uint32_t warp_indices[warps_per_block];
+        const int lane = threadIdx.x & 31;
+        const int warp = threadIdx.x >> 5;
+        const int col = blockIdx.x * warps_per_block + warp;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = K / qk;
+        float acc = -FLT_MAX;
+        uint32_t idx = 0xffffffffu;
+        if (col < N) {
+            acc = 0.0f;
+            idx = static_cast<uint32_t>(col);
+            for (int block_idx = lane; block_idx < blocks_per_col; block_idx += 32) {
+                const size_t block_base =
+                    (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+                const float scale = __half2float(*reinterpret_cast<const __half*>(B + block_base));
+                const int k_base = block_idx * qk;
+                #pragma unroll
+                for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                    const int8_t q = *reinterpret_cast<const int8_t*>(B + block_base + 2 + q_idx);
+                    acc += A[k_base + q_idx] * (static_cast<float>(q) * scale);
+                }
+            }
+        }
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            acc += __shfl_down_sync(0xffffffff, acc, offset);
+        }
+        if (lane == 0) {
+            warp_values[warp] = acc;
+            warp_indices[warp] = idx;
+        }
+        __syncthreads();
+        if (threadIdx.x == 0) {
+            float best = warp_values[0];
+            uint32_t best_idx = warp_indices[0];
+            for (int i = 1; i < warps_per_block; ++i) {
+                const float other = warp_values[i];
+                const uint32_t other_idx = warp_indices[i];
+                if (other > best || (other == best && other_idx < best_idx)) {
+                    best = other;
+                    best_idx = other_idx;
+                }
+            }
+            partial_values[blockIdx.x] = best;
+            partial_indices[blockIdx.x] = best_idx;
+        }
+    }
+
+    __global__ void q8_0_lm_head_argmax_reduce_kernel(
+        const float* __restrict__ partial_values,
+        const uint32_t* __restrict__ partial_indices,
+        uint32_t partial_count,
+        uint32_t* __restrict__ out_idx) {
+        constexpr int threads = 256;
+        __shared__ float best_values[threads];
+        __shared__ uint32_t best_indices[threads];
+        const uint32_t tid = threadIdx.x;
+        float best = -FLT_MAX;
+        uint32_t best_idx = 0xffffffffu;
+        for (uint32_t i = tid; i < partial_count; i += blockDim.x) {
+            const float v = partial_values[i];
+            const uint32_t idx = partial_indices[i];
+            if (v > best || (v == best && idx < best_idx)) {
+                best = v;
+                best_idx = idx;
+            }
+        }
+        best_values[tid] = best;
+        best_indices[tid] = best_idx;
+        __syncthreads();
+        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                const float other = best_values[tid + stride];
+                const uint32_t other_idx = best_indices[tid + stride];
+                if (other > best_values[tid] ||
+                    (other == best_values[tid] && other_idx < best_indices[tid])) {
+                    best_values[tid] = other;
+                    best_indices[tid] = other_idx;
+                }
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            *out_idx = best_indices[0];
+        }
+    }
+
     static size_t m40llm_strnlen_host(const char* s, size_t max_len) {
         size_t n = 0;
         while (n < max_len && s[n] != '\0') {
@@ -435,6 +531,46 @@ extern "C" {
             reinterpret_cast<uint32_t*>(d_out_u32));
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_q8_0_lm_head_argmax_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_scratch_f32,
+        void* d_out_u32,
+        int N,
+        int K,
+        uint32_t stream_kind) {
+        if (!ctx || !d_A_f32 || !d_B_q8_0 || !d_scratch_f32 || !d_out_u32) return -1;
+        if (N <= 0 || K <= 0 || (K % 32) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -4;
+        constexpr int warps_per_block = 8;
+        const uint32_t partial_count = static_cast<uint32_t>((N + warps_per_block - 1) / warps_per_block);
+        float* partial_values = reinterpret_cast<float*>(d_scratch_f32);
+        uint32_t* partial_indices = reinterpret_cast<uint32_t*>(partial_values + partial_count);
+        q8_0_lm_head_argmax_partials_kernel<<<
+            partial_count,
+            warps_per_block * 32,
+            0,
+            stream>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const unsigned char*>(d_B_q8_0),
+            partial_values,
+            partial_indices,
+            N,
+            K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        q8_0_lm_head_argmax_reduce_kernel<<<1, 256, 0, stream>>>(
+            partial_values,
+            partial_indices,
+            partial_count,
+            reinterpret_cast<uint32_t*>(d_out_u32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -5;
         return 0;
     }
 

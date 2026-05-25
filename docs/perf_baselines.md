@@ -49,6 +49,7 @@ Failed/neutral fusion experiment record:
 | Experiment | Preserved in commit | Removed in commit | Probe result | Target result | Decision |
 | --- | --- | --- | --- | --- | --- |
 | `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
+| `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `0e16b34` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
 
 Implementation/diagnostic notes:
 
@@ -102,6 +103,14 @@ Implementation/diagnostic notes:
   modestly to roughly `1.43-1.47 ms/layer`, while `lm_head` remains on the
   existing decode path because it has `K=2048` and very large `N`. The next Q8
   target should be the final vocabulary projection, not greedy sampling.
+- `M40LLM_Q8_LM_HEAD_ARGMAX=1` adds a diagnostic greedy-only Q8 lm-head path
+  that computes per-block argmax partials instead of materializing full logits
+  for `top_k=1`. It is correct against the existing logits-plus-argmax path,
+  but is neutral/slightly slower on M40: the event probe measured roughly
+  `7.41 ms` versus the existing lm-head projection at roughly `7.2 ms`, and the
+  32-token Qwen2.5 Q8_0 probe stayed effectively unchanged at
+  `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74
+  total_tps=4.61`. Keep it diagnostic/off by default.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
   The profiled short run still shows roughly 16.5 ms host enqueue time plus
