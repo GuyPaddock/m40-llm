@@ -1,3 +1,5 @@
+#[cfg(feature = "cuda")]
+use super::gemm::decode_cublas_single_stream_enabled;
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
@@ -64,11 +66,13 @@ impl LoadedModel {
         let d_w = self.tensor_device_ptr(&name, &lm)?;
         // Ensure any decode-stream work producing the final hidden state has
         // completed before this path (including optional output-norm) reads it.
-        self.cuda.stream_wait_for_stream(
-            CudaStream::Prefill,
-            CudaStream::Decode,
-            "hidden_to_logits_stream",
-        )?;
+        if !decode_cublas_single_stream_enabled() {
+            self.cuda.stream_wait_for_stream(
+                CudaStream::Prefill,
+                CudaStream::Decode,
+                "hidden_to_logits_stream",
+            )?;
+        }
         let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
             let norm_start = std::time::Instant::now();
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
@@ -99,7 +103,11 @@ impl LoadedModel {
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
-        self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        if decode_cublas_single_stream_enabled() {
+            self.cuda.synchronize_stream(CudaStream::Decode)?;
+        } else {
+            self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        }
         let bytes_logits = vocab
             .checked_mul(std::mem::size_of::<f32>())
             .context("logits byte size overflow")?;

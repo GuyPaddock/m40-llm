@@ -2,6 +2,70 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5-3B Throughput Probe and Batched Server Check
+
+This checkpoint adds `tests/qwen_decode_throughput.rs`, an env-gated CUDA
+throughput probe that reports generated-token decode throughput for Qwen2.5
+models. The probe is intended for explicit release/hardware runs and only
+asserts a throughput floor when `M40LLM_QWEN_THROUGHPUT_MIN_TPS` is set.
+
+Runtime changes tested here:
+
+- `M40LLM_DECODE_CUBLAS_STREAM=decode` routes materialized FP32 `M=1` cuBLAS
+  projection calls onto the decode stream and skips one-token cross-stream
+  waits in the forward path.
+- Materialized FP32 cuBLAS uses `cublasSgemv` for `M=1` decode shapes instead
+  of forcing every vector projection through SGEMM.
+- cuBLAS stream retargeting is cached in the CUDA context.
+
+Single-request release probe on Tesla M40:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_DECODE_CUBLAS_STREAM=decode \
+  M40LLM_QWEN_THROUGHPUT_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_THROUGHPUT_BACKEND=fast-fits \
+  M40LLM_QWEN_THROUGHPUT_KV=off \
+  M40LLM_QWEN_THROUGHPUT_CONTEXT=2048 \
+  M40LLM_QWEN_THROUGHPUT_MAX_TOKENS=96 \
+  cargo test --release --features cuda --test qwen_decode_throughput -- \
+  --nocapture --test-threads=1
+```
+
+| Model | Backend | KV | Generated tokens | Prefill | Decode | Total | Decode tok/s | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | fast-fits, decode-stream cuBLAS | dense off | 96 | 2077 ms | 6886 ms | 10059 ms | 13.94 | repeated `BLUE` |
+
+Batched server release check on Tesla M40:
+
+```bash
+source scripts/dev-env.sh && \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS=--release \
+  M40LLM_PROJECTION_BACKEND=fast-fits \
+  M40LLM_MATERIALIZE_F32_WEIGHTS=1 \
+  M40LLM_DECODE_CUBLAS_STREAM=decode \
+  MAX_CONTEXT_TOKENS=512 MAX_TOKENS=64 TRIALS=1 \
+  BATCH_DECODE_MODES=1 PREFILL_MODES=1 CASES=batch4_repeat \
+  M40LLM_SERVER_BATCH_DECODE_SLOTS=4 \
+  scripts/bench_server_batch_decode.sh
+```
+
+| Model | Server mode | Requests | Max tokens/request | HTTP ok | Wall | Script aggregate tok/s | Output |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | batched decode + packed prefill, dense off | 4 | 64 | 4/4 | 10114 ms | 25.31 | repeated `BLUE`/`GREEN`/`RED`/`YELLOW` |
+
+Interpretation:
+
+- Single-request Qwen2.5-3B F16 decode is still below the 20 tok/s target:
+  the best measured release path is 13.94 generated tok/s.
+- The server batch path now has a verified Qwen2.5-3B throughput mode above
+  20 aggregate tok/s on the M40 for four concurrent repeat-output requests.
+- Treat the 25.31 tok/s row as aggregate batched serving throughput, not
+  single-request latency. The next single-request speed lever remains a more
+  efficient compact-weight decode projection path.
+
 ## 2026-05-25: Qwen2.5 Q8_0 Default Compressed Auto-Packed Prefill
 
 The preferred compressed-KV runtime now automatically uses packed-prefix

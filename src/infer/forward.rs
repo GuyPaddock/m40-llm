@@ -1,3 +1,5 @@
+#[cfg(feature = "cuda")]
+use super::gemm::decode_cublas_single_stream_enabled;
 use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
 use super::workspace::ForwardWorkspacePtrs;
@@ -296,12 +298,21 @@ impl LoadedModel {
                     head_dim
                 );
             }
+            let single_stream_decode = decode_cublas_single_stream_enabled();
 
             self.with_forward_workspace(
                 d_model as usize,
                 kv_dim as usize,
                 hidden_dim as usize,
                 |ws| -> Result<()> {
+                    let wait_cross_stream =
+                        |waiting: CudaStream, signal: CudaStream, op: &'static str| -> Result<()> {
+                            if single_stream_decode {
+                                Ok(())
+                            } else {
+                                self.cuda.stream_wait_for_stream(waiting, signal, op)
+                            }
+                        };
                     let label = format!("forward.layer.{seq_id}.seq_len.{seq_len}");
                     // Pre-norm (RMSNorm) on x -> xn
                     let profile_before = profile::snapshot_if_enabled();
@@ -340,7 +351,7 @@ impl LoadedModel {
                     // Q uses query heads; K/V use KV heads for GQA models.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
@@ -385,7 +396,7 @@ impl LoadedModel {
                     let pos = seq_len.saturating_sub(1);
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
@@ -415,7 +426,7 @@ impl LoadedModel {
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_kv_append",
@@ -463,7 +474,7 @@ impl LoadedModel {
                     // Output projection of attention
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attention_to_out_project",
@@ -491,7 +502,7 @@ impl LoadedModel {
                     // Residual add y_attn: x1 = x + y_attn.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
@@ -551,7 +562,7 @@ impl LoadedModel {
                     // MLP gates and up (now feed post-attn normalized x1n)
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
@@ -586,7 +597,7 @@ impl LoadedModel {
                     // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_gate_up_to_swiglu",
@@ -612,7 +623,7 @@ impl LoadedModel {
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
@@ -640,7 +651,7 @@ impl LoadedModel {
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_down_to_mlp_residual",
@@ -754,12 +765,21 @@ impl LoadedModel {
                     head_dim
                 );
             }
+            let single_stream_decode = decode_cublas_single_stream_enabled();
 
             self.with_forward_workspace(
                 d_model as usize,
                 kv_dim as usize,
                 hidden_dim as usize,
                 |ws| -> Result<()> {
+                    let wait_cross_stream =
+                        |waiting: CudaStream, signal: CudaStream, op: &'static str| -> Result<()> {
+                            if single_stream_decode {
+                                Ok(())
+                            } else {
+                                self.cuda.stream_wait_for_stream(waiting, signal, op)
+                            }
+                        };
                     let label = format!("forward.layer.{seq_id}.graph_params");
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
@@ -791,7 +811,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
@@ -820,7 +840,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
@@ -844,7 +864,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_kv_append",
@@ -884,7 +904,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attention_to_out_project",
@@ -906,7 +926,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
@@ -954,7 +974,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
@@ -978,7 +998,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_gate_up_to_swiglu",
@@ -998,7 +1018,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
@@ -1020,7 +1040,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_down_to_mlp_residual",

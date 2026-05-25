@@ -6,6 +6,8 @@ use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use super::{ProjectionBackendDecision, ProjectionBackendEstimate, ProjectionBackendMode};
 #[cfg(feature = "cuda")]
+use crate::cuda::CudaStream;
+#[cfg(feature = "cuda")]
 use crate::gguf::GgmlDType;
 use anyhow::{Context, Result};
 use std::ffi::c_void;
@@ -22,6 +24,28 @@ fn materialized_weights_env_enabled() -> bool {
 #[cfg(feature = "cuda")]
 fn gemm_log_enabled() -> bool {
     std::env::var("M40LLM_GEMM_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+pub(crate) fn decode_cublas_single_stream_enabled() -> bool {
+    let requested = matches!(
+        std::env::var("M40LLM_DECODE_CUBLAS_STREAM").ok().as_deref(),
+        Some("decode") | Some("1") | Some("true") | Some("TRUE")
+    );
+    requested
+        && materialized_weights_env_enabled()
+        && std::env::var("M40LLM_PROJECTION_BACKEND")
+            .map(|value| value != "large-model")
+            .unwrap_or(true)
+}
+
+#[cfg(feature = "cuda")]
+fn materialized_gemm_stream(m: i32) -> CudaStream {
+    if m == 1 && decode_cublas_single_stream_enabled() {
+        CudaStream::Decode
+    } else {
+        CudaStream::Prefill
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -279,10 +303,15 @@ impl LoadedModel {
             if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {
                     Ok(d_b_f32) => {
-                        if let Err(err) = self
-                            .cuda
-                            .gemm_f32xf32_f32_async(d_a_f32, d_b_f32, d_c_f32, m, n, k)
-                        {
+                        if let Err(err) = self.cuda.gemm_f32xf32_f32_stream_async(
+                            d_a_f32,
+                            d_b_f32,
+                            d_c_f32,
+                            m,
+                            n,
+                            k,
+                            materialized_gemm_stream(m),
+                        ) {
                             if gemm_log_enabled() {
                                 eprintln!(
                                     "[cuda] async materialized f32 GEMM failed; falling back to GGUF F16 kernel: {err}"

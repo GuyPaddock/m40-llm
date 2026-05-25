@@ -34,6 +34,7 @@ struct M40llmCudaContext {
     M40llmPersistentDecode* persistent_decode;
 #ifdef M40LLM_HAVE_CUBLAS
     cublasHandle_t cublas;
+    uint32_t cublas_stream_kind;
 #endif
 };
 
@@ -476,6 +477,7 @@ extern "C" {
             return nullptr;
         }
         cublasSetStream(ctx->cublas, ctx->prefill_stream); // default
+        ctx->cublas_stream_kind = 0;
     #endif
 
         return ctx;
@@ -5954,6 +5956,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         void* d_C_f32,
         int M, int N, int K);
 
+    int m40llm_gemm_f32xf32_f32_stream_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f32_colmajor_nt,
+        void* d_C_f32,
+        int M, int N, int K,
+        uint32_t stream_kind);
+
     int m40llm_gemm_f32xf32_f32(
         M40llmCudaContext* ctx,
         const void* d_A_f32,
@@ -5973,11 +5983,42 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const void* d_B_f32_colmajor_nt,
         void* d_C_f32,
         int M, int N, int K) {
+        return m40llm_gemm_f32xf32_f32_stream_async(
+            ctx, d_A_f32, d_B_f32_colmajor_nt, d_C_f32, M, N, K, 0);
+    }
+
+    int m40llm_gemm_f32xf32_f32_stream_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f32_colmajor_nt,
+        void* d_C_f32,
+        int M, int N, int K,
+        uint32_t stream_kind) {
         if (!ctx || !d_A_f32 || !d_B_f32_colmajor_nt || !d_C_f32) return -1;
         if (M <= 0 || N <= 0 || K <= 0) return -2;
 #ifdef M40LLM_HAVE_CUBLAS
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -6;
+        if (ctx->cublas_stream_kind != stream_kind) {
+            cublasStatus_t stream_st = cublasSetStream(ctx->cublas, stream);
+            if (stream_st != CUBLAS_STATUS_SUCCESS) return -7;
+            ctx->cublas_stream_kind = stream_kind;
+        }
         float alpha = 1.0f;
         float beta = 0.0f;
+        if (M == 1) {
+            cublasStatus_t st = cublasSgemv(
+                ctx->cublas,
+                CUBLAS_OP_N,
+                N, K,
+                &alpha,
+                reinterpret_cast<const float*>(d_B_f32_colmajor_nt), N,
+                reinterpret_cast<const float*>(d_A_f32), 1,
+                &beta,
+                reinterpret_cast<float*>(d_C_f32), 1);
+            if (st != CUBLAS_STATUS_SUCCESS) return -8;
+            return 0;
+        }
         cublasStatus_t st = cublasSgemm(
             ctx->cublas,
             CUBLAS_OP_N, CUBLAS_OP_N,
@@ -5990,6 +6031,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (st != CUBLAS_STATUS_SUCCESS) return -3;
         return 0;
 #else
+        (void)stream_kind;
         return -5;
 #endif
     }

@@ -214,6 +214,13 @@ main() {
                 "Summarize CUDA streams in one sentence." \
                 "Name one benefit of batching LLM decode requests."
               ;;
+            batch4_repeat)
+              run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
+                "Repeat the word BLUE over and over, separated by spaces. Continue until stopped." \
+                "Repeat the word GREEN over and over, separated by spaces. Continue until stopped." \
+                "Repeat the word RED over and over, separated by spaces. Continue until stopped." \
+                "Repeat the word YELLOW over and over, separated by spaces. Continue until stopped."
+              ;;
             batch4_skewed)
               run_case "$batch_decode" "$batch_prefill" "$case_name" "$trial" \
                 "Hi" \

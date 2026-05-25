@@ -269,6 +269,16 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xf32_f32_stream_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f32_colmajor_nt: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
             ctx: *mut M40llmCudaContext,
             d_B_f16: *const c_void,
@@ -2238,6 +2248,48 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues materialized-FP32 GEMM on the requested stream without
+    /// synchronizing. The cuBLAS handle is retargeted under the context lock.
+    pub unsafe fn gemm_f32xf32_f32_stream_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf32_f32_stream_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f32_colmajor_nt,
+                d_c_f32,
+                m,
+                n,
+                k,
+                stream.ffi_kind(),
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xf32_f32_stream_async failed on {:?}: {rc}",
+                    stream
+                ));
+            }
+            crate::profile::record_cublas_call("gemm_f32xf32_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k, stream);
             Ok(())
         }
     }

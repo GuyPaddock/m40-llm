@@ -95,6 +95,15 @@ batched decode path before touching persistent decode or large-model fused-dequa
   2.65 s total. Bounded Qwen2.5 Q8_0 HTTP server smokes return `{"output":"4"}`
   for both default compressed top8 and explicit dense `--kv-compress-mode off`;
   the compressed server log records packed-prefix prefill.
+  `tests/qwen_decode_throughput.rs` now provides an explicit release/hardware
+  Qwen throughput probe. On Tesla M40, Qwen2.5-3B F16 fast-fits with dense KV
+  and `M40LLM_DECODE_CUBLAS_STREAM=decode` generates repeated `BLUE` text at
+  13.94 single-request decode tok/s, below the 20 tok/s single-request target.
+  The same decode-stream cuBLAS mode plus batched server decode/prefill reaches
+  25.31 aggregate tok/s for four concurrent Qwen2.5-3B F16 repeat-output
+  requests (`batch4_repeat`, 64 max tokens/request, all HTTP 200). Treat this as
+  a verified aggregate serving mode; the remaining single-request speed lever is
+  a more efficient compact-weight decode projection path.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple
