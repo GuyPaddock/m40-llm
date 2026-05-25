@@ -102,6 +102,14 @@ fn forward_finite_log_enabled() -> bool {
     std::env::var("M40LLM_FORWARD_FINITE_LOG").ok().as_deref() == Some("1")
 }
 
+#[cfg(feature = "cuda")]
+fn fused_residual_norm_enabled() -> bool {
+    matches!(
+        std::env::var("M40LLM_FUSED_RESIDUAL_NORM").ok().as_deref(),
+        Some("1") | Some("true") | Some("TRUE")
+    )
+}
+
 impl LoadedModel {
     #[cfg(feature = "cuda")]
     fn qkv_bias_ptrs(&self, w: &super::StandardLayerWeights) -> Result<Option<QkvBiasPtrs>> {
@@ -540,18 +548,47 @@ impl LoadedModel {
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
                     )?;
-                    self.cuda.residual_add_f32_async(
-                        d_x_f32,
-                        ws.dy_attn as *const c_void,
-                        ws.d_x1,
-                        d_model as usize,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "attn_residual",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    let fused_residual_norm = if let Some((d_weight, dtype)) = ffn_norm_weight {
+                        if fused_residual_norm_enabled() {
+                            self.cuda.residual_add_rms_norm_f32_weighted_async(
+                                d_x_f32,
+                                ws.dy_attn as *const c_void,
+                                ws.d_x1,
+                                d_weight,
+                                ws.d_x1n,
+                                1,
+                                d_model as u32,
+                                self.model_config.layer_norm_epsilon,
+                                norm_weight_dtype_code(dtype)?,
+                            )?;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if fused_residual_norm {
+                        log_profiled_op(
+                            &label,
+                            "attn_residual_ffn_norm",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.cuda.residual_add_f32_async(
+                            d_x_f32,
+                            ws.dy_attn as *const c_void,
+                            ws.d_x1,
+                            d_model as usize,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "attn_residual",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.attn_residual"),
                         ws.d_x1 as *const c_void,
@@ -559,33 +596,35 @@ impl LoadedModel {
                     )?;
 
                     // Post-attention norm: x1n = norm(x1)
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    if let Some((d_weight, dtype)) = ffn_norm_weight {
-                        self.run_rms_norm_weighted_async(
-                            ws.d_x1,
-                            d_weight,
-                            dtype,
-                            ws.d_x1n,
-                            1,
-                            d_model as u32,
-                            self.model_config.layer_norm_epsilon,
-                        )?;
-                    } else {
-                        self.run_rms_norm_async(
-                            ws.d_x1,
-                            ws.d_x1n,
-                            1,
-                            d_model as u32,
-                            self.model_config.layer_norm_epsilon,
-                        )?;
+                    if !fused_residual_norm {
+                        let profile_before = profile::snapshot_if_enabled();
+                        let op_start = std::time::Instant::now();
+                        if let Some((d_weight, dtype)) = ffn_norm_weight {
+                            self.run_rms_norm_weighted_async(
+                                ws.d_x1,
+                                d_weight,
+                                dtype,
+                                ws.d_x1n,
+                                1,
+                                d_model as u32,
+                                self.model_config.layer_norm_epsilon,
+                            )?;
+                        } else {
+                            self.run_rms_norm_async(
+                                ws.d_x1,
+                                ws.d_x1n,
+                                1,
+                                d_model as u32,
+                                self.model_config.layer_norm_epsilon,
+                            )?;
+                        }
+                        log_profiled_op(
+                            &label,
+                            "ffn_norm",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
                     }
-                    log_profiled_op(
-                        &label,
-                        "ffn_norm",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.ffn_norm"),
                         ws.d_x1n as *const c_void,

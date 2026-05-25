@@ -42,6 +42,7 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_CUDA_GREEDY_ARGMAX=1` | 44 | 512 | 1586 ms | 31218 ms | 32990 ms | 16.40 | 15.52 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1573 ms | 30344 ms | 32113 ms | 16.87 | 15.94 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_QKV=1 M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1343 ms | 28277 ms | 29826 ms | 18.11 | 17.17 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | previous row + `M40LLM_FUSED_RESIDUAL_NORM=1` | 44 | 512 | 1344 ms | 28288 ms | 29826 ms | 18.10 | 17.17 | coherent |
 
 Implementation/diagnostic notes:
 
@@ -61,6 +62,15 @@ Implementation/diagnostic notes:
   and SwiGLU into one decode kernel. `M40LLM_FUSED_QKV=1` fuses single-token
   Q/K/V GGUF F16 projection and optional Q/K/V f32 bias into one decode kernel.
   Both are opt-in while validation broadens.
+- `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
+  post-attention residual add and weighted RMSNorm. It showed a small short-run
+  probe improvement, but the full 512-token target run was neutral versus the
+  fused QKV/MLP baseline. Treat it as a failed/neutral experiment unless a
+  broader fusion makes this interface useful. The short 32-token probe with the
+  same flags reported `prompt_tokens=44 generated_tokens=32 prefill_ms=1343
+  decode_ms=1134 total_ms=2652 decode_tps=28.22 total_tps=12.07`, compared
+  with a prior short best around 11.95 E2E tok/s, but that did not carry through
+  to the authoritative 512-token target row above.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
   The profiled short run still shows roughly 16.5 ms host enqueue time plus
