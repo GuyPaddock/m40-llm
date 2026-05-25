@@ -52,6 +52,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   model-level KV layer/sequence addressing instead of passing `layer as seq_id`
   directly. FP32 materialized projection weights have budget reporting and
   over-budget fallback logging plus tensor identity metadata in the cache key.
+  Projection GEMMs now have explicit `auto`, `fast-fits`, and `large-model`
+  backend selection. Auto estimates uploaded weights, materialized FP32 cache,
+  one-row forward workspace, and resident KV against
+  `M40LLM_FAST_FITS_BUDGET_MB`; `large-model` currently means the compact GGUF
+  fallback path without full FP32 materialization, while fused dequant
+  projection kernels remain future work.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

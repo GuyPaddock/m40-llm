@@ -74,6 +74,16 @@ leaving one-off timing notes in the README.
 - `M40LLM_GEMM_LOG=1`: print GEMM backend selection lines.
 - `M40LLM_ENABLE_CUBLAS=1`: enable cuBLAS integration when headers/libraries
   are detected.
+- `M40LLM_PROJECTION_BACKEND=auto|fast-fits|large-model`: choose the projection
+  backend policy. `auto` is the default. `fast-fits` uses materialized FP32
+  projection weights with cuBLAS when allowed. `large-model` keeps compact GGUF
+  F16/quantized weights and skips full FP32 materialization; this is the
+  current fallback path, not the future fused-dequant projection backend.
+- `M40LLM_FAST_FITS_BUDGET_MB=<mb>`: total memory budget used by
+  `M40LLM_PROJECTION_BACKEND=auto` when deciding whether materialized FP32
+  projections fit. The estimate includes uploaded model weights, estimated FP32
+  materialized projection cache, one-row forward workspace, and the resident KV
+  cache. The default is `22528` MiB to leave headroom on a 24 GiB M40.
 - `M40LLM_MATERIALIZE_F32_WEIGHTS=0`: force the dedicated GGUF-layout CUDA
   fallback instead of materialized FP32 projection weights.
 - `M40LLM_MATERIALIZE_F32_BUDGET_MB=<mb>`: cap cached FP32 materialized

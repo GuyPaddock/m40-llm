@@ -1,6 +1,10 @@
 #[cfg(feature = "cuda")]
 use super::types::{MaterializedWeight, MaterializedWeightKey};
+#[cfg(feature = "cuda")]
+use super::workspace::ForwardWorkspace;
 use super::LoadedModel;
+#[cfg(feature = "cuda")]
+use super::{ProjectionBackendDecision, ProjectionBackendEstimate, ProjectionBackendMode};
 #[cfg(feature = "cuda")]
 use crate::gguf::GgmlDType;
 use anyhow::{Context, Result};
@@ -9,7 +13,7 @@ use std::ffi::c_void;
 use std::sync::Once;
 
 #[cfg(feature = "cuda")]
-fn materialized_weights_enabled() -> bool {
+fn materialized_weights_env_enabled() -> bool {
     std::env::var("M40LLM_MATERIALIZE_F32_WEIGHTS")
         .map(|v| v != "0")
         .unwrap_or(true)
@@ -26,6 +30,15 @@ fn materialized_budget_bytes() -> Option<usize> {
         .ok()?
         .parse::<usize>()
         .ok()?;
+    mb.checked_mul(1024)?.checked_mul(1024)
+}
+
+#[cfg(feature = "cuda")]
+fn fast_fits_budget_bytes() -> Option<usize> {
+    let mb = std::env::var("M40LLM_FAST_FITS_BUDGET_MB")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(22 * 1024);
     mb.checked_mul(1024)?.checked_mul(1024)
 }
 
@@ -208,7 +221,7 @@ impl LoadedModel {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            if materialized_weights_enabled() && cfg!(have_cublas) {
+            if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {
                     Ok(d_b_f32) => {
                         if let Err(err) = self
@@ -253,7 +266,7 @@ impl LoadedModel {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            if materialized_weights_enabled() && cfg!(have_cublas) {
+            if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {
                     Ok(d_b_f32) => {
                         if let Err(err) = self
@@ -379,7 +392,7 @@ impl LoadedModel {
     }
 
     #[cfg(feature = "cuda")]
-    fn estimated_materialized_f32_bytes(&self) -> usize {
+    pub fn estimated_materialized_f32_bytes(&self) -> usize {
         self.device_tensors
             .values()
             .filter(|tensor| tensor.dtype == GgmlDType::F16 && tensor.shape.len() == 2)
@@ -393,6 +406,74 @@ impl LoadedModel {
                     .and_then(|elems| elems.checked_mul(std::mem::size_of::<f32>()))
             })
             .sum()
+    }
+
+    #[cfg(feature = "cuda")]
+    pub fn projection_backend_decision(&self) -> ProjectionBackendDecision {
+        let d_model = self.model_config.embedding_length as usize;
+        let kv_dim = (self.model_config.attention_head_count_kv
+            * self.model_config.attention_key_length) as usize;
+        let hidden_dim = self.model_config.feed_forward_length as usize;
+        let workspace_bytes =
+            ForwardWorkspace::estimated_bytes(d_model, kv_dim, hidden_dim, 1).unwrap_or(0);
+        let kv_bytes = self
+            .kv_cache
+            .as_ref()
+            .map(|kv| kv.actual_bytes())
+            .unwrap_or(0);
+        let estimate = ProjectionBackendEstimate {
+            weights_bytes: self.weights_len,
+            materialized_f32_bytes: self.estimated_materialized_f32_bytes(),
+            workspace_bytes,
+            kv_bytes,
+        };
+        super::backend::choose_projection_backend(
+            ProjectionBackendMode::from_env(),
+            estimate,
+            fast_fits_budget_bytes(),
+            cfg!(have_cublas),
+            materialized_weights_env_enabled(),
+        )
+    }
+
+    #[cfg(feature = "cuda")]
+    fn projection_backend_allows_materialized_f32(&self) -> bool {
+        let decision = self.projection_backend_decision();
+        self.log_projection_backend_once(&decision);
+        decision.allows_materialized_f32()
+    }
+
+    #[cfg(feature = "cuda")]
+    fn log_projection_backend_once(&self, decision: &ProjectionBackendDecision) {
+        if !gemm_log_enabled() {
+            return;
+        }
+        static LOG_ONCE: Once = Once::new();
+        LOG_ONCE.call_once(|| {
+            let total = decision
+                .estimate
+                .total_with_materialization()
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "overflow".to_string());
+            let budget = decision
+                .budget_bytes
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unbounded".to_string());
+            eprintln!(
+                "[cuda] projection_backend: requested={:?} selected={:?} reason={} cublas={} materialization_enabled={} weights_bytes={} materialized_f32_bytes={} workspace_bytes={} kv_bytes={} fast_fits_total_bytes={} budget_bytes={}",
+                decision.requested,
+                decision.selected,
+                decision.reason,
+                decision.cublas_available,
+                decision.materialization_enabled,
+                decision.estimate.weights_bytes,
+                decision.estimate.materialized_f32_bytes,
+                decision.estimate.workspace_bytes,
+                decision.estimate.kv_bytes,
+                total,
+                budget
+            );
+        });
     }
 
     #[cfg(feature = "cuda")]

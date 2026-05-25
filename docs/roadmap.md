@@ -99,12 +99,16 @@ Fast-fits backend:
 - Materialized FP32 projection weights.
 - cuBLAS `Sgemm`.
 - Intended for models that fit comfortably in 24 GB with workspace and KV.
+- Selected explicitly with `M40LLM_PROJECTION_BACKEND=fast-fits` or
+  automatically when the estimated memory footprint is within
+  `M40LLM_FAST_FITS_BUDGET_MB`.
 
 Large-model backend:
 
 - Compact GGUF/quantized weights.
 - No full FP32 materialization.
-- Future fused dequant plus projection kernels.
+- Current implementation uses the existing compact GGUF projection fallback.
+- Future work adds fused dequant plus projection kernels.
 
 The large-model backend should not be mixed into the fast path until the
 fast-fits path is stable and measured.
