@@ -961,49 +961,6 @@ extern "C" {
         }
     }
 
-    __global__ void residual_add_rms_norm_f32_weighted_parallel(
-        const float* __restrict__ a,
-        const float* __restrict__ b,
-        float* __restrict__ residual_out,
-        const void* __restrict__ weight,
-        float* __restrict__ norm_out,
-        size_t n_rows,
-        size_t row_stride,
-        float eps,
-        uint32_t weight_dtype) {
-        const size_t row = blockIdx.x;
-        if (row >= n_rows) return;
-
-        extern __shared__ float reduce[];
-        const uint32_t tid = threadIdx.x;
-        const size_t base = row * row_stride;
-
-        float ss = 0.0f;
-        for (size_t i = tid; i < row_stride; i += blockDim.x) {
-            const size_t idx = base + i;
-            const float value = a[idx] + b[idx];
-            residual_out[idx] = value;
-            ss += value * value;
-        }
-        reduce[tid] = ss;
-        __syncthreads();
-
-        for (uint32_t stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-            if (tid < stride) {
-                reduce[tid] += reduce[tid + stride];
-            }
-            __syncthreads();
-        }
-
-        const float scale = rsqrtf(reduce[0] / static_cast<float>(row_stride) + eps);
-        const __half* w_f16 = reinterpret_cast<const __half*>(weight);
-        const float* w_f32 = reinterpret_cast<const float*>(weight);
-        for (size_t i = tid; i < row_stride; i += blockDim.x) {
-            const float w = weight_dtype == 0 ? __half2float(w_f16[i]) : w_f32[i];
-            norm_out[base + i] = residual_out[base + i] * scale * w;
-        }
-    }
-
     __global__ void swiglu_f32_kernel(
         const float* __restrict__ gate,
         const float* __restrict__ up,
@@ -1042,17 +999,6 @@ int m40llm_residual_add_f32_async(
         const void* d_b_f32,
         void* d_out_f32,
         size_t n);
-int m40llm_residual_add_rms_norm_f32_weighted_async(
-        M40llmCudaContext* ctx,
-        const void* d_a_f32,
-        const void* d_b_f32,
-        void* d_residual_out_f32,
-        const void* d_weight,
-        void* d_norm_out_f32,
-        uint32_t rows,
-        uint32_t dim,
-        float eps,
-        uint32_t weight_dtype);
 int m40llm_swiglu_f32_async(
         M40llmCudaContext* ctx,
         const void* d_gate_f32,
@@ -1339,41 +1285,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             reinterpret_cast<const float*>(d_b_f32),
             reinterpret_cast<float*>(d_out_f32),
             n);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) return -3;
-        return 0;
-    }
-
-    int m40llm_residual_add_rms_norm_f32_weighted_async(
-        M40llmCudaContext* ctx,
-        const void* d_a_f32,
-        const void* d_b_f32,
-        void* d_residual_out_f32,
-        const void* d_weight,
-        void* d_norm_out_f32,
-        uint32_t rows,
-        uint32_t dim,
-        float eps,
-        uint32_t weight_dtype) {
-        if (!ctx || !d_a_f32 || !d_b_f32 || !d_residual_out_f32 || !d_weight || !d_norm_out_f32) return -1;
-        if (ensure_device(ctx) != 0) return -2;
-        if (rows == 0 || dim == 0) return -4;
-        if (weight_dtype > 1) return -5;
-        const int threads = 256;
-        residual_add_rms_norm_f32_weighted_parallel<<<
-            rows,
-            threads,
-            threads * sizeof(float),
-            ctx->decode_stream>>>(
-            reinterpret_cast<const float*>(d_a_f32),
-            reinterpret_cast<const float*>(d_b_f32),
-            reinterpret_cast<float*>(d_residual_out_f32),
-            d_weight,
-            reinterpret_cast<float*>(d_norm_out_f32),
-            rows,
-            dim,
-            eps,
-            weight_dtype);
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -3;
         return 0;

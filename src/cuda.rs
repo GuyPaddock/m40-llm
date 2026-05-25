@@ -399,18 +399,6 @@ mod ffi {
             d_out_f32: *mut c_void,
             n: usize,
         ) -> i32;
-        pub fn m40llm_residual_add_rms_norm_f32_weighted_async(
-            ctx: *mut M40llmCudaContext,
-            d_a_f32: *const c_void,
-            d_b_f32: *const c_void,
-            d_residual_out_f32: *mut c_void,
-            d_weight: *const c_void,
-            d_norm_out_f32: *mut c_void,
-            rows: u32,
-            dim: u32,
-            eps: f32,
-            weight_dtype: u32,
-        ) -> i32;
         pub fn m40llm_swiglu_f32_async(
             ctx: *mut M40llmCudaContext,
             d_gate_f32: *const c_void,
@@ -3235,62 +3223,6 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a, d_b, d_out, n);
-            Ok(())
-        }
-    }
-
-    /// # Safety
-    /// Enqueues `residual_out = a + b` and weighted RMSNorm of that residual on
-    /// the decode stream. Weight dtype code is 0=F16 and 1=F32.
-    #[allow(clippy::too_many_arguments)]
-    pub unsafe fn residual_add_rms_norm_f32_weighted_async(
-        &self,
-        d_a: *const c_void,
-        d_b: *const c_void,
-        d_residual_out: *mut c_void,
-        d_weight: *const c_void,
-        d_norm_out: *mut c_void,
-        rows: u32,
-        dim: u32,
-        eps: f32,
-        weight_dtype: u32,
-    ) -> Result<()> {
-        #[cfg(feature = "cuda")]
-        {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_residual_add_rms_norm_f32_weighted_async(
-                self.inner.raw.as_ptr(),
-                d_a,
-                d_b,
-                d_residual_out,
-                d_weight,
-                d_norm_out,
-                rows,
-                dim,
-                eps,
-                weight_dtype,
-            );
-            if rc != 0 {
-                return Err(anyhow!(
-                    "m40llm_residual_add_rms_norm_f32_weighted_async failed: {rc}"
-                ));
-            }
-            record_async_kernel("residual_add_rms_norm_f32_weighted");
-            Ok(())
-        }
-        #[cfg(not(feature = "cuda"))]
-        {
-            let _ = (
-                d_a,
-                d_b,
-                d_residual_out,
-                d_weight,
-                d_norm_out,
-                rows,
-                dim,
-                eps,
-                weight_dtype,
-            );
             Ok(())
         }
     }
