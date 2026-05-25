@@ -59,6 +59,60 @@ fn cpu_gguf_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> Vec<
     c
 }
 
+fn q8_0_gguf_bytes_from_dequantized(vals: &[f32], n: usize, k: usize) -> Vec<u8> {
+    const QK: usize = 32;
+    const BLOCK_BYTES: usize = 34;
+    let blocks_per_col = k.div_ceil(QK);
+    let mut out = vec![0u8; n * blocks_per_col * BLOCK_BYTES];
+    for col in 0..n {
+        for block in 0..blocks_per_col {
+            let start = block * QK;
+            let end = (start + QK).min(k);
+            let scale = vals[col * k + start..col * k + end]
+                .iter()
+                .fold(0.0f32, |acc, v| acc.max(v.abs()))
+                / 127.0;
+            let scale = if scale == 0.0 { 1.0 } else { scale };
+            let base = (col * blocks_per_col + block) * BLOCK_BYTES;
+            let scale_bits = half::f16::from_f32(scale).to_bits();
+            out[base] = (scale_bits & 0xff) as u8;
+            out[base + 1] = (scale_bits >> 8) as u8;
+            for idx in 0..QK {
+                let k_idx = start + idx;
+                let q = if k_idx < k {
+                    (vals[col * k + k_idx] / scale).round().clamp(-128.0, 127.0) as i8
+                } else {
+                    0
+                };
+                out[base + 2 + idx] = q as u8;
+            }
+        }
+    }
+    out
+}
+
+fn q8_0_gguf_dequantize(bytes: &[u8], n: usize, k: usize) -> Vec<f32> {
+    const QK: usize = 32;
+    const BLOCK_BYTES: usize = 34;
+    let blocks_per_col = k.div_ceil(QK);
+    let mut out = vec![0f32; n * k];
+    for col in 0..n {
+        for block in 0..blocks_per_col {
+            let base = (col * blocks_per_col + block) * BLOCK_BYTES;
+            let scale_bits = u16::from_le_bytes([bytes[base], bytes[base + 1]]);
+            let scale = half::f16::from_bits(scale_bits).to_f32();
+            for idx in 0..QK {
+                let k_idx = block * QK + idx;
+                if k_idx < k {
+                    let q = bytes[base + 2 + idx] as i8;
+                    out[col * k + k_idx] = f32::from(q) * scale;
+                }
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn gemm_f32xf16_f32_square_2x2() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -203,6 +257,63 @@ fn gemm_f32xf16_gguf_f32_rectangular_1x3x2() -> Result<()> {
     for (g, e) in got.iter().zip(expect.iter()) {
         let diff = (g - e).abs();
         assert!(diff <= 1e-3, "got {:?} expect {:?}", got, expect);
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_gguf_f32_rectangular_2x35x3() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (2i32, 35i32, 3i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 7) as f32 - 3.0) * 0.25)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 11) as f32 - 5.0) * 0.125)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q8_0_gguf_dequantize(&b_q8, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    }
+
+    let mut hc = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            hc.as_mut_ptr() as *mut c_void,
+            dc as *const c_void,
+            hc.len(),
+        )?;
+    }
+
+    let got = bytes_to_f32s(&hc);
+    for (g, e) in got.iter().zip(expect.iter()) {
+        let diff = (g - e).abs();
+        assert!(diff <= 1e-4, "got {:?} expect {:?}", got, expect);
     }
 
     unsafe {

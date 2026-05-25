@@ -84,6 +84,10 @@ leaving one-off timing notes in the README.
   projections fit. The estimate includes uploaded model weights, estimated FP32
   materialized projection cache, one-row forward workspace, and the resident KV
   cache. The default is `22528` MiB to leave headroom on a 24 GiB M40.
+- GGUF Q8_0 projection tensors now route through a fused CUDA
+  `f32 x Q8_0 -> f32` path that dequantizes inside the projection kernel. This
+  is the first large-model fused-dequant primitive; it is not yet a complete
+  replacement for the fast-fits materialized FP32 backend.
 - `M40LLM_MATERIALIZE_F32_WEIGHTS=0`: force the dedicated GGUF-layout CUDA
   fallback instead of materialized FP32 projection weights.
 - `M40LLM_MATERIALIZE_F32_BUDGET_MB=<mb>`: cap cached FP32 materialized

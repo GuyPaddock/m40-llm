@@ -108,7 +108,11 @@ Large-model backend:
 - Compact GGUF/quantized weights.
 - No full FP32 materialization.
 - Current implementation uses the existing compact GGUF projection fallback.
-- Future work adds fused dequant plus projection kernels.
+- Fused Q8_0 projection has started with a CUDA kernel for
+  `f32 x GGUF Q8_0 -> f32` that dequantizes inside the projection and avoids an
+  intermediate dequant buffer.
+- Future work expands fused dequant coverage beyond Q8_0 and benchmarks it
+  against the fast-fits materialized FP32 path.
 
 The large-model backend should not be mixed into the fast path until the
 fast-fits path is stable and measured.

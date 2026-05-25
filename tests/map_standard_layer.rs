@@ -204,6 +204,38 @@ fn map_standard_layer_accepts_optional_qkv_biases() -> Result<()> {
 }
 
 #[test]
+fn map_standard_layer_accepts_q8_0_projection_weights() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    for key in [
+        "layers.0.attention.wq.weight",
+        "layers.0.attention.wk.weight",
+        "layers.0.attention.wv.weight",
+        "layers.0.attention.wo.weight",
+        "layers.0.feed_forward.w3.weight",
+        "layers.0.feed_forward.w1.weight",
+        "layers.0.feed_forward.w2.weight",
+    ] {
+        lm.device_tensors
+            .get_mut(key)
+            .expect("weight present")
+            .dtype = GgmlDType::Q8_0;
+    }
+
+    let mapped = lm
+        .map_standard_layer(0)
+        .expect("should accept Q8_0 projection weights");
+    assert_eq!(mapped.wq.dtype, GgmlDType::Q8_0);
+    assert_eq!(mapped.w_down.dtype, GgmlDType::Q8_0);
+    Ok(())
+}
+
+#[test]
 fn map_standard_layer_rejects_bad_qkv_bias_shape() -> Result<()> {
     let mut lm = match make_model_with_layer(0, 32, 64, true) {
         Ok(lm) => lm,

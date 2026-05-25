@@ -206,6 +206,24 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xf32_f32_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -1859,6 +1877,92 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_q8_0` must be a GGUF Q8_0 tensor with logical shape [k, n], where
+    /// dimension 0 is fastest and Q8_0 blocks are laid out along K per column.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq8_0_gguf_f32",
+                "CUDA fused GGUF Q8_0 dequant projection",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq8_0_gguf_f32 failed: {rc}"));
+            }
+            record_sync_kernel("gemm_f32xq8_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused GGUF Q8_0 dequant projection on the prefill stream without
+    /// synchronizing.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq8_0_gguf_f32_async",
+                "CUDA fused GGUF Q8_0 dequant projection async enqueue",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq8_0_gguf_f32_async failed: {rc}"));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
             Ok(())
         }
     }

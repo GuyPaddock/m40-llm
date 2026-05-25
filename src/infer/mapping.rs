@@ -215,7 +215,8 @@ impl LoadedModel {
         let attn_norm = self.find_tensor_any_optional(&attn_norm_names);
         let ffn_norm = self.find_tensor_any_optional(&ffn_norm_names);
 
-        // DType checks: we support FP16 or Q5_1 weights for GEMM paths
+        // DType checks: projection paths support F16 plus selected quantized
+        // GGUF layouts when a fused dequant backend is available.
         for (name, t) in [
             ("wq", &wq),
             ("wk", &wk),
@@ -225,8 +226,13 @@ impl LoadedModel {
             ("w_up", &w_up),
             ("w_down", &w_down),
         ] {
-            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q5_1 {
-                anyhow::bail!("tensor {} expected F16 or Q5_1, got {:?}", name, t.dtype);
+            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q5_1 && t.dtype != GgmlDType::Q8_0
+            {
+                anyhow::bail!(
+                    "tensor {} expected F16, Q5_1, or Q8_0, got {:?}",
+                    name,
+                    t.dtype
+                );
             }
         }
         // Shape checks (row-major): X [1 x d_model] · W[K=d_model x N] => out [1 x N]

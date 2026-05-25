@@ -221,6 +221,11 @@ impl LoadedModel {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                return self
+                    .cuda
+                    .gemm_f32xq8_0_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            }
             if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {
                     Ok(d_b_f32) => {
@@ -266,6 +271,11 @@ impl LoadedModel {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                return self
+                    .cuda
+                    .gemm_f32xq8_0_gguf_f32_async(d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            }
             if self.projection_backend_allows_materialized_f32() {
                 match self.materialized_gguf_weight(d_b_f16, n, k) {
                     Ok(d_b_f32) => {
@@ -494,6 +504,14 @@ impl LoadedModel {
                 })
             })
             .unwrap_or_else(|| (None, 0, GgmlDType::Unknown(u32::MAX), Vec::new()))
+    }
+
+    #[cfg(feature = "cuda")]
+    fn gguf_weight_dtype(&self, d_b: *const c_void) -> GgmlDType {
+        self.device_tensors
+            .values()
+            .find_map(|tensor| std::ptr::eq(tensor.dptr.cast_const(), d_b).then_some(tensor.dtype))
+            .unwrap_or(GgmlDType::Unknown(u32::MAX))
     }
 
     #[cfg(feature = "cuda")]

@@ -57,7 +57,8 @@ batched decode path before touching persistent decode or large-model fused-dequa
   one-row forward workspace, and resident KV against
   `M40LLM_FAST_FITS_BUDGET_MB`; `large-model` currently means the compact GGUF
   fallback path without full FP32 materialization, while fused dequant
-  projection kernels remain future work.
+  projection kernels are starting with an opt-in GGUF Q8_0 projection primitive
+  that computes `f32 x Q8_0 -> f32` and dequantizes inside the CUDA kernel.
   `DecodeSession` now also owns reusable `d_logits` and optional
   `d_norm_hidden` scratch for CUDA logits. Hot CUDA wrappers now expose async
   enqueue variants while preserving existing sync wrappers for tests/simple

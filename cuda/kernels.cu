@@ -5560,6 +5560,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         C[row * N + col] = acc;
     }
 
+    __global__ void gemm_f32xq8_0_gguf_f32_kernel(
+        const float* __restrict__ A,           // MxK row-major activations
+        const unsigned char* __restrict__ B,   // GGUF Q8_0 [K,N], K-fastest
+        float* __restrict__ C,                 // MxN row-major output
+        int M, int N, int K) {
+        int row = blockIdx.y * blockDim.y + threadIdx.y;
+        int col = blockIdx.x * blockDim.x + threadIdx.x;
+        if (row >= M || col >= N) return;
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = (K + qk - 1) / qk;
+        float acc = 0.0f;
+        for (int kk = 0; kk < K; ++kk) {
+            const int block_idx = kk / qk;
+            const int q_idx = kk - block_idx * qk;
+            const size_t block_base =
+                (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+            const __half scale_h = *reinterpret_cast<const __half*>(B + block_base);
+            const float scale = __half2float(scale_h);
+            const int8_t q = *reinterpret_cast<const int8_t*>(B + block_base + 2 + q_idx);
+            acc += A[row * K + kk] * (static_cast<float>(q) * scale);
+        }
+        C[row * N + col] = acc;
+    }
+
     // Materialize GGUF [K,N] F16 weights into column-major [N,K] FP32.
     // This lets cublasSgemm compute row-major C=A*B via C_col=B^T*A^T.
     __global__ void materialize_gguf_f16_to_f32_colmajor_nt_kernel(
@@ -5699,6 +5724,38 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -2;
         err = cudaStreamSynchronize(ctx->prefill_stream);
+        if (err != cudaSuccess) return -3;
+        return 0;
+    }
+
+    int m40llm_gemm_f32xq8_0_gguf_f32_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_C_f32,
+        int M, int N, int K) {
+        if (!ctx) return -1;
+        if (M <= 0 || N <= 0 || K <= 0) return -4;
+        const float* A = reinterpret_cast<const float*>(d_A_f32);
+        const unsigned char* B = reinterpret_cast<const unsigned char*>(d_B_q8_0);
+        float* C = reinterpret_cast<float*>(d_C_f32);
+        dim3 block(16, 16);
+        dim3 grid((N + block.x - 1) / block.x, (M + block.y - 1) / block.y);
+        gemm_f32xq8_0_gguf_f32_kernel<<<grid, block, 0, ctx->prefill_stream>>>(A, B, C, M, N, K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -2;
+        return 0;
+    }
+
+    int m40llm_gemm_f32xq8_0_gguf_f32(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_q8_0,
+        void* d_C_f32,
+        int M, int N, int K) {
+        int rc = m40llm_gemm_f32xq8_0_gguf_f32_async(ctx, d_A_f32, d_B_q8_0, d_C_f32, M, N, K);
+        if (rc != 0) return rc;
+        cudaError_t err = cudaStreamSynchronize(ctx->prefill_stream);
         if (err != cudaSuccess) return -3;
         return 0;
     }
