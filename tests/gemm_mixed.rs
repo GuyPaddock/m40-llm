@@ -3,6 +3,7 @@
 mod cuda_env;
 
 use anyhow::Result;
+use m40_llm::cuda::CudaStream;
 // CudaContext not used directly in this test
 use std::ffi::c_void;
 
@@ -314,6 +315,142 @@ fn gemm_f32xq8_0_gguf_f32_rectangular_2x35x3() -> Result<()> {
     for (g, e) in got.iter().zip(expect.iter()) {
         let diff = (g - e).abs();
         assert!(diff <= 1e-4, "got {:?} expect {:?}", got, expect);
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_decode_kernel_matches_generic_1x2048x2048() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 2048i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q8_0_gguf_dequantize(&b_q8, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc_generic = ctx.device_malloc(bytes_c)?;
+    let dc_decode = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_generic_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_generic,
+            m,
+            n,
+            k,
+        )?;
+        ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_decode,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut generic_bytes = vec![0u8; bytes_c];
+    let mut decode_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            generic_bytes.as_mut_ptr() as *mut c_void,
+            dc_generic as *const c_void,
+            generic_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            decode_bytes.as_mut_ptr() as *mut c_void,
+            dc_decode as *const c_void,
+            decode_bytes.len(),
+        )?;
+    }
+    let generic = bytes_to_f32s(&generic_bytes);
+    let decode = bytes_to_f32s(&decode_bytes);
+    for ((g, d), e) in generic.iter().zip(decode.iter()).zip(expect.iter()) {
+        assert!((g - e).abs() <= 1e-4, "generic mismatch got {g} expect {e}");
+        assert!((d - e).abs() <= 1e-4, "decode mismatch got {d} expect {e}");
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_generic)?;
+        ctx.device_free(dc_decode)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_dispatch_falls_back_for_tail_k() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 35i32, 64i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 7) as f32 - 3.0) * 0.25)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 11) as f32 - 5.0) * 0.125)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q8_0_gguf_dequantize(&b_q8, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32(da as *const c_void, db as *const c_void, dc, m, n, k)?;
+    }
+
+    let mut got_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            got_bytes.as_mut_ptr() as *mut c_void,
+            dc as *const c_void,
+            got_bytes.len(),
+        )?;
+    }
+    let got = bytes_to_f32s(&got_bytes);
+    for (g, e) in got.iter().zip(expect.iter()) {
+        assert!((g - e).abs() <= 1e-4, "got {g} expect {e}");
     }
 
     unsafe {

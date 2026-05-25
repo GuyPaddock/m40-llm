@@ -2,12 +2,14 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
-## 2026-05-25: Fused Q8_0 Projection Primitive Baseline
+## 2026-05-25: Q8_0 Decode Projection Tiling
 
-This checkpoint adds a dedicated `q8_projection` Criterion benchmark for the
-first large-model fused-dequant projection primitive. It compares:
+This checkpoint adds an `M=1` decode-specialized Q8_0 projection kernel and
+updates the dedicated `q8_projection` Criterion benchmark for the first
+large-model fused-dequant projection primitive. It compares:
 
-- fused GGUF Q8_0 projection, `f32 x Q8_0 -> f32`;
+- generic fused GGUF Q8_0 projection, `f32 x Q8_0 -> f32`;
+- decode-tiled GGUF Q8_0 projection for `M=1,K%32=0`;
 - existing GGUF F16 fallback projection kernel;
 - materialized FP32 cuBLAS projection.
 
@@ -19,7 +21,7 @@ source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-featur
 source scripts/dev-env.sh && \
   M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   cargo test --features cuda --test gemm_mixed \
-  gemm_f32xq8_0_gguf_f32_rectangular_2x35x3 -- --nocapture --test-threads=1
+  q8_0 -- --nocapture --test-threads=1
 source scripts/dev-env.sh && \
   M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   cargo clippy --features cuda,server --all-targets -- -D warnings
@@ -33,31 +35,35 @@ Correctness notes:
 
 - The CUDA parity test passes for a non-multiple-of-32 K dimension
   (`M=2,K=35,N=3`), covering Q8_0 tail-block handling.
+- The decode-specialized kernel matches the generic Q8_0 path and CPU
+  dequantized reference for `M=1,K=2048,N=2048`.
+- Production Q8_0 projection dispatch now uses the decode-tiled kernel for
+  `M=1,K%32=0` and falls back to the generic kernel otherwise.
 - Benchmark correctness probes reported zero max/mean absolute difference
   versus the CPU dequantized reference for `tiny`, `llama_decode_q`, and
   `qwen_decode_q`.
 
 Timing summary on Tesla M40:
 
-| Shape | M | K | N | Q8_0 fused | F16 GGUF kernel | Materialized FP32 cuBLAS |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| tiny | 2 | 3 | 35 | 7.829 us | 7.699 us | 9.447 us |
-| Llama decode Q/O | 1 | 2048 | 2048 | 228.76 us | 191.09 us | 103.10 us |
-| Llama decode MLP | 1 | 2048 | 8192 | 746.31 us | 544.14 us | 362.32 us |
-| Qwen decode Q/O | 1 | 2048 | 2048 | 229.37 us | 191.23 us | 102.69 us |
-| Qwen decode MLP | 1 | 2048 | 11008 | 985.74 us | 784.81 us | 443.28 us |
-| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.570 ms | 6.311 ms | 147.78 us |
+| Shape | M | K | N | Q8_0 generic | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.615 us | n/a | 7.903 us | 9.204 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.91 us | 111.47 us | 189.36 us | 102.97 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 746.54 us | 403.62 us | 544.99 us | 362.33 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 229.36 us | 112.15 us | 191.77 us | 103.03 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 984.31 us | 537.60 us | 791.78 us | 443.30 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.568 ms | n/a | 6.330 ms | 148.40 us |
 
 Interpretation:
 
-- The first Q8_0 projection primitive is correctness-first and not yet
-  performance competitive. It is slower than the existing F16 GGUF projection
-  kernel on all measured decode/prefill shapes and far slower than materialized
-  FP32 cuBLAS when fast-fits is available.
-- This argues against adding more fused-dequant dtypes immediately. The next
-  large-model backend step should optimize the Q8_0 kernel's memory access and
-  tiling first, especially for `M=1` decode where the current one-output-per-thread
-  kernel reloads the activation row for every output column.
+- The decode-tiled Q8_0 path roughly halves decode-shaped Q8_0 projection
+  latency and now beats the existing F16 GGUF kernel for measured `M=1` rows.
+- Materialized FP32 cuBLAS remains faster on these decode rows when fast-fits is
+  available, so the optimized Q8_0 path is mainly useful for the large-model
+  compact backend where full FP32 materialization is not viable.
+- Multi-row prefill still uses the generic Q8_0 path and remains slower than
+  F16 GGUF and materialized FP32. The next Q8_0 optimization should target
+  multi-row tiling or shared activation reuse for prefill-shaped work.
 - Fast-fits materialized FP32 remains the preferred projection backend whenever
   it fits in memory.
 

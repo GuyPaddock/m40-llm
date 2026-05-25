@@ -7,6 +7,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 #[cfg(not(all(feature = "cuda", nvcc)))]
 use criterion::{criterion_group, criterion_main, Criterion};
 #[cfg(all(feature = "cuda", nvcc))]
+use m40_llm::cuda::CudaStream;
+#[cfg(all(feature = "cuda", nvcc))]
 use std::ffi::c_void;
 
 #[cfg(all(feature = "cuda", nvcc))]
@@ -212,11 +214,11 @@ fn bench_q8_projection(c: &mut Criterion) {
 
             group.throughput(Throughput::Bytes(moved_q8 as u64));
             group.bench_with_input(
-                BenchmarkId::new("q8_fused", format!("{label}_{m}x{k}x{n}")),
+                BenchmarkId::new("q8_generic", format!("{label}_{m}x{k}x{n}")),
                 &(m, n, k),
                 |bch, &(m, n, k)| {
                     bch.iter(|| unsafe {
-                        ctx.gemm_f32xq8_0_gguf_f32(
+                        ctx.gemm_f32xq8_0_gguf_f32_generic_async(
                             da as *const c_void,
                             db_q8 as *const c_void,
                             dc,
@@ -224,10 +226,33 @@ fn bench_q8_projection(c: &mut Criterion) {
                             n as i32,
                             k as i32,
                         )
-                        .unwrap()
+                        .unwrap();
+                        ctx.synchronize_stream(CudaStream::Prefill).unwrap();
                     })
                 },
             );
+
+            if m == 1 && k % 32 == 0 {
+                group.throughput(Throughput::Bytes(moved_q8 as u64));
+                group.bench_with_input(
+                    BenchmarkId::new("q8_decode_tiled", format!("{label}_{m}x{k}x{n}")),
+                    &(m, n, k),
+                    |bch, &(m, n, k)| {
+                        bch.iter(|| unsafe {
+                            ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+                                da as *const c_void,
+                                db_q8 as *const c_void,
+                                dc,
+                                m as i32,
+                                n as i32,
+                                k as i32,
+                            )
+                            .unwrap();
+                            ctx.synchronize_stream(CudaStream::Prefill).unwrap();
+                        })
+                    },
+                );
+            }
 
             group.throughput(Throughput::Bytes(moved_f16 as u64));
             group.bench_with_input(
