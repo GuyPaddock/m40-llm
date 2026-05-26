@@ -7109,6 +7109,160 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void mlp_gate_up_swiglu_f32xq8_0_gguf_decode_coltile4_split4_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ W_gate,
+        const unsigned char* __restrict__ W_up,
+        float* __restrict__ C,
+        int H, int K) {
+        const int col0 = blockIdx.x * 4;
+        const int tid = threadIdx.x;
+        const int qk = 32;
+        const int split = 4;
+        const int vals_per_split = qk / split;
+        const int block_bytes = 34;
+        const int blocks_per_col = K / qk;
+        const int tasks = blocks_per_col * split;
+        float gate0 = 0.0f;
+        float gate1 = 0.0f;
+        float gate2 = 0.0f;
+        float gate3 = 0.0f;
+        float up0 = 0.0f;
+        float up1 = 0.0f;
+        float up2 = 0.0f;
+        float up3 = 0.0f;
+        for (int task = tid; task < tasks; task += blockDim.x) {
+            const int block_idx = task / split;
+            const int split_idx = task - block_idx * split;
+            const int q_offset = split_idx * vals_per_split;
+            const int k_base = block_idx * qk + q_offset;
+            float a_vals[vals_per_split];
+            #pragma unroll
+            for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                a_vals[q_idx] = A[k_base + q_idx];
+            }
+            const size_t gate_block0 =
+                (static_cast<size_t>(col0) * blocks_per_col + block_idx) * block_bytes;
+            if (col0 < H) {
+                const float gate_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_gate + gate_block0));
+                const float up_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_up + gate_block0));
+                #pragma unroll
+                for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                    const int q_addr = 2 + q_offset + q_idx;
+                    const int8_t gate_q =
+                        *reinterpret_cast<const int8_t*>(W_gate + gate_block0 + q_addr);
+                    const int8_t up_q =
+                        *reinterpret_cast<const int8_t*>(W_up + gate_block0 + q_addr);
+                    gate0 += a_vals[q_idx] * (static_cast<float>(gate_q) * gate_scale);
+                    up0 += a_vals[q_idx] * (static_cast<float>(up_q) * up_scale);
+                }
+            }
+            if (col0 + 1 < H) {
+                const size_t block_base = gate_block0 + static_cast<size_t>(blocks_per_col) * block_bytes;
+                const float gate_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_gate + block_base));
+                const float up_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_up + block_base));
+                #pragma unroll
+                for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                    const int q_addr = 2 + q_offset + q_idx;
+                    const int8_t gate_q =
+                        *reinterpret_cast<const int8_t*>(W_gate + block_base + q_addr);
+                    const int8_t up_q =
+                        *reinterpret_cast<const int8_t*>(W_up + block_base + q_addr);
+                    gate1 += a_vals[q_idx] * (static_cast<float>(gate_q) * gate_scale);
+                    up1 += a_vals[q_idx] * (static_cast<float>(up_q) * up_scale);
+                }
+            }
+            if (col0 + 2 < H) {
+                const size_t block_base = gate_block0 + static_cast<size_t>(2 * blocks_per_col) * block_bytes;
+                const float gate_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_gate + block_base));
+                const float up_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_up + block_base));
+                #pragma unroll
+                for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                    const int q_addr = 2 + q_offset + q_idx;
+                    const int8_t gate_q =
+                        *reinterpret_cast<const int8_t*>(W_gate + block_base + q_addr);
+                    const int8_t up_q =
+                        *reinterpret_cast<const int8_t*>(W_up + block_base + q_addr);
+                    gate2 += a_vals[q_idx] * (static_cast<float>(gate_q) * gate_scale);
+                    up2 += a_vals[q_idx] * (static_cast<float>(up_q) * up_scale);
+                }
+            }
+            if (col0 + 3 < H) {
+                const size_t block_base = gate_block0 + static_cast<size_t>(3 * blocks_per_col) * block_bytes;
+                const float gate_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_gate + block_base));
+                const float up_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_up + block_base));
+                #pragma unroll
+                for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                    const int q_addr = 2 + q_offset + q_idx;
+                    const int8_t gate_q =
+                        *reinterpret_cast<const int8_t*>(W_gate + block_base + q_addr);
+                    const int8_t up_q =
+                        *reinterpret_cast<const int8_t*>(W_up + block_base + q_addr);
+                    gate3 += a_vals[q_idx] * (static_cast<float>(gate_q) * gate_scale);
+                    up3 += a_vals[q_idx] * (static_cast<float>(up_q) * up_scale);
+                }
+            }
+        }
+
+        extern __shared__ float q8_mlp_reduce[];
+        float* gate_reduce0 = q8_mlp_reduce;
+        float* up_reduce0 = gate_reduce0 + blockDim.x;
+        float* gate_reduce1 = up_reduce0 + blockDim.x;
+        float* up_reduce1 = gate_reduce1 + blockDim.x;
+        float* gate_reduce2 = up_reduce1 + blockDim.x;
+        float* up_reduce2 = gate_reduce2 + blockDim.x;
+        float* gate_reduce3 = up_reduce2 + blockDim.x;
+        float* up_reduce3 = gate_reduce3 + blockDim.x;
+        gate_reduce0[tid] = gate0;
+        up_reduce0[tid] = up0;
+        gate_reduce1[tid] = gate1;
+        up_reduce1[tid] = up1;
+        gate_reduce2[tid] = gate2;
+        up_reduce2[tid] = up2;
+        gate_reduce3[tid] = gate3;
+        up_reduce3[tid] = up3;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                gate_reduce0[tid] += gate_reduce0[tid + stride];
+                up_reduce0[tid] += up_reduce0[tid + stride];
+                gate_reduce1[tid] += gate_reduce1[tid + stride];
+                up_reduce1[tid] += up_reduce1[tid + stride];
+                gate_reduce2[tid] += gate_reduce2[tid + stride];
+                up_reduce2[tid] += up_reduce2[tid + stride];
+                gate_reduce3[tid] += gate_reduce3[tid + stride];
+                up_reduce3[tid] += up_reduce3[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            if (col0 < H) {
+                const float gate = gate_reduce0[0];
+                C[col0] = gate * (1.0f / (1.0f + expf(-gate))) * up_reduce0[0];
+            }
+            if (col0 + 1 < H) {
+                const float gate = gate_reduce1[0];
+                C[col0 + 1] = gate * (1.0f / (1.0f + expf(-gate))) * up_reduce1[0];
+            }
+            if (col0 + 2 < H) {
+                const float gate = gate_reduce2[0];
+                C[col0 + 2] = gate * (1.0f / (1.0f + expf(-gate))) * up_reduce2[0];
+            }
+            if (col0 + 3 < H) {
+                const float gate = gate_reduce3[0];
+                C[col0 + 3] = gate * (1.0f / (1.0f + expf(-gate))) * up_reduce3[0];
+            }
+        }
+    }
+
     __global__ void qkv_f32xq8_0_gguf_decode_kernel(
         const float* __restrict__ A,
         const unsigned char* __restrict__ Wq,
@@ -7612,6 +7766,29 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (!ctx || !d_A_f32 || !d_W_gate_q8_0 || !d_W_up_q8_0 || !d_C_f32) return -1;
         if (H <= 0 || K <= 0 || (K % 32) != 0) return -2;
         const char* split_env = std::getenv("M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK");
+        const char* coltile_env = std::getenv("M40LLM_Q8_MLP_GATE_UP_COL_TILE");
+        if (coltile_env && std::strcmp(coltile_env, "4") == 0 &&
+            split_env && std::strcmp(split_env, "4") == 0) {
+            constexpr int threads = 256;
+            const size_t shmem = static_cast<size_t>(threads) * 8 * sizeof(float);
+            mlp_gate_up_swiglu_f32xq8_0_gguf_decode_coltile4_split4_kernel<<<
+                (H + 3) / 4,
+                threads,
+                shmem,
+                q8_decode_projection_stream(ctx)>>>(
+                reinterpret_cast<const float*>(d_A_f32),
+                reinterpret_cast<const unsigned char*>(d_W_gate_q8_0),
+                reinterpret_cast<const unsigned char*>(d_W_up_q8_0),
+                reinterpret_cast<float*>(d_C_f32),
+                H,
+                K);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                fprintf(stderr, "mlp_gate_up_swiglu_f32xq8_0_gguf_decode_coltile4_split4 kernel launch error: %s\n", cudaGetErrorString(err));
+                return -3;
+            }
+            return 0;
+        }
         if (split_env && std::strcmp(split_env, "4") == 0) {
             constexpr int threads = 256;
             const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
