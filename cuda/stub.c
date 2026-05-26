@@ -59,6 +59,12 @@ int m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx,
 int m40llm_qkv_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_q8_0, const void* d_Wk_q8_0, const void* d_Wv_q8_0, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
     (void)ctx; (void)d_A_f32; (void)d_Wq_q8_0; (void)d_Wk_q8_0; (void)d_Wv_q8_0; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
 }
+int m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_q4_0, const void* d_W_up_q4_0, void* d_C_f32, int H, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_W_gate_q4_0; (void)d_W_up_q4_0; (void)d_C_f32; (void)H; (void)K; return -1;
+}
+int m40llm_qkv_f32xq4_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_q4_0, const void* d_Wk_q4_0, const void* d_Wv_q4_0, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
+    (void)ctx; (void)d_A_f32; (void)d_Wq_q4_0; (void)d_Wk_q4_0; (void)d_Wv_q4_0; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
+}
 int m40llm_stream_wait_for_stream(M40llmCudaContext* ctx, uint32_t waiting_stream_kind, uint32_t signal_stream_kind) {
     (void)ctx; (void)waiting_stream_kind; (void)signal_stream_kind; return -1;
 }
@@ -126,6 +132,21 @@ int m40llm_gemm_f32xq8_0_gguf_f32_decode_async(M40llmCudaContext* ctx, const voi
 
 int m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q8_0, void* d_C_f32, int M, int N, int K) {
     (void)ctx; (void)d_A_f32; (void)d_B_q8_0; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+int m40llm_gemm_f32xq4_0_gguf_f32(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q4_0, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q4_0; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+int m40llm_gemm_f32xq4_0_gguf_f32_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q4_0, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q4_0; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+int m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q4_0, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q4_0; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+int m40llm_gemm_f32xq4_0_gguf_f32_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q4_0, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q4_0; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+int m40llm_gemm_f32xq6_k_gguf_f32_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q6_k, void* d_C_f32, int M, int N, int K) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q6_k; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
 }
 
 int m40llm_gemm_f32xf32_f32(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f32_colmajor_nt, void* d_C_f32, int M, int N, int K) {

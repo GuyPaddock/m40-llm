@@ -102,10 +102,13 @@ impl LoadedModel {
             "token_embd".to_string(),
             "token_embeddings.weight".to_string(),
         ])?;
-        // Enforce embeddings dtype policy: F16 or Q8_0
-        if tok.dtype != GgmlDType::F16 && tok.dtype != GgmlDType::Q8_0 {
+        // Enforce embeddings dtype policy: F16 or supported GGUF quantized rows.
+        if tok.dtype != GgmlDType::F16
+            && tok.dtype != GgmlDType::Q8_0
+            && tok.dtype != GgmlDType::Q4_0
+        {
             anyhow::bail!(
-                "tok_embeddings.weight expected F16 or Q8_0 [*, *], got {:?}",
+                "tok_embeddings.weight expected F16, Q8_0, or Q4_0 [*, *], got {:?}",
                 tok.dtype
             )
         }
@@ -226,10 +229,13 @@ impl LoadedModel {
             ("w_up", &w_up),
             ("w_down", &w_down),
         ] {
-            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q5_1 && t.dtype != GgmlDType::Q8_0
+            if t.dtype != GgmlDType::F16
+                && t.dtype != GgmlDType::Q5_1
+                && t.dtype != GgmlDType::Q8_0
+                && t.dtype != GgmlDType::Q4_0
             {
                 anyhow::bail!(
-                    "tensor {} expected F16, Q5_1, or Q8_0, got {:?}",
+                    "tensor {} expected F16, Q5_1, Q8_0, or Q4_0, got {:?}",
                     name,
                     t.dtype
                 );
@@ -356,7 +362,7 @@ impl LoadedModel {
     }
     /// Map the language modeling head (output projection) tensor.
     /// Prefers a dedicated output.weight/lm_head.weight [d_model, vocab] in F16
-    /// or Q8_0. If absent, accepts tied F16/Q8_0 embeddings only when they
+    /// or supported quantized formats. If absent, accepts tied embeddings only when they
     /// already have the same GGUF-native [d_model, vocab] layout expected by the
     /// projection path.
     /// Returns (tensor name, tensor view, d_model, vocab, tied_to_embeddings).
@@ -367,30 +373,36 @@ impl LoadedModel {
             "lm_head.weight".to_string(),
             "output".to_string(),
         ];
+        let mut unsupported_output_dtype = None;
         if let Ok(t) = self.find_tensor_any(&candidates) {
             let name = candidates
                 .iter()
                 .find(|candidate| self.device_tensor(candidate).is_some())
                 .context("lm_head tensor name not found after candidate match")?
                 .clone();
-            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q8_0 {
-                anyhow::bail!("lm_head expected F16 or Q8_0, got {:?}", t.dtype);
+            if t.dtype != GgmlDType::F16
+                && t.dtype != GgmlDType::Q8_0
+                && t.dtype != GgmlDType::Q4_0
+                && t.dtype != GgmlDType::Q6K
+            {
+                unsupported_output_dtype = Some((name, t.dtype));
+            } else {
+                if t.shape.len() != 2 {
+                    anyhow::bail!(
+                        "lm_head shape invalid: expected [d_model, vocab], got {:?}",
+                        t.shape
+                    );
+                }
+                let d_model = t.shape[0] as usize;
+                let vocab = t.shape[1] as usize;
+                if d_model == 0 || vocab == 0 {
+                    anyhow::bail!(
+                        "lm_head dims invalid: non-zero [d_model, vocab] required: {:?}",
+                        t.shape
+                    );
+                }
+                return Ok((name, t.clone(), d_model, vocab, false));
             }
-            if t.shape.len() != 2 {
-                anyhow::bail!(
-                    "lm_head shape invalid: expected [d_model, vocab], got {:?}",
-                    t.shape
-                );
-            }
-            let d_model = t.shape[0] as usize;
-            let vocab = t.shape[1] as usize;
-            if d_model == 0 || vocab == 0 {
-                anyhow::bail!(
-                    "lm_head dims invalid: non-zero [d_model, vocab] required: {:?}",
-                    t.shape
-                );
-            }
-            return Ok((name, t.clone(), d_model, vocab, false));
         }
         let embedding_candidates = vec![
             "tok_embeddings.weight".to_string(),
@@ -404,9 +416,10 @@ impl LoadedModel {
                 .find(|candidate| self.device_tensor(candidate).is_some())
                 .context("embedding tensor name not found after candidate match")?
                 .clone();
-            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q8_0 {
+            if t.dtype != GgmlDType::F16 && t.dtype != GgmlDType::Q8_0 && t.dtype != GgmlDType::Q4_0
+            {
                 anyhow::bail!(
-                    "tied lm_head requires F16 or Q8_0 embeddings when output head is absent; tensor {name} has {:?}",
+                    "tied lm_head requires F16, Q8_0, or Q4_0 embeddings when output head is absent; tensor {name} has {:?}",
                     t.dtype
                 );
             }
@@ -428,8 +441,14 @@ impl LoadedModel {
             }
             return Ok((name, t.clone(), d_model, vocab, true));
         }
+        if let Some((name, dtype)) = unsupported_output_dtype {
+            anyhow::bail!(
+                "lm_head tensor {name} has unsupported dtype {:?}, and no compatible tied F16/Q8_0/Q4_0 embeddings in [d_model, vocab] layout were found",
+                dtype
+            );
+        }
         anyhow::bail!(
-            "output projection tensor not found; expected one of {} or tied F16/Q8_0 embeddings in [d_model, vocab] layout",
+            "output projection tensor not found; expected one of {} or tied F16/Q8_0/Q4_0 embeddings in [d_model, vocab] layout",
             candidates.join(", ")
         )
     }

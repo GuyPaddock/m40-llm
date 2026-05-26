@@ -140,6 +140,12 @@ batched decode path before touching persistent decode or large-model fused-dequa
   opt-in diagnostic greedy-only Q8 lm-head argmax path; it is correct but
   neutral/slightly slower on the same short Qwen2.5 Q8_0 probe, so keep it off
   by default and treat the final vocabulary projection as still unresolved.
+  Qwen2.5-3B Q4_0 GGUF compatibility is now partially supported: standard
+  Q4_0 projection/embedding tensors use CUDA dequant projection paths and the
+  mixed Qwen file's dedicated Q6_K `output.weight` uses a narrow single-token
+  CUDA projection. The 32-token exact-prompt probe generated coherent text, but
+  was not a speed path (`decode_tps=10.86`, `total_tps=3.54`), so keep Q4_0 as
+  format compatibility rather than the active route to the Ollama target.
   The decode-stream F16 path is opt-in and now synchronizes logits on the
   actual producer stream; `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` asserts E2E
   throughput separately from decode-only TPS. `top_k=1` now has a CPU greedy

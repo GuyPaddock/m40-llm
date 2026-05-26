@@ -284,6 +284,77 @@ mod ffi {
             Nv: i32,
             Kdim: i32,
         ) -> i32;
+        pub fn m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_W_gate_q4_0: *const c_void,
+            d_W_up_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            H: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq4_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_Wq_q4_0: *const c_void,
+            d_Wk_q4_0: *const c_void,
+            d_Wv_q4_0: *const c_void,
+            d_bq_f32: *const c_void,
+            d_bk_f32: *const c_void,
+            d_bv_f32: *const c_void,
+            d_Q_f32: *mut c_void,
+            d_K_f32: *mut c_void,
+            d_V_f32: *mut c_void,
+            Nq: i32,
+            Nk: i32,
+            Nv: i32,
+            Kdim: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq6_k_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q6_k: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -2391,6 +2462,114 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// Enqueues a single-token fused MLP gate/up projection plus SwiGLU for
+    /// GGUF Q4_0 weights. This is an opt-in decode path for M=1 only.
+    pub unsafe fn mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_w_gate_q4_0: *const c_void,
+        d_w_up_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        h: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "mlp_gate_up_swiglu_f32xq4_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_w_gate_q4_0,
+                d_w_up_q4_0,
+                d_c_f32,
+                h,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("mlp_gate_up_swiglu_f32xq4_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_w_gate_q4_0, d_w_up_q4_0, d_c_f32, h, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a fused single-token Q/K/V GGUF Q4_0 projection. Bias pointers
+    /// may be null; non-null biases are interpreted as f32 vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_f32xq4_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_wq_q4_0: *const c_void,
+        d_wk_q4_0: *const c_void,
+        d_wv_q4_0: *const c_void,
+        d_bq_f32: Option<*const c_void>,
+        d_bk_f32: Option<*const c_void>,
+        d_bv_f32: Option<*const c_void>,
+        d_q_f32: *mut c_void,
+        d_k_f32: *mut c_void,
+        d_v_f32: *mut c_void,
+        n_q: i32,
+        n_k: i32,
+        n_v: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "qkv_f32xq4_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_qkv_f32xq4_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_wq_q4_0,
+                d_wk_q4_0,
+                d_wv_q4_0,
+                d_bq_f32.unwrap_or(std::ptr::null()),
+                d_bk_f32.unwrap_or(std::ptr::null()),
+                d_bv_f32.unwrap_or(std::ptr::null()),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                n_q,
+                n_k,
+                n_v,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_qkv_f32xq4_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("qkv_f32xq4_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_a_f32, d_wq_q4_0, d_wk_q4_0, d_wv_q4_0, d_bq_f32, d_bk_f32, d_bv_f32, d_q_f32,
+                d_k_f32, d_v_f32, n_q, n_k, n_v, k,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_b_q8_0` must be a GGUF Q8_0 tensor with logical shape [k, n], where
     /// dimension 0 is fastest and Q8_0 blocks are laid out along K per column.
     pub unsafe fn gemm_f32xq8_0_gguf_f32(
@@ -2429,6 +2608,219 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_q4_0` must be a GGUF Q4_0 tensor with logical shape [k, n], where
+    /// dimension 0 is fastest and Q4_0 blocks are laid out along K per column.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq4_0_gguf_f32",
+                "CUDA fused GGUF Q4_0 dequant projection",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq4_0_gguf_f32 failed: {rc}"));
+            }
+            record_sync_kernel("gemm_f32xq4_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused GGUF Q4_0 dequant projection without synchronizing.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            if m == 1 && k > 0 && (k % 32) == 0 {
+                return self
+                    .gemm_f32xq4_0_gguf_f32_decode_async(d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            }
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq4_0_gguf_f32_async",
+                "CUDA fused GGUF Q4_0 dequant projection async enqueue",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq4_0_gguf_f32_async failed: {rc}"));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the block-loop GGUF Q4_0 projection kernel on the prefill stream.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_blockloop_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32_blockloop");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the M=1 decode-specialized GGUF Q4_0 projection kernel.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq4_0_gguf_f32_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq4_0_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the M=1 decode-specialized GGUF Q6_K projection kernel.
+    pub unsafe fn gemm_f32xq6_k_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q6_k: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq6_k_gguf_f32_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq6_k_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q6_k,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq6_k_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq6_k_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q6_k, d_c_f32, m, n, k);
             Ok(())
         }
     }

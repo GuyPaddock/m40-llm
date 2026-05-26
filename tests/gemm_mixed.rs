@@ -114,6 +114,67 @@ fn q8_0_gguf_dequantize(bytes: &[u8], n: usize, k: usize) -> Vec<f32> {
     out
 }
 
+fn q4_0_gguf_bytes_from_dequantized(vals: &[f32], n: usize, k: usize) -> Vec<u8> {
+    const QK: usize = 32;
+    const BLOCK_BYTES: usize = 18;
+    let blocks_per_col = k.div_ceil(QK);
+    let mut out = vec![0u8; n * blocks_per_col * BLOCK_BYTES];
+    for col in 0..n {
+        for block in 0..blocks_per_col {
+            let start = block * QK;
+            let end = (start + QK).min(k);
+            let scale = vals[col * k + start..col * k + end]
+                .iter()
+                .fold(0.0f32, |acc, v| acc.max(v.abs()))
+                / 7.0;
+            let scale = if scale == 0.0 { 1.0 } else { scale };
+            let base = (col * blocks_per_col + block) * BLOCK_BYTES;
+            let scale_bits = half::f16::from_f32(scale).to_bits();
+            out[base] = (scale_bits & 0xff) as u8;
+            out[base + 1] = (scale_bits >> 8) as u8;
+            for pair in 0..16 {
+                let lo_idx = start + pair;
+                let hi_idx = start + pair + 16;
+                let lo = if lo_idx < k {
+                    (vals[col * k + lo_idx] / scale).round().clamp(-8.0, 7.0) as i32 + 8
+                } else {
+                    8
+                } as u8;
+                let hi = if hi_idx < k {
+                    (vals[col * k + hi_idx] / scale).round().clamp(-8.0, 7.0) as i32 + 8
+                } else {
+                    8
+                } as u8;
+                out[base + 2 + pair] = (lo & 0x0f) | ((hi & 0x0f) << 4);
+            }
+        }
+    }
+    out
+}
+
+fn q4_0_gguf_dequantize(bytes: &[u8], n: usize, k: usize) -> Vec<f32> {
+    const QK: usize = 32;
+    const BLOCK_BYTES: usize = 18;
+    let blocks_per_col = k.div_ceil(QK);
+    let mut out = vec![0f32; n * k];
+    for col in 0..n {
+        for block in 0..blocks_per_col {
+            let base = (col * blocks_per_col + block) * BLOCK_BYTES;
+            let scale_bits = u16::from_le_bytes([bytes[base], bytes[base + 1]]);
+            let scale = half::f16::from_bits(scale_bits).to_f32();
+            for idx in 0..QK {
+                let k_idx = block * QK + idx;
+                if k_idx < k {
+                    let packed = bytes[base + 2 + (idx & 15)];
+                    let q = if idx < 16 { packed & 0x0f } else { packed >> 4 };
+                    out[col * k + k_idx] = (i32::from(q) - 8) as f32 * scale;
+                }
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn gemm_f32xf16_f32_square_2x2() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -828,6 +889,161 @@ fn gemm_f32xq8_0_decode_kernel_matches_generic_1x2048x2048() -> Result<()> {
         ctx.device_free(da)?;
         ctx.device_free(db)?;
         ctx.device_free(dc_generic)?;
+        ctx.device_free(dc_decode)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq4_0_blockloop_matches_cpu_tail_2x35x3() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (2i32, 35i32, 3i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 11) as f32 - 5.0) * 0.0625)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 13) as f32 - 6.0) * 0.03125)
+        .collect();
+    let b_q4 = q4_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+    let b_deq = q4_0_gguf_dequantize(&b_q4, n as usize, k as usize);
+    let expect = cpu_gguf_gemm_f32(&a, &b_deq, m as usize, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q4.len())?;
+    let dc = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q4.as_ptr() as *const c_void, b_q4.len())?;
+        ctx.gemm_f32xq4_0_gguf_f32_blockloop_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+    }
+
+    let mut got_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            got_bytes.as_mut_ptr() as *mut c_void,
+            dc as *const c_void,
+            got_bytes.len(),
+        )?;
+    }
+    let got = bytes_to_f32s(&got_bytes);
+    for (i, (g, e)) in got.iter().zip(expect.iter()).enumerate() {
+        assert!(
+            (g - e).abs() <= 1e-4,
+            "idx {i}: got {g}, expected {e}, diff {}",
+            (g - e).abs()
+        );
+    }
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq4_0_decode_matches_blockloop_1x2048x1024() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 1024i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_q4 = q4_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q4.len())?;
+    let dc_blockloop = ctx.device_malloc(bytes_c)?;
+    let dc_decode = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q4.as_ptr() as *const c_void, b_q4.len())?;
+        ctx.gemm_f32xq4_0_gguf_f32_blockloop_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_blockloop,
+            m,
+            n,
+            k,
+        )?;
+        ctx.gemm_f32xq4_0_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_decode,
+            m,
+            n,
+            k,
+        )?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut blockloop_bytes = vec![0u8; bytes_c];
+    let mut decode_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            blockloop_bytes.as_mut_ptr() as *mut c_void,
+            dc_blockloop as *const c_void,
+            blockloop_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            decode_bytes.as_mut_ptr() as *mut c_void,
+            dc_decode as *const c_void,
+            decode_bytes.len(),
+        )?;
+    }
+    let blockloop = bytes_to_f32s(&blockloop_bytes);
+    let decode = bytes_to_f32s(&decode_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (b, d) in blockloop.iter().zip(decode.iter()) {
+        let diff = (b - d).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / blockloop.len() as f32;
+    assert!(
+        max_diff <= 3e-1 && mean_diff <= 5e-2,
+        "q4 decode mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_blockloop)?;
         ctx.device_free(dc_decode)?;
     }
     Ok(())

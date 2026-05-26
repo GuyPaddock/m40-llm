@@ -1,7 +1,7 @@
 #[cfg(feature = "cuda")]
 use super::gemm::{
     decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
-    q8_decode_kernel_decode_stream_enabled,
+    q4_decode_kernel_decode_stream_enabled, q8_decode_kernel_decode_stream_enabled,
 };
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
@@ -79,9 +79,15 @@ impl LoadedModel {
         let d_w = self.tensor_device_ptr(&name, &lm)?;
         let q8_logits_on_decode_stream = q8_decode_kernel_decode_stream_enabled()
             && self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0;
+        let q4_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q4_0;
+        let q6_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q6K;
         let logits_on_decode_stream = decode_cublas_single_stream_enabled()
             || f16_decode_kernel_decode_stream_enabled()
-            || q8_logits_on_decode_stream;
+            || q8_logits_on_decode_stream
+            || q4_logits_on_decode_stream
+            || q6_logits_on_decode_stream;
         let stream = if logits_on_decode_stream {
             CudaStream::Decode
         } else {
@@ -361,6 +367,32 @@ impl LoadedModel {
                                     if d < d_model {
                                         let q = w_bytes[base + 2 + idx] as i8 as f32;
                                         acc += hidden[d] * q * scale;
+                                    }
+                                }
+                            }
+                            *logit_ref = acc;
+                        }
+                    }
+                    crate::gguf::GgmlDType::Q4_0 => {
+                        const Q4_0_BLOCK: usize = 32;
+                        const Q4_0_BLOCK_BYTES: usize = 18;
+                        let blocks_per_col = d_model.div_ceil(Q4_0_BLOCK);
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let col_base = col * blocks_per_col * Q4_0_BLOCK_BYTES;
+                            for block in 0..blocks_per_col {
+                                let base = col_base + block * Q4_0_BLOCK_BYTES;
+                                let scale = half::f16::from_bits(u16::from_le_bytes([
+                                    w_bytes[base],
+                                    w_bytes[base + 1],
+                                ]))
+                                .to_f32();
+                                for idx in 0..Q4_0_BLOCK {
+                                    let d = block * Q4_0_BLOCK + idx;
+                                    if d < d_model {
+                                        let packed = w_bytes[base + 2 + (idx & 15)];
+                                        let q = if idx < 16 { packed & 0x0f } else { packed >> 4 };
+                                        acc += hidden[d] * ((i32::from(q) - 8) as f32) * scale;
                                     }
                                 }
                             }

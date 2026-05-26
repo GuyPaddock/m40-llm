@@ -49,7 +49,8 @@ Failed/neutral fusion experiment record:
 | Experiment | Preserved in commit | Removed in commit | Probe result | Target result | Decision |
 | --- | --- | --- | --- | --- | --- |
 | `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
-| `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `0e16b34` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
+| `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
+| Qwen2.5-3B Q4_0 GGUF projection support | current Q4 support commit | n/a | 32-token Qwen2.5 Q4_0 probe generated coherent text but was slow: `prefill_ms=5912 decode_ms=2946 total_ms=9053 decode_tps=10.86 total_tps=3.54` | Not run on the 512-token target because the short probe is below the Q8 short probe and far below the F16 best | Keep as model-format compatibility; not a speed path toward the Ollama target |
 
 Implementation/diagnostic notes:
 
@@ -111,6 +112,13 @@ Implementation/diagnostic notes:
   32-token Qwen2.5 Q8_0 probe stayed effectively unchanged at
   `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74
   total_tps=4.61`. Keep it diagnostic/off by default.
+- Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
+  and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
+  The runtime now supports Q4_0 projection/embedding dequant plus a narrow
+  Q6_K single-token projection path for that output head. The first release
+  32-token probe produced coherent text, but performance was not useful for the
+  active Ollama comparison: `prefill_ms=5912 decode_ms=2946 total_ms=9053
+  decode_tps=10.86 total_tps=3.54`.
 - With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
   42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
   The profiled short run still shows roughly 16.5 ms host enqueue time plus
