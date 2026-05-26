@@ -2249,6 +2249,142 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_head128_group4_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        constexpr uint32_t group = 4;
+        constexpr uint32_t head_dim = 128;
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* warp_reduce = scores + (size_t)group * seq_len;
+        float* max_shared = warp_reduce + group * 4;
+        float* denom_shared = max_shared + group;
+
+        const uint32_t group_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t lane = tid & 31u;
+        const uint32_t warp = tid >> 5;
+        const uint32_t groups_per_kv = q_heads / (kv_heads * group);
+        if (groups_per_kv == 0u) return;
+        const uint32_t kvh_idx = group_idx / groups_per_kv;
+        const uint32_t group_within_kv = group_idx - kvh_idx * groups_per_kv;
+        const uint32_t qh_start = kvh_idx * groups_per_kv * group + group_within_kv * group;
+        if (kvh_idx >= kv_heads || qh_start + group > q_heads) return;
+
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+
+        if (tid < group) {
+            max_shared[tid] = -FLT_MAX;
+        }
+        __syncthreads();
+
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            const float k = tid < head_dim ? __half2float(K[base + tid]) : 0.0f;
+            float dot[group];
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                const float* qh = Q + (size_t)(qh_start + g) * (size_t)head_dim;
+                dot[g] = tid < head_dim ? qh[tid] * k : 0.0f;
+            }
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                #pragma unroll
+                for (uint32_t g = 0; g < group; ++g) {
+                    dot[g] += __shfl_down_sync(0xffffffffu, dot[g], offset);
+                }
+            }
+            if (lane == 0u) {
+                #pragma unroll
+                for (uint32_t g = 0; g < group; ++g) {
+                    warp_reduce[g * 4 + warp] = dot[g];
+                }
+            }
+            __syncthreads();
+            if (tid < group) {
+                const float score =
+                    (warp_reduce[tid * 4 + 0] + warp_reduce[tid * 4 + 1] +
+                     warp_reduce[tid * 4 + 2] + warp_reduce[tid * 4 + 3]) *
+                    inv_sqrt;
+                scores[(size_t)tid * seq_len + t] = score;
+                if (score > max_shared[tid]) max_shared[tid] = score;
+            }
+            __syncthreads();
+        }
+
+        float denom_part[group];
+        #pragma unroll
+        for (uint32_t g = 0; g < group; ++g) {
+            denom_part[g] = 0.0f;
+        }
+        for (uint32_t t = tid; t < seq_len; t += blockDim.x) {
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                denom_part[g] += expf(scores[(size_t)g * seq_len + t] - max_shared[g]);
+            }
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                denom_part[g] += __shfl_down_sync(0xffffffffu, denom_part[g], offset);
+            }
+        }
+        if (lane == 0u) {
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                warp_reduce[g * 4 + warp] = denom_part[g];
+            }
+        }
+        __syncthreads();
+        if (tid < group) {
+            const float denom =
+                warp_reduce[tid * 4 + 0] + warp_reduce[tid * 4 + 1] +
+                warp_reduce[tid * 4 + 2] + warp_reduce[tid * 4 + 3];
+            denom_shared[tid] = denom > 0.0f ? denom : 1.0f;
+        }
+        __syncthreads();
+
+        for (uint32_t t = tid; t < seq_len; t += blockDim.x) {
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                scores[(size_t)g * seq_len + t] =
+                    expf(scores[(size_t)g * seq_len + t] - max_shared[g]) / denom_shared[g];
+            }
+        }
+        __syncthreads();
+
+        if (tid < head_dim) {
+            float acc[group];
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                acc[g] = 0.0f;
+            }
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float v = __half2float(V[base + tid]);
+                #pragma unroll
+                for (uint32_t g = 0; g < group; ++g) {
+                    acc[g] += scores[(size_t)g * seq_len + t] * v;
+                }
+            }
+            #pragma unroll
+            for (uint32_t g = 0; g < group; ++g) {
+                Out[(size_t)(qh_start + g) * head_dim + tid] = acc[g];
+            }
+        }
+    }
+
     __global__ void attention_last_token_gqa_dense_recent_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -4975,9 +5111,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 const char* head128_kernel_env = getenv("M40LLM_ATTN_HEAD128_KERNEL");
                 const bool use_head128_shared = head128_kernel_env && strcmp(head128_kernel_env, "shared") == 0;
                 const bool use_head128_warp32 = head128_kernel_env && strcmp(head128_kernel_env, "warp32") == 0;
+                const bool use_head128_group4 = head128_kernel_env && strcmp(head128_kernel_env, "group4") == 0;
                 if (!logged_head128 && log_env && strcmp(log_env, "1") == 0) {
                     fprintf(stderr, "[cuda] attention_gqa backend: head128 %s kernel\n",
-                            use_head128_shared ? "shared-score" : (use_head128_warp32 ? "warp32-score" : "fast-warp-reduce"));
+                            use_head128_shared ? "shared-score" : (use_head128_warp32 ? "warp32-score" : (use_head128_group4 ? "group4-gqa" : "fast-warp-reduce")));
                     logged_head128 = 1;
                 }
                 if (use_head128_shared) {
@@ -4992,6 +5129,18 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                     const int warp_threads = 32;
                     const size_t warp_shmem = (size_t)seq_len * sizeof(float);
                     attention_last_token_gqa_head128_warp_kernel<<<blocks, warp_threads, warp_shmem, ctx->decode_stream>>>(
+                        reinterpret_cast<const __half*>(kv->d_k),
+                        reinterpret_cast<const __half*>(kv->d_v),
+                        kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                        reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                        reinterpret_cast<float*>(out_dev_f32)
+                    );
+                } else if (use_head128_group4 && q_heads % (kv->num_heads * 4) == 0 && seq_len <= 1024) {
+                    const uint32_t groups_per_kv = q_heads / (kv->num_heads * 4);
+                    const uint32_t group_blocks = kv->num_heads * groups_per_kv;
+                    const size_t group_shmem =
+                        ((size_t)4 * (size_t)seq_len + (size_t)4 * 4 + (size_t)4 * 2) * sizeof(float);
+                    attention_last_token_gqa_head128_group4_kernel<<<(int)group_blocks, threads, group_shmem, ctx->decode_stream>>>(
                         reinterpret_cast<const __half*>(kv->d_k),
                         reinterpret_cast<const __half*>(kv->d_v),
                         kv->max_seq_len, q_heads, kv->num_heads, seq_id,
