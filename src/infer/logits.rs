@@ -1,14 +1,35 @@
+#[cfg(feature = "cuda")]
+use super::gemm::{
+    decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
+    q4_decode_kernel_decode_stream_enabled, q8_decode_kernel_decode_stream_enabled,
+};
 use super::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaStream;
 #[cfg(feature = "cuda")]
 use crate::cuda::DeviceBuffer;
 #[cfg(feature = "cuda")]
+use crate::gguf::GgmlDType;
+#[cfg(feature = "cuda")]
 use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
 use anyhow::Result;
 use std::ffi::c_void;
+
+#[cfg(feature = "cuda")]
+fn q8_lm_head_argmax_enabled() -> bool {
+    std::env::var("M40LLM_Q8_LM_HEAD_ARGMAX")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "cuda")]
+fn f16_lm_head_argmax_enabled() -> bool {
+    std::env::var("M40LLM_F16_LM_HEAD_ARGMAX")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
 
 impl LoadedModel {
     /// # Safety
@@ -52,37 +73,68 @@ impl LoadedModel {
 
 impl LoadedModel {
     /// # Safety
-    /// Reuses caller-owned device scratch for output-norm staging and logits.
+    /// Enqueues output norm (when present) and lm_head projection into
+    /// caller-owned logits scratch. Returns the stream that produces logits.
     #[cfg(feature = "cuda")]
-    pub unsafe fn logits_from_hidden_into(
+    pub unsafe fn enqueue_logits_from_hidden_into(
         &self,
         d_hidden_f32: *const c_void,
         d_logits: *mut c_void,
         d_norm_hidden: Option<*mut c_void>,
-    ) -> Result<Vec<f32>> {
+    ) -> Result<(usize, CudaStream)> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
+        let q8_logits_on_decode_stream = q8_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0;
+        let q4_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q4_0;
+        let q6_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
+            && self.gguf_weight_dtype(d_w) == GgmlDType::Q6K;
+        let logits_on_decode_stream = decode_cublas_single_stream_enabled()
+            || f16_decode_kernel_decode_stream_enabled()
+            || q8_logits_on_decode_stream
+            || q4_logits_on_decode_stream
+            || q6_logits_on_decode_stream;
+        let stream = if logits_on_decode_stream {
+            CudaStream::Decode
+        } else {
+            CudaStream::Prefill
+        };
         // Ensure any decode-stream work producing the final hidden state has
         // completed before this path (including optional output-norm) reads it.
-        self.cuda.stream_wait_for_stream(
-            CudaStream::Prefill,
-            CudaStream::Decode,
-            "hidden_to_logits_stream",
-        )?;
+        if !logits_on_decode_stream {
+            self.cuda.stream_wait_for_stream(
+                CudaStream::Prefill,
+                CudaStream::Decode,
+                "hidden_to_logits_stream",
+            )?;
+        }
         let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
             let norm_start = std::time::Instant::now();
             let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
             let d_norm_hidden =
                 d_norm_hidden.context("missing d_norm_hidden scratch for output norm logits")?;
-            self.run_rms_norm_weighted(
-                d_hidden_f32,
-                d_norm_w,
-                norm.dtype,
-                d_norm_hidden,
-                1,
-                d_model as u32,
-                self.model_config.layer_norm_epsilon,
-            )?;
+            if logits_on_decode_stream {
+                self.run_rms_norm_weighted_async(
+                    d_hidden_f32,
+                    d_norm_w,
+                    norm.dtype,
+                    d_norm_hidden,
+                    1,
+                    d_model as u32,
+                    self.model_config.layer_norm_epsilon,
+                )?;
+            } else {
+                self.run_rms_norm_weighted(
+                    d_hidden_f32,
+                    d_norm_w,
+                    norm.dtype,
+                    d_norm_hidden,
+                    1,
+                    d_model as u32,
+                    self.model_config.layer_norm_epsilon,
+                )?;
+            }
             timing::log("logits.output_norm", norm_start.elapsed());
             d_norm_hidden as *const c_void
         } else {
@@ -99,7 +151,21 @@ impl LoadedModel {
         )
         .with_context(|| format!("lm_head GEMM failed: m=1 n={vocab} k={d_model} tensor={name}"))?;
         timing::log("logits.lm_head_gemm", gemm_start.elapsed());
-        self.cuda.synchronize_stream(CudaStream::Prefill)?;
+        Ok((vocab, stream))
+    }
+
+    /// # Safety
+    /// Reuses caller-owned device scratch for output-norm staging and logits.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn logits_from_hidden_into(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+    ) -> Result<Vec<f32>> {
+        let (vocab, stream) =
+            self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
+        self.cuda.synchronize_stream(stream)?;
         let bytes_logits = vocab
             .checked_mul(std::mem::size_of::<f32>())
             .context("logits byte size overflow")?;
@@ -113,6 +179,195 @@ impl LoadedModel {
             logits.push(f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]));
         }
         Ok(logits)
+    }
+
+    /// # Safety
+    /// Reuses caller-owned device scratch for logits, optional output norm, and
+    /// one u32 sampled-token slot. This is the CUDA greedy top_k=1 path.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn greedy_token_from_hidden_into(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+        d_token_u32: *mut c_void,
+    ) -> Result<u32> {
+        let argmax_start = std::time::Instant::now();
+        if f16_lm_head_argmax_enabled() {
+            let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
+            let d_w = self.tensor_device_ptr(&name, &lm)?;
+            if self.gguf_weight_dtype(d_w) == GgmlDType::F16 {
+                let stream = if f16_decode_kernel_decode_stream_enabled()
+                    || decode_cublas_single_stream_enabled()
+                {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if stream != CudaStream::Decode {
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "hidden_to_f16_lm_head_argmax_stream",
+                    )?;
+                }
+                let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
+                    let norm_start = std::time::Instant::now();
+                    let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
+                    let d_norm_hidden = d_norm_hidden
+                        .context("missing d_norm_hidden scratch for f16 lm_head argmax")?;
+                    if stream == CudaStream::Decode {
+                        self.run_rms_norm_weighted_async(
+                            d_hidden_f32,
+                            d_norm_w,
+                            norm.dtype,
+                            d_norm_hidden,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    } else {
+                        self.run_rms_norm_weighted(
+                            d_hidden_f32,
+                            d_norm_w,
+                            norm.dtype,
+                            d_norm_hidden,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    }
+                    timing::log("logits.output_norm", norm_start.elapsed());
+                    d_norm_hidden as *const c_void
+                } else {
+                    d_hidden_f32
+                };
+                let partial_count = vocab.div_ceil(8);
+                let scratch_bytes = partial_count
+                    .checked_mul(2)
+                    .and_then(|v| v.checked_mul(std::mem::size_of::<u32>()))
+                    .context("f16 lm_head argmax scratch byte size overflow")?;
+                let logits_bytes = vocab
+                    .checked_mul(std::mem::size_of::<f32>())
+                    .context("logits byte size overflow")?;
+                if scratch_bytes <= logits_bytes {
+                    self.cuda.f16_lm_head_argmax_async(
+                        hidden_for_logits,
+                        d_w,
+                        d_logits,
+                        d_token_u32,
+                        vocab as i32,
+                        d_model as i32,
+                        stream,
+                    )?;
+                    self.cuda.synchronize_stream(stream)?;
+                    let mut token = 0u32;
+                    self.cuda.memcpy_d2h(
+                        (&mut token as *mut u32).cast::<c_void>(),
+                        d_token_u32 as *const c_void,
+                        std::mem::size_of::<u32>(),
+                    )?;
+                    timing::log(
+                        "logits.greedy_f16_lm_head_argmax_total",
+                        argmax_start.elapsed(),
+                    );
+                    return Ok(token);
+                }
+            }
+        }
+        if q8_lm_head_argmax_enabled() {
+            let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
+            let d_w = self.tensor_device_ptr(&name, &lm)?;
+            if self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0 {
+                let stream = if q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if stream != CudaStream::Decode {
+                    self.cuda.stream_wait_for_stream(
+                        CudaStream::Prefill,
+                        CudaStream::Decode,
+                        "hidden_to_q8_lm_head_argmax_stream",
+                    )?;
+                }
+                let hidden_for_logits = if let Some((norm_name, norm)) = self.map_output_norm()? {
+                    let norm_start = std::time::Instant::now();
+                    let d_norm_w = self.tensor_device_ptr(&norm_name, &norm)?;
+                    let d_norm_hidden = d_norm_hidden
+                        .context("missing d_norm_hidden scratch for q8 lm_head argmax")?;
+                    if stream == CudaStream::Decode {
+                        self.run_rms_norm_weighted_async(
+                            d_hidden_f32,
+                            d_norm_w,
+                            norm.dtype,
+                            d_norm_hidden,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    } else {
+                        self.run_rms_norm_weighted(
+                            d_hidden_f32,
+                            d_norm_w,
+                            norm.dtype,
+                            d_norm_hidden,
+                            1,
+                            d_model as u32,
+                            self.model_config.layer_norm_epsilon,
+                        )?;
+                    }
+                    timing::log("logits.output_norm", norm_start.elapsed());
+                    d_norm_hidden as *const c_void
+                } else {
+                    d_hidden_f32
+                };
+                let partial_count = vocab.div_ceil(8);
+                let scratch_bytes = partial_count
+                    .checked_mul(2)
+                    .and_then(|v| v.checked_mul(std::mem::size_of::<u32>()))
+                    .context("q8 lm_head argmax scratch byte size overflow")?;
+                let logits_bytes = vocab
+                    .checked_mul(std::mem::size_of::<f32>())
+                    .context("logits byte size overflow")?;
+                if scratch_bytes <= logits_bytes {
+                    self.cuda.q8_0_lm_head_argmax_async(
+                        hidden_for_logits,
+                        d_w,
+                        d_logits,
+                        d_token_u32,
+                        vocab as i32,
+                        d_model as i32,
+                        stream,
+                    )?;
+                    self.cuda.synchronize_stream(stream)?;
+                    let mut token = 0u32;
+                    self.cuda.memcpy_d2h(
+                        (&mut token as *mut u32).cast::<c_void>(),
+                        d_token_u32 as *const c_void,
+                        std::mem::size_of::<u32>(),
+                    )?;
+                    timing::log(
+                        "logits.greedy_q8_lm_head_argmax_total",
+                        argmax_start.elapsed(),
+                    );
+                    return Ok(token);
+                }
+            }
+        }
+        let (vocab, stream) =
+            self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
+        self.cuda
+            .argmax_f32_async(d_logits as *const c_void, vocab as u32, d_token_u32, stream)?;
+        self.cuda.synchronize_stream(stream)?;
+        let mut token = 0u32;
+        self.cuda.memcpy_d2h(
+            (&mut token as *mut u32).cast::<c_void>(),
+            d_token_u32 as *const c_void,
+            std::mem::size_of::<u32>(),
+        )?;
+        timing::log("logits.greedy_argmax_total", argmax_start.elapsed());
+        Ok(token)
     }
 
     /// # Safety
@@ -161,22 +416,79 @@ impl LoadedModel {
                 for (i, ch) in hidden_bytes.chunks_exact(4).enumerate() {
                     hidden[i] = f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]);
                 }
-                // Weights are row-major [D, V] in f16
+                // Weights are GGUF-native [D, V], with D fastest inside each
+                // output-column block for quantized layouts.
                 let off = lm.byte_offset as usize;
-                let w_bytes = &self.host_weights[off..off + d_model * vocab * 2];
+                let w_bytes = &self.host_weights[off..off + lm.nbytes];
                 let mut logits = vec![0f32; vocab];
-                for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
-                    let mut acc = 0f32;
-                    let mut idx = col * d_model * 2;
-                    for &hidden_val in hidden.iter().take(d_model) {
-                        let lo = w_bytes[idx] as u16;
-                        let hi = w_bytes[idx + 1] as u16;
-                        let bits = lo | (hi << 8);
-                        let w = half::f16::from_bits(bits).to_f32();
-                        acc += hidden_val * w;
-                        idx += 2;
+                match lm.dtype {
+                    crate::gguf::GgmlDType::F16 => {
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let mut idx = col * d_model * 2;
+                            for &hidden_val in hidden.iter().take(d_model) {
+                                let lo = w_bytes[idx] as u16;
+                                let hi = w_bytes[idx + 1] as u16;
+                                let bits = lo | (hi << 8);
+                                let w = half::f16::from_bits(bits).to_f32();
+                                acc += hidden_val * w;
+                                idx += 2;
+                            }
+                            *logit_ref = acc;
+                        }
                     }
-                    *logit_ref = acc;
+                    crate::gguf::GgmlDType::Q8_0 => {
+                        const Q8_0_BLOCK: usize = 32;
+                        const Q8_0_BLOCK_BYTES: usize = 34;
+                        let blocks_per_col = d_model.div_ceil(Q8_0_BLOCK);
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let col_base = col * blocks_per_col * Q8_0_BLOCK_BYTES;
+                            for block in 0..blocks_per_col {
+                                let base = col_base + block * Q8_0_BLOCK_BYTES;
+                                let scale = half::f16::from_bits(u16::from_le_bytes([
+                                    w_bytes[base],
+                                    w_bytes[base + 1],
+                                ]))
+                                .to_f32();
+                                for idx in 0..Q8_0_BLOCK {
+                                    let d = block * Q8_0_BLOCK + idx;
+                                    if d < d_model {
+                                        let q = w_bytes[base + 2 + idx] as i8 as f32;
+                                        acc += hidden[d] * q * scale;
+                                    }
+                                }
+                            }
+                            *logit_ref = acc;
+                        }
+                    }
+                    crate::gguf::GgmlDType::Q4_0 => {
+                        const Q4_0_BLOCK: usize = 32;
+                        const Q4_0_BLOCK_BYTES: usize = 18;
+                        let blocks_per_col = d_model.div_ceil(Q4_0_BLOCK);
+                        for (col, logit_ref) in logits.iter_mut().enumerate().take(vocab) {
+                            let mut acc = 0f32;
+                            let col_base = col * blocks_per_col * Q4_0_BLOCK_BYTES;
+                            for block in 0..blocks_per_col {
+                                let base = col_base + block * Q4_0_BLOCK_BYTES;
+                                let scale = half::f16::from_bits(u16::from_le_bytes([
+                                    w_bytes[base],
+                                    w_bytes[base + 1],
+                                ]))
+                                .to_f32();
+                                for idx in 0..Q4_0_BLOCK {
+                                    let d = block * Q4_0_BLOCK + idx;
+                                    if d < d_model {
+                                        let packed = w_bytes[base + 2 + (idx & 15)];
+                                        let q = if idx < 16 { packed & 0x0f } else { packed >> 4 };
+                                        acc += hidden[d] * ((i32::from(q) - 8) as f32) * scale;
+                                    }
+                                }
+                            }
+                            *logit_ref = acc;
+                        }
+                    }
+                    other => anyhow::bail!("unsupported lm_head dtype for host path: {:?}", other),
                 }
                 return Ok(logits);
             }

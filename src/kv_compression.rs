@@ -121,6 +121,13 @@ impl KvCompressionConfig {
         config
     }
 
+    pub fn is_preferred_batched_runtime(&self) -> bool {
+        self.mode == KvCompressMode::BlockSelectExact
+            && self.effective_exact_old_backing() == KvExactOldBacking::Fp16KQ4V
+            && self.effective_exact_old_attention() == KvExactOldAttention::Fp16KQ4VDirect
+            && self.representatives == 0
+    }
+
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.recent_window == 0 {
             anyhow::bail!("kv_recent_window must be > 0");
@@ -205,8 +212,16 @@ impl KvCompressionConfig {
         }
         match self.mode {
             KvCompressMode::Off => Ok(()),
-            KvCompressMode::DenseRecentOnly
-            | KvCompressMode::RecentOnly
+            KvCompressMode::DenseRecentOnly => {
+                if head_dim != 64 && head_dim != 128 {
+                    anyhow::bail!(
+                        "dense-recent-only requires head_dim=64 or head_dim=128, got head_dim={}",
+                        head_dim
+                    );
+                }
+                Ok(())
+            }
+            KvCompressMode::RecentOnly
             | KvCompressMode::BlockSummary
             | KvCompressMode::BlockSelectLossy => {
                 if head_dim != 64 {
@@ -335,6 +350,7 @@ mod tests {
         assert_eq!(cfg.top_blocks, 8);
         assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Fp16KQ4V);
         assert_eq!(cfg.exact_old_attention, KvExactOldAttention::Fp16KQ4VDirect);
+        assert!(cfg.is_preferred_batched_runtime());
     }
 
     #[test]
@@ -347,6 +363,23 @@ mod tests {
         assert_eq!(cfg.top_blocks, 8);
         assert_eq!(cfg.exact_old_backing, KvExactOldBacking::Dense);
         assert_eq!(cfg.exact_old_attention, KvExactOldAttention::Staged);
+        assert!(!cfg.is_preferred_batched_runtime());
+    }
+
+    #[test]
+    fn preferred_batched_runtime_rejects_diagnostic_variants() {
+        let q8 = KvCompressionConfig {
+            exact_old_backing: KvExactOldBacking::Q8,
+            exact_old_attention: KvExactOldAttention::Q8Direct,
+            ..KvCompressionConfig::default()
+        };
+        assert!(!q8.is_preferred_batched_runtime());
+
+        let reps = KvCompressionConfig {
+            representatives: 1,
+            ..KvCompressionConfig::default()
+        };
+        assert!(!reps.is_preferred_batched_runtime());
     }
 
     #[test]

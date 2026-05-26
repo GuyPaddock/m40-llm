@@ -8,6 +8,8 @@ use crate::kv_selection::{
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
+#[cfg(feature = "cuda")]
+use std::borrow::Cow;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
@@ -117,6 +119,43 @@ mod ffi {
             bytes: usize,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_argmax_f32_async(
+            ctx: *mut M40llmCudaContext,
+            d_values_f32: *const c_void,
+            len: u32,
+            d_out_u32: *mut c_void,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q8_0_lm_head_argmax_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_scratch_f32: *mut c_void,
+            d_out_u32: *mut c_void,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q8_0_lm_head_argmax_shared_a_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_scratch_f32: *mut c_void,
+            d_out_u32: *mut c_void,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_f16_lm_head_argmax_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_scratch_f32: *mut c_void,
+            d_out_u32: *mut c_void,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
 
         pub fn m40llm_validate_device_ptr(ptr: *const c_void) -> i32;
 
@@ -206,6 +245,201 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xf16_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_W_gate_f16: *const c_void,
+            d_W_up_f16: *const c_void,
+            d_C_f32: *mut c_void,
+            H: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xf16_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_Wq_f16: *const c_void,
+            d_Wk_f16: *const c_void,
+            d_Wv_f16: *const c_void,
+            d_bq_f32: *const c_void,
+            d_bk_f32: *const c_void,
+            d_bv_f32: *const c_void,
+            d_Q_f32: *mut c_void,
+            d_K_f32: *mut c_void,
+            d_V_f32: *mut c_void,
+            Nq: i32,
+            Nk: i32,
+            Nv: i32,
+            Kdim: i32,
+        ) -> i32;
+        pub fn m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_W_gate_q8_0: *const c_void,
+            d_W_up_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            H: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_Wq_q8_0: *const c_void,
+            d_Wk_q8_0: *const c_void,
+            d_Wv_q8_0: *const c_void,
+            d_bq_f32: *const c_void,
+            d_bk_f32: *const c_void,
+            d_bv_f32: *const c_void,
+            d_Q_f32: *mut c_void,
+            d_K_f32: *mut c_void,
+            d_V_f32: *mut c_void,
+            Nq: i32,
+            Nk: i32,
+            Nv: i32,
+            Kdim: i32,
+        ) -> i32;
+        pub fn m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_W_gate_q4_0: *const c_void,
+            d_W_up_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            H: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq4_0_gguf_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_Wq_q4_0: *const c_void,
+            d_Wk_q4_0: *const c_void,
+            d_Wv_q4_0: *const c_void,
+            d_bq_f32: *const c_void,
+            d_bk_f32: *const c_void,
+            d_bv_f32: *const c_void,
+            d_Q_f32: *mut c_void,
+            d_K_f32: *mut c_void,
+            d_V_f32: *mut c_void,
+            Nq: i32,
+            Nk: i32,
+            Nv: i32,
+            Kdim: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq4_0_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q4_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq6_k_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q6_k: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_generic_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_shared_activation_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xf32_f32_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -214,6 +448,16 @@ mod ffi {
             M: i32,
             N: i32,
             K: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xf32_f32_stream_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_f32_colmajor_nt: *const c_void,
+            d_C_f32: *mut c_void,
+            M: i32,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
             ctx: *mut M40llmCudaContext,
@@ -570,6 +814,19 @@ mod ffi {
             d_q_f32: *const c_void,
             q_heads: u32,
             seq_len: u32,
+            recent_window: u32,
+            block_size: u32,
+            top_blocks: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            d_seq_ids: *const u32,
+            d_seq_lens: *const u32,
+            batch_size: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
             recent_window: u32,
             block_size: u32,
             top_blocks: u32,
@@ -989,6 +1246,26 @@ impl CudaEvent {
         crate::profile::record_stream_sync(op);
         Ok(elapsed_ms)
     }
+
+    pub fn elapsed_sync_labeled(&self, stop: &CudaEvent, label: &str) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_cuda_event_elapsed_sync failed for {label}: {rc}"
+            ));
+        }
+        crate::profile::record_stream_sync("cuda_decode_event_elapsed_sync");
+        Ok(elapsed_ms)
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -997,6 +1274,132 @@ impl Drop for CudaEvent {
         unsafe {
             ffi::m40llm_cuda_event_destroy(self.raw.as_ptr());
         }
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn q8_decode_event_log_enabled() -> bool {
+    std::env::var("M40LLM_Q8_DECODE_EVENT_LOG").ok().as_deref() == Some("1")
+        || std::env::var("M40LLM_DECODE_EVENT_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+static DECODE_EVENT_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_skip() -> usize {
+    std::env::var("M40LLM_DECODE_EVENT_LOG_SKIP")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0)
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_limit() -> Option<usize> {
+    std::env::var("M40LLM_DECODE_EVENT_LOG_LIMIT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_filter_matches(label: &str) -> bool {
+    match std::env::var("M40LLM_DECODE_EVENT_LOG_FILTER") {
+        Ok(filter) if !filter.is_empty() => label.contains(&filter),
+        _ => true,
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_should_capture(label: &str) -> bool {
+    if !q8_decode_event_log_enabled() {
+        return false;
+    }
+    if !decode_event_log_filter_matches(label) {
+        return false;
+    }
+    let index = DECODE_EVENT_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+    let skip = decode_event_log_skip();
+    if index < skip {
+        return false;
+    }
+    match decode_event_log_limit() {
+        Some(limit) => index - skip < limit,
+        None => true,
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn q8_decode_event_stream() -> CudaStream {
+    if std::env::var("M40LLM_Q8_DECODE_STREAM").ok().as_deref() == Some("decode") {
+        CudaStream::Decode
+    } else {
+        CudaStream::Prefill
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn q8_decode_tiled_cols() -> i32 {
+    std::env::var("M40LLM_Q8_DECODE_TILED_COLS")
+        .ok()
+        .and_then(|value| value.parse::<i32>().ok())
+        .unwrap_or(1)
+}
+
+#[cfg(feature = "cuda")]
+fn q8_lm_head_argmax_shared_a_enabled() -> bool {
+    std::env::var("M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+struct Q8DecodeEventDiag {
+    label: Cow<'static, str>,
+    stream: CudaStream,
+    start: CudaEvent,
+}
+
+#[cfg(feature = "cuda")]
+impl Q8DecodeEventDiag {
+    fn start(ctx: &CudaContext, label: &'static str) -> Result<Option<Self>> {
+        Self::start_on_stream(ctx, label, q8_decode_event_stream())
+    }
+
+    fn start_dynamic(
+        ctx: &CudaContext,
+        label: impl Into<Cow<'static, str>>,
+        stream: CudaStream,
+    ) -> Result<Option<Self>> {
+        let label = label.into();
+        if !decode_event_log_should_capture(label.as_ref()) {
+            return Ok(None);
+        }
+        let start = ctx.create_event()?;
+        start.record(stream)?;
+        Ok(Some(Self {
+            label,
+            stream,
+            start,
+        }))
+    }
+
+    fn start_on_stream(
+        ctx: &CudaContext,
+        label: &'static str,
+        stream: CudaStream,
+    ) -> Result<Option<Self>> {
+        Self::start_dynamic(ctx, Cow::Borrowed(label), stream)
+    }
+
+    fn finish(self, ctx: &CudaContext) -> Result<()> {
+        let stop = ctx.create_event()?;
+        stop.record(self.stream)?;
+        let elapsed_ms = self
+            .start
+            .elapsed_sync_labeled(&stop, self.label.as_ref())?;
+        eprintln!("[cuda-decode-event] {} {:.3} ms", self.label, elapsed_ms);
+        Ok(())
     }
 }
 
@@ -1537,6 +1940,153 @@ impl CudaContext {
         Ok(())
     }
 
+    /// # Safety
+    /// `d_values_f32` must point to `len` device-resident f32 values and
+    /// `d_out_u32` must point to one writable device-resident u32.
+    pub unsafe fn argmax_f32_async(
+        &self,
+        d_values_f32: *const c_void,
+        len: u32,
+        d_out_u32: *mut c_void,
+        stream: CudaStream,
+    ) -> Result<()> {
+        if len == 0 {
+            anyhow::bail!("argmax_f32_async requires len > 0");
+        }
+        let _g = self.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_argmax_f32_async(
+                self.inner.raw.as_ptr(),
+                d_values_f32,
+                len,
+                d_out_u32,
+                stream.ffi_kind(),
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!("m40llm_argmax_f32_async failed: {rc}"));
+        }
+        record_async_kernel("argmax_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// `d_a_f32` must point to one device-resident hidden row of length `k`.
+    /// `d_b_q8_0` must be GGUF Q8_0 `[k,n]`, `d_scratch_f32` must have at
+    /// least `2 * ceil(n / 8) * sizeof(u32)` bytes, and `d_out_u32` must point
+    /// to one writable device-resident u32.
+    pub unsafe fn q8_0_lm_head_argmax_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_scratch_f32: *mut c_void,
+        d_out_u32: *mut c_void,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let shared_a = q8_lm_head_argmax_shared_a_enabled();
+            let diag_label = if shared_a {
+                "q8_0_lm_head_argmax_shared_a"
+            } else {
+                "q8_0_lm_head_argmax"
+            };
+            let diag = Q8DecodeEventDiag::start(self, diag_label)?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = if shared_a {
+                ffi::m40llm_q8_0_lm_head_argmax_shared_a_async(
+                    self.inner.raw.as_ptr(),
+                    d_a_f32,
+                    d_b_q8_0,
+                    d_scratch_f32,
+                    d_out_u32,
+                    n,
+                    k,
+                    stream.ffi_kind(),
+                )
+            } else {
+                ffi::m40llm_q8_0_lm_head_argmax_async(
+                    self.inner.raw.as_ptr(),
+                    d_a_f32,
+                    d_b_q8_0,
+                    d_scratch_f32,
+                    d_out_u32,
+                    n,
+                    k,
+                    stream.ffi_kind(),
+                )
+            };
+            if rc != 0 {
+                return Err(anyhow!("{diag_label} failed: {rc}"));
+            }
+            if shared_a {
+                record_async_kernel("q8_0_lm_head_argmax_shared_a_partials");
+            } else {
+                record_async_kernel("q8_0_lm_head_argmax_partials");
+            }
+            record_async_kernel("q8_0_lm_head_argmax_reduce");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_scratch_f32, d_out_u32, n, k, stream);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_a_f32` must point to one device-resident hidden row of length `k`.
+    /// `d_b_f16` must be GGUF F16 `[k,n]`, `d_scratch_f32` must have at least
+    /// `2 * ceil(n / 8) * sizeof(u32)` bytes, and `d_out_u32` must point to one
+    /// writable device-resident u32.
+    pub unsafe fn f16_lm_head_argmax_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_scratch_f32: *mut c_void,
+        d_out_u32: *mut c_void,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start_on_stream(self, "f16_lm_head_argmax", stream)?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_f16_lm_head_argmax_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_scratch_f32,
+                d_out_u32,
+                n,
+                k,
+                stream.ffi_kind(),
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_f16_lm_head_argmax_async failed: {rc}"));
+            }
+            record_async_kernel("f16_lm_head_argmax_partials");
+            record_async_kernel("f16_lm_head_argmax_reduce");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_scratch_f32, d_out_u32, n, k, stream);
+            Ok(())
+        }
+    }
+
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn validate_device_ptr(&self, ptr: *const c_void) -> Result<()> {
         let _g = self.inner.lock.lock().unwrap();
@@ -1851,6 +2401,914 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// Enqueues a single-token GGUF F16 decode projection. By default this
+    /// uses the prefill stream for compatibility; `M40LLM_F16_DECODE_STREAM=decode`
+    /// runs the opt-in compact decode path on the decode stream to avoid
+    /// per-layer cross-stream waits.
+    pub unsafe fn gemm_f32xf16_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "gemm_f32xf16_gguf_f32_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf16_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f16,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xf16_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xf16_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f16, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a single-token fused MLP gate/up projection plus SwiGLU for
+    /// GGUF F16 weights. This is an opt-in decode path for M=1 only.
+    pub unsafe fn mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_w_gate_f16: *const c_void,
+        d_w_up_f16: *const c_void,
+        d_c_f32: *mut c_void,
+        h: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "mlp_gate_up_swiglu_f32xf16_gguf_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_w_gate_f16,
+                d_w_up_f16,
+                d_c_f32,
+                h,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("mlp_gate_up_swiglu_f32xf16_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_w_gate_f16, d_w_up_f16, d_c_f32, h, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a fused single-token Q/K/V GGUF F16 projection. Bias pointers
+    /// may be null; non-null biases are interpreted as f32 vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_f32xf16_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_wq_f16: *const c_void,
+        d_wk_f16: *const c_void,
+        d_wv_f16: *const c_void,
+        d_bq_f32: Option<*const c_void>,
+        d_bk_f32: Option<*const c_void>,
+        d_bv_f32: Option<*const c_void>,
+        d_q_f32: *mut c_void,
+        d_k_f32: *mut c_void,
+        d_v_f32: *mut c_void,
+        n_q: i32,
+        n_k: i32,
+        n_v: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "qkv_f32xf16_gguf_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_qkv_f32xf16_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_wq_f16,
+                d_wk_f16,
+                d_wv_f16,
+                d_bq_f32.unwrap_or(std::ptr::null()),
+                d_bk_f32.unwrap_or(std::ptr::null()),
+                d_bv_f32.unwrap_or(std::ptr::null()),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                n_q,
+                n_k,
+                n_v,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_qkv_f32xf16_gguf_decode_async failed: {rc}"));
+            }
+            record_async_kernel("qkv_f32xf16_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_a_f32, d_wq_f16, d_wk_f16, d_wv_f16, d_bq_f32, d_bk_f32, d_bv_f32, d_q_f32,
+                d_k_f32, d_v_f32, n_q, n_k, n_v, k,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a single-token fused MLP gate/up projection plus SwiGLU for
+    /// GGUF Q8_0 weights. This is an opt-in decode path for M=1 only.
+    pub unsafe fn mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_w_gate_q8_0: *const c_void,
+        d_w_up_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        h: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "mlp_gate_up_swiglu_f32xq8_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_w_gate_q8_0,
+                d_w_up_q8_0,
+                d_c_f32,
+                h,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("mlp_gate_up_swiglu_f32xq8_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_w_gate_q8_0, d_w_up_q8_0, d_c_f32, h, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a fused single-token Q/K/V GGUF Q8_0 projection. Bias pointers
+    /// may be null; non-null biases are interpreted as f32 vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_f32xq8_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_wq_q8_0: *const c_void,
+        d_wk_q8_0: *const c_void,
+        d_wv_q8_0: *const c_void,
+        d_bq_f32: Option<*const c_void>,
+        d_bk_f32: Option<*const c_void>,
+        d_bv_f32: Option<*const c_void>,
+        d_q_f32: *mut c_void,
+        d_k_f32: *mut c_void,
+        d_v_f32: *mut c_void,
+        n_q: i32,
+        n_k: i32,
+        n_v: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "qkv_f32xq8_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_qkv_f32xq8_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_wq_q8_0,
+                d_wk_q8_0,
+                d_wv_q8_0,
+                d_bq_f32.unwrap_or(std::ptr::null()),
+                d_bk_f32.unwrap_or(std::ptr::null()),
+                d_bv_f32.unwrap_or(std::ptr::null()),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                n_q,
+                n_k,
+                n_v,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_qkv_f32xq8_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("qkv_f32xq8_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_a_f32, d_wq_q8_0, d_wk_q8_0, d_wv_q8_0, d_bq_f32, d_bk_f32, d_bv_f32, d_q_f32,
+                d_k_f32, d_v_f32, n_q, n_k, n_v, k,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a single-token fused MLP gate/up projection plus SwiGLU for
+    /// GGUF Q4_0 weights. This is an opt-in decode path for M=1 only.
+    pub unsafe fn mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_w_gate_q4_0: *const c_void,
+        d_w_up_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        h: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "mlp_gate_up_swiglu_f32xq4_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_w_gate_q4_0,
+                d_w_up_q4_0,
+                d_c_f32,
+                h,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("mlp_gate_up_swiglu_f32xq4_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_w_gate_q4_0, d_w_up_q4_0, d_c_f32, h, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues a fused single-token Q/K/V GGUF Q4_0 projection. Bias pointers
+    /// may be null; non-null biases are interpreted as f32 vectors.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_f32xq4_0_gguf_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_wq_q4_0: *const c_void,
+        d_wk_q4_0: *const c_void,
+        d_wv_q4_0: *const c_void,
+        d_bq_f32: Option<*const c_void>,
+        d_bk_f32: Option<*const c_void>,
+        d_bv_f32: Option<*const c_void>,
+        d_q_f32: *mut c_void,
+        d_k_f32: *mut c_void,
+        d_v_f32: *mut c_void,
+        n_q: i32,
+        n_k: i32,
+        n_v: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "qkv_f32xq4_0_gguf_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_qkv_f32xq4_0_gguf_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_wq_q4_0,
+                d_wk_q4_0,
+                d_wv_q4_0,
+                d_bq_f32.unwrap_or(std::ptr::null()),
+                d_bk_f32.unwrap_or(std::ptr::null()),
+                d_bv_f32.unwrap_or(std::ptr::null()),
+                d_q_f32,
+                d_k_f32,
+                d_v_f32,
+                n_q,
+                n_k,
+                n_v,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_qkv_f32xq4_0_gguf_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("qkv_f32xq4_0_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (
+                d_a_f32, d_wq_q4_0, d_wk_q4_0, d_wv_q4_0, d_bq_f32, d_bk_f32, d_bv_f32, d_q_f32,
+                d_k_f32, d_v_f32, n_q, n_k, n_v, k,
+            );
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_q8_0` must be a GGUF Q8_0 tensor with logical shape [k, n], where
+    /// dimension 0 is fastest and Q8_0 blocks are laid out along K per column.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq8_0_gguf_f32",
+                "CUDA fused GGUF Q8_0 dequant projection",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq8_0_gguf_f32 failed: {rc}"));
+            }
+            record_sync_kernel("gemm_f32xq8_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// `d_b_q4_0` must be a GGUF Q4_0 tensor with logical shape [k, n], where
+    /// dimension 0 is fastest and Q4_0 blocks are laid out along K per column.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq4_0_gguf_f32",
+                "CUDA fused GGUF Q4_0 dequant projection",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq4_0_gguf_f32 failed: {rc}"));
+            }
+            record_sync_kernel("gemm_f32xq4_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused GGUF Q4_0 dequant projection without synchronizing.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            if m == 1 && k > 0 && (k % 32) == 0 {
+                return self
+                    .gemm_f32xq4_0_gguf_f32_decode_async(d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            }
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq4_0_gguf_f32_async",
+                "CUDA fused GGUF Q4_0 dequant projection async enqueue",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq4_0_gguf_f32_async failed: {rc}"));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the block-loop GGUF Q4_0 projection kernel on the prefill stream.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_blockloop_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq4_0_gguf_f32_blockloop_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32_blockloop");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the M=1 decode-specialized GGUF Q4_0 projection kernel.
+    pub unsafe fn gemm_f32xq4_0_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q4_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq4_0_gguf_f32_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq4_0_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q4_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq4_0_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq4_0_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q4_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the M=1 decode-specialized GGUF Q6_K projection kernel.
+    pub unsafe fn gemm_f32xq6_k_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q6_k: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq6_k_gguf_f32_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq6_k_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q6_k,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq6_k_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq6_k_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q6_k, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues fused GGUF Q8_0 dequant projection on the prefill stream without
+    /// synchronizing.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            if m == 1 && k > 0 && (k % 32) == 0 {
+                if q8_decode_tiled_cols() == 2 && k >= 4096 && n >= 1024 {
+                    return self.gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+                        d_a_f32, d_b_q8_0, d_c_f32, m, n, k,
+                    );
+                }
+                return self
+                    .gemm_f32xq8_0_gguf_f32_decode_async(d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            }
+            static GEMM_LOG: Once = Once::new();
+            log_gemm_backend_once(
+                &GEMM_LOG,
+                "m40llm_gemm_f32xq8_0_gguf_f32_async",
+                "CUDA fused GGUF Q8_0 dequant projection async enqueue",
+            );
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!("m40llm_gemm_f32xq8_0_gguf_f32_async failed: {rc}"));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the original generic fused GGUF Q8_0 projection kernel on the
+    /// prefill stream without synchronizing.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_generic_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_generic_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_generic_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_generic");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the block-loop fused GGUF Q8_0 projection kernel on the prefill
+    /// stream without synchronizing. This is the production non-decode Q8_0
+    /// path and handles K tail blocks.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_blockloop_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_blockloop_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_blockloop");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the shared-activation fused GGUF Q8_0 projection kernel on the
+    /// prefill stream without synchronizing. This targets multi-row prefill
+    /// shapes by reusing activation K-blocks across output columns.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_shared_activation_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_shared_activation_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_shared_activation_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_shared_activation");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues the M=1 decode-specialized fused GGUF Q8_0 projection kernel on
+    /// the prefill stream without synchronizing.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_decode_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq8_0_gguf_f32_decode")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_decode_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_decode_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues an experimental M=1 decode-specialized GGUF Q8_0 projection
+    /// where each CUDA block computes two output columns. This is opt-in via
+    /// `M40LLM_Q8_DECODE_TILED_COLS=2`.
+    pub unsafe fn gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_q8_0: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let diag = Q8DecodeEventDiag::start(self, "gemm_f32xq8_0_gguf_f32_decode_tiled2")?;
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_q8_0,
+                d_c_f32,
+                m,
+                n,
+                k,
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xq8_0_gguf_f32_decode_tiled2_async failed: {rc}"
+                ));
+            }
+            record_async_kernel("gemm_f32xq8_0_gguf_f32_decode_tiled2");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
     /// `d_b_f32_colmajor_nt` must contain the transpose of a logical [k,n] GGUF
     /// weight, stored as column-major [n,k]. This computes row-major C = A * B.
     pub unsafe fn gemm_f32xf32_f32(
@@ -1927,6 +3385,48 @@ impl CudaContext {
         #[cfg(not(feature = "cuda"))]
         {
             let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k);
+            Ok(())
+        }
+    }
+
+    /// # Safety
+    /// Enqueues materialized-FP32 GEMM on the requested stream without
+    /// synchronizing. The cuBLAS handle is retargeted under the context lock.
+    pub unsafe fn gemm_f32xf32_f32_stream_async(
+        &self,
+        d_a_f32: *const c_void,
+        d_b_f32_colmajor_nt: *const c_void,
+        d_c_f32: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = ffi::m40llm_gemm_f32xf32_f32_stream_async(
+                self.inner.raw.as_ptr(),
+                d_a_f32,
+                d_b_f32_colmajor_nt,
+                d_c_f32,
+                m,
+                n,
+                k,
+                stream.ffi_kind(),
+            );
+            if rc != 0 {
+                return Err(anyhow!(
+                    "m40llm_gemm_f32xf32_f32_stream_async failed on {:?}: {rc}",
+                    stream
+                ));
+            }
+            crate::profile::record_cublas_call("gemm_f32xf32_f32");
+            Ok(())
+        }
+        #[cfg(not(feature = "cuda"))]
+        {
+            let _ = (d_a_f32, d_b_f32_colmajor_nt, d_c_f32, m, n, k, stream);
             Ok(())
         }
     }
@@ -3987,6 +5487,11 @@ impl KVCache {
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        let diag = Q8DecodeEventDiag::start_dynamic(
+            ctx,
+            format!("attention_last_token_f32_gqa seq_len={seq_len}"),
+            CudaStream::Decode,
+        )?;
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
             ffi::m40llm_attention_last_token_f32_gqa_async(
@@ -4005,6 +5510,10 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa");
+        drop(_g);
+        if let Some(diag) = diag {
+            diag.finish(ctx)?;
+        }
         Ok(())
     }
 
@@ -4022,6 +5531,11 @@ impl KVCache {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        let diag = Q8DecodeEventDiag::start_dynamic(
+            ctx,
+            "attention_last_token_f32_gqa_seq_len_dev",
+            CudaStream::Decode,
+        )?;
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
             ffi::m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
@@ -4040,6 +5554,10 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
+        drop(_g);
+        if let Some(diag) = diag {
+            diag.finish(ctx)?;
+        }
         Ok(())
     }
 
@@ -4388,6 +5906,57 @@ impl KVCache {
         }
         record_async_kernel(
             "attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct",
+        );
+        Ok(())
+    }
+
+    /// # Safety
+    /// Enqueues batched direct FP16-K/q4-V exact-old GQA decode attention.
+    /// `d_q_f32` and `d_out_f32` must be packed as
+    /// `[batch, q_heads, head_dim]` in the same order as `d_seq_ids` and
+    /// `d_seq_lens`.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+        &self,
+        ctx: &CudaContext,
+        d_seq_ids: *const u32,
+        d_seq_lens: *const u32,
+        batch_size: u32,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        let _g = ctx.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                d_seq_ids,
+                d_seq_lens,
+                batch_size,
+                d_q_f32,
+                q_heads,
+                recent_window,
+                block_size,
+                top_blocks,
+                d_out_f32,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async failed: {rc} (batch_size={batch_size}, q_heads={q_heads}, kv_heads={}, head_dim={}, recent_window={recent_window}, block_size={block_size}, top_blocks={top_blocks}, max_seq_len={}, compressed={}, backing={})",
+                self.inner.num_heads,
+                self.inner.head_dim,
+                self.inner.max_seq_len,
+                self.inner.compressed,
+                self.exact_old_backing()
+            ));
+        }
+        record_async_kernel(
+            "attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched",
         );
         Ok(())
     }

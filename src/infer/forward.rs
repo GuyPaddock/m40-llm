@@ -1,3 +1,8 @@
+#[cfg(feature = "cuda")]
+use super::gemm::{
+    decode_cublas_single_stream_enabled, f16_decode_kernel_decode_stream_enabled,
+    q8_decode_kernel_decode_stream_enabled,
+};
 use super::meta::norm_weight_dtype_code;
 #[cfg(feature = "cuda")]
 use super::workspace::ForwardWorkspacePtrs;
@@ -9,6 +14,8 @@ use crate::cuda::KVCache;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
+#[cfg(feature = "cuda")]
+use crate::kv_compression;
 #[cfg(feature = "cuda")]
 use crate::kv_selection;
 #[cfg(feature = "cuda")]
@@ -294,12 +301,35 @@ impl LoadedModel {
                     head_dim
                 );
             }
+            let q8_decode_single_stream = q8_decode_kernel_decode_stream_enabled()
+                && [
+                    d_wq_f16,
+                    d_wk_f16,
+                    d_wv_f16,
+                    d_wo_f16,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    d_w_down_f16,
+                ]
+                .iter()
+                .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
+            let single_stream_decode = decode_cublas_single_stream_enabled()
+                || f16_decode_kernel_decode_stream_enabled()
+                || q8_decode_single_stream;
 
             self.with_forward_workspace(
                 d_model as usize,
                 kv_dim as usize,
                 hidden_dim as usize,
                 |ws| -> Result<()> {
+                    let wait_cross_stream =
+                        |waiting: CudaStream, signal: CudaStream, op: &'static str| -> Result<()> {
+                            if single_stream_decode {
+                                Ok(())
+                            } else {
+                                self.cuda.stream_wait_for_stream(waiting, signal, op)
+                            }
+                        };
                     let label = format!("forward.layer.{seq_id}.seq_len.{seq_len}");
                     // Pre-norm (RMSNorm) on x -> xn
                     let profile_before = profile::snapshot_if_enabled();
@@ -338,12 +368,12 @@ impl LoadedModel {
                     // Q uses query heads; K/V use KV heads for GQA models.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
-                    self.qkv_project_f32xf16_gguf_f32_async(
+                    let fused_qkv = self.try_qkv_project_f32xf16_gguf_f32_decode_async(
                         ws.d_xn,
                         1,
                         d_model,
@@ -353,17 +383,49 @@ impl LoadedModel {
                         kv_dim as i32,
                         d_wv_f16,
                         kv_dim as i32,
+                        qkv_bias.map(|(d_bq, _, _)| d_bq),
+                        qkv_bias.map(|(_, d_bk, _)| d_bk),
+                        qkv_bias.map(|(_, _, d_bv)| d_bv),
                         ws.dq,
                         ws.dk,
                         ws.dv,
                     )?;
-                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
-                    log_profiled_op(
-                        &label,
-                        "qkv_project",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_qkv {
+                        log_profiled_op(
+                            &label,
+                            "qkv_project_fused",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.qkv_project_f32xf16_gguf_f32_async(
+                            ws.d_xn,
+                            1,
+                            d_model,
+                            d_wq_f16,
+                            d_model,
+                            d_wk_f16,
+                            kv_dim as i32,
+                            d_wv_f16,
+                            kv_dim as i32,
+                            ws.dq,
+                            ws.dk,
+                            ws.dv,
+                        )?;
+                        self.apply_qkv_bias_async(
+                            qkv_bias,
+                            1,
+                            d_model as usize,
+                            kv_dim as usize,
+                            ws,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "qkv_project",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.q"),
                         ws.dq as *const c_void,
@@ -383,7 +445,7 @@ impl LoadedModel {
                     let pos = seq_len.saturating_sub(1);
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
@@ -413,7 +475,7 @@ impl LoadedModel {
                     // Append K/V for this token, rotating K into the cache.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_kv_append",
@@ -461,7 +523,7 @@ impl LoadedModel {
                     // Output projection of attention
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attention_to_out_project",
@@ -489,7 +551,7 @@ impl LoadedModel {
                     // Residual add y_attn: x1 = x + y_attn.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
@@ -549,58 +611,76 @@ impl LoadedModel {
                     // MLP gates and up (now feed post-attn normalized x1n)
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
-                    self.mlp_gates_f32xf16_gguf_f32_async(
+                    let fused_mlp = self.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                         ws.d_x1n,
                         1,
                         d_model,
                         d_w_gate_f16,
                         d_w_up_f16,
                         hidden_dim,
-                        ws.dgate,
-                        ws.dup,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "mlp_gate_up",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
-                    self.debug_log_device_f32_finiteness(
-                        &format!("{label}.gate"),
-                        ws.dgate as *const c_void,
-                        hidden_dim as usize,
-                    )?;
-                    self.debug_log_device_f32_finiteness(
-                        &format!("{label}.up"),
-                        ws.dup as *const c_void,
-                        hidden_dim as usize,
-                    )?;
-
-                    // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
-                        CudaStream::Decode,
-                        CudaStream::Prefill,
-                        "mlp_gate_up_to_swiglu",
-                    )?;
-                    self.cuda.swiglu_f32_async(
-                        ws.dgate as *const c_void,
-                        ws.dup as *const c_void,
                         ws.dhid,
-                        hidden_dim as usize,
                     )?;
-                    log_profiled_op(
-                        &label,
-                        "swiglu",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_mlp {
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up_swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.mlp_gates_f32xf16_gguf_f32_async(
+                            ws.d_x1n,
+                            1,
+                            d_model,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            hidden_dim,
+                            ws.dgate,
+                            ws.dup,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                        self.debug_log_device_f32_finiteness(
+                            &format!("{label}.gate"),
+                            ws.dgate as *const c_void,
+                            hidden_dim as usize,
+                        )?;
+                        self.debug_log_device_f32_finiteness(
+                            &format!("{label}.up"),
+                            ws.dup as *const c_void,
+                            hidden_dim as usize,
+                        )?;
+
+                        // hidden = SiLU(gate) * up, where SiLU(x) = x * sigmoid(x).
+                        let profile_before = profile::snapshot_if_enabled();
+                        let op_start = std::time::Instant::now();
+                        wait_cross_stream(
+                            CudaStream::Decode,
+                            CudaStream::Prefill,
+                            "mlp_gate_up_to_swiglu",
+                        )?;
+                        self.cuda.swiglu_f32_async(
+                            ws.dgate as *const c_void,
+                            ws.dup as *const c_void,
+                            ws.dhid,
+                            hidden_dim as usize,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
                     self.debug_log_device_f32_finiteness(
                         &format!("{label}.swiglu"),
                         ws.dhid as *const c_void,
@@ -610,7 +690,7 @@ impl LoadedModel {
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
@@ -638,7 +718,7 @@ impl LoadedModel {
                     // Final residual add per pre-norm layout: out = x1 + y_mlp.
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_down_to_mlp_residual",
@@ -752,12 +832,35 @@ impl LoadedModel {
                     head_dim
                 );
             }
+            let q8_decode_single_stream = q8_decode_kernel_decode_stream_enabled()
+                && [
+                    d_wq_f16,
+                    d_wk_f16,
+                    d_wv_f16,
+                    d_wo_f16,
+                    d_w_gate_f16,
+                    d_w_up_f16,
+                    d_w_down_f16,
+                ]
+                .iter()
+                .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
+            let single_stream_decode = decode_cublas_single_stream_enabled()
+                || f16_decode_kernel_decode_stream_enabled()
+                || q8_decode_single_stream;
 
             self.with_forward_workspace(
                 d_model as usize,
                 kv_dim as usize,
                 hidden_dim as usize,
                 |ws| -> Result<()> {
+                    let wait_cross_stream =
+                        |waiting: CudaStream, signal: CudaStream, op: &'static str| -> Result<()> {
+                            if single_stream_decode {
+                                Ok(())
+                            } else {
+                                self.cuda.stream_wait_for_stream(waiting, signal, op)
+                            }
+                        };
                     let label = format!("forward.layer.{seq_id}.graph_params");
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
@@ -789,12 +892,12 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attn_norm_to_qkv_project",
                     )?;
-                    self.qkv_project_f32xf16_gguf_f32_async(
+                    let fused_qkv = self.try_qkv_project_f32xf16_gguf_f32_decode_async(
                         ws.d_xn,
                         1,
                         d_model,
@@ -804,21 +907,53 @@ impl LoadedModel {
                         kv_dim as i32,
                         d_wv_f16,
                         kv_dim as i32,
+                        qkv_bias.map(|(d_bq, _, _)| d_bq),
+                        qkv_bias.map(|(_, d_bk, _)| d_bk),
+                        qkv_bias.map(|(_, _, d_bv)| d_bv),
                         ws.dq,
                         ws.dk,
                         ws.dv,
                     )?;
-                    self.apply_qkv_bias_async(qkv_bias, 1, d_model as usize, kv_dim as usize, ws)?;
-                    log_profiled_op(
-                        &label,
-                        "qkv_project",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_qkv {
+                        log_profiled_op(
+                            &label,
+                            "qkv_project_fused",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.qkv_project_f32xf16_gguf_f32_async(
+                            ws.d_xn,
+                            1,
+                            d_model,
+                            d_wq_f16,
+                            d_model,
+                            d_wk_f16,
+                            kv_dim as i32,
+                            d_wv_f16,
+                            kv_dim as i32,
+                            ws.dq,
+                            ws.dk,
+                            ws.dv,
+                        )?;
+                        self.apply_qkv_bias_async(
+                            qkv_bias,
+                            1,
+                            d_model as usize,
+                            kv_dim as usize,
+                            ws,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "qkv_project",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_rope_kv",
@@ -842,7 +977,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "qkv_project_to_kv_append",
@@ -882,7 +1017,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "attention_to_out_project",
@@ -904,7 +1039,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "out_project_to_attn_residual",
@@ -952,51 +1087,69 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "ffn_norm_to_mlp_gate_up",
                     )?;
-                    self.mlp_gates_f32xf16_gguf_f32_async(
+                    let fused_mlp = self.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                         ws.d_x1n,
                         1,
                         d_model,
                         d_w_gate_f16,
                         d_w_up_f16,
                         hidden_dim,
-                        ws.dgate,
-                        ws.dup,
-                    )?;
-                    log_profiled_op(
-                        &label,
-                        "mlp_gate_up",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
-
-                    let profile_before = profile::snapshot_if_enabled();
-                    let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
-                        CudaStream::Decode,
-                        CudaStream::Prefill,
-                        "mlp_gate_up_to_swiglu",
-                    )?;
-                    self.cuda.swiglu_f32_async(
-                        ws.dgate as *const c_void,
-                        ws.dup as *const c_void,
                         ws.dhid,
-                        hidden_dim as usize,
                     )?;
-                    log_profiled_op(
-                        &label,
-                        "swiglu",
-                        profile_before.as_ref(),
-                        op_start.elapsed(),
-                    );
+                    if fused_mlp {
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up_swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    } else {
+                        self.mlp_gates_f32xf16_gguf_f32_async(
+                            ws.d_x1n,
+                            1,
+                            d_model,
+                            d_w_gate_f16,
+                            d_w_up_f16,
+                            hidden_dim,
+                            ws.dgate,
+                            ws.dup,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "mlp_gate_up",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+
+                        let profile_before = profile::snapshot_if_enabled();
+                        let op_start = std::time::Instant::now();
+                        wait_cross_stream(
+                            CudaStream::Decode,
+                            CudaStream::Prefill,
+                            "mlp_gate_up_to_swiglu",
+                        )?;
+                        self.cuda.swiglu_f32_async(
+                            ws.dgate as *const c_void,
+                            ws.dup as *const c_void,
+                            ws.dhid,
+                            hidden_dim as usize,
+                        )?;
+                        log_profiled_op(
+                            &label,
+                            "swiglu",
+                            profile_before.as_ref(),
+                            op_start.elapsed(),
+                        );
+                    }
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Prefill,
                         CudaStream::Decode,
                         "swiglu_to_mlp_down",
@@ -1018,7 +1171,7 @@ impl LoadedModel {
 
                     let profile_before = profile::snapshot_if_enabled();
                     let op_start = std::time::Instant::now();
-                    self.cuda.stream_wait_for_stream(
+                    wait_cross_stream(
                         CudaStream::Decode,
                         CudaStream::Prefill,
                         "mlp_down_to_mlp_residual",
@@ -1741,9 +1894,9 @@ impl LoadedModel {
         let kv = self.kv_cache.as_ref().ok_or_else(|| {
             anyhow!("kv_cache not allocated; call allocate_kv_cache_for_layers first")
         })?;
-        if kv.head_dim() != 64 {
+        if kv.head_dim() != 64 && kv.head_dim() != 128 {
             anyhow::bail!(
-                "batched decode attention currently requires head_dim=64, got {}",
+                "batched decode attention currently requires head_dim=64 or 128, got {}",
                 kv.head_dim()
             );
         }
@@ -1941,18 +2094,36 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let kv_runtime_config = kv_compression::runtime_config();
                 unsafe {
-                    cuda_plan.dispatch_attention_async(
-                        &self.cuda,
-                        kv,
-                        ws.dq as *const c_void,
-                        q_heads,
-                        ws.datt,
-                    )?;
+                    if kv.is_compressed() && kv_runtime_config.is_preferred_batched_runtime() {
+                        cuda_plan.dispatch_fp16_k_q4_v_direct_attention_async(
+                            &self.cuda,
+                            kv,
+                            ws.dq as *const c_void,
+                            q_heads,
+                            kv_runtime_config.recent_window,
+                            kv_runtime_config.block_size,
+                            kv_runtime_config.top_blocks,
+                            ws.datt,
+                        )?;
+                    } else {
+                        cuda_plan.dispatch_attention_async(
+                            &self.cuda,
+                            kv,
+                            ws.dq as *const c_void,
+                            q_heads,
+                            ws.datt,
+                        )?;
+                    }
                 }
                 log_profiled_op(
                     &label,
-                    "attention_batched",
+                    if kv.is_compressed() {
+                        "attention_batched_compressed"
+                    } else {
+                        "attention_batched"
+                    },
                     profile_before.as_ref(),
                     op_start.elapsed(),
                 );
@@ -2237,6 +2408,7 @@ impl LoadedModel {
         let total_bytes_d = rows
             .checked_mul(bytes_d)
             .context("batched prefill total d_model byte size overflow")?;
+        let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
 
         self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
             for (seq_idx, item) in items.iter().enumerate() {
@@ -2255,7 +2427,6 @@ impl LoadedModel {
                 let layer_id: u32 = layer
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("layer index {} does not fit in u32", layer))?;
-                let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
                 let wq_ptr = self.tensor_device_ptr("wq", &w.wq)?;
                 let wk_ptr = self.tensor_device_ptr("wk", &w.wk)?;
                 let wv_ptr = self.tensor_device_ptr("wv", &w.wv)?;
@@ -2578,6 +2749,14 @@ impl LoadedModel {
                         )?;
                     }
                 }
+                if std::env::var("M40LLM_PREFILL_SYNC_EACH_LAYER")
+                    .ok()
+                    .as_deref()
+                    == Some("1")
+                {
+                    self.cuda.synchronize_stream(CudaStream::Decode)?;
+                    self.cuda.synchronize_stream(CudaStream::Prefill)?;
+                }
             }
 
             for (seq_idx, item) in items.iter().enumerate() {
@@ -2616,6 +2795,18 @@ impl LoadedModel {
                     padded_tokens.saturating_sub(valid_tokens)
                 );
             }
+
+            // The forward workspace is mutex-protected only while this closure
+            // owns it. Since the packed prefill path enqueues asynchronous work
+            // on both streams, drain the streams before returning so a following
+            // single-row decode cannot resize/free the workspace under queued
+            // kernels.
+            self.cuda
+                .synchronize_stream(CudaStream::Decode)
+                .context("batched prefill decode stream synchronization failed")?;
+            self.cuda
+                .synchronize_stream(CudaStream::Prefill)
+                .context("batched prefill prefill stream synchronization failed")?;
 
             Ok(layer_count)
         })

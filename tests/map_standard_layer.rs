@@ -1,6 +1,8 @@
 use anyhow::Result;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufValue};
 use m40_llm::infer::{DeviceTensorView, LoadedModel, ModelConfig};
+#[cfg(feature = "cuda")]
+use m40_llm::kv_compression::KvCompressionConfig;
 use std::collections::HashMap;
 
 fn strides_from(shape: &[u64]) -> Vec<usize> {
@@ -202,6 +204,38 @@ fn map_standard_layer_accepts_optional_qkv_biases() -> Result<()> {
 }
 
 #[test]
+fn map_standard_layer_accepts_q8_0_projection_weights() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    for key in [
+        "layers.0.attention.wq.weight",
+        "layers.0.attention.wk.weight",
+        "layers.0.attention.wv.weight",
+        "layers.0.attention.wo.weight",
+        "layers.0.feed_forward.w3.weight",
+        "layers.0.feed_forward.w1.weight",
+        "layers.0.feed_forward.w2.weight",
+    ] {
+        lm.device_tensors
+            .get_mut(key)
+            .expect("weight present")
+            .dtype = GgmlDType::Q8_0;
+    }
+
+    let mapped = lm
+        .map_standard_layer(0)
+        .expect("should accept Q8_0 projection weights");
+    assert_eq!(mapped.wq.dtype, GgmlDType::Q8_0);
+    assert_eq!(mapped.w_down.dtype, GgmlDType::Q8_0);
+    Ok(())
+}
+
+#[test]
 fn map_standard_layer_rejects_bad_qkv_bias_shape() -> Result<()> {
     let mut lm = match make_model_with_layer(0, 32, 64, true) {
         Ok(lm) => lm,
@@ -269,6 +303,32 @@ fn map_lm_head_uses_compatible_tied_embeddings() -> Result<()> {
 
     let (name, _view, d_model, vocab, tied) = lm.map_lm_head()?;
     assert_eq!(name, "tok_embeddings.weight");
+    assert_eq!(d_model, 32);
+    assert_eq!(vocab, 1024);
+    assert!(tied);
+    Ok(())
+}
+
+#[test]
+fn map_lm_head_uses_compatible_q8_tied_embeddings() -> Result<()> {
+    let mut lm = match make_model_with_layer(0, 32, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    lm.device_tensors.remove("output.weight");
+    let tok = lm
+        .device_tensors
+        .get_mut("tok_embeddings.weight")
+        .expect("embedding present");
+    tok.dtype = GgmlDType::Q8_0;
+    tok.shape = vec![32, 1024];
+
+    let (name, view, d_model, vocab, tied) = lm.map_lm_head()?;
+    assert_eq!(name, "tok_embeddings.weight");
+    assert_eq!(view.dtype, GgmlDType::Q8_0);
     assert_eq!(d_model, 32);
     assert_eq!(vocab, 1024);
     assert!(tied);
@@ -428,7 +488,7 @@ fn validate_full_layer_decode_requires_layer_kv_slots() -> Result<()> {
 
 #[test]
 fn kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
-    let mut lm = match make_model_with_layer(2, 32, 64, true) {
+    let mut lm = match make_model_with_layer(2, 64, 64, true) {
         Ok(lm) => lm,
         Err(e) => {
             eprintln!("skipping: {}", e);
@@ -436,6 +496,40 @@ fn kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
         }
     };
     lm.allocate_kv_cache_for_layer_sequences(16, 3)?;
+
+    assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 0)?, 0);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 0)?, 2);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 1)?, 3);
+    assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(2, 2)?, 8);
+
+    let err = lm
+        .kv_cache_physical_slot_for_layer_sequence(0, 3)
+        .unwrap_err();
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("sequence_id 3 out of range"),
+        "unexpected error: {msg}"
+    );
+    Ok(())
+}
+
+#[cfg(feature = "cuda")]
+#[test]
+fn compressed_kv_layer_sequence_mapping_uses_sequence_major_slots() -> Result<()> {
+    let mut lm = match make_model_with_layer(2, 64, 64, true) {
+        Ok(lm) => lm,
+        Err(e) => {
+            eprintln!("skipping: {}", e);
+            return Ok(());
+        }
+    };
+    let config = KvCompressionConfig {
+        recent_window: 4,
+        block_size: 4,
+        ..KvCompressionConfig::default()
+    };
+    lm.allocate_compressed_kv_cache_for_layer_sequences(16, 3, &config)?;
 
     assert_eq!(lm.kv_cache_logical_sequence_capacity(), 3);
     assert_eq!(lm.kv_cache_physical_slot_for_layer_sequence(0, 0)?, 0);
