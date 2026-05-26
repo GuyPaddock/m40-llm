@@ -91,13 +91,29 @@ fn load_model(path: &Path, context_bound: u32, kv: &KvCompressionConfig) -> Resu
 }
 
 fn throughput_kv_config() -> KvCompressionConfig {
-    match std::env::var("M40LLM_QWEN_THROUGHPUT_KV").ok().as_deref() {
+    let mut kv = match std::env::var("M40LLM_QWEN_THROUGHPUT_KV").ok().as_deref() {
         Some("default") | Some("compressed") => KvCompressionConfig::default(),
         Some("off") | Some("dense") | None => KvCompressionConfig::dense_reference(),
         Some(other) => panic!(
             "unsupported M40LLM_QWEN_THROUGHPUT_KV={other}; use off/dense or default/compressed"
         ),
+    };
+    if let Ok(value) = std::env::var("M40LLM_QWEN_THROUGHPUT_RECENT_WINDOW") {
+        kv.recent_window = value
+            .parse()
+            .expect("M40LLM_QWEN_THROUGHPUT_RECENT_WINDOW must be a u32");
     }
+    if let Ok(value) = std::env::var("M40LLM_QWEN_THROUGHPUT_BLOCK_SIZE") {
+        kv.block_size = value
+            .parse()
+            .expect("M40LLM_QWEN_THROUGHPUT_BLOCK_SIZE must be a u32");
+    }
+    if let Ok(value) = std::env::var("M40LLM_QWEN_THROUGHPUT_TOP_BLOCKS") {
+        kv.top_blocks = value
+            .parse()
+            .expect("M40LLM_QWEN_THROUGHPUT_TOP_BLOCKS must be a u32");
+    }
+    kv
 }
 
 #[test]

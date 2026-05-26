@@ -117,7 +117,14 @@ batched decode path before touching persistent decode or large-model fused-dequa
   is Qwen2.5-3B F16 large-model with dense KV,
   `M40LLM_F16_DECODE_KERNEL=1`, `M40LLM_F16_DECODE_STREAM=decode`,
   `M40LLM_CUDA_GREEDY_ARGMAX=1`, `M40LLM_FUSED_QKV=1`, and
-  `M40LLM_FUSED_MLP_SWIGLU=1`: 512 tokens in 29.83 s total, 17.17 E2E tok/s.
+  `M40LLM_FUSED_MLP_SWIGLU=1`, plus the default fast head128 attention kernel
+  and warp-reduced F16 decode projection reductions: 512 tokens in 24.47 s
+  total, 20.93 E2E tok/s. Late-token diagnostics at `seq_len=524` showed dense
+  head128 attention dropping from roughly 1.14 ms/layer to roughly
+  0.68 ms/layer. A compressed exact-old top8 row with `recent_window=128` was
+  coherent but slower on this short 556-token total-context prompt
+  (31.70 s total, 16.15 E2E tok/s), so dense `off` remains the active
+  Ollama-comparison path for this prompt.
   An opt-in `M40LLM_FUSED_RESIDUAL_NORM=1` experiment fused the post-attention
   residual add with weighted RMSNorm; it was neutral on the same 512-token
   target run (29.83 s total, 17.17 E2E tok/s), so preserve it only as reference

@@ -1892,6 +1892,164 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_head128_warp_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float scores[];
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t lane = threadIdx.x & 31u;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score = -FLT_MAX;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            #pragma unroll
+            for (uint32_t d = lane; d < head_dim; d += 32u) {
+                dot += qh[d] * __half2float(K[base + d]);
+            }
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                dot += __shfl_down_sync(0xffffffffu, dot, offset);
+            }
+            if (lane == 0u) {
+                const float score = dot * inv_sqrt;
+                scores[t] = score;
+                if (score > max_score) max_score = score;
+            }
+        }
+        max_score = __shfl_sync(0xffffffffu, max_score, 0);
+
+        float denom_part = 0.0f;
+        for (uint32_t t = lane; t < seq_len; t += 32u) {
+            denom_part += expf(scores[t] - max_score);
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            denom_part += __shfl_down_sync(0xffffffffu, denom_part, offset);
+        }
+        const float denom = __shfl_sync(0xffffffffu, denom_part, 0) > 0.0f
+            ? __shfl_sync(0xffffffffu, denom_part, 0)
+            : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        for (uint32_t d = lane; d < head_dim; d += 32u) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[t] - max_score) / denom;
+                acc += p * __half2float(V[base + d]);
+            }
+            out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_head128_fast_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        float* __restrict__ Out) {
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* warp_reduce = scores + seq_len;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t lane = tid & 31u;
+        const uint32_t warp = tid >> 5;
+        if (qh_idx >= q_heads) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score = -FLT_MAX;
+        for (uint32_t t = 0; t < seq_len; ++t) {
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            if (tid < head_dim) {
+                dot = qh[tid] * __half2float(K[base + tid]);
+            }
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                dot += __shfl_down_sync(0xffffffffu, dot, offset);
+            }
+            if (lane == 0u) {
+                warp_reduce[warp] = dot;
+            }
+            __syncthreads();
+
+            if (tid == 0u) {
+                const float score =
+                    (warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3])
+                    * inv_sqrt;
+                scores[t] = score;
+                if (score > max_score) max_score = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0u) warp_reduce[0] = max_score;
+        __syncthreads();
+        max_score = warp_reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t t = tid; t < seq_len; t += blockDim.x) {
+            denom_part += expf(scores[t] - max_score);
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            denom_part += __shfl_down_sync(0xffffffffu, denom_part, offset);
+        }
+        if (lane == 0u) {
+            warp_reduce[warp] = denom_part;
+        }
+        __syncthreads();
+        if (tid == 0u) {
+            warp_reduce[0] = warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3];
+        }
+        __syncthreads();
+        const float denom = warp_reduce[0] > 0.0f ? warp_reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        if (tid < head_dim) {
+            float acc = 0.0f;
+            for (uint32_t t = 0; t < seq_len; ++t) {
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[t] - max_score) / denom;
+                acc += p * __half2float(V[base + tid]);
+            }
+            out_h[tid] = acc;
+        }
+    }
+
     __global__ void attention_last_token_gqa_dense_recent_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -4521,17 +4679,41 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 );
             } else {
                 static int logged_head128 = 0;
+                const char* head128_kernel_env = getenv("M40LLM_ATTN_HEAD128_KERNEL");
+                const bool use_head128_shared = head128_kernel_env && strcmp(head128_kernel_env, "shared") == 0;
+                const bool use_head128_warp32 = head128_kernel_env && strcmp(head128_kernel_env, "warp32") == 0;
                 if (!logged_head128 && log_env && strcmp(log_env, "1") == 0) {
-                    fprintf(stderr, "[cuda] attention_gqa backend: head128 shared-score kernel\n");
+                    fprintf(stderr, "[cuda] attention_gqa backend: head128 %s kernel\n",
+                            use_head128_shared ? "shared-score" : (use_head128_warp32 ? "warp32-score" : "fast-warp-reduce"));
                     logged_head128 = 1;
                 }
-                attention_last_token_gqa_head128_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
-                    reinterpret_cast<const __half*>(kv->d_k),
-                    reinterpret_cast<const __half*>(kv->d_v),
-                    kv->max_seq_len, q_heads, kv->num_heads, seq_id,
-                    reinterpret_cast<const float*>(q_dev_f32), seq_len,
-                    reinterpret_cast<float*>(out_dev_f32)
-                );
+                if (use_head128_shared) {
+                    attention_last_token_gqa_head128_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                        reinterpret_cast<const __half*>(kv->d_k),
+                        reinterpret_cast<const __half*>(kv->d_v),
+                        kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                        reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                        reinterpret_cast<float*>(out_dev_f32)
+                    );
+                } else if (use_head128_warp32) {
+                    const int warp_threads = 32;
+                    const size_t warp_shmem = (size_t)seq_len * sizeof(float);
+                    attention_last_token_gqa_head128_warp_kernel<<<blocks, warp_threads, warp_shmem, ctx->decode_stream>>>(
+                        reinterpret_cast<const __half*>(kv->d_k),
+                        reinterpret_cast<const __half*>(kv->d_v),
+                        kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                        reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                        reinterpret_cast<float*>(out_dev_f32)
+                    );
+                } else {
+                    attention_last_token_gqa_head128_fast_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                        reinterpret_cast<const __half*>(kv->d_k),
+                        reinterpret_cast<const __half*>(kv->d_v),
+                        kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+                        reinterpret_cast<const float*>(q_dev_f32), seq_len,
+                        reinterpret_cast<float*>(out_dev_f32)
+                    );
+                }
             }
         } else {
             static int logged_fallback = 0;
@@ -5795,16 +5977,18 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
         }
         extern __shared__ float f16_decode_reduce[];
-        f16_decode_reduce[tid] = acc;
-        __syncthreads();
-        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-            if (tid < stride) {
-                f16_decode_reduce[tid] += f16_decode_reduce[tid + stride];
-            }
-            __syncthreads();
+        const int lane = tid & 31;
+        const int warp = tid >> 5;
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            acc += __shfl_down_sync(0xffffffffu, acc, offset);
         }
+        if (lane == 0) {
+            f16_decode_reduce[warp] = acc;
+        }
+        __syncthreads();
         if (tid == 0) {
-            C[col] = f16_decode_reduce[0];
+            C[col] = f16_decode_reduce[0] + f16_decode_reduce[1] + f16_decode_reduce[2] + f16_decode_reduce[3];
         }
     }
 
@@ -5839,21 +6023,23 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
         }
         extern __shared__ float mlp_gate_up_reduce[];
+        const int lane = tid & 31;
+        const int warp = tid >> 5;
         float* gate_reduce = mlp_gate_up_reduce;
-        float* up_reduce = mlp_gate_up_reduce + blockDim.x;
-        gate_reduce[tid] = gate_acc;
-        up_reduce[tid] = up_acc;
-        __syncthreads();
-        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-            if (tid < stride) {
-                gate_reduce[tid] += gate_reduce[tid + stride];
-                up_reduce[tid] += up_reduce[tid + stride];
-            }
-            __syncthreads();
+        float* up_reduce = mlp_gate_up_reduce + 4;
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            gate_acc += __shfl_down_sync(0xffffffffu, gate_acc, offset);
+            up_acc += __shfl_down_sync(0xffffffffu, up_acc, offset);
         }
+        if (lane == 0) {
+            gate_reduce[warp] = gate_acc;
+            up_reduce[warp] = up_acc;
+        }
+        __syncthreads();
         if (tid == 0) {
-            const float gate = gate_reduce[0];
-            const float up = up_reduce[0];
+            const float gate = gate_reduce[0] + gate_reduce[1] + gate_reduce[2] + gate_reduce[3];
+            const float up = up_reduce[0] + up_reduce[1] + up_reduce[2] + up_reduce[3];
             C[col] = gate * (1.0f / (1.0f + expf(-gate))) * up;
         }
     }
@@ -5906,16 +6092,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             }
         }
         extern __shared__ float qkv_decode_reduce[];
-        qkv_decode_reduce[tid] = acc;
-        __syncthreads();
-        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
-            if (tid < stride) {
-                qkv_decode_reduce[tid] += qkv_decode_reduce[tid + stride];
-            }
-            __syncthreads();
+        const int lane = tid & 31;
+        const int warp = tid >> 5;
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            acc += __shfl_down_sync(0xffffffffu, acc, offset);
         }
+        if (lane == 0) {
+            qkv_decode_reduce[warp] = acc;
+        }
+        __syncthreads();
         if (tid == 0) {
-            float value = qkv_decode_reduce[0];
+            float value =
+                qkv_decode_reduce[0] + qkv_decode_reduce[1] + qkv_decode_reduce[2] + qkv_decode_reduce[3];
             if (bias) {
                 value += bias[local_col];
             }

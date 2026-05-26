@@ -8,6 +8,8 @@ use crate::kv_selection::{
 #[cfg(feature = "cuda")]
 use anyhow::anyhow;
 use anyhow::Result;
+#[cfg(feature = "cuda")]
+use std::borrow::Cow;
 use std::ffi::c_void;
 #[cfg(feature = "cuda")]
 use std::ffi::CStr;
@@ -1224,6 +1226,26 @@ impl CudaEvent {
         crate::profile::record_stream_sync(op);
         Ok(elapsed_ms)
     }
+
+    pub fn elapsed_sync_labeled(&self, stop: &CudaEvent, label: &str) -> Result<f32> {
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0f32;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_sync(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms as *mut _,
+            )
+        };
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_cuda_event_elapsed_sync failed for {label}: {rc}"
+            ));
+        }
+        crate::profile::record_stream_sync("cuda_decode_event_elapsed_sync");
+        Ok(elapsed_ms)
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -1238,6 +1260,52 @@ impl Drop for CudaEvent {
 #[cfg(feature = "cuda")]
 fn q8_decode_event_log_enabled() -> bool {
     std::env::var("M40LLM_Q8_DECODE_EVENT_LOG").ok().as_deref() == Some("1")
+        || std::env::var("M40LLM_DECODE_EVENT_LOG").ok().as_deref() == Some("1")
+}
+
+#[cfg(feature = "cuda")]
+static DECODE_EVENT_LOG_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_skip() -> usize {
+    std::env::var("M40LLM_DECODE_EVENT_LOG_SKIP")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0)
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_limit() -> Option<usize> {
+    std::env::var("M40LLM_DECODE_EVENT_LOG_LIMIT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_filter_matches(label: &str) -> bool {
+    match std::env::var("M40LLM_DECODE_EVENT_LOG_FILTER") {
+        Ok(filter) if !filter.is_empty() => label.contains(&filter),
+        _ => true,
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn decode_event_log_should_capture(label: &str) -> bool {
+    if !q8_decode_event_log_enabled() {
+        return false;
+    }
+    if !decode_event_log_filter_matches(label) {
+        return false;
+    }
+    let index = DECODE_EVENT_LOG_COUNT.fetch_add(1, Ordering::Relaxed);
+    let skip = decode_event_log_skip();
+    if index < skip {
+        return false;
+    }
+    match decode_event_log_limit() {
+        Some(limit) => index - skip < limit,
+        None => true,
+    }
 }
 
 #[cfg(feature = "cuda")]
@@ -1259,7 +1327,7 @@ fn q8_decode_tiled_cols() -> i32 {
 
 #[cfg(feature = "cuda")]
 struct Q8DecodeEventDiag {
-    label: &'static str,
+    label: Cow<'static, str>,
     stream: CudaStream,
     start: CudaEvent,
 }
@@ -1267,10 +1335,18 @@ struct Q8DecodeEventDiag {
 #[cfg(feature = "cuda")]
 impl Q8DecodeEventDiag {
     fn start(ctx: &CudaContext, label: &'static str) -> Result<Option<Self>> {
-        if !q8_decode_event_log_enabled() {
+        Self::start_on_stream(ctx, label, q8_decode_event_stream())
+    }
+
+    fn start_dynamic(
+        ctx: &CudaContext,
+        label: impl Into<Cow<'static, str>>,
+        stream: CudaStream,
+    ) -> Result<Option<Self>> {
+        let label = label.into();
+        if !decode_event_log_should_capture(label.as_ref()) {
             return Ok(None);
         }
-        let stream = q8_decode_event_stream();
         let start = ctx.create_event()?;
         start.record(stream)?;
         Ok(Some(Self {
@@ -1280,11 +1356,21 @@ impl Q8DecodeEventDiag {
         }))
     }
 
+    fn start_on_stream(
+        ctx: &CudaContext,
+        label: &'static str,
+        stream: CudaStream,
+    ) -> Result<Option<Self>> {
+        Self::start_dynamic(ctx, Cow::Borrowed(label), stream)
+    }
+
     fn finish(self, ctx: &CudaContext) -> Result<()> {
         let stop = ctx.create_event()?;
         stop.record(self.stream)?;
-        let elapsed_ms = self.start.elapsed_sync(&stop, self.label)?;
-        eprintln!("[cuda-q8-event] {} {:.3} ms", self.label, elapsed_ms);
+        let elapsed_ms = self
+            .start
+            .elapsed_sync_labeled(&stop, self.label.as_ref())?;
+        eprintln!("[cuda-decode-event] {} {:.3} ms", self.label, elapsed_ms);
         Ok(())
     }
 }
@@ -2232,6 +2318,15 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "gemm_f32xf16_gguf_f32_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_gemm_f32xf16_gguf_f32_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2248,6 +2343,10 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("gemm_f32xf16_gguf_f32_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2271,6 +2370,15 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "mlp_gate_up_swiglu_f32xf16_gguf_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2287,6 +2395,10 @@ impl CudaContext {
                 ));
             }
             record_async_kernel("mlp_gate_up_swiglu_f32xf16_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -2319,6 +2431,15 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
+            let diag = Q8DecodeEventDiag::start_on_stream(
+                self,
+                "qkv_f32xf16_gguf_decode",
+                if std::env::var("M40LLM_F16_DECODE_STREAM").ok().as_deref() == Some("decode") {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                },
+            )?;
             let _g = self.inner.lock.lock().unwrap();
             let rc = ffi::m40llm_qkv_f32xf16_gguf_decode_async(
                 self.inner.raw.as_ptr(),
@@ -2341,6 +2462,10 @@ impl CudaContext {
                 return Err(anyhow!("m40llm_qkv_f32xf16_gguf_decode_async failed: {rc}"));
             }
             record_async_kernel("qkv_f32xf16_gguf_decode");
+            drop(_g);
+            if let Some(diag) = diag {
+                diag.finish(self)?;
+            }
             Ok(())
         }
         #[cfg(not(feature = "cuda"))]
@@ -5264,6 +5389,11 @@ impl KVCache {
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        let diag = Q8DecodeEventDiag::start_dynamic(
+            ctx,
+            format!("attention_last_token_f32_gqa seq_len={seq_len}"),
+            CudaStream::Decode,
+        )?;
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
             ffi::m40llm_attention_last_token_f32_gqa_async(
@@ -5282,6 +5412,10 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa");
+        drop(_g);
+        if let Some(diag) = diag {
+            diag.finish(ctx)?;
+        }
         Ok(())
     }
 
@@ -5299,6 +5433,11 @@ impl KVCache {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        let diag = Q8DecodeEventDiag::start_dynamic(
+            ctx,
+            "attention_last_token_f32_gqa_seq_len_dev",
+            CudaStream::Decode,
+        )?;
         let _g = ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
             ffi::m40llm_attention_last_token_f32_gqa_seq_len_dev_async(
@@ -5317,6 +5456,10 @@ impl KVCache {
             ));
         }
         record_async_kernel("attention_last_token_f32_gqa_seq_len_dev");
+        drop(_g);
+        if let Some(diag) = diag {
+            diag.finish(ctx)?;
+        }
         Ok(())
     }
 

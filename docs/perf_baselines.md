@@ -43,6 +43,8 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1573 ms | 30344 ms | 32113 ms | 16.87 | 15.94 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_QKV=1 M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1343 ms | 28277 ms | 29826 ms | 18.11 | 17.17 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | previous row + `M40LLM_FUSED_RESIDUAL_NORM=1` | 44 | 512 | 1344 ms | 28288 ms | 29826 ms | 18.10 | 17.17 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | fused QKV/MLP + fast head128 attention + warp-reduced F16 projections | 44 | 512 | 1278 ms | 22935 ms | 24467 ms | 22.32 | 20.93 | coherent |
+| Qwen2.5-3B F16 | large-model | compressed top8, recent 128 | same as previous row | 44 | 512 | 1352 ms | 30146 ms | 31699 ms | 16.98 | 16.15 | coherent |
 
 Failed/neutral fusion experiment record:
 
@@ -70,6 +72,23 @@ Implementation/diagnostic notes:
   and SwiGLU into one decode kernel. `M40LLM_FUSED_QKV=1` fuses single-token
   Q/K/V GGUF F16 projection and optional Q/K/V f32 bias into one decode kernel.
   Both are opt-in while validation broadens.
+- The Qwen/head128 dense attention path now defaults to a 128-thread
+  warp-reduced kernel that preserves the old kernel's occupancy while reducing
+  per-token block-wide reduction synchronizations; set
+  `M40LLM_ATTN_HEAD128_KERNEL=shared` to force the old shared-score path or
+  `M40LLM_ATTN_HEAD128_KERNEL=warp32` for the lower-occupancy one-warp
+  diagnostic. Late-token event timings at `seq_len=524` improved from roughly
+  `1.14 ms/layer` on the old shared-score kernel to roughly `0.68 ms/layer` on
+  the fast warp-reduced kernel. The single-token GGUF F16 decode projection
+  reductions also now use warp reductions for their final block reduction. The
+  combined exact-prompt result improves from 17.17 to 20.93 E2E tok/s, still far
+  below the 53.06 tok/s target.
+- A compressed exact-old KV row with `recent_window=128`, direct FP16-K/q4-V,
+  and top8 was coherent but slower on this 556-token total-context workload:
+  16.15 E2E tok/s versus 20.93 dense. The compressed selection/direct-attention
+  overhead is not worthwhile for this short comparison prompt; keep dense `off`
+  as the active Ollama-comparison path unless a later compressed attention
+  optimization changes that tradeoff.
 - `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
   post-attention residual add and weighted RMSNorm. It showed a small short-run
   probe improvement, but the full 512-token target run was neutral versus the
