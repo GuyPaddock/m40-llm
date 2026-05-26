@@ -50,6 +50,7 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense-recent, window 384 | same as dense row | 44 | 512 | 1278 ms | 22357 ms | 23832 ms | 22.90 | 21.48 | degraded/repetitive |
 | Qwen2.5-3B Q8_0 | large-model | dense off | fused Q8 QKV/MLP + split-Q-block decode/MLP + shared lm-head argmax | 44 | 512 | 1241 ms | 22738 ms | 24171 ms | 22.52 | 21.18 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense off | previous row + head128 probability reuse in attention V loop | 44 | 512 | 1231 ms | 20991 ms | 22412 ms | 24.39 | 22.85 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | previous row + split-Q-block fused Q8 QKV | 44 | 512 | 1123 ms | 19727 ms | 21030 ms | 25.95 | 24.35 | coherent |
 
 Failed/neutral fusion experiment record:
 
@@ -186,6 +187,14 @@ Implementation/diagnostic notes:
   decode_tps=22.517 total_tps=21.182`, with coherent output. This is the best
   Q8 path so far, but it is still below Ollama's measured `40.81` E2E tok/s and
   far below the `53.06` target.
+- The fused Q8 QKV projection now also honors `M40LLM_Q8_DECODE_SPLIT_QBLOCK=4`.
+  A focused event probe reduced QKV events from roughly `0.14 ms/layer` to
+  roughly `0.069 ms/layer`. The exact 512-token Qwen2.5 Q8_0 comparison prompt
+  improved to `prefill_ms=1123 decode_ms=19727 total_ms=21030
+  decode_tps=25.954 total_tps=24.346`, with coherent output. This remains short
+  of Ollama's measured `40.81` E2E tok/s and the `53.06` target; the next
+  high-impact work is still late-token head128 attention and the remaining
+  fused MLP/down projection cost.
 - Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
   and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
   The runtime now supports Q4_0 projection/embedding dequant plus a narrow

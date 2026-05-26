@@ -1437,6 +1437,161 @@ fn q8_0_mlp_gate_up_split4_matches_baseline() -> Result<()> {
 }
 
 #[test]
+fn q8_0_qkv_split4_matches_baseline() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let k = 2048i32;
+    let (nq, nk, nv) = (257i32, 65i32, 65i32);
+    let a: Vec<f32> = (0..k)
+        .map(|idx| ((idx % 29) as f32 - 14.0) * 0.015625)
+        .collect();
+    let wq: Vec<f32> = (0..nq * k)
+        .map(|idx| ((idx % 31) as f32 - 15.0) * 0.0107421875)
+        .collect();
+    let wk: Vec<f32> = (0..nk * k)
+        .map(|idx| ((idx % 37) as f32 - 18.0) * 0.009765625)
+        .collect();
+    let wv: Vec<f32> = (0..nv * k)
+        .map(|idx| ((idx % 41) as f32 - 20.0) * 0.0087890625)
+        .collect();
+    let bq: Vec<f32> = (0..nq).map(|idx| ((idx % 7) as f32 - 3.0) * 0.01).collect();
+    let bk: Vec<f32> = (0..nk).map(|idx| ((idx % 5) as f32 - 2.0) * 0.01).collect();
+    let bv: Vec<f32> = (0..nv).map(|idx| ((idx % 3) as f32 - 1.0) * 0.01).collect();
+    let wq_q8 = q8_0_gguf_bytes_from_dequantized(&wq, nq as usize, k as usize);
+    let wk_q8 = q8_0_gguf_bytes_from_dequantized(&wk, nk as usize, k as usize);
+    let wv_q8 = q8_0_gguf_bytes_from_dequantized(&wv, nv as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bq_bytes = f32s_to_bytes(&bq);
+    let bk_bytes = f32s_to_bytes(&bk);
+    let bv_bytes = f32s_to_bytes(&bv);
+    let bytes_a = (k * 4) as usize;
+    let bytes_q = (nq * 4) as usize;
+    let bytes_k = (nk * 4) as usize;
+    let bytes_v = (nv * 4) as usize;
+
+    let da = ctx.device_malloc(bytes_a)?;
+    let dwq = ctx.device_malloc(wq_q8.len())?;
+    let dwk = ctx.device_malloc(wk_q8.len())?;
+    let dwv = ctx.device_malloc(wv_q8.len())?;
+    let dbq = ctx.device_malloc(bq_bytes.len())?;
+    let dbk = ctx.device_malloc(bk_bytes.len())?;
+    let dbv = ctx.device_malloc(bv_bytes.len())?;
+    let dq_base = ctx.device_malloc(bytes_q)?;
+    let dk_base = ctx.device_malloc(bytes_k)?;
+    let dv_base = ctx.device_malloc(bytes_v)?;
+    let dq_split = ctx.device_malloc(bytes_q)?;
+    let dk_split = ctx.device_malloc(bytes_k)?;
+    let dv_split = ctx.device_malloc(bytes_v)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(dwq, wq_q8.as_ptr() as *const c_void, wq_q8.len())?;
+        ctx.memcpy_h2d(dwk, wk_q8.as_ptr() as *const c_void, wk_q8.len())?;
+        ctx.memcpy_h2d(dwv, wv_q8.as_ptr() as *const c_void, wv_q8.len())?;
+        ctx.memcpy_h2d(dbq, bq_bytes.as_ptr() as *const c_void, bq_bytes.len())?;
+        ctx.memcpy_h2d(dbk, bk_bytes.as_ptr() as *const c_void, bk_bytes.len())?;
+        ctx.memcpy_h2d(dbv, bv_bytes.as_ptr() as *const c_void, bv_bytes.len())?;
+
+        ctx.qkv_f32xq8_0_gguf_decode_async(
+            da as *const c_void,
+            dwq as *const c_void,
+            dwk as *const c_void,
+            dwv as *const c_void,
+            Some(dbq as *const c_void),
+            Some(dbk as *const c_void),
+            Some(dbv as *const c_void),
+            dq_base,
+            dk_base,
+            dv_base,
+            nq,
+            nk,
+            nv,
+            k,
+        )?;
+        {
+            let _split = EnvRestore::set("M40LLM_Q8_DECODE_SPLIT_QBLOCK", "4");
+            ctx.qkv_f32xq8_0_gguf_decode_async(
+                da as *const c_void,
+                dwq as *const c_void,
+                dwk as *const c_void,
+                dwv as *const c_void,
+                Some(dbq as *const c_void),
+                Some(dbk as *const c_void),
+                Some(dbv as *const c_void),
+                dq_split,
+                dk_split,
+                dv_split,
+                nq,
+                nk,
+                nv,
+                k,
+            )?;
+        }
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let compare = |label: &str, base_ptr, split_ptr, bytes| -> Result<()> {
+        let mut base_bytes = vec![0u8; bytes];
+        let mut split_bytes = vec![0u8; bytes];
+        unsafe {
+            ctx.memcpy_d2h(
+                base_bytes.as_mut_ptr() as *mut c_void,
+                base_ptr as *const c_void,
+                bytes,
+            )?;
+            ctx.memcpy_d2h(
+                split_bytes.as_mut_ptr() as *mut c_void,
+                split_ptr as *const c_void,
+                bytes,
+            )?;
+        }
+        let base = bytes_to_f32s(&base_bytes);
+        let split = bytes_to_f32s(&split_bytes);
+        let mut max_diff = 0.0f32;
+        let mut sum_diff = 0.0f32;
+        for (b, s) in base.iter().zip(split.iter()) {
+            let diff = (b - s).abs();
+            max_diff = max_diff.max(diff);
+            sum_diff += diff;
+        }
+        let mean_diff = sum_diff / base.len() as f32;
+        assert!(
+            max_diff <= 1e-4 && mean_diff <= 1e-5,
+            "q8 split4 QKV {label} mismatch max_diff={max_diff} mean_diff={mean_diff}"
+        );
+        Ok(())
+    };
+    compare("q", dq_base, dq_split, bytes_q)?;
+    compare("k", dk_base, dk_split, bytes_k)?;
+    compare("v", dv_base, dv_split, bytes_v)?;
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(dwq)?;
+        ctx.device_free(dwk)?;
+        ctx.device_free(dwv)?;
+        ctx.device_free(dbq)?;
+        ctx.device_free(dbk)?;
+        ctx.device_free(dbv)?;
+        ctx.device_free(dq_base)?;
+        ctx.device_free(dk_base)?;
+        ctx.device_free(dv_base)?;
+        ctx.device_free(dq_split)?;
+        ctx.device_free(dk_split)?;
+        ctx.device_free(dv_split)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn q8_0_lm_head_argmax_matches_decode_logits_argmax() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

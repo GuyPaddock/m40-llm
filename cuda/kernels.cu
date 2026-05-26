@@ -6960,6 +6960,79 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void qkv_f32xq8_0_gguf_decode_split4_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ Wq,
+        const unsigned char* __restrict__ Wk,
+        const unsigned char* __restrict__ Wv,
+        const float* __restrict__ bq,
+        const float* __restrict__ bk,
+        const float* __restrict__ bv,
+        float* __restrict__ Q,
+        float* __restrict__ Kout,
+        float* __restrict__ Vout,
+        int Nq, int Nk, int Nv, int Kdim) {
+        const int out_col = blockIdx.x;
+        const int tid = threadIdx.x;
+        const int total = Nq + Nk + Nv;
+        if (out_col >= total) return;
+
+        const unsigned char* W = Wq;
+        const float* bias = bq;
+        float* out = Q;
+        int local_col = out_col;
+        if (out_col >= Nq + Nk) {
+            W = Wv;
+            bias = bv;
+            out = Vout;
+            local_col = out_col - Nq - Nk;
+        } else if (out_col >= Nq) {
+            W = Wk;
+            bias = bk;
+            out = Kout;
+            local_col = out_col - Nq;
+        }
+
+        const int qk = 32;
+        const int split = 4;
+        const int vals_per_split = qk / split;
+        const int block_bytes = 34;
+        const int blocks_per_col = Kdim / qk;
+        const int tasks = blocks_per_col * split;
+        float acc = 0.0f;
+        for (int task = tid; task < tasks; task += blockDim.x) {
+            const int block_idx = task / split;
+            const int split_idx = task - block_idx * split;
+            const int q_offset = split_idx * vals_per_split;
+            const int k_base = block_idx * qk + q_offset;
+            const size_t block_base =
+                (static_cast<size_t>(local_col) * blocks_per_col + block_idx) * block_bytes;
+            const float scale = __half2float(*reinterpret_cast<const __half*>(W + block_base));
+            #pragma unroll
+            for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                const int8_t q =
+                    *reinterpret_cast<const int8_t*>(W + block_base + 2 + q_offset + q_idx);
+                acc += A[k_base + q_idx] * (static_cast<float>(q) * scale);
+            }
+        }
+        extern __shared__ float q8_qkv_reduce[];
+        q8_qkv_reduce[tid] = acc;
+        __syncthreads();
+        for (int stride = blockDim.x >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                q8_qkv_reduce[tid] += q8_qkv_reduce[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0) {
+            float value = q8_qkv_reduce[0];
+            if (bias) {
+                value += bias[local_col];
+            }
+            out[local_col] = value;
+        }
+    }
+
     __global__ void mlp_gate_up_swiglu_f32xq4_0_gguf_decode_kernel(
         const float* __restrict__ A,
         const unsigned char* __restrict__ W_gate,
@@ -7382,6 +7455,36 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (!ctx || !d_A_f32 || !d_Wq_q8_0 || !d_Wk_q8_0 || !d_Wv_q8_0 ||
             !d_Q_f32 || !d_K_f32 || !d_V_f32) return -1;
         if (Nq <= 0 || Nk <= 0 || Nv <= 0 || Kdim <= 0 || (Kdim % 32) != 0) return -2;
+        const char* split_env = std::getenv("M40LLM_Q8_DECODE_SPLIT_QBLOCK");
+        if (split_env && std::strcmp(split_env, "4") == 0) {
+            constexpr int threads = 256;
+            const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
+            qkv_f32xq8_0_gguf_decode_split4_kernel<<<
+                Nq + Nk + Nv,
+                threads,
+                shmem,
+                q8_decode_projection_stream(ctx)>>>(
+                reinterpret_cast<const float*>(d_A_f32),
+                reinterpret_cast<const unsigned char*>(d_Wq_q8_0),
+                reinterpret_cast<const unsigned char*>(d_Wk_q8_0),
+                reinterpret_cast<const unsigned char*>(d_Wv_q8_0),
+                reinterpret_cast<const float*>(d_bq_f32),
+                reinterpret_cast<const float*>(d_bk_f32),
+                reinterpret_cast<const float*>(d_bv_f32),
+                reinterpret_cast<float*>(d_Q_f32),
+                reinterpret_cast<float*>(d_K_f32),
+                reinterpret_cast<float*>(d_V_f32),
+                Nq,
+                Nk,
+                Nv,
+                Kdim);
+            cudaError_t err = cudaGetLastError();
+            if (err != cudaSuccess) {
+                fprintf(stderr, "qkv_f32xq8_0_gguf_decode_split4 kernel launch error: %s\n", cudaGetErrorString(err));
+                return -3;
+            }
+            return 0;
+        }
         const int threads = q8_decode_threads_for_k(Kdim);
         const size_t shmem = static_cast<size_t>(threads) * sizeof(float);
         qkv_f32xq8_0_gguf_decode_kernel<<<
