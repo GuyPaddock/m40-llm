@@ -485,8 +485,8 @@ impl LoadedModel {
         }
         let compression = runtime_config();
         if compression.mode == KvCompressMode::DenseRecentOnly {
-            if head_dim != 64 {
-                anyhow::bail!("dense-recent-only requires head_dim=64");
+            if head_dim != 64 && head_dim != 128 {
+                anyhow::bail!("dense-recent-only requires head_dim=64 or head_dim=128");
             }
             #[cfg(feature = "cuda")]
             unsafe {

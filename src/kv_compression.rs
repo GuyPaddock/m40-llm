@@ -212,8 +212,16 @@ impl KvCompressionConfig {
         }
         match self.mode {
             KvCompressMode::Off => Ok(()),
-            KvCompressMode::DenseRecentOnly
-            | KvCompressMode::RecentOnly
+            KvCompressMode::DenseRecentOnly => {
+                if head_dim != 64 && head_dim != 128 {
+                    anyhow::bail!(
+                        "dense-recent-only requires head_dim=64 or head_dim=128, got head_dim={}",
+                        head_dim
+                    );
+                }
+                Ok(())
+            }
+            KvCompressMode::RecentOnly
             | KvCompressMode::BlockSummary
             | KvCompressMode::BlockSelectLossy => {
                 if head_dim != 64 {

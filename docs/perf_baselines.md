@@ -45,12 +45,16 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense off | previous row + `M40LLM_FUSED_RESIDUAL_NORM=1` | 44 | 512 | 1344 ms | 28288 ms | 29826 ms | 18.10 | 17.17 | coherent |
 | Qwen2.5-3B F16 | large-model | dense off | fused QKV/MLP + fast head128 attention + warp-reduced F16 projections | 44 | 512 | 1278 ms | 22935 ms | 24467 ms | 22.32 | 20.93 | coherent |
 | Qwen2.5-3B F16 | large-model | compressed top8, recent 128 | same as previous row | 44 | 512 | 1352 ms | 30146 ms | 31699 ms | 16.98 | 16.15 | coherent |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 128 | same as dense row | 44 | 512 | 1278 ms | 18739 ms | 20211 ms | 27.32 | 25.33 | degraded/repetitive |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 256 | same as dense row | 44 | 512 | 1279 ms | 20950 ms | 22426 ms | 24.44 | 22.83 | degraded/repetitive |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 384 | same as dense row | 44 | 512 | 1278 ms | 22357 ms | 23832 ms | 22.90 | 21.48 | degraded/repetitive |
 
 Failed/neutral fusion experiment record:
 
 | Experiment | Preserved in commit | Removed in commit | Probe result | Target result | Decision |
 | --- | --- | --- | --- | --- | --- |
 | `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
+| `M40LLM_F16_LM_HEAD_ARGMAX=1` greedy-only F16 lm-head argmax | current diagnostic | n/a | 64-token Qwen2.5 F16 probe had unchanged decode rate: `decode_ms=2174 decode_tps=29.44`; event timing was `~3.09 ms` versus the existing lm-head projection around `~2.8 ms` | Not run on the 512-token target because the short probe and event timing showed no gain | Keep diagnostic/off by default; full-logits plus argmax remains faster |
 | `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
 | Qwen2.5-3B Q4_0 GGUF projection support | current Q4 support commit | n/a | 32-token Qwen2.5 Q4_0 probe generated coherent text but was slow: `prefill_ms=5912 decode_ms=2946 total_ms=9053 decode_tps=10.86 total_tps=3.54` | Not run on the 512-token target because the short probe is below the Q8 short probe and far below the F16 best | Keep as model-format compatibility; not a speed path toward the Ollama target |
 
@@ -89,6 +93,15 @@ Implementation/diagnostic notes:
   overhead is not worthwhile for this short comparison prompt; keep dense `off`
   as the active Ollama-comparison path unless a later compressed attention
   optimization changes that tradeoff.
+- `dense-recent-only` now supports Qwen/head128 as an explicit sliding-window
+  diagnostic. It improves token rate on this prompt, but all tested windows
+  regressed output quality: window 128 reached 25.33 E2E tok/s but collapsed
+  into repeated early sections; windows 256 and 384 were slower and still
+  repetitive. Do not use dense-recent as the active Ollama-comparison path.
+- `M40LLM_F16_LM_HEAD_ARGMAX=1` fuses the F16 lm-head projection with greedy
+  argmax, but it is slower than materializing logits and using the existing
+  argmax path on M40. The diagnostic kernel measured about `3.09 ms`, while the
+  current lm-head projection event is about `2.8 ms`.
 - `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
   post-attention residual add and weighted RMSNorm. It showed a small short-run
   probe improvement, but the full 512-token target run was neutral versus the

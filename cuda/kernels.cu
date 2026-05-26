@@ -452,6 +452,56 @@ extern "C" {
         }
     }
 
+    __global__ void f16_lm_head_argmax_partials_kernel(
+        const float* __restrict__ A,
+        const __half* __restrict__ B,
+        float* __restrict__ partial_values,
+        uint32_t* __restrict__ partial_indices,
+        int N,
+        int K) {
+        constexpr int warps_per_block = 8;
+        __shared__ float warp_values[warps_per_block];
+        __shared__ uint32_t warp_indices[warps_per_block];
+        const int lane = threadIdx.x & 31;
+        const int warp = threadIdx.x >> 5;
+        const int col = blockIdx.x * warps_per_block + warp;
+        float acc = -FLT_MAX;
+        uint32_t idx = 0xffffffffu;
+        if (col < N) {
+            acc = 0.0f;
+            idx = static_cast<uint32_t>(col);
+            const size_t col_base = static_cast<size_t>(col) * static_cast<size_t>(K);
+            for (int kk = lane * 2; kk < K; kk += 64) {
+                const __half2 w2 = *reinterpret_cast<const __half2*>(B + col_base + kk);
+                const float2 wf = __half22float2(w2);
+                acc += A[kk] * wf.x + A[kk + 1] * wf.y;
+            }
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            acc += __shfl_down_sync(0xffffffffu, acc, offset);
+        }
+        if (lane == 0) {
+            warp_values[warp] = acc;
+            warp_indices[warp] = idx;
+        }
+        __syncthreads();
+        if (threadIdx.x == 0) {
+            float best = warp_values[0];
+            uint32_t best_idx = warp_indices[0];
+            for (int i = 1; i < warps_per_block; ++i) {
+                const float other = warp_values[i];
+                const uint32_t other_idx = warp_indices[i];
+                if (other > best || (other == best && other_idx < best_idx)) {
+                    best = other;
+                    best_idx = other_idx;
+                }
+            }
+            partial_values[blockIdx.x] = best;
+            partial_indices[blockIdx.x] = best_idx;
+        }
+    }
+
     static size_t m40llm_strnlen_host(const char* s, size_t max_len) {
         size_t n = 0;
         while (n < max_len && s[n] != '\0') {
@@ -558,6 +608,46 @@ extern "C" {
             stream>>>(
             reinterpret_cast<const float*>(d_A_f32),
             reinterpret_cast<const unsigned char*>(d_B_q8_0),
+            partial_values,
+            partial_indices,
+            N,
+            K);
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) return -3;
+        q8_0_lm_head_argmax_reduce_kernel<<<1, 256, 0, stream>>>(
+            partial_values,
+            partial_indices,
+            partial_count,
+            reinterpret_cast<uint32_t*>(d_out_u32));
+        err = cudaGetLastError();
+        if (err != cudaSuccess) return -5;
+        return 0;
+    }
+
+    int m40llm_f16_lm_head_argmax_async(
+        M40llmCudaContext* ctx,
+        const void* d_A_f32,
+        const void* d_B_f16,
+        void* d_scratch_f32,
+        void* d_out_u32,
+        int N,
+        int K,
+        uint32_t stream_kind) {
+        if (!ctx || !d_A_f32 || !d_B_f16 || !d_scratch_f32 || !d_out_u32) return -1;
+        if (N <= 0 || K <= 0 || (K % 2) != 0) return -2;
+        cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -4;
+        constexpr int warps_per_block = 8;
+        const uint32_t partial_count = static_cast<uint32_t>((N + warps_per_block - 1) / warps_per_block);
+        float* partial_values = reinterpret_cast<float*>(d_scratch_f32);
+        uint32_t* partial_indices = reinterpret_cast<uint32_t*>(partial_values + partial_count);
+        f16_lm_head_argmax_partials_kernel<<<
+            partial_count,
+            warps_per_block * 32,
+            0,
+            stream>>>(
+            reinterpret_cast<const float*>(d_A_f32),
+            reinterpret_cast<const __half*>(d_B_f16),
             partial_values,
             partial_indices,
             N,
@@ -2130,6 +2220,100 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 acc += p * __half2float(V[base + d]);
             }
             out_h[d] = acc;
+        }
+    }
+
+    __global__ void attention_last_token_gqa_dense_recent_head128_fast_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        float* __restrict__ Out) {
+        const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
+        const uint32_t window_start = seq_len - window_len;
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* warp_reduce = scores + window_len;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t lane = tid & 31u;
+        const uint32_t warp = tid >> 5;
+        if (qh_idx >= q_heads || window_len == 0) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score = -FLT_MAX;
+        for (uint32_t i = 0; i < window_len; ++i) {
+            const uint32_t t = window_start + i;
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            if (tid < head_dim) {
+                dot = qh[tid] * __half2float(K[base + tid]);
+            }
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                dot += __shfl_down_sync(0xffffffffu, dot, offset);
+            }
+            if (lane == 0u) {
+                warp_reduce[warp] = dot;
+            }
+            __syncthreads();
+
+            if (tid == 0u) {
+                const float score =
+                    (warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3])
+                    * inv_sqrt;
+                scores[i] = score;
+                if (score > max_score) max_score = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0u) warp_reduce[0] = max_score;
+        __syncthreads();
+        max_score = warp_reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t i = tid; i < window_len; i += blockDim.x) {
+            denom_part += expf(scores[i] - max_score);
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            denom_part += __shfl_down_sync(0xffffffffu, denom_part, offset);
+        }
+        if (lane == 0u) {
+            warp_reduce[warp] = denom_part;
+        }
+        __syncthreads();
+        if (tid == 0u) {
+            warp_reduce[0] = warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3];
+        }
+        __syncthreads();
+        const float denom = warp_reduce[0] > 0.0f ? warp_reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        if (tid < head_dim) {
+            float acc = 0.0f;
+            for (uint32_t i = 0; i < window_len; ++i) {
+                const uint32_t t = window_start + i;
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[i] - max_score) / denom;
+                acc += p * __half2float(V[base + tid]);
+            }
+            out_h[tid] = acc;
         }
     }
 
@@ -4776,24 +4960,39 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (seq_id >= kv->max_batch_size) return -2;
         if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
-        if (kv->head_dim != 64) return -5;
+        if (kv->head_dim != 64 && kv->head_dim != 128) return -5;
         if (recent_window == 0) return -6;
         const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
         const int blocks = (int)q_heads;
-        const int threads = 256;
+        const int threads = kv->head_dim == 128 ? 128 : 256;
         const size_t shmem = ((size_t)window_len + (size_t)threads) * sizeof(float);
-        attention_last_token_gqa_dense_recent_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
-            reinterpret_cast<const __half*>(kv->d_k),
-            reinterpret_cast<const __half*>(kv->d_v),
-            kv->max_seq_len,
-            q_heads,
-            kv->num_heads,
-            seq_id,
-            reinterpret_cast<const float*>(q_dev_f32),
-            seq_len,
-            recent_window,
-            reinterpret_cast<float*>(out_dev_f32)
-        );
+        if (kv->head_dim == 64) {
+            attention_last_token_gqa_dense_recent_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                reinterpret_cast<const __half*>(kv->d_k),
+                reinterpret_cast<const __half*>(kv->d_v),
+                kv->max_seq_len,
+                q_heads,
+                kv->num_heads,
+                seq_id,
+                reinterpret_cast<const float*>(q_dev_f32),
+                seq_len,
+                recent_window,
+                reinterpret_cast<float*>(out_dev_f32)
+            );
+        } else {
+            attention_last_token_gqa_dense_recent_head128_fast_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                reinterpret_cast<const __half*>(kv->d_k),
+                reinterpret_cast<const __half*>(kv->d_v),
+                kv->max_seq_len,
+                q_heads,
+                kv->num_heads,
+                seq_id,
+                reinterpret_cast<const float*>(q_dev_f32),
+                seq_len,
+                recent_window,
+                reinterpret_cast<float*>(out_dev_f32)
+            );
+        }
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) return -7;
         return 0;

@@ -124,7 +124,13 @@ batched decode path before touching persistent decode or large-model fused-dequa
   0.68 ms/layer. A compressed exact-old top8 row with `recent_window=128` was
   coherent but slower on this short 556-token total-context prompt
   (31.70 s total, 16.15 E2E tok/s), so dense `off` remains the active
-  Ollama-comparison path for this prompt.
+  Ollama-comparison path for this prompt. Qwen/head128 `dense-recent-only`
+  sliding-window attention is now supported as a diagnostic and improves raw
+  rate on this prompt (window 128: 20.21 s total, 25.33 E2E tok/s), but windows
+  128/256/384 all produced repetitive/degraded output, so it is not acceptable
+  as the active comparison path. `M40LLM_F16_LM_HEAD_ARGMAX=1` is also
+  diagnostic-only: it measured roughly 3.09 ms for the F16 lm-head argmax path
+  versus roughly 2.8 ms for the existing lm-head projection plus argmax.
   An opt-in `M40LLM_FUSED_RESIDUAL_NORM=1` experiment fused the post-attention
   residual add with weighted RMSNorm; it was neutral on the same 512-token
   target run (29.83 s total, 17.17 E2E tok/s), so preserve it only as reference

@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};
 use m40_llm::gguf;
 use m40_llm::infer::LoadedModel;
-use m40_llm::kv_compression::KvCompressionConfig;
+use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 use std::path::{Path, PathBuf};
 
 const DEFAULT_QWEN_F16: &str =
@@ -76,7 +76,13 @@ fn load_model(path: &Path, context_bound: u32, kv: &KvCompressionConfig) -> Resu
     let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)
         .with_context(|| format!("load model from {}", path.display()))?;
     let context_tokens = context_bound.min(model.model_config.context_length);
-    if kv.mode.is_enabled() {
+    if matches!(
+        kv.mode,
+        KvCompressMode::RecentOnly
+            | KvCompressMode::BlockSummary
+            | KvCompressMode::BlockSelectLossy
+    ) || kv.uses_compressed_exact_old_backing()
+    {
         model
             .allocate_compressed_kv_cache_for_layers(context_tokens, kv)
             .with_context(|| {
@@ -93,9 +99,12 @@ fn load_model(path: &Path, context_bound: u32, kv: &KvCompressionConfig) -> Resu
 fn throughput_kv_config() -> KvCompressionConfig {
     let mut kv = match std::env::var("M40LLM_QWEN_THROUGHPUT_KV").ok().as_deref() {
         Some("default") | Some("compressed") => KvCompressionConfig::default(),
+        Some("dense-recent") | Some("dense-recent-only") => {
+            KvCompressionConfig::for_mode(KvCompressMode::DenseRecentOnly)
+        }
         Some("off") | Some("dense") | None => KvCompressionConfig::dense_reference(),
         Some(other) => panic!(
-            "unsupported M40LLM_QWEN_THROUGHPUT_KV={other}; use off/dense or default/compressed"
+            "unsupported M40LLM_QWEN_THROUGHPUT_KV={other}; use off/dense, dense-recent, or default/compressed"
         ),
     };
     if let Ok(value) = std::env::var("M40LLM_QWEN_THROUGHPUT_RECENT_WINDOW") {
