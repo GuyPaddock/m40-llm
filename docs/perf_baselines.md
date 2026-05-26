@@ -48,6 +48,7 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B F16 | large-model | dense-recent, window 128 | same as dense row | 44 | 512 | 1278 ms | 18739 ms | 20211 ms | 27.32 | 25.33 | degraded/repetitive |
 | Qwen2.5-3B F16 | large-model | dense-recent, window 256 | same as dense row | 44 | 512 | 1279 ms | 20950 ms | 22426 ms | 24.44 | 22.83 | degraded/repetitive |
 | Qwen2.5-3B F16 | large-model | dense-recent, window 384 | same as dense row | 44 | 512 | 1278 ms | 22357 ms | 23832 ms | 22.90 | 21.48 | degraded/repetitive |
+| Qwen2.5-3B Q8_0 | large-model | dense off | fused Q8 QKV/MLP + split-Q-block decode/MLP + shared lm-head argmax | 44 | 512 | 1241 ms | 22738 ms | 24171 ms | 22.52 | 21.18 | coherent |
 
 Failed/neutral fusion experiment record:
 
@@ -170,6 +171,19 @@ Implementation/diagnostic notes:
   `0.89-0.97 ms` per layer. The additional shared-memory load/synchronization
   and reduced per-column parallelism outweighed activation reuse, so this
   experiment should be removed after preserving the result.
+- `M40LLM_Q8_DECODE_SPLIT_QBLOCK=4` and
+  `M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK=4` split each 32-value Q8_0 block across
+  four thread tasks instead of assigning the whole quant block to one thread.
+  This better matches the useful part of Ollama/llama.cpp's MMVQ structure on
+  M40 without relying on native DP4A. CUDA parity passes against the existing
+  Q8 decode and fused Q8 gate/up kernels. On the Ollama Q8_0 blob, the bounded
+  16-token probe improved from `decode_tps=11.985` with shared lm-head argmax
+  alone to `decode_tps=33.264`; MLP down events dropped to roughly `0.20 ms`,
+  and fused gate/up events dropped to roughly `0.33 ms`. The exact 512-token
+  comparison prompt reached `prefill_ms=1241 decode_ms=22738 total_ms=24171
+  decode_tps=22.517 total_tps=21.182`, with coherent output. This is the best
+  Q8 path so far, but it is still below Ollama's measured `40.81` E2E tok/s and
+  far below the `53.06` target.
 - Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
   and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
   The runtime now supports Q4_0 projection/embedding dequant plus a narrow

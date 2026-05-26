@@ -7,6 +7,28 @@ use m40_llm::cuda::CudaStream;
 // CudaContext not used directly in this test
 use std::ffi::c_void;
 
+struct EnvRestore {
+    key: &'static str,
+    previous: Option<std::ffi::OsString>,
+}
+
+impl EnvRestore {
+    fn set(key: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, previous }
+    }
+}
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
+
 fn f32s_to_bytes(vals: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(vals.len() * 4);
     for &v in vals {
@@ -1221,6 +1243,195 @@ fn gemm_f32xq8_0_decode_tiled2_matches_decode_vocab_shape() -> Result<()> {
         ctx.device_free(db)?;
         ctx.device_free(dc_decode)?;
         ctx.device_free(dc_tiled)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn gemm_f32xq8_0_decode_split4_matches_decode() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (m, k, n) = (1i32, 2048i32, 1025i32);
+    let a: Vec<f32> = (0..m * k)
+        .map(|idx| ((idx % 17) as f32 - 8.0) * 0.03125)
+        .collect();
+    let b: Vec<f32> = (0..n * k)
+        .map(|idx| ((idx % 23) as f32 - 11.0) * 0.015625)
+        .collect();
+    let b_q8 = q8_0_gguf_bytes_from_dequantized(&b, n as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (m * k * 4) as usize;
+    let bytes_c = (m * n * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let db = ctx.device_malloc(b_q8.len())?;
+    let dc_decode = ctx.device_malloc(bytes_c)?;
+    let dc_split = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(db, b_q8.as_ptr() as *const c_void, b_q8.len())?;
+        ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+            da as *const c_void,
+            db as *const c_void,
+            dc_decode,
+            m,
+            n,
+            k,
+        )?;
+        {
+            let _split = EnvRestore::set("M40LLM_Q8_DECODE_SPLIT_QBLOCK", "4");
+            ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+                da as *const c_void,
+                db as *const c_void,
+                dc_split,
+                m,
+                n,
+                k,
+            )?;
+        }
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut decode_bytes = vec![0u8; bytes_c];
+    let mut split_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            decode_bytes.as_mut_ptr() as *mut c_void,
+            dc_decode as *const c_void,
+            decode_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            split_bytes.as_mut_ptr() as *mut c_void,
+            dc_split as *const c_void,
+            split_bytes.len(),
+        )?;
+    }
+    let decode = bytes_to_f32s(&decode_bytes);
+    let split = bytes_to_f32s(&split_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (d, s) in decode.iter().zip(split.iter()) {
+        let diff = (d - s).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / decode.len() as f32;
+    assert!(
+        max_diff <= 1e-5 && mean_diff <= 1e-6,
+        "split4 decode mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(db)?;
+        ctx.device_free(dc_decode)?;
+        ctx.device_free(dc_split)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn q8_0_mlp_gate_up_split4_matches_baseline() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+    let (k, h) = (2048i32, 257i32);
+    let a: Vec<f32> = (0..k)
+        .map(|idx| ((idx % 31) as f32 - 15.0) * 0.01953125)
+        .collect();
+    let gate: Vec<f32> = (0..h * k)
+        .map(|idx| ((idx % 37) as f32 - 18.0) * 0.01171875)
+        .collect();
+    let up: Vec<f32> = (0..h * k)
+        .map(|idx| ((idx % 41) as f32 - 20.0) * 0.0107421875)
+        .collect();
+    let gate_q8 = q8_0_gguf_bytes_from_dequantized(&gate, h as usize, k as usize);
+    let up_q8 = q8_0_gguf_bytes_from_dequantized(&up, h as usize, k as usize);
+
+    let a_bytes = f32s_to_bytes(&a);
+    let bytes_a = (k * 4) as usize;
+    let bytes_c = (h * 4) as usize;
+    let da = ctx.device_malloc(bytes_a)?;
+    let d_gate = ctx.device_malloc(gate_q8.len())?;
+    let d_up = ctx.device_malloc(up_q8.len())?;
+    let d_baseline = ctx.device_malloc(bytes_c)?;
+    let d_split = ctx.device_malloc(bytes_c)?;
+
+    unsafe {
+        ctx.memcpy_h2d(da, a_bytes.as_ptr() as *const c_void, bytes_a)?;
+        ctx.memcpy_h2d(d_gate, gate_q8.as_ptr() as *const c_void, gate_q8.len())?;
+        ctx.memcpy_h2d(d_up, up_q8.as_ptr() as *const c_void, up_q8.len())?;
+        ctx.mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+            da as *const c_void,
+            d_gate as *const c_void,
+            d_up as *const c_void,
+            d_baseline,
+            h,
+            k,
+        )?;
+        {
+            let _split = EnvRestore::set("M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK", "4");
+            ctx.mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
+                da as *const c_void,
+                d_gate as *const c_void,
+                d_up as *const c_void,
+                d_split,
+                h,
+                k,
+            )?;
+        }
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        ctx.synchronize_stream(CudaStream::Decode)?;
+    }
+
+    let mut baseline_bytes = vec![0u8; bytes_c];
+    let mut split_bytes = vec![0u8; bytes_c];
+    unsafe {
+        ctx.memcpy_d2h(
+            baseline_bytes.as_mut_ptr() as *mut c_void,
+            d_baseline as *const c_void,
+            baseline_bytes.len(),
+        )?;
+        ctx.memcpy_d2h(
+            split_bytes.as_mut_ptr() as *mut c_void,
+            d_split as *const c_void,
+            split_bytes.len(),
+        )?;
+    }
+    let baseline = bytes_to_f32s(&baseline_bytes);
+    let split = bytes_to_f32s(&split_bytes);
+    let mut max_diff = 0.0f32;
+    let mut sum_diff = 0.0f32;
+    for (b, s) in baseline.iter().zip(split.iter()) {
+        let diff = (b - s).abs();
+        max_diff = max_diff.max(diff);
+        sum_diff += diff;
+    }
+    let mean_diff = sum_diff / baseline.len() as f32;
+    assert!(
+        max_diff <= 1e-4 && mean_diff <= 1e-5,
+        "q8 split4 MLP mismatch max_diff={max_diff} mean_diff={mean_diff}"
+    );
+
+    unsafe {
+        ctx.device_free(da)?;
+        ctx.device_free(d_gate)?;
+        ctx.device_free(d_up)?;
+        ctx.device_free(d_baseline)?;
+        ctx.device_free(d_split)?;
     }
     Ok(())
 }
