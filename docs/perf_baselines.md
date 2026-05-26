@@ -51,6 +51,10 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B Q8_0 | large-model | dense off | fused Q8 QKV/MLP + split-Q-block decode/MLP + shared lm-head argmax | 44 | 512 | 1241 ms | 22738 ms | 24171 ms | 22.52 | 21.18 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense off | previous row + head128 probability reuse in attention V loop | 44 | 512 | 1231 ms | 20991 ms | 22412 ms | 24.39 | 22.85 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense off | previous row + split-Q-block fused Q8 QKV | 44 | 512 | 1123 ms | 19727 ms | 21030 ms | 25.95 | 24.35 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 128 | previous row + `M40LLM_DENSE_ATTENTION_SINK_TOKENS=32` | 44 | 512 | 1132 ms | 17935 ms | 19258 ms | 28.55 | 26.59 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 64 | same as previous row with window 64 | 44 | 512 | 1136 ms | 16640 ms | 18028 ms | 30.77 | 28.40 | repetitive/drifts |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 32 | same as previous row with window 32 | 44 | 512 | 1133 ms | 15920 ms | 17232 ms | 32.16 | 29.71 | repetitive |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 64/window 64 | same as previous row with sink 64 | 44 | 512 | 1139 ms | 17336 ms | 18660 ms | 29.53 | 27.44 | repetitive/drifts |
 
 Failed/neutral fusion experiment record:
 
@@ -196,6 +200,14 @@ Implementation/diagnostic notes:
   of Ollama's measured `40.81` E2E tok/s and the `53.06` target; the next
   high-impact work is still late-token head128 attention and the remaining
   fused MLP/down projection cost.
+- `M40LLM_DENSE_ATTENTION_SINK_TOKENS=N` is an opt-in dense-recent diagnostic
+  for head128 attention. It attends to the first `N` tokens plus the configured
+  recent window, avoiding the pure recent-only failure mode where the prompt
+  instruction disappears. On the exact Qwen2.5 Q8_0 512-token comparison, sink
+  32 plus a 128-token recent window is coherent and improves to `26.586` E2E
+  tok/s. Smaller windows reach `28.400` to `29.712` E2E tok/s but introduce
+  repetition/drift, so this is useful as a speed/quality diagnostic rather than
+  a credible default path toward the Ollama target.
 - Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
   and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
   The runtime now supports Q4_0 projection/embedding dequant plus a narrow

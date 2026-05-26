@@ -2426,6 +2426,104 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void attention_last_token_gqa_dense_sink_recent_head128_fast_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len,
+        uint32_t q_heads,
+        uint32_t kv_heads,
+        uint32_t seq_id,
+        const float* __restrict__ Q,
+        uint32_t seq_len,
+        uint32_t sink_tokens,
+        uint32_t recent_window,
+        float* __restrict__ Out) {
+        const uint32_t sink_count = sink_tokens < seq_len ? sink_tokens : seq_len;
+        const uint32_t recent_start_raw = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = recent_start_raw > sink_count ? recent_start_raw : sink_count;
+        const uint32_t recent_count = seq_len > recent_start ? seq_len - recent_start : 0;
+        const uint32_t candidate_count = sink_count + recent_count;
+        extern __shared__ float shmem[];
+        float* scores = shmem;
+        float* warp_reduce = scores + candidate_count;
+
+        const uint32_t qh_idx = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t lane = tid & 31u;
+        const uint32_t warp = tid >> 5;
+        if (qh_idx >= q_heads || candidate_count == 0) return;
+
+        const uint32_t group = q_heads / kv_heads;
+        const uint32_t kvh_idx = qh_idx / group;
+        const uint32_t head_dim = 128;
+        const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
+        const float inv_sqrt = 0.08838834764831845f;
+        const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
+
+        float max_score = -FLT_MAX;
+        for (uint32_t i = 0; i < candidate_count; ++i) {
+            const uint32_t t = i < sink_count ? i : recent_start + (i - sink_count);
+            const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                               + (size_t)kvh_idx * (size_t)head_dim;
+            float dot = 0.0f;
+            if (tid < head_dim) {
+                dot = qh[tid] * __half2float(K[base + tid]);
+            }
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                dot += __shfl_down_sync(0xffffffffu, dot, offset);
+            }
+            if (lane == 0u) {
+                warp_reduce[warp] = dot;
+            }
+            __syncthreads();
+
+            if (tid == 0u) {
+                const float score =
+                    (warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3])
+                    * inv_sqrt;
+                scores[i] = score;
+                if (score > max_score) max_score = score;
+            }
+            __syncthreads();
+        }
+
+        if (tid == 0u) warp_reduce[0] = max_score;
+        __syncthreads();
+        max_score = warp_reduce[0];
+
+        float denom_part = 0.0f;
+        for (uint32_t i = tid; i < candidate_count; i += blockDim.x) {
+            denom_part += expf(scores[i] - max_score);
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            denom_part += __shfl_down_sync(0xffffffffu, denom_part, offset);
+        }
+        if (lane == 0u) {
+            warp_reduce[warp] = denom_part;
+        }
+        __syncthreads();
+        if (tid == 0u) {
+            warp_reduce[0] = warp_reduce[0] + warp_reduce[1] + warp_reduce[2] + warp_reduce[3];
+        }
+        __syncthreads();
+        const float denom = warp_reduce[0] > 0.0f ? warp_reduce[0] : 1.0f;
+
+        float* out_h = Out + (size_t)qh_idx * (size_t)head_dim;
+        if (tid < head_dim) {
+            float acc = 0.0f;
+            for (uint32_t i = 0; i < candidate_count; ++i) {
+                const uint32_t t = i < sink_count ? i : recent_start + (i - sink_count);
+                const size_t base = ((size_t)seq_id * (size_t)max_seq_len + (size_t)t) * elems_per_token
+                                   + (size_t)kvh_idx * (size_t)head_dim;
+                const float p = expf(scores[i] - max_score) / denom;
+                acc += p * __half2float(V[base + tid]);
+            }
+            out_h[tid] = acc;
+        }
+    }
+
     __global__ void attention_last_token_gqa_batched_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -5072,9 +5170,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (kv->head_dim != 64 && kv->head_dim != 128) return -5;
         if (recent_window == 0) return -6;
         const uint32_t window_len = seq_len < recent_window ? seq_len : recent_window;
+        const char* sink_env = getenv("M40LLM_DENSE_ATTENTION_SINK_TOKENS");
+        const uint32_t sink_tokens = sink_env ? (uint32_t)strtoul(sink_env, nullptr, 10) : 0u;
         const int blocks = (int)q_heads;
         const int threads = kv->head_dim == 128 ? 128 : 256;
-        const size_t shmem = ((size_t)window_len + (size_t)threads) * sizeof(float);
+        const uint32_t sink_count = sink_tokens < seq_len ? sink_tokens : seq_len;
+        const uint32_t recent_start_raw = seq_len > recent_window ? seq_len - recent_window : 0;
+        const uint32_t recent_start = recent_start_raw > sink_count ? recent_start_raw : sink_count;
+        const uint32_t candidate_count = sink_count + (seq_len > recent_start ? seq_len - recent_start : 0);
+        const size_t score_count = (kv->head_dim == 128 && sink_tokens > 0) ? candidate_count : window_len;
+        const size_t shmem = (score_count + (size_t)threads) * sizeof(float);
         if (kv->head_dim == 64) {
             attention_last_token_gqa_dense_recent_head64_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
                 reinterpret_cast<const __half*>(kv->d_k),
@@ -5085,6 +5190,20 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                 seq_id,
                 reinterpret_cast<const float*>(q_dev_f32),
                 seq_len,
+                recent_window,
+                reinterpret_cast<float*>(out_dev_f32)
+            );
+        } else if (sink_tokens > 0) {
+            attention_last_token_gqa_dense_sink_recent_head128_fast_kernel<<<blocks, threads, shmem, ctx->decode_stream>>>(
+                reinterpret_cast<const __half*>(kv->d_k),
+                reinterpret_cast<const __half*>(kv->d_v),
+                kv->max_seq_len,
+                q_heads,
+                kv->num_heads,
+                seq_id,
+                reinterpret_cast<const float*>(q_dev_f32),
+                seq_len,
+                sink_tokens,
                 recent_window,
                 reinterpret_cast<float*>(out_dev_f32)
             );
