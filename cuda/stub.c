@@ -47,6 +47,9 @@ int m40llm_argmax_f32_async(M40llmCudaContext* ctx, const void* d_values_f32, ui
 int m40llm_q8_0_lm_head_argmax_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q8_0, void* d_scratch_f32, void* d_out_u32, int N, int K, uint32_t stream_kind) {
     (void)ctx; (void)d_A_f32; (void)d_B_q8_0; (void)d_scratch_f32; (void)d_out_u32; (void)N; (void)K; (void)stream_kind; return -1;
 }
+int m40llm_q8_0_lm_head_argmax_shared_a_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q8_0, void* d_scratch_f32, void* d_out_u32, int N, int K, uint32_t stream_kind) {
+    (void)ctx; (void)d_A_f32; (void)d_B_q8_0; (void)d_scratch_f32; (void)d_out_u32; (void)N; (void)K; (void)stream_kind; return -1;
+}
 int m40llm_f16_lm_head_argmax_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f16, void* d_scratch_f32, void* d_out_u32, int N, int K, uint32_t stream_kind) {
     (void)ctx; (void)d_A_f32; (void)d_B_f16; (void)d_scratch_f32; (void)d_out_u32; (void)N; (void)K; (void)stream_kind; return -1;
 }

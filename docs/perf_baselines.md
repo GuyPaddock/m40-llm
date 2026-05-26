@@ -55,7 +55,9 @@ Failed/neutral fusion experiment record:
 | --- | --- | --- | --- | --- | --- |
 | `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
 | `M40LLM_F16_LM_HEAD_ARGMAX=1` greedy-only F16 lm-head argmax | current diagnostic | n/a | 64-token Qwen2.5 F16 probe had unchanged decode rate: `decode_ms=2174 decode_tps=29.44`; event timing was `~3.09 ms` versus the existing lm-head projection around `~2.8 ms` | Not run on the 512-token target because the short probe and event timing showed no gain | Keep diagnostic/off by default; full-logits plus argmax remains faster |
+| llama.cpp-style Q8_1 activation dot for Q8_0 weights | n/a | n/a | Source audit showed llama.cpp quantized matvec paths use Q8_1 activations and DP4A-style int8 dot products, but M40/sm_52 has no native `__dp4a`; an M40-only scalar-int8 diagnostic prototype measured `7.289 ms` for 1x2048x257, while the current f32xQ8_0 decode kernel measured `0.130 ms` for 1x2048x2048 | Not run on the 512-token target because the primitive was orders of magnitude slower on M40 | Do not pursue Q8_1 activation dot without a Maxwell-specific vectorization strategy; no llama.cpp code was copied |
 | `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
+| `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` shared-activation Q8 lm-head argmax | current diagnostic | n/a | 16-token Ollama-blob Qwen2.5 Q8_0 probe cut lm-head argmax event time from roughly `7.4 ms` to `3.43 ms`, but only improved total short-run decode from about `8.1` to `8.51 tok/s` | Not run on the 512-token target because layer projection cost still dominates and the short probe remains far below target | Keep diagnostic/off by default; useful kernel evidence, not sufficient for the Ollama target |
 | Qwen2.5-3B Q4_0 GGUF projection support | current Q4 support commit | n/a | 32-token Qwen2.5 Q4_0 probe generated coherent text but was slow: `prefill_ms=5912 decode_ms=2946 total_ms=9053 decode_tps=10.86 total_tps=3.54` | Not run on the 512-token target because the short probe is below the Q8 short probe and far below the F16 best | Keep as model-format compatibility; not a speed path toward the Ollama target |
 
 Implementation/diagnostic notes:
@@ -102,6 +104,13 @@ Implementation/diagnostic notes:
   argmax, but it is slower than materializing logits and using the existing
   argmax path on M40. The diagnostic kernel measured about `3.09 ms`, while the
   current lm-head projection event is about `2.8 ms`.
+- A targeted llama.cpp CUDA audit found that its quantized matvec stack converts
+  f32 activations to Q8_1 and dots them with quantized weights. That maps well
+  to GPUs with native int8 dot instructions, but M40/sm_52 lacks `__dp4a`.
+  A clean-room M40-only scalar-int8 Q8_1 prototype was correct but measured
+  `7.289 ms` for a 1x2048x257 projection; the existing f32xQ8_0 decode kernel
+  measured `0.130 ms` for a larger 1x2048x2048 projection. This rules out a
+  direct Q8_1 activation port as the next path to the Ollama target on M40.
 - `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
   post-attention residual add and weighted RMSNorm. It showed a small short-run
   probe improvement, but the full 512-token target run was neutral versus the
@@ -144,6 +153,15 @@ Implementation/diagnostic notes:
   32-token Qwen2.5 Q8_0 probe stayed effectively unchanged at
   `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74
   total_tps=4.61`. Keep it diagnostic/off by default.
+- `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` changes that diagnostic argmax kernel
+  to cooperatively load the hidden vector into shared memory once per
+  8-vocab-column block. This halves the measured lm-head argmax event on the
+  Ollama Q8_0 blob from roughly `7.4 ms` to `3.43 ms`, but the bounded
+  16-token release probe only reaches `prefill_ms=2899 decode_ms=1881
+  total_ms=4966 decode_tps=8.506 total_tps=3.222`. The Q8 path remains
+  dominated by per-layer quantized projections, especially MLP down and fused
+  gate/up, so this is not enough to pursue the 512-token Ollama comparison
+  target.
 - Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
   and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
   The runtime now supports Q4_0 projection/embedding dequant plus a narrow

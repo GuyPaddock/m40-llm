@@ -136,6 +136,16 @@ mod ffi {
             K: i32,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_q8_0_lm_head_argmax_shared_a_async(
+            ctx: *mut M40llmCudaContext,
+            d_A_f32: *const c_void,
+            d_B_q8_0: *const c_void,
+            d_scratch_f32: *mut c_void,
+            d_out_u32: *mut c_void,
+            N: i32,
+            K: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_f16_lm_head_argmax_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -1336,6 +1346,14 @@ fn q8_decode_tiled_cols() -> i32 {
 }
 
 #[cfg(feature = "cuda")]
+fn q8_lm_head_argmax_shared_a_enabled() -> bool {
+    std::env::var("M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+
+#[cfg(feature = "cuda")]
 struct Q8DecodeEventDiag {
     label: Cow<'static, str>,
     stream: CudaStream,
@@ -1969,22 +1987,45 @@ impl CudaContext {
     ) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let diag = Q8DecodeEventDiag::start(self, "q8_0_lm_head_argmax")?;
+            let shared_a = q8_lm_head_argmax_shared_a_enabled();
+            let diag_label = if shared_a {
+                "q8_0_lm_head_argmax_shared_a"
+            } else {
+                "q8_0_lm_head_argmax"
+            };
+            let diag = Q8DecodeEventDiag::start(self, diag_label)?;
             let _g = self.inner.lock.lock().unwrap();
-            let rc = ffi::m40llm_q8_0_lm_head_argmax_async(
-                self.inner.raw.as_ptr(),
-                d_a_f32,
-                d_b_q8_0,
-                d_scratch_f32,
-                d_out_u32,
-                n,
-                k,
-                stream.ffi_kind(),
-            );
+            let rc = if shared_a {
+                ffi::m40llm_q8_0_lm_head_argmax_shared_a_async(
+                    self.inner.raw.as_ptr(),
+                    d_a_f32,
+                    d_b_q8_0,
+                    d_scratch_f32,
+                    d_out_u32,
+                    n,
+                    k,
+                    stream.ffi_kind(),
+                )
+            } else {
+                ffi::m40llm_q8_0_lm_head_argmax_async(
+                    self.inner.raw.as_ptr(),
+                    d_a_f32,
+                    d_b_q8_0,
+                    d_scratch_f32,
+                    d_out_u32,
+                    n,
+                    k,
+                    stream.ffi_kind(),
+                )
+            };
             if rc != 0 {
-                return Err(anyhow!("m40llm_q8_0_lm_head_argmax_async failed: {rc}"));
+                return Err(anyhow!("{diag_label} failed: {rc}"));
             }
-            record_async_kernel("q8_0_lm_head_argmax_partials");
+            if shared_a {
+                record_async_kernel("q8_0_lm_head_argmax_shared_a_partials");
+            } else {
+                record_async_kernel("q8_0_lm_head_argmax_partials");
+            }
             record_async_kernel("q8_0_lm_head_argmax_reduce");
             drop(_g);
             if let Some(diag) = diag {
