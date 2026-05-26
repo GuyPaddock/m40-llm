@@ -51,6 +51,9 @@ m40-llm release results on the same M40:
 | Qwen2.5-3B Q8_0 | large-model | dense off | fused Q8 QKV/MLP + split-Q-block decode/MLP + shared lm-head argmax | 44 | 512 | 1241 ms | 22738 ms | 24171 ms | 22.52 | 21.18 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense off | previous row + head128 probability reuse in attention V loop | 44 | 512 | 1231 ms | 20991 ms | 22412 ms | 24.39 | 22.85 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense off | previous row + split-Q-block fused Q8 QKV | 44 | 512 | 1123 ms | 19727 ms | 21030 ms | 25.95 | 24.35 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | previous row + `M40LLM_Q8_DECODE_COL_TILE=4` | 44 | 512 | 1083 ms | 19248 ms | 20523 ms | 26.60 | 24.95 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | compressed top8, recent 1024 | same as previous row, preferred compressed KV defaults | 44 | 512 | 1201 ms | 29006 ms | 30409 ms | 17.65 | 16.84 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | compressed top8, recent 128 | same as previous row with `M40LLM_QWEN_THROUGHPUT_RECENT_WINDOW=128` | 44 | 512 | 1205 ms | 28679 ms | 30077 ms | 17.85 | 17.02 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 128 | previous row + `M40LLM_DENSE_ATTENTION_SINK_TOKENS=32` | 44 | 512 | 1132 ms | 17935 ms | 19258 ms | 28.55 | 26.59 | coherent |
 | Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 64 | same as previous row with window 64 | 44 | 512 | 1136 ms | 16640 ms | 18028 ms | 30.77 | 28.40 | repetitive/drifts |
 | Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 32 | same as previous row with window 32 | 44 | 512 | 1133 ms | 15920 ms | 17232 ms | 32.16 | 29.71 | repetitive |
@@ -62,6 +65,7 @@ Failed/neutral fusion experiment record:
 | --- | --- | --- | --- | --- | --- |
 | `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
 | `M40LLM_F16_LM_HEAD_ARGMAX=1` greedy-only F16 lm-head argmax | current diagnostic | n/a | 64-token Qwen2.5 F16 probe had unchanged decode rate: `decode_ms=2174 decode_tps=29.44`; event timing was `~3.09 ms` versus the existing lm-head projection around `~2.8 ms` | Not run on the 512-token target because the short probe and event timing showed no gain | Keep diagnostic/off by default; full-logits plus argmax remains faster |
+| `M40LLM_Q8_DECODE_TILED_COLS=2` with the current split-Q-block/fused Q8 stack | older diagnostic | n/a | Earlier short probes improved before split-Q-block Q8 QKV and shared lm-head argmax landed | Exact 512-token target regressed to `prefill_ms=3052 decode_ms=42168 total_ms=45410 decode_tps=12.14 total_tps=11.28` | Do not use with the current stack; it reduces parallelism too much for current large-K projections |
 | llama.cpp-style Q8_1 activation dot for Q8_0 weights | n/a | n/a | Source audit showed llama.cpp quantized matvec paths use Q8_1 activations and DP4A-style int8 dot products, but M40/sm_52 has no native `__dp4a`; an M40-only scalar-int8 diagnostic prototype measured `7.289 ms` for 1x2048x257, while the current f32xQ8_0 decode kernel measured `0.130 ms` for 1x2048x2048 | Not run on the 512-token target because the primitive was orders of magnitude slower on M40 | Do not pursue Q8_1 activation dot without a Maxwell-specific vectorization strategy; no llama.cpp code was copied |
 | `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
 | `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` shared-activation Q8 lm-head argmax | current diagnostic | n/a | 16-token Ollama-blob Qwen2.5 Q8_0 probe cut lm-head argmax event time from roughly `7.4 ms` to `3.43 ms`, but only improved total short-run decode from about `8.1` to `8.51 tok/s` | Not run on the 512-token target because layer projection cost still dominates and the short probe remains far below target | Keep diagnostic/off by default; useful kernel evidence, not sufficient for the Ollama target |
@@ -79,6 +83,13 @@ Implementation/diagnostic notes:
   coherent full-run result above.
 - `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` can now assert an E2E throughput
   floor separately from the existing generated-token decode TPS floor.
+- `M40LLM_Q8_DECODE_COL_TILE=4` is an opt-in M40 Q8 decode projection kernel
+  that computes four output columns per block and reuses each activation
+  sub-block across those columns. It is inspired by llama.cpp/Ollama's
+  multi-column matvec shape, but implemented independently for this runtime's
+  f32-activation/Q8_0-weight path. On the exact 512-token target it improves the
+  current dense Q8 path from 24.35 to 24.95 E2E tok/s. This is useful, but still
+  far below Ollama's measured 40.81 E2E tok/s and the 53.06 tok/s target.
 - Packed-prefix prefill is not useful for this short Qwen prompt on the current
   path; it increased prompt prefill time from 1744 ms to 2826 ms.
 - `top_k=1` now uses greedy sampling without a full softmax/sort. The opt-in
@@ -99,12 +110,14 @@ Implementation/diagnostic notes:
   reductions also now use warp reductions for their final block reduction. The
   combined exact-prompt result improves from 17.17 to 20.93 E2E tok/s, still far
   below the 53.06 tok/s target.
-- A compressed exact-old KV row with `recent_window=128`, direct FP16-K/q4-V,
-  and top8 was coherent but slower on this 556-token total-context workload:
-  16.15 E2E tok/s versus 20.93 dense. The compressed selection/direct-attention
-  overhead is not worthwhile for this short comparison prompt; keep dense `off`
-  as the active Ollama-comparison path unless a later compressed attention
-  optimization changes that tradeoff.
+- Compressed exact-old KV top8 remains the project default for generation, but
+  it is not the active Ollama-comparison path for this short 1024-context
+  target. With the Q8_0 optimized path, default `recent_window=1024` was coherent
+  but slow at 16.84 E2E tok/s and allocated more resident KV than dense because
+  the recent ring covers the entire bounded context plus sidecar overhead.
+  Reducing the recent window to 128 lowered resident KV below dense, but still
+  measured only 17.02 E2E tok/s. Dense `off` remains the faster path for this
+  specific benchmark until compressed direct attention overhead is reduced.
 - `dense-recent-only` now supports Qwen/head128 as an explicit sliding-window
   diagnostic. It improves token rate on this prompt, but all tested windows
   regressed output quality: window 128 reached 25.33 E2E tok/s but collapsed
