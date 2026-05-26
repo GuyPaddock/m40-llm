@@ -58,6 +58,7 @@ Failed/neutral fusion experiment record:
 | llama.cpp-style Q8_1 activation dot for Q8_0 weights | n/a | n/a | Source audit showed llama.cpp quantized matvec paths use Q8_1 activations and DP4A-style int8 dot products, but M40/sm_52 has no native `__dp4a`; an M40-only scalar-int8 diagnostic prototype measured `7.289 ms` for 1x2048x257, while the current f32xQ8_0 decode kernel measured `0.130 ms` for 1x2048x2048 | Not run on the 512-token target because the primitive was orders of magnitude slower on M40 | Do not pursue Q8_1 activation dot without a Maxwell-specific vectorization strategy; no llama.cpp code was copied |
 | `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
 | `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` shared-activation Q8 lm-head argmax | current diagnostic | n/a | 16-token Ollama-blob Qwen2.5 Q8_0 probe cut lm-head argmax event time from roughly `7.4 ms` to `3.43 ms`, but only improved total short-run decode from about `8.1` to `8.51 tok/s` | Not run on the 512-token target because layer projection cost still dominates and the short probe remains far below target | Keep diagnostic/off by default; useful kernel evidence, not sufficient for the Ollama target |
+| `M40LLM_Q8_MLP_GATE_UP_TILED_COLS=4` tiled shared-activation Q8 MLP gate/up | current diagnostic | pending removal | CUDA parity against the baseline fused Q8 gate/up path passed, but the Qwen2.5 Q8_0 event probe regressed gate/up from roughly `0.53 ms` to `0.89-0.97 ms` per layer | Not run on the 512-token target because the bounded probe was slower than the existing fused Q8 path | Remove from active code after preserving this failed experiment; the 4-column/64-thread shape is not a useful M40 path |
 | Qwen2.5-3B Q4_0 GGUF projection support | current Q4 support commit | n/a | 32-token Qwen2.5 Q4_0 probe generated coherent text but was slow: `prefill_ms=5912 decode_ms=2946 total_ms=9053 decode_tps=10.86 total_tps=3.54` | Not run on the 512-token target because the short probe is below the Q8 short probe and far below the F16 best | Keep as model-format compatibility; not a speed path toward the Ollama target |
 
 Implementation/diagnostic notes:
@@ -162,6 +163,13 @@ Implementation/diagnostic notes:
   dominated by per-layer quantized projections, especially MLP down and fused
   gate/up, so this is not enough to pursue the 512-token Ollama comparison
   target.
+- `M40LLM_Q8_MLP_GATE_UP_TILED_COLS=4` tried a four-column fused Q8 gate/up
+  tile with the hidden vector loaded into shared memory. The parity test passed,
+  but the kernel was slower than the existing one-column fused gate/up path on
+  Qwen2.5 Q8_0: event timing regressed from roughly `0.53 ms` to
+  `0.89-0.97 ms` per layer. The additional shared-memory load/synchronization
+  and reduced per-column parallelism outweighed activation reuse, so this
+  experiment should be removed after preserving the result.
 - Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
   and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
   The runtime now supports Q4_0 projection/embedding dequant plus a narrow

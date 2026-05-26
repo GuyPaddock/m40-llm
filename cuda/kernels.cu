@@ -6787,6 +6787,77 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    __global__ void mlp_gate_up_swiglu_f32xq8_0_gguf_decode_tiled4_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ W_gate,
+        const unsigned char* __restrict__ W_up,
+        float* __restrict__ C,
+        int H, int K) {
+        constexpr int cols_per_block = 4;
+        const int local_col = threadIdx.y;
+        const int tid = threadIdx.x;
+        const int threads = blockDim.x;
+        const int linear_tid = threadIdx.y * blockDim.x + threadIdx.x;
+        const int linear_threads = blockDim.x * blockDim.y;
+        const int col = blockIdx.x * cols_per_block + local_col;
+
+        extern __shared__ float shared[];
+        float* A_sh = shared;
+        float* gate_reduce = A_sh + K;
+        float* up_reduce = gate_reduce + cols_per_block * threads;
+
+        for (int k = linear_tid; k < K; k += linear_threads) {
+            A_sh[k] = __ldg(A + k);
+        }
+        __syncthreads();
+
+        const int qk = 32;
+        const int block_bytes = 34;
+        const int blocks_per_col = K / qk;
+        float gate_acc = 0.0f;
+        float up_acc = 0.0f;
+        if (col < H) {
+            for (int block_idx = tid; block_idx < blocks_per_col; block_idx += threads) {
+                const int k_base = block_idx * qk;
+                const size_t gate_base =
+                    (static_cast<size_t>(col) * blocks_per_col + block_idx) * block_bytes;
+                const size_t up_base = gate_base;
+                const float gate_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_gate + gate_base));
+                const float up_scale =
+                    __half2float(*reinterpret_cast<const __half*>(W_up + up_base));
+                #pragma unroll
+                for (int q_idx = 0; q_idx < qk; ++q_idx) {
+                    const float a = A_sh[k_base + q_idx];
+                    const int8_t gate_q =
+                        *reinterpret_cast<const int8_t*>(W_gate + gate_base + 2 + q_idx);
+                    const int8_t up_q =
+                        *reinterpret_cast<const int8_t*>(W_up + up_base + 2 + q_idx);
+                    gate_acc += a * (static_cast<float>(gate_q) * gate_scale);
+                    up_acc += a * (static_cast<float>(up_q) * up_scale);
+                }
+            }
+        }
+
+        float* gate_lane = gate_reduce + local_col * threads;
+        float* up_lane = up_reduce + local_col * threads;
+        gate_lane[tid] = gate_acc;
+        up_lane[tid] = up_acc;
+        __syncthreads();
+        for (int stride = threads >> 1; stride > 0; stride >>= 1) {
+            if (tid < stride) {
+                gate_lane[tid] += gate_lane[tid + stride];
+                up_lane[tid] += up_lane[tid + stride];
+            }
+            __syncthreads();
+        }
+        if (tid == 0 && col < H) {
+            const float gate = gate_lane[0];
+            const float up = up_lane[0];
+            C[col] = gate * (1.0f / (1.0f + expf(-gate))) * up;
+        }
+    }
+
     __global__ void qkv_f32xq8_0_gguf_decode_kernel(
         const float* __restrict__ A,
         const unsigned char* __restrict__ Wq,
@@ -7216,6 +7287,35 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         int H, int K) {
         if (!ctx || !d_A_f32 || !d_W_gate_q8_0 || !d_W_up_q8_0 || !d_C_f32) return -1;
         if (H <= 0 || K <= 0 || (K % 32) != 0) return -2;
+        const char* tiled_cols_env = std::getenv("M40LLM_Q8_MLP_GATE_UP_TILED_COLS");
+        if (tiled_cols_env && std::strcmp(tiled_cols_env, "4") == 0) {
+            constexpr int cols_per_block = 4;
+            constexpr int threads_per_col = 64;
+            const size_t shmem =
+                (static_cast<size_t>(K) +
+                 static_cast<size_t>(cols_per_block) * threads_per_col * 2) * sizeof(float);
+            if (shmem <= 48u * 1024u) {
+                dim3 block(threads_per_col, cols_per_block);
+                dim3 grid((H + cols_per_block - 1) / cols_per_block);
+                mlp_gate_up_swiglu_f32xq8_0_gguf_decode_tiled4_kernel<<<
+                    grid,
+                    block,
+                    shmem,
+                    q8_decode_projection_stream(ctx)>>>(
+                    reinterpret_cast<const float*>(d_A_f32),
+                    reinterpret_cast<const unsigned char*>(d_W_gate_q8_0),
+                    reinterpret_cast<const unsigned char*>(d_W_up_q8_0),
+                    reinterpret_cast<float*>(d_C_f32),
+                    H,
+                    K);
+                cudaError_t err = cudaGetLastError();
+                if (err != cudaSuccess) {
+                    fprintf(stderr, "mlp_gate_up_swiglu_f32xq8_0_gguf_decode_tiled4 kernel launch error: %s\n", cudaGetErrorString(err));
+                    return -3;
+                }
+                return 0;
+            }
+        }
         const int threads = q8_decode_threads_for_k(K);
         const size_t shmem = static_cast<size_t>(threads) * 2 * sizeof(float);
         mlp_gate_up_swiglu_f32xq8_0_gguf_decode_kernel<<<
