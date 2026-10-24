@@ -21,6 +21,26 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
 - `llm-context/00-index.md` points to key design notes; consult it when resuming work.
 - CUDA and KV cache guidance: `docs/cuda_parity_and_kv_layout.md`.
 
+## MemPalace Workflow
+- When resuming a task, search MemPalace for the relevant design decisions,
+  experiments, and latest checkpoint before selecting new work. Search the
+  `m40_llm` project wing and the agent diary; older entries also use `m40-llm`.
+  The local, Git-ignored `mempalace.yaml` maps project rooms, including
+  `llm_context`, `cuda`, `documentation`, and `testing`.
+- Verify remembered claims against the current code, Git history, and raw
+  benchmark records. A historical result is not a fresh measurement.
+- Write diary entries as work proceeds, especially after a commit, benchmark,
+  failed experiment, or change of direction. Include the configuration,
+  measured outcome, limitations, relevant commit/report, and next task.
+  Use the diary's AAAK format and stable project/topic keywords so the next
+  session can find the entry.
+- Use drawers for durable design notes or source material, such as the
+  `llm_context` research. Use diary entries for session progress and experiment
+  decisions. Search for existing material before filing duplicate drawers.
+- Keep authoritative commands and results in repository documentation and
+  linked artifacts too. If MemPalace is unavailable, record that limitation
+  and leave a local checkpoint rather than claiming a memory update succeeded.
+
 ## Project Snapshot (from prior context)
 - Precision policy: FP16 storage (weights and KV), FP32 compute; Q in FP32, K/V stored as FP16.
 - Model format: GGUF; integration planned via `gguf-rs-lib` and `gguf-llms`.
