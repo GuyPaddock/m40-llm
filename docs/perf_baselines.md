@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Corrected-Control Independent HTTP Gains
+
+Five alternating release pairs per case qualify FP32/128 at **38.382 vs
+35.537 HTTP tok/s, +8.003%** and SGEMM prefill at **38.416 vs 35.421,
++8.456%**. Both preserve all actual 512 IDs and dense-valid quality, with
+positive paired 95% intervals. Native packed prefill is correct but
+**10.085% slower**, so does not qualify. All comparisons use repaired
+sequential control, prepared down/vocabulary and dense context 1024.
+
+These renew independent timing gates, not a combined result or fresh
+Ollama-relative target claim. See [phase medians, intervals, memory, raw
+trials and audits](experiments/2026-10-25-maxwell-completed-http.md).
+
 ## 2026-10-25: Corrected Packed-Prefill Quality
 
 Native packed and dequant SGEMM both pass fresh corrected-control quality:

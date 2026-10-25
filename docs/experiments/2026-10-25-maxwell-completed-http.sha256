@@ -1,0 +1,12 @@
+1218dd84b3e4b34b187d3f41451e1ebf9c39548eb6a18d60824b205df5ed0d54  docs/experiments/2026-10-25-maxwell-completed-http.md
+5b9005e744e63ddfde192e632e74ebaa317e0587855a154dafb7c8a760cead76  docs/experiments/2026-10-25-maxwell-completed-control-trace.jsonl
+a4cfa42734b3209a22dca902f1433a48c0802558b78ef84e005c0d386f480f2a  docs/experiments/2026-10-25-maxwell-completed-packed128-http.jsonl
+a759e76258959955f26c46a66264b058636715362f46b6fcaa1bdaee66fc1dda  docs/experiments/2026-10-25-maxwell-completed-packed128-http-audit.json
+acd9d178911ff0493e8f4470f4c27793cb08e85340b0c69a2d1ef36b5682be17  docs/experiments/2026-10-25-maxwell-completed-packed128-http.log.gz
+e1889936b98b4f2209481d11eb55ea81bbc390b0008c0a16a434ec27be470f5c  docs/experiments/2026-10-25-maxwell-completed-native-packed-http.jsonl
+edb187e77197e45c28b3f125e505f158de6d4b95ce1a96357c4962285f4e1a9f  docs/experiments/2026-10-25-maxwell-completed-native-packed-http-audit.json
+4616ee095a3aba13a1c1aa5a62736c4215cdfac4617cac039e72f53b2cfa505f  docs/experiments/2026-10-25-maxwell-completed-native-packed-http.log.gz
+1e956feeb2033dd24051942b1e628715b0d3e41e8c5239bf30a223d8e0c857ad  docs/experiments/2026-10-25-maxwell-completed-dequant-sgemm-http.jsonl
+4296ce4cb990fcf030f27981c93d4cde8f5fb1d3ec792ff593f4d1d5ee52489c  docs/experiments/2026-10-25-maxwell-completed-dequant-sgemm-http-audit.json
+58a171ae796f3b411acfbed93f34e7f490cf6ed88e6b1d28b84d06b312b5865c  docs/experiments/2026-10-25-maxwell-completed-dequant-sgemm-http.log.gz
+2c08c3da1432d4b3e1fefd189e6cef8deb48b92ce2519f2ded5276044a8939ed  docs/experiments/2026-10-25-maxwell-completed-ollama.log.gz

@@ -54,6 +54,16 @@ intervals are about 3.21 s native packed and 0.48 s SGEMM versus 1.59 s
 sequential; controlled HTTP evidence is still required. Next remeasure the
 independent candidates, then a qualifying combination and fresh Ollama.
 
+The [corrected-control independent HTTP screen](experiments/2026-10-25-maxwell-completed-http.md)
+now qualifies FP32/128 at **38.382 vs 35.537 tok/s, +8.003%**, and SGEMM
+prefill at **38.416 vs 35.421, +8.456%**, with positive paired intervals and
+all actual 512 IDs equal. Native packed loses 10.085% and is retained only
+as a negative control. Each uses five alternating pairs with stable clocks;
+none requires extension. Next validate the combination, then time it only
+if quality passes. The existing tool now has a tested explicit
+`--time-ollama` mode for the eventual fresh selected-runtime comparison.
+No default changes or original target achievement follow from this screen.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
