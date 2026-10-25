@@ -145,6 +145,11 @@ below is historical context, not the current research execution order.
   HTTP E2E gates, and bound experiments before C11/C11A. Missing counters or
   the original speed target do not block the later n-gram feasibility decision
   and separate model-changing research. No further attention tuning round yet.
+- C10A preparation tests exposed pre-existing uploaded-weight accounting drift
+  from `bd9b68fd`: final context drop freed native GPU weights but never removed
+  their allocation records or subtracted tracked bytes. Final-owner cleanup now
+  accounts only successful frees, with a clone/readback/repeated-model regression.
+  This is an independent correction, not a kernel performance result.
 - The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
   Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
   explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.

@@ -60,3 +60,39 @@ fn test_allocation_error_preserves_allocator_and_live_buffers() -> Result<()> {
     assert_eq!(CudaContext::total_device_bytes(), initial_bytes);
     Ok(())
 }
+
+/// Uploaded weights survive intermediate context clones and are freed/accounted
+/// exactly once when the final owner drops, including across successive models.
+#[test]
+fn test_uploaded_weights_drop_restores_accounting_after_last_owner() -> Result<()> {
+    let initial = CudaContext::total_device_bytes();
+    for bytes in [16, 32] {
+        let before = profile::snapshot();
+        let ctx = CudaContext::new(-1)?;
+        let props = ctx.current_device_props()?;
+        ensure!(
+            props.major == 5 && props.minor == 2,
+            "weight cleanup test requires sm_52"
+        );
+        let expected = vec![7_u8; bytes];
+        let pointer = ctx.upload_weights(&expected)?;
+        let owner = ctx.clone();
+        drop(ctx);
+        assert_eq!(CudaContext::total_device_bytes(), initial + bytes);
+        let mut actual = vec![0_u8; bytes];
+        unsafe {
+            owner.memcpy_d2h(actual.as_mut_ptr().cast(), pointer, bytes)?;
+        }
+        assert_eq!(actual, expected);
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()).device_frees,
+            0
+        );
+        drop(owner);
+        assert_eq!(CudaContext::total_device_bytes(), initial);
+        let delta = profile::counter_delta(&before, &profile::snapshot());
+        assert_eq!(delta.device_allocs, 1);
+        assert_eq!(delta.device_frees, 1);
+    }
+    Ok(())
+}

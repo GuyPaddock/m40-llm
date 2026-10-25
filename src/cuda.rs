@@ -4504,12 +4504,23 @@ impl CudaContext {
 #[cfg(feature = "cuda")]
 impl Drop for CudaContextInner {
     fn drop(&mut self) {
-        // Free tracked weights if present to avoid device memory leak
-        if let Ok(inner) = self.weights_ptr.get_mut() {
-            if let Some(ptr) = inner.take() {
-                unsafe {
-                    let _ = ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr());
+        let weights = self
+            .weights_ptr
+            .get_mut()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(ptr) = weights.take() {
+            let rc = unsafe { ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr()) };
+            if rc == 0 {
+                let allocations = self
+                    .alloc_map
+                    .get_mut()
+                    .unwrap_or_else(|error| error.into_inner());
+                if let Some(info) = allocations.remove(&ptr.as_ptr()) {
+                    TOTAL_DEVICE_BYTES.fetch_sub(info.size, Ordering::SeqCst);
                 }
+                crate::profile::record_device_free("context.weights");
+            } else {
+                eprintln!("[cuda] context weight cleanup failed: rc={rc}");
             }
         }
         // SAFETY: raw was constructed from a non-null FFI pointer and is only freed here when Arc count drops to 0
