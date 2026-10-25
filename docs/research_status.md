@@ -115,30 +115,41 @@ Both warning-as-error CI lanes, three all-targets Clippy configurations and
 fmt pass. The explicit hardware test fails when requested without a device,
 rather than treating missing hardware as success.
 
-Next is C24: measure calibration block influence, freeze interior-layer
-rankings/masks before held-out evaluation, then compare one/two/three removals
-using the existing C20 runner. Protect first/last layers and original IDs.
-Export remains conditional C25; C26 compares measured quality/speed/memory.
-Do not reopen rejected sparse-weight, n-gram or dense-layout screens.
+**C24 is complete.** Read-only block influence and all 34+33+32 interior
+calibration-loss trials ran on clean `68f1b15`. Freeze SHA
+`a9f0f2cc8c952eacaf96d6fe2576e30a35ef225a5f85f4574630545af3ab4d3c`
+binds original-ID masks `[8]`, `[8,24]` and `[8,24,25]` before held-out
+evaluation. No held-out/browser fitting or BI shortlist occurs. The first
+loss winner ranks 22nd by dense BI, so BI alone is not a removal recipe.
+See [the contracts](layer_ranking.md) and
+[complete measurements and raw data](experiments/2026-10-25-ranked-layer-tradeoffs.md).
 
-**C24 is in progress.** `7eea030` defines bounded teacher-forced calibration
-block influence and complete iterative loss-ranking stages. Five CPU tests
-protect deterministic ranking, original IDs, population identity and first/last
-layers. Read-only model-local capture also passes M40 full-logit/launch parity
-and an independent explicit-layer hidden-transition oracle. Unsupported
-batch/packed/graph/compressed paths reject capture before launches; this
-integration is committed in `de98d27`. See
-[the contracts and atomic sequence](layer_ranking.md). Real-model influence,
-all-interior calibration-loss ranking and frozen-mask quality/timing remain.
+The empty control exactly matches current full logits and C19's recorded
+traces/statistics. All applied masks exactly reproduce their frozen
+calibration losses. Held-out PPL is 39.6122 dense versus
+40.9846/46.1846/49.3736 with one/two/three removals. The one-layer mask
+preserves all seven dense-valid task passes but still increases held-out
+PPL 3.46%. Two/three removals introduce unclosed-JSON-fence regressions with
+requested facts still visible. Dense-failed tasks remain inconclusive;
+aggregate task counts do not prove preserved quality.
 
-The shared release evaluator now has explicit calibration-only `--rank-layers`
-and checked `--layer-ranking` / `--remove-layer-count` application. A single
-resident model uses completed session scopes and drained KV/workspace resets
-for all 34+33+32 original-interior loss trials, without weakening runtime
-setup guards. Scoring is committed in `c00fca7` and agrees exactly with the
-paired evaluator. Identity, reset and CLI tests pass; clean-source real-model
-ranking and held-out results are not
-yet available. No mask or other runtime default changes.
+Five alternating pairs give held-out matched-prefix rate gains
+2.484/5.116/7.937%, including greedy readback and final completion. These
+model-changing measurements are not generated/HTTP throughput. Every model
+still uploads 3,279,519,744 weight bytes and reserves 37,748,736 dense KV
+bytes. No mask or runtime policy is promoted. Post-matrix cuBLAS-on/off
+hardware validation passes; both warning-as-error CI lanes, Clippy and fmt
+also pass. Implementation commits are `7eea030`, `de98d27`, `c00fca7` and
+`68f1b15`.
+
+Next is C25 compact export of the explicitly quality-evaluated `[8]`
+candidate, recorded before held-out evaluation as the least structural
+change. Write a separate artifact with retained-layer tensor renumbering,
+updated metadata and provenance; never modify the source GGUF. Require
+round-trip output/logit equivalence to the masked source and actual weight/KV
+reclamation. C26 then compares measured quality, speed, allocation and
+preparation costs. C22/C27 remain postponed under their negative sparse
+kernel gate; do not reopen rejected n-gram or dense-layout screens.
 
 C21 used these dependency-ordered commits:
 

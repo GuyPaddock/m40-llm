@@ -2,6 +2,35 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Calibration-Ranked Layer Tradeoffs
+
+C24 is complete on clean `68f1b15`, release Qwen2.5-3B Q8_0, dense KV.
+All 99 calibration removal trials ran before held-out evaluation. Frozen
+original-ID masks are `[8]`, `[8,24]` and `[8,24,25]`; first/last layers stay.
+No mask is promoted and no resident weight/KV memory is reclaimed yet.
+
+| Mask | Held-Out Tasks | Held-Out Dense-Valid Regressions | Held-Out PPL | Held-Out Matched-Step Rate Gain |
+| --- | --- | ---: | ---: | ---: |
+| `[]`, control | 4/6 | 0 | 39.612159 | +0.017%, noise |
+| `[8]` | 5/6 | 0 | 40.984621 | +2.484% |
+| `[8,24]` | 3/6 | 1 | 46.184633 | +5.116% |
+| `[8,24,25]` | 4/6 | 1 | 49.373639 | +7.937% |
+
+Dense-failed tasks remain inconclusive even if a candidate passes. The
+one-layer mask preserves every dense-valid task but raises held-out PPL
+3.46%; larger masks add unclosed-JSON-fence regressions despite retaining
+the requested facts. Aggregate task counts alone hide those regressions.
+BI alone would not choose layer 8; it ranks 22nd by dense block influence.
+
+Five alternating pairs per split time identical observed prefixes, including
+greedy readback and final GPU completion, not generated/HTTP throughput.
+All reference traces and recorded loss statistics match C19. The empty
+control has zero full-vector logit drift; every applied positive mask exactly
+reproduces its frozen calibration loss. Requested per-model weight/KV bytes
+remain 3,279,519,744 / 37,748,736. Next is separate C25 compact export of the
+explicitly evaluated `[8]` candidate. Exact-engine goals remain unmet.
+See [the report, frozen artifact and complete raw pairs](experiments/2026-10-25-ranked-layer-tradeoffs.md).
+
 ## 2026-10-25: Calibrated SwiGLU Quality Tradeoffs
 
 C23's frozen calibration/evaluation is complete on Qwen2.5-3B Q8_0, release

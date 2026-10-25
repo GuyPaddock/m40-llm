@@ -82,3 +82,9 @@ completes C20. Empty masks reproduce C19 exactly. One/two/three central-layer
 skips improve matched-step rate about 2.6/5.2/7.9%, but held-out PPL worsens
 and two/three-layer choices regress tasks. No mask becomes preferred, no
 resident weight/KV capacity is reclaimed, and no HTTP speedup is claimed.
+
+C24 now also has [calibration-ranked release measurements](experiments/2026-10-25-ranked-layer-tradeoffs.md).
+The frozen `[8]` candidate preserves all dense-valid task passes with held-out
+PPL +3.46% and matched-prefix rate +2.484%. It remains opt-in and
+quality-changing. Its separate compact export is C25, not an allocation
+benefit of masks themselves.

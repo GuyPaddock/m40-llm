@@ -123,3 +123,18 @@ already-frozen mask. It conflicts with ad-hoc `--skip-layers` and activation
 transforms. Manifests retain artifact SHA and original skipped IDs. The ordinary
 reference stays all-layers. Also run an empty-mask control, retaining the usual
 dense-failed inconclusive classifications and full-logit/task/timing records.
+
+## Measured Checkpoint
+
+The [C24 release study](experiments/2026-10-25-ranked-layer-tradeoffs.md)
+completes all 99 calibration trials and freezes `[8]`, `[8,24]` and
+`[8,24,25]` before held-out evaluation. Each applied mask reproduces its
+calibration loss exactly. Layer 8 ranks 22nd by dense BI, confirming why
+loss verification is separate from block influence.
+
+The one-layer mask retains every dense-valid task pass but raises held-out
+PPL 3.46%. Larger masks increase PPL 16.59/24.64% and introduce exact-format
+regressions. Held-out matched-prefix rate gains are 2.484/5.116/7.937%, not
+unchanged-engine or generated/HTTP TPS. No weight/KV capacity is reclaimed.
+No mask is promoted. C25 next tests a separate compact artifact for `[8]`
+against that quality-evaluated masked source, without modifying the original.
