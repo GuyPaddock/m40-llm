@@ -1,8 +1,8 @@
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
-    cuda::{CudaContext, CudaEvent, CudaStream, DeviceBuffer, Q8FfnFp32Variant},
+    cuda::{CudaContext, CudaEvent, CudaStream, DeviceBuffer, Q8FfnFp32Variant, Q8FfnQ81Launch},
     evaluation::ffn_capture::FfnLayerSamples,
-    infer::LoadedModel,
+    infer::{q8_activation::Q8ActivationShape, LoadedModel},
     profile,
 };
 use serde::Serialize;
@@ -14,6 +14,84 @@ use std::{
 
 const GUARD_VALUES: usize = 8;
 const GUARD_BITS: u32 = 0x4b12_3456;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub(super) enum FfnKernel {
+    Native,
+    Fp32(Q8FfnFp32Variant),
+    Q81(Q8FfnQ81Launch),
+}
+
+impl FfnKernel {
+    pub fn has_quantization(self) -> bool {
+        matches!(self, Self::Q81(_))
+    }
+
+    pub fn threads(self) -> u32 {
+        match self {
+            Self::Native => 256,
+            Self::Fp32(variant) => variant.threads(),
+            Self::Q81(launch) => launch.threads() as u32,
+        }
+    }
+
+    pub fn has_packed_loads(self) -> bool {
+        match self {
+            Self::Native => false,
+            Self::Fp32(variant) => variant.has_packed_loads(),
+            Self::Q81(_) => true,
+        }
+    }
+
+    pub fn has_warp_reduction(self) -> bool {
+        match self {
+            Self::Native => false,
+            Self::Fp32(variant) => variant.has_warp_reduction(),
+            Self::Q81(_) => true,
+        }
+    }
+}
+
+pub(super) struct GuardedQ8Activation {
+    storage: DeviceBuffer,
+    pub shape: Q8ActivationShape,
+}
+
+impl GuardedQ8Activation {
+    fn new(ctx: &CudaContext, rows: usize, columns: usize) -> Result<Self> {
+        let shape = Q8ActivationShape::new(rows, columns, columns)?;
+        let storage = DeviceBuffer::new_tagged(ctx, shape.bytes() + 32, "ffn_bench:q8-activation")?;
+        let guards = vec![0xa5u8; storage.bytes()];
+        unsafe {
+            ctx.memcpy_h2d(storage.as_mut_ptr(), guards.as_ptr().cast(), guards.len())?;
+        }
+        Ok(Self { storage, shape })
+    }
+
+    pub fn pointer(&self) -> *mut c_void {
+        unsafe { self.storage.as_mut_ptr().cast::<u8>().add(16).cast() }
+    }
+
+    pub fn read(&self, ctx: &CudaContext) -> Result<Vec<u8>> {
+        let mut bytes = vec![0u8; self.storage.bytes()];
+        unsafe {
+            ctx.memcpy_d2h(
+                bytes.as_mut_ptr().cast(),
+                self.storage.as_ptr(),
+                bytes.len(),
+            )?;
+        }
+        ensure!(
+            bytes[..16]
+                .iter()
+                .chain(&bytes[16 + self.shape.bytes()..])
+                .all(|&v| v == 0xa5),
+            "FFN quantized activation guard overwritten"
+        );
+        Ok(bytes[16..16 + self.shape.bytes()].to_vec())
+    }
+}
 
 pub(super) struct GuardedF32 {
     storage: DeviceBuffer,
@@ -66,6 +144,7 @@ impl GuardedF32 {
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum Stage {
+    Quantize,
     GateUpSwiglu,
     IsolatedDown,
     Complete,
@@ -88,7 +167,8 @@ pub(super) struct FfnPipeline<'a> {
     pub isolated_output: GuardedF32,
     start: CudaEvent,
     stop: CudaEvent,
-    pub variant: Option<Q8FfnFp32Variant>,
+    pub kernel: FfnKernel,
+    pub quantized: Option<GuardedQ8Activation>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -136,7 +216,8 @@ impl<'a> FfnPipeline<'a> {
             )?,
             start: ctx.create_event()?,
             stop: ctx.create_event()?,
-            variant: None,
+            kernel: FfnKernel::Native,
+            quantized: None,
         })
     }
 
@@ -146,9 +227,27 @@ impl<'a> FfnPipeline<'a> {
     }
 
     /// Reuse the same scratch only after its previous producer has finished.
-    pub fn select_variant(&mut self, variant: Option<Q8FfnFp32Variant>) -> Result<()> {
+    pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
+        ensure!(
+            !kernel.has_quantization() || self.quantized.is_some(),
+            "reserve quantized FFN scratch before selecting Q8_1"
+        );
         self.drain()?;
-        self.variant = variant;
+        self.kernel = kernel;
+        Ok(())
+    }
+
+    pub fn reserve_quantized_scratch(&mut self) -> Result<()> {
+        ensure!(
+            self.quantized.is_none(),
+            "Q8_1 FFN scratch already reserved"
+        );
+        self.drain()?;
+        self.quantized = Some(GuardedQ8Activation::new(
+            &self.model.cuda,
+            self.rows,
+            self.d_model,
+        )?);
         Ok(())
     }
 
@@ -172,10 +271,14 @@ impl<'a> FfnPipeline<'a> {
         ]
         .iter()
         .map(|buffer| buffer.storage.bytes())
-        .sum()
+        .sum::<usize>()
+            + self.quantized.as_ref().map_or(0, |q| q.storage.bytes())
     }
 
     pub fn enqueue_gate_up_projections(&self) -> Result<()> {
+        if self.kernel.has_quantization() {
+            return self.enqueue_q81(true);
+        }
         if self.rows > 1 {
             // The previous iteration's SwiGLU may still be reading gate/up.
             self.model.cuda.stream_wait_for_stream(
@@ -200,7 +303,10 @@ impl<'a> FfnPipeline<'a> {
     }
 
     fn enqueue_gate_up_swiglu(&self) -> Result<()> {
-        if let Some(variant) = self.variant {
+        if self.kernel.has_quantization() {
+            return self.enqueue_q81(false);
+        }
+        if let FfnKernel::Fp32(variant) = self.kernel {
             if self.rows > 1 {
                 // Previous down work on prefill may still consume hidden.
                 self.model.cuda.stream_wait_for_stream(
@@ -257,6 +363,56 @@ impl<'a> FfnPipeline<'a> {
         Ok(())
     }
 
+    fn enqueue_quantization(&self) -> Result<()> {
+        ensure!(
+            self.kernel.has_quantization(),
+            "quantization requires the explicit Q8_1 kernel"
+        );
+        let quantized = self
+            .quantized
+            .as_ref()
+            .context("missing Q8_1 FFN scratch")?;
+        if self.rows > 1 {
+            self.model.cuda.stream_wait_for_stream(
+                CudaStream::Decode,
+                CudaStream::Prefill,
+                "ffn_bench_quantized_input_reuse",
+            )?;
+        }
+        unsafe {
+            self.model.cuda.quantize_q8_1_async(
+                self.input.pointer(),
+                quantized.pointer(),
+                quantized.shape,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn enqueue_q81(&self, has_intermediates: bool) -> Result<()> {
+        let FfnKernel::Q81(launch) = self.kernel else {
+            anyhow::bail!("Q8_1 consumer was not selected")
+        };
+        let quantized = self
+            .quantized
+            .as_ref()
+            .context("missing Q8_1 FFN scratch")?;
+        self.enqueue_quantization()?;
+        unsafe {
+            self.model.cuda.ffn_q8_1_async(
+                quantized.pointer(),
+                self.gate_weight,
+                self.up_weight,
+                self.hidden.pointer(),
+                has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+                self.hidden_dim as i32,
+                quantized.shape,
+                launch,
+            )?;
+        }
+        Ok(())
+    }
+
     fn enqueue_down(&self, captured: bool) -> Result<()> {
         if self.rows > 1 {
             self.model.cuda.stream_wait_for_stream(
@@ -285,6 +441,7 @@ impl<'a> FfnPipeline<'a> {
 
     pub fn enqueue(&self, stage: Stage) -> Result<()> {
         match stage {
+            Stage::Quantize => self.enqueue_quantization(),
             Stage::GateUpSwiglu => self.enqueue_gate_up_swiglu(),
             Stage::IsolatedDown => self.enqueue_down(true),
             Stage::Complete => {
@@ -296,13 +453,18 @@ impl<'a> FfnPipeline<'a> {
 
     pub fn time(&self, stage: Stage, iterations: usize) -> Result<Value> {
         ensure!(iterations > 0, "FFN timing needs at least one iteration");
+        ensure!(
+            !matches!(stage, Stage::Quantize) || self.kernel.has_quantization(),
+            "native FFN has no quantization stage"
+        );
         self.drain()?;
-        let start_stream = if self.variant.is_some() && !matches!(stage, Stage::IsolatedDown) {
-            CudaStream::Decode
-        } else {
-            self.projection_stream()
-        };
-        let stop_stream = if matches!(stage, Stage::GateUpSwiglu) {
+        let start_stream =
+            if self.kernel != FfnKernel::Native && !matches!(stage, Stage::IsolatedDown) {
+                CudaStream::Decode
+            } else {
+                self.projection_stream()
+            };
+        let stop_stream = if matches!(stage, Stage::GateUpSwiglu | Stage::Quantize) {
             CudaStream::Decode
         } else {
             self.projection_stream()
@@ -364,6 +526,9 @@ impl<'a> FfnPipeline<'a> {
 
     pub fn verify_guards_and_inputs(&self, layer: &FfnLayerSamples) -> Result<()> {
         self.drain()?;
+        if let Some(quantized) = &self.quantized {
+            quantized.read(&self.model.cuda)?;
+        }
         for buffer in [
             &self.gate,
             &self.up,

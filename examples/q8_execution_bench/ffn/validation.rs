@@ -1,10 +1,13 @@
 use super::{
     fixture::source_bytes,
-    pipeline::{FfnPipeline, Stage},
+    pipeline::{FfnKernel, FfnPipeline, Stage},
 };
 use anyhow::{ensure, Result};
 use half::f16;
-use m40_llm::evaluation::ffn_capture::{FfnLayerSamples, FfnTensorSource};
+use m40_llm::{
+    evaluation::ffn_capture::{FfnLayerSamples, FfnTensorSource},
+    infer::q8_activation::quantize_reference,
+};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -17,6 +20,20 @@ pub(super) struct ErrorStats {
 }
 
 pub(super) fn compare(actual: &[f32], expected: &[f64]) -> Result<ErrorStats> {
+    let stats = measure(actual, expected)?;
+    for (&a, &b) in actual.iter().zip(expected) {
+        let difference = (f64::from(a) - b).abs();
+        ensure!(
+            difference < 1e-3 + 2e-5 * b.abs(),
+            "FFN numerical drift {difference}, expected {b}"
+        );
+    }
+    Ok(stats)
+}
+
+/// Quantization drift against original FP32 input is measured, not hidden by
+/// relaxing the independent quantized-input implementation correctness gate.
+pub(super) fn measure(actual: &[f32], expected: &[f64]) -> Result<ErrorStats> {
     ensure!(
         !actual.is_empty() && actual.len() == expected.len(),
         "FFN comparison shape mismatch"
@@ -30,10 +47,6 @@ pub(super) fn compare(actual: &[f32], expected: &[f64]) -> Result<ErrorStats> {
             "FFN comparison contains nonfinite values"
         );
         let difference = (f64::from(a) - b).abs();
-        ensure!(
-            difference < 1e-3 + 2e-5 * b.abs(),
-            "FFN numerical drift {difference}, expected {b}"
-        );
         maximum = maximum.max(difference);
         sum += difference;
         bitwise_equal &= a.to_bits() == (b as f32).to_bits();
@@ -84,14 +97,34 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     let rows = pipeline.rows;
     let input = &layer.normalized_inputs[..rows * pipeline.d_model];
     let captured = &layer.swiglu_inputs[..rows * pipeline.hidden_dim];
+    let quantization = if pipeline.kernel.has_quantization() {
+        let shape = pipeline
+            .quantized
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("missing quantized scratch"))?
+            .shape;
+        let blocks = quantize_reference(input, shape)?;
+        let reconstructed: Vec<_> = blocks.iter().flat_map(|b| b.reconstruct()).collect();
+        let error = measure(
+            &reconstructed,
+            &input.iter().copied().map(f64::from).collect::<Vec<_>>(),
+        )?;
+        let bytes: Vec<_> = blocks.iter().flat_map(|b| b.to_bytes()).collect();
+        Some((reconstructed, error, bytes))
+    } else {
+        None
+    };
+    let reference_input = quantization
+        .as_ref()
+        .map_or(input, |(reconstructed, _, _)| reconstructed.as_slice());
     let gate_cpu = project(
-        input,
+        reference_input,
         source_bytes(pipeline.model, &layer.source.gate)?,
         &layer.source.gate,
         rows,
     )?;
     let up_cpu = project(
-        input,
+        reference_input,
         source_bytes(pipeline.model, &layer.source.up)?,
         &layer.source.up,
         rows,
@@ -110,15 +143,19 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     pipeline.drain()?;
     let hidden = pipeline.hidden.read(&pipeline.model.cuda)?;
     let hidden_error = compare(&hidden, &hidden_cpu)?;
-    let capture_error = compare(
+    let compare_capture = if pipeline.kernel.has_quantization() {
+        measure
+    } else {
+        compare
+    };
+    let capture_error = compare_capture(
         &hidden,
         &captured.iter().copied().map(f64::from).collect::<Vec<_>>(),
     )?;
     ensure!(
         rows != 1
-            || pipeline
-                .variant
-                .is_some_and(|variant| variant.threads() == 128)
+            || pipeline.kernel.has_quantization()
+            || matches!(pipeline.kernel,FfnKernel::Fp32(variant) if variant.threads()==128)
             || capture_error.bitwise_equal,
         "single-row native/256-thread FFN no longer reproduces frozen captured SwiGLU bits"
     );
@@ -130,12 +167,43 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
         &pipeline.isolated_output.read(&pipeline.model.cuda)?,
         &isolated_cpu,
     )?;
+    let quantization_report = if let Some((_, error, bytes)) = quantization {
+        let scratch = pipeline.quantized.as_ref().unwrap();
+        ensure!(
+            scratch.read(&pipeline.model.cuda)? == bytes,
+            "GPU Q8_1 bytes differ from independent CPU encoding"
+        );
+        let original_gate = project(
+            input,
+            source_bytes(pipeline.model, &layer.source.gate)?,
+            &layer.source.gate,
+            rows,
+        )?;
+        let original_up = project(
+            input,
+            source_bytes(pipeline.model, &layer.source.up)?,
+            &layer.source.up,
+            rows,
+        )?;
+        let original_hidden: Vec<_> = original_gate
+            .iter()
+            .zip(&original_up)
+            .map(|(&g, &u)| g / (1.0 + (-g).exp()) * u)
+            .collect();
+        json!({"activation_reconstruction":error,"encoded_bytes_match_cpu":true,"payload_bytes":scratch.shape.bytes(),
+            "gate_vs_original_fp32_cpu":measure(&pipeline.gate.read(&pipeline.model.cuda)?,&original_gate)?,
+            "up_vs_original_fp32_cpu":measure(&pipeline.up.read(&pipeline.model.cuda)?,&original_up)?,
+            "swiglu_vs_original_fp32_cpu":measure(&hidden,&original_hidden)?,
+            "scope":"quantization drift is diagnostic; strict correctness remains against quantized-input CPU references"})
+    } else {
+        Value::Null
+    };
     pipeline.verify_guards_and_inputs(layer)?;
     Ok(
         json!({"gate_vs_cpu":gate,"up_vs_cpu":up,"swiglu_vs_cpu":hidden_error,"swiglu_vs_frozen_capture":capture_error,
         "complete_down_vs_cpu_on_actual_swiglu":output,"isolated_down_vs_cpu_on_frozen_swiglu":isolated,
         "guards_and_immutable_inputs":true,"cpu_reference":"scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
-        "variant":pipeline.variant,
+        "variant":pipeline.kernel,"quantization":quantization_report,
         "tolerance":"absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical"}),
     )
 }

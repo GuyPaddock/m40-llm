@@ -84,10 +84,36 @@ The inspected 128-thread consumer has 64 XMAD, ten shuffle and one barrier
 instruction sites, with no DP4A or Tensor Core instructions. Static counts
 are not latency, measured occupancy or DRAM traffic.
 
-Next measure quantization-inclusive complete FFN costs using the existing
-real-input benchmark, including activation reconstruction and projection
-drift versus the FP32 control. Do not enable a runtime path from these
-numerical tests or treat Q8_1 as satisfying exact-output acceptance.
+## Quantization-Inclusive Benchmark
+
+The existing `q8_execution_bench` accepts `--ffn-q81` with the same frozen
+`--ffn-inputs` and `--ffn-capture-report` used by the
+[FP32 screen](ffn_benchmark_inputs.md#bounded-fp32-ffn-screen). It is mutually
+exclusive with `--ffn-f32-ablation`. Substitute `--ffn-q81` in that command;
+preserve the exact capture environment, release build, rows 1/4, five initial
+alternating native/candidate pairs and ten iterations per repeated stage.
+
+Only the two fixed Q8_1 geometries execute. Reserve one guarded activation
+buffer before validation/timing and reuse it across both arms. Native owns
+the same scratch for matched residency but does not quantize its input.
+Record payload and allocated capacity separately, including guard bytes.
+Keep qualified prepared down/vocabulary fixed. Gate/up and complete-FFN
+candidate totals include quantization on every iteration, not one cached
+quantization reused across an entire trial. A separate `quantize` stage
+measures its cost; do not add that cost to totals that already include it.
+
+Numerical validation compares encoded bytes and gate/up/SwiGLU against the
+independent quantized-input CPU reference using the existing strict tolerance.
+Reconstruction and original-FP32 projection/hidden drift are separate measured
+fields, not grounds to weaken the correctness tolerance. Native and initial
+256-thread FP32 variants retain frozen one-row bit requirements. All expensive
+CPU references and readbacks precede active warmup and primary pairs.
+
+Release M40 runner tests pass, including guarded reuse, exact quantizer launch
+accounting, cross-stream four-row execution, unchanged down, rejection before
+scratch reservation and native/FP32 regression checks. Real-input measurement
+is still pending. Do not enable a runtime path from these tests or treat Q8_1
+as satisfying exact-output acceptance.
 
 ## Atomic Delivery
 

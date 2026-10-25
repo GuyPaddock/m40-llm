@@ -1,11 +1,11 @@
 use super::{
     fixture::FfnInputs,
-    pipeline::{FfnPipeline, GuardedF32, Stage},
+    pipeline::{FfnKernel, FfnPipeline, GuardedF32, Stage},
     validation,
 };
 use anyhow::Result;
 use m40_llm::{
-    cuda::{CudaContext, CudaStream, DeviceBuffer, Q8FfnFp32Variant},
+    cuda::{CudaContext, CudaStream, DeviceBuffer, Q8FfnFp32Variant, Q8FfnQ81Launch},
     evaluation::{
         corpus::Corpus,
         ffn_capture::{
@@ -163,6 +163,97 @@ fn test_ffn_numerical_gate_rejects_full_output_drift() -> Result<()> {
     assert!(validation::compare(&[1.0, f32::NAN], &[1.0, 2.0]).is_err());
     assert!(validation::compare(&[1.0], &[1.0, 2.0]).is_err());
     assert!(validation::compare(&[], &[]).is_err());
+    assert!((validation::measure(&[1.0, 2.1], &[1.0, 2.0])?.max_abs_diff - 0.1).abs() < 1e-6);
+    assert!(validation::measure(&[f32::NAN], &[1.0]).is_err());
+    Ok(())
+}
+
+/// Q8_1 candidates must reserve reusable guarded scratch before selection,
+/// include one quantizer in every gate/complete step, and keep strict numerical
+/// correctness separate from intentionally reported FP32-activation drift.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_q81_pipeline_accounts_for_quantization_and_keeps_down() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build(0);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layer = sample_layer(&model)?;
+        for rows in [1, 4] {
+            let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
+            let capacity = pipeline.scratch_bytes();
+            let before = m40_llm::profile::snapshot();
+            assert!(pipeline
+                .select_kernel(FfnKernel::Q81(Q8FfnQ81Launch::Threads128))
+                .is_err());
+            assert!(pipeline.time(Stage::Quantize, 1).is_err());
+            assert_eq!(
+                m40_llm::profile::counter_delta(&before, &m40_llm::profile::snapshot()),
+                Default::default()
+            );
+            pipeline.reserve_quantized_scratch()?;
+            assert!(pipeline.reserve_quantized_scratch().is_err());
+            assert_eq!(
+                pipeline.scratch_bytes(),
+                capacity + rows * 64 / 32 * 36 + 32
+            );
+            let resident = CudaContext::total_device_bytes();
+            for launch in Q8FfnQ81Launch::ALL {
+                pipeline.select_kernel(FfnKernel::Q81(launch))?;
+                let checks = validation::validate(&pipeline, &layer)?;
+                assert_eq!(checks["quantization"]["encoded_bytes_match_cpu"], true);
+                assert_eq!(checks["quantization"]["payload_bytes"], rows * 64 / 32 * 36);
+                for stage in [
+                    Stage::Quantize,
+                    Stage::GateUpSwiglu,
+                    Stage::IsolatedDown,
+                    Stage::Complete,
+                    Stage::Complete,
+                ] {
+                    let timing = pipeline.time(stage, 8)?;
+                    let counters = &timing["enqueue_counters"];
+                    let launches = match stage {
+                        Stage::Quantize | Stage::IsolatedDown => 1,
+                        Stage::GateUpSwiglu => 2,
+                        Stage::Complete => 3,
+                    };
+                    let waits = if rows == 1 {
+                        0
+                    } else if matches!(stage, Stage::Complete) {
+                        2
+                    } else {
+                        1
+                    };
+                    assert_eq!(counters["launches"], 8 * launches);
+                    assert_eq!(counters["stream_waits"], 8 * waits);
+                    for key in [
+                        "device_allocs",
+                        "device_frees",
+                        "h2d_copies",
+                        "d2h_copies",
+                        "stream_syncs",
+                        "cublas_calls",
+                    ] {
+                        assert_eq!(counters[key], 0, "{key}");
+                    }
+                }
+                let after = validation::validate(&pipeline, &layer)?;
+                assert_eq!(after["guards_and_immutable_inputs"], true);
+                assert_eq!(CudaContext::total_device_bytes(), resident);
+                pipeline.select_kernel(FfnKernel::Native)?;
+                assert!(validation::validate(&pipeline, &layer)?["quantization"].is_null());
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
 
@@ -350,6 +441,7 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
                     (_, Stage::IsolatedDown) => 7,
                     (_, Stage::GateUpSwiglu) => 21,
                     (_, Stage::Complete) => 28,
+                    (_, Stage::Quantize) => unreachable!("native stage list excludes quantization"),
                 };
                 assert_eq!(counters["launches"], launches);
                 for key in [
@@ -452,7 +544,7 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
             validation::validate(&pipeline, &layer)?;
             let native_hidden = pipeline.hidden.read(&model.cuda)?;
             for variant in Q8FfnFp32Variant::ALL {
-                pipeline.select_variant(Some(variant))?;
+                pipeline.select_kernel(FfnKernel::Fp32(variant))?;
                 let checks = validation::validate(&pipeline, &layer)?;
                 assert_eq!(checks["guards_and_immutable_inputs"], true);
                 if rows == 1 && variant.threads() == 256 {
@@ -496,7 +588,7 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                 pipeline.verify_guards_and_inputs(&layer)?;
                 assert_eq!(pipeline.scratch_bytes(), capacity);
                 assert_eq!(CudaContext::total_device_bytes(), resident);
-                pipeline.select_variant(None)?;
+                pipeline.select_kernel(FfnKernel::Native)?;
                 pipeline.enqueue(Stage::Complete)?;
                 pipeline.drain()?;
                 assert_eq!(pipeline.hidden.read(&model.cuda)?, native_hidden);

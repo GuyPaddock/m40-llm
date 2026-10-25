@@ -79,6 +79,9 @@ struct Args {
     /// Pair the five fixed M03 FP32 kernels against fresh native FFN controls.
     #[arg(long, requires = "ffn_inputs")]
     ffn_f32_ablation: bool,
+    /// Pair the two Q8_1 numerical candidates, including activation encoding.
+    #[arg(long, requires = "ffn_inputs", conflicts_with = "ffn_f32_ablation")]
+    ffn_q81: bool,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -564,6 +567,13 @@ mod argument_tests {
                 .ffn_f32_ablation
         );
         assert!(parse(&["--ffn-f32-ablation"]).is_err());
+        assert!(parse(&["--ffn-q81"]).is_err());
+        assert!(
+            parse(&[flags.as_slice(), &["--ffn-q81"]].concat())
+                .unwrap()
+                .ffn_q81
+        );
+        assert!(parse(&[flags.as_slice(), &["--ffn-q81", "--ffn-f32-ablation"]].concat()).is_err());
         assert!(parse(&["--ffn-inputs", "inputs.json"]).is_err());
         assert!(parse(&["--ffn-capture-report", "capture.jsonl"]).is_err());
         for extra in [
