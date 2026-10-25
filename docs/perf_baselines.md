@@ -2,6 +2,35 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Prepared Q8 Release HTTP Gate
+
+Three immutable family configurations complete C10A's bounded HTTP screen,
+with five serial native/prepared pairs each, dense KV, 65 shared prompt IDs,
+and 512 generated IDs. No candidate passes both timing and actual-ID parity.
+
+| Prepared families | Native HTTP tok/s | Prepared HTTP tok/s | Outcome |
+| --- | ---: | ---: | --- |
+| All | 31.946 | 11.433 | -64.21%; IDs match |
+| QKV/output/down/vocabulary, native MLP | 31.907 | 29.765 | -6.71%; IDs match |
+| Down/vocabulary only | 31.847 | 35.837 | +12.53%; IDs diverge at step 310 |
+
+The last row is a timing lead, **not a promoted exact-output result**. Its
+95% paired-bootstrap gain interval is [12.430%, 12.796%], but the generated
+continuation changes. All configurations remain opt-in; preparation stays off.
+The qualified selection remains C07's native Q8 plus split8/256 exact attention.
+Neither original speed target is met, and Ollama was an untimed oracle here.
+
+Canonical `4`/`OK`/`37` smokes pass for native and both reduced candidates.
+Initial user-only OK/config failures on the native reference are retained as
+inconclusive. Cold candidate loading is about 17.5-17.9 s; extra prepared
+weight payload is 3.279/1.554/1.193 GB, respectively. Combined-model host RSS
+and boundary device usage are not standalone candidate peak VRAM measurements.
+
+See the [release report and raw JSONL](experiments/2026-10-25-q8-prepared-http.md)
+for every paired result, actual token traces, confidence intervals, setup/memory
+accounting, smoke correction, and next keep/remove checkpoint. No further
+layout/geometry tuning was added, and benchmark processes were cleaned up.
+
 ## 2026-10-24: Prepared Q8 Runtime Correctness Checkpoint
 
 C10A adds opt-in model-owned split/mixed layouts, prepared fused QKV/MLP, and

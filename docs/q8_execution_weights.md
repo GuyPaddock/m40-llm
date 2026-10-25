@@ -4,7 +4,11 @@ The API in `infer::execution_weights` owns lossless execution representations,
 separate from `DeviceTensorView`, uploaded GGUF weights, and the model's FP32
 materialization cache. C08-C10 established ownership and isolated measurements;
 C10A.1 adds opt-in model-owned preparation and standard projection dispatch.
-Preparation remains disabled by default. No generation speedup is claimed yet.
+Preparation remains disabled by default. The
+[release HTTP gate](experiments/2026-10-25-q8-prepared-http.md) rejects all-family
+and native-MLP timing regressions. Down/vocabulary-only preparation is faster
+but changes the generated continuation at step 310, so it also fails the
+combined promotion gate. No qualified generation speedup is claimed.
 
 C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
 and real-tensor release microbenchmark. See the
@@ -295,10 +299,13 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_greedy -- --nocapture --test-threads=1
 ```
 
-Next: model-level parity and repeated HTTP
-gates. C09/C10 isolated results do not prove whole-model wins or justify
-replacing useful fused operations. Keep setup,
-duplicate resident weights, and peak payload accounting explicit.
+The repeated HTTP gate is now complete. Full preparation reduces throughput
+by 64.21%, retaining native MLP reduces it by 6.71%, and down/vocabulary-only
+increases it by 12.53% but fails actual-ID parity. See the linked release report
+before selecting an experimental family subset. C09/C10 isolated results do not qualify a runtime
+configuration; keep setup, duplicate weights, and memory scope explicit.
+Next is C11's keep/remove checkpoint, then C11A's offline n-gram study, not
+another layout search.
 The selected exact-attention
 benchmark configuration remains split8/256 from C07; global runtime/KV defaults
 are unchanged, and neither unchanged-model throughput target has been reached.

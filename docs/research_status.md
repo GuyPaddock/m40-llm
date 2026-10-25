@@ -13,81 +13,46 @@ experiments, the offline n-gram feasibility gate, conditional speculation, and
 separately evaluated model-changing research. It is not replaced by the
 [legacy task roadmap](archive/legacy-task-roadmap.md).
 
-## Work in Progress: 2026-10-24
+## Prepared Q8 HTTP Checkpoint: 2026-10-25
 
-C01-C10 and the uploaded-weight accounting prerequisite `81948df` are complete.
-C10A.1/2 add opt-in model-owned Q8 preparation, standard projections, fused
-consumers, and greedy vocabulary integration. HTTP validation is pending. Runtime/KV
-defaults and the selected C07 benchmark configuration are unchanged.
-The real split-cache Qwen Q8 arithmetic canary returns `4`; cache/stream/failure
-tests, existing CUDA regressions with cuBLAS on/off, non-CUDA warning-as-error
-tests, and both Clippy lanes pass. See [ownership and validation details](q8_execution_weights.md).
-This is correctness evidence, not a generation speedup.
+C01-C10 and C10A implementation/HTTP validation are complete. No prepared
+candidate passes the combined timing and actual-ID parity gate. Keep the
+qualified C07 native-Q8/split8/256 attention benchmark configuration and
+preparation off. Runtime/KV defaults are unchanged; both overall speed goals
+remain unmet.
 
-The dependency-ordered C10A units are:
+Five serial release pairs per subset, each with 65 prompt IDs and 512 generated
+IDs, give:
 
-1. `feat(infer): prepare model-owned Q8 layouts`: loader/cache configuration,
-   semantic identity, budgets, stream-aware standard dispatch, and ownership/
-   numerical tests. Depends on C08-C10 and the allocation prerequisites.
-2. `perf(cuda): reuse Q8 layouts in fused decode`: prepared fused QKV and
-   gate/up/SwiGLU consumers plus greedy vocabulary integration, preserving
-   useful fusion and producer streams. Depends on C10A.1 and parity tests.
-3. `test(bench): validate prepared Q8 HTTP gains`: immutable native/prepared
-   model controls, serial paired HTTP measurements, actual token traces,
-   setup/resident-memory reporting, and the promotion decision. Depends on
-   C10A.2 and model parity; no microbenchmark-only promotion.
+| Prepared families | Native / prepared HTTP tok/s | Actual IDs equal | Decision |
+| --- | --- | --- | --- |
+| All | 31.946 / 11.433 | Yes | Timing regression |
+| QKV/output/down/vocabulary; native MLP | 31.907 / 29.765 | Yes | Timing regression |
+| Down/vocabulary only | 31.847 / 35.837 | No | Timing lead, parity rejection |
 
-C10A.1 is committed as `11f2fb6`. Split C10A.2 into focused consumer commits:
-`perf(cuda): use prepared Q8 for fused QKV`, then
-`perf(cuda): reuse prepared Q8 in fused MLP`, then
-`perf(infer): use prepared Q8 greedy logits`. Each depends on the cache and
-its own numerical/stream tests; the HTTP gate waits for all three.
-Prepared fused QKV now preserves one-launch dispatch, optional biases, and both
-producer streams; CPU/native-GPU tail and shape tests pass. The real Qwen Q8
-canary returns `4` and records 756 prepared fused-QKV launches.
-Prepared fused gate/up/SwiGLU now retains a one-column/128-thread launch with
-shared activation reads and aligned split values, not the failed four-column
-fusion. Independent-weight, tail, stream, CPU/native tests pass. Greedy
-vocabulary integration now uses prepared projection plus device argmax, with
-exactly one u32 readback and no device allocation in selection. CPU/native/
-full-logits/tie/stream checks pass. There is no new HTTP speed claim.
-The real fully prepared QKV/MLP canary returns `4` with 756 launches of each
-consumer. Its unpaired debug generation total is higher than the previous
-native-MLP canary; preserve that evidence and compare native/prepared MLP
-explicitly in the release gate instead of assuming all prepared fusion wins.
-Next is C10A.3: immutable model controls, per-family native/prepared choices,
-actual-token parity, and the serial paired release HTTP promotion gate.
-The real Qwen vocabulary/output-norm probe matches full logits and copies only
-one u32 D2H; its subsequent text canary still answers `4`. C10A.3 must provide
-per-model native/prepared family controls before timing, particularly for MLP,
-without mutating shared dispatch configuration between active requests.
+The last subset first diverges at zero-based generated step 310. It is not a
+new qualified best result. Canonical arithmetic/OK/config smokes pass native
+and both reduced subsets; the first run's user-only OK/config reference
+failures remain inconclusive. The three runs never overlap; the isolated
+oracle has been stopped and GPU allocation returned to zero.
 
-Split C10A.3 into dependency-ordered commits:
+See the [full release report and raw artifacts](experiments/2026-10-25-q8-prepared-http.md)
+for confidence intervals, timing boundaries, memory/setup costs, and limitations.
+Implementation/test contracts and earlier correctness canaries remain in
+[Q8 execution weights](q8_execution_weights.md).
 
-1. `feat(infer): select prepared Q8 families`: immutable load-time family
-   selection, preparation-budget/accounting changes, and behavioral dispatch
-   tests. Depends on C10A.1/2; excluded families retain native fused kernels.
-2. `test(bench): compare prepared Q8 over HTTP`: two separately loaded model
-   controls, matched serial requests, setup/memory records, and actual token
-   traces. Depends on the family selector and the existing comparison protocol.
-3. `docs(perf): record prepared Q8 HTTP results`: bounded release measurements,
-   quality/promotion decisions, and raw artifacts after the benchmark commit.
-   Keep the full and native-MLP candidates distinct; no new kernel geometries.
+C10A commits preserve cache/loading (`11f2fb6`), fused QKV (`4db3c1e`), fused
+MLP (`e2dbc61`), greedy vocabulary (`b76177d`), immutable families (`3d176fe`),
+and HTTP comparison (`26bc810`). `e74ed87` fixes only quality-smoke formatting,
+without changing the measured browser prompt. CUDA family/ownership/forward/
+attention tests, cuBLAS on/off checks, non-CUDA warning-as-error tests,
+Clippy, and protocol/CLI tests pass.
 
-The family selector now captures `all` or an explicit subset at loading and
-omits excluded allocations entirely. M40 tests verify per-family native/prepared
-dispatch, retained one-launch native fused MLP, greedy parity, exact memory
-accounting, and coexistence of differently configured model instances. Defaults
-remain off for preparation; the release comparison is next.
-The HTTP runner now accepts `--compare-q8-execution split|mixed` and an explicit
-family subset. It loads an independent native control, runs serial paired
-requests, and records setup/memory, quality smokes, stable output, actual IDs,
-and request timestamps. The comparison follows the existing bounded confidence
-protocol and does not infer the Ollama target from a native-control ratio.
-
-Preserve useful fusion and account for duplicate source/prepared weights.
-Do not reopen the completed layout tuning rounds or claim a runtime speedup
-from their projection microbenchmarks.
+Next is C11's keep/remove decision and exact-kernel checkpoint. Preserve
+these commits/results before any removal. Then run the formal C11A offline
+n-gram feasibility study on the selected configuration. Do not extend the
+closed round with more layout/geometry tuning or reinterpret isolated gains
+as qualified generation speedups.
 
 ## Committed Checkpoint: 2026-10-24
 
