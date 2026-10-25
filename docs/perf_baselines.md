@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Prepared Q8 Same-Prefix Branch Diagnostic
+
+Clean release `6ff0f63` reproduces C10A's down/vocabulary branch at generated
+step 310 on identical native prefixes. All 317 native predictions match the
+archive; only step 310 differs between models under forced native history.
+Both vocabulary heads choose 1008 on native hidden state and 5815 on prepared
+hidden state, localizing this branch to forward drift rather than the head.
+
+At that prefix, generic top-two margin is 0.000270844 native. Hidden-state
+change produces up to 0.004250050 generic-logit drift, while changing the head
+on the same hidden state changes logits by at most 3.815e-6. All sampled
+top-ten sets overlap 10/10. The result narrows the next check to prepared down
+reduction order; it neither proves harmless rounding nor promotes the old
++12.53% timing lead. This is untimed numerical evidence, not a new speed test.
+See [the full intervention, ranks, audit and raw data](experiments/2026-10-25-q8-prepared-prefix-drift.md).
+
 ## 2026-10-25: Frozen Layer and Activation Composition
 
 C26 now includes the combined checkpoint on clean release `26a3a5d`, frozen

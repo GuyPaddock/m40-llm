@@ -235,6 +235,17 @@ controls, original absolute positions, evidence identity and cleanup must
 validate before the clean release probe. The old candidate remains unqualified
 until the branch is explained and the existing acceptance gate is satisfied.
 
+The clean `6ff0f63` probe reproduces the archived branch exactly. All 317 native
+predictions match history; the only forced-prefix disagreement is step 310.
+Both heads choose 1008 from native hidden state and 5815 from prepared hidden
+state. Same-hidden head drift is at most 3.815e-6, while forward-induced
+generic-logit drift reaches 0.004250050 across a native top-two margin of
+0.000270844. See [the report and raw data](experiments/2026-10-25-q8-prepared-prefix-drift.md).
+Next check existing 4-column/256-thread separate projection against native
+decode bitwise at Qwen down dimensions: cache dispatch currently selects 128,
+and the selected native coltile4/split4 path uses 256. No new kernel/layout
+search or parity-gate relaxation is authorized by this observation.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
