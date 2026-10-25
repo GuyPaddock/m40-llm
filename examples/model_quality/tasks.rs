@@ -53,6 +53,14 @@ pub fn warmup(model: &LoadedModel, tokenizer: &Tokenizer) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TaskResult {
+    pub reference_passed: bool,
+    pub candidate_passed: bool,
+    pub first_reference_token_id: Option<u32>,
+    pub has_identical_generation: bool,
+}
+
 pub(super) fn generation_record(
     generated: &GeneratedText,
     wall_ms: f64,
@@ -72,7 +80,7 @@ pub fn evaluate_task(
     reference: &LoadedModel,
     candidate: &LoadedModel,
     tokenizer: &Tokenizer,
-) -> Result<(bool, bool)> {
+) -> Result<TaskResult> {
     let (prompt, expected_ids) = encode_task(tokenizer, &task.prompt)?;
     reference.reset_activation_statistics()?;
     candidate.reset_activation_statistics()?;
@@ -112,6 +120,9 @@ pub fn evaluate_task(
                         .min(candidate_generated.metrics.generated_tokens),
                 )
         });
+    let has_identical_generation = first_generated_divergence.is_none()
+        && reference_generated.output == candidate_generated.output
+        && reference_generated.metrics.stop_reason == candidate_generated.metrics.stop_reason;
     report.append(json!({"kind":"model_quality_task","split":split,"id":task.id,"family":task.family,
         "user_prompt":task.prompt,"rendered_prompt":prompt,"prompt_token_ids":expected_ids,
         "max_tokens":task.max_tokens,"scoring_rule":task.scoring,
@@ -119,9 +130,10 @@ pub fn evaluate_task(
         "candidate":generation_record(&candidate_generated, candidate_wall_ms, candidate)?,
         "reference_score":reference_score,"candidate_score":candidate_score,
         "quality_conclusion":QualityConclusion::compare(reference_score.passed, candidate_score.passed),
-        "first_generated_divergence_step_zero_based":first_generated_divergence}))?;
+        "first_generated_divergence_step_zero_based":first_generated_divergence,
+        "has_identical_generation":has_identical_generation}))?;
     eprintln!(
-        "{split:?} {}: dense={}, candidate={}, prefill={:.1}/{:.1} ms decode={:.1}/{:.1} ms",
+        "{split:?} {}: reference={}, candidate={}, prefill={:.1}/{:.1} ms decode={:.1}/{:.1} ms",
         task.id,
         reference_score.passed,
         candidate_score.passed,
@@ -130,7 +142,15 @@ pub fn evaluate_task(
         reference_generated.metrics.decode_elapsed_ms,
         candidate_generated.metrics.decode_elapsed_ms
     );
-    Ok((reference_score.passed, candidate_score.passed))
+    Ok(TaskResult {
+        reference_passed: reference_score.passed,
+        candidate_passed: candidate_score.passed,
+        first_reference_token_id: reference_generated
+            .token_ids
+            .get(reference_generated.prompt_token_len)
+            .copied(),
+        has_identical_generation,
+    })
 }
 
 #[cfg(test)]
@@ -178,17 +198,20 @@ mod tests {
             let destination = crate::test_files::TestReportPath::new();
             let path = destination.path();
             let mut report = Report::create(path)?;
+            let result = evaluate_task(
+                &mut report,
+                Split::HeldOut,
+                &task,
+                &reference,
+                &candidate,
+                &tokenizer,
+            )?;
             assert_eq!(
-                evaluate_task(
-                    &mut report,
-                    Split::HeldOut,
-                    &task,
-                    &reference,
-                    &candidate,
-                    &tokenizer
-                )?,
+                (result.reference_passed, result.candidate_passed),
                 (false, false)
             );
+            assert!(result.has_identical_generation);
+            assert!(result.first_reference_token_id.is_some());
             let record: Value = serde_json::from_str(std::fs::read_to_string(path)?.trim())?;
             assert_eq!(record["quality_conclusion"], "inconclusive");
             assert_eq!(record["prompt_token_ids"], json!(tokenizer.encode("Hi")?));

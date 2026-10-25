@@ -114,6 +114,35 @@ After freezing that artifact, apply it with `--layer-ranking frozen.json` and
 is recorded; held-out results never choose the layer set. See
 [layer-ranking contracts and commands](layer_ranking.md).
 
+For C25, `--compact-export-report completed-export.json` selects a separate
+equivalence check. The reference receives the export's checked original-layer
+mask before allocating KV; the compact candidate runs all retained layers.
+Ad-hoc masks, fitting and activation transforms conflict with this flag.
+File hashes, copied metadata, tensor mapping and embedded quality lineage must
+match before model load. The normal reference remains unmasked when the flag
+is absent. See [compact export and comparison](compact_gguf.md).
+
+This mode requires identical generated IDs, text and stop reason. Additional
+`compact_task_logit_parity` rows compare full logits over the task's observed
+prefixes, including final prompt and the continuation after its first sampled
+token. A terminal dummy target exposes that last row without forwarding the
+dummy; it never contributes to corpus PPL. Diagnostics need two reserved
+tokens and run outside measured task generation. All full-logit differences
+must be zero, including the normal loss passages. Timed predictions must also
+match when paired step timing is enabled.
+
+Compact split summaries use `masked_reference_passes`,
+`masked_reference_regressions` and `masked_reference_failed_tasks`, not the
+unchanged-model dense-reference labels. Exported prior quality costs remain
+in the manifest. Exact source/compact parity does not restore the unmodified
+model's quality or establish an exact-engine improvement. A completed report
+marks `compact_equivalence_verified=true` only after all checks and cleanup.
+
+Memory records include the successful context-owned weight allocation request,
+physical KV slots and allocated context. KV payload capacity is recorded
+separately from the Rust allocation tracker, which excludes native KV storage.
+Neither is standalone peak VRAM or CUDA/library allocator overhead.
+
 The manifest records model/corpus/config/executable hashes, source revision,
 worktree, toolchains, build flags, device, and selected splits. Split records
 hash the serialized selected data. Task rows retain raw text, rendered prompt,

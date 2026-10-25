@@ -1,8 +1,16 @@
 #[cfg(all(feature = "cuda", nvcc))]
 mod activations;
+#[cfg(all(feature = "cuda", nvcc))]
+mod compact;
+#[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "../../tests/common/compact_gguf.rs"]
+mod compact_fixture;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/cuda_test_scope.rs"]
 mod cuda_test_scope;
+#[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "../../tests/common/env_restore.rs"]
+mod env_restore;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/tiny_gguf.rs"]
 mod fixture;
@@ -61,6 +69,10 @@ struct Args {
     split: SplitChoice,
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
+    /// Compare the masked source against an unmasked compact candidate using
+    /// this completed export record. Other candidate transforms are forbidden.
+    #[arg(long, conflicts_with_all=["skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
+    compact_export_report: Option<PathBuf>,
     /// Candidate-only diagnostic, zero-based interior IDs; reference stays intact.
     #[arg(long, value_delimiter = ',', conflicts_with_all=["rank_layers","layer_ranking"])]
     skip_layers: Vec<usize>,
@@ -209,6 +221,37 @@ mod argument_tests {
             ],
         ] {
             assert!(parse(&extra).is_err());
+        }
+    }
+
+    /// Compact equivalence has its own checked source mask. Ad-hoc candidate
+    /// masks or simultaneous fitting/transforms cannot silently change the pair.
+    #[test]
+    fn test_compact_comparison_arguments_reject_other_transforms() {
+        assert!(parse(&["--compact-export-report", "export.json"])
+            .unwrap()
+            .compact_export_report
+            .is_some());
+        for extra in [
+            vec!["--skip-layers", "1"],
+            vec!["--rank-layers", "new.json"],
+            vec![
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "1",
+            ],
+            vec!["--capture-activations", "new.json"],
+            vec![
+                "--activation-calibration",
+                "frozen.json",
+                "--activation-target",
+                "0.5",
+            ],
+        ] {
+            let mut values = vec!["--compact-export-report", "export.json"];
+            values.extend(extra);
+            assert!(parse(&values).is_err());
         }
     }
 }

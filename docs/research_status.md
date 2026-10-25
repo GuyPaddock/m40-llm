@@ -171,6 +171,15 @@ serial CPU-only run. This is not a GPU allocation, inference parity or speed
 result. See [the checkpoint and reproduction identities](experiments/2026-10-25-compact-layer8-export-checkpoint.md).
 Next is the live masked-source/compact-model comparison, not another mask fit.
 
+The shared quality runner now has an explicit `--compact-export-report`
+comparison mode. It masks only the original source, verifies compact file and
+metadata lineage, checks actual owned uploads and physical KV capacity, and
+requires matching generation plus zero full-logit drift. Additional task-prefix
+diagnostics stay outside generation and paired timing. All 16 runner tests,
+including the real exported Qwen artifact, pass on M40 with cuBLAS on/off.
+Normal reference-mask guardrails remain intact. Clean release measurements
+over both frozen splits are the remaining C25 checkpoint.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

@@ -109,6 +109,53 @@ Then measure actual uploaded weight and allocated KV reductions independently
 of logical active-layer counts. No original model, runtime default or
 unchanged-engine performance claim changes through this work.
 
+## Live Masked-Source Comparison
+
+The shared `model_quality` runner accepts `--compact-export-report` to compare
+the original source with its checked frozen mask against the compact artifact
+with every retained layer active. Do not use `--skip-layers 8` on the compact
+file; its layer IDs have already been renumbered. Other model transforms and
+fitting flags conflict with this comparison mode.
+
+Use the selected native-Q8 CUDA environment from
+[the quality-runner instructions](model_quality.md#release-runner), then run
+serially with the original source in `$model`:
+
+```bash
+cargo build --release --features cuda --example model_quality
+target/release/examples/model_quality \
+  --reference-model "$model" \
+  --model target/research-exports/qwen-q8-pruned-layer8.gguf \
+  --compact-export-report docs/experiments/2026-10-25-compact-layer8-export.json \
+  --variant-id compact-layer8-equivalence --split all --context-tokens 1024 \
+  --step-timing-trials 5 --output /tmp/compact-layer8-equivalence.jsonl
+```
+
+Source/output hashes, copied metadata, tensor descriptors and evidence lineage
+are checked before load. After load, the runner checks source-only masking,
+matching dimensions/RoPE/tokenizers, successful owned weight allocations and
+fewer physical KV slots at unchanged context. It verifies identical task
+tokens/text/stops, zero full-logit drift on task-prefix boundaries and loss
+passages, and equal forced-prefix predictions in the paired timing trials.
+Diagnostic full-prefix readback/scoring is not generation timing or corpus
+PPL. The final dummy target is never forwarded. No complete record is written
+if a check fails; retain the partial rows for diagnosis.
+
+This reference is the masked source, not the original full-layer model.
+Compact summaries name it explicitly and retain the existing C24 quality
+costs. Requested weights and native KV payload capacity are separate; native
+KV does not appear in the Rust allocation-tracker total. Driver/library
+overhead and peak VRAM are not measured by these fields. Preflight file hashing
+is timed separately from model load and is not fresh-process cold I/O.
+
+The ignored real-model CUDA smoke requires explicit
+`M40LLM_COMPACT_SOURCE_MODEL`, `M40LLM_COMPACT_MODEL` and
+`M40LLM_COMPACT_EXPORT_REPORT` paths. It never scans caches or downloads a model.
+An explicit request fails if the device or model paths are unavailable.
+The Qwen-only parallel head128 override is scoped to that test, not the suite's
+head64 fixtures. CPU preflight checks and a same-top-token/different-logit
+negative case protect against weak equivalence claims.
+
 Four CPU copy-plan, two evidence and four writer tests cover both supported
 architectures, scalar block-count widths, mixed payloads, custom/default
 alignment, exact unchanged metadata bytes, invalid claims and filesystem

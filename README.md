@@ -157,7 +157,8 @@ Research support and opt-in diagnostics:
 - Opt-in Q8 execution-weight preparation, ownership, and layout contracts:
   [`docs/q8_execution_weights.md`](docs/q8_execution_weights.md)
 - Model-variant quality evaluation and opt-in layer masks:
-  [`docs/model_quality.md`](docs/model_quality.md), [`docs/layer_masks.md`](docs/layer_masks.md)
+  [`docs/model_quality.md`](docs/model_quality.md), [`docs/layer_masks.md`](docs/layer_masks.md),
+  [`docs/compact_gguf.md`](docs/compact_gguf.md)
 - M40 performance roadmap, batching, CUDA Graphs, and backend direction:
   [`docs/roadmap.md`](docs/roadmap.md)
 - Current benchmark history:

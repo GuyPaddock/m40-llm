@@ -39,6 +39,14 @@ impl CompactTensorCopy {
     pub fn payload_bytes(&self) -> u64 {
         self.payload_bytes
     }
+
+    pub fn dtype(&self) -> GgmlDType {
+        self.dtype
+    }
+
+    pub fn shape(&self) -> &[u64] {
+        &self.shape
+    }
 }
 
 /// Validated layer/tensor mapping, not proof of model quality. The export

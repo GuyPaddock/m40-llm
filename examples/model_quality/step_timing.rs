@@ -11,6 +11,8 @@ use std::time::Instant;
 pub struct StepTimingConfig {
     pub trials: usize,
     pub warm_prefix_tokens: usize,
+    pub expected_reference_skipped_layers: Vec<usize>,
+    pub should_require_equivalent_predictions: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -123,8 +125,8 @@ pub fn measure_pairs(
         "step timing requires 1..32 trials"
     );
     ensure!(
-        !reference.layer_mask.has_skipped_layers(),
-        "step timing reference must keep every layer"
+        reference.layer_mask.skipped_layers() == config.expected_reference_skipped_layers,
+        "step timing reference mask differs from the checked comparison"
     );
     let mut reference_times = Vec::new();
     let mut candidate_times = Vec::new();
@@ -145,6 +147,13 @@ pub fn measure_pairs(
             a.timed_prefix_lengths == b.timed_prefix_lengths,
             "timed token workloads differ"
         );
+        if config.should_require_equivalent_predictions {
+            ensure!(
+                a.warm_prediction_id == b.warm_prediction_id
+                    && a.predicted_token_ids == b.predicted_token_ids,
+                "compact/source forced-prefix predictions differ"
+            );
+        }
         for (trace, prior) in [
             (&a, &mut reference_predictions),
             (&b, &mut candidate_predictions),
@@ -170,6 +179,8 @@ pub fn measure_pairs(
         report.append(json!({"kind":"model_quality_step_timing","split":split,"passage_id":passage_id,
             "trial":trial,"input_token_ids":ids,"reference":a,"candidate":b,
             "execution_order":if trial%2 == 0 {vec!["reference","candidate"]} else {vec!["candidate","reference"]},
+            "reference_skipped_layer_ids":config.expected_reference_skipped_layers,
+            "requires_equivalent_predictions":config.should_require_equivalent_predictions,
             "first_prediction_divergence_prefix_tokens":first_prediction_divergence_prefix_tokens,
             "scope":"matched observed prefixes, greedy next-token API including GPU argmax/readback and final stream drains; excludes reset/scratch/warmup; NOT free generation or HTTP TPS"}))?;
     }
@@ -256,6 +267,8 @@ mod tests {
             StepTimingConfig {
                 trials: 2,
                 warm_prefix_tokens: 2,
+                expected_reference_skipped_layers: Vec::new(),
+                should_require_equivalent_predictions: false,
             },
         )?;
         let records = std::fs::read_to_string(destination.path())?
@@ -278,6 +291,69 @@ mod tests {
         assert_eq!(records[2]["trials"], 2);
         assert_eq!(records[2]["has_stable_predictions"], true);
         assert_eq!(records[2]["is_exact_engine_promotion"], false);
+        Ok(())
+    }
+
+    /// A masked source is accepted only when the checked comparison declares
+    /// that exact mask. Wrong reference expectations fail before forward work.
+    #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
+    fn test_paired_steps_require_the_declared_reference_mask() -> Result<()> {
+        let _scope = crate::cuda_test_scope::lock_cuda();
+        let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+        let initial = CudaContext::total_device_bytes();
+        {
+            let mut reference = model(&[1])?;
+            let mut candidate = model(&[1])?;
+            let destination = crate::test_files::TestReportPath::new();
+            let mut report = Report::create(destination.path())?;
+            let before = m40_llm::profile::snapshot();
+            assert!(measure_pairs(
+                &mut report,
+                Split::HeldOut,
+                "mask-contract",
+                &mut reference,
+                &mut candidate,
+                &[1, 2, 3, 4, 5],
+                StepTimingConfig {
+                    trials: 1,
+                    warm_prefix_tokens: 2,
+                    expected_reference_skipped_layers: vec![],
+                    should_require_equivalent_predictions: true
+                }
+            )
+            .is_err());
+            assert_eq!(
+                m40_llm::profile::counter_delta(&before, &m40_llm::profile::snapshot()),
+                m40_llm::profile::OpCounters::default()
+            );
+            measure_pairs(
+                &mut report,
+                Split::HeldOut,
+                "mask-contract",
+                &mut reference,
+                &mut candidate,
+                &[1, 2, 3, 4, 5],
+                StepTimingConfig {
+                    trials: 1,
+                    warm_prefix_tokens: 2,
+                    expected_reference_skipped_layers: vec![1],
+                    should_require_equivalent_predictions: true,
+                },
+            )?;
+            let records: Vec<serde_json::Value> = std::fs::read_to_string(destination.path())?
+                .lines()
+                .map(serde_json::from_str)
+                .collect::<Result<_, _>>()?;
+            assert_eq!(records.len(), 2);
+            assert_eq!(records[0]["reference_skipped_layer_ids"], json!([1]));
+            assert_eq!(records[0]["requires_equivalent_predictions"], true);
+            assert_eq!(
+                records[0]["reference"]["predicted_token_ids"],
+                records[0]["candidate"]["predicted_token_ids"]
+            );
+        }
+        assert_eq!(CudaContext::total_device_bytes(), initial);
         Ok(())
     }
 }

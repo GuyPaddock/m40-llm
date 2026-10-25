@@ -1,4 +1,5 @@
 use super::{
+    compact::{self, CompactComparison},
     records::{self, Report},
     step_timing, tasks, Args,
 };
@@ -100,6 +101,7 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
         "active_layer_count":model.active_layer_count()?,
         "has_in_process_compaction":false,
         "resident_kv_bytes":cache.actual_bytes(),
+        "kv_accounting_scope":"native cache K/V payload capacity after successful allocation; excludes native length metadata and CUDA allocator overhead",
         "physical_kv_slots":cache.max_batch_size(),
         "allocated_context_tokens":cache.max_seq_len(),
         "head128_attention_workspace_bytes":cache.head128_attention_workspace_bytes(),
@@ -107,7 +109,7 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
         "activation_sparsity":model.activation_research_stats()?,
         "materialized_f32_bytes":materialized_bytes,
         "combined_tracked_device_bytes":CudaContext::total_device_bytes(),
-        "scope":"per-model requested storage; excludes driver/library overhead; tracked total includes ALL resident models/workspaces, not standalone peak VRAM"
+        "scope":"per-model requested storage; tracked total covers ALL models' Rust-tracked weights/workspaces, with native KV separate; excludes driver/library overhead; not standalone peak VRAM"
     }))
 }
 
@@ -214,6 +216,14 @@ pub fn evaluate(args: Args) -> Result<()> {
     let environment = environment()?;
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
+    let compact_preflight = Instant::now();
+    let compact = CompactComparison::load(&args, &corpus_bytes)?;
+    let compact_preflight_ms = compact
+        .as_ref()
+        .map(|_| compact_preflight.elapsed().as_secs_f64() * 1000.0);
+    if compact.is_some() {
+        super::research::validate_execution(&environment)?;
+    }
     let activation = super::activations::load_variant(&args, &environment, &corpus, &corpus_bytes)?;
     let layer_ranking = super::layers::load_variant(&args, &environment, &corpus, &corpus_bytes)?;
     let skipped_layers = layer_ranking
@@ -228,7 +238,9 @@ pub fn evaluate(args: Args) -> Result<()> {
     let (mut reference, reference_tokenizer) = load_model(
         &args.reference_model,
         args.context_tokens,
-        &[],
+        compact
+            .as_ref()
+            .map_or(&[], |value| value.reference_skipped_layers()),
         super::activations::ActivationSetup::Disabled,
     )?;
     let reference_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
@@ -246,6 +258,9 @@ pub fn evaluate(args: Args) -> Result<()> {
     if let Some(ranking) = &layer_ranking {
         ranking.validate_model(&candidate, &candidate_tokenizer, &corpus)?;
     }
+    if let Some(compact) = &compact {
+        compact.validate_models(&reference, &candidate)?;
+    }
     ensure!(
         reference.model_config.vocab_size == candidate.model_config.vocab_size,
         "reference/candidate vocabulary sizes differ"
@@ -262,9 +277,20 @@ pub fn evaluate(args: Args) -> Result<()> {
         args.context_tokens,
         reference.model_config.vocab_size,
     )?;
+    if compact.is_some() {
+        for split in &splits {
+            for task in &corpus.split(*split).tasks {
+                let (_, ids) = tasks::encode_task(&reference_tokenizer, &task.prompt)?;
+                compact::validate_diagnostic_capacity(ids.len(), args.context_tokens)?;
+            }
+        }
+    }
     let reference_identity =
         model_identity(&args.reference_model, &reference, &reference_tokenizer)?;
     let candidate_identity = model_identity(&args.model, &candidate, &candidate_tokenizer)?;
+    if let Some(compact) = &compact {
+        compact.validate_identities(&reference_identity, &candidate_identity)?;
+    }
     let configuration = json!({"environment":environment,"kv_mode":"off","allocated_context_tokens":args.context_tokens,
         "sampling":"greedy top_k=1 seed=0, no penalties","cache_reset":"before each task/passage",
         "task_template":"canonical Qwen system+user ChatML; Llama3 auto chat",
@@ -272,6 +298,9 @@ pub fn evaluate(args: Args) -> Result<()> {
         "teacher_forcing":"identical observed prefixes, full vocabulary logits, no sampling",
         "timing_scope":"resident in-process generation admission-to-return including detokenization; excludes loading/HTTP/queue; loss includes full-logit readback and CPU scoring",
         "quality_timing_trials":1,"candidate_skipped_layer_ids":candidate.layer_mask.skipped_layers(),
+        "reference_skipped_layer_ids":reference.layer_mask.skipped_layers(),
+        "comparison_purpose":if compact.is_some() {"masked_source_vs_compact_export"} else {"unchanged_reference_vs_model_variant"},
+        "compact_export":compact.as_ref().map(CompactComparison::describe),
         "step_timing_trials":args.step_timing_trials,"step_timing_warm_prefix_tokens":args.step_timing_warm_prefix_tokens,
         "candidate_activation_calibration":activation.as_ref().map(|value|value.describe()),
         "candidate_layer_ranking":layer_ranking.as_ref().map(|value|value.describe()).transpose()?});
@@ -292,8 +321,9 @@ pub fn evaluate(args: Args) -> Result<()> {
         "created_unix_s":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         "variant_id":args.variant_id,"reference":reference_identity,"candidate":candidate_identity,
         "has_identical_model_source":reference_identity["sha256"] == candidate_identity["sha256"],
-        "has_identical_execution_model":reference_identity["sha256"] == candidate_identity["sha256"] && transforms.is_empty(),
-        "in_process_transforms":transforms,"external_model_difference":"only file hashes/metadata verified; no pruning provenance inferred from label",
+        "has_identical_execution_model":reference_identity["sha256"] == candidate_identity["sha256"] && transforms.is_empty() && !reference.layer_mask.has_skipped_layers(),
+        "reference_in_process_transforms":if reference.layer_mask.has_skipped_layers() {vec![json!({"kind":"diagnostic_layer_mask","skipped_layer_ids":reference.layer_mask.skipped_layers()})]} else {vec![]},
+        "in_process_transforms":transforms,"external_model_difference":if compact.is_some() {"verified compact export; live comparison is against masked source, not unchanged source"} else {"only file hashes/metadata verified; no pruning provenance inferred from label"},
         "corpus_path":args.corpus,"corpus_id":corpus.corpus_id,"corpus_sha256":records::sha256(&corpus_bytes)?,
         "selected_splits":splits,"configuration":configuration,"configuration_sha256":records::sha256(&serde_json::to_vec(&configuration)?)?,
         "revision":records::command_text("git",&["rev-parse","HEAD"])?,"worktree":records::command_text("git",&["status","--short"])?,
@@ -304,7 +334,8 @@ pub fn evaluate(args: Args) -> Result<()> {
         "host_compiler":records::command_text("g++",&["--version"])?,
         "device":format!("{:?}",reference.cuda.current_device_props()?),
         "cold_load_reference_ms":reference_load_ms,"cold_load_candidate_ms":candidate_load_ms,
-        "load_scope":"GGUF parsing/file read/upload/dense KV/validation; excludes later file hashing; not fresh-process cold I/O"}))?;
+        "compact_preflight_ms":compact_preflight_ms,
+        "load_scope":"GGUF parsing/file read/upload/dense KV/validation; excludes preflight and later identity hashing; not fresh-process cold I/O"}))?;
     for split in splits {
         let inputs = corpus.split(split);
         report.append(json!({"kind":"model_quality_split","split":split,
@@ -317,14 +348,26 @@ pub fn evaluate(args: Args) -> Result<()> {
             "prompt":"Say ready.","max_tokens":2,"reference":memory(&reference)?,"candidate":memory(&candidate)?}))?;
         let mut task_results = Vec::new();
         for task in &inputs.tasks {
-            task_results.push(tasks::evaluate_task(
+            let result = tasks::evaluate_task(
                 &mut report,
                 split,
                 task,
                 &reference,
                 &candidate,
                 &reference_tokenizer,
-            )?);
+            )?;
+            if let Some(compact) = &compact {
+                let (_, ids) = tasks::encode_task(&reference_tokenizer, &task.prompt)?;
+                compact.record_task_boundaries(
+                    &mut report,
+                    split,
+                    &task.id,
+                    (&mut reference, &mut candidate),
+                    &ids,
+                    &result,
+                )?;
+            }
+            task_results.push(result);
         }
         let mut losses = Vec::new();
         for passage in &inputs.passages {
@@ -337,6 +380,9 @@ pub fn evaluate(args: Args) -> Result<()> {
                 "text":passage.text,"token_ids":ids,"comparison":comparison,"elapsed_ms":elapsed_ms,
                 "timing_scope":"both models interleaved serially, full-logit D2H and CPU scoring; NOT decode throughput",
                 "reference_memory":memory(&reference)?,"candidate_memory":memory(&candidate)?}))?;
+            if compact.is_some() {
+                compact::require_identical_logits(&comparison)?;
+            }
             eprintln!(
                 "{split:?} {}: reference PPL={:?}, candidate PPL={:?}, max drift={:.6}",
                 passage.id,
@@ -349,6 +395,10 @@ pub fn evaluate(args: Args) -> Result<()> {
         if args.step_timing_trials > 0 {
             let timing_passage = &inputs.passages[0];
             let ids = tasks::encode_passage(&reference_tokenizer, &timing_passage.text)?;
+            let expected_reference_skipped_layers = compact
+                .as_ref()
+                .map(|value| value.reference_skipped_layers().to_vec())
+                .unwrap_or_default();
             step_timing::measure_pairs(
                 &mut report,
                 split,
@@ -359,24 +409,45 @@ pub fn evaluate(args: Args) -> Result<()> {
                 step_timing::StepTimingConfig {
                     warm_prefix_tokens: args.step_timing_warm_prefix_tokens,
                     trials: args.step_timing_trials,
+                    expected_reference_skipped_layers,
+                    should_require_equivalent_predictions: compact.is_some(),
                 },
             )?;
         }
-        report.append(json!({"kind":"model_quality_summary","split":split,
-            "tasks":task_results.len(),"dense_reference_passes":task_results.iter().filter(|(a,_)| *a).count(),
-            "candidate_passes":task_results.iter().filter(|(_,b)| *b).count(),
-            "dense_valid_regressions":task_results.iter().filter(|(a,b)| *a && !*b).count(),
-            "inconclusive_tasks":task_results.iter().filter(|(a,_)| !*a).count(),
+        let mut summary = json!({"kind":"model_quality_summary","split":split,
+            "tasks":task_results.len(),"dense_reference_passes":task_results.iter().filter(|result|result.reference_passed).count(),
+            "candidate_passes":task_results.iter().filter(|result|result.candidate_passed).count(),
+            "dense_valid_regressions":task_results.iter().filter(|result|result.reference_passed && !result.candidate_passed).count(),
+            "inconclusive_tasks":task_results.iter().filter(|result|!result.reference_passed).count(),
             "reference_loss":LossMetrics::combine(&losses.iter().map(|r|r.reference.clone()).collect::<Vec<_>>())?,
             "candidate_loss":LossMetrics::combine(&losses.iter().map(|r|r.candidate.clone()).collect::<Vec<_>>())?,
             "max_abs_logit_diff":losses.iter().map(|r|r.max_abs_logit_diff).fold(0.0_f64,f64::max),
-            "reference_memory":memory(&reference)?,"candidate_memory":memory(&candidate)?}))?;
+            "reference_memory":memory(&reference)?,"candidate_memory":memory(&candidate)?});
+        if compact.is_some() {
+            let fields = summary.as_object_mut().expect("summary object");
+            for (old, new) in [
+                ("dense_reference_passes", "masked_reference_passes"),
+                ("dense_valid_regressions", "masked_reference_regressions"),
+                ("inconclusive_tasks", "masked_reference_failed_tasks"),
+            ] {
+                let value = fields.remove(old).expect("summary field");
+                fields.insert(new.to_owned(), value);
+            }
+            fields.insert(
+                "comparison_purpose".into(),
+                json!("compact equivalence, not quality versus unchanged source"),
+            );
+        }
+        report.append(summary)?;
     }
     ensure!(
         memory(&reference)?["materialized_f32_bytes"] == 0
             && memory(&candidate)?["materialized_f32_bytes"] == 0,
         "unexpected materialized FP32 weights in compact quality run"
     );
+    if let Some(compact) = &compact {
+        compact.validate_models(&reference, &candidate)?;
+    }
     drop(reference);
     drop(candidate);
     ensure!(
@@ -385,7 +456,8 @@ pub fn evaluate(args: Args) -> Result<()> {
     );
     report.append(
         json!({"kind":"model_quality_complete","device_bytes_before":initial_device_bytes,
-        "device_bytes_after":CudaContext::total_device_bytes(),"is_complete":true}),
+        "device_bytes_after":CudaContext::total_device_bytes(),"is_complete":true,
+        "compact_equivalence_verified":compact.as_ref().map(|_|true)}),
     )?;
     Ok(())
 }
