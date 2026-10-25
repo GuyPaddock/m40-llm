@@ -34,8 +34,13 @@ It does not enable activation sparsity. The model-local read-only CUDA observer
 now preserves exact logits/KV bytes under prepared down/vocabulary, with fused
 and unfused gate/up and selected-layer capture. Two M40 tests verify replay,
 CPU-reference agreement, copy/sync counts, allocation cleanup and unsupported
-path rejection. Real calibration capture and the shared benchmark still remain;
-no M02 GPU timing or inference speed improvement is claimed.
+path rejection. Clean release `f459c97` now has
+[frozen real calibration inputs](experiments/2026-10-25-maxwell-ffn-inputs.md):
+21 paired rows/layer, all 163 inactive/active generated IDs equal, complete
+provenance and allocation cleanup. Three control tasks pass and three fail
+their fixed rubrics; capture changes no output. Complete FFN measurement in
+the shared benchmark remains; no M02 GPU timing or inference speed improvement
+is claimed.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact
