@@ -154,6 +154,8 @@ These areas are active research and should be treated as opt-in:
   [`docs/kv_compression.md`](docs/kv_compression.md)
 - Runtime diagnostics, profiling flags, and graph debug knobs:
   [`docs/diagnostics.md`](docs/diagnostics.md)
+- Benchmark-only Q8 execution-weight ownership and layout contracts:
+  [`docs/q8_execution_weights.md`](docs/q8_execution_weights.md)
 - M40 performance roadmap, batching, CUDA Graphs, and backend direction:
   [`docs/roadmap.md`](docs/roadmap.md)
 - Current benchmark history:

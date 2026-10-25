@@ -106,8 +106,16 @@ below is historical context, not the current research execution order.
   before querying error properties. An impossible-allocation hardware test
   verifies contextual errors, unchanged accounting, live data, and subsequent
   allocation instead of deadlocking before partial-buffer cleanup.
-- Next: C08 benchmark-only typed execution weights and independent C09/C10
-  Q8 layouts; neither layout depends on the other succeeding. Use the selected
+- C08 now provides benchmark-only Q8 source identities/bounded views, explicit
+  column/split/tiled allocation plans, and typed RAII host/device ownership in
+  `infer::execution_weights`. Identity includes model SHA, tensor, offset,
+  dtype/shape, and execution layout rather than device addresses. CPU failure
+  fakes plus a real second-plane CUDA allocation failure verify cleanup; device
+  roundtrip and tail-shaped projection tests pass. Production GGUF views,
+  materialized weights, loader/cache, dispatch, and defaults are unchanged.
+  See `docs/q8_execution_weights.md`; split/tiled kernels are not implemented yet.
+- Next: independent C09/C10 Q8 layout experiments; neither layout depends on
+  the other succeeding. Use the selected
   C07 benchmark config for subsequent controls, require parity and repeated
   HTTP E2E gates, and bound experiments before C11/C11A. Missing counters or
   the original speed target do not block the later n-gram feasibility decision

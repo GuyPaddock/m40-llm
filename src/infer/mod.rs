@@ -3,6 +3,7 @@
 mod backend;
 mod batch;
 mod embeddings;
+pub mod execution_weights;
 mod forward;
 mod gemm;
 mod kv;
