@@ -65,6 +65,36 @@ that the full prompt was processed.
 
 ## Run the Comparison
 
+### Maxwell Runtime Candidates
+
+M08 reuses this comparison tool with explicit FFN and prefill settings. First
+complete the matching [`model_quality` run](maxwell_q8_execution.md#explicit-runtime-qualification)
+on both frozen splits. Then add the following to the ordinary command:
+
+```bash
+--compare-q8-runtime packed-f32-128 \
+--q8-runtime-prefill sequential \
+--q8-runtime-quality-report /path/to/completed-quality.jsonl
+```
+
+The control and candidate both retain prepared down/vocabulary, original model
+bytes and dense/context-1024 attention. The reference uses native FFN and
+sequential prefill. Prefill choices are `sequential`, `native-packed` and
+`dequant-sgemm`, independent of the FFN choice. The quality report must match
+the model, candidate, frozen corpus and both splits; missing or inconsistent
+completion evidence fails. A valid failed-quality report permits diagnostic
+timing but blocks exact-output promotion. Q8_1 is always a numerical track.
+
+Five alternating pairs, variation extension and fresh borderline confirmation
+reuse the existing protocol. Rows report actual launch/copy/allocation deltas,
+model-local choices and resident scratch outside the HTTP timing boundary.
+Matching untimed production token traces report actual prefill mode and
+temporary-weight capacity. No extra full-logit readback enters timed requests.
+Ollama supplies the untimed tokenizer/oracle check in candidate-pair mode;
+those pairs alone do not establish the fresh 1.30x-Ollama goal.
+
+### Baseline Command
+
 Build and execute through the project environment with hardware access:
 
 ```bash

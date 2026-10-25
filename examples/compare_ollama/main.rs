@@ -1,6 +1,9 @@
 #[cfg(any(test, all(feature = "cuda", feature = "server", nvcc)))]
 mod protocol;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
+#[path = "../common/q8_runtime.rs"]
+mod q8_runtime;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod run;
 
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]

@@ -1,6 +1,6 @@
 use super::{
-    gpu_snapshot, protocol, start_server, ComparisonRun, GenerateResponse, LoadedModel, Pair,
-    ServerVariant, CONTEXT_TOKENS,
+    gpu_snapshot, protocol, start_server, start_server_with_prefill, ComparisonRun,
+    GenerateResponse, LoadedModel, Pair, ServerVariant, CONTEXT_TOKENS,
 };
 use anyhow::{ensure, Context, Result};
 use m40_llm::{cuda::CudaContext, gguf};
@@ -22,15 +22,22 @@ fn peak_host_rss_kib() -> Option<u64> {
 
 impl ComparisonRun {
     async fn load_prepared_server(&mut self) -> Result<()> {
-        let config = self
-            .args
-            .candidate_q8_config()?
-            .context("missing Q8 candidate config")?;
+        let runtime = self.args.candidate_runtime_config();
         let before = CudaContext::total_device_bytes();
         let started = Instant::now();
-        let gguf = gguf::load_gguf(&self.args.model)?;
-        let bytes = std::fs::read(&self.args.model)?;
-        let mut model = LoadedModel::from_gguf_with_q8_execution(gguf, bytes, -1, config)?;
+        let model = if let Some(config) = runtime {
+            config.load_model(&self.args.model, CONTEXT_TOKENS)?.0
+        } else {
+            let config = self
+                .args
+                .candidate_q8_config()?
+                .context("missing Q8 candidate config")?;
+            let gguf = gguf::load_gguf(&self.args.model)?;
+            let bytes = std::fs::read(&self.args.model)?;
+            let mut model = LoadedModel::from_gguf_with_q8_execution(gguf, bytes, -1, config)?;
+            model.allocate_kv_cache_for_layers(CONTEXT_TOKENS)?;
+            model
+        };
         ensure!(
             model.cuda.current_device_props()?.device_id
                 == self
@@ -42,8 +49,18 @@ impl ComparisonRun {
                     .device_id,
             "control and candidate must use the same GPU"
         );
-        model.allocate_kv_cache_for_layers(CONTEXT_TOKENS)?;
         let stats = model.q8_execution_stats();
+        if runtime.is_some() {
+            let control = self.server.state.model.q8_execution_stats();
+            ensure!(
+                stats.mode == control.mode
+                    && stats.families == control.families
+                    && stats.resident_bytes == control.resident_bytes
+                    && stats.source_weights_bytes == control.source_weights_bytes
+                    && stats.single_row_down_split_launch == control.single_row_down_split_launch,
+                "runtime comparison changed prepared down/vocabulary control"
+            );
+        }
         let source_hash: String = stats
             .tensors
             .first()
@@ -62,6 +79,7 @@ impl ComparisonRun {
             "kind": "q8_execution_setup", "is_timed": false,
             "control_execution": self.server.state.model.q8_execution_stats(),
             "candidate_execution": stats, "candidate_cold_load_elapsed_ms": started.elapsed().as_secs_f64() * 1000.0,
+            "candidate_runtime_config":runtime,
             "tracked_device_payload_before_candidate_bytes": before,
             "tracked_device_payload_after_candidate_bytes": CudaContext::total_device_bytes(),
             "combined_process_peak_host_rss_kib": peak_host_rss_kib(),
@@ -69,7 +87,11 @@ impl ComparisonRun {
             "gpu": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
             "memory_scope": "tracked requested payload for both m40 models; GPU snapshot also includes idle Ollama; not measured peak VRAM",
         }))?;
-        self.prepared_server = Some(start_server(model).await?);
+        self.prepared_server = Some(if let Some(config) = runtime {
+            start_server_with_prefill(model, config.prompt_prefill()).await?
+        } else {
+            start_server(model).await?
+        });
         Ok(())
     }
 
@@ -162,11 +184,27 @@ impl ComparisonRun {
             .remove("reaches_original_target");
         self.report.record(
             json!({"kind":"q8_execution_summary","phase":phase,"comparison":summary,
+            "candidate_runtime_config":self.args.candidate_runtime_config(),
             "is_ollama_comparison":false,"requires_quality_parity_for_promotion":true}),
         )
     }
 
     pub(super) async fn compare_q8_execution(&mut self) -> Result<()> {
+        let mut passes_runtime_quality = true;
+        let runtime = self.args.candidate_runtime_config();
+        if let Some(config) = runtime {
+            let evidence = super::runtime_quality::load(
+                self.args
+                    .q8_runtime_quality_report
+                    .as_deref()
+                    .context("runtime quality report")?,
+                config,
+                &self.model_sha256,
+                &self.prompt_ids,
+            )?;
+            passes_runtime_quality = evidence.passes_exact_gate;
+            self.report.record(evidence.record)?;
+        }
         self.load_prepared_server().await?;
         let smokes_pass = self.execution_smokes().await?;
         let control = self
@@ -221,7 +259,10 @@ impl ComparisonRun {
             "passes_timing_gate":comparison.passes_promotion_gate,
             "passes_smokes_without_dense_valid_regression":smokes_pass,
             "actual_generated_ids_equal":is_equal,
-            "qualifies_as_benchmark_candidate":comparison.passes_promotion_gate && smokes_pass && is_equal,
+            "passes_completed_runtime_quality_gate":passes_runtime_quality,
+            "is_numerical_track":runtime.is_some_and(|config|config.is_numerical()),
+            "candidate_runtime_config":runtime,
+            "qualifies_as_benchmark_candidate":comparison.passes_promotion_gate && smokes_pass && is_equal && passes_runtime_quality,
             "changes_runtime_defaults":false,"establishes_ollama_target":false}))?;
         eprintln!("Q8 comparison: native={:.3}, prepared={:.3} HTTP E2E tok/s; gain={:.3}%, timing_gate={}, token_ids_equal={}",
             comparison.control.median, comparison.candidate.median, comparison.gain * 100.0,
@@ -283,6 +324,44 @@ mod tests {
             "--compare-head128-attention"
         ])
         .is_err());
+        Ok(())
+    }
+
+    /// Runtime experiments require their completed quality evidence and keep
+    /// independent prefill settings separate from weight-layout comparisons.
+    #[test]
+    fn test_runtime_cli_requires_evidence_and_preserves_prefill_choice() -> Result<()> {
+        let args = parse_args(&[
+            "--compare-q8-runtime",
+            "packed-f32-128",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+        ])?;
+        let config = args.candidate_runtime_config().unwrap();
+        assert_eq!(config.ffn_config()?.threads(), Some(128));
+        assert!(!config.prefill_backend().is_native());
+        assert!(args.candidate_q8_config()?.is_none());
+        assert!(parse_args(&["--compare-q8-runtime", "native"]).is_err());
+        assert!(parse_args(&["--q8-runtime-prefill", "dequant-sgemm"]).is_err());
+        for extra in [
+            vec!["--compare-q8-execution", "split"],
+            vec!["--compare-stage-profile"],
+            vec!["--compare-head128-attention"],
+        ] {
+            let values = [
+                vec![
+                    "--compare-q8-runtime",
+                    "native",
+                    "--q8-runtime-quality-report",
+                    "quality.jsonl",
+                ],
+                extra,
+            ]
+            .concat();
+            assert!(parse_args(&values).is_err());
+        }
         Ok(())
     }
 }

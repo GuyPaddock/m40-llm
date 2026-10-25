@@ -11,7 +11,7 @@ use std::{
 use anyhow::{ensure, Context, Result};
 use clap::Parser;
 use m40_llm::{
-    generate::{generate_text, GenerateOptions, PromptFormat},
+    generate::{generate_text, GenerateOptions, PromptFormat, PromptPrefill},
     generation_metrics::GenerationMetrics,
     gguf,
     infer::{
@@ -26,9 +26,12 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::protocol::{self, CacheEvidence, Pair, CONTEXT_TOKENS, MAX_TOKENS};
+use super::q8_runtime::{FfnChoice, PrefillChoice, RuntimeConfig};
 
 #[path = "q8.rs"]
 mod q8;
+#[path = "runtime_quality.rs"]
+mod runtime_quality;
 
 #[derive(Parser)]
 #[command(about = "Controlled warm HTTP Qwen Q8_0 comparison; requires an isolated Ollama server")]
@@ -64,9 +67,25 @@ struct Args {
     q8_families: Q8ExecutionFamilies,
     #[arg(long, default_value_t = 6144, requires = "q8_execution_mode")]
     q8_budget_mb: usize,
+    /// M08 candidate; both models retain the qualified down/vocabulary control.
+    #[arg(long = "compare-q8-runtime", value_enum, requires="q8_runtime_quality_report",
+        conflicts_with_all=["q8_execution_mode", "should_compare_stage_profile", "should_compare_head128"])]
+    q8_runtime_candidate: Option<FfnChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_prefill: Option<PrefillChoice>,
+    /// Completed model_quality report for this exact candidate/source/corpus.
+    #[arg(long, requires = "q8_runtime_candidate")]
+    q8_runtime_quality_report: Option<PathBuf>,
 }
 
 impl Args {
+    fn candidate_runtime_config(&self) -> Option<RuntimeConfig> {
+        self.q8_runtime_candidate.map(|ffn| RuntimeConfig {
+            ffn,
+            prefill: self.q8_runtime_prefill.unwrap_or_default(),
+        })
+    }
+
     fn candidate_q8_config(&self) -> Result<Option<Q8ExecutionConfig>> {
         self.q8_execution_mode
             .as_deref()
@@ -362,10 +381,16 @@ async fn post_ollama(
 }
 
 async fn start_server(model: LoadedModel) -> Result<HttpServer> {
-    let state = Arc::new(AppState::new_with_kv_config(
-        model,
-        KvCompressionConfig::dense_reference(),
-    ));
+    start_server_with_prefill(model, PromptPrefill::Environment).await
+}
+
+async fn start_server_with_prefill(
+    model: LoadedModel,
+    prefill: PromptPrefill,
+) -> Result<HttpServer> {
+    let mut state = AppState::new_with_kv_config(model, KvCompressionConfig::dense_reference());
+    state.prompt_prefill = prefill;
+    let state = Arc::new(state);
     ensure!(
         !state.decode_batching_requested,
         "single-request comparison does not use the scheduler"
@@ -420,6 +445,7 @@ impl ComparisonRun {
         let is_stage_profile_enabled =
             std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1");
         let before = gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?;
+        let counters_before = m40_llm::profile::snapshot();
         let started_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         let started_at = Instant::now();
         let response = self
@@ -435,6 +461,7 @@ impl ComparisonRun {
         let bytes = response.bytes().await?;
         let wall_ms = started_at.elapsed().as_secs_f64() * 1000.0;
         let finished_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+        let counters_after = m40_llm::profile::snapshot();
         ensure!(
             status.is_success(),
             "m40-llm {status}: {}",
@@ -456,12 +483,37 @@ impl ComparisonRun {
         );
         let tps = metrics.generated_tokens as f64 * 1000.0 / wall_ms;
         let execution = server.state.model.q8_execution_stats();
+        let (activation_bytes, temporary_weight_bytes) = server
+            .state
+            .model
+            .forward_workspace
+            .lock()
+            .map_err(|_| anyhow::anyhow!("poisoned forward workspace"))?
+            .as_ref()
+            .map(|workspace| {
+                let pointers = workspace.ptrs();
+                (
+                    pointers.q8_activation.map_or(0, |s| s.bytes),
+                    pointers.q8_prefill_weight.map_or(0, |s| s.bytes),
+                )
+            })
+            .unwrap_or((0, 0));
         self.report.record(json!({
             "kind": "trial", "runtime": "m40-llm", "phase": phase, "pair": pair,
             "model_variant": variant.as_str(),
             "client_started_unix_ms": started_unix_ms, "client_finished_unix_ms": finished_unix_ms,
             "q8_execution_mode": execution.mode, "q8_execution_families": execution.families,
             "q8_prepared_bytes": execution.resident_bytes,
+            "q8_ffn":server.state.model.q8_ffn,"q8_prefill_backend":server.state.model.q8_prefill,
+            "prompt_prefill":server.state.prompt_prefill,
+            "resident_q8_activation_scratch_bytes_after_request":activation_bytes,
+            "resident_prefill_weight_scratch_bytes_after_request":temporary_weight_bytes,
+            "scratch_scope":"actual remaining workspace capacity; released prefill temporary capacity is recorded by the matching untimed token trace",
+            "enqueue_counters":m40_llm::profile::counter_delta(&counters_before,&counters_after),
+            "launch_deltas":counters_after.by_op.iter().filter_map(|(name,counts)| {
+                let delta=counts.launches-counters_before.by_op.get(name).map_or(0,|v|v.launches);
+                (delta>0).then_some((*name,delta))
+            }).collect::<BTreeMap<_,_>>(),
             "client_elapsed_ms": wall_ms, "e2e_tps": tps, "metrics": metrics,
             "stage_profile_enabled": is_stage_profile_enabled,
             "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
@@ -583,6 +635,7 @@ impl ComparisonRun {
                 top_k: Some(1),
                 seed: Some(0),
                 kv_compression: KvCompressionConfig::dense_reference(),
+                prompt_prefill: server.state.prompt_prefill,
                 ..Default::default()
             },
         )?;
@@ -608,6 +661,10 @@ impl ComparisonRun {
             "prompt_token_ids": &generated.token_ids[..generated.prompt_token_len],
             "generated_token_ids": &generated.token_ids[generated.prompt_token_len..],
             "matches_measured_output": true, "output": generated.output,
+            "prefill_mode":generated.prefill_mode,
+            "prefill_chunk_size":generated.prefill_chunk_size,
+            "q8_prefill_temporary_weight_bytes":generated.q8_prefill_temporary_weight_bytes,
+            "q8_ffn":server.state.model.q8_ffn,"q8_prefill_backend":server.state.model.q8_prefill,
             "stage_profile_enabled": std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1"),
             "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
         }))?;
@@ -847,6 +904,7 @@ pub async fn compare() -> Result<()> {
     );
     let args = Args::parse();
     let candidate_q8_config = args.candidate_q8_config()?;
+    let candidate_runtime = args.candidate_runtime_config();
     ensure!(
         Path::new(&format!("/proc/{}", args.ollama_pid)).exists(),
         "Ollama PID is not live"
@@ -917,6 +975,9 @@ pub async fn compare() -> Result<()> {
                 .contains(&k.as_str())
         })
         .collect();
+    if candidate_runtime.is_some() {
+        super::q8_runtime::validate_environment(&environment)?;
+    }
     let ollama_version: Value = client
         .get(format!("{}/api/version", args.ollama_url))
         .send()
@@ -959,7 +1020,9 @@ pub async fn compare() -> Result<()> {
     protocol::validate_replacement_ids(&prompt_ids, &replacement_ids)?;
     let load_start = Instant::now();
     let bytes = std::fs::read(&args.model)?;
-    let control_execution = if candidate_q8_config.is_some() {
+    let control_execution = if candidate_runtime.is_some() {
+        Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?
+    } else if candidate_q8_config.is_some() {
         Q8ExecutionConfig::disabled()
     } else {
         Q8ExecutionConfig::from_env()?
@@ -1004,7 +1067,8 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
-        "comparison_kind": if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "comparison_kind": if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "candidate_runtime_config":candidate_runtime,
         "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
@@ -1042,7 +1106,11 @@ pub async fn compare() -> Result<()> {
         .collect();
     report.record(json!({"kind": "ollama_backend_verification", "runner_lines": offload_lines, "gpu": gpu_snapshot(args.ollama_pid, &gpu_uuid)?}))?;
     report.record(json!({"kind": "tokenizer_oracle", "prompt_token_ids": oracle_prompt_ids, "replacement_token_ids": oracle_replacement_ids, "is_equal": true, "cold_ollama_load_ms": oracle.load_duration as f64 / 1e6, "source": runner_url}))?;
-    let server = start_server(model).await?;
+    let server = if candidate_runtime.is_some() {
+        start_server_with_prefill(model, PromptPrefill::Sequential).await?
+    } else {
+        start_server(model).await?
+    };
     let mut run = ComparisonRun {
         args,
         client,
@@ -1055,7 +1123,7 @@ pub async fn compare() -> Result<()> {
         runner_url,
         report,
     };
-    if run.args.q8_execution_mode.is_some() {
+    if run.args.q8_execution_mode.is_some() || run.args.q8_runtime_candidate.is_some() {
         return run.compare_q8_execution().await;
     }
     if run.args.should_compare_stage_profile {
