@@ -16,10 +16,13 @@ See [the complete quality evidence](experiments/2026-10-25-ranked-layer-tradeoff
 4. `feat(gguf): write separate compact variants`: byte-preserving streaming
    writer, create-new outputs, provenance/quality bindings, metadata updates
    and round-trip/file-safety tests. Depends on the validated copy plan.
-5. `test(quality): compare compact and masked models`: masked-source versus
+5. `feat(cuda): report owned weight allocation`: query successful context-owned
+   uploads rather than infer device storage from host file size. Test replacement
+   and cleanup before relying on the comparison's memory report.
+6. `test(quality): compare compact and masked models`: masked-source versus
    exported-model full-logit/task parity, real allocation accounting and a
    bounded runner. Depends on safe export and C24 frozen evidence.
-6. `docs(perf): record compact model costs`: clean release measurements,
+7. `docs(perf): record compact model costs`: clean release measurements,
    preparation time, memory and quality limitations. Depends on parity.
 
 ## Copy Plan

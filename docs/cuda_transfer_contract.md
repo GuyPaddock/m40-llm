@@ -119,3 +119,14 @@ C11. Median HTTP throughput is 31.937 tok/s versus Ollama's 43.163; neither
 exact-engine speed target is met. This is not a paired pre/post-fix speedup
 claim. Canonical ChatML CLI smokes pass in default compressed and explicit
 dense modes; pre-existing user-only failures remain in the raw evidence.
+
+## Owned Weight Accounting
+
+`CudaContext::uploaded_weights_bytes()` returns the requested bytes of the
+current successful weight upload from its owned allocation record. It returns
+zero before upload and in non-CUDA contexts. Re-upload replaces the prior
+size; scratch is excluded. This is not total GPU use or allocator/driver
+overhead. The query acquires ownership locks but issues no CUDA work.
+The quality runner checks it against the host payload and requires a device
+pointer before reporting uploaded-weight allocation bytes. M40 tests verify
+replacement, contents by readback, scratch isolation and complete cleanup.

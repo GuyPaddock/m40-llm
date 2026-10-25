@@ -1650,6 +1650,43 @@ impl CudaContext {
     pub fn total_device_bytes() -> usize {
         TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
     }
+
+    /// Requested bytes in this context's successful, currently owned weight
+    /// upload. This excludes workspaces, KV and driver/library allocation overhead.
+    pub fn uploaded_weights_bytes(&self) -> Result<usize> {
+        #[cfg(feature = "cuda")]
+        {
+            let _guard = self
+                .inner
+                .lock
+                .lock()
+                .map_err(|_| anyhow!("poisoned CUDA context"))?;
+            let weights = self
+                .inner
+                .weights_ptr
+                .lock()
+                .map_err(|_| anyhow!("poisoned weight owner"))?;
+            let Some(pointer) = weights.as_ref() else {
+                return Ok(0);
+            };
+            let allocations = self
+                .inner
+                .alloc_map
+                .lock()
+                .map_err(|_| anyhow!("poisoned device allocation map"))?;
+            let allocation = allocations
+                .get(&pointer.as_ptr())
+                .ok_or_else(|| anyhow!("owned weight allocation is missing"))?;
+            anyhow::ensure!(
+                allocation.tag.as_deref() == Some("weights"),
+                "owned weight allocation has the wrong tag"
+            );
+            Ok(allocation.size)
+        }
+        #[cfg(not(feature = "cuda"))]
+        Ok(0)
+    }
+
     pub fn new(device_id: i32) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {

@@ -83,6 +83,11 @@ pub(super) fn load_model(
 
 pub fn memory(model: &LoadedModel) -> Result<Value> {
     let cache = model.kv_cache.as_ref().context("allocated KV")?;
+    let uploaded_weights = model.cuda.uploaded_weights_bytes()?;
+    ensure!(
+        uploaded_weights == model.weights_len && !model.d_weights_base.is_null(),
+        "quality memory accounting requires successfully uploaded device weights"
+    );
     let materialized = model
         .materialized_weights
         .lock()
@@ -90,16 +95,19 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
     let materialized_bytes: usize = materialized.values().map(|weight| weight.bytes).sum();
     Ok(json!({
         "uploaded_weight_payload_bytes":model.weights_len,
+        "uploaded_weight_allocation_bytes":uploaded_weights,
         "source_layer_count":model.model_config.block_count,
         "active_layer_count":model.active_layer_count()?,
         "has_in_process_compaction":false,
         "resident_kv_bytes":cache.actual_bytes(),
+        "physical_kv_slots":cache.max_batch_size(),
+        "allocated_context_tokens":cache.max_seq_len(),
         "head128_attention_workspace_bytes":cache.head128_attention_workspace_bytes(),
         "prepared_weight_bytes":model.q8_execution_stats().resident_bytes,
         "activation_sparsity":model.activation_research_stats()?,
         "materialized_f32_bytes":materialized_bytes,
         "combined_tracked_device_bytes":CudaContext::total_device_bytes(),
-        "scope":"per-model persistent fields; tracked total includes ALL resident models/workspaces, not standalone peak VRAM"
+        "scope":"per-model requested storage; excludes driver/library overhead; tracked total includes ALL resident models/workspaces, not standalone peak VRAM"
     }))
 }
 
