@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Native QKV Warp Finish Passes Stage Gate
+
+One fixed raw-Q8/FP32 split4 kernel replaces nine reduction barriers with
+one publication and an original-tree warp finish. It preserves Q/K/V bits
+and real biases, with **27.47-27.76% one-request throughput gains** and
+positive paired intervals. Four distinct independent requests gain
+26.45-26.73%; this is not a batched GEMM. Registers stay at 32 with no
+reported spills. See [scope, paired data, exactness and ownership](experiments/2026-10-25-maxwell-qkv-warp-screen.md).
+
+The kernel passes the 5% complete-QKV gate, but the prespecified optimistic
+profile-weighted whole-token ceiling is only **2.59-2.61%**, below 3%.
+Keep `499d2de` as a positive benchmark candidate, without standalone runtime
+integration or an HTTP claim. A separately justified output-projection
+reduction experiment may support a future combined candidate; all actual-token
+quality and original HTTP gates remain. The last qualified runtime stays
+45.075 HTTP tok/s and both original goals remain unmet.
+
 ## 2026-10-25: Fixed-Width FFN Misses Micro Gate
 
 One fixed K=2048 specialization removes 21 static pre-load address-product

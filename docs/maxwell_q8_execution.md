@@ -281,6 +281,10 @@ stream with caller-owned spans. It preserves split4 math and optional FP32
 biases while removing repeated reduction barriers. It neither allocates,
 transfers nor synchronizes. The unsafe contract requires aligned, disjoint
 live outputs and properly ordered input/weight/bias producers.
+The [completed screen](experiments/2026-10-25-maxwell-qkv-warp-screen.md)
+preserves bits and improves complete one-request QKV throughput 27.47-27.76%.
+It passes the stage gate but not the prespecified 3% standalone E2E ceiling;
+retain it benchmark-only pending a separately qualified combined candidate.
 
 ### M03 Primitive Checkpoint
 

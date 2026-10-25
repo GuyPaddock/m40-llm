@@ -47,9 +47,16 @@ Qwen gate/up always using K=2048. The
 [completed fixed-width screen](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md)
 removes those sites and preserves bits, but complete one-row gains are only
 **1.24-1.32%**, clearly below 5%. Keep `deef80b` benchmark-only without a
-width/unroll/geometry rescue. Next independently inspect native fused QKV's
-nine-barrier reduction against the measured 11.72% stage share, not another
-FFN variant or a revival of failed prepared-QKV layouts. Prepared down/head and
+width/unroll/geometry rescue. The independent
+[native QKV reduction screen](experiments/2026-10-25-maxwell-qkv-warp-screen.md)
+now passes the stage gate at **27.47-27.76%** throughput gain with unchanged
+bits, biases, raw weights and 32-register usage. Its optimistic standalone
+whole-token ceiling is only **2.59-2.61%**, below 3%, so `499d2de` remains a
+positive benchmark candidate, not a runtime win. Next scope one independent
+native output-projection warp finish: that measured 8.25% stage also has a
+nine-barrier reduction. Consider a combined runtime only after both stage
+gates and the combined ceiling pass; do not rescue QKV geometry or revive
+failed prepared layouts. Prepared down/head and
 original micro/quality/HTTP gates remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
