@@ -30,7 +30,7 @@ enables weight preparation.
 | --- | --- |
 | M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
 | M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
-| M03 | CUDA primitives and release parity verified: four 256-thread load/reduction variants and packed/warp128; real-input paired timing pending |
+| M03 | Complete: [real-input five-pair screen](experiments/2026-10-25-maxwell-fp32-ffn-screen.md); packed/warp256 gains 7.75-8.27% complete FFN with native bits on the sampled one-row inputs; 128 gains 12.18-12.63% with small arithmetic drift |
 | M04 | Pending independently: packed Q8_1 activation/dot experiment, quantization-inclusive cost and numerical checks |
 | M05 | Pending: complete-FFN five-pair screen and preserved negative results |
 | M06 | Conditional: immutable runtime selection and reusable scratch only for qualifying decode candidates |
@@ -74,7 +74,10 @@ The existing complete-FFN benchmark now accepts `--ffn-f32-ablation` for
 [paired native controls](ffn_benchmark_inputs.md#bounded-fp32-ffn-screen).
 Release M40 tests verify all five variants through reusable pipeline scratch,
 cross-stream four-row work, full CPU-reference outputs and enqueue counters.
-The real-input five-pair matrix remains to be measured.
+The [real-input five-pair matrix](experiments/2026-10-25-maxwell-fp32-ffn-screen.md)
+now passes the one-row micro gate for packed/warp256 and packed/warp128 at
+all three layers. The latter is not bit-identical. Losing variants remain
+preserved. No whole-model or HTTP qualification follows from this screen.
 Keep prepared down/vocabulary fixed. The four-row experimental fused kernel
 is a row-batched algorithm extension, not the production four-row two-GEMM
 plus SwiGLU path; report that distinction rather than attributing all M4

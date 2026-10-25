@@ -2,6 +2,29 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Bounded FP32 Q8 FFN Screen
+
+Clean release `bedea89` measures the five fixed M03 variants on real layer
+0/17/35 tensors and distinct frozen rows 1/4, keeping prepared down/vocabulary
+unchanged. Five alternating pairs per case give packed/warp256 complete-FFN
+throughput gains of 7.75/7.87/8.27%, with positive paired confidence bounds
+and native one-row hidden/completed-output bits preserved. Packed/warp128
+gains 12.18/12.52/12.63% but changes FP32 association; whole-model token
+parity is not established. Neither is a runtime recommendation yet.
+
+Packed/shared256 gains only 1.40-1.57% and fails the 5% screen. Scalar/warp256
+and scalar/shared256 regress versus native; implementations and measurements
+are preserved. Four-row fused candidates improve complete latency, including
+a fusion change versus the native two-projection/SwiGLU path, so those gains
+are not pure reduction/load ablations or decode throughput claims.
+
+All 36 numerical/guard validations pass. The 150 pairs contain 900 isolated
+primary intervals with no enqueue allocation, copy or sync. All 300 boundary
+samples show SM 1113 / memory 3004 MHz and only the benchmark PID; tracked
+payload returns zero to zero. No runtime defaults change. M04 Q8_1 and M07
+prefill remain independent next work; both original E2E targets remain unmet.
+See [the complete screen, losing variants and raw evidence](experiments/2026-10-25-maxwell-fp32-ffn-screen.md).
+
 ## 2026-10-25: Warm Complete Q8 FFN Baseline
 
 M02 measures real layer 0/17/35 FFNs with frozen calibration inputs, genuine

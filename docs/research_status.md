@@ -45,14 +45,21 @@ guarded reusable scratch and enqueue counters. Clean release `29dee55` now has
 about 0.457 ms/layer at one row, versus 4.67-4.72 ms for rows4, with gate/up
 dominant. All numerical/ownership checks pass. The initial 949 MHz clock-ramp
 run is preserved; bounded warmup yields 1113 MHz at every primary sample.
-This is a baseline, not an inference speed improvement. M03 now has five
-explicit CUDA primitives and passing release M40 parity/ownership tests.
-The four 256-thread variants preserve native split4 bits on the synthetic
-grid; packed/warp128 passes CPU tolerance. Release sm_52 inspection shows
-32 registers and zero stack/local bytes throughout. No runtime choice or
-default changed. Next is real-input paired complete-FFN timing of these
-fixed variants; do not add more capture infrastructure. See the
-[primitive checkpoint](maxwell_q8_execution.md#m03-primitive-checkpoint).
+This is a baseline, not an inference speed improvement.
+
+M03 is complete: [clean release five-pair evidence](experiments/2026-10-25-maxwell-fp32-ffn-screen.md)
+on all three layers shows packed/warp256 improving complete one-row FFN
+throughput 7.75-8.27%, with native hidden and completed-output bits preserved
+on these real inputs. Packed/warp128 gains 12.18-12.63% with small nonzero
+arithmetic drift. The other three fixed variants fail the decode micro gate;
+all implementations and measurements are retained. Four-row gains also
+include fusion changes and are reported separately. All 36 validations and
+900 primary-interval audits pass, with stable observed 1113/3004 MHz clocks.
+Release sm_52 uses 32 registers and zero stack/local bytes throughout.
+No runtime choice/default changed; whole-model 512-token parity and E2E
+qualification remain pending. Next is independent M04 Q8_1, then M05 screening
+before conditional M06 integration. M07 prefill SGEMM remains independent.
+Do not add capture infrastructure or expand the bounded geometry search.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact
