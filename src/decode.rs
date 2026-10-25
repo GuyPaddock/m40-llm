@@ -6,6 +6,8 @@ use anyhow::{anyhow, Result};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::Tokenizer;
 
+pub mod ngram;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StopReason {

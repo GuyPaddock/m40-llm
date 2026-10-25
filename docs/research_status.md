@@ -15,6 +15,17 @@ separately evaluated model-changing research. It is not replaced by the
 
 ## Exact Kernel Checkpoint: 2026-10-25
 
+C11A is now in progress, in dependency order:
+
+1. `feat(decode): add bounded ngram lookup`: history-only borrowed drafts,
+   longest/recency matching, stop/budget bounds, and CPU behavioral tests.
+2. `test(bench): study ngram acceptance offline`: position/round replay,
+   actual-trace validation and regression capture, hypothetical cost sensitivity,
+   and the formal screening gate. Depends on the lookup and C11 artifacts.
+3. `docs(perf): record ngram feasibility decision`: release CPU analysis and
+   raw results, with proceed/postpone status before conditional verifier work.
+   Depends on the tested study tool and selected actual traces.
+
 C01-C11 are complete, including conditional C10A evaluation and the preserved
 failure removals. The selected opt-in benchmark remains native Q8 plus C07
 parallel head128 attention, partitions=8/threads=256, with preparation off.
