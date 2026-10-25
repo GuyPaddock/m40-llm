@@ -230,8 +230,10 @@ target/release/examples/compare_ollama \
   --output /tmp/q8-native-mlp-http.jsonl
 ```
 
-`--q8-families all` includes prepared fused MLP; omitting `gate-up` preserves
-native fused MLP. `--q8-budget-mb` limits extra prepared bytes and defaults to
+`--q8-families all` prepares all projection families; native fused MLP is
+retained regardless of that subset after the C11 cleanup. To reproduce the
+historical all-prepared-MLP timing, use its recorded revision `26bc810` rather
+than current code. `--q8-budget-mb` limits extra prepared bytes and defaults to
 6144 MiB. `mixed` additionally prepares the previously measured multi-row tiled
 Q/output/down layouts; it is not a new launch-geometry search. CLI candidate
 settings are explicit and do not use ambient preparation env vars.

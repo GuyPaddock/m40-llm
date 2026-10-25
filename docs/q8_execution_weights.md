@@ -88,14 +88,12 @@ All three prepared tensors must be present and shape-compatible; missing cache
 entries retain native fused QKV, while invalid cached shapes fail before launch.
 Multi-row calls still use the standard projection path.
 
-`M40LLM_FUSED_Q8_MLP_SWIGLU=1` also lets prepared caches supply fused gate/up
-and SwiGLU. This keeps one output column per 128-thread block, reuses each
-activation vector across both operands, and reads aligned split value planes.
-It deliberately does not retry the earlier failed four-column fused MLP
-experiment. Split accumulation/reduction is shared with standard projections
-and QKV; no intermediate gate/up allocation or extra activation launch is added.
-Both weights must be cached and shape-compatible; missing cache entries retain
-the native fused path.
+`M40LLM_FUSED_Q8_MLP_SWIGLU=1` always retains the native fused gate/up/SwiGLU
+kernel, even when gate/up weights are prepared. The slower prepared fused MLP
+was removed after preservation in `e2dbc61` and release measurements in
+`2e2bb5c`. Model-level shape and pointer checks remain before enqueue. Prepared
+gate/up weights are still available to ordinary projection APIs and multi-row
+work; they do not replace the retained native fused decode kernel.
 
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.
@@ -294,7 +292,7 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_qkv -- --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
-  --test q8_prepared_mlp -- --nocapture --test-threads=1
+  --test q8_native_mlp_cache -- --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_greedy -- --nocapture --test-threads=1
 ```

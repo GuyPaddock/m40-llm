@@ -271,21 +271,20 @@ impl LoadedModel {
                 && self.gguf_weight_dtype(d_w_gate_f16) == GgmlDType::Q8_0
                 && self.gguf_weight_dtype(d_w_up_f16) == GgmlDType::Q8_0
             {
-                let stream = if q8_decode_kernel_decode_stream_enabled() {
-                    CudaStream::Decode
-                } else {
-                    CudaStream::Prefill
-                };
-                if self.q8_execution.try_project_mlp(
-                    &self.cuda,
-                    d_x_f32,
-                    [d_w_gate_f16, d_w_up_f16],
-                    d_out_f32,
-                    h,
-                    k,
-                    stream,
-                )? {
-                    return Ok(true);
+                anyhow::ensure!(
+                    !d_x_f32.is_null() && !d_out_f32.is_null() && d_x_f32 != d_out_f32.cast_const(),
+                    "invalid/aliased fused Q8 MLP buffers"
+                );
+                for source in [d_w_gate_f16, d_w_up_f16] {
+                    let tensor = self
+                        .device_tensors
+                        .values()
+                        .find(|tensor| std::ptr::eq(tensor.dptr.cast_const(), source))
+                        .context("missing fused Q8 MLP weight")?;
+                    anyhow::ensure!(
+                        tensor.shape == [k as u64, h as u64],
+                        "fused Q8 MLP weight shape mismatch"
+                    );
                 }
                 self.cuda
                     .mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(

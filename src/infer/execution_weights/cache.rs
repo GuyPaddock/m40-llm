@@ -222,39 +222,6 @@ impl Q8ExecutionCache {
     }
 
     /// # Safety
-    /// All spans belong to this model/context and remain live until completion.
-    /// The caller supplies the dependency from the activation producer.
-    pub(crate) unsafe fn try_project_mlp(
-        &self,
-        ctx: &CudaContext,
-        input: *const c_void,
-        sources: [*const c_void; 2],
-        output: *mut c_void,
-        h: i32,
-        k: i32,
-        stream: CudaStream,
-    ) -> Result<bool> {
-        let [Some(gate), Some(up)] = sources.map(|source| self.tensors.get(&(source as usize)))
-        else {
-            return Ok(false);
-        };
-        ensure!(
-            !input.is_null() && !output.is_null() && input != output.cast_const(),
-            "invalid/aliased prepared Q8 MLP pointers"
-        );
-        ctx.mlp_gate_up_swiglu_f32xq8_separate_async(
-            input,
-            gate.split_planes(h, k)?,
-            up.split_planes(h, k)?,
-            output,
-            h,
-            k,
-            stream,
-        )?;
-        Ok(true)
-    }
-
-    /// # Safety
     /// Source/input/output/bias pointers have the stated spans in this model's
     /// context. The caller supplies producer dependencies and retains all owners.
     pub(crate) unsafe fn try_project_qkv(

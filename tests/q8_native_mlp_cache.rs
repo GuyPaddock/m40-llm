@@ -102,11 +102,7 @@ fn run_mlp(
     assert_eq!(delta.device_frees, 0);
     assert_eq!(delta.h2d_copies, 0);
     assert_eq!(delta.d2h_copies, 0);
-    let op = if model.q8_execution_stats().mode == Q8ExecutionMode::Off {
-        "mlp_gate_up_swiglu_f32xq8_0_gguf_decode"
-    } else {
-        "mlp_gate_up_swiglu_f32xq8_separate"
-    };
+    let op = "mlp_gate_up_swiglu_f32xq8_0_gguf_decode";
     assert_eq!(
         after.by_op.get(op).map_or(0, |v| v.launches)
             - before.by_op.get(op).map_or(0, |v| v.launches),
@@ -144,11 +140,11 @@ fn run_mlp(
     Ok(actual)
 }
 
-/// Split-plane gate/up/SwiGLU stays one allocation-free async launch with
-/// independent operands, output guards, narrow/tail widths, and both streams.
-/// CPU/native results match; invalid dimensions and non-decode calls do not launch.
+/// Prepared caches must retain native one-launch fused MLP after the slower
+/// prepared fusion is removed. Native math, guards, streams, and rejection
+/// behavior must be identical with preparation off, split, or mixed.
 #[test]
-fn test_prepared_fused_mlp_matches_native_and_cpu() -> Result<()> {
+fn test_prepared_caches_retain_native_fused_mlp() -> Result<()> {
     let _fused = EnvRestore::set("M40LLM_FUSED_Q8_MLP_SWIGLU", "1");
     let initial = CudaContext::total_device_bytes();
     for hidden in [1, 31, 65, 128] {
@@ -158,7 +154,11 @@ fn test_prepared_fused_mlp_matches_native_and_cpu() -> Result<()> {
             props.major == 5 && props.minor == 2,
             "MLP test requires sm_52"
         );
-        for mode in [Q8ExecutionMode::Split, Q8ExecutionMode::Mixed] {
+        for mode in [
+            Q8ExecutionMode::Off,
+            Q8ExecutionMode::Split,
+            Q8ExecutionMode::Mixed,
+        ] {
             let model = make_model(mode, hidden)?;
             for stream in [CudaStream::Prefill, CudaStream::Decode] {
                 let _stream = EnvRestore::set(

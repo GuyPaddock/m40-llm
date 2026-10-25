@@ -54,6 +54,27 @@ n-gram feasibility study on the selected configuration. Do not extend the
 closed round with more layout/geometry tuning or reinterpret isolated gains
 as qualified generation speedups.
 
+### C11 Execution Units
+
+1. `refactor(cuda): remove failed prepared MLP`: remove the preserved
+   `e2dbc61` fused consumer after the negative `2e2bb5c` release gate, retaining
+   native fusion, shape/pointer checks, and cache coexistence tests.
+2. `refactor(cuda): drop coalesced Q8 experiment`: remove the losing lane
+   mapping preserved in `bb4d30e`, keeping useful vector-tiled projection
+   research. This is independent of MLP removal.
+3. `docs(perf): record exact Qwen kernel results`: rerun the selected native
+   configuration through the controlled release HTTP comparison after cleanup
+   and reconcile all C07-C10A keep/remove decisions. Depends on both removals.
+4. `test(bench): study ngram acceptance offline`: deterministic history-only
+   lookup and simulation over the selected configuration's actual traces, with
+   cost sensitivity and the formal proceed/postpone gate. Depends on C11.
+
+The prepared MLP consumer is now removed. CUDA native/cache fusion, family,
+prepared QKV/greedy, and MLP wrapper tests pass, as do non-CUDA warning-as-error
+tests and CUDA/server all-targets Clippy. The
+remaining cache and split/vector consumers stay opt-in research, not a promoted
+configuration. No new layout tuning or default change is authorized here.
+
 ## Committed Checkpoint: 2026-10-24
 
 The following checkpoint was moved from `AGENTS.md` at `81948df`. Paths in

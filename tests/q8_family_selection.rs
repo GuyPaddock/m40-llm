@@ -99,7 +99,7 @@ fn project(model: &LoadedModel, name: &str, is_prepared: bool) -> Result<Vec<f32
     Ok(output)
 }
 
-fn fused_mlp(model: &LoadedModel, is_prepared: bool) -> Result<Vec<f32>> {
+fn run_fused_mlp(model: &LoadedModel) -> Result<Vec<f32>> {
     let input = fixture::projection::make_input(1, 64);
     let d_input = DeviceBuffer::new_tagged(&model.cuda, 64 * 4, "families:mlp-input")?;
     let d_output = DeviceBuffer::new_tagged(&model.cuda, 128 * 4, "families:mlp-output")?;
@@ -124,11 +124,7 @@ fn fused_mlp(model: &LoadedModel, is_prepared: bool) -> Result<Vec<f32>> {
         "fused MLP must remain enabled"
     );
     let after = profile::snapshot();
-    let op = if is_prepared {
-        "mlp_gate_up_swiglu_f32xq8_separate"
-    } else {
-        "mlp_gate_up_swiglu_f32xq8_0_gguf_decode"
-    };
+    let op = "mlp_gate_up_swiglu_f32xq8_0_gguf_decode";
     assert_eq!(
         after.by_op.get(op).map_or(0, |c| c.launches)
             - before.by_op.get(op).map_or(0, |c| c.launches),
@@ -218,8 +214,8 @@ fn test_family_selection_preserves_native_consumers_and_accounting() -> Result<(
                 let (max, mean) = fixture::projection::measure_error(&actual, &expected);
                 ensure!(max < 1e-3 && mean < 1e-4, "native/family mismatch");
             }
-            let expected = fused_mlp(&native, false)?;
-            let actual = fused_mlp(&model, families.contains(Q8ProjectionGroup::GateUp))?;
+            let expected = run_fused_mlp(&native)?;
+            let actual = run_fused_mlp(&model)?;
             let (max, mean) = fixture::projection::measure_error(&actual, &expected);
             ensure!(max < 1e-3 && mean < 1e-4, "family fused MLP mismatch");
             let input = fixture::projection::make_input(1, 64);

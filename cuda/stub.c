@@ -69,10 +69,6 @@ int m40llm_qkv_f32xq8_separate_async(M40llmCudaContext* ctx, const void* input, 
     (void)ctx; (void)input; (void)scales; (void)values; (void)biases;
     (void)outputs; (void)widths; (void)k; (void)stream_kind; return -1;
 }
-int m40llm_mlp_gate_up_swiglu_f32xq8_separate_async(M40llmCudaContext* ctx, const void* input, const void* gate_scales, const void* gate_values, const void* up_scales, const void* up_values, void* output, int h, int k, uint32_t stream_kind) {
-    (void)ctx; (void)input; (void)gate_scales; (void)gate_values;
-    (void)up_scales; (void)up_values; (void)output; (void)h; (void)k; (void)stream_kind; return -1;
-}
 int m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_q4_0, const void* d_W_up_q4_0, void* d_C_f32, int H, int K) {
     (void)ctx; (void)d_A_f32; (void)d_W_gate_q4_0; (void)d_W_up_q4_0; (void)d_C_f32; (void)H; (void)K; return -1;
 }
