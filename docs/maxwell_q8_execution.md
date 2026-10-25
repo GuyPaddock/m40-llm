@@ -31,11 +31,11 @@ enables weight preparation.
 | M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
 | M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
 | M03 | Complete: [real-input five-pair screen](experiments/2026-10-25-maxwell-fp32-ffn-screen.md); packed/warp256 gains 7.75-8.27% complete FFN with native bits on the sampled one-row inputs; 128 gains 12.18-12.63% with small arithmetic drift |
-| M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, quality pending |
+| M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, later quality and historical timing evidence retained |
 | M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
-| M08 | In progress: [six quality comparisons](experiments/2026-10-25-maxwell-runtime-quality.md); [packed FP32/128 HTTP qualifies](experiments/2026-10-25-maxwell-runtime-packed128-http.md) at +8.133% with all 512 IDs equal; other comparisons and packed-path attribution pending |
+| M08 | In progress: six historical quality and all independent HTTP screens recorded; [sequential ordering repair](experiments/2026-10-25-maxwell-prefill-drift-completed.md) requires fresh corrected-control quality and timing before qualification |
 | M09 | Pending: measured attribution, retained configuration, fresh Ollama comparison and remaining-goal audit |
 
 The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
@@ -54,6 +54,11 @@ Both models use the qualified prepared down/vocabulary configuration, dense
 KV/context 1024 and the same source GGUF. The reference always uses native FFN
 and sequential prefill. Runtime choices are explicit, not inherited from
 ambient experiment settings; model-changing/capture modes are incompatible.
+Quality manifests now record `prefill_execution_contract` as
+`prefix-decode-completed-v1`. HTTP qualification rejects older reports with
+a clear instruction to rerun quality. This prevents historical unsafe-prefix
+evidence from qualifying the repaired runtime merely because model, prompt
+and candidate names still match.
 
 After restoring the frozen M02 environment, run a single candidate:
 

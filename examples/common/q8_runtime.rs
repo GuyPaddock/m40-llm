@@ -10,6 +10,10 @@ use m40_llm::{
 };
 use serde::Serialize;
 
+/// Reject quality evidence collected before no-logits prefix input reuse was
+/// ordered. Historical reports remain readable, but cannot qualify a new run.
+pub const PREFILL_EXECUTION_CONTRACT: &str = "prefix-decode-completed-v1";
+
 /// Only the bounded M03/M04 candidates that passed the complete-FFN screen.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[serde(rename_all = "kebab-case")]

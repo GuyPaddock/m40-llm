@@ -31,6 +31,10 @@ fn validate(
         "quality report model differs from HTTP model"
     );
     ensure!(
+        manifest["prefill_execution_contract"] == super::super::q8_runtime::PREFILL_EXECUTION_CONTRACT,
+        "quality report predates the prefix completion contract; rerun quality with the corrected runtime"
+    );
+    ensure!(
         manifest["candidate_config"] == serde_json::to_value(config)?,
         "quality report runtime candidate differs"
     );
@@ -184,6 +188,7 @@ mod tests {
 
     /// Timing promotion requires complete consistent evidence. A real changed
     /// continuation is a failed gate, not a malformed report or an exact win.
+    /// Evidence from the unsafe prefix schedule must not qualify a repaired run.
     #[test]
     fn test_quality_preflight_distinguishes_failed_gate_from_stale_summary() -> Result<()> {
         let config = RuntimeConfig::default();
@@ -191,6 +196,7 @@ mod tests {
         let parsed = m40_llm::evaluation::corpus::Corpus::parse(std::str::from_utf8(corpus)?)?;
         let mut rows = vec![
             json!({"kind":"q8_runtime_manifest","reference":{"sha256":"model"},"candidate":{"sha256":"model"},
+                "prefill_execution_contract":super::super::super::q8_runtime::PREFILL_EXECUTION_CONTRACT,
                 "candidate_config":config,"control_config":config,"corpus_sha256":sha256_bytes(corpus)?,
                 "selected_splits":["calibration","held_out"],"browser_prompt_ids":[1,2]}),
             json!({"kind":"q8_runtime_summary","dense_valid_tasks":12,"dense_valid_regressions":0,
@@ -214,6 +220,14 @@ mod tests {
                 }),
         );
         assert!(validate(&rows, config, "model", corpus, &[1, 2])?);
+        for contract in [Value::Null, json!("prefix-unfenced-v0")] {
+            let mut stale = rows.clone();
+            stale[0]["prefill_execution_contract"] = contract;
+            assert!(validate(&stale, config, "model", corpus, &[1, 2])
+                .unwrap_err()
+                .to_string()
+                .contains("rerun quality"));
+        }
         assert!(validate(&rows, config, "model", corpus, &[2, 1])
             .unwrap_err()
             .to_string()

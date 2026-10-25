@@ -252,7 +252,8 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
             }
         }
     }
-    report.append(json!({"kind":"q8_runtime_manifest","schema_version":1,"variant_id":args.variant_id,
+    report.append(json!({"kind":"q8_runtime_manifest","schema_version":2,"variant_id":args.variant_id,
+        "prefill_execution_contract":super::q8_runtime::PREFILL_EXECUTION_CONTRACT,
         "reference":run::model_identity(&args.reference_model,&reference,&tokenizer)?,
         "candidate":run::model_identity(&args.model,&candidate,&candidate_tokenizer)?,
         "control_config":control,"candidate_config":config,"is_numerical_track":config.is_numerical(),
