@@ -112,6 +112,16 @@ impl Args {
         })
     }
 
+    fn primary_execution_config(&self) -> Result<Q8ExecutionConfig> {
+        if let Some(config) = self.primary_runtime_config() {
+            config.execution_config()
+        } else if self.q8_execution_mode.is_some() {
+            Ok(Q8ExecutionConfig::disabled())
+        } else {
+            Q8ExecutionConfig::from_env()
+        }
+    }
+
     fn candidate_q8_config(&self) -> Result<Option<Q8ExecutionConfig>> {
         self.q8_execution_mode
             .as_deref()
@@ -1099,13 +1109,7 @@ pub async fn compare() -> Result<()> {
     };
     let load_start = Instant::now();
     let bytes = std::fs::read(&args.model)?;
-    let control_execution = if candidate_runtime.is_some() {
-        Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?
-    } else if candidate_q8_config.is_some() {
-        Q8ExecutionConfig::disabled()
-    } else {
-        Q8ExecutionConfig::from_env()?
-    };
+    let control_execution = args.primary_execution_config()?;
     let mut model = if let Some(config) = primary_runtime {
         LoadedModel::from_gguf_with_q8_backends(
             gguf_model,

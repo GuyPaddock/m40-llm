@@ -422,10 +422,27 @@ mod tests {
             candidate.prompt_prefill(),
             args.primary_runtime_config().unwrap().prompt_prefill()
         );
+        assert!(!args
+            .primary_execution_config()?
+            .families
+            .contains(m40_llm::infer::execution_weights::Q8ProjectionGroup::GateUp));
         let args = parse_args(&[values.as_slice(), &["--time-ollama"]].concat())?;
         assert_eq!(
             args.primary_runtime_config(),
             args.candidate_runtime_config()
+        );
+        assert_eq!(
+            args.primary_execution_config()?.families,
+            candidate.execution_config()?.families
+        );
+        assert!(args
+            .primary_execution_config()?
+            .families
+            .contains(m40_llm::infer::execution_weights::Q8ProjectionGroup::GateUp));
+        let args = parse_args(&[values.as_slice(), &["--profile-q8-runtime"]].concat())?;
+        assert_eq!(
+            args.primary_execution_config()?.families,
+            candidate.execution_config()?.families
         );
         assert!(parse_args(&["--q8-runtime-control", "qualified-packed128-sgemm"]).is_err());
         Ok(())
