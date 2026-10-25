@@ -102,6 +102,10 @@ below is historical context, not the current research execution order.
   middle GPU interval union. See `docs/experiments/2026-10-24-head128-attention.md`.
   Canonical-system Qwen arithmetic/OK/config smokes pass both kernels; the
   earlier user-only reference EOS is retained, not called an attention bug.
+- C08's allocation-error prerequisite now releases the CUDA context mutex
+  before querying error properties. An impossible-allocation hardware test
+  verifies contextual errors, unchanged accounting, live data, and subsequent
+  allocation instead of deadlocking before partial-buffer cleanup.
 - Next: C08 benchmark-only typed execution weights and independent C09/C10
   Q8 layouts; neither layout depends on the other succeeding. Use the selected
   C07 benchmark config for subsequent controls, require parity and repeated

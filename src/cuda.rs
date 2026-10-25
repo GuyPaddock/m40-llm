@@ -1826,6 +1826,9 @@ impl CudaContext {
             ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _)
         };
         if rc != 0 || out.is_null() {
+            // Property queries take this mutex too. Release it before building
+            // the allocation error so OOM cannot deadlock cleanup/fallback.
+            drop(_g);
             let props = self.current_device_props().ok();
             return Err(anyhow!(
                 "m40llm_device_malloc failed: rc={rc}, bytes={bytes}, total_before={}{}",
