@@ -264,6 +264,16 @@ impl LoadedModel {
                         "experimental Q8 FFN requires matching Q8_0 gate/up weights; use M40LLM_Q8_FFN_KERNEL=native");
                 }
                 match self.q8_ffn.kernel() {
+                    super::Q8FfnKernel::SplitF32x4 => {
+                        self.q8_execution.project_ffn(
+                            &self.cuda,
+                            d_x_f32,
+                            [d_w_gate_f16, d_w_up_f16],
+                            d_out_f32,
+                            h,
+                            k,
+                        )?;
+                    }
                     super::Q8FfnKernel::PackedF32 => {
                         let variant = if self.q8_ffn.threads() == Some(128) {
                             crate::cuda::Q8FfnFp32Variant::PackedWarp128

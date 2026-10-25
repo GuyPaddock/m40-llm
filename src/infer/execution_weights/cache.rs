@@ -226,6 +226,59 @@ impl Q8ExecutionCache {
         self.stats.has_prepared_vocabulary
     }
 
+    /// Resolve only this model's gate/up tensors. The returned planes borrow
+    /// model-owned allocations; no host packing or upload occurs in decode.
+    pub(crate) fn ffn_planes(
+        &self,
+        sources: [*const c_void; 2],
+        hidden: i32,
+        k: i32,
+    ) -> Result<[[*const c_void; 2]; 2]> {
+        ensure!(
+            sources[0] != sources[1],
+            "split FFN gate/up must be distinct"
+        );
+        let mut planes = [[std::ptr::null(); 2]; 2];
+        for (index, source) in sources.into_iter().enumerate() {
+            let entry = self
+                .tensors
+                .get(&(source as usize))
+                .context("split-f32x4-128 requires prepared gate/up weights in this model")?;
+            ensure!(
+                entry.family == [ProjectionFamily::Gate, ProjectionFamily::Up][index],
+                "split FFN requires gate/up projection family"
+            );
+            planes[index] = entry.split_planes(hidden, k)?;
+        }
+        Ok(planes)
+    }
+
+    /// # Safety
+    /// Input/output have the stated device spans in this context. The caller
+    /// orders their producers and retains the model until decode completes.
+    pub(crate) unsafe fn project_ffn(
+        &self,
+        ctx: &CudaContext,
+        input: *const c_void,
+        sources: [*const c_void; 2],
+        output: *mut c_void,
+        hidden: i32,
+        k: i32,
+    ) -> Result<()> {
+        let [[gate_scale, gate_values], [up_scale, up_values]] =
+            self.ffn_planes(sources, hidden, k)?;
+        ctx.ffn_q8_split_f32_async(
+            input,
+            [gate_scale, up_scale],
+            [gate_values, up_values],
+            output,
+            1,
+            hidden,
+            k,
+            None,
+        )
+    }
+
     /// # Safety
     /// Source/input/output/bias pointers have the stated spans in this model's
     /// context. The caller supplies producer dependencies and retains all owners.

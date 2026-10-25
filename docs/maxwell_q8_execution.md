@@ -113,7 +113,7 @@ Run attribution separately from all timed comparisons.
 
 ### Load-Time Configuration
 
-`M40LLM_Q8_FFN_KERNEL=native|packed-f32|q8-1` is captured once by
+`M40LLM_Q8_FFN_KERNEL=native|packed-f32|split-f32x4-128|q8-1` is captured once by
 `LoadedModel::from_gguf`. Unset means `native`, preserving the existing
 dispatch and all runtime defaults. `packed-f32` selects the screened
 256-thread packed/warp FP32-activation kernel; `q8-1` selects the 128-thread
@@ -137,6 +137,26 @@ The selected kernels enqueue on decode. Other projection streams retain
 explicit producer/consumer waits. No per-token allocation, transfer or
 synchronization is added by FFN enqueue.
 
+The qualifying [split-plane screen](experiments/2026-10-25-maxwell-split-ffn-screen.md)
+also has an opt-in runtime consumer, `Q8FfnConfig::split_f32x4()` or
+`M40LLM_Q8_FFN_KERNEL=split-f32x4-128`. Its only geometry is 128 threads,
+four FP32 input values per task, original per-weight scaling and FP32
+accumulation. This is not Q8_1 activation quantization. It requires
+`M40LLM_Q8_EXECUTION_WEIGHTS=split` and a family list containing `gate-up`.
+Use `gate-up,down,vocabulary` to retain the qualified prepared down/head.
+Missing preparation or insufficient budget is an error, not a native fallback.
+
+The model's existing execution cache owns separate original FP16 scale and
+signed-byte planes. Packing/upload occurs once at load, releases each temporary
+host copy, and is charged to existing preparation/budget reporting. The Qwen
+36-layer gate/up planes add 1,724,645,376 bytes to the down/vocabulary control;
+that is a layout calculation, not a measured runtime memory result. Decode
+borrows these owners without new allocation, transfer or synchronization.
+Explicit `dequant-sgemm` prefill still converts the original Q8 tensor using
+one bounded temporary buffer, even when gate/up is cached. Only the final
+prompt token uses the new fused consumer. No defaults change; microbenchmark
+qualification alone does not establish full-model token equality or HTTP speed.
+
 Explicit experimental requests require compiled CUDA kernels, sm_52, uploaded
 Q8_0 gate/up tensors in every standard layer and complete 32-value input
 blocks. Unsupported requests fail with a native-mode remedy rather than
@@ -146,7 +166,7 @@ are rejected. This investigation adds no server scheduling behavior.
 
 API migration: in-memory `LoadedModel` construction now supplies
 `q8_ffn: Q8FfnConfig::native()`. Direct callers of the unsafe fused-FFN
-wrapper supply a final scratch argument: `None` for native/packed FP32, or
+wrapper supply a final scratch argument: `None` for native/packed/split FP32, or
 an owned `Q8FfnScratch` view for Q8_1. Workspace allocation/estimation also
 takes the FFN configuration. Configure before creating workspace/session
 state; do not replace model components while sessions reference them.

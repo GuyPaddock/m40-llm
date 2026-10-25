@@ -144,12 +144,15 @@ All three prepared tensors must be present and shape-compatible; missing cache
 entries retain native fused QKV, while invalid cached shapes fail before launch.
 Multi-row calls still use the standard projection path.
 
-`M40LLM_FUSED_Q8_MLP_SWIGLU=1` always retains the native fused gate/up/SwiGLU
-kernel, even when gate/up weights are prepared. The slower prepared fused MLP
+With native FFN selection, `M40LLM_FUSED_Q8_MLP_SWIGLU=1` retains the native
+fused gate/up/SwiGLU kernel even when gate/up weights are prepared. The slower prepared fused MLP
 was removed after preservation in `e2dbc61` and release measurements in
 `2e2bb5c`. Model-level shape and pointer checks remain before enqueue. Prepared
 gate/up weights are still available to ordinary projection APIs and multi-row
-work; they do not replace the retained native fused decode kernel.
+work; they do not replace the retained native fused decode kernel implicitly.
+The separately screened `M40LLM_Q8_FFN_KERNEL=split-f32x4-128` is an explicit,
+fixed-geometry exception requiring split gate/up preparation. See
+[load-time FFN selection](maxwell_q8_execution.md#load-time-configuration).
 
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.

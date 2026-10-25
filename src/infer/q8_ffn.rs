@@ -11,6 +11,8 @@ pub enum Q8FfnKernel {
     Native,
     #[serde(rename = "packed-f32")]
     PackedF32,
+    #[serde(rename = "split-f32x4-128")]
+    SplitF32x4,
     #[serde(rename = "q8-1")]
     Q81,
 }
@@ -45,6 +47,32 @@ impl Q8FfnConfig {
         Self::candidate(Q8FfnKernel::Q81, threads)
     }
 
+    /// The split-plane screen qualifies one fixed FP32-activation geometry.
+    pub const fn split_f32x4() -> Self {
+        Self {
+            kernel: Q8FfnKernel::SplitF32x4,
+            threads: Some(128),
+        }
+    }
+
+    pub(crate) fn validate_execution(
+        self,
+        execution: super::execution_weights::Q8ExecutionConfig,
+    ) -> Result<()> {
+        if self.kernel == Q8FfnKernel::SplitF32x4 {
+            ensure!(
+                execution.mode == super::execution_weights::Q8ExecutionMode::Split
+                    && execution
+                        .families
+                        .contains(super::execution_weights::Q8ProjectionGroup::GateUp),
+                "split-f32x4-128 requires M40LLM_Q8_EXECUTION_WEIGHTS=split and \
+                 M40LLM_Q8_EXECUTION_FAMILIES including gate-up; \
+                 use M40LLM_Q8_FFN_KERNEL=native to disable"
+            );
+        }
+        Ok(())
+    }
+
     fn candidate(kernel: Q8FfnKernel, threads: u32) -> Result<Self> {
         ensure!(
             matches!(threads, 128 | 256),
@@ -60,8 +88,11 @@ impl Q8FfnConfig {
         match value {
             "native" => Ok(Self::native()),
             "packed-f32" => Self::packed_f32(256),
+            "split-f32x4-128" => Ok(Self::split_f32x4()),
             "q8-1" => Self::q8_1(128),
-            _ => anyhow::bail!("M40LLM_Q8_FFN_KERNEL must be native, packed-f32, or q8-1"),
+            _ => anyhow::bail!(
+                "M40LLM_Q8_FFN_KERNEL must be native, packed-f32, split-f32x4-128, or q8-1"
+            ),
         }
     }
 
@@ -141,6 +172,25 @@ impl super::LoadedModel {
             );
             self.tensor_device_ptr("experimental FFN gate", &mapped.w_gate)?;
             self.tensor_device_ptr("experimental FFN up", &mapped.w_up)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_q8_ffn_prepared_weights(&self) -> Result<()> {
+        if self.q8_ffn.kernel() != Q8FfnKernel::SplitF32x4 {
+            return Ok(());
+        }
+        let (k, hidden) = self.validate_standard_layers()?;
+        for layer in 0..self.model_config.block_count as usize {
+            let mapped = self.map_standard_layer(layer)?;
+            self.q8_execution.ffn_planes(
+                [
+                    mapped.w_gate.dptr.cast_const(),
+                    mapped.w_up.dptr.cast_const(),
+                ],
+                hidden as i32,
+                k as i32,
+            )?;
         }
         Ok(())
     }

@@ -59,6 +59,7 @@ impl LoadedModel {
                     && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
             "experimental Q8 prefill requires compiled CUDA/cuBLAS; use M40LLM_Q8_PREFILL_BACKEND=native"
         );
+        ffn.validate_execution(execution)?;
         #[cfg(not(feature = "cuda"))]
         anyhow::ensure!(
             execution.mode == Q8ExecutionMode::Off,
@@ -196,6 +197,8 @@ impl LoadedModel {
                 hash_ms,
             )?;
         }
+        #[cfg(feature = "cuda")]
+        model.validate_q8_ffn_prepared_weights()?;
         if !model.q8_ffn.is_native() {
             eprintln!("[q8-ffn] kernel={:?} threads={:?} scope=single-row activation_bytes={} numerical_track={}",
                 model.q8_ffn.kernel(),model.q8_ffn.threads(),

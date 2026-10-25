@@ -16,6 +16,15 @@ fn test_q8_ffn_config_selects_only_screened_candidates() -> Result<()> {
         Q8FfnConfig::packed_f32(256)?
     );
     assert_eq!(Q8FfnConfig::parse("q8-1")?, Q8FfnConfig::q8_1(128)?);
+    assert_eq!(
+        Q8FfnConfig::parse("split-f32x4-128")?,
+        Q8FfnConfig::split_f32x4()
+    );
+    assert_eq!(Q8FfnConfig::split_f32x4().threads(), Some(128));
+    assert_eq!(
+        serde_json::to_value(Q8FfnConfig::split_f32x4())?["kernel"],
+        "split-f32x4-128"
+    );
     for threads in [128, 256] {
         assert_eq!(
             Q8FfnConfig::packed_f32(threads)?.kernel(),
@@ -43,6 +52,8 @@ fn test_q8_ffn_config_selects_only_screened_candidates() -> Result<()> {
 fn test_q8_ffn_config_accounts_for_quantized_storage() -> Result<()> {
     assert_eq!(Q8FfnConfig::native().activation_bytes(2048)?, 0);
     assert_eq!(Q8FfnConfig::packed_f32(128)?.activation_bytes(2048)?, 0);
+    assert_eq!(Q8FfnConfig::split_f32x4().activation_bytes(2048)?, 0);
+    assert!(!Q8FfnConfig::split_f32x4().has_quantization());
     let q = Q8FfnConfig::q8_1(128)?;
     assert!(q.has_quantization());
     assert_eq!(q.activation_bytes(64)?, 72);
@@ -58,7 +69,11 @@ fn test_q8_ffn_config_accounts_for_quantized_storage() -> Result<()> {
 #[cfg(not(all(feature = "cuda", nvcc)))]
 #[test]
 fn test_q8_ffn_explicit_request_requires_compiled_cuda() -> Result<()> {
-    for config in [Q8FfnConfig::packed_f32(256)?, Q8FfnConfig::q8_1(128)?] {
+    for config in [
+        Q8FfnConfig::packed_f32(256)?,
+        Q8FfnConfig::q8_1(128)?,
+        Q8FfnConfig::split_f32x4(),
+    ] {
         let (gguf, bytes) = fixture::build(0);
         let before = m40_llm::profile::snapshot();
         let error = m40_llm::infer::LoadedModel::from_gguf_with_q8_backends(
@@ -130,7 +145,15 @@ mod hardware {
             gguf,
             bytes,
             -1,
-            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+            Q8ExecutionConfig::parse(
+                "split",
+                Some("6144"),
+                Some(if config.kernel() == Q8FfnKernel::SplitF32x4 {
+                    "gate-up,down,vocabulary"
+                } else {
+                    "down,vocabulary"
+                }),
+            )?,
             config,
             m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
         )
@@ -281,8 +304,11 @@ mod hardware {
             for position in 0..tokens {
                 let mut payloads = Vec::new();
                 for model in [reference, candidate] {
-                    let mut k = [0u8; 128];
-                    let mut v = [0u8; 128];
+                    let bytes = model.model_config.attention_head_count_kv as usize
+                        * model.model_config.attention_key_length as usize
+                        * 2;
+                    let mut k = vec![0u8; bytes];
+                    let mut v = vec![0u8; bytes];
                     assert_eq!(
                         unsafe {
                             ffi_debug_read_kv_token(
@@ -454,6 +480,7 @@ mod hardware {
             Q8FfnConfig::packed_f32(256)?,
             Q8FfnConfig::q8_1(128)?,
             Q8FfnConfig::q8_1(256)?,
+            Q8FfnConfig::split_f32x4(),
         ] {
             let model = model(config)?;
             let before = serde_json::to_value(model.q8_execution_stats())?;
@@ -544,6 +571,7 @@ mod hardware {
                         Q8FfnKernel::PackedF32 => "ffn_q8_f32_packed_warp_256",
                         Q8FfnKernel::Q81 if config.threads() == Some(128) => "ffn_q8_1_threads128",
                         Q8FfnKernel::Q81 => "ffn_q8_1_threads256",
+                        Q8FfnKernel::SplitF32x4 => "ffn_q8_split_f32x4_128",
                         Q8FfnKernel::Native => unreachable!("candidate list excludes native"),
                     };
                     assert_eq!(
@@ -624,6 +652,255 @@ mod hardware {
                     compare_kv(&reference, &candidate, ids.len() as u32)?;
                 }
             }
+        }
+        assert_eq!(CudaContext::total_device_bytes(), initial);
+        Ok(())
+    }
+
+    /// Lossless split planes are model-owned, leave down/vocabulary unchanged,
+    /// and cannot divert the SGEMM prefix. Both head64 and biased head128/Qwen
+    /// retain numerical logits/KV parity with the qualified packed128 control.
+    /// Warm decode reuses storage without quantization, copies or allocation.
+    #[cfg(have_cublas)]
+    #[test]
+    #[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
+    fn test_split_ffn_preserves_sgemm_prefix_and_reuses_model_weights() -> Result<()> {
+        use m40_llm::infer::{q8_prefill::Q8PrefillBackend, ForwardPrefillSequence};
+        let _lock = crate::cuda_test_scope::lock_cuda();
+        let _env = configure();
+        let _hardware = CudaContext::new_m40()?;
+        let initial = CudaContext::total_device_bytes();
+        let close = |actual: &[f32], expected: &[f32]| {
+            assert_eq!(actual.len(), expected.len());
+            for (index, (a, b)) in actual.iter().zip(expected).enumerate() {
+                assert!(
+                    a.is_finite() && b.is_finite() && (a - b).abs() <= 2e-3,
+                    "index={index} actual={a} expected={b}"
+                );
+            }
+        };
+        for is_qwen in [false, true] {
+            let load = |ffn: Q8FfnConfig, families: &str| -> Result<LoadedModel> {
+                let (gguf, bytes) = fixture::build_prefill_fixture(is_qwen);
+                let mut loaded = LoadedModel::from_gguf_with_q8_backends(
+                    gguf,
+                    bytes,
+                    -1,
+                    Q8ExecutionConfig::parse("split", Some("6144"), Some(families))?,
+                    ffn,
+                    Q8PrefillBackend::DequantSgemm,
+                )?;
+                loaded.allocate_kv_cache_for_layers(16)?;
+                Ok(loaded)
+            };
+            let reference = load(Q8FfnConfig::packed_f32(128)?, "down,vocabulary")?;
+            let candidate = load(Q8FfnConfig::split_f32x4(), "gate-up,down,vocabulary")?;
+            let old_stats = reference.q8_execution_stats();
+            let stats = candidate.q8_execution_stats();
+            let gate_up_bytes: usize = candidate
+                .gguf
+                .tensors
+                .iter()
+                .filter(|t| {
+                    t.name.ends_with("feed_forward.w1.weight")
+                        || t.name.ends_with("feed_forward.w3.weight")
+                })
+                .map(|t| (t.shape[0] * t.shape[1]) as usize / 32 * 34)
+                .sum();
+            assert!(gate_up_bytes > 0);
+            assert_eq!(
+                stats.resident_bytes,
+                old_stats.resident_bytes + gate_up_bytes
+            );
+            assert_eq!(
+                stats.total_weight_payload_bytes,
+                stats.source_weights_bytes + stats.resident_bytes
+            );
+            assert_eq!(
+                stats.single_row_down_split_launch,
+                old_stats.single_row_down_split_launch
+            );
+            for old in &old_stats.tensors {
+                let new = stats.tensors.iter().find(|t| t.key == old.key).unwrap();
+                assert_eq!(new.resident_bytes, old.resident_bytes);
+                assert_eq!(new.source_bytes, old.source_bytes);
+            }
+            // Later ambient changes must not replace the captured backend.
+            let _changed = EnvRestore::set("M40LLM_Q8_FFN_KERNEL", "native");
+            let _weights = EnvRestore::set("M40LLM_Q8_EXECUTION_WEIGHTS", "off");
+            let width = candidate.model_config.embedding_length as usize;
+            let ids = [2, 3, 4, 7, 8];
+            let mut hidden = Vec::new();
+            for model in [&reference, &candidate] {
+                let output = DeviceBuffer::new_tagged(&model.cuda, width * 4, "split-prefix-out")?;
+                let before = profile::snapshot();
+                unsafe {
+                    model.forward_prefill_all_layers_varlen_for_sequences(&[
+                        ForwardPrefillSequence {
+                            token_ids: &ids[..4],
+                            sequence_id: 0,
+                            d_out_f32: output.as_mut_ptr(),
+                        },
+                    ])?;
+                }
+                let after = profile::snapshot();
+                let delta = profile::counter_delta(&before, &after);
+                assert_eq!(delta.cublas_calls, 14);
+                let launches = |op: &str| {
+                    after.by_op.get(op).map_or(0, |p| p.launches)
+                        - before.by_op.get(op).map_or(0, |p| p.launches)
+                };
+                assert_eq!(launches("dequantize_q8_0_to_f32_colmajor"), 14);
+                assert_eq!(launches("ffn_q8_split_f32x4_128"), 0);
+                let workspace = model.forward_workspace.lock().unwrap();
+                let pointers = workspace.as_ref().unwrap().ptrs();
+                assert!(pointers.q8_activation.is_none());
+                assert_eq!(
+                    pointers.q8_prefill_weight.unwrap().bytes,
+                    width * model.model_config.feed_forward_length as usize * 4
+                );
+                let mut values = vec![0.0f32; width];
+                unsafe {
+                    model.cuda.memcpy_d2h(
+                        values.as_mut_ptr().cast(),
+                        output.as_ptr(),
+                        width * 4,
+                    )?;
+                }
+                hidden.push(values);
+            }
+            close(&hidden[0], &hidden[1]);
+            // All prefix projections/attention are identical, including biases
+            // and absolute RoPE positions, regardless of cached gate/up planes.
+            compare_kv(&reference, &candidate, 4)?;
+            let mut reference_session = DecodeSession::new_for_sequence_with_kv_config(
+                &reference,
+                0,
+                KvCompressionConfig::dense_reference(),
+                width,
+                true,
+                "split-reference",
+                "split-reference:in",
+                "split-reference:out",
+            )?;
+            let mut candidate_session = DecodeSession::new_for_sequence_with_kv_config(
+                &candidate,
+                0,
+                KvCompressionConfig::dense_reference(),
+                width,
+                true,
+                "split-candidate",
+                "split-candidate:in",
+                "split-candidate:out",
+            )?;
+            reference_session.mark_processed_through(4);
+            candidate_session.mark_processed_through(4);
+            close(
+                &candidate_session.logits_for_ids(&ids, |_| {})?,
+                &reference_session.logits_for_ids(&ids, |_| {})?,
+            );
+            assert!(candidate
+                .forward_workspace
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .ptrs()
+                .q8_prefill_weight
+                .is_none());
+            let resident = CudaContext::total_device_bytes();
+            let before = profile::snapshot();
+            let actual = candidate_session.logits_for_ids(&[2, 3, 4, 7, 8, 9], |_| {})?;
+            let after = profile::snapshot();
+            let delta = profile::counter_delta(&before, &after);
+            assert_eq!(delta.device_allocs + delta.device_frees, 0);
+            assert_eq!(
+                after.by_op["ffn_q8_split_f32x4_128"].launches
+                    - before.by_op["ffn_q8_split_f32x4_128"].launches,
+                2
+            );
+            assert_eq!(CudaContext::total_device_bytes(), resident);
+            assert_eq!(
+                serde_json::to_value(candidate.q8_execution_stats())?,
+                serde_json::to_value(&stats)?
+            );
+            close(
+                &actual,
+                &reference_session.logits_for_ids(&[2, 3, 4, 7, 8, 9], |_| {})?,
+            );
+            assert!(candidate.materialized_weights.lock().unwrap().is_empty());
+        }
+        assert_eq!(CudaContext::total_device_bytes(), initial);
+        Ok(())
+    }
+
+    /// Missing gate/up preparation, a zero budget, or a different model's
+    /// source pointers must fail without silently selecting a native kernel.
+    /// Allocation failures leave no prepared/source storage behind.
+    #[test]
+    #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+    fn test_split_ffn_rejects_unprepared_weights_and_budget_without_leaks() -> Result<()> {
+        let _lock = crate::cuda_test_scope::lock_cuda();
+        let _env = configure();
+        let _hardware = CudaContext::new_m40()?;
+        let initial = CudaContext::total_device_bytes();
+        for execution in [
+            Q8ExecutionConfig::disabled(),
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+            Q8ExecutionConfig::parse("split", Some("0"), Some("gate-up,down,vocabulary"))?,
+        ] {
+            let (gguf, bytes) = fixture::build_with_layers(0, 2);
+            let before = profile::snapshot();
+            let error = LoadedModel::from_gguf_with_q8_backends(
+                gguf,
+                bytes,
+                -1,
+                execution,
+                Q8FfnConfig::split_f32x4(),
+                m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
+            )
+            .err()
+            .expect("unprepared/budget-limited split FFN must fail");
+            assert!(error.to_string().contains("gate-up") || error.to_string().contains("budget"));
+            assert_eq!(CudaContext::total_device_bytes(), initial);
+            if execution.budget_bytes != 0 {
+                assert_eq!(
+                    profile::counter_delta(&before, &profile::snapshot()),
+                    Default::default()
+                );
+            }
+        }
+        {
+            let candidate = model(Q8FfnConfig::split_f32x4())?;
+            let other = model(Q8FfnConfig::split_f32x4())?;
+            let foreign = other.map_standard_layer(0)?;
+            let mapped = candidate.map_standard_layer(0)?;
+            let input = DeviceBuffer::new_tagged(&candidate.cuda, 256, "split-invalid:in")?;
+            let output = DeviceBuffer::new_tagged(&candidate.cuda, 512, "split-invalid:out")?;
+            let before = profile::snapshot();
+            for (sources, rows) in [
+                ([foreign.w_gate.dptr, foreign.w_up.dptr], 1),
+                ([mapped.w_gate.dptr, mapped.w_gate.dptr], 1),
+                ([mapped.w_gate.dptr, mapped.w_up.dptr], 4),
+            ] {
+                assert!(unsafe {
+                    candidate.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
+                        input.as_ptr(),
+                        rows,
+                        64,
+                        sources[0],
+                        sources[1],
+                        128,
+                        output.as_mut_ptr(),
+                        None,
+                    )
+                }
+                .is_err());
+            }
+            assert_eq!(
+                profile::counter_delta(&before, &profile::snapshot()),
+                Default::default()
+            );
         }
         assert_eq!(CudaContext::total_device_bytes(), initial);
         Ok(())
