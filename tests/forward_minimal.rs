@@ -5,6 +5,7 @@ mod cuda_env;
 use anyhow::Result;
 use m40_llm::gguf::GgufModel;
 use m40_llm::infer::{LoadedModel, ModelConfig};
+use m40_llm::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
@@ -26,10 +27,11 @@ fn f32s_to_halves_bytes(vals: &[f32]) -> Vec<u8> {
     out
 }
 
-/// A minimal one-token forward produces finite hidden values with explicit
-/// native F16 weight storage and no opt-in execution cache.
+/// A minimal one-token dense reference produces finite hidden values with
+/// native F16 weights and no opt-in execution cache or compression semantics.
 #[test]
 fn forward_one_token_minimal_smoke() -> Result<()> {
+    let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
