@@ -13,7 +13,34 @@ experiments, the offline n-gram feasibility gate, conditional speculation, and
 separately evaluated model-changing research. It is not replaced by the
 [legacy task roadmap](archive/legacy-task-roadmap.md).
 
-## Prepared Q8 HTTP Checkpoint: 2026-10-25
+## Exact Kernel Checkpoint: 2026-10-25
+
+C01-C11 are complete, including conditional C10A evaluation and the preserved
+failure removals. The selected opt-in benchmark remains native Q8 plus C07
+parallel head128 attention, partitions=8/threads=256, with preparation off.
+Global runtime/KV defaults are unchanged.
+
+Fresh five-pair release HTTP confirmation at `f5cda0d` measures 31.850 tok/s
+m40-llm versus 43.032 Ollama. Every row has 65 prompt IDs, 512 generated tokens,
+length stopping, and verified fresh KV. The actual m40 trace matches the prior
+qualified trace exactly. Both objectives remain unmet: 53.06 tok/s and 1.30x
+fresh Ollama, now 55.9416 tok/s. See the [C11 report and raw records](experiments/2026-10-25-exact-kernel-checkpoint.md).
+
+The slower prepared fused MLP is removed in `9044eea`, after preservation in
+`e2dbc61` and measurements in `2e2bb5c`. Native fusion and shape/pointer checks
+remain. The slower tiled coalesced-lane mapping is removed in `f5cda0d`, after
+preservation in `bb4d30e`; vector-only research remains. Remaining preparation
+paths stay opt-in, with no qualified HTTP win. CUDA/cuBLAS-on/off, non-CUDA
+warning-as-error, Clippy, and formatting checks pass. Benchmark processes are
+stopped; final GPU allocation is zero.
+
+Next is **C11A**, the formal offline history-only n-gram acceptance study on
+the selected actual trace and fixed regression prompts. Its >=10% optimistic
+browser E2E screening gate decides whether C12-C17 are justified. If negative,
+record C18 and proceed to C19; do not reopen layout tuning or build a verifier
+before the feasibility gate.
+
+## Prepared Q8 HTTP History: 2026-10-25
 
 C01-C10 and C10A implementation/HTTP validation are complete. No prepared
 candidate passes the combined timing and actual-ID parity gate. Keep the
@@ -48,24 +75,25 @@ without changing the measured browser prompt. CUDA family/ownership/forward/
 attention tests, cuBLAS on/off checks, non-CUDA warning-as-error tests,
 Clippy, and protocol/CLI tests pass.
 
-Next is C11's keep/remove decision and exact-kernel checkpoint. Preserve
-these commits/results before any removal. Then run the formal C11A offline
-n-gram feasibility study on the selected configuration. Do not extend the
-closed round with more layout/geometry tuning or reinterpret isolated gains
-as qualified generation speedups.
+This checkpoint led to C11's keep/remove decision and exact-kernel confirmation
+above. It did not authorize another layout/geometry search or reinterpret
+isolated gains as qualified generation speedups.
 
-### C11 Execution Units
+### C11 Commit Sequence
 
-1. `refactor(cuda): remove failed prepared MLP`: remove the preserved
+1. Completed `9044eea`, `refactor(cuda): remove failed prepared MLP`: remove
+   the preserved
    `e2dbc61` fused consumer after the negative `2e2bb5c` release gate, retaining
    native fusion, shape/pointer checks, and cache coexistence tests.
-2. `refactor(cuda): drop coalesced Q8 experiment`: remove the losing lane
+2. Completed `f5cda0d`, `refactor(cuda): drop coalesced Q8 experiment`: remove
+   the losing lane
    mapping preserved in `bb4d30e`, keeping useful vector-tiled projection
    research. This is independent of MLP removal.
-3. `docs(perf): record exact Qwen kernel results`: rerun the selected native
+3. Completed in this checkpoint,
+   `docs(perf): record exact Qwen kernel results`: rerun the selected native
    configuration through the controlled release HTTP comparison after cleanup
    and reconcile all C07-C10A keep/remove decisions. Depends on both removals.
-4. `test(bench): study ngram acceptance offline`: deterministic history-only
+4. Next, `test(bench): study ngram acceptance offline`: deterministic history-only
    lookup and simulation over the selected configuration's actual traces, with
    cost sensitivity and the formal proceed/postpone gate. Depends on C11.
 
@@ -78,8 +106,8 @@ The coalesced-lane mapping preserved in `bb4d30e` is now removed from CUDA,
 Rust launch descriptors, and the microbenchmark CLI. Its original measurements
 remain unchanged. Retained vector/library/cache tests, the 11-case attention
 grid, 24-case forward suite, projection/MLP wrappers, cuBLAS-off checks,
-non-CUDA warning-as-error tests, and CUDA/server Clippy pass. C11's controlled
-native/Ollama release confirmation is next.
+non-CUDA warning-as-error tests, and CUDA/server Clippy pass. The controlled
+native/Ollama release confirmation is complete in the C11 report above.
 
 ## Committed Checkpoint: 2026-10-24
 

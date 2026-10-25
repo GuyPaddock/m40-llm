@@ -2,6 +2,30 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Exact-Kernel Round Checkpoint
+
+C11's fresh five-pair release HTTP confirmation measures **31.850 tok/s**
+m40-llm versus **43.032 tok/s** Ollama 0.40.11. Median HTTP time is
+16.075/11.898 s; m40 internal prefill/decode is 1.683/14.348 s. All rows
+generate 512 tokens from the same 65 prompt IDs with verified fresh KV and
+length stops. Actual m40 IDs match the prior qualified trace after cleanup.
+
+The runtime-to-Ollama throughput difference is -25.985%, paired-bootstrap 95%
+interval [-26.118%, -25.305%]. No variation extension or borderline confirmation
+is triggered. Neither target is reached: 53.06 tok/s and the newly binding
+1.30x-Ollama target of 55.9416 tok/s. This is not another attention-promotion
+comparison; C07's original +33.98% paired result remains its promotion evidence.
+
+Keep native Q8 plus C07 split8/256 exact attention for the benchmark, preparation
+off. The failed prepared fused MLP and coalesced-lane tile mapping are now
+removed in separate commits after preservation. Remaining split/vector/cache
+paths stay opt-in research, not preferred generation. No global defaults change.
+
+See the [C11 keep/remove report and raw records](experiments/2026-10-25-exact-kernel-checkpoint.md)
+for the complete decisions, output/memory evidence, phase-boundary caveats,
+and remaining FFN/prefill costs. Next is C11A's offline n-gram feasibility gate,
+not another kernel-tuning round. All benchmark processes have been stopped.
+
 ## 2026-10-25: Prepared Q8 Release HTTP Gate
 
 Three immutable family configurations complete C10A's bounded HTTP screen,

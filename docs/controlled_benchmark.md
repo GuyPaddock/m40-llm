@@ -9,6 +9,10 @@ The [2026-10-24 baseline checkpoint](experiments/2026-10-24-qwen-baseline-checkp
 combines the repeated HTTP results, stage profile, counter availability, and
 bounded optimization decisions. It distinguishes measured timings from
 bandwidth/Amdahl estimates.
+The [2026-10-25 exact-kernel checkpoint](experiments/2026-10-25-exact-kernel-checkpoint.md)
+records the selected native-Q8/split8/256 configuration after cleanup and a
+fresh 31.850 versus 43.032 HTTP tok/s confirmation. Both speed targets remain
+unmet; prepared projection microbenchmarks are not promoted generation results.
 
 ## Ollama Setup
 

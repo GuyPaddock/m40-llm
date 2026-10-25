@@ -304,8 +304,9 @@ by 64.21%, retaining native MLP reduces it by 6.71%, and down/vocabulary-only
 increases it by 12.53% but fails actual-ID parity. See the linked release report
 before selecting an experimental family subset. C09/C10 isolated results do not qualify a runtime
 configuration; keep setup, duplicate weights, and memory scope explicit.
-Next is C11's keep/remove checkpoint, then C11A's offline n-gram study, not
-another layout search.
+C11's [keep/remove checkpoint](experiments/2026-10-25-exact-kernel-checkpoint.md)
+is complete, including the prepared MLP and coalesced-lane removals. Next is
+C11A's offline n-gram study, not another layout search.
 The selected exact-attention
 benchmark configuration remains split8/256 from C07; global runtime/KV defaults
 are unchanged, and neither unchanged-model throughput target has been reached.
