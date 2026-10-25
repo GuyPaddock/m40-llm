@@ -126,6 +126,23 @@ No default changes or throughput claim follow. Next is M08: full-model
 512-token equality, dense-valid tasks, Q8_1 quality/loss, isolated prefill and
 decode E2E pairs, then a qualifying combination and fresh Ollama comparison.
 
+M08 now has [full-model runtime quality evidence](experiments/2026-10-25-maxwell-runtime-quality.md)
+from release `3d6833a`. Explicit request-owned prefill keeps scientific
+choices independent of ambient settings; both models retain prepared
+down/vocabulary. Packed FP32/128 and /256 preserve all 512 browser IDs and
+all twelve frozen task outputs. Seven dense-valid task rows have no
+regressions; packed128 has small nonzero logit drift, while packed256 sampled
+logits match exactly. Both may advance to HTTP timing, not default promotion.
+Q8_1 diverges at step 42 with higher held-out PPL, so remains numerical
+research. Native packed and SGEMM prefill produce identical candidate IDs but
+both diverge from sequential at token 0. Their shared large prompt-logit drift
+must be isolated before an exact combination can qualify; a faster SGEMM
+prompt interval is not enough. FP32-versus-FP16 attention K/V consumption is
+a source-supported hypothesis, not a measured explanation. All six cases
+release tracked allocations. Next run bounded controlled HTTP comparisons,
+retain the failed gates, and resolve packed-path semantics before combination.
+Neither original E2E target is achieved.
+
 ## Previous Research Checkpoints
 
 The entries below retain their original checkpoint sequence. Their historical

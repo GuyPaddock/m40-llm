@@ -2,6 +2,24 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Full-Model Maxwell Runtime Quality Gate
+
+Clean release `3d6833a` tests six independent runtime candidates against the
+qualified prepared down/vocabulary control on the actual 512-token browser
+workload and both frozen quality splits. Packed FP32/128 and /256 preserve
+all 512 IDs and all twelve task outputs, with no regressions across seven
+dense-valid tasks. Packed256 sampled logits are identical; packed128 has small
+nonzero drift. Both advance to controlled HTTP timing, not default promotion.
+
+Both Q8_1 geometries diverge at step 42 without dense-valid task regressions;
+held-out PPL increases from 39.61 to 40.67-40.78. Keep this numerical track
+separate from the exact-output goal. Native packed and SGEMM prefill match
+each other's 512 IDs but differ from sequential at token 0, with large prompt
+logit drift. SGEMM reduces the single diagnostic prompt interval from 1.57 s
+to 0.56 s, including all conversions and an 86 MiB temporary, but does not
+qualify as an exact-output improvement. No combined candidate or default is
+advanced. See [raw reports, scope and unresolved packed-path attribution](experiments/2026-10-25-maxwell-runtime-quality.md).
+
 ## 2026-10-25: Bounded Q8 Prefill Runtime Checkpoint
 
 M07 adds opt-in, model-local `dequant-sgemm` packed-prefix prefill with one

@@ -1,0 +1,13 @@
+6fadf1512182c4f7d789bc08f9346d62516ae3aa37dd9c4ec756f32c3e3cec4e  docs/experiments/2026-10-25-maxwell-runtime-dequant-sgemm-quality.jsonl
+b89ab70d4ffd991ba228e2ab98fb1c159e8fa95d809cb5ad874c20ee7a179154  docs/experiments/2026-10-25-maxwell-runtime-native-packed-quality.jsonl
+978eb7f71e870671cf00d2669c0f70c9f3661aa4b33a20d463fd8208075507aa  docs/experiments/2026-10-25-maxwell-runtime-packed128-quality.jsonl
+927e5b50e61815f8489eccb70baefae030e057ac52296752cd2615af70e5be52  docs/experiments/2026-10-25-maxwell-runtime-packed256-quality.jsonl
+c6c0ba4d17c79458b4e410cc8488108109dbb528b3f2ab4051edfdf383a0ab9b  docs/experiments/2026-10-25-maxwell-runtime-q81128-quality.jsonl
+077135f11b540784b1185b3994154a0b49aa25a91423cc8cd25e413e3d7626fe  docs/experiments/2026-10-25-maxwell-runtime-q81256-quality.jsonl
+7518489cc5ecfbf032d9485291afb19f34b13260bc294fdaaaffcee665d9f70d  docs/experiments/2026-10-25-maxwell-runtime-dequant-sgemm-quality.log.gz
+561cb85a558d94d7a31eee73dfd5b9522369bb2a8a876e8977030b57ab6b67ef  docs/experiments/2026-10-25-maxwell-runtime-native-packed-quality.log.gz
+0a00dd3872474deb72cd60dc2097f7c8cc793f6b554d5a3f5e4814eb1a12c743  docs/experiments/2026-10-25-maxwell-runtime-packed128-quality.log.gz
+970e6e1553b2406bb6715311ecf6972adccc977f3b870972436e20bf9ab0d4fc  docs/experiments/2026-10-25-maxwell-runtime-packed256-quality.log.gz
+5a90dba58f21b0c2e9f8da8963c1aa9d9662c9c006575664fbf4b2c5d8956540  docs/experiments/2026-10-25-maxwell-runtime-q81128-quality.log.gz
+16d2c755fe6830f927af0e5fa1390303c5e2d91468e674904380d0bd5d96f942  docs/experiments/2026-10-25-maxwell-runtime-q81256-quality.log.gz
+895e4e81c59346fc1b3cafd5f3ebe56136d333b4ae7306abdef0602709c028ce  docs/experiments/2026-10-25-maxwell-runtime-quality-audit.jsonl
