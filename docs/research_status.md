@@ -18,8 +18,8 @@ separately evaluated model-changing research. It is not replaced by the
 C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
 is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
 C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
-Individual research results are recorded through C26 below; its combined
-layer/activation checkpoint is now in progress. C22/C27 remain postponed under
+Individual and combined research results are recorded through C26 below.
+C22/C27 remain postponed under
 the negative sparse gate. Neither exact-engine speed objective is achieved.
 
 Validation follow-up: the local NVCC/no-device CI reproduction exposed 25
@@ -202,13 +202,23 @@ layer/activation measurements; its extra E2E/quality-budget prerequisites were
 not a requirement for research in the authorized C26 plan. Do not infer additive
 gains or reuse source-bound activation metadata on a compact model.
 
-The next bounded checkpoint composes frozen mask `[8]` with existing activation
+The completed bounded checkpoint composes frozen mask `[8]` with existing activation
 targets 0/50/60%, on original source IDs and both unchanged C19 splits, five
-paired trials each. The zero control must match masked native behavior;
+paired trials each. The zero control matches recorded masked-native behavior;
 positive thresholds retain all original prepared down weights and skipped-layer
-counters must stay zero. No new fitting or default promotion is authorized.
+counters stay zero. No new fitting or default promotion occurs.
 Implementation permits application after the mask and freezes mask changes
 afterward; calibration capture still requires every original layer.
+
+**C26 now includes measured composition.** Clean `26a3a5d` runs both splits
+with targets 0/50/60% and five alternating pairs. The zero control matches C24's
+12 masked-native task traces and 203 recorded loss-token statistics; every full
+reference matches historical C24. Positive variants retain original IDs and
+all original prepared down weights, adding 862,411,332 bytes. Held-out rate
+gains are 7.012/9.247% with PPL 44.293885/50.199624, increases of 11.82/26.73%.
+The 60% combination regresses calibration config lookup from `6` to `19`.
+Both are research-only model changes, not unchanged-engine gains. See
+[the report and complete raw evidence](experiments/2026-10-25-combined-model-tradeoffs.md).
 
 Latest qualified unchanged HTTP rate is
 31.937130 tok/s versus Ollama 43.162711; both 53.06 and fresh 1.30x-Ollama

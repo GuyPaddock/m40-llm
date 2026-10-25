@@ -2,7 +2,9 @@
 
 ## Decision
 
-C26's individual comparison covers completed C20/C23/C24/C25 evidence without another fit or sweep.
+C26 covers completed C20/C23/C24/C25 evidence and the subsequent
+[frozen layer/activation combination checkpoint](2026-10-25-combined-model-tradeoffs.md).
+No calibration artifact is fitted again.
 No modified model is promoted. Ranked layer removal gives the smaller observed
 quality cost, and compact export reclaims real storage. Activation sparsity
 gives larger matched-step gains but costs more loss and device memory.
@@ -52,6 +54,8 @@ Trials from different revisions are not pooled into new historical pairs.
 | C24 ranked mask `[8,24]` | 3/6 | 1 | 46.184633 | +16.59% | +5.116% |
 | C24 ranked mask `[8,24,25]` | 4/6 | 1 | 49.373639 | +24.64% | +7.937% |
 | C25 compact `[8]` export | 5/6 | 0 | 40.984621 | +3.46%, inherited | +0.060% vs masked source only |
+| C26 `[8]` + activation 50% | 4/6 | 0 | 44.293885 | +11.82% | +7.012% |
+| C26 `[8]` + activation 60% | 4/6 | 0 | 50.199624 | +26.73% | +9.247% |
 
 The two dense-failed held-out tasks are inconclusive for compression/model
 quality conclusions, including any extra candidate pass. This is why 5/6 is
@@ -69,6 +73,9 @@ Ranked `[8]` has a substantially smaller same-corpus PPL cost than fixed `[17]`.
 Its approximately 2.5% rate change is below the exact-engine 3% screen and is
 not an E2E promotion result. C25 adds neutral compaction timing, not another
 layer of compute savings. Do not add +0.060% to +2.484%.
+The 60% combined row also regresses a dense-valid calibration config task
+that both individual components passed. Zero held-out task regressions do
+not erase that interaction or the increased loss.
 
 ## Ordinary Generation Observations
 
@@ -97,6 +104,7 @@ boundary and full output are retained per task in the comparison records.
 | C20/C24 masked source, any tested mask | 3,279,519,744 | 37,748,736 | 0 |
 | C23 positive activation target | 3,279,519,744 | 37,748,736 | 862,411,332 |
 | C25 compact 35-layer `[8]` | 3,197,605,888 | 36,700,160 | 0 |
+| C26 `[8]` plus positive activation target | 3,279,519,744 | 37,748,736 | 862,411,332 |
 
 The activation extra is 862,322,688 bytes of duplicate down weights, 88,068
 bytes of shared selection workspace and 576 counter bytes. It is about
@@ -132,15 +140,17 @@ saving 29.41% against 34-byte native blocks. It nevertheless takes
 justify decode pruning. C22 saliency calibration and C27 sparse Q4 remain
 postponed. No integrated sparse-model quality or E2E result exists.
 
-No combined model is tested or inferred in these original 13 reports. Static-plus-activation sparsity
+The original 13 reports contain individual variants. Static-plus-activation sparsity
 lacks an independently useful static decode kernel. Layer-plus-activation
 removal has independently measured costs. The initial comparison required a
 controlled generated-E2E win or approved quality budget before further research;
-that was an extra restriction, not C26's authorized experiment gate. The next
-bounded checkpoint therefore composes frozen mask `[8]` with existing targets
-0/50/60% on both unchanged splits, with no fitting or promotion. It needs
-original-ID routing, a zero control and measured held-out evaluation, not an
-assumption that individual gains add.
+that was an extra restriction, not C26's authorized experiment gate. The completed
+bounded checkpoint measures frozen mask `[8]` with existing targets
+0/50/60% on both unchanged splits, with no fitting or promotion. The zero
+control matches historical masked-native tokens/statistics and the positive
+variants retain original-ID routing, measured loss and allocation costs.
+They produce +7.012/+9.247% held-out matched-step rate, but larger loss and a
+new 60% calibration failure. No additive or original-model speed claim follows.
 The existing activation artifact is bound to the original source/hash and
 must not be applied blindly to a renumbered compact model.
 
@@ -157,8 +167,8 @@ fresh Ollama reference, approximately 56.1115 tok/s. That matched five-pair
 run uses the same Qwen Q8_0 model, 65 prompt tokens, 512 generated tokens,
 verified fresh KV and length stops.
 
-This records individual costs, not completion of C26's combined experiment or
-the original speed objective. The bounded kernel, layout and feasibility
+This records individual and measured combined costs, not completion of the
+original speed objective. The bounded kernel, layout and feasibility
 screens are not reopened by composition. General runtime defaults
 remain preferred compressed exact-old top8; the short exact-engine benchmark
 continues to request dense mode explicitly.

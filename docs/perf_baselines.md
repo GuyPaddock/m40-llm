@@ -2,6 +2,27 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Frozen Layer and Activation Composition
+
+C26 now includes the combined checkpoint on clean release `26a3a5d`, frozen
+mask `[8]` with existing activation targets 0/50/60%, both unchanged C19 splits.
+The zero control matches all 12 historical masked-native task traces and 203
+loss-token statistics. All references match the frozen full model, original
+layer routing is retained and skipped layer 8 accumulates zero counters.
+
+| Combination | Held-Out PPL | Held PPL Increase | Held Matched-Step Rate Gain | New Dense-Valid Failures Cal / Held |
+| --- | ---: | ---: | ---: | --- |
+| `[8]` + 0%, control | 40.984621 | +3.46% | +2.561% | 0 / 0 |
+| `[8]` + 50% | 44.293885 | +11.82% | +7.012% | 0 / 0 |
+| `[8]` + 60% | 50.199624 | +26.73% | +9.247% | 1 / 0 |
+
+The 60% combination answers `19` instead of `6` on the calibration config
+row, although both components pass independently. Keep combinations opt-in.
+Positive rows add the same 862,411,332 prepared bytes as C23, retaining all
+36 source down tensors and physical KV slots. Five pairs measure matched
+observed-prefix steps, not generated/HTTP throughput. No refitting, default
+promotion or additive speed claim occurs. See [the full report, audits and raw data](experiments/2026-10-25-combined-model-tradeoffs.md).
+
 ## 2026-10-25: Modified-Model Tradeoff Checkpoint
 
 C26 compares the completed frozen-corpus studies without another fit or sweep.
@@ -19,6 +40,8 @@ retains ordinary generation times/counts, preparation boundaries and all
 The original exact objectives remain unmet at the latest qualified 31.937
 HTTP tok/s versus 43.163 Ollama. Another optimization round needs a new
 research decision, not a promotion of these approximate-model results.
+The later composition checkpoint above closes the combination gap in this
+initial individual-only report; its earlier measurements remain unchanged.
 
 ## 2026-10-25: Compact Model Live Equivalence and Memory
 
