@@ -23,6 +23,11 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "cuda")]
+mod q8_ffn;
+#[cfg(feature = "cuda")]
+pub use q8_ffn::Q8FfnFp32Variant;
+
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
 pub const ROPE_LAYOUT_NEOX: u32 = 1;
 
@@ -294,6 +299,17 @@ mod ffi {
             d_C_f32: *mut c_void,
             H: i32,
             K: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_f32_ablation_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+            variant: i32,
         ) -> i32;
         pub fn m40llm_qkv_f32xq8_separate_async(
             ctx: *mut M40llmCudaContext,

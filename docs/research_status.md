@@ -45,8 +45,14 @@ guarded reusable scratch and enqueue counters. Clean release `29dee55` now has
 about 0.457 ms/layer at one row, versus 4.67-4.72 ms for rows4, with gate/up
 dominant. All numerical/ownership checks pass. The initial 949 MHz clock-ramp
 run is preserved; bounded warmup yields 1113 MHz at every primary sample.
-This is a baseline, not an inference speed improvement. Next is M03's bounded
-FP32 load/reduction ablation; do not add more capture infrastructure.
+This is a baseline, not an inference speed improvement. M03 now has five
+explicit CUDA primitives and passing release M40 parity/ownership tests.
+The four 256-thread variants preserve native split4 bits on the synthetic
+grid; packed/warp128 passes CPU tolerance. Release sm_52 inspection shows
+32 registers and zero stack/local bytes throughout. No runtime choice or
+default changed. Next is real-input paired complete-FFN timing of these
+fixed variants; do not add more capture infrastructure. See the
+[primitive checkpoint](maxwell_q8_execution.md#m03-primitive-checkpoint).
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact

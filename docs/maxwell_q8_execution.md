@@ -30,7 +30,7 @@ enables weight preparation.
 | --- | --- |
 | M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
 | M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
-| M03 | Pending: fixed FP32 packed-load/reduction ablation, then one additional 128-thread combined variant |
+| M03 | CUDA primitives and release parity verified: four 256-thread load/reduction variants and packed/warp128; real-input paired timing pending |
 | M04 | Pending independently: packed Q8_1 activation/dot experiment, quantization-inclusive cost and numerical checks |
 | M05 | Pending: complete-FFN five-pair screen and preserved negative results |
 | M06 | Conditional: immutable runtime selection and reusable scratch only for qualifying decode candidates |
@@ -42,6 +42,39 @@ The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its
 callback support is distinct from the unavailable legacy traffic counters.
 The official binary was not rebuilt for the diagnostic.
+
+### M03 Primitive Checkpoint
+
+`CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,
+not a generation policy. Its five fixed variants use scalar/packed loads and
+shared/warp reduction at 256 threads, plus packed/warp at 128 threads. All
+enqueue one kernel on the decode stream with no allocation, transfer or
+synchronization. Packed payload reads require only two-byte alignment for
+native 34-byte Q8_0 blocks. No upstream code was copied for these variants.
+
+The release M40 tests in `tests/q8_ffn_fp32.rs` pass for distinct rows 1/4,
+signed extremes, zero scales, hidden tails and two-byte-offset weight bases.
+All four 256-thread variants match native split4 output bits across that
+synthetic grid; the sole 128-thread variant passes CPU-reference tolerance.
+Input/output guards, immutable weights, rejected arguments, enqueue counters
+and tracked allocation cleanup are checked. This is not yet real-model
+512-token parity or a measured speedup.
+
+NVCC 12.8.93 release sm_52 inspection reports 32 registers, zero stack and
+zero local bytes for all five variants and native split4. Dynamic shared
+storage is 2 KiB at 256 threads and 1 KiB at 128 threads. The scalar variants
+contain 16 byte-payload load sites plus two scale-load sites; packed variants
+contain eight halfword-payload load sites plus two scale-load sites. Warp
+variants contain one barrier and ten shuffle sites. Static shared-reduction
+barrier-site counts are not dynamic counts: native uses a loop, whereas the
+new fixed-size scalar/shared reduction is unrolled. Debug resource reports
+are not performance evidence. Occupancy and DRAM traffic were not measured.
+
+Next extend the existing complete-FFN benchmark with paired native controls.
+Keep prepared down/vocabulary fixed. The four-row experimental fused kernel
+is a row-batched algorithm extension, not the production four-row two-GEMM
+plus SwiGLU path; report that distinction rather than attributing all M4
+differences to packed loads or reductions.
 
 M01 confirms relevant execution differences, not how many milliseconds each
 causes. Keep the scalar-Q8_1 and prior packed-prefill failures as evidence.

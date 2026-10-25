@@ -62,6 +62,10 @@ int m40llm_qkv_f32xf16_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A
 int m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_q8_0, const void* d_W_up_q8_0, void* d_C_f32, int H, int K) {
     (void)ctx; (void)d_A_f32; (void)d_W_gate_q8_0; (void)d_W_up_q8_0; (void)d_C_f32; (void)H; (void)K; return -1;
 }
+int m40llm_ffn_q8_f32_ablation_async(M40llmCudaContext* ctx, const void* input, const void* gate, const void* up, void* output, int rows, int hidden, int k, int variant) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output;
+    (void)rows; (void)hidden; (void)k; (void)variant; return -99;
+}
 int m40llm_qkv_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_q8_0, const void* d_Wk_q8_0, const void* d_Wv_q8_0, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
     (void)ctx; (void)d_A_f32; (void)d_Wq_q8_0; (void)d_Wk_q8_0; (void)d_Wv_q8_0; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
 }
