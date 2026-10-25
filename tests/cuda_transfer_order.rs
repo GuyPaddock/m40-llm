@@ -10,6 +10,7 @@ use half::f16;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer, ExactOldBacking, KVCache},
     kv_compression::KvRepresentativePolicy,
+    profile,
 };
 
 fn read(ctx: &CudaContext, buffer: &DeviceBuffer, elements: usize) -> Result<Vec<f32>> {
@@ -252,6 +253,172 @@ fn test_native_kv_initialization_precedes_first_decode() -> Result<()> {
                 assert!(other.block_counts.iter().all(|&value| value == 0));
             }
         }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LegacyAppendKind {
+    Fp16,
+    Fp32,
+    RotaryFp32,
+}
+
+/// A queued decode producer must publish length before legacy host reads it.
+/// Back-to-back appends behind a backlog must use distinct slots for odd/even
+/// token widths and preserve both payloads; overflow must leave them intact.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_legacy_append_observes_queued_length_publication() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let busy_host = vec![0.0_f32; 1 << 22];
+    let busy = DeviceBuffer::new_tagged(&ctx, busy_host.len() * 4, "legacy:backlog")?;
+    unsafe {
+        ctx.memcpy_h2d(busy.as_mut_ptr(), busy_host.as_ptr().cast(), busy.bytes())?;
+    }
+    for dim in [3, 64, 128] {
+        for kind in [
+            LegacyAppendKind::Fp16,
+            LegacyAppendKind::Fp32,
+            LegacyAppendKind::RotaryFp32,
+        ] {
+            if dim == 3 && matches!(kind, LegacyAppendKind::RotaryFp32) {
+                continue;
+            }
+            let values = [0.25_f32, 1.5, -0.75, 2.5];
+            let mut inputs = Vec::new();
+            for value in values {
+                let data: Vec<u8> = if matches!(kind, LegacyAppendKind::Fp16) {
+                    (0..dim)
+                        .flat_map(|_| f16::from_f32(value).to_le_bytes())
+                        .collect()
+                } else {
+                    (0..dim).flat_map(|_| value.to_le_bytes()).collect()
+                };
+                let buffer = DeviceBuffer::new_tagged(&ctx, data.len(), "legacy:input")?;
+                unsafe {
+                    ctx.memcpy_h2d(buffer.as_mut_ptr(), data.as_ptr().cast(), data.len())?;
+                }
+                inputs.push(buffer);
+            }
+            let cache = KVCache::new_with_context(&ctx, 2, 1, 1, dim as u32)?;
+            for _ in 0..16 {
+                unsafe {
+                    ctx.residual_add_f32_async(
+                        busy.as_ptr(),
+                        busy.as_ptr(),
+                        busy.as_mut_ptr(),
+                        busy_host.len(),
+                    )?;
+                }
+            }
+            for token in 0..2 {
+                unsafe {
+                    enqueue_legacy(
+                        kind,
+                        &cache,
+                        &ctx,
+                        inputs[token * 2].as_ptr(),
+                        inputs[token * 2 + 1].as_ptr(),
+                    )?;
+                }
+            }
+            ctx.synchronize_stream(CudaStream::Decode)?;
+            for token in 0..2 {
+                let mut k = vec![0_u16; dim];
+                let mut v = vec![0_u16; dim];
+                let rc = unsafe {
+                    m40_llm::cuda::ffi_debug_read_kv_token(
+                        &ctx,
+                        &cache,
+                        0,
+                        token as u32,
+                        k.as_mut_ptr().cast(),
+                        v.as_mut_ptr().cast(),
+                    )
+                };
+                assert_eq!(rc, 0);
+                assert!(
+                    k.iter()
+                        .all(|&actual| actual == f16::from_f32(values[token * 2]).to_bits()),
+                    "K overwritten: {kind:?} dim={dim} token={token}"
+                );
+                assert!(
+                    v.iter()
+                        .all(|&actual| actual == f16::from_f32(values[token * 2 + 1]).to_bits()),
+                    "V overwritten: {kind:?} dim={dim} token={token}"
+                );
+            }
+            unsafe {
+                assert!(
+                    enqueue_legacy(kind, &cache, &ctx, inputs[0].as_ptr(), inputs[1].as_ptr())
+                        .is_err()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Dispatch only the legacy API under test; buffers are device-ready and kept
+/// alive by the caller through completion. Rotary position intentionally stays
+/// zero, independently of the append slot.
+unsafe fn enqueue_legacy(
+    kind: LegacyAppendKind,
+    cache: &KVCache,
+    ctx: &CudaContext,
+    k: *const std::ffi::c_void,
+    v: *const std::ffi::c_void,
+) -> Result<()> {
+    match kind {
+        LegacyAppendKind::Fp16 => cache.append_token(ctx, 0, k, v),
+        LegacyAppendKind::Fp32 => cache.append_token_f32_async(ctx, 0, k, v),
+        LegacyAppendKind::RotaryFp32 => {
+            cache.append_token_f32_rope_k_async(ctx, 0, k, v, 0, 10000.0, 1.0)
+        }
+    }
+}
+
+/// Production explicit-position append must stay enqueue-only on head64 and
+/// head128: length publication adds no host copies, allocations or stream waits.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_explicit_position_append_stays_enqueue_only() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    for dim in [64, 128] {
+        let k = vec![0.0_f32; 2 * dim];
+        let v = vec![1.5_f32; 2 * dim];
+        let d_k = DeviceBuffer::new_tagged(&ctx, k.len() * 4, "at:k")?;
+        let d_v = DeviceBuffer::new_tagged(&ctx, v.len() * 4, "at:v")?;
+        unsafe {
+            ctx.memcpy_h2d(d_k.as_mut_ptr(), k.as_ptr().cast(), d_k.bytes())?;
+            ctx.memcpy_h2d(d_v.as_mut_ptr(), v.as_ptr().cast(), d_v.bytes())?;
+        }
+        let cache = KVCache::new_with_context(&ctx, 8, 1, 2, dim as u32)?;
+        let before = profile::snapshot();
+        for position in 0..2 {
+            unsafe {
+                cache.append_token_f32_rope_k_at_async(
+                    &ctx,
+                    0,
+                    d_k.as_ptr(),
+                    d_v.as_ptr(),
+                    position,
+                    position,
+                    10000.0,
+                    1.0,
+                )?;
+            }
+        }
+        let delta = profile::counter_delta(&before, &profile::snapshot());
+        assert_eq!(delta.launches, 2);
+        assert_eq!(delta.stream_syncs, 0);
+        assert_eq!(delta.stream_waits, 0);
+        assert_eq!(delta.h2d_copies + delta.d2h_copies, 0);
+        assert_eq!(delta.device_allocs + delta.device_frees, 0);
+        ctx.synchronize_stream(CudaStream::Decode)?;
     }
     Ok(())
 }

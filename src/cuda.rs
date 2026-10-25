@@ -5377,7 +5377,9 @@ impl KVCache {
 impl KVCache {
     /// # Safety
     /// `k_dev` and `v_dev` must be valid device pointers containing one token's worth of K/V in f16 layout.
-    /// `seq_id` must be in range. Context must target same device as this cache.
+    /// `seq_id` must be in range and this must be dense KV on the same device.
+    /// Finish input/cache producers on other streams before calling. This legacy API
+    /// waits for decode length publication and finishes its default-stream copies.
     pub unsafe fn append_token(
         &self,
         ctx: &CudaContext,
@@ -5398,7 +5400,10 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
         }
-        record_sync_kernel("kvcache_append_token");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
+        crate::profile::record_h2d_copy("kvcache_append_token_length", 4);
+        crate::profile::record_stream_sync("kvcache_append_token_completion");
         Ok(())
     }
 
@@ -5417,7 +5422,10 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues f32-to-f16 KV append on the decode stream. Callers must synchronize before reading from the cache.
+    /// Waits for decode length publication, then enqueues f32-to-f16 append.
+    /// Use explicit-position append for an enqueue-only path. Inputs must be
+    /// ready on this device and retained until decode completion; other-stream
+    /// input/cache producers must finish first. Dense cache only. Drain before reading KV.
     pub unsafe fn append_token_f32_async(
         &self,
         ctx: &CudaContext,
@@ -5441,6 +5449,8 @@ impl KVCache {
             ));
         }
         record_async_kernel("kvcache_append_token_f32");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
         Ok(())
     }
 
@@ -5465,8 +5475,9 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues fused K RoPE and f32-to-f16 KV append on the decode stream.
-    /// Callers must synchronize before reading from the cache.
+    /// Legacy length-aware append waits for decode length publication, then
+    /// enqueues fused K RoPE and FP16 storage. Finish other-stream input/cache
+    /// producers first, retain inputs and drain decode before reading KV.
     pub unsafe fn append_token_f32_rope_k_async(
         &self,
         ctx: &CudaContext,
@@ -5492,7 +5503,9 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues fused K RoPE and KV append with an explicit rotary layout.
+    /// Waits for decode length publication, then enqueues K RoPE/KV append
+    /// into dense KV. Inputs must be ready and live through decode completion.
+    /// Explicit-position append remains the enqueue-only production API.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn append_token_f32_rope_k_layout_async(
         &self,
@@ -5525,6 +5538,8 @@ impl KVCache {
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
         Ok(())
     }
 

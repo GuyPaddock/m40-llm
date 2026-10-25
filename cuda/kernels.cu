@@ -8650,25 +8650,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return kv;
     }
 
-    __global__ void cast_store_f32_to_f16_kernel(const float* __restrict__ in,
-                                                 __half* __restrict__ out,
-                                                 size_t n) {
+    __global__ void append_kv_f32_kernel(
+        const float* __restrict__ k_in, const float* __restrict__ v_in,
+        __half* __restrict__ k_out, __half* __restrict__ v_out,
+        uint32_t* __restrict__ seq_map, uint32_t seq_id, uint32_t next_length,
+        size_t n) {
         const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
         if (i < n) {
-            out[i] = __float2half_rn(in[i]);
-        }
-    }
-
-    __global__ void cast_store_f32_to_f16_kernel_h2(const float* __restrict__ in,
-                                                    __half* __restrict__ out,
-                                                    size_t n_pairs) {
-        const size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-        if (i < n_pairs) {
-            const size_t idx = i * 2;
-            const float a = in[idx];
-            const float b = in[idx + 1];
-            __half2 h2 = __halves2half2(__float2half_rn(a), __float2half_rn(b));
-            reinterpret_cast<__half2*>(out)[i] = h2;
+            k_out[i] = __float2half_rn(k_in[i]);
+            v_out[i] = __float2half_rn(v_in[i]);
+            if (i == 0) seq_map[seq_id] = next_length;
         }
     }
 
@@ -8703,7 +8694,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         float freq_base,
         float freq_scale,
         uint32_t rope_layout,
-        size_t pairs_per_token) {
+        size_t pairs_per_token,
+        uint32_t* __restrict__ seq_map,
+        uint32_t seq_id,
+        uint32_t next_length) {
         const size_t pair = blockIdx.x * blockDim.x + threadIdx.x;
         if (pair >= pairs_per_token) return;
 
@@ -8727,6 +8721,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         k_out[i1] = __float2half_rn(k0 * s + k1 * c);
         v_out[i0] = __float2half_rn(v_in[i0]);
         v_out[i1] = __float2half_rn(v_in[i1]);
+        if (pair == 0) seq_map[seq_id] = next_length;
     }
 
     __global__ void rope_k_append_f32_to_f16_h2_at_kernel(
@@ -8898,17 +8893,27 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    static cudaError_t read_kv_length_after_decode(
+        M40llmCudaContext* ctx, const M40llmKVCache* kv,
+        uint32_t seq_id, uint32_t* length) {
+        if (ensure_device(ctx) != 0) return cudaErrorInvalidDevice;
+        cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
+        if (err != cudaSuccess) return err;
+        return cudaMemcpy(length, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    }
+
     int m40llm_kvcache_append_token(M40llmCudaContext* ctx,
                                      M40llmKVCache* kv,
                                      uint32_t seq_id,
                                      const void* k_dev,
                                      const void* v_dev) {
         if (!ctx || !kv || !k_dev || !v_dev) return -1;
+        if (kv->compressed) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
 
         // Fetch current length for this sequence
         uint32_t cur_len = 0;
-        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        cudaError_t err = read_kv_length_after_decode(ctx, kv, seq_id, &cur_len);
         if (err != cudaSuccess) return -3;
         if (cur_len >= kv->max_seq_len) return -4;
 
@@ -8924,8 +8929,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         // Increment length
         cur_len += 1;
-        err = cudaMemcpy(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice);
-        if (err != cudaSuccess) return -7;
+        const int copy_result = m40llm_memcpy_h2d(ctx, kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t));
+        if (copy_result != 0) return -7;
 
         return 0;
     }
@@ -8948,10 +8953,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          const void* k_dev_f32,
                                          const void* v_dev_f32) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (kv->compressed || kv->num_heads == 0 || kv->head_dim == 0) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
 
         uint32_t cur_len = 0;
-        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        cudaError_t err = read_kv_length_after_decode(ctx, kv, seq_id, &cur_len);
         if (err != cudaSuccess) return -3;
         if (cur_len >= kv->max_seq_len) return -4;
 
@@ -8965,51 +8971,14 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
 
         const int threads = 256;
 
-        // Handle potential 4-byte alignment for half2 stores. If the output pointer
-        // is not 4-byte aligned, do one scalar element first to align it.
-        size_t elems_remaining = elems_per_token;
-        size_t skip = 0;
-        if (((uintptr_t)k_out & 0x3) != 0) {
-            // do first element scalar for both K and V
-            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(k_in, k_out, 1);
-            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(v_in, v_out, 1);
-            skip = 1;
-            elems_remaining -= 1;
-        }
-
-        const size_t pairs = elems_remaining / 2;
-        const size_t tail = elems_remaining & 1u;
-
-        const float* k_in_h2 = k_in + skip;
-        const float* v_in_h2 = v_in + skip;
-        __half* k_out_h2 = k_out + skip;
-        __half* v_out_h2 = v_out + skip;
-
-        if (pairs > 0) {
-            const int blocks_h2 = (int)((pairs + threads - 1) / threads);
-            cudaGetLastError();
-            cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(k_in_h2, k_out_h2, pairs);
-            cast_store_f32_to_f16_kernel_h2<<<blocks_h2, threads, 0, ctx->decode_stream>>>(v_in_h2, v_out_h2, pairs);
-        }
-        if (tail) {
-            const float* k_tail_in = k_in_h2 + pairs * 2;
-            const float* v_tail_in = v_in_h2 + pairs * 2;
-            __half* k_tail_out = k_out_h2 + pairs * 2;
-            __half* v_tail_out = v_out_h2 + pairs * 2;
-            cudaGetLastError();
-            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(k_tail_in, k_tail_out, 1);
-            cast_store_f32_to_f16_kernel<<<1, 1, 0, ctx->decode_stream>>>(v_tail_in, v_tail_out, 1);
-        }
+        const int blocks = (int)((elems_per_token + threads - 1) / threads);
+        append_kv_f32_kernel<<<blocks, threads, 0, ctx->decode_stream>>>(
+            k_in, v_in, k_out, v_out, kv->d_seq_map, seq_id, cur_len + 1u, elems_per_token);
         err = cudaGetLastError();
         if (err != cudaSuccess) {
             fprintf(stderr, "append_token_f32 kernel launch error: %s\n", cudaGetErrorString(err));
             return -5;
         }
-
-        // Increment length
-        cur_len += 1;
-        err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
-        if (err != cudaSuccess) return -6;
 
         return 0;
     }
@@ -9091,12 +9060,13 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
                                          float freq_scale,
                                          uint32_t rope_layout) {
         if (!ctx || !kv || !k_dev_f32 || !v_dev_f32) return -1;
+        if (kv->compressed) return -1;
         if (seq_id >= kv->max_batch_size) return -2;
         if (kv->head_dim == 0 || kv->num_heads == 0) return -3;
         if (kv->head_dim % 2 != 0) return -4;
 
         uint32_t cur_len = 0;
-        cudaError_t err = cudaMemcpy(&cur_len, kv->d_seq_map + seq_id, sizeof(uint32_t), cudaMemcpyDeviceToHost);
+        cudaError_t err = read_kv_length_after_decode(ctx, kv, seq_id, &cur_len);
         if (err != cudaSuccess) return -5;
         if (cur_len >= kv->max_seq_len) return -6;
 
@@ -9122,16 +9092,15 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             freq_base,
             freq_scale,
             rope_layout,
-            pairs_per_token);
+            pairs_per_token,
+            kv->d_seq_map,
+            seq_id,
+            cur_len + 1u);
         err = cudaGetLastError();
         if (err != cudaSuccess) {
             fprintf(stderr, "append_token_f32_rope_k kernel launch error: %s\n", cudaGetErrorString(err));
             return -7;
         }
-
-        cur_len += 1;
-        err = cudaMemcpyAsync(kv->d_seq_map + seq_id, &cur_len, sizeof(uint32_t), cudaMemcpyHostToDevice, ctx->decode_stream);
-        if (err != cudaSuccess) return -8;
 
         return 0;
     }

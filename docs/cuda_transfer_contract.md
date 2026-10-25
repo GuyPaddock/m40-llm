@@ -66,6 +66,30 @@ Immediate first append/attention tests cover dense head64/head128, head64
 summary/q8 caches, and head64/head128 mixed FP16-K/q4-V, without a reset or
 readback before consumption. Metadata and an unused sequence stay unchanged.
 
-Legacy append metadata and explicit async producer dependencies remain under
-audit. Benchmark timing impact must be measured; these correctness changes
+Legacy length-aware append now drains its decode producer before copying the
+current length to host. Plain FP32 and rotary FP32 kernels publish the next
+length directly by-value with their K/V stores, removing asynchronous copies
+from stack-owned counters. Plain FP32 uses scalar FP16 stores for odd widths
+and 2-byte-aligned token slots. FP16 append finishes its default-stream
+K/V/length copies through the central upload fence. Compressed caches reject
+these legacy dense APIs; their explicit-position path remains unchanged.
+The legacy read wait and four-byte D2H are counted explicitly. FP16 copy-only
+append no longer reports a fictional kernel launch.
+
+Production explicit-position append still publishes length on device with
+no host copy, allocation, event wait or stream synchronization. Hardware
+regressions verify that property at head64/head128 and test back-to-back
+legacy appends behind a decode backlog, including odd widths, overflow and
+rotary position distinct from the cache slot. Callers still must finish
+input/cache producers on other streams and drain before readback or reuse.
+
+The audited native H2D operations all go through the completed upload;
+default-stream KV memsets share the checked constructor publication fence.
+Runtime batch/prefill host metadata is uploaded through the central method.
+Async reset/reconstruction is scheduled and drained on decode. Debug/selection
+readbacks drain decode; async device-to-device copies and cross-stream kernel
+consumers retain their caller-side dependency requirements. This is not a
+claim that arbitrary external raw-pointer misuse is safe.
+
+Benchmark timing impact must be measured separately; these correctness changes
 are not throughput optimizations.

@@ -113,7 +113,7 @@ a reason to rewrite the C21 preservation commits.
 1. `ad217af`, `fix(cuda): complete synchronous host uploads`: make the central upload
    return device-ready, document producer/consumer ownership, account for the
    completion wait and add immediate-consumer regressions on both streams.
-2. `fix(cuda): publish initialized device storage`: finish native weights
+2. `cca45db`, `fix(cuda): publish initialized device storage`: finish native weights
    and checked KV initialization before publishing usable pointers. Depends
    on the central upload contract, without per-kernel hot-path waits.
 3. `fix(kv): publish legacy append lengths on device`: separate the legacy
@@ -143,6 +143,15 @@ for supported dense, summary/q8, mixed q4 head64/head128 and representative
 metadata layouts. No unsupported head128 diagnostic attention is enabled.
 The remaining direct native H2D sites are legacy append length publication;
 those will be corrected independently before the release checkpoint.
+
+Legacy dense append now waits for its decode length producer, then publishes
+FP32/RoPE length inside the append kernel rather than copying a stack value
+asynchronously. FP16 append finishes default-stream copies before return.
+Five transfer-order tests and four cast/RoPE/reset tests pass on M40, including
+queued length publication, odd widths and overflow. Explicit-position append
+remains enqueue-only on head64/head128, verified by launch/copy/wait counters.
+No new waits enter production explicit-position append. Broader CUDA/cuBLAS
+parity, CI lanes and the release exact-trace checkpoint are next.
 
 C20 was split into dependency-ordered commits:
 
