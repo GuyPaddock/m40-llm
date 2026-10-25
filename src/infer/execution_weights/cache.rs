@@ -10,7 +10,7 @@ use super::{
     runtime::{check_budget, ProjectionFamily},
     DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionConfig,
     Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats, Q8ProjectionLaunch, Q8SeparateLaunch,
-    Q8SourceIdentity, Q8SourceView, Q8TiledAccess, Q8TiledLaunch,
+    Q8SourceIdentity, Q8SourceView, Q8TiledLaunch,
 };
 use crate::{
     cuda::{CudaContext, CudaStream},
@@ -279,7 +279,7 @@ impl Q8ExecutionCache {
         let (weight, launch) = if let Some(weight) = entry.tiled.as_ref().filter(|_| m >= 64) {
             (
                 weight,
-                Q8ProjectionLaunch::Tiled(Q8TiledLaunch::new(16, 128, Q8TiledAccess::Vector)?),
+                Q8ProjectionLaunch::Tiled(Q8TiledLaunch::new(16, 128)?),
             )
         } else {
             (

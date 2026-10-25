@@ -14,7 +14,7 @@ use m40_llm::{
     gguf::{load_gguf, GgufTensor},
     infer::execution_weights::{
         DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionLayout,
-        Q8SeparateLaunch, Q8SourceIdentity, Q8SourceView, Q8TiledAccess, Q8TiledLaunch,
+        Q8SeparateLaunch, Q8SourceIdentity, Q8SourceView, Q8TiledLaunch,
     },
 };
 use serde_json::{json, Value};
@@ -24,22 +24,6 @@ use serde_json::{json, Value};
 enum LayoutArg {
     Separate,
     InputTiled,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
-enum TiledAccessArg {
-    Vector,
-    CoalescedLanes,
-}
-
-impl TiledAccessArg {
-    fn launch_access(self) -> Q8TiledAccess {
-        match self {
-            Self::Vector => Q8TiledAccess::Vector,
-            Self::CoalescedLanes => Q8TiledAccess::CoalescedLanes,
-        }
-    }
 }
 
 impl LayoutArg {
@@ -60,10 +44,7 @@ enum ProjectionLaunch {
     Tiled(Q8TiledLaunch),
 }
 
-fn configurations(
-    layout: Q8ExecutionLayout,
-    access: Q8TiledAccess,
-) -> Result<Vec<ProjectionLaunch>> {
+fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
     match layout {
         Q8ExecutionLayout::SeparateScalesValues => [1, 4]
             .into_iter()
@@ -74,9 +55,7 @@ fn configurations(
             })
             .collect(),
         Q8ExecutionLayout::InputTiled { columns } => [128, 256]
-            .map(|threads| {
-                Q8TiledLaunch::new(columns as u32, threads, access).map(ProjectionLaunch::Tiled)
-            })
+            .map(|threads| Q8TiledLaunch::new(columns as u32, threads).map(ProjectionLaunch::Tiled))
             .into_iter()
             .collect(),
         Q8ExecutionLayout::ColumnBlocks => {
@@ -89,8 +68,6 @@ fn configurations(
 struct Args {
     #[arg(long, value_enum, default_value = "separate")]
     layout: LayoutArg,
-    #[arg(long, value_enum, default_value = "vector")]
-    tiled_access: TiledAccessArg,
     #[arg(long)]
     model: PathBuf,
     #[arg(long)]
@@ -301,7 +278,7 @@ fn measure_rows(
     let layout = projection.execution.key().layout;
     let resident_bytes = projection.execution.plan().resident_bytes();
     let iterations = args.iterations.div_ceil(rows).max(2);
-    for config in configurations(layout, args.tiled_access.launch_access())? {
+    for config in configurations(layout)? {
         let errors = projection.check(bytes, input, config)?;
         for _ in 0..3 {
             unsafe {
@@ -473,7 +450,7 @@ pub fn benchmark() -> Result<()> {
         "build_profile":if cfg!(debug_assertions) {"dev"} else {"release"},
         "cuda_flags":["-O3","sm_52","compute_52"],"nvcc":command_output("nvcc", &["--version"])?,
         "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,"execution_layout":args.layout,
-        "tiled_access":args.tiled_access,
+        "tiled_access":"vector",
         "control":"GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
         "timing":"CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
         "interpretation":"isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic"}),

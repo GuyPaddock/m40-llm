@@ -404,7 +404,6 @@ mod ffi {
             k: i32,
             columns: i32,
             threads: i32,
-            access: i32,
             stream_kind: u32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_separate_f32_async(
@@ -3450,7 +3449,6 @@ impl CudaContext {
         k: i32,
         columns: i32,
         threads: i32,
-        access: i32,
         stream: CudaStream,
     ) -> Result<()> {
         let _guard = self.inner.lock.lock().unwrap();
@@ -3464,7 +3462,6 @@ impl CudaContext {
             k,
             columns,
             threads,
-            access,
             stream.ffi_kind(),
         );
         if rc != 0 {

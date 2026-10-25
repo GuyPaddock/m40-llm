@@ -2,7 +2,7 @@ use anyhow::{ensure, Context, Result};
 
 use super::{
     prepare_buffers, HostQ8ExecutionWeight, Q8AllocationPlan, Q8ExecutionKey, Q8ExecutionLayout,
-    Q8ProjectionLaunch, Q8SeparateLaunch, Q8TiledAccess, Q8TiledLaunch,
+    Q8ProjectionLaunch, Q8SeparateLaunch, Q8TiledLaunch,
 };
 use crate::cuda::{CudaContext, CudaStream, DeviceBuffer};
 
@@ -195,10 +195,6 @@ impl DeviceQ8ExecutionWeight {
                     k,
                     config.columns() as i32,
                     config.threads() as i32,
-                    match config.access() {
-                        Q8TiledAccess::Vector => 0,
-                        Q8TiledAccess::CoalescedLanes => 1,
-                    },
                     stream,
                 )
             }

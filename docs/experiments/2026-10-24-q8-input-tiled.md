@@ -1,5 +1,11 @@
 # Input-Tiled Q8 Execution Weights
 
+Historical checkpoint: the measured code, including the losing coalesced-lane
+mapping and `--tiled-access` option, is preserved in `bb4d30e`. C11 removes
+that mapping after its measured failure; current code retains vector access
+only. Run the historical commands below at the preserved revision to reproduce
+both mappings. The original measurements and decision remain unchanged.
+
 ## Decision
 
 C10 completes the second independent lossless Q8 layout experiment. Retain

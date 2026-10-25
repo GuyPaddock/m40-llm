@@ -220,23 +220,15 @@ impl Q8SeparateLaunch {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Q8TiledAccess {
-    Vector,
-    CoalescedLanes,
-}
-
-/// Twelve bounded configurations; storage width is part of identity.
+/// Six retained vector configurations; storage width is part of identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Q8TiledLaunch {
     columns: u32,
     threads: u32,
-    access: Q8TiledAccess,
 }
 
 impl Q8TiledLaunch {
-    pub fn new(columns: u32, threads: u32, access: Q8TiledAccess) -> Result<Self> {
+    pub fn new(columns: u32, threads: u32) -> Result<Self> {
         ensure!(
             matches!(columns, 4 | 8 | 16),
             "Q8 tiled columns must be 4, 8, or 16"
@@ -245,20 +237,13 @@ impl Q8TiledLaunch {
             matches!(threads, 128 | 256),
             "Q8 tiled threads must be 128 or 256"
         );
-        Ok(Self {
-            columns,
-            threads,
-            access,
-        })
+        Ok(Self { columns, threads })
     }
     pub fn columns(self) -> u32 {
         self.columns
     }
     pub fn threads(self) -> u32 {
         self.threads
-    }
-    pub fn access(self) -> Q8TiledAccess {
-        self.access
     }
 }
 

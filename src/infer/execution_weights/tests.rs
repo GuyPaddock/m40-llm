@@ -182,30 +182,27 @@ fn test_input_tiles_preserve_bytes_and_zero_padding() {
     }
 }
 
-/// The CUDA experiment offers twelve launch shapes, not every storage descriptor
+/// Retained vector kernels offer six launch shapes, not every storage descriptor
 /// width or arbitrary thread count. Reject unsupported choices before enqueue.
 #[test]
-fn test_tiled_launch_accepts_only_twelve_experiment_configs() {
-    for access in [Q8TiledAccess::Vector, Q8TiledAccess::CoalescedLanes] {
-        for columns in [4, 8, 16] {
-            for threads in [128, 256] {
-                let launch = Q8TiledLaunch::new(columns, threads, access).unwrap();
-                assert_eq!(launch.columns(), columns);
-                assert_eq!(launch.threads(), threads);
-                assert_eq!(launch.access(), access);
-            }
+fn test_tiled_launch_accepts_only_retained_vector_configs() {
+    for columns in [4, 8, 16] {
+        for threads in [128, 256] {
+            let launch = Q8TiledLaunch::new(columns, threads).unwrap();
+            assert_eq!(launch.columns(), columns);
+            assert_eq!(launch.threads(), threads);
         }
-        for (columns, threads) in [
-            (0, 128),
-            (1, 128),
-            (2, 128),
-            (32, 256),
-            (4, 0),
-            (8, 64),
-            (16, 512),
-        ] {
-            assert!(Q8TiledLaunch::new(columns, threads, access).is_err());
-        }
+    }
+    for (columns, threads) in [
+        (0, 128),
+        (1, 128),
+        (2, 128),
+        (32, 256),
+        (4, 0),
+        (8, 64),
+        (16, 512),
+    ] {
+        assert!(Q8TiledLaunch::new(columns, threads).is_err());
     }
 }
 

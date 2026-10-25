@@ -74,6 +74,12 @@ prepared QKV/greedy, and MLP wrapper tests pass, as do non-CUDA warning-as-error
 tests and CUDA/server all-targets Clippy. The
 remaining cache and split/vector consumers stay opt-in research, not a promoted
 configuration. No new layout tuning or default change is authorized here.
+The coalesced-lane mapping preserved in `bb4d30e` is now removed from CUDA,
+Rust launch descriptors, and the microbenchmark CLI. Its original measurements
+remain unchanged. Retained vector/library/cache tests, the 11-case attention
+grid, 24-case forward suite, projection/MLP wrappers, cuBLAS-off checks,
+non-CUDA warning-as-error tests, and CUDA/server Clippy pass. C11's controlled
+native/Ollama release confirmation is next.
 
 ## Committed Checkpoint: 2026-10-24
 

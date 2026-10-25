@@ -13,10 +13,11 @@ combined promotion gate. No qualified generation speedup is claimed.
 C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
 and real-tensor release microbenchmark. See the
 [measured results](experiments/2026-10-24-q8-separate-projections.md).
-C10 independently implements lossless input-tiled storage and two bounded
-CUDA mappings. See the [tiled experiment](experiments/2026-10-24-q8-input-tiled.md).
-Its vector mapping is a per-family candidate; the coalesced-lane mapping was
-slower. Those microbenchmarks alone do not qualify a runtime configuration.
+C10 compared lossless input-tiled storage with two bounded CUDA mappings.
+See the [tiled experiment](experiments/2026-10-24-q8-input-tiled.md). The vector
+mapping remains a per-family research candidate. The slower coalesced-lane
+mapping and its API/CLI switches are removed after preservation in `bb4d30e`.
+Those microbenchmarks alone do not qualify a runtime configuration.
 
 ## Opt-In Runtime Preparation
 
@@ -158,8 +159,9 @@ granularity, CUDA context overhead, or total process VRAM.
 
 `HostQ8ExecutionWeight::tile_inputs` copies all original payload bytes and scale
 bits into those records, zeroing only alignment and padded output columns.
-`Q8TiledLaunch` permits widths4/8/16, threads128/256, and vector/coalesced-lane
-access. Storage widths1/2/32 remain valid descriptors/host packing choices but
+`Q8TiledLaunch::new(columns, threads)` permits widths4/8/16 and threads128/256
+for the retained vector mapping. Storage widths1/2/32 remain valid descriptors
+and host packing choices but
 are not CUDA launch choices in this experiment. The requested launch width
 must match the owning execution layout. `project_tiled_async` enqueues on the
 decode stream after validating dimensions, buffer sizes, and non-aliasing.
