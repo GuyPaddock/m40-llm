@@ -7,7 +7,7 @@ mod fixture;
 use anyhow::Result;
 use m40_llm::{
     cuda::CudaContext,
-    evaluation::teacher_forced::compare_loaded_models,
+    evaluation::teacher_forced::{compare_loaded_models, score_loaded_model},
     infer::LoadedModel,
     kv_compression::{KvCompressionConfig, ScopedRuntimeConfig},
 };
@@ -24,6 +24,34 @@ fn model() -> Result<LoadedModel> {
     let mut model = LoadedModel::from_gguf(gguf, weights, -1)?;
     model.allocate_kv_cache_for_layers(32)?;
     Ok(model)
+}
+
+/// The single-model scorer must reset dense KV, agree exactly with the paired
+/// evaluator's reference, reject invalid input and preserve subsequent usability.
+#[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
+fn test_single_model_cuda_loss_matches_paired_reference() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
+    let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let mut reference = model()?;
+        let mut candidate = model()?;
+        let ids = [1, 4, 3, 8, 7];
+        let expected = compare_loaded_models(&mut reference, &mut candidate, &ids)?.reference;
+        assert_eq!(score_loaded_model(&mut reference, &ids)?, expected);
+        score_loaded_model(&mut reference, &[2, 9, 6])?;
+        assert_eq!(score_loaded_model(&mut reference, &ids)?, expected);
+        let before = CudaContext::total_device_bytes();
+        assert!(score_loaded_model(&mut reference, &[1]).is_err());
+        assert!(score_loaded_model(&mut reference, &[96, 1]).is_err());
+        assert!(score_loaded_model(&mut reference, &[1; 33]).is_err());
+        assert_eq!(CudaContext::total_device_bytes(), before);
+        assert_eq!(score_loaded_model(&mut reference, &ids)?, expected);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
 }
 
 /// Independent CUDA sessions must produce identical full logits for the same

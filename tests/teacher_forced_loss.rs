@@ -1,5 +1,7 @@
 use anyhow::Result;
-use m40_llm::evaluation::loss::{compare_teacher_forced, score_logits, LossMetrics};
+use m40_llm::evaluation::loss::{
+    compare_teacher_forced, score_logits, score_teacher_forced, LossMetrics,
+};
 
 /// Stable log-sum-exp must preserve uniform loss even at huge equal logits,
 /// agree with analytical probabilities, and reject invalid inputs explicitly.
@@ -96,5 +98,28 @@ fn test_full_logit_drift_and_top10_ties() -> Result<()> {
     assert_eq!(signed.target_rank, 3);
     assert!(compare_teacher_forced(&[0], |_| unreachable!(), |_| unreachable!()).is_err());
     assert!(compare_teacher_forced(&[0, 0], |_| Ok(vec![0.0]), |_| Ok(vec![0.0, 0.0])).is_err());
+    Ok(())
+}
+
+/// Single-model loss consumes the same observed prefixes/NLL as the paired
+/// evaluator. Invalid shapes and vocabulary changes fail rather than truncate.
+#[test]
+fn test_single_model_loss_matches_paired_reference() -> Result<()> {
+    let ids = [0, 2, 1, 3];
+    let mut calls = Vec::new();
+    let single = score_teacher_forced(&ids, |prefix| {
+        calls.push(prefix.to_vec());
+        Ok(vec![9.0, 0.0, 0.0, 0.0])
+    })?;
+    let paired = compare_teacher_forced(
+        &ids,
+        |_| Ok(vec![9.0, 0.0, 0.0, 0.0]),
+        |_| Ok(vec![9.0, 0.0, 0.0, 0.0]),
+    )?;
+    assert_eq!(single, paired.reference);
+    assert_eq!(calls, vec![vec![0], vec![0, 2], vec![0, 2, 1]]);
+    assert!(score_teacher_forced(&[0], |_| unreachable!()).is_err());
+    assert!(score_teacher_forced(&[0, 2], |_| Ok(vec![0.0])).is_err());
+    assert!(score_teacher_forced(&[0, 1, 2], |prefix| Ok(vec![0.0; prefix.len() + 1])).is_err());
     Ok(())
 }

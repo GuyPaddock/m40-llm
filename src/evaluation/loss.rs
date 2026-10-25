@@ -100,6 +100,30 @@ pub fn score_logits(logits: &[f32], target: u32) -> Result<TokenPrediction> {
     })
 }
 
+/// Score one model on the observed sequence without sampling or introducing
+/// targets into their own prefixes. Uses the same full-logit NLL as comparisons.
+pub fn score_teacher_forced(
+    ids: &[u32],
+    mut predict: impl FnMut(&[u32]) -> Result<Vec<f32>>,
+) -> Result<LossMetrics> {
+    ensure!(
+        ids.len() >= 2,
+        "teacher forcing requires a prefix and target"
+    );
+    let mut vocabulary = None;
+    let mut sum = 0.0;
+    for position in 1..ids.len() {
+        let logits = predict(&ids[..position])?;
+        ensure!(
+            vocabulary.is_none_or(|count| count == logits.len()),
+            "vocabulary changed during evaluation"
+        );
+        vocabulary = Some(logits.len());
+        sum += score_logits(&logits, ids[position])?.nll;
+    }
+    LossMetrics::from_sum(sum, ids.len() - 1)
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct TokenComparison {
     pub position: usize,

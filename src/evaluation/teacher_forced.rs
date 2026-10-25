@@ -1,12 +1,16 @@
 //! Full-logit evaluation on existing sessions; no sampling or new CUDA kernels.
 
-use super::loss::{compare_teacher_forced, TeacherForcedReport};
+use super::loss::{compare_teacher_forced, score_teacher_forced, LossMetrics, TeacherForcedReport};
 use crate::{
     decode_session::DecodeSession, infer::LoadedModel, kv_compression::KvCompressionConfig,
 };
 use anyhow::{ensure, Context, Result};
 
 fn create_session(model: &mut LoadedModel, ids: &[u32]) -> Result<DecodeSession> {
+    ensure!(
+        ids.len() >= 2,
+        "teacher forcing requires a prefix and target"
+    );
     let cache = model
         .kv_cache
         .as_ref()
@@ -37,6 +41,13 @@ fn create_session(model: &mut LoadedModel, ids: &[u32]) -> Result<DecodeSession>
         "teacher_forced:input",
         "teacher_forced:output",
     )
+}
+
+/// A fresh dense session per passage, with no second resident model or sampled
+/// continuation. Calibration ranking can reuse this without recomputing control.
+pub fn score_loaded_model(model: &mut LoadedModel, ids: &[u32]) -> Result<LossMetrics> {
+    let mut session = create_session(model, ids)?;
+    score_teacher_forced(ids, |prefix| session.logits_for_ids(prefix, |_| {}))
 }
 
 /// Exclusive model borrows keep the session's raw model pointer live and prevent
