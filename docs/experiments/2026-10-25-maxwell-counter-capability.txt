@@ -1,0 +1,14 @@
+cuptiGetVersion: 0 CUPTI_SUCCESS
+device: Tesla M40 24GB; CUPTI version: 26; is_counter_measurement: false
+cuptiDeviceGetNumEventDomains: 27 CUPTI_ERROR_NOT_SUPPORTED
+cuptiDeviceGetNumMetrics: 0 CUPTI_SUCCESS
+reported event domains: 0; reported metrics: 154
+metric: dram_read_throughput
+cuptiMetricGetIdFromName: 0 CUPTI_SUCCESS
+cuptiMetricCreateEventGroupSets: 27 CUPTI_ERROR_NOT_SUPPORTED
+metric: gld_efficiency
+cuptiMetricGetIdFromName: 0 CUPTI_SUCCESS
+cuptiMetricCreateEventGroupSets: 27 CUPTI_ERROR_NOT_SUPPORTED
+metric: achieved_occupancy
+cuptiMetricGetIdFromName: 0 CUPTI_SUCCESS
+cuptiMetricCreateEventGroupSets: 27 CUPTI_ERROR_NOT_SUPPORTED
