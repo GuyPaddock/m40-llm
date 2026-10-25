@@ -64,6 +64,13 @@ if quality passes. The existing tool now has a tested explicit
 `--time-ollama` mode for the eventual fresh selected-runtime comparison.
 No default changes or original target achievement follow from this screen.
 
+The [combined FP32/128 plus SGEMM quality gate](experiments/2026-10-25-maxwell-completed-combined-quality.md)
+now passes: all 512 actual IDs and all twelve task outputs match corrected
+control, with zero dense-valid regressions. Maximum sampled logit drift is
+0.011406; top-10 overlap stays 10. Next run combined/native HTTP pairs and
+the fresh selected-runtime Ollama comparison. Single diagnostic prompt and
+decode intervals are not substituted for those controlled measurements.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
