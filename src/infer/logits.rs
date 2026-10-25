@@ -86,17 +86,11 @@ impl LoadedModel {
     ) -> Result<(usize, CudaStream)> {
         let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
         let d_w = self.tensor_device_ptr(&name, &lm)?;
-        let q8_logits_on_decode_stream = q8_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0;
-        let q4_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q4_0;
-        let q6_logits_on_decode_stream = q4_decode_kernel_decode_stream_enabled()
-            && self.gguf_weight_dtype(d_w) == GgmlDType::Q6K;
-        let logits_on_decode_stream = decode_cublas_single_stream_enabled()
-            || f16_decode_kernel_decode_stream_enabled()
-            || q8_logits_on_decode_stream
-            || q4_logits_on_decode_stream
-            || q6_logits_on_decode_stream;
+        let logits_on_decode_stream = match self.gguf_weight_dtype(d_w) {
+            GgmlDType::Q8_0 => q8_decode_kernel_decode_stream_enabled(),
+            GgmlDType::Q4_0 | GgmlDType::Q6K => q4_decode_kernel_decode_stream_enabled(),
+            _ => decode_cublas_single_stream_enabled() || f16_decode_kernel_decode_stream_enabled(),
+        };
         let stream = if logits_on_decode_stream {
             CudaStream::Decode
         } else {
