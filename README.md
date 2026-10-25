@@ -148,7 +148,7 @@ back for host sampling.
 
 ## Experimental Features
 
-These areas are active research and should be treated as opt-in:
+Research support and opt-in diagnostics:
 
 - Compressed KV-cache modes and long-context quality harness:
   [`docs/kv_compression.md`](docs/kv_compression.md)
@@ -156,6 +156,8 @@ These areas are active research and should be treated as opt-in:
   [`docs/diagnostics.md`](docs/diagnostics.md)
 - Opt-in Q8 execution-weight preparation, ownership, and layout contracts:
   [`docs/q8_execution_weights.md`](docs/q8_execution_weights.md)
+- Model-variant quality evaluation and opt-in layer masks:
+  [`docs/model_quality.md`](docs/model_quality.md), [`docs/layer_masks.md`](docs/layer_masks.md)
 - M40 performance roadmap, batching, CUDA Graphs, and backend direction:
   [`docs/roadmap.md`](docs/roadmap.md)
 - Current benchmark history:

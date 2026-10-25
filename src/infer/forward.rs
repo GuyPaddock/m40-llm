@@ -1862,7 +1862,7 @@ impl LoadedModel {
             anyhow::bail!("forward_one_token_with_layer_graph_params requires CUDA")
         }
     }
-    /// Runs one token through every transformer layer.
+    /// Runs one token through every configured active transformer layer.
     ///
     /// The current single-request server path defaults to `sequence_id=0`;
     /// batched callers can use `forward_one_token_all_layers_for_sequence`.
@@ -1879,7 +1879,8 @@ impl LoadedModel {
         unsafe { self.forward_one_token_all_layers_for_sequence(d_x_f32, 0, seq_len, d_out_f32) }
     }
 
-    /// Runs one token through every transformer layer for one logical sequence.
+    /// Runs one token through active layers for one logical sequence, retaining
+    /// original tensor/KV layer IDs and returning the executed layer count.
     ///
     /// # Safety
     /// - `d_x_f32` and `d_out_f32` must be valid device pointers on this model's CUDA context.
@@ -1947,7 +1948,7 @@ impl LoadedModel {
         }
     }
 
-    /// Runs one decode token for a batch of logical sequences.
+    /// Runs one decode token for a batch through the configured active layers.
     ///
     /// This path keeps projections and MLP row-batched while using the existing
     /// packed variable-length GQA decode attention primitive for the attention
@@ -2392,7 +2393,7 @@ impl LoadedModel {
         })
     }
 
-    /// Runs full-prompt prefill for a batch of logical sequences.
+    /// Runs full-prompt prefill through active layers for a batch of logical sequences.
     ///
     /// This is the packed variable-length prefill counterpart to the batched
     /// decode path. Prompt tokens are packed into contiguous workspace rows,
@@ -2894,7 +2895,7 @@ impl LoadedModel {
         })
     }
 
-    /// Runs one token through every transformer layer using device-resident
+    /// Runs one token through active transformer layers using device-resident
     /// position and sequence-length parameters for graph replay.
     ///
     /// # Safety

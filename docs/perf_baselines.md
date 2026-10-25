@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Diagnostic Layer-Mask Tradeoffs
+
+C20 adds opt-in model-local interior-layer skipping, preserving original tensor/
+KV IDs and all resident weights/KV capacity. The release empty-mask control
+exactly reproduces C19 generation and loss. Fixed central masks were declared
+before results; no mask is promoted and normal generation remains all-layers.
+
+| Skipped IDs | Held-Out Task Passes | Held-Out PPL | Matched-Step Rate Gain |
+| --- | --- | ---: | ---: |
+| None | 4/6 | 39.612159 | +0.137%, control floor |
+| 17 | 4/6 | 47.656541 | +2.564% |
+| 17,18 | 2/6 | 52.716052 | +5.181% |
+| 17,18,19 | 3/6 | 53.784796 | +7.870% |
+
+Five alternating pairs per split measure identical observed prefixes after
+eight warm tokens. These are greedy prediction steps, not free-generated or
+HTTP TPS. Free outputs differ in length; the two/three-layer workshop responses
+are slower overall despite less compute and also fail quality. One-layer task
+passes do not mean unchanged quality: held-out PPL rises 20.31%.
+
+All masks retain 3,279,519,744 uploaded weight bytes and 36 MiB dense KV per
+model. GPU use returns to zero. No model/KV compaction or exact-engine gain is
+claimed. See the [full quality/timing report and four raw artifacts](experiments/2026-10-25-layer-mask-sensitivity.md).
+Next is C21's sparse-Q8 format/kernel screen against matched-zero dense weights;
+layer ranking remains C24. Exact HTTP objectives remain unmet.
+
 ## 2026-10-25: Frozen Model-Quality Reference
 
 C19 is complete without model or default changes. The release explicit-model

@@ -18,7 +18,7 @@ separately evaluated model-changing research. It is not replaced by the
 C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
 is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
 C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
-The full research plan remains active; C20-C27 remain subject to their own
+The full research plan remains active; C21-C27 remain subject to their own
 quality/performance gates. Neither exact-engine speed objective is achieved.
 
 **C19 is complete.** Disjoint inputs/rubrics were frozen before the dense run;
@@ -26,20 +26,29 @@ teacher-forced loss and the explicit-model release runner now have a recorded
 Qwen2.5 Q8_0 reference over both splits. See the [C19 evidence and limitations](experiments/2026-10-25-model-quality-dense-reference.md).
 Modified-model speed must not be presented as an unchanged-engine win.
 
-Next is **C20**, diagnostic interior-layer masks with original layer/KV IDs,
-empty-mask parity, invalid-mask rejection, and explicit memory/quality/timing
-records. Then C21 tests exactly 50% static sparsity with matched-zero dense
-projections before any calibration-driven pruning. Do not tune on held-out or
-browser inputs, and do not reopen the failed n-gram/layout screens.
+**C20 is complete.** Model-local masks preserve original IDs and allocations;
+empty-mask parity and skipped work are verified. The fixed one/two/three-layer
+release probe records matched-step gains about 2.6/5.2/7.9%, but held-out PPL
+worsens from 39.61 to 47.66/52.72/53.78, with task regressions at two/three
+layers. Keep all masks diagnostic; no source-model or runtime default changes.
+See [the measured tradeoffs and raw artifacts](experiments/2026-10-25-layer-mask-sensitivity.md).
 
-C20 is split into dependency-ordered commits:
+Next is **C21**, fixed 16-of-32 sparse-Q8 packing and a Maxwell projection
+experiment at exactly 50% weight sparsity. Compare the sparse kernel against
+native dense Q8 containing the same zeroed weights, including actual aligned
+bytes, tails, decode/prefill shapes, packing cost and matched timing. Do not
+calibrate model pruning until that format/kernel has a positive speed gate.
+Layer influence ranking remains C24, compact export C25. Do not tune on
+held-out/browser inputs or reopen the failed n-gram/layout screens.
 
-1. `feat(infer): define diagnostic layer masks`: checked interior IDs, original
+C20 was split into dependency-ordered commits:
+
+1. `9674452`, `feat(infer): define diagnostic layer masks`: checked interior IDs, original
    chronological execution order, empty-mask behavior and CPU tests.
-2. `feat(infer): apply masks to full-model forward`: model-local setup before
+2. `04739c3`, `feat(infer): apply masks to full-model forward`: model-local setup before
    KV allocation, all full-model forward paths, active-index scratch routing,
    and CUDA parity/skip tests. Depends on the mask contract.
-3. `test(quality): evaluate masked layer variants`: candidate-only CLI masks,
+3. `261faf9`, `test(quality): evaluate masked layer variants`: candidate-only CLI masks,
    transform/memory identity, and matched forced-prefix step timing. Depends
    on forward wiring and C19's frozen evaluation runner.
 4. `docs(perf): record layer-mask tradeoffs`: fixed one/two/three interior
@@ -58,7 +67,10 @@ cuBLAS-on tests, 21 cuBLAS-off tests, the full non-CUDA warning-as-error suite
 and both Clippy lanes pass. The runner now adds candidate-only masks and
 matched forced-prefix timing. Before any mask result, the fixed probes are
 none, `[17]`, `[17,18]`, `[17,18,19]`, both frozen splits, five alternating
-step-timing pairs per split. Real mask quality/timing results remain pending.
+step-timing pairs per split. All four reports complete with clean source
+manifests; references match C19, paired predictions repeat, and GPU use returns
+to zero. These forced-prefix rates are not generated/HTTP TPS or a promoted
+exact-engine improvement. Source weights and physical KV capacity stay fixed.
 
 C19 was split into dependency-ordered commits:
 

@@ -76,4 +76,8 @@ split. Do not select layers by held-out results or tune the frozen rubrics.
 These are central-layer sensitivity probes, not an influence ranking or a
 preferred pruning recipe; C24 ranking remains separate.
 
-The real release results remain required before C20 is complete.
+The [release sensitivity checkpoint](experiments/2026-10-25-layer-mask-sensitivity.md)
+completes C20. Empty masks reproduce C19 exactly. One/two/three central-layer
+skips improve matched-step rate about 2.6/5.2/7.9%, but held-out PPL worsens
+and two/three-layer choices regress tasks. No mask becomes preferred, no
+resident weight/KV capacity is reclaimed, and no HTTP speedup is claimed.
