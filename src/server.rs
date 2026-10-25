@@ -21,6 +21,9 @@ use crate::generate::{
     decode_generated_text, generate_text, prepare_prompt, sampler_from_options, sanitize_output,
     GenerateOptions, PromptFormat,
 };
+use crate::generation_metrics::GenerationMetrics;
+#[cfg(feature = "cuda")]
+use crate::generation_metrics::GenerationTimer;
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
@@ -75,6 +78,8 @@ pub struct GenerateRequest {
     pub max_tokens: Option<usize>,
     #[serde(default)]
     pub stream: bool,
+    #[serde(default, rename = "include_metrics")]
+    pub should_include_metrics: bool,
     #[serde(default)]
     pub temperature: Option<f32>,
     #[serde(default)]
@@ -90,6 +95,8 @@ pub struct GenerateRequest {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GenerateResponse {
     pub output: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<GenerationMetrics>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -213,6 +220,8 @@ struct DecodeSchedulerRequest {
     ids: Vec<u32>,
     generated: Vec<u32>,
     prompt_token_len: usize,
+    should_include_metrics: bool,
+    generation_timer: GenerationTimer,
     force_sequential_steps: bool,
     sampler: crate::sampling::Sampler,
     stopping: StoppingCriteria,
@@ -240,6 +249,7 @@ impl DecodeSchedulerRequest {
         request_id: crate::decode_batch::DecodeRequestId,
         req: GenerateRequest,
     ) -> Result<Self> {
+        let generation_timer = GenerationTimer::new(std::time::Instant::now());
         let sequence_lease = lease_decode_sequence(state).map_err(|(_, Json(err))| {
             anyhow::anyhow!("decode sequence lease failed: {}", err.error)
         })?;
@@ -296,6 +306,8 @@ impl DecodeSchedulerRequest {
             ids,
             generated: Vec::new(),
             prompt_token_len,
+            should_include_metrics: req.should_include_metrics,
+            generation_timer,
             force_sequential_steps: false,
             sampler,
             stopping,
@@ -326,6 +338,7 @@ impl DecodeSchedulerRequest {
         let next = self.sampler.sample(&logits)? as u32;
         self.ids.push(next);
         self.generated.push(next);
+        self.generation_timer.record_token();
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             let text = self
                 .tokenizer
@@ -362,6 +375,7 @@ impl DecodeSchedulerRequest {
         let next = self.sampler.sample(&logits)? as u32;
         self.ids.push(next);
         self.generated.push(next);
+        self.generation_timer.record_token();
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             let text = self
                 .tokenizer
@@ -457,6 +471,7 @@ impl DecodeSchedulerRequest {
         let next = self.sampler.sample(&logits)? as u32;
         self.ids.push(next);
         self.generated.push(next);
+        self.generation_timer.record_token();
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             let text = self
                 .tokenizer
@@ -475,10 +490,24 @@ impl DecodeSchedulerRequest {
     }
 
     fn send_complete(mut self) {
-        let result = decode_generated_text(&self.tokenizer, &self.ids, self.prompt_token_len)
-            .map(|text| sanitize_output(&text))
-            .map(|output| GenerateResponse { output })
-            .map_err(|err| err.to_string());
+        let result = (|| -> Result<GenerateResponse> {
+            let text = decode_generated_text(&self.tokenizer, &self.ids, self.prompt_token_len)?;
+            let metrics = self
+                .should_include_metrics
+                .then(|| {
+                    self.generation_timer.finish(
+                        self.prompt_token_len,
+                        &self.generated,
+                        &self.stopping,
+                    )
+                })
+                .transpose()?;
+            Ok(GenerateResponse {
+                output: sanitize_output(&text),
+                metrics,
+            })
+        })()
+        .map_err(|err| err.to_string());
         self.send_result(result);
     }
 
@@ -1162,6 +1191,15 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if req.stream && req.should_include_metrics {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "include_metrics is only supported for buffered requests (stream=false)"
+                    .to_string(),
+            }),
+        ));
+    }
     if state.decode_batching_requested {
         crate::decode_batch::maybe_log_server_batch_decode_status();
         crate::decode_batch::maybe_log_server_batch_prefill_status();
@@ -1192,6 +1230,7 @@ async fn generate(
         })?;
         return Ok(Json(GenerateResponse {
             output: generated.output,
+            metrics: req.should_include_metrics.then_some(generated.metrics),
         })
         .into_response());
     }
@@ -1588,5 +1627,9 @@ async fn generate(
         state.model.cuda.device_id(),
         CudaContext::total_device_bytes()
     );
-    Ok(Json(GenerateResponse { output: text }).into_response())
+    Ok(Json(GenerateResponse {
+        output: text,
+        metrics: None,
+    })
+    .into_response())
 }

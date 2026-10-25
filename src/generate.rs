@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 #[cfg(feature = "cuda")]
 use crate::cuda::{CudaContext, CudaStream};
 use crate::decode::StoppingCriteria;
+use crate::generation_metrics::{GenerationMetrics, GenerationTimer};
 #[cfg(not(feature = "cuda"))]
 use crate::gguf::GgmlDType;
 use crate::infer::LoadedModel;
@@ -62,6 +63,7 @@ impl Default for GenerateOptions {
 #[derive(Debug, Clone)]
 pub struct GeneratedText {
     pub output: String,
+    pub metrics: GenerationMetrics,
     pub token_ids: Vec<u32>,
     pub prompt_token_len: usize,
     pub prompt_prefill_elapsed_ms: u128,
@@ -365,6 +367,7 @@ fn log_tokenizer_diag(
 
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
     let total_start = std::time::Instant::now();
+    let mut generation_timer = GenerationTimer::new(total_start);
     #[cfg(feature = "cuda")]
     let (materialized_f32_cache_entries_before, materialized_f32_cache_bytes_before) =
         model.materialized_f32_cache_stats();
@@ -922,6 +925,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         }
         ids.push(next);
         generated.push(next);
+        generation_timer.record_token();
         if std::env::var("M40LLM_DECODE_LOG").ok().as_deref() == Some("1") {
             eprintln!("[decode] sampled token id={next}");
         }
@@ -1051,8 +1055,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     #[cfg(not(feature = "cuda"))]
     let reported_prefill_chunk_size = prefill_chunk_size;
 
+    let metrics = generation_timer.finish(prompt_token_len, &generated, &stopping)?;
     Ok(GeneratedText {
         output: sanitize_output(&text),
+        metrics,
         token_ids: ids,
         prompt_token_len,
         prompt_prefill_elapsed_ms: prompt_prefill_elapsed.as_millis(),

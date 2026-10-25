@@ -79,6 +79,9 @@ curl -sS -X POST http://127.0.0.1:58439/generate \
 
 CLI and server responses contain generated text only; they do not echo the
 prompt. `max_tokens` counts generated token IDs, not decoded characters.
+Buffered requests may add `"include_metrics":true` for token counts, stop reason,
+and wall-clock generation timings. See [HTTP metrics](docs/diagnostics.md#buffered-http-metrics)
+for the timing boundaries.
 
 ## CUDA Toolchain
 

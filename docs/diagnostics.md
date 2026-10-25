@@ -3,6 +3,39 @@
 Most diagnostics are disabled by default because they are verbose or can change
 timing. Enable only the signal needed for a profiling or correctness run.
 
+## Buffered HTTP Metrics
+
+Send `"include_metrics":true` with a non-streaming `/generate` request:
+
+```json
+{"prompt":"Hello","max_tokens":8,"top_k":1,"include_metrics":true}
+```
+
+The response includes `output` and a `metrics` object with:
+
+- `prompt_tokens`: encoded prompt IDs, including chat-template/control tokens.
+- `generated_tokens`: sampled IDs, including EOS/EOT even when omitted from text.
+- `stop_reason`: `stop` for a sampled EOS/EOT, or `length` for the token limit.
+  A stop token at the limit reports `stop`.
+- `prefill_elapsed_ms`: generation admission through the first sampled token,
+  including tokenizer/session setup and first-token sampling. Zero if no token
+  was requested.
+- `decode_elapsed_ms`: first through last sampled token, including sampling and
+  host scheduling. Zero for fewer than two generated tokens.
+- `total_elapsed_ms`: admitted generation through output decoding and required
+  completion waits, before response serialization.
+
+These are request-owned wall times, not isolated GPU-stage measurements. Batched
+scheduler timings include time waiting for other admitted requests. Admission
+queueing, HTTP parsing/serialization, and transport are excluded; measure the
+whole HTTP request on the client for end-to-end throughput. The older quality
+harness timings that sum logits-call durations keep their existing boundaries.
+
+Metrics are opt-in; ordinary responses remain `{"output":"..."}`. Combining
+`include_metrics` with `stream=true` returns HTTP 400. Both serial generation and
+the CUDA buffered scheduler report actual sampled counts rather than
+re-tokenizing sanitized output.
+
 ## Device and Tensor Mapping
 
 - `M40LLM_FORCE_M40=1`: require a visible sm_52 device.
