@@ -447,8 +447,15 @@ impl DecodeSession {
     pub fn logits_for_packed_prefix_then_ids(
         &mut self,
         ids: &[u32],
-        mut on_token_logits: impl FnMut(&[f32]),
+        on_token_logits: impl FnMut(&[f32]),
     ) -> Result<Vec<f32>> {
+        self.prefill_packed_prefix_ids(ids)?;
+        self.logits_for_ids(ids, on_token_logits)
+    }
+
+    /// Prefill all but the final prompt token at original absolute positions.
+    /// The final token remains on the caller's normal logits or GPU-greedy path.
+    pub fn prefill_packed_prefix_ids(&mut self, ids: &[u32]) -> Result<()> {
         self.last_prefill_sync_diag = None;
         if !self.can_forward {
             anyhow::bail!("packed prefill requires full-layer forward");
@@ -463,7 +470,7 @@ impl DecodeSession {
             );
         }
         if ids.len() == 1 {
-            return self.logits_for_ids(ids, on_token_logits);
+            return Ok(());
         }
         let d_out = self
             .d_out
@@ -503,7 +510,7 @@ impl DecodeSession {
             self.logged_full_forward = true;
         }
         self.processed_len = prefix_len;
-        self.logits_for_ids(ids, |logits| on_token_logits(logits))
+        Ok(())
     }
 
     pub fn logits_for_compressed_chunked_prefill_ids(

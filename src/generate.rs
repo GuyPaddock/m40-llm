@@ -619,6 +619,24 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 {
                     let _ = logits_fn_start;
                     if cuda_greedy_logits_enabled {
+                        if logits_call_count == 0 && prefill_chunk_size_setting.is_some() {
+                            let bound = match options.kv_compression.mode {
+                                KvCompressMode::Off => prefill_chunk_size,
+                                KvCompressMode::BlockSelectExact => {
+                                    preferred_compressed_prefill_chunk_size
+                                }
+                                _ => None,
+                            };
+                            if bound.is_some_and(|bound| ids.len() <= bound) {
+                                decode_session.prefill_packed_prefix_ids(ids)?;
+                                prefill_mode = if options.kv_compression.mode == KvCompressMode::Off
+                                {
+                                    "packed-prefix".to_string()
+                                } else {
+                                    "packed-prefix-block-select-exact".to_string()
+                                };
+                            }
+                        }
                         let token = decode_session.greedy_token_for_ids(ids)?;
                         let mut logits = vec![f32::NEG_INFINITY; token as usize + 1];
                         logits[token as usize] = 0.0;
