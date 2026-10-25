@@ -7,7 +7,10 @@ use serde::Serialize;
 use crate::gguf::{GgmlDType, GgufTensor};
 
 mod runtime;
-pub use runtime::{Q8ExecutionConfig, Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats};
+pub use runtime::{
+    Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode, Q8ExecutionStats,
+    Q8PreparedTensorStats, Q8ProjectionGroup,
+};
 #[cfg(feature = "cuda")]
 mod cache;
 #[cfg(feature = "cuda")]

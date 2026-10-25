@@ -10,7 +10,7 @@ use env_restore::EnvRestore;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer},
     infer::{
-        execution_weights::{Q8ExecutionConfig, Q8ExecutionMode},
+        execution_weights::{Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode},
         LoadedModel,
     },
     profile,
@@ -33,6 +33,7 @@ fn make_model(mode: Q8ExecutionMode, hidden: usize) -> Result<LoadedModel> {
         Q8ExecutionConfig {
             mode,
             budget_bytes: 1024 * 1024,
+            families: Q8ExecutionFamilies::all(),
         },
     )
 }

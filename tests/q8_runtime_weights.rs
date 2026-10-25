@@ -10,7 +10,7 @@ use env_restore::EnvRestore;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer},
     infer::{
-        execution_weights::{Q8ExecutionConfig, Q8ExecutionMode},
+        execution_weights::{Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode},
         LoadedModel,
     },
     profile,
@@ -25,6 +25,7 @@ fn make_model(mode: Q8ExecutionMode, seed: u8) -> Result<LoadedModel> {
         Q8ExecutionConfig {
             mode,
             budget_bytes: 1024 * 1024,
+            families: Q8ExecutionFamilies::all(),
         },
     )
 }
@@ -225,7 +226,8 @@ fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()>
             -1,
             Q8ExecutionConfig {
                 mode: Q8ExecutionMode::Split,
-                budget_bytes: 0
+                budget_bytes: 0,
+                families: Q8ExecutionFamilies::all(),
             }
         )
         .is_err());
@@ -237,7 +239,8 @@ fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()>
             -1,
             Q8ExecutionConfig {
                 mode: Q8ExecutionMode::Split,
-                budget_bytes: 1024 * 1024
+                budget_bytes: 1024 * 1024,
+                families: Q8ExecutionFamilies::all(),
             }
         )
         .is_err());
@@ -250,7 +253,8 @@ fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()>
             -1,
             Q8ExecutionConfig {
                 mode: Q8ExecutionMode::Split,
-                budget_bytes: 1024 * 1024
+                budget_bytes: 1024 * 1024,
+                families: Q8ExecutionFamilies::all(),
             }
         )
         .is_err());

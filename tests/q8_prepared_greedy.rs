@@ -12,7 +12,7 @@ use env_restore::EnvRestore;
 use m40_llm::{
     cuda::CudaContext,
     infer::{
-        execution_weights::{Q8ExecutionConfig, Q8ExecutionMode},
+        execution_weights::{Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode},
         LoadedModel,
     },
 };
@@ -52,6 +52,7 @@ fn test_prepared_greedy_uses_cached_vocabulary_and_one_token_readback() -> Resul
                     Q8ExecutionConfig {
                         mode,
                         budget_bytes: 1024 * 1024,
+                        families: Q8ExecutionFamilies::all(),
                     },
                 )?;
                 assert!(model.q8_execution_stats().has_prepared_vocabulary);

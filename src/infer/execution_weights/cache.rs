@@ -107,6 +107,9 @@ impl Q8ExecutionCache {
             let Some(family) = ProjectionFamily::from_name(&tensor.name, lm_head_name) else {
                 continue;
             };
+            if !config.families.contains(family.group()) {
+                continue;
+            }
             if tensor.dtype != GgmlDType::Q8_0 {
                 continue;
             }
@@ -136,6 +139,7 @@ impl Q8ExecutionCache {
         check_budget(estimated, config.budget_bytes)?;
         let mut stats = Q8ExecutionStats::empty();
         stats.mode = config.mode;
+        stats.families = config.families;
         stats.has_prepared_vocabulary = entries
             .iter()
             .any(|(_, family, _)| *family == ProjectionFamily::Vocabulary);
@@ -182,8 +186,8 @@ impl Q8ExecutionCache {
             .context("Q8 resident payload overflow")?;
         cache.stats.preparation_elapsed_ms =
             start.elapsed().as_secs_f64() * 1000.0 + hash_elapsed_ms;
-        eprintln!("[q8-execution] mode={:?} tensors={} layouts={} prepared_bytes={} source_bytes={} total_weight_payload_bytes={} budget_bytes={} peak_setup_host_payload_bytes={} preparation_ms={:.3}",
-            config.mode,cache.tensors.len(),cache.stats.tensors.len(),cache.stats.resident_bytes,
+        eprintln!("[q8-execution] mode={:?} families={:?} tensors={} layouts={} prepared_bytes={} source_bytes={} total_weight_payload_bytes={} budget_bytes={} peak_setup_host_payload_bytes={} preparation_ms={:.3}",
+            config.mode,config.families.groups(),cache.tensors.len(),cache.stats.tensors.len(),cache.stats.resident_bytes,
             host_weights.len(),cache.stats.total_weight_payload_bytes,config.budget_bytes,
             cache.stats.peak_setup_host_payload_bytes,cache.stats.preparation_elapsed_ms);
         Ok(cache)
@@ -393,6 +397,7 @@ mod tests {
                 Q8ExecutionConfig {
                     mode: Q8ExecutionMode::Split,
                     budget_bytes: 1024,
+                    families: super::super::Q8ExecutionFamilies::all(),
                 },
                 0.0,
                 |_, _| {
@@ -456,6 +461,7 @@ mod tests {
                 Q8ExecutionConfig {
                     mode: Q8ExecutionMode::Split,
                     budget_bytes: 1024,
+                    families: super::super::Q8ExecutionFamilies::all(),
                 },
                 0.0,
                 |ctx, host| {

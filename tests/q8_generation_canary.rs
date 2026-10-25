@@ -7,7 +7,7 @@ mod greedy;
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};
 use m40_llm::gguf::{self, GgmlDType, GgufModel};
-use m40_llm::infer::{execution_weights::Q8ExecutionMode, LoadedModel, ModelConfig};
+use m40_llm::infer::{execution_weights::Q8ProjectionGroup, LoadedModel, ModelConfig};
 use m40_llm::kv_compression::KvCompressionConfig;
 use m40_llm::profile;
 use std::collections::BTreeMap;
@@ -345,7 +345,10 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
         .get("mlp_gate_up_swiglu_f32xq8_separate")
         .map_or(0, |counts| counts.launches);
     eprintln!("[q8-canary] prepared_mlp_launches={prepared_mlp_launches}");
-    if model.q8_execution_stats().mode != Q8ExecutionMode::Off
+    if model
+        .q8_execution_stats()
+        .families
+        .contains(Q8ProjectionGroup::GateUp)
         && matches!(
             std::env::var("M40LLM_FUSED_Q8_MLP_SWIGLU").ok().as_deref(),
             Some("1" | "true" | "TRUE")
@@ -356,7 +359,10 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
             "requested prepared fused MLP must execute"
         );
     }
-    if model.q8_execution_stats().mode != Q8ExecutionMode::Off
+    if model
+        .q8_execution_stats()
+        .families
+        .contains(Q8ProjectionGroup::Qkv)
         && matches!(
             std::env::var("M40LLM_FUSED_Q8_QKV").ok().as_deref(),
             Some("1" | "true" | "TRUE")

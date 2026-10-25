@@ -1,5 +1,5 @@
 use anyhow::{ensure, Context, Result};
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 use super::{Q8ExecutionKey, Q8ExecutionLayout};
 
@@ -11,10 +11,87 @@ pub enum Q8ExecutionMode {
     Mixed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Q8ProjectionGroup {
+    Qkv,
+    Output,
+    GateUp,
+    Down,
+    Vocabulary,
+}
+
+impl Q8ProjectionGroup {
+    const ALL: [Self; 5] = [
+        Self::Qkv,
+        Self::Output,
+        Self::GateUp,
+        Self::Down,
+        Self::Vocabulary,
+    ];
+    fn bit(self) -> u8 {
+        1 << self as u8
+    }
+}
+
+/// Immutable selection of projection groups to prepare, not a per-token switch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Q8ExecutionFamilies(u8);
+
+impl Q8ExecutionFamilies {
+    pub const fn all() -> Self {
+        Self(0b11111)
+    }
+    pub const fn none() -> Self {
+        Self(0)
+    }
+
+    pub fn contains(self, group: Q8ProjectionGroup) -> bool {
+        self.0 & group.bit() != 0
+    }
+
+    pub fn groups(self) -> Vec<Q8ProjectionGroup> {
+        Q8ProjectionGroup::ALL
+            .into_iter()
+            .filter(|&group| self.contains(group))
+            .collect()
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        if value == "all" {
+            return Ok(Self::all());
+        }
+        let mut families = Self::none();
+        for item in value.split(',').map(str::trim) {
+            let group = match item {
+                "qkv" => Q8ProjectionGroup::Qkv,
+                "output" => Q8ProjectionGroup::Output,
+                "gate-up" => Q8ProjectionGroup::GateUp,
+                "down" => Q8ProjectionGroup::Down,
+                "vocabulary" => Q8ProjectionGroup::Vocabulary,
+                _ => anyhow::bail!("invalid Q8 execution family {item:?}; use all or a comma-separated subset of qkv,output,gate-up,down,vocabulary"),
+            };
+            ensure!(
+                !families.contains(group),
+                "duplicate Q8 execution family: {item}"
+            );
+            families.0 |= group.bit();
+        }
+        Ok(families)
+    }
+}
+
+impl Serialize for Q8ExecutionFamilies {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.groups().serialize(serializer)
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Q8ExecutionConfig {
     pub mode: Q8ExecutionMode,
     pub budget_bytes: usize,
+    pub families: Q8ExecutionFamilies,
 }
 
 impl Q8ExecutionConfig {
@@ -22,6 +99,7 @@ impl Q8ExecutionConfig {
         Self {
             mode: Q8ExecutionMode::Off,
             budget_bytes: 0,
+            families: Q8ExecutionFamilies::none(),
         }
     }
 
@@ -39,10 +117,15 @@ impl Q8ExecutionConfig {
             Err(std::env::VarError::NotPresent) => None,
             Err(e) => return Err(e.into()),
         };
-        Self::parse(&mode, budget.as_deref())
+        let families = match std::env::var("M40LLM_Q8_EXECUTION_FAMILIES") {
+            Ok(value) => Some(value),
+            Err(std::env::VarError::NotPresent) => None,
+            Err(e) => return Err(e.into()),
+        };
+        Self::parse(&mode, budget.as_deref(), families.as_deref())
     }
 
-    pub fn parse(mode: &str, budget_mb: Option<&str>) -> Result<Self> {
+    pub fn parse(mode: &str, budget_mb: Option<&str>, families: Option<&str>) -> Result<Self> {
         let mode = match mode {
             "off" | "0" => return Ok(Self::disabled()),
             "split" => Q8ExecutionMode::Split,
@@ -55,6 +138,7 @@ impl Q8ExecutionConfig {
             .context("invalid M40LLM_Q8_EXECUTION_BUDGET_MB")?;
         Ok(Self {
             mode,
+            families: Q8ExecutionFamilies::parse(families.unwrap_or("all"))?,
             budget_bytes: mb
                 .checked_mul(1024 * 1024)
                 .context("Q8 execution budget overflow")?,
@@ -72,6 +156,7 @@ pub struct Q8PreparedTensorStats {
 #[derive(Debug, Clone, Serialize)]
 pub struct Q8ExecutionStats {
     pub mode: Q8ExecutionMode,
+    pub families: Q8ExecutionFamilies,
     pub has_prepared_vocabulary: bool,
     pub budget_bytes: usize,
     pub estimated_bytes: usize,
@@ -88,6 +173,7 @@ impl Q8ExecutionStats {
     pub(super) fn empty() -> Self {
         Self {
             mode: Q8ExecutionMode::Off,
+            families: Q8ExecutionFamilies::none(),
             has_prepared_vocabulary: false,
             budget_bytes: 0,
             estimated_bytes: 0,
@@ -115,6 +201,15 @@ pub(super) enum ProjectionFamily {
 }
 
 impl ProjectionFamily {
+    pub(super) fn group(self) -> Q8ProjectionGroup {
+        match self {
+            Self::Query | Self::Key | Self::Value => Q8ProjectionGroup::Qkv,
+            Self::Output => Q8ProjectionGroup::Output,
+            Self::Gate | Self::Up => Q8ProjectionGroup::GateUp,
+            Self::Down => Q8ProjectionGroup::Down,
+            Self::Vocabulary => Q8ProjectionGroup::Vocabulary,
+        }
+    }
     pub(super) fn from_name(name: &str, lm_head_name: &str) -> Option<Self> {
         if name == lm_head_name {
             return Some(Self::Vocabulary);
@@ -182,6 +277,7 @@ mod tests {
                 Q8ExecutionConfig {
                     mode,
                     budget_bytes: 1024,
+                    families: Q8ExecutionFamilies::all(),
                 },
             )
             .err()
@@ -195,17 +291,19 @@ mod tests {
     #[test]
     fn test_execution_config_rejects_invalid_modes_and_budgets() {
         assert_eq!(
-            Q8ExecutionConfig::parse("off", Some("bad")).unwrap().mode,
+            Q8ExecutionConfig::parse("off", Some("bad"), Some("bad"))
+                .unwrap()
+                .mode,
             Q8ExecutionMode::Off
         );
         assert_eq!(
-            Q8ExecutionConfig::parse("split", Some("1"))
+            Q8ExecutionConfig::parse("split", Some("1"), None)
                 .unwrap()
                 .budget_bytes,
             1024 * 1024
         );
         assert_eq!(
-            Q8ExecutionConfig::parse("mixed", Some("0"))
+            Q8ExecutionConfig::parse("mixed", Some("0"), None)
                 .unwrap()
                 .budget_bytes,
             0
@@ -215,9 +313,19 @@ mod tests {
             ("split", Some("bad")),
             ("mixed", Some("-1")),
         ] {
-            assert!(Q8ExecutionConfig::parse(mode, budget).is_err());
+            assert!(Q8ExecutionConfig::parse(mode, budget, None).is_err());
         }
-        assert!(Q8ExecutionConfig::parse("split", Some(&usize::MAX.to_string())).is_err());
+        assert!(Q8ExecutionConfig::parse("split", Some(&usize::MAX.to_string()), None).is_err());
+        let config = Q8ExecutionConfig::parse("split", None, Some("qkv, down,vocabulary")).unwrap();
+        assert!(config.families.contains(Q8ProjectionGroup::Down));
+        assert!(!config.families.contains(Q8ProjectionGroup::GateUp));
+        assert_eq!(
+            serde_json::to_value(config.families).unwrap(),
+            serde_json::json!(["qkv", "down", "vocabulary"])
+        );
+        for invalid in ["", "none", "all,down", "gate", "qkv,qkv", "down,"] {
+            assert!(Q8ExecutionConfig::parse("split", None, Some(invalid)).is_err());
+        }
     }
 
     /// Selection is per projection family: mixed only adds tiled Q/O/down and

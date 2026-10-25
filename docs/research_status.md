@@ -62,6 +62,24 @@ one u32 D2H; its subsequent text canary still answers `4`. C10A.3 must provide
 per-model native/prepared family controls before timing, particularly for MLP,
 without mutating shared dispatch configuration between active requests.
 
+Split C10A.3 into dependency-ordered commits:
+
+1. `feat(infer): select prepared Q8 families`: immutable load-time family
+   selection, preparation-budget/accounting changes, and behavioral dispatch
+   tests. Depends on C10A.1/2; excluded families retain native fused kernels.
+2. `test(bench): compare prepared Q8 over HTTP`: two separately loaded model
+   controls, matched serial requests, setup/memory records, and actual token
+   traces. Depends on the family selector and the existing comparison protocol.
+3. `docs(perf): record prepared Q8 HTTP results`: bounded release measurements,
+   quality/promotion decisions, and raw artifacts after the benchmark commit.
+   Keep the full and native-MLP candidates distinct; no new kernel geometries.
+
+The family selector now captures `all` or an explicit subset at loading and
+omits excluded allocations entirely. M40 tests verify per-family native/prepared
+dispatch, retained one-launch native fused MLP, greedy parity, exact memory
+accounting, and coexistence of differently configured model instances. Defaults
+remain off for preparation; the release comparison is next.
+
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup
 from their projection microbenchmarks.

@@ -23,6 +23,16 @@ M40LLM_Q8_EXECUTION_WEIGHTS=split
 M40LLM_Q8_EXECUTION_BUDGET_MB=6144
 ```
 
+`M40LLM_Q8_EXECUTION_FAMILIES` defaults to `all`. A comma-separated subset of
+`qkv,output,gate-up,down,vocabulary` prepares only those groups, for example
+`qkv,output,down,vocabulary` retains native fused MLP while using prepared
+QKV/output/down/vocabulary weights. Excluded groups consume no prepared memory
+and use their existing native paths, including fused kernels and greedy head
+selection. Family selection is captured at model loading, never toggled between
+active requests; explicit constructors use `Q8ExecutionConfig.families`.
+Both the budget estimate and actual cache stats reflect this subset. Invalid,
+empty, or duplicate family names fail; use mode `off` to disable all preparation.
+
 `off` is the default and skips hashing, packing, and prepared allocations.
 `split` prepares separate original FP16 scales and signed Q8 values for each
 recognized Q/K/V/O, gate/up/down, and vocabulary projection. Tied output
@@ -52,7 +62,7 @@ execution layout. A model-local native-pointer lookup finds those immutable
 owners; pointers are not used as cross-model cache identities.
 
 `q8_execution_stats()` exposes estimated/actual prepared bytes, budget,
-source uploaded bytes, total source+prepared device payload, per-tensor/layout
+source uploaded bytes, total source+prepared device payload, selected families, per-tensor/layout
 keys and bytes, vocabulary-prepared status, and hash/preparation milliseconds.
 `peak_setup_host_payload_bytes`
 estimates the original file + retained tensor-data blob + largest temporary
