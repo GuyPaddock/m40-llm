@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Pinned Ollama Maxwell Dispatch
+
+M01 verifies actual launches from official Ollama 0.40.11, llama.cpp
+`b11845` / `9ff0d7e90`. The completed untimed M40 trace observes Q8_1
+quantization, unfused Q8 MMVQ with 128 threads, Q8-to-FP32 dequantization and
+Maxwell SGEMM. All 12,660 API records complete without drops/errors; driver
+and runtime domains duplicate the same 6330 launches. Whole-process counts
+include startup/warmup, not just the four generated tokens.
+
+Selected shipped sm_52 PTX reassembles offline to packed loads, signed integer
+operations, shuffles and one barrier with no spills. This is not the actual
+driver JIT cubin or measured occupancy. M40 native fused gate/up instead has
+byte loads and looped shared reduction. These differences justify the bounded
+FFN experiments, not a measured attribution of the speed gap. No runtime
+defaults change and no new throughput is claimed. See
+[the source/runtime table, provenance and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md).
+
 ## 2026-10-25: Qualified Q8 Stage Attribution
 
 Clean `1a5388c` profiles the qualified split down/vocabulary configuration
@@ -786,8 +803,12 @@ Implementation/diagnostic notes:
   to GPUs with native int8 dot instructions, but M40/sm_52 lacks `__dp4a`.
   A clean-room M40-only scalar-int8 Q8_1 prototype was correct but measured
   `7.289 ms` for a 1x2048x257 projection; the existing f32xQ8_0 decode kernel
-  measured `0.130 ms` for a larger 1x2048x2048 projection. This rules out a
-  direct Q8_1 activation port as the next path to the Ollama target on M40.
+  measured `0.130 ms` for a larger 1x2048x2048 projection. This rejects that
+  scalar prototype, not all packed/warp Q8_1 implementations. The shapes are
+  unmatched and do not isolate activation-quantization cost. The later
+  [pinned runtime audit](experiments/2026-10-25-maxwell-q8-dispatch.md) confirms
+  Ollama uses the scalar integer-dot fallback with a different packed/reduction
+  organization; any new implementation still needs matched complete-FFN tests.
 - `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
   post-attention residual add and weighted RMSNorm. It showed a small short-run
   probe improvement, but the full 512-token target run was neutral versus the

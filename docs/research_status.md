@@ -6,14 +6,37 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The authorized research sequence is the workspace's
-[M40-LLM research plan](../../M40_LLM_RESEARCH_PLAN.md), outside this Git
-repository. It orders controlled measurement, bounded exact-kernel/layout
-experiments, the offline n-gram feasibility gate, conditional speculation, and
-separately evaluated model-changing research. It is not replaced by the
-[legacy task roadmap](archive/legacy-task-roadmap.md).
+The active sequence is the workspace's
+[Maxwell Q8 execution plan](../../M40_LLM_MAXWELL_Q8_EXECUTION_PLAN.md), outside
+this Git repository. It orders pinned Ollama dispatch verification, complete
+FFN measurements, bounded FP32/Q8_1 experiments, independent prefill SGEMM,
+and controlled runtime qualification. See [the current investigation](maxwell_q8_execution.md).
+The [earlier research plan](../../M40_LLM_RESEARCH_PLAN.md) and
+[legacy task roadmap](archive/legacy-task-roadmap.md) remain history, not the
+active execution order. Their negative conditional gates remain recorded.
 
-## Current Phase: Separate Model Research
+## Current Phase: Maxwell Q8 Execution
+
+M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
+is complete. The SDK-only observer in `723a456` traces the official binary,
+not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
+unfused 128-thread Q8 MMVQ, Q8-to-FP32 dequantization and Maxwell SGEMM,
+with zero dropped records, unknown symbols or launch errors. The bounded
+65-prompt/4-generated request is diagnostic, not a throughput trial. sm_52
+PTX is shipped; offline ptxas resource checks are not the actual driver JIT.
+The source pin, compatibility scope, licenses, raw data and limitations are
+recorded. No kernel, runtime default or acceptance gate changes.
+
+Next is M02: use layer 0/17/35 tensors and read-only frozen-calibration
+activation samples for complete FFN baselines at genuine rows 1/4. Preserve
+the qualified prepared down/vocabulary control. FP32 changes require exact
+512-token parity; Q8_1 stays a separate opt-in numerical track. Independent
+prefill work has a bounded temporary dequant buffer, not full FP32 caching.
+
+## Previous Research Checkpoints
+
+The entries below retain their original checkpoint sequence. Their historical
+"next" steps do not override the current M01-M09 plan above.
 
 C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
 is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
