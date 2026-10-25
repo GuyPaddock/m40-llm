@@ -35,7 +35,7 @@ enables weight preparation.
 | M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
-| M08 | In progress: [six full-model quality comparisons](experiments/2026-10-25-maxwell-runtime-quality.md); FP32 candidates pass, Q8_1 is numerical, packed prefill fails exact-output gate; HTTP qualification pending |
+| M08 | In progress: [six quality comparisons](experiments/2026-10-25-maxwell-runtime-quality.md); [packed FP32/128 HTTP qualifies](experiments/2026-10-25-maxwell-runtime-packed128-http.md) at +8.133% with all 512 IDs equal; other comparisons and packed-path attribution pending |
 | M09 | Pending: measured attribution, retained configuration, fresh Ollama comparison and remaining-goal audit |
 
 The standalone [untimed launch observer](cuda_launch_trace.md), preserved in

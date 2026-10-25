@@ -101,8 +101,8 @@ fixed independently in `d211726`; the qualified Q8 decode schedule is unchanged.
 Release M40 affected CUDA suites pass with cuBLAS on/off, the shared benchmark
 tests pass, and non-CUDA warning-as-error tests plus CUDA/server Clippy pass.
 Runtime-disabled-upload all-target checks also pass; NVCC still compiles that
-build. No full-model quality or speed claim follows. Next implement independent
-M07 bounded prefill SGEMM, then M08 numerical/512-token/quality/E2E qualification.
+build. These integration tests alone make no full-model quality or speed
+claim. Independent M07 and the subsequent M08 qualification are recorded below.
 
 M07 is complete: [bounded temporary Q8-to-FP32 prefill SGEMM](q8_prefill.md).
 Checked shapes cap one weight at 128 MiB and exclude the vocabulary matrix.
@@ -142,6 +142,19 @@ a source-supported hypothesis, not a measured explanation. All six cases
 release tracked allocations. Next run bounded controlled HTTP comparisons,
 retain the failed gates, and resolve packed-path semantics before combination.
 Neither original E2E target is achieved.
+
+M08's first [controlled HTTP qualification](experiments/2026-10-25-maxwell-runtime-packed128-http.md)
+now passes: five alternating pairs give packed FP32/128 38.493 versus native
+FFN control 35.598 HTTP tok/s, +8.133% with positive [7.938%, 8.275%] paired
+95% interval. All 512 actual IDs, frozen dense-valid tasks and HTTP smokes
+pass. Prepared down/vocabulary, dense/context 1024, launch counts and
+allocation counts stay fixed. The result qualifies this explicit typed
+candidate only; environment/default selections remain unchanged. The isolated
+Ollama runner is stopped, final CUDA regressions complete with cuBLAS on/off,
+and release examples are restored to cuBLAS-on builds. Remaining bounded
+candidate comparisons, packed-path attribution and fresh selected-runtime
+Ollama comparison are still required; M08/M09 and both original speed goals
+remain incomplete.
 
 ## Previous Research Checkpoints
 

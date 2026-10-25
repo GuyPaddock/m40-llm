@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Packed FP32/128 Runtime HTTP Qualification
+
+Release `c79e919` compares the screened packed/warp FP32 128-thread FFN
+candidate against native FFN with prepared down/vocabulary fixed, sequential
+prefill, dense KV/context 1024 and the canonical 512-token workload. Five
+alternating HTTP pairs yield **38.493 versus 35.598 tok/s**, a **+8.133%** gain
+with 95% paired interval **[7.938%, 8.275%]**. All actual 512 IDs match, frozen
+dense-valid quality and HTTP smokes pass, and allocation/launch counts remain
+unchanged. The clear result passes the existing timing gate without extension.
+
+This is a qualified typed benchmark candidate, not a runtime-default change
+or fresh Ollama target claim. Failed packed-prefill gates remain separate;
+no combined exact-output result is claimed. See [configuration, phase medians,
+raw data, audits and validation](experiments/2026-10-25-maxwell-runtime-packed128-http.md).
+
 ## 2026-10-25: Full-Model Maxwell Runtime Quality Gate
 
 Clean release `3d6833a` tests six independent runtime candidates against the
