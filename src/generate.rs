@@ -318,7 +318,8 @@ pub fn prepare_prompt(
             false,
         ),
         PromptFormat::Auto | PromptFormat::Raw => {
-            let add_bos = !(tokenizer.is_llama3() && llama3_prompt_is_preformatted(prompt));
+            let add_bos = !((tokenizer.is_llama3() && llama3_prompt_is_preformatted(prompt))
+                || (tokenizer.is_qwen2() && prompt.contains("<|im_start|>")));
             (prompt.to_string(), add_bos)
         }
     }
