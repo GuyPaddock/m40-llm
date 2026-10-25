@@ -17,16 +17,25 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Current blocker to qualification: sequential prefill ordering.** The
+**Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
 shows that draining each no-logits prefix forward or running a greedy head
 at every prefix changes the old sequential output to the packed first token.
 Manual no-drain reproduces the old result bit-for-bit; layer-0 KV already
 differs substantially. Final cached attention replay agrees with CPU within
-2.51e-6. Repair prefix input/workspace ownership before any new promotion.
+2.51e-6. The fix in `2ca0de1` now completes each no-logits prefix forward.
+The [matched corrected probe](experiments/2026-10-25-maxwell-prefill-drift-completed.md)
+shows session, drained and per-prefix-head execution match every sampled
+K/V and final hidden/logit bit. A queued-work fixture fails before the fix
+and passes after it. Packed prompt-logit differences fall to about 0.011
+max, but full-continuation equality still needs fresh validation.
 Prior M08 exact-to-control gates and timings remain historical evidence,
 not corrected-control qualification. M08/M09 and both original goals remain
-incomplete. Runtime defaults are unchanged.
+incomplete. Runtime defaults are unchanged. Next regenerate M08 quality
+reports for the completed-prefix contract before any HTTP qualification;
+old reports cannot qualify the repaired runtime. The five remaining
+[historical HTTP comparisons](experiments/2026-10-25-maxwell-runtime-http-screen.md)
+are preserved, including FP32/256's twenty fresh below-gate pairs.
 
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,

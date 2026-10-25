@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Sequential Prefill Ownership Repair
+
+Real Qwen attribution finds that the no-logits prefix loop reused its input
+before prior nonblocking consumers completed. Draining each prefix or
+computing a head at every prefix changes the old first token, with about
+9.96 max logit difference. A queued-work fixture reproduces the defect.
+
+After an explicit prefix completion boundary, session, drained and
+per-prefix-head execution match all sampled K/V and final hidden/logit bits.
+Native packed and SGEMM first-token/top-10 sets now match corrected sequential;
+residual prompt-logit max differences are 0.01069 / 0.01132. This does not
+prove full-continuation parity. Prior timing records remain historical;
+requalify quality and speed against the repaired control. See [matched
+before/after evidence and regression scope](experiments/2026-10-25-maxwell-prefill-drift-completed.md).
+
 ## 2026-10-25: Remaining Maxwell Runtime HTTP Screen
 
 The five remaining release comparisons preserve prepared down/vocabulary,
