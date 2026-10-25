@@ -11,6 +11,8 @@ mod cuda_test_scope;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/env_restore.rs"]
 mod env_restore;
+#[cfg(all(feature = "cuda", nvcc))]
+mod ffn_capture;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/tiny_gguf.rs"]
 mod fixture;
@@ -75,6 +77,10 @@ struct Args {
     split: SplitChoice,
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
+    /// Untimed M02 input capture using the qualified prepared down/vocabulary
+    /// control. Requires calibration split and creates a new paired artifact.
+    #[arg(long, conflicts_with_all=["q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
+    capture_ffn_inputs: Option<PathBuf>,
     /// Diagnose the recorded native/prepared down+vocabulary branch on identical
     /// prefixes. No fitting, free generation or performance promotion occurs.
     #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
@@ -278,6 +284,34 @@ mod argument_tests {
         ] {
             let values = [vec!["--q8-prefix-drift", "trace.jsonl"], extra].concat();
             assert!(parse(&values).is_err());
+        }
+    }
+
+    /// Paired FFN capture is read-only and must not silently compose a model
+    /// transform, another capture, a prefix probe or timed evaluation.
+    #[test]
+    fn test_ffn_capture_arguments_exclude_other_experiments() {
+        let capture = ["--capture-ffn-inputs", "new-ffn.json"];
+        assert_eq!(
+            parse(&capture).unwrap().capture_ffn_inputs,
+            Some(PathBuf::from("new-ffn.json"))
+        );
+        for extra in [
+            vec!["--skip-layers", "1"],
+            vec!["--rank-layers", "new.json"],
+            vec!["--capture-activations", "new.json"],
+            vec!["--q8-prefix-drift", "old.jsonl"],
+            vec!["--compact-export-report", "export.json"],
+            vec!["--layer-ranking", "rank.json", "--remove-layer-count", "1"],
+            vec![
+                "--activation-calibration",
+                "act.json",
+                "--activation-target",
+                "0.5",
+            ],
+            vec!["--step-timing-trials", "5"],
+        ] {
+            assert!(parse(&[capture.as_slice(), extra.as_slice()].concat()).is_err());
         }
     }
 

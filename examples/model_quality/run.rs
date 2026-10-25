@@ -70,6 +70,18 @@ pub(super) fn load_model_with_execution(
     activation: super::activations::ActivationSetup<'_>,
     execution: Q8ExecutionConfig,
 ) -> Result<(LoadedModel, Tokenizer)> {
+    load_model_with_setup(path, context_tokens, execution, |model| {
+        model.set_diagnostic_layer_mask(skipped_layers)?;
+        activation.configure(model)
+    })
+}
+
+pub(super) fn load_model_with_setup(
+    path: &Path,
+    context_tokens: u32,
+    execution: Q8ExecutionConfig,
+    configure: impl FnOnce(&mut LoadedModel) -> Result<()>,
+) -> Result<(LoadedModel, Tokenizer)> {
     let gguf = gguf::load_gguf(path)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
     ensure!(
@@ -86,8 +98,7 @@ pub(super) fn load_model_with_execution(
         context_tokens <= model.model_config.context_length,
         "requested context exceeds model context"
     );
-    model.set_diagnostic_layer_mask(skipped_layers)?;
-    activation.configure(&mut model)?;
+    configure(&mut model)?;
     model.allocate_kv_cache_for_layers(context_tokens)?;
     model.validate_full_layer_decode()?;
     Ok((model, tokenizer))
@@ -218,6 +229,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.capture_ffn_inputs.is_some() {
+        return super::ffn_capture::capture(&args);
+    }
     if args.q8_prefix_drift.is_some() {
         return super::prepared_drift::diagnose(args);
     }

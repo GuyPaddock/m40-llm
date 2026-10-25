@@ -68,6 +68,39 @@ vectors, under the same host budget. Their capacity is
 these temporary read buffers, which are freed on export/model drop. Capture
 owns no device allocation and never writes model buffers.
 
+## Real-Model Capture Command
+
+The existing release `model_quality` example accepts `--capture-ffn-inputs`.
+It uses the qualified control through an explicit model-construction argument;
+the evaluator's ambient `M40LLM_Q8_EXECUTION_WEIGHTS=off` reference guard stays
+unchanged. All six frozen calibration tasks run once with inactive capture and
+again with capture active. Actual prompt IDs, every generated ID, output and
+stop reason must match. Each selected layer records at most four generated
+input rows per task. Both the artifact and its JSONL companion are required
+provenance for subsequent benchmark use.
+
+```bash
+source scripts/dev-env.sh
+while IFS=$'\t' read -r key value; do
+  export "$key=$value"
+done < <(head -n1 docs/experiments/2026-10-25-ranked-layer-one.jsonl |
+  jq -r '.configuration.environment|to_entries[]|[.key,.value]|@tsv')
+MODEL="$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d"
+cargo run --release --features cuda --example model_quality -- \
+  --reference-model "$MODEL" --model "$MODEL" \
+  --variant-id maxwell-ffn-inputs --split calibration \
+  --capture-ffn-inputs new-ffn-inputs.json --output new-ffn-capture.jsonl
+```
+
+Use new destinations and request hardware access. This is untimed diagnostic
+work, not an E2E or FFN latency measurement. Do not run it beside a timed trial.
+Context is fixed to 1024 and model shape to Qwen2.5-3B for this M02 entrypoint.
+Held-out/all splits, other transforms/capture modes, timing trials and aliased
+or pre-existing artifact/report destinations are rejected. The companion
+records original model/tokenizer identities, actual immutable preparation,
+execution configuration/hash, source revision/build, raw task results, host
+observation/read-scratch bytes and final tracked allocation cleanup.
+
 ## Current Validation
 
 Eight CPU tests cover paired values and distinct rows, original IDs and source
