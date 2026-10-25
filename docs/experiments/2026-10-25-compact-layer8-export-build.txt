@@ -1,0 +1,2 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `release` profile [optimized] target(s) in 7.41s

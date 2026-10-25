@@ -162,6 +162,15 @@ Real compact-model load, masked-source numerical/task parity and measured
 weight/KV reclamation remain. No memory-saving or engine-speed result is
 claimed from the copy plan or successful file export alone.
 
+The clean `890b9c3` release CPU tool now exports the real Qwen `[8]` artifact
+to ignored `target/research-exports/qwen-q8-pruned-layer8.gguf`, SHA
+`7d04260214a3b57379310e963c4f6b4d39208be9b644d45c83aefa4430d03070`.
+It retains 35 layers / 422 tensors and reduces actual tensor-data file bytes
+to 3,197,605,888, with the source unchanged. Preparation is 38.683 s in one
+serial CPU-only run. This is not a GPU allocation, inference parity or speed
+result. See [the checkpoint and reproduction identities](experiments/2026-10-25-compact-layer8-export-checkpoint.md).
+Next is the live masked-source/compact-model comparison, not another mask fit.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

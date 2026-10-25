@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Compact Layer-8 Export Preparation
+
+C25's release CPU exporter constructs the separate 35-layer Qwen Q8_0 `[8]`
+artifact on clean `890b9c3`. Tensor-data storage decreases from 3,279,519,744
+to 3,197,605,888 bytes, 78.119 MiB or 2.498%. The source stays unchanged;
+the completed output has 422 tensors and passes descriptor/offset round-trip.
+Single-run preparation through publication takes 38.683 s, including three
+full-file hash passes and data fsync, not GPU inference or a cold-cache trial.
+
+This does not establish actual uploaded-weight/KV savings or masked-source
+inference equivalence; those remain the next C25 gates. C24's `[8]` held-out
+PPL cost of +3.46% still applies. No default or exact-engine speed claim
+changes. See [the checkpoint and raw export record](experiments/2026-10-25-compact-layer8-export-checkpoint.md).
+
 ## 2026-10-25: Calibration-Ranked Layer Tradeoffs
 
 C24 is complete on clean `68f1b15`, release Qwen2.5-3B Q8_0, dense KV.

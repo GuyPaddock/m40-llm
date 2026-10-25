@@ -112,3 +112,8 @@ alignment, exact unchanged metadata bytes, invalid claims and filesystem
 safety. These are format/export checks, not GPU inference equivalence.
 Both warning-as-error CI lanes, non-CUDA and CUDA/server all-targets Clippy,
 fmt and whitespace checks pass.
+
+The [real Qwen export checkpoint](experiments/2026-10-25-compact-layer8-export-checkpoint.md)
+constructs the separate 35-layer artifact with unchanged source identity and
+2.498% fewer tensor-data file bytes. Live masked-source numerical parity and
+actual device-memory measurements remain; no inference speedup is established.
