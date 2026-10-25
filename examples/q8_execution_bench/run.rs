@@ -19,6 +19,8 @@ use m40_llm::{
 };
 use serde_json::{json, Value};
 
+#[path = "ffn/mod.rs"]
+mod ffn;
 #[path = "sparse_inputs.rs"]
 mod sparse_inputs;
 
@@ -69,6 +71,17 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Complete FFN baseline from frozen paired inputs, not synthetic projections.
+    #[arg(long, requires="ffn_capture_report", conflicts_with_all=["sparse_inputs","layout","tensors"])]
+    ffn_inputs: Option<PathBuf>,
+    #[arg(long, requires = "ffn_inputs")]
+    ffn_capture_report: Option<PathBuf>,
+    #[arg(
+        long,
+        default_value = "data/research_quality/v1.json",
+        requires = "ffn_inputs"
+    )]
+    ffn_corpus: PathBuf,
     /// Screen sparse completed-SwiGLU inputs, not a lossless layout change.
     #[arg(long)]
     sparse_inputs: bool,
@@ -421,6 +434,9 @@ pub fn benchmark() -> Result<()> {
             && args.rows.iter().all(|&rows| (1..=64).contains(&rows)),
         "require >=5 trials, >0 iterations and rows in 1..=64"
     );
+    if args.ffn_inputs.is_some() {
+        return ffn::benchmark(&args);
+    }
     if args.sparse_inputs {
         ensure!(
             !cfg!(debug_assertions) && matches!(args.layout, LayoutArg::InputTiled)
@@ -509,4 +525,44 @@ pub fn benchmark() -> Result<()> {
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod argument_tests {
+    use super::*;
+
+    /// New FFN inputs require their completed provenance report, exclude old
+    /// layout/sparsity experiments, and leave the original projection CLI valid.
+    #[test]
+    fn test_ffn_arguments_preserve_explicit_modes() {
+        let parse = |extra: &[&str]| {
+            let mut args = vec![
+                "q8_execution_bench",
+                "--model",
+                "source.gguf",
+                "--output",
+                "new.jsonl",
+            ];
+            args.extend_from_slice(extra);
+            Args::try_parse_from(args)
+        };
+        assert!(parse(&[]).unwrap().ffn_inputs.is_none());
+        let flags = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+        ];
+        assert_eq!(parse(&flags).unwrap().rows, [1, 4]);
+        assert!(parse(&["--ffn-inputs", "inputs.json"]).is_err());
+        assert!(parse(&["--ffn-capture-report", "capture.jsonl"]).is_err());
+        for extra in [
+            vec!["--sparse-inputs"],
+            vec!["--layout", "input-tiled"],
+            vec!["--tensors", "blk.0.ffn_down.weight"],
+        ] {
+            assert!(parse(&[flags.as_slice(), extra.as_slice()].concat()).is_err());
+        }
+        assert!(parse(&["--layout", "input-tiled", "--rows", "1"]).is_ok());
+    }
 }

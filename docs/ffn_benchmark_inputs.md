@@ -122,3 +122,58 @@ creation error, as required; GPU-less CI does not establish observer parity.
 
 Real-model capture evidence and complete FFN timing still remain. No performance
 improvement follows from these contracts or correctness tests.
+
+## Complete FFN Baseline
+
+The existing `q8_execution_bench` accepts `--ffn-inputs` and
+`--ffn-capture-report`. This mode verifies the artifact, completed task histories,
+frozen corpus, execution hash/environment and original model/tensor bytes. It
+rejects repeated first-four rows, mixed layout/sparsity switches, unsupported
+shapes and any silent single-row fused-kernel fallback. The original projection
+benchmark CLI remains available.
+
+```bash
+# Reuse the qualified environment from the capture command above.
+mkdir -p target/research-fixtures
+gzip -dc docs/experiments/2026-10-25-maxwell-ffn-inputs.json.gz > \
+  target/research-fixtures/m02-ffn-inputs.json
+cargo run --release --features cuda --example q8_execution_bench -- \
+  --model "$MODEL" --output new-ffn-baseline.jsonl \
+  --ffn-inputs target/research-fixtures/m02-ffn-inputs.json \
+  --ffn-capture-report docs/experiments/2026-10-25-maxwell-ffn-capture.jsonl \
+  --rows 1,4 --trials 5 --iterations 10
+```
+
+The immutable model cache retains qualified down/vocabulary preparation. Only
+FFN primitives execute: no KV, attention, embedding or vocabulary projection is
+timed. Whole-model weights and the vocabulary cache remain resident and are
+reported; these microbenchmarks are not full-model peak-memory measurements.
+
+Single-row gate/up/SwiGLU uses the native fused FP32-activation kernel; down
+uses prepared four-column/256-thread reduction on decode. Four-row gate/up
+uses real multi-row Q8 projections on prefill, then waits for decode SwiGLU;
+down waits back onto prefill and uses prepared four-column/128-thread dispatch.
+The next iteration also waits before reusing gate/up buffers. Each of the four
+rows has a distinct captured input; multi-row results are not autoregressive
+decode timings.
+
+Measure gate/up/SwiGLU, down on frozen captured SwiGLU, and complete FFN with
+freshly computed SwiGLU separately. Events cover each causal multi-stream path;
+host enqueue/completion time and enqueue counters accompany GPU elapsed time.
+Stage order alternates across baseline trials. This is not yet an A/B speedup
+screen; the later bounded candidates require their own alternating pairs.
+Quantization cost is explicitly zero because the FP32 control has no activation
+quantization operation. Allocation, upload, CPU references, readbacks and the
+single completion wait lie outside the repeated enqueue region. Any enqueue
+allocation/copy/synchronization rejects the row.
+
+Guarded, reusable RAII buffers protect both inputs and outputs. Validation
+compares every gate/up/SwiGLU and down output with scalar Q8 dequantization/FP64
+CPU references, plus actual capture parity; single-row SwiGLU must match frozen
+bits exactly. Changed decode-stream inputs exercise cross-stream ordering in
+hardware tests. Whole-model final logits and generated-token quality remain
+separate runtime acceptance requirements.
+
+M02 delivery is split into the tested benchmark extension, then a clean-release
+measurement/evidence commit. Do not promote a kernel or change runtime defaults
+from this baseline alone.

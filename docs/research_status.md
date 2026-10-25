@@ -38,9 +38,10 @@ path rejection. Clean release `f459c97` now has
 [frozen real calibration inputs](experiments/2026-10-25-maxwell-ffn-inputs.md):
 21 paired rows/layer, all 163 inactive/active generated IDs equal, complete
 provenance and allocation cleanup. Three control tasks pass and three fail
-their fixed rubrics; capture changes no output. Complete FFN measurement in
-the shared benchmark remains; no M02 GPU timing or inference speed improvement
-is claimed.
+their fixed rubrics; capture changes no output. The shared benchmark now has a
+complete-FFN mode using production wrappers, genuine rows 1/4, CPU references,
+guarded reusable scratch and enqueue counters. Clean release measurements
+remain; no M02 GPU timing or inference speed improvement is claimed.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact
