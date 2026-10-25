@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest selected-runtime gap checkpoint:** the
+[fresh Ollama comparison](experiments/2026-10-25-maxwell-selected-ollama-http.md)
+measures typed FP32/128 plus SGEMM at **41.331 vs 42.946 HTTP tok/s**,
+**3.761% slower**, with verified actual IDs, quality and cache resets.
+Both original targets remain unmet: **53.06** and **55.829 tok/s** for
+1.30x this fresh Ollama median. The selected exact combination is retained
+experimentally; no global defaults change. Next measure its current stage
+costs without timing contamination, then test one bounded FP32-only
+scale-factored gate/up hypothesis if the profile supports it. Do not replace
+the exact-engine objective with numerical, pruning or scheduling results.
+
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
 shows that draining each no-logits prefix forward or running a greedy head

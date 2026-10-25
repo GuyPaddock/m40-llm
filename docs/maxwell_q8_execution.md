@@ -35,8 +35,8 @@ enables weight preparation.
 | M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
-| M08 | In progress: six historical quality and all independent HTTP screens recorded; [sequential ordering repair](experiments/2026-10-25-maxwell-prefill-drift-completed.md) requires fresh corrected-control quality and timing before qualification |
-| M09 | Pending: measured attribution, retained configuration, fresh Ollama comparison and remaining-goal audit |
+| M08 | Corrected exact branch qualified: [independent gains](experiments/2026-10-25-maxwell-completed-http.md), [combined quality](experiments/2026-10-25-maxwell-completed-combined-quality.md) and [combined HTTP +16.616%](experiments/2026-10-25-maxwell-completed-combined-http.md); numerical historical evidence remains separate |
+| M09 | [Fresh selected-runtime checkpoint](experiments/2026-10-25-maxwell-selected-ollama-http.md): 41.331 vs 42.946 HTTP tok/s, 3.761% slower; original targets unmet, continue the native-FFN next-work sequence |
 
 The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its

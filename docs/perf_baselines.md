@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Selected Runtime vs Fresh Ollama
+
+Five alternating release pairs measure the qualified FP32/128 plus SGEMM
+runtime at **41.331 HTTP tok/s** versus pinned official Ollama 0.40.11 at
+**42.946**, **3.761% slower**, paired interval **[-4.391%, -3.339%]**.
+Every primary request produces 512 actual tokens, cache resets are verified,
+and selected-runtime IDs match completed quality evidence. No extension is
+required for this clear negative comparison.
+
+Median HTTP is **12387.91 vs 11922.04 ms**, reported prompt **515.63 vs
+231.40 ms**, decode **11823.71 vs 11685.76 ms**. Phase boundaries differ;
+these medians are not additive causal attribution. Both original targets
+remain unmet: **53.06** and **55.829 tok/s** for 1.30x fresh Ollama.
+See [provenance, actual traces, limits and the next native-FFN experiment](experiments/2026-10-25-maxwell-selected-ollama-http.md).
+
 ## 2026-10-25: Combined Corrected-Control Runtime Gain
 
 Five alternating release pairs qualify packed FP32/128 FFN plus SGEMM
