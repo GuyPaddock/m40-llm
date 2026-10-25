@@ -29,10 +29,13 @@ passes at **44.972 vs 41.205 tok/s, +9.142%** against current packed128/SGEMM.
 Both use five alternating pairs with positive intervals and no extension.
 The [new split-runtime profile](experiments/2026-10-25-maxwell-split-stage-profile.md)
 preserves actual IDs and measures 0.986% instrumentation overhead. Middle
-stage shares are 37.43% gate/up, 22.31% down and 3.62% attention. Next test
-one fixed two-column/128-thread split FFN against the qualified one-column
-control, with unchanged per-weight FP32 compute and prepared down/head.
-Require the original micro/quality/HTTP gates and no rescue geometry sweep. Do not
+stage shares are 37.43% gate/up, 22.31% down and 3.62% attention. The fixed
+[two-column follow-up](experiments/2026-10-25-maxwell-split-cols2-screen.md)
+preserves bits but regresses complete one-row FFN throughput 5.85-6.01%.
+Keep `414f2a5` benchmark-only and stop column tuning. Next audit one-column
+load/address/conversion instructions before considering one lossless joint
+gate/up packing experiment. Keep one-column geometry, prepared down/head,
+and original micro/quality/HTTP gates fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
 Earlier checkpoints below record their historical next steps, not a second

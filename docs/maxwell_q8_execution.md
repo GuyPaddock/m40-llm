@@ -213,6 +213,9 @@ column, not the block-wide barrier. The original one-column kernel body
 and C ABI remain intact. Tests require gate/up/SwiGLU bit equality with the
 current control, CPU tolerance, guards, immutable planes and scratch reuse.
 No runtime selection is added unless the complete-FFN screen qualifies.
+The [completed screen](experiments/2026-10-25-maxwell-split-cols2-screen.md)
+regresses 5.85-6.01% at one row despite bitwise parity. It remains
+benchmark-only; do not widen the column search or enable it in generation.
 
 ### M03 Primitive Checkpoint
 

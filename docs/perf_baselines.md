@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Two-Column Split FFN Regresses
+
+One fixed two-column/128-thread split-plane kernel preserves current
+one-column bits, but complete one-row throughput is **5.85-6.01% slower**;
+four-row work is **4.38-5.45% slower**, with negative paired intervals.
+Prepared storage and down are identical. Registers rise from 32 to 40,
+without reported spills; this does not establish a measured occupancy cause.
+See [paired results, ownership, SASS and the rejected gate](experiments/2026-10-25-maxwell-split-cols2-screen.md).
+
+Keep `414f2a5` benchmark-only, with no additional column tuning or runtime
+selection. The qualified one-column split/SGEMM runtime and both original
+unmet HTTP targets remain unchanged.
+
 ## 2026-10-25: Qualified Split Runtime Stage Profile
 
 The selected split-plane FP32/SGEMM runtime preserves all actual 512 IDs with
