@@ -272,3 +272,25 @@ lower confidence bound. Do not add geometry configurations to rescue a loss.
 The Rust validation entrypoint is now `ffn_q8_f32_capture_async` with an
 explicit variant. It replaces the factored-only name rather than adding a
 compatibility alias; timed enqueue and the existing C ABI remain separate.
+
+## Audit Packed128-Control Follow-Ups
+
+`scripts/audit_ffn_followup.jq` checks six-shape FP32 screens against explicit
+source, candidate, newly created report path and sole GPU PID. It verifies
+native/control/candidate validations, alternating pairs, stage order,
+allocation/copy/sync counts, observed clocks, non-overlapping intervals,
+reported medians and the unchanged micro gate. It does not establish E2E
+qualification. For example, re-audit the preserved scale-factor result:
+
+```bash
+jq -s \
+  --arg source 498699a8b7131cb766c08776e5799099c9b59807 \
+  --arg candidate packed-warp128-factored-scales \
+  --arg report docs/experiments/2026-10-25-maxwell-factored-ffn-screen.jsonl \
+  --arg pid 1114652 -f scripts/audit_ffn_followup.jq \
+  docs/experiments/2026-10-25-maxwell-factored-ffn-screen.jsonl
+```
+
+The new audit leaves historical report-specific scripts and hash manifests
+unchanged. Changed control, timed allocation and fabricated median data must
+fail rather than producing a successful summary.
