@@ -2,6 +2,1439 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-05-25: Qwen2.5-3B E2E Ollama Comparison Checkpoint
+
+The active E2E goal uses this exact prompt with `max_tokens=512`:
+
+```text
+Explain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible
+```
+
+Ollama baseline method:
+
+- Started an isolated Ollama server with `CUDA_VISIBLE_DEVICES=1
+  OLLAMA_HOST=127.0.0.1:11436 ollama serve`.
+- Ollama logs confirmed the runner used `Tesla M40 24GB`, compute capability
+  5.2, with `qwen2.5:3b-instruct-q8_0`.
+- Warmed once with `num_predict=1`.
+- Measured a non-streaming `/api/generate` request with `num_predict=512`,
+  `num_ctx=1024`, `temperature=0`, and `top_k=1`.
+
+Ollama result:
+
+| Model | Runtime | Prompt tokens | Generated tokens | Wall | Total duration | Eval duration | E2E tok/s | Eval tok/s | Stop |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B Instruct Q8_0 | Ollama 0.18.2 on Tesla M40 | 65 | 512 | 12.545 s | 12.534 s | 11.047 s | 40.81 | 46.35 | length |
+
+The required 30% margin over this measured E2E baseline is **53.06 generated
+tokens/s**.
+
+m40-llm release results on the same M40:
+
+| Model | Backend | KV | Extra env | Prompt tokens | Generated tokens | Prefill | Decode | Total | Decode tok/s | E2E tok/s | Output quality |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | large-model | dense off | `M40LLM_F16_DECODE_KERNEL=1` | 44 | 512 | 2049 ms | 36353 ms | 43575 ms | 14.08 | 11.75 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | current Q8_0 fused projection | 44 | 512 | 5957 ms | 82287 ms | 93430 ms | 6.22 | 5.48 | coherent |
+| Qwen2.5-3B F16 | fast-fits | dense off | materialized FP32 cuBLAS | 44 | 512 | 3993 ms | 54141 ms | 63339 ms | 9.46 | 8.08 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | `M40LLM_F16_DECODE_KERNEL=1 M40LLM_F16_DECODE_STREAM=decode` | 44 | 512 | 1744 ms | 31268 ms | 38579 ms | 16.38 | 13.27 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_PREFILL_CHUNK_SIZE=128` | 44 | 512 | 2826 ms | 31236 ms | 39335 ms | 16.39 | 13.02 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CPU greedy `top_k=1` fast path | 44 | 512 | 1749 ms | 31249 ms | 33294 ms | 16.39 | 15.38 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + `M40LLM_CUDA_GREEDY_ARGMAX=1` | 44 | 512 | 1586 ms | 31218 ms | 32990 ms | 16.40 | 15.52 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1573 ms | 30344 ms | 32113 ms | 16.87 | 15.94 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | decode-stream F16 + CUDA argmax + `M40LLM_FUSED_QKV=1 M40LLM_FUSED_MLP_SWIGLU=1` | 44 | 512 | 1343 ms | 28277 ms | 29826 ms | 18.11 | 17.17 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | previous row + `M40LLM_FUSED_RESIDUAL_NORM=1` | 44 | 512 | 1344 ms | 28288 ms | 29826 ms | 18.10 | 17.17 | coherent |
+| Qwen2.5-3B F16 | large-model | dense off | fused QKV/MLP + fast head128 attention + warp-reduced F16 projections | 44 | 512 | 1278 ms | 22935 ms | 24467 ms | 22.32 | 20.93 | coherent |
+| Qwen2.5-3B F16 | large-model | compressed top8, recent 128 | same as previous row | 44 | 512 | 1352 ms | 30146 ms | 31699 ms | 16.98 | 16.15 | coherent |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 128 | same as dense row | 44 | 512 | 1278 ms | 18739 ms | 20211 ms | 27.32 | 25.33 | degraded/repetitive |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 256 | same as dense row | 44 | 512 | 1279 ms | 20950 ms | 22426 ms | 24.44 | 22.83 | degraded/repetitive |
+| Qwen2.5-3B F16 | large-model | dense-recent, window 384 | same as dense row | 44 | 512 | 1278 ms | 22357 ms | 23832 ms | 22.90 | 21.48 | degraded/repetitive |
+| Qwen2.5-3B Q8_0 | large-model | dense off | fused Q8 QKV/MLP + split-Q-block decode/MLP + shared lm-head argmax | 44 | 512 | 1241 ms | 22738 ms | 24171 ms | 22.52 | 21.18 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | previous row + head128 probability reuse in attention V loop | 44 | 512 | 1231 ms | 20991 ms | 22412 ms | 24.39 | 22.85 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | previous row + split-Q-block fused Q8 QKV | 44 | 512 | 1123 ms | 19727 ms | 21030 ms | 25.95 | 24.35 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense off | previous row + `M40LLM_Q8_DECODE_COL_TILE=4` | 44 | 512 | 1083 ms | 19248 ms | 20523 ms | 26.60 | 24.95 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | compressed top8, recent 1024 | split-Q-block Q8 path, preferred compressed KV defaults | 44 | 512 | 1201 ms | 29006 ms | 30409 ms | 17.65 | 16.84 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | compressed top8, recent 128 | split-Q-block Q8 path with `M40LLM_QWEN_THROUGHPUT_RECENT_WINDOW=128` | 44 | 512 | 1205 ms | 28679 ms | 30077 ms | 17.85 | 17.02 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 128 | split-Q-block Q8 path + `M40LLM_DENSE_ATTENTION_SINK_TOKENS=32` | 44 | 512 | 1132 ms | 17935 ms | 19258 ms | 28.55 | 26.59 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 128 | previous row + `M40LLM_Q8_DECODE_COL_TILE=4` | 44 | 512 | 1100 ms | 17483 ms | 18794 ms | 29.29 | 27.24 | coherent |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 64 | same as previous row with window 64 | 44 | 512 | 1136 ms | 16640 ms | 18028 ms | 30.77 | 28.40 | repetitive/drifts |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 32/window 32 | same as previous row with window 32 | 44 | 512 | 1133 ms | 15920 ms | 17232 ms | 32.16 | 29.71 | repetitive |
+| Qwen2.5-3B Q8_0 | large-model | dense sink+recent, sink 64/window 64 | same as previous row with sink 64 | 44 | 512 | 1139 ms | 17336 ms | 18660 ms | 29.53 | 27.44 | repetitive/drifts |
+
+Failed/neutral fusion experiment record:
+
+| Experiment | Preserved in commit | Removed in commit | Probe result | Target result | Decision |
+| --- | --- | --- | --- | --- | --- |
+| `M40LLM_FUSED_RESIDUAL_NORM=1` fused post-attention residual add with weighted RMSNorm | `b2f1cf5` | `386ce76` | 32-token probe improved slightly to `total_tps=12.07` | 512-token target was neutral: `29826 ms`, `17.17 E2E tok/s` | Removed from active code; keep as a reference for future broader fusion work |
+| `M40LLM_F16_LM_HEAD_ARGMAX=1` greedy-only F16 lm-head argmax | current diagnostic | n/a | 64-token Qwen2.5 F16 probe had unchanged decode rate: `decode_ms=2174 decode_tps=29.44`; event timing was `~3.09 ms` versus the existing lm-head projection around `~2.8 ms` | Not run on the 512-token target because the short probe and event timing showed no gain | Keep diagnostic/off by default; full-logits plus argmax remains faster |
+| `M40LLM_Q8_DECODE_TILED_COLS=2` with the current split-Q-block/fused Q8 stack | older diagnostic | n/a | Earlier short probes improved before split-Q-block Q8 QKV and shared lm-head argmax landed | Exact 512-token target regressed to `prefill_ms=3052 decode_ms=42168 total_ms=45410 decode_tps=12.14 total_tps=11.28` | Do not use with the current stack; it reduces parallelism too much for current large-K projections |
+| `M40LLM_Q8_MLP_GATE_UP_COL_TILE=4` four-column fused Q8 gate/up | `c6c2588` | `15b2f9d` | CUDA parity against the existing fused Q8 gate/up path passed | Exact 512-token target regressed to `prefill_ms=1179 decode_ms=20337 total_ms=21782 decode_tps=25.18 total_tps=23.51` when combined with `M40LLM_Q8_DECODE_COL_TILE=4` | Removed after preserving; reduced block parallelism/register pressure outweighs activation reuse for Qwen's 11008-wide gate/up projection on M40 |
+| llama.cpp-style Q8_1 activation dot for Q8_0 weights | n/a | n/a | Source audit showed llama.cpp quantized matvec paths use Q8_1 activations and DP4A-style int8 dot products, but M40/sm_52 has no native `__dp4a`; an M40-only scalar-int8 diagnostic prototype measured `7.289 ms` for 1x2048x257, while the current f32xQ8_0 decode kernel measured `0.130 ms` for 1x2048x2048 | Not run on the 512-token target because the primitive was orders of magnitude slower on M40 | Do not pursue Q8_1 activation dot without a Maxwell-specific vectorization strategy; no llama.cpp code was copied |
+| `M40LLM_Q8_LM_HEAD_ARGMAX=1` greedy-only Q8 lm-head argmax | `11cff45` | n/a | 32-token Qwen2.5 Q8_0 probe was effectively unchanged: `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74 total_tps=4.61` | Not run on the 512-token target because the short probe and event timings showed no gain | Keep diagnostic/off by default; final vocabulary projection remains unresolved |
+| `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` shared-activation Q8 lm-head argmax | current diagnostic | n/a | 16-token Ollama-blob Qwen2.5 Q8_0 probe cut lm-head argmax event time from roughly `7.4 ms` to `3.43 ms`, but only improved total short-run decode from about `8.1` to `8.51 tok/s` | Not run on the 512-token target because layer projection cost still dominates and the short probe remains far below target | Keep diagnostic/off by default; useful kernel evidence, not sufficient for the Ollama target |
+| `M40LLM_Q8_MLP_GATE_UP_TILED_COLS=4` tiled shared-activation Q8 MLP gate/up | `c10b544` | follow-up removal commit | CUDA parity against the baseline fused Q8 gate/up path passed, but the Qwen2.5 Q8_0 event probe regressed gate/up from roughly `0.53 ms` to `0.89-0.97 ms` per layer | Not run on the 512-token target because the bounded probe was slower than the existing fused Q8 path | Remove from active code after preserving this failed experiment; the 4-column/64-thread shape is not a useful M40 path |
+| Qwen2.5-3B Q4_0 GGUF projection support | current Q4 support commit | n/a | 32-token Qwen2.5 Q4_0 probe generated coherent text but was slow: `prefill_ms=5912 decode_ms=2946 total_ms=9053 decode_tps=10.86 total_tps=3.54` | Not run on the 512-token target because the short probe is below the Q8 short probe and far below the F16 best | Keep as model-format compatibility; not a speed path toward the Ollama target |
+| `M40LLM_ATTN_HEAD128_KERNEL=group8` grouped Qwen GQA attention | `82c1a0c` | `5e21b54` | Qwen-shaped parity passed for `q_heads=16`, `kv_heads=2`, `head_dim=128`, and seq_lens through 1024, but the exact 512-token Qwen2.5 Q8_0 target regressed to `prefill_ms=1255 decode_ms=22756 total_ms=24205 decode_tps=22.50 total_tps=21.15` | Slower than the default head128 probability-reuse result: `22412 ms`, `22.85 E2E tok/s` | Removed from active code after preserving this failed experiment; grouping all 8 Q heads per KV head increases per-block work/register pressure enough to lose on M40 |
+| `M40LLM_ATTN_HEAD128_KERNEL=group4` grouped Qwen GQA attention | `1929182` | `b9c2194` | Qwen-shaped parity passed for `q_heads=16`, `kv_heads=2`, `head_dim=128`, and seq_lens through 1024, but the exact 512-token Qwen2.5 Q8_0 target regressed to `prefill_ms=1131 decode_ms=20858 total_ms=22171 decode_tps=24.55 total_tps=23.09` | Slower than the current default split-Q-block/probability-reuse result: `21030 ms`, `24.35 E2E tok/s` | Removed from active code after preserving this failed experiment; grouping four Q heads per block still loses enough occupancy/register efficiency to offset K/V reuse on M40 |
+
+Implementation/diagnostic notes:
+
+- `M40LLM_F16_DECODE_STREAM=decode` now runs the opt-in compact F16 decode
+  projection kernel on the decode stream and makes forward/logits synchronize
+  the actual producer stream. An intermediate version synchronized the wrong
+  stream in logits and produced corrupted output; that was fixed before the
+  coherent full-run result above.
+- `M40LLM_QWEN_THROUGHPUT_MIN_TOTAL_TPS` can now assert an E2E throughput
+  floor separately from the existing generated-token decode TPS floor.
+- `M40LLM_Q8_DECODE_COL_TILE=4` is an opt-in M40 Q8 decode projection kernel
+  that computes four output columns per block and reuses each activation
+  sub-block across those columns. It is inspired by llama.cpp/Ollama's
+  multi-column matvec shape, but implemented independently for this runtime's
+  f32-activation/Q8_0-weight path. On the exact 512-token target it improves the
+  current dense Q8 path from 24.35 to 24.95 E2E tok/s. This is useful, but still
+  far below Ollama's measured 40.81 E2E tok/s and the 53.06 tok/s target.
+- Packed-prefix prefill is not useful for this short Qwen prompt on the current
+  path; it increased prompt prefill time from 1744 ms to 2826 ms.
+- `top_k=1` now uses greedy sampling without a full softmax/sort. The opt-in
+  CUDA argmax path avoids full-logits D2H for this benchmark, but the long-run
+  gain is small because the remaining cost is full-layer decode work.
+- `M40LLM_FUSED_MLP_SWIGLU=1` fuses single-token GGUF F16 gate/up projection
+  and SwiGLU into one decode kernel. `M40LLM_FUSED_QKV=1` fuses single-token
+  Q/K/V GGUF F16 projection and optional Q/K/V f32 bias into one decode kernel.
+  Both are opt-in while validation broadens.
+- The Qwen/head128 dense attention path now defaults to a 128-thread
+  warp-reduced kernel that preserves the old kernel's occupancy while reducing
+  per-token block-wide reduction synchronizations; set
+  `M40LLM_ATTN_HEAD128_KERNEL=shared` to force the old shared-score path or
+  `M40LLM_ATTN_HEAD128_KERNEL=warp32` for the lower-occupancy one-warp
+  diagnostic. Late-token event timings at `seq_len=524` improved from roughly
+  `1.14 ms/layer` on the old shared-score kernel to roughly `0.68 ms/layer` on
+  the fast warp-reduced kernel. The single-token GGUF F16 decode projection
+  reductions also now use warp reductions for their final block reduction. The
+  combined exact-prompt result improves from 17.17 to 20.93 E2E tok/s, still far
+  below the 53.06 tok/s target.
+- Compressed exact-old KV top8 remains the project default for generation, but
+  it is not the active Ollama-comparison path for this short 1024-context
+  target. With the Q8_0 optimized path, default `recent_window=1024` was coherent
+  but slow at 16.84 E2E tok/s and allocated more resident KV than dense because
+  the recent ring covers the entire bounded context plus sidecar overhead.
+  Reducing the recent window to 128 lowered resident KV below dense, but still
+  measured only 17.02 E2E tok/s. Dense `off` remains the faster path for this
+  specific benchmark until compressed direct attention overhead is reduced.
+- `dense-recent-only` now supports Qwen/head128 as an explicit sliding-window
+  diagnostic. It improves token rate on this prompt, but all tested windows
+  regressed output quality: window 128 reached 25.33 E2E tok/s but collapsed
+  into repeated early sections; windows 256 and 384 were slower and still
+  repetitive. Do not use dense-recent as the active Ollama-comparison path.
+- `M40LLM_F16_LM_HEAD_ARGMAX=1` fuses the F16 lm-head projection with greedy
+  argmax, but it is slower than materializing logits and using the existing
+  argmax path on M40. The diagnostic kernel measured about `3.09 ms`, while the
+  current lm-head projection event is about `2.8 ms`.
+- A targeted llama.cpp CUDA audit found that its quantized matvec stack converts
+  f32 activations to Q8_1 and dots them with quantized weights. That maps well
+  to GPUs with native int8 dot instructions, but M40/sm_52 lacks `__dp4a`.
+  A clean-room M40-only scalar-int8 Q8_1 prototype was correct but measured
+  `7.289 ms` for a 1x2048x257 projection; the existing f32xQ8_0 decode kernel
+  measured `0.130 ms` for a larger 1x2048x2048 projection. This rules out a
+  direct Q8_1 activation port as the next path to the Ollama target on M40.
+- `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
+  post-attention residual add and weighted RMSNorm. It showed a small short-run
+  probe improvement, but the full 512-token target run was neutral versus the
+  fused QKV/MLP baseline. Treat it as a failed/neutral experiment unless a
+  broader fusion makes this interface useful. The short 32-token probe with the
+  same flags reported `prompt_tokens=44 generated_tokens=32 prefill_ms=1343
+  decode_ms=1134 total_ms=2652 decode_tps=28.22 total_tps=12.07`, compared
+  with a prior short best around 11.95 E2E tok/s, but that did not carry through
+  to the authoritative 512-token target row above.
+- `M40LLM_Q8_DECODE_STREAM=decode` moves single-token GGUF Q8_0 decode
+  projections onto the decode stream when the active layer/output weights are
+  actually Q8_0. This reduced a 32-token Qwen2.5 Q8_0 short probe from
+  `decode_tps=7.40 total_tps=3.15` to `decode_tps=8.20 total_tps=3.48`.
+  Adding opt-in fused Q8 decode projections with `M40LLM_FUSED_Q8_QKV=1
+  M40LLM_FUSED_Q8_MLP_SWIGLU=1` improved the same short probe further to
+  `prefill_ms=4192 decode_ms=3275 total_ms=7648 decode_tps=9.77
+  total_tps=4.18`. A follow-up large-`K` thread-count adjustment keeps
+  `K=2048` decode projections at 128 threads and raises larger hidden-dim Q8
+  decode projections to 256 threads; the same short probe improved to
+  `prefill_ms=3950 decode_ms=3102 total_ms=7235 decode_tps=10.32
+  total_tps=4.42`. An opt-in two-column decode tile
+  (`M40LLM_Q8_DECODE_TILED_COLS=2`) for large-`K` Q8 projections improved the
+  same short probe to `prefill_ms=3781 decode_ms=2982 total_ms=6946
+  decode_tps=10.73 total_tps=4.61`. This is useful Q8 integration progress,
+  but still far below the F16 best and the Ollama target.
+- `M40LLM_Q8_DECODE_EVENT_LOG=1` adds a diagnostic CUDA-event split around Q8
+  decode projection launches. A tiny Qwen2.5 Q8_0 probe showed approximate
+  per-layer costs of `0.14 ms` for fused QKV, `0.11 ms` for the attention output
+  projection, `0.63 ms` for fused gate/up/SwiGLU, and `1.55 ms` for MLP down;
+  final `lm_head` was about `7.2 ms`. With
+  `M40LLM_Q8_DECODE_TILED_COLS=2`, the large-`K` MLP down projection improves
+  modestly to roughly `1.43-1.47 ms/layer`, while `lm_head` remains on the
+  existing decode path because it has `K=2048` and very large `N`. The next Q8
+  target should be the final vocabulary projection, not greedy sampling.
+- `M40LLM_Q8_LM_HEAD_ARGMAX=1` adds a diagnostic greedy-only Q8 lm-head path
+  that computes per-block argmax partials instead of materializing full logits
+  for `top_k=1`. It is correct against the existing logits-plus-argmax path,
+  but is neutral/slightly slower on M40: the event probe measured roughly
+  `7.41 ms` versus the existing lm-head projection at roughly `7.2 ms`, and the
+  32-token Qwen2.5 Q8_0 probe stayed effectively unchanged at
+  `prefill_ms=3781 decode_ms=2980 total_ms=6944 decode_tps=10.74
+  total_tps=4.61`. Keep it diagnostic/off by default.
+- `M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A=1` changes that diagnostic argmax kernel
+  to cooperatively load the hidden vector into shared memory once per
+  8-vocab-column block. This halves the measured lm-head argmax event on the
+  Ollama Q8_0 blob from roughly `7.4 ms` to `3.43 ms`, but the bounded
+  16-token release probe only reaches `prefill_ms=2899 decode_ms=1881
+  total_ms=4966 decode_tps=8.506 total_tps=3.222`. The Q8 path remains
+  dominated by per-layer quantized projections, especially MLP down and fused
+  gate/up, so this is not enough to pursue the 512-token Ollama comparison
+  target.
+- `M40LLM_Q8_MLP_GATE_UP_TILED_COLS=4` tried a four-column fused Q8 gate/up
+  tile with the hidden vector loaded into shared memory. The parity test passed,
+  but the kernel was slower than the existing one-column fused gate/up path on
+  Qwen2.5 Q8_0: event timing regressed from roughly `0.53 ms` to
+  `0.89-0.97 ms` per layer. The additional shared-memory load/synchronization
+  and reduced per-column parallelism outweighed activation reuse, so this
+  experiment should be removed after preserving the result.
+- `M40LLM_Q8_DECODE_SPLIT_QBLOCK=4` and
+  `M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK=4` split each 32-value Q8_0 block across
+  four thread tasks instead of assigning the whole quant block to one thread.
+  This better matches the useful part of Ollama/llama.cpp's MMVQ structure on
+  M40 without relying on native DP4A. CUDA parity passes against the existing
+  Q8 decode and fused Q8 gate/up kernels. On the Ollama Q8_0 blob, the bounded
+  16-token probe improved from `decode_tps=11.985` with shared lm-head argmax
+  alone to `decode_tps=33.264`; MLP down events dropped to roughly `0.20 ms`,
+  and fused gate/up events dropped to roughly `0.33 ms`. The exact 512-token
+  comparison prompt reached `prefill_ms=1241 decode_ms=22738 total_ms=24171
+  decode_tps=22.517 total_tps=21.182`, with coherent output. This is the best
+  Q8 path so far, but it is still below Ollama's measured `40.81` E2E tok/s and
+  far below the `53.06` target.
+- The fused Q8 QKV projection now also honors `M40LLM_Q8_DECODE_SPLIT_QBLOCK=4`.
+  A focused event probe reduced QKV events from roughly `0.14 ms/layer` to
+  roughly `0.069 ms/layer`. The exact 512-token Qwen2.5 Q8_0 comparison prompt
+  improved to `prefill_ms=1123 decode_ms=19727 total_ms=21030
+  decode_tps=25.954 total_tps=24.346`, with coherent output. This remains short
+  of Ollama's measured `40.81` E2E tok/s and the `53.06` target; the next
+  high-impact work is still late-token head128 attention and the remaining
+  fused MLP/down projection cost.
+- `M40LLM_DENSE_ATTENTION_SINK_TOKENS=N` is an opt-in dense-recent diagnostic
+  for head128 attention. It attends to the first `N` tokens plus the configured
+  recent window, avoiding the pure recent-only failure mode where the prompt
+  instruction disappears. On the exact Qwen2.5 Q8_0 512-token comparison, sink
+  32 plus a 128-token recent window is coherent and improves to `26.586` E2E
+  tok/s. Smaller windows reach `28.400` to `29.712` E2E tok/s but introduce
+  repetition/drift, so this is useful as a speed/quality diagnostic rather than
+  a credible default path toward the Ollama target.
+- Qwen's published Q4_0 GGUF is a mixed file: the standard projection tensors
+  and tied embeddings are Q4_0, while the dedicated `output.weight` is Q6_K.
+  The runtime now supports Q4_0 projection/embedding dequant plus a narrow
+  Q6_K single-token projection path for that output head. The first release
+  32-token probe produced coherent text, but performance was not useful for the
+  active Ollama comparison: `prefill_ms=5912 decode_ms=2946 total_ms=9053
+  decode_tps=10.86 total_tps=3.54`.
+- With both fusions enabled, current m40-llm best E2E is 17.17 tok/s, about
+  42.1% of Ollama's measured E2E rate and far below the 53.06 tok/s target.
+  The profiled short run still shows roughly 16.5 ms host enqueue time plus
+  roughly 19 ms GPU completion time per generated token. Full-token CUDA Graph
+  replay captured after fusion wiring, but replay was unusably slow on this
+  path (32-token probe: 0.25 E2E tok/s) and changed output, so graph remains
+  experimental/off.
+
+## 2026-05-25: Qwen2.5-3B Compact F16 Decode Reaches 20+ Tok/s
+
+This checkpoint adds an opt-in compact-weight GGUF F16 decode projection kernel
+for `M=1` single-token decode. The kernel reads GGUF F16 weights directly,
+uses `half2` vector loads for even `K`, and accumulates in FP32. This avoids the
+12.34 GB materialized FP32 projection cache and reduces single-request decode
+weight bandwidth enough to cross the 20 generated-token/s target on Tesla M40
+for a bounded 64-token sample.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  gemm_f32xf16_gguf_decode_kernel_matches_sync_1x2048x2048 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_F16_DECODE_KERNEL=1 \
+  M40LLM_QWEN_THROUGHPUT_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_THROUGHPUT_BACKEND=large-model \
+  M40LLM_QWEN_THROUGHPUT_KV=off \
+  M40LLM_QWEN_THROUGHPUT_CONTEXT=512 \
+  M40LLM_QWEN_THROUGHPUT_MAX_TOKENS=64 \
+  M40LLM_QWEN_THROUGHPUT_MIN_GENERATED=64 \
+  M40LLM_QWEN_THROUGHPUT_MIN_TPS=20 \
+  cargo test --release --features cuda --test qwen_decode_throughput -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Model | Backend | KV | Prompt tokens | Generated tokens | Prefill | Decode | Total | Decode tok/s | Total tok/s | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | large-model + `M40LLM_F16_DECODE_KERNEL=1` | dense off, context bound 512 | 24 | 64 | 1098 ms | 3101 ms | 5018 ms | 20.64 | 12.75 | repeated `BLUE` |
+
+Interpretation:
+
+- This satisfies the current generated-token throughput goal for Qwen2.5-3B on
+  Tesla M40: the measured decode/output rate is above 20 tok/s.
+- The measurement is generated-token decode throughput, not cold total
+  end-to-end throughput. Total throughput remains lower because prompt prefill
+  and setup are included in `total_ms`.
+- The compact F16 decode kernel is still opt-in via
+  `M40LLM_F16_DECODE_KERNEL=1`; keep it behind the env gate until it has broader
+  parity/performance coverage across more F16 GGUF models and longer contexts.
+
+## 2026-05-25: Qwen2.5-3B Throughput Probe and Batched Server Check
+
+This checkpoint adds `tests/qwen_decode_throughput.rs`, an env-gated CUDA
+throughput probe that reports generated-token decode throughput for Qwen2.5
+models. The probe is intended for explicit release/hardware runs and only
+asserts a throughput floor when `M40LLM_QWEN_THROUGHPUT_MIN_TPS` is set.
+
+Runtime changes tested here:
+
+- `M40LLM_DECODE_CUBLAS_STREAM=decode` routes materialized FP32 `M=1` cuBLAS
+  projection calls onto the decode stream and skips one-token cross-stream
+  waits in the forward path.
+- Materialized FP32 cuBLAS uses `cublasSgemv` for `M=1` decode shapes instead
+  of forcing every vector projection through SGEMM.
+- cuBLAS stream retargeting is cached in the CUDA context.
+
+Single-request release probe on Tesla M40:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_DECODE_CUBLAS_STREAM=decode \
+  M40LLM_QWEN_THROUGHPUT_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_THROUGHPUT_BACKEND=fast-fits \
+  M40LLM_QWEN_THROUGHPUT_KV=off \
+  M40LLM_QWEN_THROUGHPUT_CONTEXT=2048 \
+  M40LLM_QWEN_THROUGHPUT_MAX_TOKENS=96 \
+  cargo test --release --features cuda --test qwen_decode_throughput -- \
+  --nocapture --test-threads=1
+```
+
+| Model | Backend | KV | Generated tokens | Prefill | Decode | Total | Decode tok/s | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | fast-fits, decode-stream cuBLAS | dense off | 96 | 2077 ms | 6886 ms | 10059 ms | 13.94 | repeated `BLUE` |
+
+Batched server release check on Tesla M40:
+
+```bash
+source scripts/dev-env.sh && \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS=--release \
+  M40LLM_PROJECTION_BACKEND=fast-fits \
+  M40LLM_MATERIALIZE_F32_WEIGHTS=1 \
+  M40LLM_DECODE_CUBLAS_STREAM=decode \
+  MAX_CONTEXT_TOKENS=512 MAX_TOKENS=64 TRIALS=1 \
+  BATCH_DECODE_MODES=1 PREFILL_MODES=1 CASES=batch4_repeat \
+  M40LLM_SERVER_BATCH_DECODE_SLOTS=4 \
+  scripts/bench_server_batch_decode.sh
+```
+
+| Model | Server mode | Requests | Max tokens/request | HTTP ok | Wall | Script aggregate tok/s | Output |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Qwen2.5-3B F16 | batched decode + packed prefill, dense off | 4 | 64 | 4/4 | 10114 ms | 25.31 | repeated `BLUE`/`GREEN`/`RED`/`YELLOW` |
+
+Interpretation:
+
+- Single-request Qwen2.5-3B F16 decode is still below the 20 tok/s target:
+  the best measured release path is 13.94 generated tok/s.
+- The server batch path now has a verified Qwen2.5-3B throughput mode above
+  20 aggregate tok/s on the M40 for four concurrent repeat-output requests.
+- Treat the 25.31 tok/s row as aggregate batched serving throughput, not
+  single-request latency. The next single-request speed lever remains a more
+  efficient compact-weight decode projection path.
+
+## 2026-05-25: Qwen2.5 Q8_0 Default Compressed Auto-Packed Prefill
+
+The preferred compressed-KV runtime now automatically uses packed-prefix
+prefill for bounded `block-select-exact` prompts. `M40LLM_PREFILL_CHUNK_SIZE`
+still controls dense reference packed prefill explicitly; when unset, preferred
+compressed KV uses a conservative default bound of 128 prompt tokens. Set
+`M40LLM_PREFILL_CHUNK_SIZE=0` to disable the automatic compressed packed-prefix
+path.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed q8_0 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_Q8_GENERATION_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --features cuda --test q8_generation_canary -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Backend | KV mode | Prefill mode | Chunk | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Q8 launches | Output |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Q8_0 large-model | compressed top8 default | packed-prefix-block-select-exact | 128 | arithmetic | yes | 20 | 2 | 1192 ms | 137 ms | 1459 ms | 758 | `4` |
+| Q8_0 large-model | compressed top8 default | packed-prefix-block-select-exact | 128 | config lookup | yes | 38 | 3 | 2238 ms | 281 ms | 2653 ms | 1011 | `37` |
+
+Server smoke, release build, Qwen2.5 Q8_0, `--max-context-tokens 2048`:
+
+| Server mode | Request | Result | Log evidence |
+| --- | --- | --- | --- |
+| default compressed top8 | arithmetic | HTTP 200, `{"output":"4"}` | `packed prefix prefill enabled layers=36` |
+| explicit dense `off` | arithmetic | HTTP 200, `{"output":"4"}` | dense compatibility path used; no compressed allocation |
+
+Interpretation:
+
+- The default compressed Q8 path now gets the measured packed-prefix win without
+  requiring users to set `M40LLM_PREFILL_CHUNK_SIZE`.
+- Dense reference mode is intentionally unchanged: it still uses sequential
+  prefill unless `M40LLM_PREFILL_CHUNK_SIZE` is explicitly set.
+- The server compatibility smoke validates both the project default compressed
+  path and the explicit dense `--kv-compress-mode off` escape hatch for Qwen2.5
+  Q8_0.
+
+## 2026-05-25: Qwen2.5 F16 Fast-Fits vs Q8_0 Large-Model Dense-KV Comparison
+
+This checkpoint adds an opt-in CUDA comparison harness for the same Qwen2.5-3B
+model family in two projection/runtime configurations:
+
+- F16 GGUF with `M40LLM_PROJECTION_BACKEND=fast-fits`, using materialized FP32
+  projection weights and cuBLAS.
+- Q8_0 GGUF with `M40LLM_PROJECTION_BACKEND=large-model` and
+  `M40LLM_MATERIALIZE_F32_WEIGHTS=0`, using fused GGUF Q8_0 projection kernels
+  without materialized FP32 projection weights.
+
+Both rows force dense reference KV with `KvCompressionConfig::dense_reference()`
+so this isolates projection backend behavior from compressed-KV behavior. The
+harness is skipped unless `M40LLM_QWEN_BACKEND_COMPARE=1` is set.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40, bounded to 256 context tokens:
+
+| Backend | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Materialized FP32 added | Q8 launches | cuBLAS calls | Output |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| F16 fast-fits | arithmetic | yes | 20 | 2 | 1990 ms | 78 ms | 2279 ms | 12.34 GB | 0 | 5313 | `4` |
+| F16 fast-fits | exact OK | yes | 15 | 2 | 1161 ms | 78 ms | 1364 ms | 0 B warm | 0 | 4048 | `OK` |
+| F16 fast-fits | config lookup | yes | 38 | 3 | 2991 ms | 162 ms | 3291 ms | 0 B warm | 0 | 10120 | `37` |
+| Q8_0 large-model | arithmetic | yes | 20 | 2 | 2678 ms | 135 ms | 2942 ms | 0 B | 5313 | 0 | `4` |
+| Q8_0 large-model | exact OK | yes | 15 | 2 | 2003 ms | 134 ms | 2264 ms | 0 B | 4048 | 0 | `OK` |
+| Q8_0 large-model | config lookup | yes | 38 | 3 | 5150 ms | 277 ms | 5568 ms | 0 B | 10120 | 0 | `37` |
+
+Interpretation:
+
+- F16 fast-fits is still faster on these short dense-KV prompts because
+  materialized FP32 cuBLAS remains the fastest projection path when the model
+  and materialized cache fit in VRAM.
+- Q8_0 large-model now produces matching lightweight quality answers on the
+  same prompts while avoiding the 12.34 GB materialized FP32 projection cache.
+- The Q8_0 rows exercise fused Q8_0 projection launches end-to-end and perform
+  zero cuBLAS projection calls; the F16 rows perform cuBLAS projection calls and
+  zero Q8_0 launches.
+- This is not yet a compressed-KV or long-context comparison. Use it as the
+  current dense-KV projection backend checkpoint for Qwen2.5 F16 versus Q8_0.
+
+## 2026-05-25: Qwen2.5 Q8_0 Packed-Prefix and Compressed-KV Compatibility
+
+The Qwen projection comparison harness now also records bounded Q8_0 prefill
+variants and a default compressed-KV compatibility row:
+
+- dense reference KV with sequential prefill;
+- dense reference KV with `M40LLM_PREFILL_CHUNK_SIZE=32/64/128`;
+- default compressed KV top8 with direct FP16-K/q4-V exact-old attention.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_BACKEND_COMPARE=1 \
+  M40LLM_QWEN_F16_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_Q8_MODEL=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d \
+  cargo test --release --features cuda --test qwen_projection_backend_compare -- \
+  --nocapture --test-threads=1
+```
+
+Release profile result on Tesla M40:
+
+| Backend | KV mode | Prefill mode | Chunk | Prompt case | Pass | Prompt tokens | Generated tokens | Prefill | Decode | Total | Q8 launches | Output |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Q8_0 large-model | dense off | sequential | n/a | arithmetic | yes | 20 | 2 | 2781 ms | 140 ms | 3048 ms | 5313 | `4` |
+| Q8_0 large-model | dense off | sequential | n/a | exact OK | yes | 15 | 2 | 2073 ms | 138 ms | 2338 ms | 4048 | `OK` |
+| Q8_0 large-model | dense off | sequential | n/a | config lookup | yes | 38 | 3 | 5333 ms | 288 ms | 5755 ms | 10120 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 32 | arithmetic | yes | 20 | 2 | 1203 ms | 142 ms | 1483 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 32 | exact OK | yes | 15 | 2 | 974 ms | 138 ms | 1240 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | sequential-over-bound | 32 | config lookup | yes | 38 | 3 | 5141 ms | 276 ms | 5552 ms | 10120 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | arithmetic | yes | 20 | 2 | 1193 ms | 133 ms | 1447 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | exact OK | yes | 15 | 2 | 963 ms | 134 ms | 1219 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | packed-prefix | 64 | config lookup | yes | 38 | 3 | 2255 ms | 278 ms | 2666 ms | 1011 | `37` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | arithmetic | yes | 20 | 2 | 1190 ms | 133 ms | 1446 ms | 758 | `4` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | exact OK | yes | 15 | 2 | 958 ms | 134 ms | 1216 ms | 758 | `OK` |
+| Q8_0 large-model | dense off | packed-prefix | 128 | config lookup | yes | 38 | 3 | 2255 ms | 278 ms | 2666 ms | 1011 | `37` |
+| Q8_0 large-model | compressed top8 | sequential-kv-compressed | n/a | arithmetic | yes | 20 | 2 | 2711 ms | 138 ms | 2982 ms | 5313 | `4` |
+| Q8_0 large-model | compressed top8 | sequential-kv-compressed | n/a | config lookup | yes | 38 | 3 | 5212 ms | 279 ms | 5639 ms | 10120 | `37` |
+
+Interpretation:
+
+- Packed-prefix prefill is the first real speed lever for Q8_0 large-model
+  generation. For the 38-token config lookup prompt, chunk 64/128 reduces
+  prefill from about 5.33 s to 2.26 s and total time from 5.76 s to 2.67 s.
+- Chunk 32 is too small for the 38-token prompt and falls back to
+  `sequential-over-bound`, so it does not improve that row.
+- Arithmetic and exact-OK prompts use packed-prefix at all tested chunk sizes,
+  reducing Q8 projection launches from thousands to 758 because the prompt
+  prefix is handled as a multi-row operation.
+- Default compressed KV top8 is compatible with Qwen2.5 Q8_0 short prompts.
+  At this small 2048-token context bound, final compressed allocation is
+  89.1 MB versus 75.5 MB dense-equivalent because the 1024-token recent ring
+  dominates the allocation; do not treat this row as a long-context memory
+  saving claim.
+
+## 2026-05-25: Q8_0 Real-Model Generation Canary
+
+This checkpoint adds an explicit CUDA canary for validating the large-model
+GGUF Q8_0 projection path inside full generation. The canary is opt-in through
+`M40LLM_Q8_GENERATION_MODEL=/path/to/model.gguf`; when unset it skips cleanly.
+
+The canary probes the supplied GGUF before loading weights and reports:
+
+- architecture/tokenizer-relevant model family;
+- layer count, `d_model`, Q/KV head counts, head dimension, and context length;
+- tensor dtype counts and standard projection Q8_0 coverage;
+- bounded dense-KV estimate for the canary context;
+- support status and the reason for any skip.
+
+Validation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_Q8_GENERATION_MODEL=/path/to/q8_0.gguf \
+  M40LLM_PROJECTION_BACKEND=large-model \
+  M40LLM_MATERIALIZE_F32_WEIGHTS=0 \
+  cargo test --features cuda --test q8_generation_canary -- \
+  --nocapture --test-threads=1
+```
+
+The canary bounds KV allocation with `M40LLM_Q8_CANARY_CONTEXT_TOKENS`
+(default `256`) and skips models larger than
+`M40LLM_Q8_CANARY_MAX_WEIGHT_MB` (default `8192`) unless overridden. It expects
+LLaMA/Qwen-style standard projection tensor names and at least one Q8_0
+projection tensor. Unsupported cached Q8_0 models should be documented as
+architecture/tokenizer coverage gaps rather than CUDA kernel failures.
+
+Qwen2.5 Q8_0 validation:
+
+- Pulled `qwen2.5:3b-instruct-q8_0` with Ollama. The model blob is:
+  `/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d`.
+- Probe: `arch=qwen2`, `layers=36`, `d_model=2048`, `q_heads=16`,
+  `kv_heads=2`, `head_dim=128`, `context=32768`, `weights_bytes=3279519744`,
+  `q8_projection_tensors=252/252`, dtype counts `F32=181`, `Q8_0=253`.
+- The first canary attempt exposed a real all-Q8 GGUF blocker: Qwen2.5 Q8_0
+  has tied Q8_0 output embeddings and no separate F16 output head. The runtime
+  now accepts Q8_0 tied `[d_model, vocab]` embeddings for logits and routes them
+  through the fused Q8_0 projection path.
+- CUDA canary result with dense reference KV and large-model projections, using
+  prompt `What is 2+2? Answer with one digit.`: output `"4"`,
+  `prompt_tokens=20`, `total_tokens=22`, `prefill_ms=10376`,
+  `decode_ms=524`, `total_ms=12146`, `q8_projection_launches=5313`.
+- A prior release CLI smoke with prompt `Say OK.` returned `Say OK.` on Tesla
+  M40, which was too self-referential to be a useful quality signal. The
+  arithmetic canary above is the current quality smoke for this path.
+
+Local probe result:
+
+- `gemma-4-E2B-it-Q8_0.gguf` parses as `general.architecture=gemma4` with
+  317 Q8_0 tensors, but the current generic metadata parser rejects its
+  attention shape (`embedding_length 1536` versus
+  `head_count 8 * attention_key_length 512`). The canary skips it before weight
+  upload/allocation. Treat this as a Gemma4 config/tokenizer coverage gap, not
+  a Q8_0 projection kernel result.
+
+## 2026-05-25: Q8_0 Shared-Activation Prefill Projection
+
+This checkpoint adds a shared-activation GGUF Q8_0 projection kernel for
+multi-row prefill shapes. Production Q8_0 dispatch now uses:
+
+- decode-tiled Q8_0 when `M=1,K%32=0`;
+- shared-activation Q8_0 when `M>=4,K>=64,N>=16`;
+- block-loop Q8_0 for smaller non-decode shapes and tails;
+- scalar generic Q8_0 only through explicit benchmark/debug wrappers.
+
+Validation/benchmark commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  q8_0 -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench q8_projection -- \
+  --sample-size 10 --warm-up-time 1 --measurement-time 2
+```
+
+Correctness notes:
+
+- Shared-activation Q8_0 matches the CPU dequantized reference for medium and
+  tail shapes, including `M=5,K=96,N=65` and `M=3,K=35,N=33`.
+- A prefill-shaped CUDA parity test compares shared-activation and block-loop
+  outputs for `M=64,K=2048,N=2048` with aggregate tolerance.
+- Decode remains on the existing decode-tiled path.
+
+Timing summary on Tesla M40:
+
+| Shape | M | K | N | Q8_0 scalar | Q8_0 block-loop | Q8_0 shared-activation | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.572 us | 7.765 us | n/a | n/a | 7.619 us | 8.882 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.52 us | 160.41 us | n/a | 111.23 us | 189.09 us | 102.32 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 744.02 us | 542.61 us | n/a | 404.24 us | 544.92 us | 361.75 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 228.54 us | 160.58 us | n/a | 111.38 us | 188.97 us | 102.25 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 981.33 us | 769.24 us | n/a | 537.91 us | 787.63 us | 441.70 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.551 ms | 6.383 ms | 5.982 ms | n/a | 6.342 ms | 147.65 us |
+
+Interpretation:
+
+- Shared-activation improves the target Q8_0 prefill row beyond block-loop,
+  reducing Qwen prefill64 Q/O to 5.98 ms and beating the F16 fallback on this
+  benchmark.
+- Decode still prefers decode-tiled; shared-activation is only dispatched for
+  multi-row prefill-shaped work.
+- Materialized FP32 cuBLAS remains far faster whenever fast-fits is available.
+  The next large-model backend step should validate this projection path inside
+  real Q8_0 model generation rather than adding more micro-kernel variants.
+
+## 2026-05-25: Q8_0 Block-Loop Prefill Projection
+
+This checkpoint adds a block-loop GGUF Q8_0 projection kernel for non-decode
+shapes. The scalar generic kernel remains available as a benchmark/debug
+baseline, while production dispatch now uses:
+
+- decode-tiled Q8_0 when `M=1,K%32=0`;
+- block-loop Q8_0 for all other Q8_0 projection shapes;
+- scalar generic Q8_0 only through explicit benchmark/debug wrappers.
+
+Validation/benchmark commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  q8_0 -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench q8_projection -- \
+  --sample-size 10 --warm-up-time 1 --measurement-time 2
+```
+
+Correctness notes:
+
+- Block-loop Q8_0 matches the CPU dequantized reference for tail and medium
+  shapes, including `M=2,K=35,N=3` and `M=5,K=96,N=65`.
+- A prefill-shaped CUDA parity test compares block-loop and scalar generic
+  outputs for `M=64,K=2048,N=2048`.
+- The decode-tiled parity test uses aggregate tolerance because it changes the
+  FP32 reduction order versus the scalar baseline.
+
+Timing summary on Tesla M40:
+
+| Shape | M | K | N | Q8_0 scalar | Q8_0 block-loop | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.641 us | 7.888 us | n/a | 7.805 us | 9.355 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.55 us | 161.30 us | 111.64 us | 190.38 us | 103.87 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 744.03 us | 543.86 us | 404.87 us | 545.19 us | 363.71 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 230.75 us | 160.62 us | 111.40 us | 190.18 us | 103.14 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 980.49 us | 773.46 us | 538.03 us | 788.82 us | 443.06 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.551 ms | 6.388 ms | n/a | 6.346 ms | 148.12 us |
+
+Interpretation:
+
+- Block-loop improves the non-decode Q8_0 path by hoisting per-block scale loads
+  and avoiding repeated scale decode for every scalar K element.
+- The improvement is meaningful for prefill-shaped Q8_0 work: Qwen prefill64
+  drops from 7.55 ms to 6.39 ms, roughly matching the existing F16 fallback.
+- Decode still prefers the decode-tiled kernel; block-loop is faster than scalar
+  but slower than decode-tiled for `M=1` rows.
+- Materialized FP32 cuBLAS remains far faster whenever fast-fits is available.
+  The next Q8_0 large-model step should be true multi-row tiling/shared
+  activation reuse, not more scalar block-loop tuning.
+
+## 2026-05-25: Q8_0 Decode Projection Tiling
+
+This checkpoint adds an `M=1` decode-specialized Q8_0 projection kernel and
+updates the dedicated `q8_projection` Criterion benchmark for the first
+large-model fused-dequant projection primitive. It compares:
+
+- generic fused GGUF Q8_0 projection, `f32 x Q8_0 -> f32`;
+- decode-tiled GGUF Q8_0 projection for `M=1,K%32=0`;
+- existing GGUF F16 fallback projection kernel;
+- materialized FP32 cuBLAS projection.
+
+Validation/benchmark commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test gemm_mixed \
+  q8_0 -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo bench --features cuda --bench q8_projection -- \
+  --sample-size 10 --warm-up-time 1 --measurement-time 2
+```
+
+Correctness notes:
+
+- The CUDA parity test passes for a non-multiple-of-32 K dimension
+  (`M=2,K=35,N=3`), covering Q8_0 tail-block handling.
+- The decode-specialized kernel matches the generic Q8_0 path and CPU
+  dequantized reference for `M=1,K=2048,N=2048`.
+- Production Q8_0 projection dispatch now uses the decode-tiled kernel for
+  `M=1,K%32=0` and falls back to the generic kernel otherwise.
+- Benchmark correctness probes reported zero max/mean absolute difference
+  versus the CPU dequantized reference for `tiny`, `llama_decode_q`, and
+  `qwen_decode_q`.
+
+Timing summary on Tesla M40:
+
+| Shape | M | K | N | Q8_0 generic | Q8_0 decode-tiled | F16 GGUF kernel | Materialized FP32 cuBLAS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| tiny | 2 | 3 | 35 | 7.615 us | n/a | 7.903 us | 9.204 us |
+| Llama decode Q/O | 1 | 2048 | 2048 | 228.91 us | 111.47 us | 189.36 us | 102.97 us |
+| Llama decode MLP | 1 | 2048 | 8192 | 746.54 us | 403.62 us | 544.99 us | 362.33 us |
+| Qwen decode Q/O | 1 | 2048 | 2048 | 229.36 us | 112.15 us | 191.77 us | 103.03 us |
+| Qwen decode MLP | 1 | 2048 | 11008 | 984.31 us | 537.60 us | 791.78 us | 443.30 us |
+| Qwen prefill64 Q/O | 64 | 2048 | 2048 | 7.568 ms | n/a | 6.330 ms | 148.40 us |
+
+Interpretation:
+
+- The decode-tiled Q8_0 path roughly halves decode-shaped Q8_0 projection
+  latency and now beats the existing F16 GGUF kernel for measured `M=1` rows.
+- Materialized FP32 cuBLAS remains faster on these decode rows when fast-fits is
+  available, so the optimized Q8_0 path is mainly useful for the large-model
+  compact backend where full FP32 materialization is not viable.
+- Multi-row prefill still uses the generic Q8_0 path and remains slower than
+  F16 GGUF and materialized FP32. The next Q8_0 optimization should target
+  multi-row tiling or shared activation reuse for prefill-shaped work.
+- Fast-fits materialized FP32 remains the preferred projection backend whenever
+  it fits in memory.
+
+## 2026-05-24: Real Qwen Mixed-Length Head128 Prefill Fix
+
+This checkpoint fixes the release-only real Qwen mixed-length head128
+compressed multi-row prefill blocker and supersedes the same-day
+diagnostic-only notes below.
+
+Validation/diagnostic commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  qwen_head128_compressed_multirow -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke compressed_head128 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  M40LLM_QWEN_HEAD128_PREFILL_DIAG_MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  M40LLM_QWEN_HEAD128_PREFILL_DIAG_ORDER=java,hello,batching,cuda \
+  cargo test --release --features cuda --test forward_with_layer_smoke \
+  qwen_head128_real_mixed_prefill_diagnostic -- --nocapture --test-threads=1
+```
+
+Findings:
+
+- The synthetic Qwen-shaped compressed multi-row parity test still passes, and
+  compressed head128 server smokes still pass.
+- A new standalone Qwen-shaped packed-prefill attention parity test reproduces
+  the release NaN failure at the kernel level and now passes against the CPU
+  reference.
+- The real-model release diagnostic now compares single-row packed-prefix
+  prefill with multi-row mixed-length packed prefill for the server prompt
+  order and sequence IDs. It passes with matching generated tokens and matching
+  prefix hidden vectors.
+- `forward_prefill_all_layers_varlen_for_sequences` now keeps the varlen
+  metadata plan alive through the final stream drain, and drains both streams
+  before releasing the shared forward workspace so queued prefill kernels cannot
+  outlive workspace ownership.
+- CUDA stream waits now use per-wait events whose destruction is queued after
+  the waiting stream consumes them. This avoids re-recording a shared event
+  before earlier waits have drained.
+- The packed-prefill attention kernel now uses a fixed shared-memory score
+  region separate from the reduction scratch region. This removes the
+  release-mode NaNs seen with Qwen's `q_heads=16`, `kv_heads=2`,
+  `head_dim=128` shape.
+- Mixed-length real Qwen/head128 compressed multi-row prefill is now admitted
+  for the preferred compressed runtime when `M40LLM_SERVER_BATCH_PREFILL=1`.
+- Dense head128 scheduler prefill also uses the same multi-row varlen prefill
+  path after this kernel fix; the obsolete single-row diagnostic admission gate
+  was removed.
+
+Bounded real Qwen release confirmation after dense and compressed head128
+multi-row prefill admission:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same batch4_mixed" \
+  PORT_BASE=59680 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Output note |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| dense `off`, multi-row | batch2 same | 2 | 2 | 644 ms | 0.610 s | 6.211 | both `Hello!` |
+| dense `off`, mixed-length multi-row | batch4 mixed | 4 | 4 | 1132 ms | 1.035 s | 7.067 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
+| compressed top8, multi-row | batch2 same | 2 | 2 | 649 ms | 0.613 s | 6.163 | both `Hello!` |
+| compressed top8, mixed-length multi-row | batch4 mixed | 4 | 4 | 1136 ms | 1.049 s | 7.042 | `Hello!`, `Certainly!`, `CUDA streams`, `One benefit` |
+
+The compressed rows used:
+
+```bash
+SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=59880 scripts/bench_server_batch_decode.sh
+```
+
+For these very short prompts and bounded context, dense and compressed top8 are
+effectively tied. Treat this as scheduler admission/parity evidence, not a
+long-context compressed-KV speedup claim.
+
+## 2026-05-24: Same-Length Qwen Head128 Multi-Row Compressed Prefill
+
+Superseded by the real Qwen mixed-length fix above. This section records the
+intermediate same-length-only admission checkpoint.
+
+This checkpoint narrowed and admitted a safe subset of true multi-row
+head128/Qwen compressed packed prefill before the mixed-length fix above:
+
+- At this intermediate checkpoint, same-length pending prompt prefixes used
+  true multi-row packed prefill by default for the preferred compressed runtime.
+- Mixed-length head128/Qwen compressed prefixes still used the previous
+  per-request packed-prefix path.
+- The temporary forced mixed-length diagnostic gate used for this checkpoint
+  has since been removed.
+
+Validation:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  qwen_head128_compressed_multirow -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke compressed_head128 -- \
+  --nocapture --test-threads=1
+```
+
+Results:
+
+- Qwen-like synthetic parity now covers `head_dim=128`, `q_heads=16`,
+  `kv_heads=2`, Q/K/V biases, split-half RoPE, and compressed KV snapshots.
+- Same-length compressed head128 server smoke records
+  `server_scheduler_compressed_batched_prefill_tick` without requiring the
+  diagnostic env var.
+- Mixed-length diagnostic server smoke at this checkpoint still required the
+  temporary forced diagnostic gate. The current runtime no longer has that gate.
+
+Bounded real Qwen release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same batch4_mixed" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=57580 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Output note |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| compressed top8, default same-length multi-row | batch2 same | 2 | 2 | 592 ms | 0.557 s | 6.757 | both `Hello!` |
+| compressed top8, mixed-length safe fallback | batch4 mixed | 4 | 4 | 1389 ms | 1.293 s | 5.760 | matches prior safe outputs |
+
+- Forced mixed-length multi-row returned HTTP 200 but changed outputs
+  (`themoment`, empty output, `CUDA streams`, `!!`) relative to the safe
+  per-request path (`Hello!`, `Certainly!`, `CUDA streams`, `One benefit`).
+- Forcing sequential decode after mixed-length multi-row prefill still
+  diverged, so the remaining issue is in real-model mixed-length prefill/KV
+  state rather than batched decode after prefill.
+- Do not promote mixed-length real Qwen head128 multi-row prefill yet.
+
+## 2026-05-24: Qwen Head128 Compressed Packed-Prefix Admission
+
+This checkpoint admits preferred compressed-KV packed-prefix prefill for
+`head_dim=128` server requests. The scheduler guard now allows `head_dim=64` or
+`head_dim=128` for compressed packed-prefix prefill when the runtime uses the
+preferred exact-old compressed path:
+
+- KV mode: `block-select-exact`
+- Exact-old backing: `fp16-k-q4-v`
+- Exact-old attention: `fp16-k-q4-v-direct`
+- Selection policy: plain top-k, default `top_blocks=8`
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke qwen_head128 -- \
+  --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- Qwen-shaped `head_dim=128` packed-prefix prefill parity passes for dense and
+  compressed `block-select-exact` with Q/K/V biases and split-half RoPE.
+- The compressed parity test compares final logits and compressed-KV debug
+  snapshots against sequential compressed prefill.
+- `server_smoke` passes 11 CUDA/server tests, including a Qwen-shaped
+  two-request compressed head128 server smoke that records
+  `server_scheduler_compressed_packed_prefill_tick`.
+- CUDA/server clippy passes with `-D warnings`.
+
+Bounded release timing commands:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode off" \
+  PORT_BASE=56980 scripts/bench_server_batch_decode.sh
+
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact --kv-recent-window 256" \
+  PORT_BASE=57180 scripts/bench_server_batch_decode.sh
+```
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| dense off, batched decode+prefill | batch2 same | 2 | 2 | 642 ms | 0.607 s | 6.231 |
+| compressed top8, batched decode+prefill | batch2 same | 2 | 2 | 750 ms | 0.718 s | 5.333 |
+
+Interpretation:
+
+- The compressed head128 server path is now admitted and functional for
+  Qwen-shaped requests.
+- The bounded 512-context compressed timing uses `--kv-recent-window 256`
+  because the project default `kv_recent_window=1024` intentionally fails
+  against `--max-context-tokens 512` with a clear error.
+- This tiny batch2 smoke is not a compressed-KV speed claim: the prompts are
+  short and the compressed path is slightly slower than dense off. It is an
+  admission/correctness/timing sanity check.
+- Real compressed-KV quality/performance conclusions should continue to use
+  dense-valid long-context rows where old-context sparsification is exercised.
+
+## 2026-05-24: Preferred Compressed KV Server Batch Admission
+
+This checkpoint makes the preferred compressed-KV runtime available through the
+queued server batch scheduler and adds a true batched decode attention launch
+for the preferred exact-old backend:
+
+- KV mode: `block-select-exact`
+- Exact-old backing: `fp16-k-q4-v`
+- Exact-old attention: `fp16-k-q4-v-direct`
+- Selection policy: plain top-k, default `top_blocks=8`
+
+The scheduler now allocates multi-sequence compressed KV slots and leases one
+logical sequence per active request. Pending prompt rows can use compressed
+packed-prefix prefill when `M40LLM_SERVER_BATCH_PREFILL=1` on the verified
+head64 path. Decode rows dispatch one batched direct FP16-K/q4-V exact-old
+attention kernel over `[batch, q_heads]` instead of falling back to one
+compressed attention launch per request.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke \
+  packed_prefill_logits_match_sequential_block_select_exact -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- `attention_batched_varlen` passes both dense batched attention parity and
+  direct FP16-K/q4-V compressed batched attention parity against individual
+  decode for `head_dim=64` and `head_dim=128`.
+- Compressed packed-prefix prefill matches sequential `block-select-exact`
+  logits and compressed KV debug snapshots on the head64 CUDA parity smoke.
+- `server_smoke` passes 10 CUDA/server tests.
+- The preferred compressed scheduler smoke returns HTTP 200 for two concurrent
+  buffered `/generate` requests, records
+  `server_scheduler_compressed_packed_prefill_tick`, and confirms compressed
+  requests launch
+  `attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched`.
+- CUDA/server clippy passes with `-D warnings`.
+
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="batch2_same" \
+  SERVER_EXTRA_ARGS="--kv-compress-mode block-select-exact" \
+  PORT_BASE=56880 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_193513`
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: release
+- Server args: `--kv-compress-mode block-select-exact`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| compressed batched decode+prefill | batch2 same | 2 | 2 | 170 ms | 0.156 s | 23.53 |
+
+Server log confirmation:
+
+- The scheduler admitted compressed KV with logical sequence ids `[1, 2]`.
+- The prefill tick used compressed packed-prefix prefill.
+- The warmup single-request decode logged `batch size <= 1`; the measured
+  two-request decode tick did not take the fallback and used the batched
+  compressed attention path.
+
+Remaining limitations:
+
+- Compressed packed-prefix prefill is verified and admitted for head64 and
+  head128 server prompts. Head128 uses per-request packed-prefix prefill inside
+  scheduler ticks; true multi-row real-model Qwen prefill remains a separate
+  future optimization target.
+- Only the preferred direct FP16-K/q4-V exact-old runtime is admitted for
+  batched compressed decode. Diagnostic compressed modes still fall back or fail
+  clearly.
+
+## 2026-05-24: Dense Server Staggered Scheduler Overlap
+
+This checkpoint adds an explicit scheduler profile marker for ticks that contain
+both prompt-prefill rows and decode rows:
+`server_scheduler_mixed_prefill_decode_tick`. It also extends
+`scripts/bench_server_batch_decode.sh` with staggered request launch offsets via
+`STAGGER_MS` plus `staggered_mixed` and `staggered_skewed` cases. The benchmark
+enables `M40LLM_SERVER_BATCH_LOG=1` by default so server logs show per-tick row
+composition.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+```
+
+Results:
+
+- Non-CUDA warning-as-error tests pass.
+- `server_smoke` passes 9 CUDA/server tests, including a staggered three-request
+  scheduler smoke that records at least one mixed prefill/decode tick and keeps
+  packed prefill plus decode-row processing active.
+
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=8 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="staggered_mixed" STAGGER_MS=5 \
+  PORT_BASE=56480 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_183813`
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: release
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | staggered mixed | 4 | 4 | 1362 ms | 0.848 s | 23.50 | 1.00x |
+| batched decode | staggered mixed | 4 | 4 | 1389 ms | 1.158 s | 23.04 | 0.98x |
+| batched decode+prefill | staggered mixed | 4 | 4 | 398 ms | 0.233 s | 80.40 | 3.42x |
+
+Mixed-tick confirmation command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=8 \
+  BATCH_DECODE_MODES="1" PREFILL_MODES="1" \
+  CASES="staggered_mixed" STAGGER_MS=50 \
+  PORT_BASE=56580 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_183859`
+- Result: all four requests returned HTTP 200.
+- Server log included mixed scheduler ticks, including
+  `prefill_rows=1 decode_rows=1` and `prefill_rows=2 decode_rows=1`.
+
+Interpretation:
+
+- The scheduler can now be tested under late-arriving prompt-prefill work while
+  earlier requests remain active in decode.
+- Packed prefill remains the main short-request speed lever. Decode-only
+  batching is neutral/slightly negative in this staggered TinyLlama smoke.
+- The CUDA smoke fixture may process decode rows sequentially after packed
+  prefill by design; this checkpoint validates mixed scheduler execution, not a
+  claim that every mixed tick uses row-batched decode.
+
+## 2026-05-24: Dense Server Batch Head128 Admission
+
+This checkpoint lifts dense server batched decode and packed prompt-prefix
+prefill admission from head64-only to `head_dim=64` or `head_dim=128`.
+Head64 keeps true multi-request packed prefill. Head128/Qwen uses per-request
+packed-prefix prefill inside the scheduler tick, then keeps those prefilled
+requests on the sequential decode path for the rest of the short request. This
+avoids the real Qwen multi-row head128 packed-prefill/scheduler divergence
+while preserving the prompt-prefill speedup. Compressed KV batching remains
+disabled; the dense scheduler path still requires `--kv-compress-mode off`.
+
+Validation commands:
+
+```bash
+source scripts/dev-env.sh && cargo fmt --all -- --check
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test attention_batched_varlen -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda,server --test server_smoke -- --nocapture --test-threads=1
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo clippy --features cuda,server --all-targets -- -D warnings
+source scripts/dev-env.sh && RUSTFLAGS=-Dwarnings cargo test --no-default-features --locked --all
+```
+
+Results:
+
+- `attention_batched_varlen` passes for both `head_dim=64` and `head_dim=128`,
+  covering sync batched dispatch, async batched dispatch, scheduler-built
+  dispatch, and individual decode parity.
+- `forward_with_layer_smoke` passes 20 CUDA tests, including a head128
+  row-batched full-layer decode smoke that asserts packed GQA attention was
+  used plus Qwen-shaped head128 packed-prefix and multi-sequence packed-prefill
+  parity tests with Q/K/V biases and split-half RoPE.
+- `server_smoke` passes 8 CUDA/server tests, including a two-request head128
+  buffered `/generate` smoke that records `server_scheduler_batched_decode_tick`
+  and a dense scheduler smoke that records packed prompt-prefix prefill ticks.
+- CUDA/server clippy and the non-CUDA warning-as-error matrix are clean.
+
+Qwen2.5 release benchmark follow-up:
+
+- Uncapped dense Qwen batching with `M40LLM_SERVER_BATCH_DECODE_SLOTS=8` fails
+  during FP32 MLP materialization because full-context dense KV for eight
+  logical sequences leaves insufficient VRAM.
+- `--max-context-tokens` / `MAX_CONTEXT_TOKENS` was added for bounded server
+  benchmarking. With `MAX_CONTEXT_TOKENS=512`, dense serial and head128
+  decode-only batching return HTTP 200 for batch1, batch2, and batch4 mixed
+  prompts.
+- Qwen-shaped head128 packed-prefix and batched-prefill parity tests now pass.
+  A real Qwen mixed-prompt run showed that true multi-request head128 packed
+  prefill can still change outputs, so admitted head128 server prefill uses
+  per-request packed-prefix prefill as the correctness-preserving path.
+
+Bounded release command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="batch1_hello batch2_same batch4_mixed" \
+  PORT_BASE=56280 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_175006`
+- Model: `Qwen2.5-3B-Instruct-f16.gguf`
+- Cargo profile: release
+- Server args: `--max-context-tokens 512 --kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 879 ms | 0.868 s | 2.28 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 845 ms | 0.835 s | 2.37 | 1.04x |
+| batched decode+prefill | batch1 hello | 1 | 1 | 838 ms | 0.828 s | 2.39 | 1.05x |
+| dense serial | batch2 same | 2 | 2 | 1674 ms | 1.255 s | 2.39 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 1603 ms | 1.569 s | 2.50 | 1.04x |
+| batched decode+prefill | batch2 same | 2 | 2 | 649 ms | 0.614 s | 6.16 | 2.58x |
+| dense serial | batch4 mixed | 4 | 4 | 5198 ms | 3.062 s | 1.54 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 4991 ms | 4.893 s | 1.60 | 1.04x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 1202 ms | 1.106 s | 6.66 | 4.32x |
+
+Interpretation:
+
+- All bounded Qwen2.5 rows returned HTTP 200 and the batch-enabled rows matched
+  dense serial two-token smoke outputs, including batch4 mixed.
+- Head128 decode-only batching is correct but only modestly faster for this
+  two-token Qwen matrix; prompt prefill and logits dominate.
+- `M40LLM_SERVER_BATCH_PREFILL=1` now gives the useful Qwen speedup: batch2
+  improves 2.58x and batch4 mixed improves 4.32x versus dense serial in this
+  bounded release run.
+
+Qwen-shaped parity and rejected server admission check:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test forward_with_layer_smoke qwen_head128 -- \
+  --nocapture --test-threads=1
+```
+
+- Result: both Qwen-shaped head128 tests pass. The tests cover packed-prefix
+  logits-vs-sequential parity and multi-sequence packed-prefill final-hidden
+  parity with Q/K/V biases, split-half RoPE, `head_dim=128`, and dense
+  reference KV config.
+
+The rejected true multi-request head128 packed-prefill shape was:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  MODEL=/mnt/array-fastest/home/guyep/.cache/m40-llm/models/Qwen2.5-3B-Instruct-f16.gguf \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 MAX_CONTEXT_TOKENS=512 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  CASES="batch1_hello batch2_same batch4_mixed" \
+  PORT_BASE=55480 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_133941`
+- Dense serial and decode-only rows returned HTTP 200 with expected two-token
+  smoke outputs.
+- With head128 packed prefill admitted, batch2 improved to 538 ms wall time
+  versus 1722 ms dense serial, but batch4 mixed outputs changed to
+  `---</textarea`, `Sure,`, `CUDA streams`, and ` Help Batch`.
+- Follow-up: server packed prefill now uses prompt-prefix semantics. It
+  pre-fills `prompt[..len-1]` and leaves the final prompt token on the normal
+  one-token path, matching CLI packed-prefix generation.
+- Head128/Qwen server admission now uses per-request packed-prefix prefill
+  inside the scheduler tick and keeps those prefilled requests on the
+  sequential decode path. True multi-request head128 packed prefill remains a
+  future optimization target.
+- The Qwen-shaped low-level parity test now covers a mixed four-sequence batch
+  with lengths 1/2/4/5. It still matches sequential hidden states, so the
+  avoided path is specific to real-model multi-row head128 server state, not
+  the small head128 varlen attention primitive.
+
+## 2026-05-24: Dense Server Batch Script Refresh
+
+This checkpoint updates `scripts/bench_server_batch_decode.sh` for the current
+runtime defaults. Since compressed KV is now the default runtime mode and the
+server batch scheduler is still dense-cache-only, the script now passes
+`--kv-compress-mode off` by default. Override `SERVER_EXTRA_ARGS` only for
+diagnostic runs.
+`CARGO_RUN_ARGS="--release"` now selects an optimized Rust server build for
+release timing checks.
+
+Benchmark command:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=53480 scripts/bench_server_batch_decode.sh
+```
+
+Environment:
+
+- GPU: Tesla M40 24GB, sm_52
+- Model: `TinyLlama-1.1B-Chat-v1.0.f16.gguf`
+- Cargo profile: development `cargo run --features cuda,server`
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_030057`
+- Server args: `--kv-compress-mode off`
+
+Single-trial wall-time results:
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 174 ms | 0.165 s | 11.49 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 175 ms | 0.166 s | 11.43 | 0.99x |
+| batched decode+prefill | batch1 hello | 1 | 1 | 176 ms | 0.168 s | 11.36 | 0.99x |
+| dense serial | batch2 same | 2 | 2 | 337 ms | 0.246 s | 11.87 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 327 ms | 0.315 s | 12.23 | 1.03x |
+| batched decode+prefill | batch2 same | 2 | 2 | 251 ms | 0.240 s | 15.94 | 1.34x |
+| dense serial | batch4 mixed | 4 | 4 | 1549 ms | 1.030 s | 5.17 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1543 ms | 1.363 s | 5.19 | 1.00x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 496 ms | 0.426 s | 16.13 | 3.12x |
+| dense serial | batch4 skewed | 4 | 4 | 2471 ms | 1.440 s | 3.24 | 1.00x |
+| batched decode | batch4 skewed | 4 | 4 | 2468 ms | 2.398 s | 3.24 | 1.00x |
+| batched decode+prefill | batch4 skewed | 4 | 4 | 697 ms | 0.617 s | 11.48 | 3.55x |
+
+Interpretation:
+
+- Decode-only batching is neutral for these 2-token requests because prompt
+  prefill dominates.
+- Enabling packed prefill with batched decode materially improves mixed/skewed
+  batch-4 wall time in this bounded run.
+- This is a single development-build confirmation, not a release latency claim.
+
+Release-mode confirmation:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=2 \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=53780 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_030533`
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch1 hello | 1 | 1 | 90 ms | 0.082 s | 22.22 | 1.00x |
+| batched decode | batch1 hello | 1 | 1 | 92 ms | 0.084 s | 21.74 | 0.98x |
+| batched decode+prefill | batch1 hello | 1 | 1 | 93 ms | 0.084 s | 21.51 | 0.97x |
+| dense serial | batch2 same | 2 | 2 | 172 ms | 0.123 s | 23.26 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 160 ms | 0.149 s | 25.00 | 1.08x |
+| batched decode+prefill | batch2 same | 2 | 2 | 99 ms | 0.088 s | 40.40 | 1.74x |
+| dense serial | batch4 mixed | 4 | 4 | 1004 ms | 0.538 s | 7.97 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1000 ms | 0.954 s | 8.00 | 1.00x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 158 ms | 0.126 s | 50.63 | 6.35x |
+| dense serial | batch4 skewed | 4 | 4 | 1591 ms | 0.976 s | 5.03 | 1.00x |
+| batched decode | batch4 skewed | 4 | 4 | 1587 ms | 1.467 s | 5.04 | 1.00x |
+| batched decode+prefill | batch4 skewed | 4 | 4 | 169 ms | 0.135 s | 47.34 | 9.41x |
+
+Release interpretation:
+
+- Optimized Rust roughly halves single-request latency in this short benchmark.
+- Decode-only batching remains neutral for short generations with prompt-heavy
+  work.
+- Packed prefill plus batched decode is the meaningful dense scheduler lever for
+  short concurrent prompts, reaching 6.35x to 9.41x wall-time speedup on the
+  batch-4 mixed/skewed cases in this single-trial confirmation.
+
+Longer decode-focused release check:
+
+```bash
+source scripts/dev-env.sh && \
+  M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  CARGO_RUN_ARGS="--release" \
+  TRIALS=1 MAX_TOKENS=16 \
+  CASES="batch2_same batch4_mixed" \
+  BATCH_DECODE_MODES="0 1" PREFILL_MODES="0 1" \
+  PORT_BASE=54080 scripts/bench_server_batch_decode.sh
+```
+
+- Log directory: `/tmp/m40llm_batch_decode_bench_20260524_031036`
+- Server args: `--kv-compress-mode off`
+
+| Mode | Case | Requests | HTTP 200 | Wall | Avg latency | Tokens/s | Speedup vs dense serial |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| dense serial | batch2 same | 2 | 2 | 875 ms | 0.651 s | 36.57 | 1.00x |
+| batched decode | batch2 same | 2 | 2 | 578 ms | 0.566 s | 55.36 | 1.51x |
+| batched decode+prefill | batch2 same | 2 | 2 | 515 ms | 0.503 s | 62.14 | 1.70x |
+| dense serial | batch4 mixed | 4 | 4 | 1711 ms | 1.235 s | 37.41 | 1.00x |
+| batched decode | batch4 mixed | 4 | 4 | 1418 ms | 1.086 s | 45.13 | 1.21x |
+| batched decode+prefill | batch4 mixed | 4 | 4 | 582 ms | 0.338 s | 109.97 | 2.94x |
+
+Longer-token interpretation:
+
+- With `MAX_TOKENS=16`, decode-only batching is no longer neutral:
+  throughput improves by 1.51x for batch2 same-prompt and 1.21x for batch4
+  mixed prompts.
+- Packed prefill still matters because these prompts include varied prompt
+  lengths; decode+prefill remains the strongest dense scheduler configuration.
+- `CASES="..."` now filters the benchmark script to bounded subsets for longer
+  decode-focused checks.
+
 ## 2026-05-24: Dense Scheduler Mixed Tick Guardrails
 
 This checkpoint returns to the pre-KV-compression server batching path and keeps
@@ -13,6 +1446,11 @@ Implementation notes:
 
 - `M40LLM_SERVER_BATCH_LOG=1` now logs scheduler queue size, per-tick
   prefill/decode/complete row counts, and packed-decode fallback reasons.
+- Dense scheduler decisions are also visible through profile event names:
+  `server_scheduler_batched_prefill_tick`,
+  `server_scheduler_batched_decode_tick`,
+  `server_scheduler_sequential_prefill_tick`, and
+  `server_scheduler_sequential_decode_tick`.
 - Scheduler ticks now partition active requests into pending-prefill,
   decode-ready, and complete groups instead of treating a tick as all-prefill or
   all-decode.

@@ -142,6 +142,41 @@ impl LoadedModel {
                         )?;
                     }
                 }
+                GgmlDType::Q4_0 => {
+                    const Q4_0_BLOCK: usize = 32;
+                    const Q4_0_BLOCK_BYTES: usize = 18;
+                    if !rows_are_vocab && r0 != d_model {
+                        anyhow::bail!(
+                            "Q4_0 embeddings require contiguous token vectors; got shape {:?}",
+                            tok.shape
+                        );
+                    }
+                    let blocks = d_model.div_ceil(Q4_0_BLOCK);
+                    let row_bytes = blocks * Q4_0_BLOCK_BYTES;
+                    let d_row =
+                        (tok.dptr as usize + (token_id as usize) * row_bytes) as *const c_void;
+                    let mut qrow = vec![0u8; row_bytes];
+                    self.cuda
+                        .memcpy_d2h(qrow.as_mut_ptr() as *mut c_void, d_row, row_bytes)?;
+                    let mut out = vec![0f32; d_model];
+                    for blk in 0..blocks {
+                        let base = blk * Q4_0_BLOCK_BYTES;
+                        let d_bits = u16::from_le_bytes([qrow[base], qrow[base + 1]]);
+                        let d = half::f16::from_bits(d_bits).to_f32();
+                        for idx in 0..Q4_0_BLOCK {
+                            let i = blk * Q4_0_BLOCK + idx;
+                            if i >= d_model {
+                                break;
+                            }
+                            let packed = qrow[base + 2 + (idx & 15)];
+                            let q = if idx < 16 { packed & 0x0f } else { packed >> 4 };
+                            out[i] = ((q as i32 - 8) as f32) * d;
+                        }
+                    }
+                    let out_bytes = d_model * std::mem::size_of::<f32>();
+                    self.cuda
+                        .memcpy_h2d(d_out_f32, out.as_ptr() as *const c_void, out_bytes)?;
+                }
                 GgmlDType::Q5_1 => {
                     // Q5_1 dequantization: shape [K, N], blocks along N
                     const Q5_1_BLOCK: usize = 32;

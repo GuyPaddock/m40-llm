@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod backend;
 mod batch;
 mod embeddings;
 mod forward;
@@ -14,6 +15,9 @@ mod types;
 #[cfg(feature = "cuda")]
 mod workspace;
 
+pub use backend::{
+    ProjectionBackend, ProjectionBackendDecision, ProjectionBackendEstimate, ProjectionBackendMode,
+};
 #[cfg(feature = "cuda")]
 pub use batch::VarlenPrefillPlan;
 pub use batch::{

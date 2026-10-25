@@ -203,6 +203,102 @@ fn packed_varlen_prefill_gqa_matches_cpu_reference() -> Result<()> {
 }
 
 #[test]
+fn packed_varlen_prefill_qwen_shape_matches_cpu_reference() -> Result<()> {
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let head_dim = 128usize;
+    let q_heads = 16usize;
+    let kv_heads = 2usize;
+    let meta = BatchMetadata::new(vec![
+        BatchSequence {
+            seq_len: 19,
+            query_len: 19,
+            kv_len: 19,
+        },
+        BatchSequence {
+            seq_len: 8,
+            query_len: 8,
+            kv_len: 8,
+        },
+        BatchSequence {
+            seq_len: 17,
+            query_len: 17,
+            kv_len: 17,
+        },
+        BatchSequence {
+            seq_len: 16,
+            query_len: 16,
+            kv_len: 16,
+        },
+    ])?;
+
+    let q_len = meta.total_q_tokens() as usize * q_heads * head_dim;
+    let kv_len = meta.total_kv_tokens() as usize * kv_heads * head_dim;
+    let q: Vec<f32> = (0..q_len)
+        .map(|i| ((i * 17 % 251) as f32) * 0.19 - 23.0)
+        .collect();
+    let k: Vec<f32> = (0..kv_len)
+        .map(|i| ((i * 23 % 263) as f32) * 0.32 - 41.0)
+        .collect();
+    let v: Vec<f32> = (0..kv_len)
+        .map(|i| ((i * 29 % 269) as f32) * 0.021 - 2.7)
+        .collect();
+    let expected = cpu_prefill_gqa_varlen(&q, &k, &v, &meta, q_heads, kv_heads, head_dim);
+
+    let bytes_q = q.len() * std::mem::size_of::<f32>();
+    let bytes_kv = k.len() * std::mem::size_of::<f32>();
+    let bytes_out = expected.len() * std::mem::size_of::<f32>();
+    let plan = VarlenPrefillPlan::new(&ctx, meta.clone(), head_dim as u32)?;
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_k = ctx.device_malloc(bytes_kv)?;
+    let d_v = ctx.device_malloc(bytes_kv)?;
+    let d_out = ctx.device_malloc(bytes_out)?;
+
+    unsafe {
+        ctx.memcpy_h2d(d_q, f32s_to_bytes(&q).as_ptr() as *const c_void, bytes_q)?;
+        ctx.memcpy_h2d(d_k, f32s_to_bytes(&k).as_ptr() as *const c_void, bytes_kv)?;
+        ctx.memcpy_h2d(d_v, f32s_to_bytes(&v).as_ptr() as *const c_void, bytes_kv)?;
+        plan.dispatch(
+            d_q as *const c_void,
+            d_k as *const c_void,
+            d_v as *const c_void,
+            q_heads as u32,
+            kv_heads as u32,
+            d_out,
+        )?;
+
+        let mut got_bytes = vec![0u8; bytes_out];
+        ctx.memcpy_d2h(got_bytes.as_mut_ptr() as *mut c_void, d_out, bytes_out)?;
+        let got = bytes_to_f32s(&got_bytes);
+        for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                g.is_finite(),
+                "Qwen-shape prefill produced nonfinite at {i}: {g}"
+            );
+            let diff = (g - e).abs();
+            assert!(
+                diff <= 2e-3,
+                "Qwen-shape prefill mismatch at {i}: got {g}, expected {e}, diff={diff}"
+            );
+        }
+
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_k)?;
+        ctx.device_free(d_v)?;
+        ctx.device_free(d_out)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn varlen_prefill_plan_rejects_unsupported_head_dim() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,

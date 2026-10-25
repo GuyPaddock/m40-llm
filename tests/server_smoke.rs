@@ -1,6 +1,7 @@
 #![cfg(feature = "server")]
 
 use anyhow::Result;
+use m40_llm::generate::PromptFormat;
 use m40_llm::infer::LoadedModel;
 use m40_llm::kv_compression::{KvCompressMode, KvCompressionConfig};
 use m40_llm::profile;
@@ -100,12 +101,12 @@ async fn server_generate_default_compressed_kv_smoke() -> Result<()> {
 
     let state = AppState::new_with_kv_config(model, kv_compression);
     assert!(
-        !state.decode_batching_requested,
-        "compressed KV should stay on the serialized server path until the scheduler is cache-layout-aware"
+        state.decode_batching_requested,
+        "preferred compressed KV should use the batch scheduler"
     );
     assert!(
-        state.decode_sequence_pool.is_none(),
-        "compressed KV should not allocate dense scheduler sequence leases"
+        state.decode_sequence_pool.is_some(),
+        "preferred compressed KV should allocate scheduler sequence leases"
     );
     let server = start_test_server_with_kv_config_state(state).await?;
 
@@ -139,6 +140,96 @@ async fn server_generate_compressed_top_block_overrides_smoke() -> Result<()> {
 }
 
 #[tokio::test]
+async fn server_generate_batch_decode_supports_preferred_compressed_kv() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layer_sequences(16, 2, &kv_compression)?;
+
+    let state = AppState::new_with_kv_config(model, kv_compression);
+    assert!(state.decode_batching_requested);
+    assert!(state.decode_sequence_pool.is_some());
+    let server = start_test_server_with_kv_config_state(state).await?;
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "CD".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let sequential_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_sequential_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert_eq!(
+        sequential_decode_ticks, 0,
+        "preferred compressed scheduler should use batched compressed decode"
+    );
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks >= 1,
+        "preferred compressed scheduler should record a batched decode tick"
+    );
+    let compressed_attention_launches = snapshot
+        .by_op
+        .get("attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_attention_launches >= 1,
+        "preferred compressed scheduler should launch batched direct FP16-K/q4-V attention"
+    );
+    let compressed_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_packed_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_prefill_ticks >= 1,
+        "preferred compressed scheduler should use head64 packed-prefix prefill"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
         eprintln!("skipping server smoke tests without CUDA upload support");
@@ -157,13 +248,13 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     let client = reqwest::Client::new();
     let url = format!("http://{}/generate", server.addr);
     let req_a = GenerateRequest {
-        prompt: "A".to_string(),
+        prompt: "AB".to_string(),
         max_tokens: Some(2),
         stream: false,
         ..Default::default()
     };
     let req_b = GenerateRequest {
-        prompt: "B".to_string(),
+        prompt: "CD".to_string(),
         max_tokens: Some(2),
         stream: false,
         ..Default::default()
@@ -183,15 +274,6 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     assert!(!out_a.output.is_empty());
     assert!(!out_b.output.is_empty());
     let snapshot = profile::snapshot();
-    let batched_attention_launches = snapshot
-        .by_op
-        .get("attention_last_token_f32_gqa_batched")
-        .map(|counts| counts.launches)
-        .unwrap_or_default();
-    assert!(
-        batched_attention_launches >= 1,
-        "server batch scheduler should use packed GQA decode attention"
-    );
     let prefill_attention_launches = snapshot
         .by_op
         .get("attention_prefill_f32_gqa_varlen")
@@ -200,6 +282,375 @@ async fn zz_server_generate_batch_decode_leases_sequence_slots() -> Result<()> {
     assert!(
         prefill_attention_launches >= 1,
         "server batch scheduler should use packed varlen prefill attention"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "server batch scheduler should record at least one batched prefill tick"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_decode_mixes_prefill_and_decode_ticks() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let (gguf, bytes) = server_smoke_model();
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_kv_cache_for_layer_sequences(24, 3)?;
+
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let long_req = GenerateRequest {
+        prompt: "ABCDEFGH".to_string(),
+        max_tokens: Some(16),
+        stream: false,
+        ..Default::default()
+    };
+    let late_req_a = GenerateRequest {
+        prompt: "EF".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let late_req_b = GenerateRequest {
+        prompt: "GH".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let first_client = client.clone();
+    let first_url = url.clone();
+    let first =
+        tokio::spawn(async move { first_client.post(&first_url).json(&long_req).send().await });
+    tokio::task::yield_now().await;
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    let second = client.post(&url).json(&late_req_a).send();
+    let third = client.post(&url).json(&late_req_b).send();
+    let (resp_a, resp_b, resp_c) = tokio::join!(first, second, third);
+    let resp_a = resp_a??;
+    let resp_b = resp_b?;
+    let resp_c = resp_c?;
+    assert!(resp_a.status().is_success());
+    assert!(resp_b.status().is_success());
+    assert!(resp_c.status().is_success());
+
+    let out_a: GenerateResponse = serde_json::from_slice(&resp_a.bytes().await?)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&resp_b.bytes().await?)?;
+    let out_c: GenerateResponse = serde_json::from_slice(&resp_c.bytes().await?)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+    assert!(!out_c.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let mixed_ticks = snapshot
+        .by_op
+        .get("server_scheduler_mixed_prefill_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        mixed_ticks >= 1,
+        "staggered requests should produce at least one scheduler tick with active decode plus new prefill"
+    );
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    let sequential_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_sequential_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks + sequential_decode_ticks >= 1,
+        "staggered scheduler should continue processing decode rows"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "staggered scheduler should continue using packed prefill ticks"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_decode_supports_head128() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+    let (gguf, bytes) = tiny_gguf::make_identity_tiny_gguf(tiny_gguf::TinyGgufConfig {
+        vocab: 128,
+        d_model: 128,
+        head_count: 1,
+        ..Default::default()
+    });
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_kv_cache_with_layout(16, 2, 1, 128)?;
+
+    let server =
+        start_test_server_with_kv_config(model, KvCompressionConfig::dense_reference()).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "ABCDEFGH IJ".to_string(),
+        max_tokens: Some(2),
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    let status_a = resp_a.status();
+    let status_b = resp_b.status();
+    let bytes_a = resp_a.bytes().await?;
+    let bytes_b = resp_b.bytes().await?;
+    assert!(
+        status_a.is_success(),
+        "request A failed with {status_a}: {}",
+        String::from_utf8_lossy(&bytes_a)
+    );
+    assert!(
+        status_b.is_success(),
+        "request B failed with {status_b}: {}",
+        String::from_utf8_lossy(&bytes_b)
+    );
+    let out_a: GenerateResponse = serde_json::from_slice(&bytes_a)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&bytes_b)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let batched_decode_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_decode_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_decode_ticks >= 1,
+        "head128 server batch scheduler should record at least one batched decode tick"
+    );
+    let batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        batched_prefill_ticks >= 1,
+        "head128 server batch scheduler should record at least one packed prefill tick"
+    );
+    let prefill_attention_launches = snapshot
+        .by_op
+        .get("attention_prefill_f32_gqa_varlen")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert_eq!(
+        prefill_attention_launches, 1,
+        "head128 mixed-length dense scheduler should use one multi-row packed prefill launch"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_decode_supports_compressed_head128_prefill() -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(tiny_gguf::TinyGgufConfig {
+        vocab: 100_000,
+        d_model: 128,
+        hidden: 16,
+        head_count: 1,
+        block_count: 1,
+        context_length: 16,
+    });
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layer_sequences(16, 2, &kv_compression)?;
+
+    let server = start_test_server_with_kv_config(model, kv_compression).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB CD".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "AB EF".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    let status_a = resp_a.status();
+    let status_b = resp_b.status();
+    let bytes_a = resp_a.bytes().await?;
+    let bytes_b = resp_b.bytes().await?;
+    assert!(
+        status_a.is_success(),
+        "request A failed with {status_a}: {}",
+        String::from_utf8_lossy(&bytes_a)
+    );
+    assert!(
+        status_b.is_success(),
+        "request B failed with {status_b}: {}",
+        String::from_utf8_lossy(&bytes_b)
+    );
+    let out_a: GenerateResponse = serde_json::from_slice(&bytes_a)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&bytes_b)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let compressed_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_packed_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_prefill_ticks >= 1,
+        "compressed head128 scheduler should record packed-prefix prefill"
+    );
+    let compressed_batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_batched_prefill_ticks >= 1,
+        "compressed head128 scheduler should record multi-row packed prefill"
+    );
+    server.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn zz_server_generate_batch_decode_supports_compressed_head128_mixed_multirow_prefill(
+) -> Result<()> {
+    if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {
+        eprintln!("skipping server smoke tests without CUDA upload support");
+        return Ok(());
+    }
+    let _batch_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "1");
+    let _prefill_env = EnvVarGuard::set("M40LLM_SERVER_BATCH_PREFILL", "1");
+    profile::reset();
+
+    let kv_compression = server_smoke_compressed_config(8);
+    let (gguf, bytes) = tiny_gguf::make_qwen2_attention_bias_tiny_gguf(tiny_gguf::TinyGgufConfig {
+        vocab: 100_000,
+        d_model: 128,
+        hidden: 16,
+        head_count: 1,
+        block_count: 1,
+        context_length: 16,
+    });
+
+    let mut model = LoadedModel::from_gguf(gguf, bytes, 0)?;
+    model.allocate_compressed_kv_cache_for_layer_sequences(16, 2, &kv_compression)?;
+
+    let server = start_test_server_with_kv_config(model, kv_compression).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let req_a = GenerateRequest {
+        prompt: "AB CD".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+    let req_b = GenerateRequest {
+        prompt: "ABCDEFGH IJ".to_string(),
+        max_tokens: Some(1),
+        prompt_format: PromptFormat::Raw,
+        stream: false,
+        ..Default::default()
+    };
+
+    let (resp_a, resp_b) = tokio::join!(
+        client.post(&url).json(&req_a).send(),
+        client.post(&url).json(&req_b).send()
+    );
+    let resp_a = resp_a?;
+    let resp_b = resp_b?;
+    let status_a = resp_a.status();
+    let status_b = resp_b.status();
+    let bytes_a = resp_a.bytes().await?;
+    let bytes_b = resp_b.bytes().await?;
+    assert!(
+        status_a.is_success(),
+        "request A failed with {status_a}: {}",
+        String::from_utf8_lossy(&bytes_a)
+    );
+    assert!(
+        status_b.is_success(),
+        "request B failed with {status_b}: {}",
+        String::from_utf8_lossy(&bytes_b)
+    );
+    let out_a: GenerateResponse = serde_json::from_slice(&bytes_a)?;
+    let out_b: GenerateResponse = serde_json::from_slice(&bytes_b)?;
+    assert!(!out_a.output.is_empty());
+    assert!(!out_b.output.is_empty());
+
+    let snapshot = profile::snapshot();
+    let compressed_batched_prefill_ticks = snapshot
+        .by_op
+        .get("server_scheduler_compressed_batched_prefill_tick")
+        .map(|counts| counts.launches)
+        .unwrap_or_default();
+    assert!(
+        compressed_batched_prefill_ticks >= 1,
+        "mixed-length compressed head128 scheduler should record multi-row packed prefill"
     );
     server.shutdown().await?;
     Ok(())

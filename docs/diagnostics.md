@@ -43,6 +43,15 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
   final-token dense attention or KV-cache work.
 - `M40LLM_STREAM_LOG=1`: print prefill/decode stream creation details and
   best-effort priority selection.
+- `M40LLM_SERVER_BATCH_LOG=1`: print dense server scheduler queue/tick
+  composition and packed-decode fallback reasons. The scheduler also records
+  profile events named `server_scheduler_batched_prefill_tick`,
+  `server_scheduler_batched_decode_tick`,
+  `server_scheduler_sequential_prefill_tick`, and
+  `server_scheduler_sequential_decode_tick`; inspect them with
+  `profile::snapshot()` in tests or `M40LLM_LAUNCH_LOG=1` during diagnostics.
+- `M40LLM_SERVER_BATCH_PREFILL_LOG=1`: print packed-prefill fallback reasons
+  and avoided padded-token counts for compatible dense server prefill batches.
 - `M40LLM_DECODE_SESSION_LOG=1`: print verbose decode-session token logs.
 - `M40LLM_LONG_DECODE_LOG=1`: print bounded long-generation progress at the
   first token, every 64 generated tokens, and the configured generation cap.
@@ -65,6 +74,20 @@ leaving one-off timing notes in the README.
 - `M40LLM_GEMM_LOG=1`: print GEMM backend selection lines.
 - `M40LLM_ENABLE_CUBLAS=1`: enable cuBLAS integration when headers/libraries
   are detected.
+- `M40LLM_PROJECTION_BACKEND=auto|fast-fits|large-model`: choose the projection
+  backend policy. `auto` is the default. `fast-fits` uses materialized FP32
+  projection weights with cuBLAS when allowed. `large-model` keeps compact GGUF
+  F16/quantized weights and skips full FP32 materialization; this is the
+  current fallback path, not the future fused-dequant projection backend.
+- `M40LLM_FAST_FITS_BUDGET_MB=<mb>`: total memory budget used by
+  `M40LLM_PROJECTION_BACKEND=auto` when deciding whether materialized FP32
+  projections fit. The estimate includes uploaded model weights, estimated FP32
+  materialized projection cache, one-row forward workspace, and the resident KV
+  cache. The default is `22528` MiB to leave headroom on a 24 GiB M40.
+- GGUF Q8_0 projection tensors now route through a fused CUDA
+  `f32 x Q8_0 -> f32` path that dequantizes inside the projection kernel. This
+  is the first large-model fused-dequant primitive; it is not yet a complete
+  replacement for the fast-fits materialized FP32 backend.
 - `M40LLM_MATERIALIZE_F32_WEIGHTS=0`: force the dedicated GGUF-layout CUDA
   fallback instead of materialized FP32 projection weights.
 - `M40LLM_MATERIALIZE_F32_BUDGET_MB=<mb>`: cap cached FP32 materialized

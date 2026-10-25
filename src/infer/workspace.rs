@@ -48,6 +48,65 @@ pub struct ForwardWorkspacePtrs {
 }
 
 impl ForwardWorkspace {
+    pub fn estimated_bytes(
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        rows: usize,
+    ) -> Result<usize> {
+        if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
+            anyhow::bail!(
+                "ForwardWorkspace: invalid dims d_model={d_model} kv_dim={kv_dim} hidden_dim={hidden_dim}"
+            );
+        }
+        if rows == 0 {
+            anyhow::bail!("ForwardWorkspace: rows must be greater than zero");
+        }
+
+        let f32_bytes = std::mem::size_of::<f32>();
+        let u32_bytes = std::mem::size_of::<u32>();
+        let bytes_d = d_model
+            .checked_mul(rows)
+            .context("workspace d_model bytes overflow")?
+            .checked_mul(f32_bytes)
+            .context("workspace d_model bytes overflow")?;
+        let bytes_kv = kv_dim
+            .checked_mul(rows)
+            .context("workspace kv bytes overflow")?
+            .checked_mul(f32_bytes)
+            .context("workspace kv bytes overflow")?;
+        let bytes_h = hidden_dim
+            .checked_mul(rows)
+            .context("workspace hidden bytes overflow")?
+            .checked_mul(f32_bytes)
+            .context("workspace hidden bytes overflow")?;
+        let bytes_attention_meta = rows
+            .checked_mul(u32_bytes)
+            .context("workspace attention metadata bytes overflow")?;
+
+        bytes_d
+            .checked_mul(9)
+            .context("workspace d_model aggregate bytes overflow")?
+            .checked_add(
+                bytes_kv
+                    .checked_mul(2)
+                    .context("workspace kv aggregate bytes overflow")?,
+            )
+            .context("workspace aggregate bytes overflow")?
+            .checked_add(
+                bytes_h
+                    .checked_mul(3)
+                    .context("workspace hidden aggregate bytes overflow")?,
+            )
+            .context("workspace aggregate bytes overflow")?
+            .checked_add(
+                bytes_attention_meta
+                    .checked_mul(2)
+                    .context("workspace metadata aggregate bytes overflow")?,
+            )
+            .context("workspace aggregate bytes overflow")
+    }
+
     pub fn new(
         ctx: &CudaContext,
         d_model: usize,
@@ -73,23 +132,22 @@ impl ForwardWorkspace {
             anyhow::bail!("ForwardWorkspace: rows must be greater than zero");
         }
 
-        let rows_u = rows;
         let bytes_d = d_model
-            .checked_mul(rows_u)
+            .checked_mul(rows)
             .context("workspace d_model bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace d_model bytes overflow")?;
         let bytes_kv = kv_dim
-            .checked_mul(rows_u)
+            .checked_mul(rows)
             .context("workspace kv bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace kv bytes overflow")?;
         let bytes_h = hidden_dim
-            .checked_mul(rows_u)
+            .checked_mul(rows)
             .context("workspace hidden bytes overflow")?
             .checked_mul(std::mem::size_of::<f32>())
             .context("workspace hidden bytes overflow")?;
-        let bytes_attention_meta = rows_u
+        let bytes_attention_meta = rows
             .checked_mul(std::mem::size_of::<u32>())
             .context("workspace attention metadata bytes overflow")?;
 

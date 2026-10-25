@@ -313,7 +313,7 @@ pub fn server_batch_prefill_requested() -> bool {
 
 #[cfg(feature = "server")]
 pub fn server_batch_prefill_status() -> &'static str {
-    "M40LLM_SERVER_BATCH_PREFILL=1 requested; compatible buffered scheduler ticks batch initial prompt prefill with packed varlen attention"
+    "M40LLM_SERVER_BATCH_PREFILL=1 requested; compatible dense buffered scheduler ticks and preferred compressed head128 ticks use packed prompt-prefix prefill"
 }
 
 #[cfg(feature = "server")]
@@ -348,6 +348,37 @@ impl CudaDecodeBatchPlan {
                 self.plan.batch_size(),
                 d_q_f32,
                 q_heads,
+                d_out_f32,
+            )
+        }
+    }
+
+    /// # Safety
+    /// `d_q_f32` and `d_out_f32` must be packed by `plan.entries()` order with
+    /// one query token per active request: [batch, q_heads, head_dim].
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn dispatch_fp16_k_q4_v_direct_attention_async(
+        &self,
+        ctx: &CudaContext,
+        kv: &KVCache,
+        d_q_f32: *const c_void,
+        q_heads: u32,
+        recent_window: u32,
+        block_size: u32,
+        top_blocks: u32,
+        d_out_f32: *mut c_void,
+    ) -> Result<()> {
+        unsafe {
+            kv.attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_batched_async(
+                ctx,
+                self.d_sequence_ids.as_ptr() as *const u32,
+                self.d_sequence_lens.as_ptr() as *const u32,
+                self.plan.batch_size(),
+                d_q_f32,
+                q_heads,
+                recent_window,
+                block_size,
+                top_blocks,
                 d_out_f32,
             )
         }

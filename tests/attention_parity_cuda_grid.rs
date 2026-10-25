@@ -179,6 +179,135 @@ fn attention_dense_recent_window_matches_reference() -> Result<()> {
 }
 
 #[test]
+fn attention_dense_sink_recent_head128_matches_reference() -> Result<()> {
+    struct EnvGuard {
+        key: &'static str,
+        previous: Option<String>,
+    }
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self { key, previous }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.previous {
+                    Some(value) => std::env::set_var(self.key, value),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+
+    let _sink = EnvGuard::set("M40LLM_DENSE_ATTENTION_SINK_TOKENS", "3");
+    let ctx = match cuda_env::ctx_m40_or_skip() {
+        Some(ctx) => ctx,
+        None => return Ok(()),
+    };
+    if let Err(e) = cuda_env::require_sm52(&ctx) {
+        eprintln!("{}", e);
+        return Ok(());
+    }
+
+    let q_heads = 16u32;
+    let kv_heads = 2u32;
+    let head_dim = 128u32;
+    let seq_len = 12u32;
+    let sink_tokens = 3u32;
+    let recent_window = 5u32;
+    let q_dim = (q_heads * head_dim) as usize;
+    let kv_dim = (kv_heads * head_dim) as usize;
+    let kv = KVCache::new_with_context(&ctx, seq_len, 1, kv_heads, head_dim)?;
+
+    let mut k_tokens = Vec::new();
+    let mut v_tokens = Vec::new();
+    for t in 0..seq_len as usize {
+        let k: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 17 + i * 5) as f32) * 0.0002 - 0.18)
+            .collect();
+        let v: Vec<f32> = (0..kv_dim)
+            .map(|i| ((t * 13 + kv_dim - 1 - i) as f32) * 0.00025 - 0.11)
+            .collect();
+        let k_stored = cast_f32_to_f16_then_back(&k);
+        let v_stored = cast_f32_to_f16_then_back(&v);
+        let bytes = kv_dim * std::mem::size_of::<f32>();
+        let d_k = ctx.device_malloc(bytes)?;
+        let d_v = ctx.device_malloc(bytes)?;
+        unsafe {
+            ctx.memcpy_h2d(d_k, k.as_ptr() as *const c_void, bytes)?;
+            ctx.memcpy_h2d(d_v, v.as_ptr() as *const c_void, bytes)?;
+            kv.append_token_f32(&ctx, 0, d_k as *const c_void, d_v as *const c_void)?;
+            ctx.device_free(d_k)?;
+            ctx.device_free(d_v)?;
+        }
+        k_tokens.push(k_stored);
+        v_tokens.push(v_stored);
+    }
+
+    let q: Vec<f32> = (0..q_dim)
+        .map(|i| ((i * 7) as f32) * 0.00015 - 0.09)
+        .collect();
+    let bytes_q = q_dim * std::mem::size_of::<f32>();
+    let d_q = ctx.device_malloc(bytes_q)?;
+    let d_out = ctx.device_malloc(bytes_q)?;
+    unsafe {
+        ctx.memcpy_h2d(d_q, q.as_ptr() as *const c_void, bytes_q)?;
+        kv.attention_last_token_f32_gqa_dense_recent_async(
+            &ctx,
+            0,
+            d_q as *const c_void,
+            q_heads,
+            seq_len,
+            recent_window,
+            d_out,
+        )?;
+        ctx.synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
+    }
+
+    let mut out_gpu = vec![0f32; q_dim];
+    unsafe {
+        ctx.memcpy_d2h(
+            out_gpu.as_mut_ptr() as *mut c_void,
+            d_out as *const c_void,
+            bytes_q,
+        )?;
+        ctx.device_free(d_q)?;
+        ctx.device_free(d_out)?;
+    }
+
+    let recent_start = (seq_len - recent_window).max(sink_tokens) as usize;
+    let mut selected_k = k_tokens[..sink_tokens as usize].to_vec();
+    selected_k.extend_from_slice(&k_tokens[recent_start..]);
+    let mut selected_v = v_tokens[..sink_tokens as usize].to_vec();
+    selected_v.extend_from_slice(&v_tokens[recent_start..]);
+    let expected = cpu_last_token_attention_gqa(
+        &q,
+        &selected_k,
+        &selected_v,
+        q_heads as usize,
+        kv_heads as usize,
+        head_dim as usize,
+    );
+
+    for i in 0..q_dim {
+        let diff = (expected[i] - out_gpu[i]).abs();
+        assert!(
+            diff < 1e-3,
+            "sink+recent head128 mismatch at {i}: cpu={} gpu={} diff={diff}",
+            expected[i],
+            out_gpu[i]
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn attention_block_select_exact_matches_dense_when_all_old_blocks_selected() -> Result<()> {
     struct EnvGuard {
         key: &'static str,

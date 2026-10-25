@@ -35,19 +35,32 @@ Physical KV slots are mapped internally from logical layer and sequence IDs.
 
 `M40LLM_SERVER_BATCH_DECODE=1` enables the experimental buffered decode
 scheduler path. Requests lease logical KV sequence slots and can use packed
-batched GQA decode attention for compatible `head_dim=64` models while the
-shared workspace lock remains in place. `M40LLM_SERVER_BATCH_DECODE_SLOTS=N`
-overrides the default logical sequence slot count.
+batched GQA decode attention for compatible `head_dim=64` and `head_dim=128`
+models while the shared workspace lock remains in place.
+`M40LLM_SERVER_BATCH_DECODE_SLOTS=N` overrides the default logical sequence slot
+count.
 
 `M40LLM_SERVER_BATCH_PREFILL=1` opts into packed variable-length prompt prefill
-for compatible server cases. Unsupported or single-request cases fall back to
-the normal path.
+for compatible server cases. Dense head64 uses multi-request packed prefill;
+dense head128/Qwen uses per-request packed-prefix prefill inside the scheduler
+tick until real-model multi-row head128 parity is established. The preferred
+compressed-KV runtime (`block-select-exact`, `fp16-k-q4-v`,
+`fp16-k-q4-v-direct`, top-k) now participates in the queued batch scheduler
+with distinct logical KV sequence slots; verified head64 compressed requests
+and same-length head128/Qwen-shaped compressed requests can use true multi-row
+packed-prefix prefill. Mixed-length head128/Qwen-shaped compressed requests
+keep the per-request packed-prefix path because forced mixed-length multi-row
+prefill still changes real Qwen outputs. Compatible compressed decode rows use
+batched direct FP16-K/q4-V exact-old attention. Unsupported or single-request
+cases fall back to the normal path.
 
 The intended order is:
 
 1. Batched decode with safe request/session ownership.
 2. Packed prefill once decode batching is correct.
 3. Mixed prefill/decode overlap after scheduler behavior is stable.
+4. Mixed-length real-model head128/Qwen packed prefill after same-length
+   compressed head128 multi-row prefill remains stable.
 
 Benchmark the buffered batch-decode path with:
 
@@ -57,10 +70,18 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   TRIALS=3 MAX_TOKENS=2 scripts/bench_server_batch_decode.sh
 ```
 
-The script compares batch-decode modes and writes detailed logs and
-`results.tsv` under `/tmp` by default. Set
+The script compares dense batch-decode modes and writes detailed logs and
+`results.tsv` under `/tmp` by default. It still passes `--kv-compress-mode off`
+for dense batching baselines; pass `SERVER_EXTRA_ARGS="--kv-compress-mode
+block-select-exact"` to exercise the default compressed-KV runtime. Set
 `BATCH_DECODE_MODES=1 PREFILL_MODES="0 1"` to compare batched decode with
-packed prefill disabled versus enabled.
+packed prefill disabled versus enabled. Set `CARGO_RUN_ARGS="--release"` for
+optimized Rust timing checks. Set `CASES="batch2_same batch4_mixed"` or another
+space-separated subset to keep longer decode-focused checks bounded.
+Set `CASES="staggered_mixed staggered_skewed" STAGGER_MS=25` to measure mixed
+arrival traffic where active decode requests and late-arriving prompt-prefill
+requests share scheduler ticks. The server logs scheduler tick composition by
+default during this benchmark.
 
 ## CUDA Graph Direction
 
@@ -78,12 +99,20 @@ Fast-fits backend:
 - Materialized FP32 projection weights.
 - cuBLAS `Sgemm`.
 - Intended for models that fit comfortably in 24 GB with workspace and KV.
+- Selected explicitly with `M40LLM_PROJECTION_BACKEND=fast-fits` or
+  automatically when the estimated memory footprint is within
+  `M40LLM_FAST_FITS_BUDGET_MB`.
 
 Large-model backend:
 
 - Compact GGUF/quantized weights.
 - No full FP32 materialization.
-- Future fused dequant plus projection kernels.
+- Current implementation uses the existing compact GGUF projection fallback.
+- Fused Q8_0 projection has started with a CUDA kernel for
+  `f32 x GGUF Q8_0 -> f32` that dequantizes inside the projection and avoids an
+  intermediate dequant buffer.
+- Future work expands fused dequant coverage beyond Q8_0 and benchmarks it
+  against the fast-fits materialized FP32 path.
 
 The large-model backend should not be mixed into the fast path until the
 fast-fits path is stable and measured.
