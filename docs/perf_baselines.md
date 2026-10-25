@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Output Warp Finish Clears Combined Feasibility
+
+The fixed raw-Q8 four-column output kernel preserves original FP32 bits and
+improves one-request throughput **30.42-31.57%**, with positive paired
+intervals. Four independent requests gain 26.86-27.52%; this is not batched
+GEMM. Both kernels use 40 registers and 4096 dynamic shared bytes, with no
+reported spills. See [paired data, instruction hashes and ownership](experiments/2026-10-25-maxwell-output-warp-screen.md).
+
+The unchanged QKV peer plus output gives an optimistic profile-weighted
+whole-token estimate of **4.68-4.72%**, clearing the prespecified 3%
+feasibility gate. This authorizes a combined opt-in runtime experiment,
+not an E2E claim. No generation/default dispatch changed; actual-512 and
+frozen-quality checks must precede original HTTP gates. The last qualified
+runtime remains **45.075 HTTP tok/s**, with both original goals unmet.
+
 ## 2026-10-25: Native QKV Warp Finish Passes Stage Gate
 
 One fixed raw-Q8/FP32 split4 kernel replaces nine reduction barriers with

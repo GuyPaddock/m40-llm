@@ -286,6 +286,25 @@ preserves bits and improves complete one-request QKV throughput 27.47-27.76%.
 It passes the stage gate but not the prespecified 3% standalone E2E ceiling;
 retain it benchmark-only pending a separately qualified combined candidate.
 
+### Bounded Native Output Reduction Probe
+
+`q8_execution_bench --output-f32-warp --qkv-warp-report ...` uses the same
+projection probe and frozen FFN input surrogates, with real output weights.
+The peer must match the prespecified QKV report hash and model/capture
+provenance. One original four-column/split4/256-thread kernel is compared
+with its original-tree warp finish; geometry and storage are unchanged.
+`CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async` enqueues on an explicit
+stream without allocation, copies or synchronization. Caller-owned raw
+weights and aligned FP32 spans must remain live and properly ordered.
+
+The [completed output screen](experiments/2026-10-25-maxwell-output-warp-screen.md)
+preserves control bits and gains **30.42-31.57%** at one request. The
+prespecified combined QKV/output optimistic ceiling is **4.68-4.72%**,
+clearing feasibility but not measured runtime qualification. Next use an
+immutable opt-in combined choice with unchanged split-FFN/SGEMM control,
+then actual-512/frozen quality and the original HTTP/Ollama gates.
+Neither projection primitive currently selects a new generation default.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,

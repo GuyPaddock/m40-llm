@@ -52,11 +52,16 @@ width/unroll/geometry rescue. The independent
 now passes the stage gate at **27.47-27.76%** throughput gain with unchanged
 bits, biases, raw weights and 32-register usage. Its optimistic standalone
 whole-token ceiling is only **2.59-2.61%**, below 3%, so `499d2de` remains a
-positive benchmark candidate, not a runtime win. Next scope one independent
-native output-projection warp finish: that measured 8.25% stage also has a
-nine-barrier reduction. Consider a combined runtime only after both stage
-gates and the combined ceiling pass; do not rescue QKV geometry or revive
-failed prepared layouts. Prepared down/head and
+positive benchmark candidate, not a runtime win. The independent
+[native output reduction screen](experiments/2026-10-25-maxwell-output-warp-screen.md)
+now also passes at **30.42-31.57%** one-request throughput gain, preserving
+bits, storage and 40-register usage. Both stage gates and the combined
+optimistic **4.68-4.72%** ceiling pass. Implementation `12191f5` remains
+benchmark-only. Next add one immutable combined QKV/output runtime choice
+with current split-FFN/SGEMM as explicit control and identical gate/up/down/
+head preparation; require actual-512/frozen quality before original HTTP
+qualification. Do not rescue geometry or revive failed prepared layouts.
+Prepared down/head and
 original micro/quality/HTTP gates remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
