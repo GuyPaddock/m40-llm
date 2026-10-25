@@ -12,6 +12,10 @@ use anyhow::Result;
 use env_restore::EnvRestore;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer, Q8FfnFp32Variant},
+    infer::execution_weights::{
+        DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8MatrixShape,
+        Q8SourceIdentity, Q8SourceView,
+    },
     profile,
 };
 
@@ -123,10 +127,45 @@ fn compare_case(
             })
         })
         .collect();
-    for variant in Q8FfnFp32Variant::ALL.into_iter().chain([
-        Q8FfnFp32Variant::PackedWarp128FactoredScales,
-        Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
-    ]) {
+    let pack = |name: &str, bytes: &[u8]| -> Result<_> {
+        let identity = Q8SourceIdentity::from_column_blocks(
+            [0; 32],
+            name.into(),
+            0,
+            Q8MatrixShape::new(k, hidden)?,
+        )?;
+        HostQ8ExecutionWeight::separate_scales_values(Q8SourceView::from_tensor_bytes(
+            &identity, bytes,
+        )?)
+    };
+    let host_planes = [pack("gate", &gate)?, pack("up", &up)?];
+    let split_weights = [
+        DeviceQ8ExecutionWeight::upload(ctx, &host_planes[0])?,
+        DeviceQ8ExecutionWeight::upload(ctx, &host_planes[1])?,
+    ];
+    let mut scales = [std::ptr::null(); 2];
+    let mut values = [std::ptr::null(); 2];
+    for (index, weight) in split_weights.iter().enumerate() {
+        let DeviceQ8ExecutionView::SeparateScalesValues {
+            scales: s,
+            values: v,
+            ..
+        } = weight.view()
+        else {
+            unreachable!()
+        };
+        scales[index] = s.as_ptr();
+        values[index] = v.as_ptr();
+    }
+    for variant in Q8FfnFp32Variant::ALL
+        .into_iter()
+        .chain([
+            Q8FfnFp32Variant::PackedWarp128FactoredScales,
+            Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
+        ])
+        .map(Some)
+        .chain([None])
+    {
         unsafe {
             ctx.memcpy_h2d(
                 output.as_mut_ptr(),
@@ -136,16 +175,29 @@ fn compare_case(
         }
         let before = profile::snapshot();
         unsafe {
-            ctx.ffn_q8_f32_ablation_async(
-                x.cast(),
-                gate_pointer,
-                up_pointer,
-                out.cast(),
-                rows as i32,
-                hidden as i32,
-                k as i32,
-                variant,
-            )?;
+            if let Some(variant) = variant {
+                ctx.ffn_q8_f32_ablation_async(
+                    x.cast(),
+                    gate_pointer,
+                    up_pointer,
+                    out.cast(),
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    variant,
+                )?;
+            } else {
+                ctx.ffn_q8_split_f32_async(
+                    x.cast(),
+                    scales,
+                    values,
+                    out.cast(),
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    None,
+                )?;
+            }
         }
         let delta = profile::counter_delta(&before, &profile::snapshot());
         assert_eq!(delta.launches, 1);
@@ -156,7 +208,7 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
-        if variant.has_intermediate_capture() {
+        if variant.is_none_or(|v| v.has_intermediate_capture()) {
             let captured = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:captured")?;
             let gate_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:gate-out")?;
             let up_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:up-out")?;
@@ -170,18 +222,34 @@ fn compare_case(
                 }
             }
             unsafe {
-                ctx.ffn_q8_f32_capture_async(
-                    x.cast(),
-                    gate_pointer,
-                    up_pointer,
-                    captured.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
-                    gate_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
-                    up_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
-                    rows as i32,
-                    hidden as i32,
-                    k as i32,
-                    variant,
-                )?;
+                if let Some(variant) = variant {
+                    ctx.ffn_q8_f32_capture_async(
+                        x.cast(),
+                        gate_pointer,
+                        up_pointer,
+                        captured.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        gate_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        up_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        rows as i32,
+                        hidden as i32,
+                        k as i32,
+                        variant,
+                    )?;
+                } else {
+                    ctx.ffn_q8_split_f32_async(
+                        x.cast(),
+                        scales,
+                        values,
+                        captured.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        rows as i32,
+                        hidden as i32,
+                        k as i32,
+                        Some((
+                            gate_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                            up_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        )),
+                    )?;
+                }
             }
             ctx.synchronize_stream(CudaStream::Decode)?;
             assert_eq!(
@@ -208,13 +276,26 @@ fn compare_case(
                 (f64::from(a) - b).abs() < 1e-3 + 2e-5 * b.abs(),
                 "{variant:?} k={k} hidden={hidden} rows={rows}: {a} vs {b}"
             );
-            if variant.threads() == 256 {
+            if variant.is_some_and(|v| v.threads() == 256) {
                 assert_eq!(
                     a.to_bits(),
                     native.to_bits(),
                     "{variant:?} k={k} hidden={hidden} rows={rows}"
                 );
             }
+        }
+    }
+    for (weight, host) in split_weights.iter().zip(&host_planes) {
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = weight.view()
+        else {
+            unreachable!()
+        };
+        for (buffer, expected) in [scales, values].into_iter().zip(host.planes()) {
+            let mut actual = vec![0u8; buffer.bytes()];
+            unsafe {
+                ctx.memcpy_d2h(actual.as_mut_ptr().cast(), buffer.as_ptr(), actual.len())?;
+            }
+            assert_eq!(&actual, expected);
         }
     }
     assert_eq!(read(ctx, &d_input)?, input);
@@ -231,6 +312,8 @@ fn compare_case(
 /// All four 256-thread load/reduction variants preserve native split4 bits.
 /// All 128-thread strategies obey the same numerical tolerance; follow-up
 /// gate/up capture must match the ordinary kernel's SwiGLU bits.
+/// The fixed split-plane/four-value strategy uses lossless typed packing and
+/// must preserve source planes as well as output guards.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -265,6 +348,46 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
         let output = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-output")?;
         let before = profile::snapshot();
         unsafe {
+            for (rows, hidden, k, offset) in
+                [(0, 1, 32, 0), (1, 0, 32, 0), (1, 1, 33, 0), (1, 1, 32, 8)]
+            {
+                assert!(ctx
+                    .ffn_q8_split_f32_async(
+                        input.as_ptr().cast::<u8>().add(offset).cast(),
+                        [weight.as_ptr(); 2],
+                        [weight.as_ptr(); 2],
+                        output.as_mut_ptr(),
+                        rows,
+                        hidden,
+                        k,
+                        None
+                    )
+                    .is_err());
+            }
+            assert!(ctx
+                .ffn_q8_split_f32_async(
+                    input.as_ptr(),
+                    [std::ptr::null(), weight.as_ptr()],
+                    [weight.as_ptr(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    1,
+                    32,
+                    None
+                )
+                .is_err());
+            assert!(ctx
+                .ffn_q8_split_f32_async(
+                    input.as_ptr(),
+                    [weight.as_ptr(); 2],
+                    [weight.as_ptr(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    1,
+                    32,
+                    Some((output.as_mut_ptr(), output.as_mut_ptr()))
+                )
+                .is_err());
             assert!(ctx
                 .ffn_q8_f32_ablation_async(
                     input.as_ptr().cast::<u8>().add(4).cast(),

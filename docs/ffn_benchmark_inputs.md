@@ -294,3 +294,34 @@ jq -s \
 The new audit leaves historical report-specific scripts and hash manifests
 unchanged. Changed control, timed allocation and fabricated median data must
 fail rather than producing a successful summary.
+
+## Bounded Split-Plane Fused FFN
+
+Use `--ffn-f32-split-planes` instead of `--ffn-f32-ablation` in the original
+complete-FFN command. This tests one 128-thread/four-value strategy with the
+existing `SeparateScalesValues` representation, FP32 activations, aligned
+`float4` input and 32-bit payload loads. It retains per-weight scaling, shared
+publication/final-warp reduction and fused SwiGLU. It does not introduce a
+weight format, activation quantization, geometry search or runtime default.
+
+Prepare only the current layer's gate/up pair using the existing lossless
+packer and RAII uploader. The pair remains resident for **both** timing arms;
+the qualified packed/warp128 control still reads original GGUF gate/up.
+Prepared down/vocabulary is unchanged. The pair is released after each case,
+so full-model extra preparation is an estimate, not measured runtime residency.
+The per-case 128 MiB preparation cap is checked before host packing.
+
+Each `ffn_ablation_preparation` record reports source identity, plane sizes,
+added device bytes, retained host bytes, packing time and allocation/upload
+time. Primary pairs additionally record actual tracked device bytes. Setup
+and full-plane readback verification are outside warmup/primary intervals;
+no allocations, copies or synchronization occur in timed enqueue. All planes
+must remain byte-identical, and intermediate capture must match the normal
+kernel's SwiGLU bits. Genuine rows 1/4, original layers 0/17/35, five paired
+trials and the existing CPU tolerance are unchanged.
+
+The same 5% complete one-row FFN gate and positive paired lower bound apply.
+Only a qualifying result permits load-time runtime integration, actual
+512-token/frozen-task validation and incremental HTTP comparison against
+the current packed128/SGEMM runtime. Micro results cannot satisfy either
+original E2E target or justify a global default change.

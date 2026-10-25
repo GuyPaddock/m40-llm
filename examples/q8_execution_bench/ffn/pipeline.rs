@@ -5,7 +5,7 @@ use m40_llm::{
     infer::{q8_activation::Q8ActivationShape, LoadedModel},
     profile,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::{json, Value};
 use std::{
     ffi::c_void,
@@ -15,12 +15,23 @@ use std::{
 const GUARD_VALUES: usize = 8;
 const GUARD_BITS: u32 = 0x4b12_3456;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
     Native,
     Fp32(Q8FfnFp32Variant),
     Q81(Q8FfnQ81Launch),
+    SplitF32x4,
+}
+
+impl Serialize for FfnKernel {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            Self::Native => serializer.serialize_none(),
+            Self::Fp32(variant) => variant.serialize(serializer),
+            Self::Q81(launch) => launch.serialize(serializer),
+            Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
+        }
+    }
 }
 
 impl FfnKernel {
@@ -28,11 +39,16 @@ impl FfnKernel {
         matches!(self, Self::Q81(_))
     }
 
+    pub fn has_intermediate_capture(self) -> bool {
+        self == Self::SplitF32x4 || matches!(self,Self::Fp32(v) if v.has_intermediate_capture())
+    }
+
     pub fn threads(self) -> u32 {
         match self {
             Self::Native => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
+            Self::SplitF32x4 => 128,
         }
     }
 
@@ -40,7 +56,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::Q81(_) => true,
+            Self::Q81(_) | Self::SplitF32x4 => true,
         }
     }
 
@@ -48,7 +64,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::Q81(_) => true,
+            Self::Q81(_) | Self::SplitF32x4 => true,
         }
     }
 }
@@ -169,6 +185,7 @@ pub(super) struct FfnPipeline<'a> {
     stop: CudaEvent,
     pub kernel: FfnKernel,
     pub quantized: Option<GuardedQ8Activation>,
+    pub prepared: Option<super::prepared::PreparedFfnWeights>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -218,6 +235,7 @@ impl<'a> FfnPipeline<'a> {
             stop: ctx.create_event()?,
             kernel: FfnKernel::Native,
             quantized: None,
+            prepared: None,
         })
     }
 
@@ -228,6 +246,10 @@ impl<'a> FfnPipeline<'a> {
 
     /// Reuse the same scratch only after its previous producer has finished.
     pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
+        ensure!(
+            kernel != FfnKernel::SplitF32x4 || self.prepared.is_some(),
+            "prepare split FFN weights before selecting the candidate"
+        );
         ensure!(
             !kernel.has_quantization() || self.quantized.is_some(),
             "reserve quantized FFN scratch before selecting Q8_1"
@@ -249,6 +271,40 @@ impl<'a> FfnPipeline<'a> {
             self.d_model,
         )?);
         Ok(())
+    }
+
+    pub fn prepare_split_weights(&mut self, layer: &FfnLayerSamples) -> Result<()> {
+        ensure!(
+            self.prepared.is_none(),
+            "split FFN weights already prepared"
+        );
+        self.drain()?;
+        self.prepared = Some(super::prepared::PreparedFfnWeights::new(self.model, layer)?);
+        Ok(())
+    }
+
+    fn enqueue_split(&self, has_intermediates: bool) -> Result<()> {
+        if self.rows > 1 {
+            self.model.cuda.stream_wait_for_stream(
+                CudaStream::Decode,
+                CudaStream::Prefill,
+                "ffn_bench_split_hidden_reuse",
+            )?;
+        }
+        let prepared = self
+            .prepared
+            .as_ref()
+            .context("missing split FFN weights")?;
+        unsafe {
+            prepared.enqueue(
+                self.input.pointer(),
+                self.hidden.pointer(),
+                self.rows as i32,
+                self.hidden_dim as i32,
+                self.d_model as i32,
+                has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+            )
+        }
     }
 
     fn projection_stream(&self) -> CudaStream {
@@ -276,6 +332,9 @@ impl<'a> FfnPipeline<'a> {
     }
 
     pub fn enqueue_gate_up_projections(&self) -> Result<()> {
+        if self.kernel == FfnKernel::SplitF32x4 {
+            return self.enqueue_split(true);
+        }
         if let FfnKernel::Fp32(variant) = self.kernel {
             if variant.has_intermediate_capture() {
                 unsafe {
@@ -322,6 +381,9 @@ impl<'a> FfnPipeline<'a> {
     }
 
     fn enqueue_gate_up_swiglu(&self) -> Result<()> {
+        if self.kernel == FfnKernel::SplitF32x4 {
+            return self.enqueue_split(false);
+        }
         if self.kernel.has_quantization() {
             return self.enqueue_q81(false);
         }
@@ -546,6 +608,9 @@ impl<'a> FfnPipeline<'a> {
 
     pub fn verify_guards_and_inputs(&self, layer: &FfnLayerSamples) -> Result<()> {
         self.drain()?;
+        if let Some(prepared) = &self.prepared {
+            prepared.verify()?;
+        }
         if let Some(quantized) = &self.quantized {
             quantized.read(&self.model.cuda)?;
         }

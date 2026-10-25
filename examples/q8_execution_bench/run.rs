@@ -88,6 +88,9 @@ struct Args {
     /// One 128-thread adjacent-pair mapping versus qualified packed FP32/128.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales"])]
     ffn_f32_coalesced_pairs: bool,
+    /// One 128-thread/four-value fused FFN on existing split weight planes.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs"])]
+    ffn_f32_split_planes: bool,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -569,6 +572,23 @@ mod argument_tests {
         assert!(!parse(&flags).unwrap().ffn_f32_ablation);
         assert!(!parse(&flags).unwrap().ffn_f32_factored_scales);
         assert!(!parse(&flags).unwrap().ffn_f32_coalesced_pairs);
+        assert!(!parse(&flags).unwrap().ffn_f32_split_planes);
+        assert!(
+            parse(&[flags.as_slice(), &["--ffn-f32-split-planes"]].concat())
+                .unwrap()
+                .ffn_f32_split_planes
+        );
+        assert!(parse(&["--ffn-f32-split-planes"]).is_err());
+        for other in [
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+        ] {
+            assert!(
+                parse(&[flags.as_slice(), &["--ffn-f32-split-planes", other]].concat()).is_err()
+            );
+        }
         assert!(
             parse(&[flags.as_slice(), &["--ffn-f32-coalesced-pairs"]].concat())
                 .unwrap()

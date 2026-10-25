@@ -2,6 +2,7 @@ mod ablation;
 mod access;
 mod fixture;
 mod pipeline;
+mod prepared;
 mod validation;
 
 use super::{command_output, inspect_gpu, write_record, Args};
@@ -13,7 +14,7 @@ use m40_llm::{
     gguf::load_gguf,
     infer::{execution_weights::Q8ExecutionConfig, LoadedModel},
 };
-use pipeline::{FfnPipeline, Stage};
+use pipeline::{FfnKernel, FfnPipeline, Stage};
 use serde_json::json;
 use std::{
     fs::{self, OpenOptions},
@@ -21,8 +22,10 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
-    let is_fp32_ablation =
-        args.ffn_f32_ablation || args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs;
+    let is_fp32_ablation = args.ffn_f32_ablation
+        || args.ffn_f32_factored_scales
+        || args.ffn_f32_coalesced_pairs
+        || args.ffn_f32_split_planes;
     ensure!(
         !cfg!(debug_assertions) && args.rows == [1, 4],
         "FFN baseline requires release and --rows 1,4"
@@ -64,15 +67,24 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "request_pattern_hypothesis":if args.ffn_f32_coalesced_pairs {Some(access::describe_requests(inputs.artifact.plan.d_model))} else {None},
         "is_q81_numerical_track":args.ffn_q81,
         "q81_variants":if args.ffn_q81 {json!(m40_llm::cuda::Q8FfnQ81Launch::ALL)} else {serde_json::Value::Null},
-        "fp32_variants":if args.ffn_f32_coalesced_pairs {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128CoalescedPairs])} else if args.ffn_f32_factored_scales {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128FactoredScales])} else if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
-        "activation_quantization":{"is_enabled":args.ffn_q81,"control_gpu_ms":0.0,"candidate_gpu_ms":"measured separately and included in gate/up and complete totals"},
-        "control":if args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
+        "fp32_variants":if args.ffn_f32_split_planes {json!([FfnKernel::SplitF32x4])} else if args.ffn_f32_coalesced_pairs {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128CoalescedPairs])} else if args.ffn_f32_factored_scales {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128FactoredScales])} else if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
+        "activation_quantization":{"is_enabled":args.ffn_q81,"control_gpu_ms":0.0,"candidate_gpu_ms":if args.ffn_q81 {json!("measured separately and included in gate/up and complete totals")} else {json!(0.0)}},
+        "control":if args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs || args.ffn_f32_split_planes {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"}),
     )?;
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
+            if args.ffn_f32_split_planes {
+                pipeline.prepare_split_weights(layer)?;
+                write_record(
+                    &mut output,
+                    json!({"kind":"ffn_ablation_preparation","layer_id":layer.source.layer_id,
+                    "rows":rows,"preparation":pipeline.prepared.as_ref().unwrap().report,
+                    "scratch_capacity_bytes":pipeline.scratch_bytes()}),
+                )?;
+            }
             if args.ffn_q81 {
                 pipeline.reserve_quantized_scratch()?;
             }

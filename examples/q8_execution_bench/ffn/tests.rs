@@ -519,7 +519,8 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
     Ok(())
 }
 
-/// Original and follow-up variants reuse one allocation set across kernel
+/// Original and follow-up variants, including prepared split planes, reuse
+/// one allocation set across kernel
 /// switches. Repeated row-batched complete work waits before hidden reuse and
 /// returns CPU-matching outputs without timed allocation, copying or sync.
 #[test]
@@ -540,21 +541,31 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
         let layer = sample_layer(&model)?;
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
+            assert!(pipeline.select_kernel(FfnKernel::SplitF32x4).is_err());
+            let qualified = serde_json::to_value(model.q8_execution_stats())?;
+            pipeline.prepare_split_weights(&layer)?;
+            assert!(pipeline.prepare_split_weights(&layer).is_err());
+            assert!(pipeline.prepared.as_ref().unwrap().bytes > 0);
             let capacity = pipeline.scratch_bytes();
             let resident = CudaContext::total_device_bytes();
             validation::validate(&pipeline, &layer)?;
             let native_hidden = pipeline.hidden.read(&model.cuda)?;
-            for variant in Q8FfnFp32Variant::ALL.into_iter().chain([
-                Q8FfnFp32Variant::PackedWarp128FactoredScales,
-                Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
-            ]) {
-                pipeline.select_kernel(FfnKernel::Fp32(variant))?;
+            for kernel in Q8FfnFp32Variant::ALL
+                .into_iter()
+                .chain([
+                    Q8FfnFp32Variant::PackedWarp128FactoredScales,
+                    Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
+                ])
+                .map(FfnKernel::Fp32)
+                .chain([FfnKernel::SplitF32x4])
+            {
+                pipeline.select_kernel(kernel)?;
                 let checks = validation::validate(&pipeline, &layer)?;
                 assert_eq!(checks["guards_and_immutable_inputs"], true);
-                if variant.has_intermediate_capture() {
+                if kernel.has_intermediate_capture() {
                     assert_eq!(checks["intermediate_capture_matches_normal_kernel"], true);
                 }
-                if rows == 1 && variant.threads() == 256 {
+                if rows == 1 && kernel.threads() == 256 {
                     assert_eq!(pipeline.hidden.read(&model.cuda)?, native_hidden);
                 }
                 for stage in [
@@ -595,6 +606,7 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                 pipeline.verify_guards_and_inputs(&layer)?;
                 assert_eq!(pipeline.scratch_bytes(), capacity);
                 assert_eq!(CudaContext::total_device_bytes(), resident);
+                assert_eq!(serde_json::to_value(model.q8_execution_stats())?, qualified);
                 pipeline.select_kernel(FfnKernel::Native)?;
                 pipeline.enqueue(Stage::Complete)?;
                 pipeline.drain()?;
@@ -603,6 +615,22 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
         }
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Split-plane dispatch has a distinct report identity while legacy native
+/// and packed variants retain their existing JSON values.
+#[test]
+fn test_split_ffn_reports_do_not_alias_native_or_packed_controls() -> Result<()> {
+    assert_eq!(serde_json::to_value(FfnKernel::Native)?, Value::Null);
+    assert_eq!(
+        serde_json::to_value(FfnKernel::Fp32(Q8FfnFp32Variant::PackedWarp128))?,
+        "packed-warp128"
+    );
+    assert_eq!(
+        serde_json::to_value(FfnKernel::SplitF32x4)?,
+        "split-f32x4-128"
+    );
     Ok(())
 }
 

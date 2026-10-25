@@ -104,6 +104,81 @@ impl Q8FfnFp32Variant {
 }
 
 impl CudaContext {
+    /// Fixed 128-thread/four-value FP32 experiment on existing separate planes.
+    /// Optional intermediates use the same kernel; no setup or sync occurs here.
+    ///
+    /// # Safety
+    /// All spans belong to this context and survive decode-stream completion.
+    /// Input holds rows*k FP32 values at 16-byte alignment. Each scale plane
+    /// holds hidden*(k/32) FP16 values, each four-byte-aligned payload holds
+    /// hidden*k signed bytes. Outputs hold rows*hidden FP32 values, disjoint
+    /// from inputs/weights and one another. Complete all producer dependencies.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        ensure!(
+            matches!(rows, 1 | 4) && hidden > 0 && k > 0 && k % 32 == 0,
+            "split FP32 FFN requires rows 1/4 and complete Q8 blocks"
+        );
+        ensure!(
+            !input.is_null()
+                && !output.is_null()
+                && input != output.cast_const()
+                && (input as usize).is_multiple_of(16)
+                && (output as usize).is_multiple_of(4),
+            "split FP32 FFN requires disjoint input/output and 16-byte input alignment"
+        );
+        ensure!(
+            scales
+                .iter()
+                .all(|p| !p.is_null() && (*p as usize).is_multiple_of(2))
+                && values
+                    .iter()
+                    .all(|p| !p.is_null() && (*p as usize).is_multiple_of(4)),
+            "split FP32 FFN requires FP16 scales and aligned packed payloads"
+        );
+        let (g, u) = intermediates.unwrap_or((std::ptr::null_mut(), std::ptr::null_mut()));
+        if intermediates.is_some() {
+            ensure!(
+                !g.is_null()
+                    && !u.is_null()
+                    && g != u
+                    && g != output
+                    && u != output
+                    && g.cast_const() != input
+                    && u.cast_const() != input
+                    && (g as usize).is_multiple_of(4)
+                    && (u as usize).is_multiple_of(4),
+                "invalid split FP32 FFN intermediate outputs"
+            );
+        }
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_ffn_q8_split_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales.as_ptr(),
+            values.as_ptr(),
+            output,
+            g,
+            u,
+            rows,
+            hidden,
+            k,
+        );
+        ensure!(rc == 0, "m40llm_ffn_q8_split_f32_async failed: {rc}");
+        record_async_kernel("ffn_q8_split_f32x4_128");
+        Ok(())
+    }
+
     /// Enqueue packed Q8_0 weights x previously encoded Q8_1 activations,
     /// reusing the same quantized input for gate/up. Optional intermediate
     /// outputs are diagnostic; timed calls omit them.

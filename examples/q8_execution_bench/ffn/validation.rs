@@ -138,8 +138,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     pipeline.drain()?;
     let gate = compare(&pipeline.gate.read(&pipeline.model.cuda)?, &gate_cpu)?;
     let up = compare(&pipeline.up.read(&pipeline.model.cuda)?, &up_cpu)?;
-    let diagnostic_hidden = if matches!(pipeline.kernel,FfnKernel::Fp32(v) if v.has_intermediate_capture())
-    {
+    let diagnostic_hidden = if pipeline.kernel.has_intermediate_capture() {
         Some(pipeline.hidden.read(&pipeline.model.cuda)?)
     } else {
         None
@@ -170,6 +169,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     ensure!(
         rows != 1
             || pipeline.kernel.has_quantization()
+            || pipeline.kernel == FfnKernel::SplitF32x4
             || matches!(pipeline.kernel,FfnKernel::Fp32(variant) if variant.threads()==128)
             || capture_error.bitwise_equal,
         "single-row native/256-thread FFN no longer reproduces frozen captured SwiGLU bits"
