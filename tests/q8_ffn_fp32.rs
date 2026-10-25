@@ -123,7 +123,10 @@ fn compare_case(
             })
         })
         .collect();
-    for variant in Q8FfnFp32Variant::ALL {
+    for variant in Q8FfnFp32Variant::ALL
+        .into_iter()
+        .chain([Q8FfnFp32Variant::PackedWarp128FactoredScales])
+    {
         unsafe {
             ctx.memcpy_h2d(
                 output.as_mut_ptr(),
@@ -153,6 +156,51 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
+        if variant.has_factored_scales() {
+            let captured = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:captured")?;
+            let gate_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:gate-out")?;
+            let up_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:up-out")?;
+            for buffer in [&captured, &gate_out, &up_out] {
+                unsafe {
+                    ctx.memcpy_h2d(
+                        buffer.as_mut_ptr(),
+                        output_values.as_ptr().cast(),
+                        buffer.bytes(),
+                    )?;
+                }
+            }
+            unsafe {
+                ctx.ffn_q8_f32_factored_capture_async(
+                    x.cast(),
+                    gate_pointer,
+                    up_pointer,
+                    captured.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                    gate_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                    up_out.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                )?;
+            }
+            ctx.synchronize_stream(CudaStream::Decode)?;
+            assert_eq!(
+                read(ctx, &captured)?,
+                actual,
+                "capture changed factored arithmetic"
+            );
+            for (values, weight) in [(read(ctx, &gate_out)?, &gate), (read(ctx, &up_out)?, &up)] {
+                for row in 0..rows {
+                    for column in 0..hidden {
+                        let expected = fixture::project_cpu(&input, weight, row, column, k);
+                        let actual = f64::from(values[row * hidden + column]);
+                        assert!(
+                            (actual - expected).abs() < 1e-3 + 2e-5 * expected.abs(),
+                            "factored projection differs: {actual} vs {expected}"
+                        );
+                    }
+                }
+            }
+        }
         for ((&a, &b), &native) in actual.iter().zip(&expected).zip(&native) {
             assert!(a.is_finite() && b.is_finite());
             assert!(
@@ -180,7 +228,9 @@ fn compare_case(
 }
 
 /// All four 256-thread load/reduction variants preserve native split4 bits.
-/// The sole 128-thread candidate obeys numerical tolerance. Distinct rows,
+/// Both 128-thread arithmetic strategies obey the same numerical tolerance;
+/// factored gate/up capture must match the ordinary kernel's SwiGLU bits.
+/// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
 #[test]
@@ -213,6 +263,26 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
         let weight = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-weight")?;
         let output = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-output")?;
         let before = profile::snapshot();
+        unsafe {
+            for (g, u) in [
+                (output.as_mut_ptr(), output.as_mut_ptr()),
+                (std::ptr::null_mut(), output.as_mut_ptr()),
+            ] {
+                assert!(ctx
+                    .ffn_q8_f32_factored_capture_async(
+                        input.as_ptr(),
+                        weight.as_ptr(),
+                        weight.as_ptr(),
+                        output.as_mut_ptr(),
+                        g,
+                        u,
+                        1,
+                        1,
+                        32
+                    )
+                    .is_err());
+            }
+        }
         for (rows, hidden, k) in [(0, 1, 32), (2, 1, 32), (4, 0, 32), (1, 1, 33), (1, 1, 0)] {
             assert!(unsafe {
                 ctx.ffn_q8_f32_ablation_async(

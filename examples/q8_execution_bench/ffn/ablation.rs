@@ -83,7 +83,16 @@ pub(super) fn benchmark_case(
     args: &Args,
 ) -> Result<()> {
     let rows = pipeline.rows;
-    let candidates: Vec<_> = if args.ffn_q81 {
+    let control = if args.ffn_f32_factored_scales {
+        FfnKernel::Fp32(Q8FfnFp32Variant::PackedWarp128)
+    } else {
+        FfnKernel::Native
+    };
+    let candidates: Vec<_> = if args.ffn_f32_factored_scales {
+        vec![FfnKernel::Fp32(
+            Q8FfnFp32Variant::PackedWarp128FactoredScales,
+        )]
+    } else if args.ffn_q81 {
         Q8FfnQ81Launch::ALL
             .into_iter()
             .map(FfnKernel::Q81)
@@ -104,6 +113,17 @@ pub(super) fn benchmark_case(
         "rows":rows,"variant":null,"checks":native_checks,"source":layer.source,
         "row_positions":layer.rows[..rows],"scratch_capacity_bytes":pipeline.scratch_bytes()}),
     )?;
+    if control != FfnKernel::Native {
+        pipeline.select_kernel(control)?;
+        let checks = validation::validate(pipeline, layer)?;
+        write_record(
+            output,
+            json!({"kind":"ffn_ablation_validation",
+            "layer_id":layer.source.layer_id,"rows":rows,"variant":control,
+            "role":"timing-control","checks":checks,"source":layer.source,
+            "row_positions":layer.rows[..rows],"scratch_capacity_bytes":pipeline.scratch_bytes()}),
+        )?;
+    }
     let mut row_fused_reference: Option<Vec<f32>> = None;
     for &variant in &candidates {
         pipeline.select_kernel(variant)?;
@@ -152,36 +172,38 @@ pub(super) fn benchmark_case(
             "complete_output_vs_native":output_vs_native,"scratch_capacity_bytes":pipeline.scratch_bytes(),
             "fused_256_thread_row_control_bits_preserved":matches!(variant,FfnKernel::Fp32(v) if v.threads()==256),
             "is_numerical_track":variant.has_quantization(),
-            "projection_checks_scope":if variant.has_quantization() {"candidate gate/up/SwiGLU checked against quantized-input CPU reference; original FP32 drift reported separately"} else {"gate/up checks use the native unfused oracle; candidate fused SwiGLU and completed down outputs are checked against scalar CPU references"}}),
+            "projection_checks_scope":if variant.has_quantization() {"candidate gate/up/SwiGLU checked against quantized-input CPU reference; original FP32 drift reported separately"} else if args.ffn_f32_factored_scales {"candidate fused gate/up capture, SwiGLU and completed down outputs checked against scalar CPU references; capture and normal SwiGLU bits equal"} else {"gate/up checks use the native unfused oracle; candidate fused SwiGLU and completed down outputs are checked against scalar CPU references"}}),
         )?;
     }
     // All expensive CPU references precede active warmup and primary pairs.
     let mut results = Vec::new();
     for variant in candidates {
-        pipeline.select_kernel(FfnKernel::Native)?;
-        let native_warmup = pipeline.warm_up(1000.0, 256)?;
+        pipeline.select_kernel(control)?;
+        let control_warmup = pipeline.warm_up(1000.0, 256)?;
         pipeline.select_kernel(variant)?;
         let candidate_warmup = pipeline.warm_up(100.0, 256)?;
         write_record(
             output,
             json!({"kind":"ffn_ablation_warmup","layer_id":layer.source.layer_id,
-            "rows":rows,"variant":variant,"native":native_warmup,"candidate":candidate_warmup,
+            "rows":rows,"variant":variant,"control_variant":control,
+            "control":control_warmup,"candidate":candidate_warmup,
+            "native":if control==FfnKernel::Native {Some(&control_warmup)} else {None},
             "gpu_after":inspect_gpu()?}),
         )?;
         let mut pairs = Vec::new();
         for trial in 0..args.trials {
             let gpu_before = inspect_gpu()?;
-            let mut arms = [FfnKernel::Native, variant];
+            let mut arms = [control, variant];
             if trial % 2 == 1 {
                 arms.reverse();
             }
             let mut measurements = Vec::new();
-            let (mut native_ms, mut candidate_ms) = (0.0, 0.0);
+            let (mut control_ms, mut candidate_ms) = (0.0, 0.0);
             let mut quantization_ms = 0.0;
             for arm in arms {
                 pipeline.select_kernel(arm)?;
                 let stages = time_stages(pipeline, args, trial)?;
-                if arm != FfnKernel::Native {
+                if arm != control {
                     candidate_ms = complete_ms(&stages)?;
                     if arm.has_quantization() {
                         quantization_ms = stages
@@ -191,22 +213,22 @@ pub(super) fn benchmark_case(
                             .context("missing actual quantization cost")?;
                     }
                 } else {
-                    native_ms = complete_ms(&stages)?;
+                    control_ms = complete_ms(&stages)?;
                 }
                 measurements.push(json!({"variant":arm,"stages":stages}));
             }
-            pairs.push((native_ms, candidate_ms));
+            pairs.push((control_ms, candidate_ms));
             write_record(
                 output,
                 json!({"kind":"ffn_ablation_pair","layer_id":layer.source.layer_id,
-                "rows":rows,"variant":variant,"trial":trial,"measurements":measurements,
+                "rows":rows,"variant":variant,"control_variant":control,"trial":trial,"measurements":measurements,
                 "gpu_before":gpu_before,"gpu_after":inspect_gpu()?,"activation_quantization_ms":quantization_ms,
                 "is_numerical_track":variant.has_quantization(),
                 "scratch_capacity_bytes":pipeline.scratch_bytes(),"threads":variant.threads(),
                 "quantization_payload_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()),
                 "quantization_scratch_capacity_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()+32),
                 "has_packed_loads":variant.has_packed_loads(),"has_warp_reduction":variant.has_warp_reduction(),
-                "scope":if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
+                "scope":if args.ffn_f32_factored_scales {"FP32 scale factoring versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
             )?;
         }
         pipeline.verify_guards_and_inputs(layer)?;
@@ -218,10 +240,19 @@ pub(super) fn benchmark_case(
     }
     // Statistical CPU work follows all primary GPU measurements for this shape.
     for (variant, pairs) in results {
+        let mut result = summarize(&pairs)?;
+        if control != FfnKernel::Native {
+            let median = result
+                .as_object_mut()
+                .unwrap()
+                .remove("native_median_ms")
+                .unwrap();
+            result["control_median_ms"] = median;
+        }
         write_record(
             output,
             json!({"kind":"ffn_ablation_screen","layer_id":layer.source.layer_id,
-            "rows":rows,"variant":variant,"result":summarize(&pairs)?,
+            "rows":rows,"variant":variant,"control_variant":control,"result":result,
             "is_decode_screen":rows==1,"runtime_integration_allowed":false}),
         )?;
     }

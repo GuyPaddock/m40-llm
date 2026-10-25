@@ -138,10 +138,25 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     pipeline.drain()?;
     let gate = compare(&pipeline.gate.read(&pipeline.model.cuda)?, &gate_cpu)?;
     let up = compare(&pipeline.up.read(&pipeline.model.cuda)?, &up_cpu)?;
+    let diagnostic_hidden = if matches!(pipeline.kernel,FfnKernel::Fp32(v) if v.has_factored_scales())
+    {
+        Some(pipeline.hidden.read(&pipeline.model.cuda)?)
+    } else {
+        None
+    };
     pipeline.enqueue(Stage::Complete)?;
     pipeline.enqueue(Stage::IsolatedDown)?;
     pipeline.drain()?;
     let hidden = pipeline.hidden.read(&pipeline.model.cuda)?;
+    if let Some(diagnostic) = &diagnostic_hidden {
+        ensure!(
+            hidden
+                .iter()
+                .zip(diagnostic)
+                .all(|(a, b)| a.to_bits() == b.to_bits()),
+            "factored intermediate capture changed SwiGLU bits"
+        );
+    }
     let hidden_error = compare(&hidden, &hidden_cpu)?;
     let compare_capture = if pipeline.kernel.has_quantization() {
         measure
@@ -204,6 +219,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
         "complete_down_vs_cpu_on_actual_swiglu":output,"isolated_down_vs_cpu_on_frozen_swiglu":isolated,
         "guards_and_immutable_inputs":true,"cpu_reference":"scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
         "variant":pipeline.kernel,"quantization":quantization_report,
+        "intermediate_capture_matches_normal_kernel":diagnostic_hidden.map(|_|true),
         "tolerance":"absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical"}),
     )
 }

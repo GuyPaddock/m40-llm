@@ -223,3 +223,25 @@ Four-row fused results include an algorithm/fusion change versus the native
 two-projection/SwiGLU implementation, so report them independently rather than
 attributing that entire gain to load/reduction changes. Prepared down and
 vocabulary remain fixed; whole-model logits/512-token equality remain pending.
+
+## Bounded FP32 Scale-Factoring Follow-Up
+
+Use `--ffn-f32-factored-scales` instead of `--ffn-f32-ablation` in the command
+above to test one further 128-thread candidate. Its control is the qualified
+packed/warp128 kernel, not the old native implementation. Both arms retain
+FP32 activations, the same packed weight reads, split4 assignment, warp
+reduction and prepared down/vocabulary paths. The candidate accumulates eight
+activation/int8 products before applying their common Q8 scale. This changes
+FP32 association but does not quantize activations or modify model weights.
+
+The original five-variant M03 screen is unchanged. The follow-up tests layers
+0/17/35 at genuine rows 1/4, five alternating pairs, ten iterations per stage,
+and the same complete-FFN micro gate. It adds no geometry search. Candidate
+gate/up capture must match CPU references and ordinary-kernel SwiGLU bits;
+SwiGLU and completed down outputs retain the existing numerical tolerance.
+Capture stores are validation-only, never part of timed work. JSONL names the
+actual timing control and emits `control_median_ms` for this follow-up.
+
+Only a passing micro screen permits model-local runtime evaluation. Actual
+512-token equality, frozen-task quality and incremental HTTP gains versus
+the selected packed128/SGEMM runtime remain required before retaining it.

@@ -19,7 +19,8 @@ impl Q8FfnQ81Launch {
     }
 }
 
-/// M03's entire bounded geometry set. These do not select a runtime policy.
+/// M03's frozen set plus one subsequent scale-factor experiment. None selects
+/// a runtime policy; ALL deliberately retains the original five-variant set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[repr(i32)]
@@ -29,6 +30,7 @@ pub enum Q8FfnFp32Variant {
     ScalarWarp256 = 2,
     PackedWarp256 = 3,
     PackedWarp128 = 4,
+    PackedWarp128FactoredScales = 5,
 }
 
 impl Q8FfnFp32Variant {
@@ -41,7 +43,10 @@ impl Q8FfnFp32Variant {
     ];
 
     pub fn threads(self) -> u32 {
-        if self == Self::PackedWarp128 {
+        if matches!(
+            self,
+            Self::PackedWarp128 | Self::PackedWarp128FactoredScales
+        ) {
             128
         } else {
             256
@@ -51,15 +56,25 @@ impl Q8FfnFp32Variant {
     pub fn has_packed_loads(self) -> bool {
         matches!(
             self,
-            Self::PackedShared256 | Self::PackedWarp256 | Self::PackedWarp128
+            Self::PackedShared256
+                | Self::PackedWarp256
+                | Self::PackedWarp128
+                | Self::PackedWarp128FactoredScales
         )
     }
 
     pub fn has_warp_reduction(self) -> bool {
         matches!(
             self,
-            Self::ScalarWarp256 | Self::PackedWarp256 | Self::PackedWarp128
+            Self::ScalarWarp256
+                | Self::PackedWarp256
+                | Self::PackedWarp128
+                | Self::PackedWarp128FactoredScales
         )
+    }
+
+    pub fn has_factored_scales(self) -> bool {
+        self == Self::PackedWarp128FactoredScales
     }
 
     fn operation_name(self) -> &'static str {
@@ -69,6 +84,7 @@ impl Q8FfnFp32Variant {
             Self::ScalarWarp256 => "ffn_q8_f32_scalar_warp_256",
             Self::PackedWarp256 => "ffn_q8_f32_packed_warp_256",
             Self::PackedWarp128 => "ffn_q8_f32_packed_warp_128",
+            Self::PackedWarp128FactoredScales => "ffn_q8_f32_factored_scales_128",
         }
     }
 }
@@ -212,6 +228,54 @@ impl CudaContext {
         k: i32,
         variant: Q8FfnFp32Variant,
     ) -> Result<()> {
+        self.enqueue_ffn_fp32(input, gate, up, output, rows, hidden, k, variant, None)
+    }
+
+    /// Capture gate/up and SwiGLU from the same factored-scale kernel used by
+    /// ordinary benchmark enqueue. Timed calls omit these extra output stores.
+    ///
+    /// # Safety
+    /// Same span/stream contract as ffn_q8_f32_ablation_async; both intermediate
+    /// spans hold rows*hidden f32 values and are disjoint from every other span.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_f32_factored_capture_async(
+        &self,
+        input: *const c_void,
+        gate: *const c_void,
+        up: *const c_void,
+        output: *mut c_void,
+        gate_output: *mut c_void,
+        up_output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+    ) -> Result<()> {
+        self.enqueue_ffn_fp32(
+            input,
+            gate,
+            up,
+            output,
+            rows,
+            hidden,
+            k,
+            Q8FfnFp32Variant::PackedWarp128FactoredScales,
+            Some((gate_output, up_output)),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn enqueue_ffn_fp32(
+        &self,
+        input: *const c_void,
+        gate: *const c_void,
+        up: *const c_void,
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        variant: Q8FfnFp32Variant,
+        capture: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
         ensure!(
             !input.is_null()
                 && !gate.is_null()
@@ -225,19 +289,52 @@ impl CudaContext {
             (gate as usize).is_multiple_of(2) && (up as usize).is_multiple_of(2),
             "FP32 FFN Q8_0 weights require two-byte alignment"
         );
+        ensure!(
+            (input as usize).is_multiple_of(4) && (output as usize).is_multiple_of(4),
+            "FP32 FFN input/output require four-byte alignment"
+        );
+        if let Some((g, u)) = capture {
+            ensure!(
+                !g.is_null()
+                    && !u.is_null()
+                    && g != u
+                    && g != output
+                    && u != output
+                    && g.cast_const() != input
+                    && u.cast_const() != input
+                    && (g as usize).is_multiple_of(4)
+                    && (u as usize).is_multiple_of(4),
+                "invalid/aliased FFN intermediate outputs"
+            );
+        }
         let _guard = self.inner.lock.lock().unwrap();
         let rc = unsafe {
-            ffi::m40llm_ffn_q8_f32_ablation_async(
-                self.inner.raw.as_ptr(),
-                input,
-                gate,
-                up,
-                output,
-                rows,
-                hidden,
-                k,
-                variant as i32,
-            )
+            if let Some((g, u)) = capture {
+                ffi::m40llm_ffn_q8_f32_factored_capture_async(
+                    self.inner.raw.as_ptr(),
+                    input,
+                    gate,
+                    up,
+                    output,
+                    g,
+                    u,
+                    rows,
+                    hidden,
+                    k,
+                )
+            } else {
+                ffi::m40llm_ffn_q8_f32_ablation_async(
+                    self.inner.raw.as_ptr(),
+                    input,
+                    gate,
+                    up,
+                    output,
+                    rows,
+                    hidden,
+                    k,
+                    variant as i32,
+                )
+            }
         };
         ensure!(rc==0,"m40llm_ffn_q8_f32_ablation_async failed: {rc}, variant={variant:?}, rows={rows}, hidden={hidden}, k={k}");
         record_async_kernel(variant.operation_name());

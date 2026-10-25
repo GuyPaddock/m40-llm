@@ -276,6 +276,22 @@ impl<'a> FfnPipeline<'a> {
     }
 
     pub fn enqueue_gate_up_projections(&self) -> Result<()> {
+        if matches!(self.kernel,FfnKernel::Fp32(v) if v.has_factored_scales()) {
+            unsafe {
+                self.model.cuda.ffn_q8_f32_factored_capture_async(
+                    self.input.pointer(),
+                    self.gate_weight,
+                    self.up_weight,
+                    self.hidden.pointer(),
+                    self.gate.pointer(),
+                    self.up.pointer(),
+                    self.rows as i32,
+                    self.hidden_dim as i32,
+                    self.d_model as i32,
+                )?;
+            }
+            return Ok(());
+        }
         if self.kernel.has_quantization() {
             return self.enqueue_q81(true);
         }

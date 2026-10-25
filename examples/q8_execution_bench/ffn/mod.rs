@@ -43,7 +43,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let setup_ms = began.elapsed().as_secs_f64() * 1000.0;
     write_record(
         &mut output,
-        json!({"kind":if args.ffn_q81 {"ffn_q81_manifest"} else if args.ffn_f32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
+        json!({"kind":if args.ffn_q81 {"ffn_q81_manifest"} else if args.ffn_f32_ablation || args.ffn_f32_factored_scales {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
         "model":args.model,"model_sha256":inputs.artifact.plan.model_sha256,
         "fixture":args.ffn_inputs,"fixture_sha256":inputs.artifact_sha256,"capture_report":args.ffn_capture_report,
         "capture_report_sha256":inputs.report_sha256,"capture_revision":inputs.manifest["revision"],
@@ -57,12 +57,12 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "memory":{"original_weights":model.weights_len,"prepared_weights":model.q8_execution_stats().resident_bytes,
             "resident_kv":0,"tracked_device_bytes":CudaContext::total_device_bytes()},
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,
-        "is_fp32_ablation":args.ffn_f32_ablation,
+        "is_fp32_ablation":args.ffn_f32_ablation || args.ffn_f32_factored_scales,
         "is_q81_numerical_track":args.ffn_q81,
         "q81_variants":if args.ffn_q81 {json!(m40_llm::cuda::Q8FfnQ81Launch::ALL)} else {serde_json::Value::Null},
-        "fp32_variants":if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
+        "fp32_variants":if args.ffn_f32_factored_scales {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128FactoredScales])} else if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
         "activation_quantization":{"is_enabled":args.ffn_q81,"control_gpu_ms":0.0,"candidate_gpu_ms":"measured separately and included in gate/up and complete totals"},
-        "control":"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed",
+        "control":if args.ffn_f32_factored_scales {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"}),
     )?;
@@ -72,7 +72,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
             if args.ffn_q81 {
                 pipeline.reserve_quantized_scratch()?;
             }
-            if args.ffn_f32_ablation || args.ffn_q81 {
+            if args.ffn_f32_ablation || args.ffn_q81 || args.ffn_f32_factored_scales {
                 ablation::benchmark_case(&mut output, &mut pipeline, layer, args)?;
                 continue;
             }
@@ -130,7 +130,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     );
     write_record(
         &mut output,
-        json!({"kind":if args.ffn_q81 {"ffn_q81_complete"} else if args.ffn_f32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
+        json!({"kind":if args.ffn_q81 {"ffn_q81_complete"} else if args.ffn_f32_ablation || args.ffn_f32_factored_scales {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
         "device_bytes_before":initial_device_bytes,"device_bytes_after":CudaContext::total_device_bytes(),
         "gpu_after_release":inspect_gpu()?,"scope":"Rust-tracked payload cleanup, not driver context RSS"}),
     )

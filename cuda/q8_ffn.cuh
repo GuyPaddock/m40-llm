@@ -29,12 +29,13 @@ __device__ __forceinline__ float reduce_published(const float* values, int lane)
     return sum;
 }
 
-template<bool HasPackedLoads, bool HasWarpReduction, int Threads>
+template<bool HasPackedLoads, bool HasWarpReduction, int Threads, bool HasFactoredScales = false>
 __global__ void gate_up_swiglu(
     const float* __restrict__ input,
     const unsigned char* __restrict__ gate,
     const unsigned char* __restrict__ up,
-    float* __restrict__ output, int hidden, int k) {
+    float* __restrict__ output, int hidden, int k,
+    float* __restrict__ gate_output, float* __restrict__ up_output) {
     const int column = blockIdx.x;
     const int row = blockIdx.y;
     const int tid = threadIdx.x;
@@ -51,6 +52,8 @@ __global__ void gate_up_swiglu(
         const float gate_scale = __half2float(*reinterpret_cast<const __half*>(gate + weight_base));
         const float up_scale = __half2float(*reinterpret_cast<const __half*>(up + weight_base));
         if constexpr (HasPackedLoads) {
+            float gate_dot = 0.0f;
+            float up_dot = 0.0f;
             #pragma unroll
             for (int pair = 0; pair < 4; ++pair) {
                 // A 34-byte Q8_0 stride guarantees only two-byte alignment.
@@ -63,9 +66,20 @@ __global__ void gate_up_swiglu(
                     const float a = activation[input_base + pair * 2 + lane];
                     const int8_t gate_q = static_cast<int8_t>(gate_pair >> (lane * 8));
                     const int8_t up_q = static_cast<int8_t>(up_pair >> (lane * 8));
-                    gate_acc += a * (static_cast<float>(gate_q) * gate_scale);
-                    up_acc += a * (static_cast<float>(up_q) * up_scale);
+                    if constexpr (HasFactoredScales) {
+                        gate_dot += a * static_cast<float>(gate_q);
+                        up_dot += a * static_cast<float>(up_q);
+                    } else {
+                        gate_acc += a * (static_cast<float>(gate_q) * gate_scale);
+                        up_acc += a * (static_cast<float>(up_q) * up_scale);
+                    }
                 }
+            }
+            if constexpr (HasFactoredScales) {
+                // Keep activations in FP32, but apply the shared scale once
+                // per eight-value task. FP32 association differs from native.
+                gate_acc += gate_dot * gate_scale;
+                up_acc += up_dot * up_scale;
             }
         } else {
             #pragma unroll
@@ -88,7 +102,14 @@ __global__ void gate_up_swiglu(
         if (tid < 32) {
             const float g = reduce_published<Threads>(gate_partial, tid);
             const float u = reduce_published<Threads>(up_partial, tid);
-            if (tid == 0) output[static_cast<size_t>(row) * hidden + column] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (tid == 0) {
+                const size_t index = static_cast<size_t>(row) * hidden + column;
+                output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+                if constexpr (HasFactoredScales) {
+                    if (gate_output) gate_output[index] = g;
+                    if (up_output) up_output[index] = u;
+                }
+            }
         }
     } else {
         for (int stride = Threads / 2; stride > 0; stride >>= 1) {
@@ -106,12 +127,14 @@ __global__ void gate_up_swiglu(
     }
 }
 
-template<bool HasPackedLoads, bool HasWarpReduction, int Threads>
+template<bool HasPackedLoads, bool HasWarpReduction, int Threads, bool HasFactoredScales = false>
 void launch(M40llmCudaContext* ctx, const void* input, const void* gate, const void* up,
-            void* output, int rows, int hidden, int k) {
-    gate_up_swiglu<HasPackedLoads,HasWarpReduction,Threads><<<dim3(hidden,rows),Threads,2*Threads*sizeof(float),ctx->decode_stream>>>(
+            void* output, int rows, int hidden, int k,
+            void* gate_output = nullptr, void* up_output = nullptr) {
+    gate_up_swiglu<HasPackedLoads,HasWarpReduction,Threads,HasFactoredScales><<<dim3(hidden,rows),Threads,2*Threads*sizeof(float),ctx->decode_stream>>>(
         static_cast<const float*>(input),static_cast<const unsigned char*>(gate),
-        static_cast<const unsigned char*>(up),static_cast<float*>(output),hidden,k);
+        static_cast<const unsigned char*>(up),static_cast<float*>(output),hidden,k,
+        static_cast<float*>(gate_output),static_cast<float*>(up_output));
 }
 }
 
@@ -128,7 +151,22 @@ extern "C" int m40llm_ffn_q8_f32_ablation_async(
         case 2: launch<false,true,256>(ctx,input,gate,up,output,rows,hidden,k); break;
         case 3: launch<true,true,256>(ctx,input,gate,up,output,rows,hidden,k); break;
         case 4: launch<true,true,128>(ctx,input,gate,up,output,rows,hidden,k); break;
+        case 5: launch<true,true,128,true>(ctx,input,gate,up,output,rows,hidden,k); break;
         default: return -3;
     }
+    return cudaGetLastError() == cudaSuccess ? 0 : -4;
+}
+
+extern "C" int m40llm_ffn_q8_f32_factored_capture_async(
+    M40llmCudaContext* ctx, const void* input, const void* gate, const void* up,
+    void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    if (!ctx || !input || !gate || !up || !output || !gate_output || !up_output) return -1;
+    if (input == output || input == gate_output || input == up_output ||
+        output == gate_output || output == up_output || gate_output == up_output) return -1;
+    if ((rows != 1 && rows != 4) || hidden <= 0 || k <= 0 || k % 32 != 0 ||
+        reinterpret_cast<uintptr_t>(gate) % 2 || reinterpret_cast<uintptr_t>(up) % 2 ||
+        reinterpret_cast<uintptr_t>(input) % 4 || reinterpret_cast<uintptr_t>(output) % 4 ||
+        reinterpret_cast<uintptr_t>(gate_output) % 4 || reinterpret_cast<uintptr_t>(up_output) % 4) return -2;
+    m40llm_q8_ffn::launch<true,true,128,true>(ctx,input,gate,up,output,rows,hidden,k,gate_output,up_output);
     return cudaGetLastError() == cudaSuccess ? 0 : -4;
 }

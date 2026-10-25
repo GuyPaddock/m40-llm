@@ -82,6 +82,9 @@ struct Args {
     /// Pair the two Q8_1 numerical candidates, including activation encoding.
     #[arg(long, requires = "ffn_inputs", conflicts_with = "ffn_f32_ablation")]
     ffn_q81: bool,
+    /// One 128-thread scale-factor candidate versus qualified packed FP32/128.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81"])]
+    ffn_f32_factored_scales: bool,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -537,8 +540,8 @@ pub fn benchmark() -> Result<()> {
 mod argument_tests {
     use super::*;
 
-    /// New FFN inputs require their completed provenance report, exclude old
-    /// layout/sparsity experiments, and leave the original projection CLI valid.
+    /// FFN modes require provenance, exclude conflicting arithmetic experiments,
+    /// and leave the original projection CLI valid. Scale factoring is explicit.
     #[test]
     fn test_ffn_arguments_preserve_explicit_modes() {
         let parse = |extra: &[&str]| {
@@ -561,6 +564,18 @@ mod argument_tests {
         ];
         assert_eq!(parse(&flags).unwrap().rows, [1, 4]);
         assert!(!parse(&flags).unwrap().ffn_f32_ablation);
+        assert!(!parse(&flags).unwrap().ffn_f32_factored_scales);
+        assert!(
+            parse(&[flags.as_slice(), &["--ffn-f32-factored-scales"]].concat())
+                .unwrap()
+                .ffn_f32_factored_scales
+        );
+        assert!(parse(&["--ffn-f32-factored-scales"]).is_err());
+        for other in ["--ffn-q81", "--ffn-f32-ablation"] {
+            assert!(
+                parse(&[flags.as_slice(), &["--ffn-f32-factored-scales", other]].concat()).is_err()
+            );
+        }
         assert!(
             parse(&[flags.as_slice(), &["--ffn-f32-ablation"]].concat())
                 .unwrap()
