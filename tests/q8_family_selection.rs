@@ -119,6 +119,7 @@ fn run_fused_mlp(model: &LoadedModel) -> Result<Vec<f32>> {
                 model.device_tensors["layers.0.feed_forward.w1.weight"].dptr,
                 128,
                 d_output.as_mut_ptr(),
+                None,
             )?
         },
         "fused MLP must remain enabled"

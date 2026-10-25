@@ -83,6 +83,10 @@ pub struct ActivationResearch {
 impl LoadedModel {
     fn activation_sources(&self) -> Result<(Vec<CalibrationLayer>, HashMap<usize, usize>)> {
         ensure!(
+            self.q8_ffn.is_native(),
+            "activation research requires M40LLM_Q8_FFN_KERNEL=native"
+        );
+        ensure!(
             self.activation_research.is_none()
                 && self.layer_influence.is_none()
                 && self.ffn_capture.is_none()

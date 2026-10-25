@@ -33,7 +33,7 @@ enables weight preparation.
 | M03 | Complete: [real-input five-pair screen](experiments/2026-10-25-maxwell-fp32-ffn-screen.md); packed/warp256 gains 7.75-8.27% complete FFN with native bits on the sampled one-row inputs; 128 gains 12.18-12.63% with small arithmetic drift |
 | M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, quality pending |
 | M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
-| M06 | Conditional: immutable runtime selection and reusable scratch only for qualifying decode candidates |
+| M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Independent pending branch: bounded reusable Q8-to-FP32 prefill SGEMM, with no full-model FP32 cache |
 | M08 | Pending: isolated decode/prefill and qualifying combination HTTP/quality comparisons |
 | M09 | Pending: measured attribution, retained configuration, fresh Ollama comparison and remaining-goal audit |
@@ -42,6 +42,46 @@ The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its
 callback support is distinct from the unavailable legacy traffic counters.
 The official binary was not rebuilt for the diagnostic.
+
+## Experimental Runtime Selection
+
+`M40LLM_Q8_FFN_KERNEL=native|packed-f32|q8-1` is captured once by
+`LoadedModel::from_gguf`. Unset means `native`, preserving the existing
+dispatch and all runtime defaults. `packed-f32` selects the screened
+256-thread packed/warp FP32-activation kernel; `q8-1` selects the 128-thread
+quantization-inclusive candidate. These are experimental choices, not
+whole-model quality or throughput recommendations. Q8_1 changes arithmetic
+and remains a separate numerical track.
+
+The typed `Q8FfnConfig` constructors retain both 128/256-thread geometries
+for full-model qualification. `from_gguf_with_q8_backends` accepts independent
+weight-preparation and FFN configurations. The existing explicit
+`from_gguf_with_q8_execution` constructor always uses native FFN, so ambient
+experimental flags cannot alter frozen references. Down/vocabulary preparation
+is unchanged and must be selected separately.
+
+Only one-row forward uses the candidate. Sequential prompt tokens and the
+final prompt token use that one-row path; multi-row packed-prefix prefill
+keeps its native projections. Q8_1 uses one RAII activation allocation in the
+leased forward workspace, shared across layers and reused across tokens.
+Qwen's D=2048 needs 2304 bytes; packed FP32 needs no quantization allocation.
+The selected kernels enqueue on decode. Other projection streams retain
+explicit producer/consumer waits. No per-token allocation, transfer or
+synchronization is added by FFN enqueue.
+
+Explicit experimental requests require compiled CUDA kernels, sm_52, uploaded
+Q8_0 gate/up tensors in every standard layer and complete 32-value input
+blocks. Unsupported requests fail with a native-mode remedy rather than
+silently benchmarking another implementation. Experimental graph capture,
+batched decode, frozen input capture and model-changing research combinations
+are rejected. This investigation adds no server scheduling behavior.
+
+API migration: in-memory `LoadedModel` construction now supplies
+`q8_ffn: Q8FfnConfig::native()`. Direct callers of the unsafe fused-FFN
+wrapper supply a final scratch argument: `None` for native/packed FP32, or
+an owned `Q8FfnScratch` view for Q8_1. Workspace allocation/estimation also
+takes the FFN configuration. Configure before creating workspace/session
+state; do not replace model components while sessions reference them.
 
 ### M03 Primitive Checkpoint
 

@@ -18,6 +18,7 @@ mod logits;
 mod mapping;
 mod meta;
 pub mod q8_activation;
+mod q8_ffn;
 pub mod sparse_weights;
 mod tensor_views;
 mod types;
@@ -42,4 +43,5 @@ pub use kv::with_exact_block_staging;
 #[cfg(feature = "cuda")]
 pub use layer_influence::LayerInfluenceCapture;
 pub use layer_mask::LayerMask;
+pub use q8_ffn::{Q8FfnConfig, Q8FfnKernel, Q8FfnScratch};
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

@@ -253,14 +253,19 @@ impl LoadedModel {
         let mut guard = self.forward_workspace.lock().unwrap();
         if !guard
             .as_ref()
-            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim, rows))
+            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim, rows, self.q8_ffn))
             .unwrap_or(false)
         {
             if let Some(old) = guard.take() {
                 old.free(&self.cuda);
             }
             *guard = Some(super::workspace::ForwardWorkspace::new_with_rows(
-                &self.cuda, d_model, kv_dim, hidden_dim, rows,
+                &self.cuda,
+                d_model,
+                kv_dim,
+                hidden_dim,
+                rows,
+                self.q8_ffn,
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
@@ -332,21 +337,29 @@ impl LoadedModel {
                 ]
                 .iter()
                 .all(|ptr| self.gguf_weight_dtype(*ptr) == GgmlDType::Q8_0);
-            let single_stream_decode = decode_cublas_single_stream_enabled()
-                || f16_decode_kernel_decode_stream_enabled()
-                || q8_decode_single_stream;
+            // Experimental gate/up is always on decode. Elide other producer
+            // waits only when every Q8 projection is also known to be there.
+            let single_stream_decode = q8_decode_single_stream
+                || (self.q8_ffn.is_native()
+                    && (decode_cublas_single_stream_enabled()
+                        || f16_decode_kernel_decode_stream_enabled()));
             // Profiling follows the producer, not the wait-elision heuristic.
             let (qkv_stream, output_stream, gate_up_stream, down_stream) =
                 if gpu_profile::is_recording() {
                     let qkv = self.profiled_projection_stream(d_wq_f16);
-                    let gate = self.profiled_projection_stream(d_w_gate_f16);
+                    let gate = if self.q8_ffn.is_native() {
+                        self.profiled_projection_stream(d_w_gate_f16)
+                    } else {
+                        CudaStream::Decode
+                    };
                     anyhow::ensure!(
                         qkv == self.profiled_projection_stream(d_wk_f16)
                             && qkv == self.profiled_projection_stream(d_wv_f16),
                         "stage profiling requires Q/K/V projections on one producer stream"
                     );
                     anyhow::ensure!(
-                        gate == self.profiled_projection_stream(d_w_up_f16),
+                        !self.q8_ffn.is_native()
+                            || gate == self.profiled_projection_stream(d_w_up_f16),
                         "stage profiling requires gate/up projections on one producer stream"
                     );
                     (
@@ -689,6 +702,7 @@ impl LoadedModel {
                         d_w_up_f16,
                         hidden_dim,
                         ws.dhid,
+                        ws.q8_activation,
                     )?;
                     if fused_mlp {
                         gpu_stage.finish_as("mlp_gate_up_swiglu")?;
@@ -889,6 +903,10 @@ impl LoadedModel {
         if d_model <= 0 || hidden_dim <= 0 {
             anyhow::bail!("forward_one_token_minimal_graph_params: invalid dims");
         }
+        anyhow::ensure!(
+            self.q8_ffn.is_native(),
+            "experimental Q8 FFN graph capture is not validated; use M40LLM_Q8_FFN_KERNEL=native"
+        );
         anyhow::ensure!(
             self.activation_research.is_none()
                 && self.layer_influence.is_none()
@@ -1194,6 +1212,7 @@ impl LoadedModel {
                         d_w_up_f16,
                         hidden_dim,
                         ws.dhid,
+                        ws.q8_activation,
                     )?;
                     if fused_mlp {
                         log_profiled_op(
@@ -2002,6 +2021,7 @@ impl LoadedModel {
         &self,
         items: &[ForwardBatchItem],
     ) -> Result<usize> {
+        anyhow::ensure!(self.q8_ffn.is_native(),"experimental Q8 FFN is single-row only; disable batched decode or use M40LLM_Q8_FFN_KERNEL=native");
         anyhow::ensure!(
             self.activation_research.is_none()
                 && self.layer_influence.is_none()

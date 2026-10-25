@@ -367,7 +367,8 @@ fn sample_layer(model: &LoadedModel) -> Result<FfnLayerSamples> {
                 mapped.w_gate.dptr,
                 mapped.w_up.dptr,
                 128,
-                h.as_mut_ptr()
+                h.as_mut_ptr(),
+                None,
             )?);
         }
         model.cuda.synchronize_stream(CudaStream::Decode)?;

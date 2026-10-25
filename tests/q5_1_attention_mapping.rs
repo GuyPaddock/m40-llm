@@ -139,6 +139,7 @@ fn make_model_with_q5_1_attention_layer(layer: usize, d_model: usize) -> Result<
         cuda,
         kv_cache: None,
         layer_mask: m40_llm::infer::LayerMask::default(),
+        q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

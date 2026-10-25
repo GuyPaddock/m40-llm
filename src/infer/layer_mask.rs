@@ -72,6 +72,10 @@ impl super::LoadedModel {
     /// Freeze the diagnostic before KV/session state exists. This skips compute,
     /// not source tensors or physical KV layer slots; no layer IDs are renumbered.
     pub fn set_diagnostic_layer_mask(&mut self, skipped_layers: &[usize]) -> Result<()> {
+        ensure!(
+            self.q8_ffn.is_native(),
+            "diagnostic layer masks require M40LLM_Q8_FFN_KERNEL=native"
+        );
         let mask = LayerMask::new(self.model_config.block_count, skipped_layers)?;
         ensure!(
             self.kv_cache.is_none(),

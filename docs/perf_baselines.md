@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Experimental FFN Runtime Checkpoint
+
+M06 now exposes model-local `native|packed-f32|q8-1` single-row FFN selection,
+keeping native as the default and prepared down/vocabulary unchanged. Q8_1
+reuses one activation buffer across layers/tokens; packed-prefix projections
+remain native. Release M40 regressions cover stream ordering, allocation
+cleanup/reuse, CPU references and packed256 fixture logits/KV bit equality.
+An independently reproduced older logits stream bug is fixed in `d211726`;
+the qualified control's Q8 decode-stream schedule does not change.
+
+This is a correctness/integration checkpoint, not a new throughput result.
+Full-model 512-token parity, Q8_1 quality and HTTP qualification are pending;
+the microbenchmark gains below are not promoted to E2E claims. See
+[the runtime contract, API migration and validation](experiments/2026-10-25-maxwell-ffn-runtime.md).
+
 ## 2026-10-25: Quantization-Inclusive Q8_1 FFN Screen
 
 Clean release `6431295` completes M04's two fixed packed integer-dot

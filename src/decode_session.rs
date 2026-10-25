@@ -181,6 +181,10 @@ impl DecodeSession {
         d_x_tag: &'static str,
         d_out_tag: &'static str,
     ) -> Result<Self> {
+        anyhow::ensure!(
+            model.q8_ffn.is_native() || !decode_graph_enabled(),
+            "experimental Q8 FFN requires M40LLM_DECODE_GRAPH=0; graph capture is not validated"
+        );
         anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
             "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
         if model.activation_research.is_some() {

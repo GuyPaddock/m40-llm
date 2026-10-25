@@ -56,9 +56,9 @@ all implementations and measurements are retained. Four-row gains also
 include fusion changes and are reported separately. All 36 validations and
 900 primary-interval audits pass, with stable observed 1113/3004 MHz clocks.
 Release sm_52 uses 32 registers and zero stack/local bytes throughout.
-No runtime choice/default changed; whole-model 512-token parity and E2E
-qualification remain pending. Next is independent M04 Q8_1, then M05 screening
-before conditional M06 integration. M07 prefill SGEMM remains independent.
+No default changed; whole-model 512-token parity and E2E qualification remain
+pending. M04/M05 screening and M06 integration are recorded below. M07 prefill
+SGEMM remains independent.
 Do not add capture infrastructure or expand the bounded geometry search.
 
 M04 has a [pinned Q8_1 encoding and packed-dot contract](q8_activation.md).
@@ -76,8 +76,8 @@ trials pass. Original-FP32 drift is measurable, including up to 0.538361 in
 sampled completed output; no whole-model quality or E2E claim follows.
 The report closes M05's bounded micro screen with all failed implementations
 preserved. Packed/warp FP32 and Q8_1 qualify conditionally for M06, not default
-promotion. Next capture model-local immutable selection, reusable scratch and
-clear unsupported errors, then validate full-model logits/512 IDs and quality.
+promotion. M06 now captures model-local selection and reusable scratch;
+full-model logits/512 IDs and quality remain pending.
 Test FP32 128-thread actual continuation equality rather than assuming drift
 is harmless or disqualifying it without evidence. Q8_1 stays a separate
 numerical track with task/loss/perplexity gates. M07 prefill remains independent.
@@ -86,6 +86,23 @@ for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact
 512-token parity; Q8_1 stays a separate opt-in numerical track. Independent
 prefill work has a bounded temporary dequant buffer, not full FP32 caching.
+
+M06 is complete: [runtime integration and regressions](experiments/2026-10-25-maxwell-ffn-runtime.md).
+`M40LLM_Q8_FFN_KERNEL=native|packed-f32|q8-1` is captured at load time, with
+native unchanged by default. Typed choices retain both screened geometries.
+Q8_1 reserves one reusable RAII workspace buffer; packed FP32 reserves none.
+Prepared down/vocabulary remain fixed, multi-row packed-prefix projections
+stay native, and only one-row steps dispatch the candidate. Unsupported
+models, scratch, graph/batched decode and research combinations fail clearly.
+Runtime tests cover CPU references, scratch reuse, zero warm allocation,
+producer streams, packed-prefix dispatch and packed256 fixture logits/KV bits.
+The mixed-flag regression exposed a pre-existing Q8 logits producer-stream bug,
+fixed independently in `d211726`; the qualified Q8 decode schedule is unchanged.
+Release M40 affected CUDA suites pass with cuBLAS on/off, the shared benchmark
+tests pass, and non-CUDA warning-as-error tests plus CUDA/server Clippy pass.
+Runtime-disabled-upload all-target checks also pass; NVCC still compiles that
+build. No full-model quality or speed claim follows. Next implement independent
+M07 bounded prefill SGEMM, then M08 numerical/512-token/quality/E2E qualification.
 
 ## Previous Research Checkpoints
 

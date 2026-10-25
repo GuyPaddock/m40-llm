@@ -133,6 +133,7 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
         cuda: ctx.clone(),
         kv_cache: None,
         layer_mask: m40_llm::infer::LayerMask::default(),
+        q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
@@ -290,6 +291,7 @@ fn out_proj_f32xf16_f32_smoke() -> Result<()> {
         cuda: ctx.clone(),
         kv_cache: None,
         layer_mask: m40_llm::infer::LayerMask::default(),
+        q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

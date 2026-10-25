@@ -23,6 +23,10 @@ impl LoadedModel {
         plan: LayerRankingPlan,
         budget_bytes: usize,
     ) -> Result<()> {
+        ensure!(
+            self.q8_ffn.is_native(),
+            "layer influence capture requires M40LLM_Q8_FFN_KERNEL=native"
+        );
         plan.validate()?;
         ensure!(
             self.layer_influence.is_none()

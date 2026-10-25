@@ -149,6 +149,7 @@ fn verify_replay(model: &LoadedModel, artifact: &FfnCaptureArtifact) -> Result<(
                     w_up,
                     128,
                     hidden.as_mut_ptr(),
+                    None,
                 )? {
                     model.mlp_gates_f32xf16_gguf_f32_async(
                         input.as_ptr(),

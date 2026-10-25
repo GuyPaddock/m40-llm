@@ -338,6 +338,7 @@ impl<'a> FfnPipeline<'a> {
                         self.up_weight,
                         self.hidden_dim as i32,
                         self.hidden.pointer(),
+                        None,
                     )?
             };
             ensure!(

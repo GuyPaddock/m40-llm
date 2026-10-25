@@ -54,6 +54,7 @@ unsafe fn enqueue(
         model.device_tensors[UP].dptr,
         hidden,
         output,
+        None,
     )
 }
 

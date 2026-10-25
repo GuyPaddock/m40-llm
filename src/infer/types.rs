@@ -264,6 +264,9 @@ pub struct LoadedModel {
     /// before allocating KV. Public for in-memory model construction, like the
     /// other model components; full-model entrypoints validate its layer count.
     pub layer_mask: super::LayerMask,
+    /// Load-time, model-local FFN selection. In-memory fixtures must choose an
+    /// explicit native config; do not replace this after workspace/session use.
+    pub q8_ffn: super::Q8FfnConfig,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]

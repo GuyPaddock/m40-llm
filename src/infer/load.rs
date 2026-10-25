@@ -10,11 +10,12 @@ use std::ffi::c_void;
 
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
-        Self::from_gguf_with_q8_execution(
+        Self::from_gguf_with_q8_backends(
             gguf,
             gguf_bytes,
             device_id,
             Q8ExecutionConfig::from_env()?,
+            super::Q8FfnConfig::from_env()?,
         )
     }
 
@@ -24,6 +25,31 @@ impl LoadedModel {
         device_id: i32,
         execution: Q8ExecutionConfig,
     ) -> Result<Self> {
+        // Explicit weight-cache controls retain native FFN independently of
+        // ambient experimental flags, including frozen benchmark references.
+        Self::from_gguf_with_q8_backends(
+            gguf,
+            gguf_bytes,
+            device_id,
+            execution,
+            super::Q8FfnConfig::native(),
+        )
+    }
+
+    pub fn from_gguf_with_q8_backends(
+        gguf: GgufModel,
+        gguf_bytes: Vec<u8>,
+        device_id: i32,
+        execution: Q8ExecutionConfig,
+        ffn: super::Q8FfnConfig,
+    ) -> Result<Self> {
+        anyhow::ensure!(
+            ffn.is_native()
+                || (cfg!(feature = "cuda")
+                    && cfg!(nvcc)
+                    && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
+            "experimental Q8 FFN requires compiled CUDA kernels; use M40LLM_Q8_FFN_KERNEL=native"
+        );
         #[cfg(not(feature = "cuda"))]
         anyhow::ensure!(
             execution.mode == Q8ExecutionMode::Off,
@@ -109,6 +135,7 @@ impl LoadedModel {
             cuda,
             kv_cache: None,
             layer_mask: super::LayerMask::default(),
+            q8_ffn: ffn,
             #[cfg(feature = "cuda")]
             forward_workspace: std::sync::Mutex::new(None),
             #[cfg(feature = "cuda")]
@@ -133,6 +160,8 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         let mut model = model;
         #[cfg(feature = "cuda")]
+        model.validate_q8_ffn_backend()?;
+        #[cfg(feature = "cuda")]
         if let Some((sha256, hash_ms)) = source_sha256 {
             let props = model.cuda.current_device_props()?;
             anyhow::ensure!(
@@ -151,6 +180,11 @@ impl LoadedModel {
                 execution,
                 hash_ms,
             )?;
+        }
+        if !model.q8_ffn.is_native() {
+            eprintln!("[q8-ffn] kernel={:?} threads={:?} scope=single-row activation_bytes={} numerical_track={}",
+                model.q8_ffn.kernel(),model.q8_ffn.threads(),
+                model.q8_ffn.activation_bytes(model.model_config.embedding_length as usize)?,model.q8_ffn.has_quantization());
         }
         Ok(model)
     }

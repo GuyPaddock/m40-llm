@@ -72,6 +72,10 @@ impl LoadedModel {
     /// this read-only observer permits the qualified prepared down/vocabulary
     /// control. Caller binds the original model/corpus/execution hashes.
     pub fn begin_ffn_capture(&mut self, plan: FfnCapturePlan, budget_bytes: usize) -> Result<()> {
+        ensure!(
+            self.q8_ffn.is_native(),
+            "frozen FFN capture requires M40LLM_Q8_FFN_KERNEL=native"
+        );
         plan.validate()?;
         ensure!(
             self.ffn_capture.is_none()

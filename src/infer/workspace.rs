@@ -1,3 +1,4 @@
+use super::{Q8FfnConfig, Q8FfnScratch};
 use crate::cuda::{CudaContext, DeviceBuffer};
 use anyhow::{Context, Result};
 use std::ffi::c_void;
@@ -8,6 +9,8 @@ pub struct ForwardWorkspace {
     kv_dim: usize,
     hidden_dim: usize,
     rows: usize,
+    ffn_config: Q8FfnConfig,
+    q8_activation: Option<DeviceBuffer>,
     dq: DeviceBuffer,
     dk: DeviceBuffer,
     dv: DeviceBuffer,
@@ -29,6 +32,7 @@ pub struct ForwardWorkspace {
 #[derive(Debug, Clone, Copy)]
 pub struct ForwardWorkspacePtrs {
     pub rows: usize,
+    pub q8_activation: Option<Q8FfnScratch>,
     pub dq: *mut c_void,
     pub dk: *mut c_void,
     pub dv: *mut c_void,
@@ -53,6 +57,7 @@ impl ForwardWorkspace {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        ffn: Q8FfnConfig,
     ) -> Result<usize> {
         if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
             anyhow::bail!(
@@ -84,7 +89,7 @@ impl ForwardWorkspace {
             .checked_mul(u32_bytes)
             .context("workspace attention metadata bytes overflow")?;
 
-        bytes_d
+        let base = bytes_d
             .checked_mul(9)
             .context("workspace d_model aggregate bytes overflow")?
             .checked_add(
@@ -104,7 +109,9 @@ impl ForwardWorkspace {
                     .checked_mul(2)
                     .context("workspace metadata aggregate bytes overflow")?,
             )
-            .context("workspace aggregate bytes overflow")
+            .context("workspace aggregate bytes overflow")?;
+        base.checked_add(ffn.activation_bytes(d_model)?)
+            .context("workspace Q8 activation bytes overflow")
     }
 
     pub fn new(
@@ -112,8 +119,9 @@ impl ForwardWorkspace {
         d_model: usize,
         kv_dim: usize,
         hidden_dim: usize,
+        ffn: Q8FfnConfig,
     ) -> Result<Self> {
-        Self::new_with_rows(ctx, d_model, kv_dim, hidden_dim, 1)
+        Self::new_with_rows(ctx, d_model, kv_dim, hidden_dim, 1, ffn)
     }
 
     pub fn new_with_rows(
@@ -122,6 +130,7 @@ impl ForwardWorkspace {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        ffn: Q8FfnConfig,
     ) -> Result<Self> {
         if d_model == 0 || kv_dim == 0 || hidden_dim == 0 {
             anyhow::bail!(
@@ -151,11 +160,22 @@ impl ForwardWorkspace {
             .checked_mul(std::mem::size_of::<u32>())
             .context("workspace attention metadata bytes overflow")?;
 
+        let quantized_bytes = ffn.activation_bytes(d_model)?;
         Ok(Self {
             d_model,
             kv_dim,
             hidden_dim,
             rows,
+            ffn_config: ffn,
+            q8_activation: if quantized_bytes > 0 {
+                Some(DeviceBuffer::new_tagged(
+                    ctx,
+                    quantized_bytes,
+                    "fwd:ffn_q8_activation",
+                )?)
+            } else {
+                None
+            },
             dq: DeviceBuffer::new_tagged(ctx, bytes_d, "fwd:dq_f32")?,
             dk: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dk_f32")?,
             dv: DeviceBuffer::new_tagged(ctx, bytes_kv, "fwd:dv_f32")?,
@@ -183,11 +203,19 @@ impl ForwardWorkspace {
         })
     }
 
-    pub fn matches(&self, d_model: usize, kv_dim: usize, hidden_dim: usize, rows: usize) -> bool {
+    pub fn matches(
+        &self,
+        d_model: usize,
+        kv_dim: usize,
+        hidden_dim: usize,
+        rows: usize,
+        ffn: Q8FfnConfig,
+    ) -> bool {
         self.d_model == d_model
             && self.kv_dim == kv_dim
             && self.hidden_dim == hidden_dim
             && self.rows == rows
+            && self.ffn_config == ffn
     }
 
     pub fn rows(&self) -> usize {
@@ -197,6 +225,10 @@ impl ForwardWorkspace {
     pub fn ptrs(&self) -> ForwardWorkspacePtrs {
         ForwardWorkspacePtrs {
             rows: self.rows,
+            q8_activation: self.q8_activation.as_ref().map(|buffer| Q8FfnScratch {
+                pointer: buffer.as_mut_ptr(),
+                bytes: buffer.bytes(),
+            }),
             dq: self.dq.as_mut_ptr(),
             dk: self.dk.as_mut_ptr(),
             dv: self.dv.as_mut_ptr(),
