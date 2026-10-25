@@ -49,6 +49,7 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
 
 /// Native F16 gate/up and down projections match the row-major CPU reference
 /// without involving the opt-in Q8 execution cache.
+/// Gate/up and down projections preserve FP16-weight products against CPU references.
 #[test]
 fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -145,6 +146,7 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: None,
+        layer_mask: m40_llm::infer::LayerMask::default(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

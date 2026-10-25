@@ -181,6 +181,8 @@ impl DecodeSession {
         d_x_tag: &'static str,
         d_out_tag: &'static str,
     ) -> Result<Self> {
+        anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
+            "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
         let gpu_profiler =
             DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
         if gpu_profiler.is_some() {
@@ -559,6 +561,8 @@ impl DecodeSession {
         ids: &[u32],
         mut on_token_logits: impl FnMut(&[f32]),
     ) -> Result<(Vec<f32>, usize)> {
+        anyhow::ensure!(!self.model().layer_mask.has_skipped_layers(),
+            "masked packed-then-compress prefill is not supported; use sequential or packed-prefix prefill");
         self.last_prefill_sync_diag = None;
         if !self.can_forward {
             anyhow::bail!("packed-then-compress prefill requires full-layer forward");
@@ -1147,7 +1151,7 @@ impl DecodeSession {
                 });
             }
             self.last_forward_used_graph = true;
-            Ok((*self.model).model_config.block_count as usize)
+            (*self.model).active_layer_count()
         } else {
             let _kv_runtime_guard =
                 crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());

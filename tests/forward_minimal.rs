@@ -68,6 +68,7 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: Some(kv),
+        layer_mask: m40_llm::infer::LayerMask::default(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

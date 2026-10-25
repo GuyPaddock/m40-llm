@@ -67,3 +67,30 @@ impl LayerMask {
             .filter(|layer| self.skipped_layers.binary_search(layer).is_err()))
     }
 }
+
+impl super::LoadedModel {
+    /// Freeze the diagnostic before KV/session state exists. This skips compute,
+    /// not source tensors or physical KV layer slots; no layer IDs are renumbered.
+    pub fn set_diagnostic_layer_mask(&mut self, skipped_layers: &[usize]) -> Result<()> {
+        let mask = LayerMask::new(self.model_config.block_count, skipped_layers)?;
+        ensure!(
+            self.kv_cache.is_none(),
+            "configure the layer mask before allocating KV or creating decode sessions"
+        );
+        #[cfg(feature = "cuda")]
+        ensure!(
+            self.forward_workspace
+                .lock()
+                .map_err(|_| anyhow::anyhow!("poisoned forward workspace"))?
+                .is_none(),
+            "configure the layer mask before forward execution"
+        );
+        self.layer_mask = mask;
+        Ok(())
+    }
+
+    pub fn active_layer_count(&self) -> Result<usize> {
+        self.layer_mask
+            .active_layer_count(self.model_config.block_count)
+    }
+}

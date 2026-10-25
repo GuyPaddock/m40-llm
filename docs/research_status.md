@@ -47,6 +47,14 @@ C20 is split into dependency-ordered commits:
    logit drift and scoped timing/memory. Depends on verified implementation.
    No ranking or compact export in C20; those remain C24/C25.
 
+The mask contract is committed in `9674452`. Forward integration covers
+sequential, batched, packed-prefill and device-parameter paths with original
+KV IDs; session graphs and all-slot packed-then-compress reconstruction are
+explicitly rejected for nonempty masks. See [the mask contract](layer_masks.md).
+The broader validation exposed an independent minimal-forward fixture using
+dense head_dim=4 KV with the compressed default; `fe48028` makes that reference
+explicitly dense. Runner integration and measured mask results remain pending.
+
 C19 was split into dependency-ordered commits:
 
 1. `d1294fc`, `test(quality): freeze pruning evaluation splits`: immutable authored V1

@@ -1921,10 +1921,14 @@ impl LoadedModel {
 
             self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
-                for layer in 0..layer_count {
+                for (active_index, layer) in self
+                    .layer_mask
+                    .active_layers(self.model_config.block_count)?
+                    .enumerate()
+                {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
-                    } else if layer % 2 == 0 {
+                    } else if active_index % 2 == 0 {
                         ws.scratch_a
                     } else {
                         ws.scratch_b
@@ -1932,7 +1936,7 @@ impl LoadedModel {
                     self.forward_one_token_with_layer(current, layer, sequence_id, seq_len, next)?;
                     current = next as *const c_void;
                 }
-                Ok(layer_count)
+                self.active_layer_count()
             })
         }
 
@@ -2012,7 +2016,10 @@ impl LoadedModel {
             .checked_mul(std::mem::size_of::<f32>())
             .context("batched forward kv byte size overflow")?;
         self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
-            for layer in 0..layer_count {
+            for layer in self
+                .layer_mask
+                .active_layers(self.model_config.block_count)?
+            {
                 let w = self.map_standard_layer(layer)?;
                 let layer_id: u32 = layer
                     .try_into()
@@ -2381,7 +2388,7 @@ impl LoadedModel {
                     }
                 }
             }
-            Ok(layer_count)
+            self.active_layer_count()
         })
     }
 
@@ -2497,7 +2504,7 @@ impl LoadedModel {
                 }
             }
 
-            for layer in 0..layer_count {
+            for layer in self.layer_mask.active_layers(self.model_config.block_count)? {
                 let w = self.map_standard_layer(layer)?;
                 let layer_id: u32 = layer
                     .try_into()
@@ -2883,7 +2890,7 @@ impl LoadedModel {
                 .synchronize_stream(CudaStream::Prefill)
                 .context("batched prefill prefill stream synchronization failed")?;
 
-            Ok(layer_count)
+            self.active_layer_count()
         })
     }
 
@@ -2944,10 +2951,14 @@ impl LoadedModel {
 
             self.with_forward_workspace(d_model, kv_dim, hidden_dim, |ws| {
                 let mut current = d_x_f32;
-                for layer in 0..layer_count {
+                for (active_index, layer) in self
+                    .layer_mask
+                    .active_layers(self.model_config.block_count)?
+                    .enumerate()
+                {
                     let next = if layer + 1 == layer_count {
                         d_out_f32
-                    } else if layer % 2 == 0 {
+                    } else if active_index % 2 == 0 {
                         ws.scratch_a
                     } else {
                         ws.scratch_b
@@ -2962,7 +2973,7 @@ impl LoadedModel {
                     )?;
                     current = next as *const c_void;
                 }
-                Ok(layer_count)
+                self.active_layer_count()
             })
         }
 

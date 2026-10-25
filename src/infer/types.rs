@@ -260,6 +260,10 @@ pub struct LoadedModel {
     pub gguf: GgufModel,
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
+    /// Compute-skipping diagnostic; configure with set_diagnostic_layer_mask
+    /// before allocating KV. Public for in-memory model construction, like the
+    /// other model components; full-model entrypoints validate its layer count.
+    pub layer_mask: super::LayerMask,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]

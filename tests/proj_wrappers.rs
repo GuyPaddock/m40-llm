@@ -49,6 +49,7 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
 
 /// Native F16 Q/K/V projections match independent CPU matrix products with
 /// explicit source weights rather than a prepared Q8 cache.
+/// Q/K/V projections preserve the FP16-weight layout against CPU products.
 #[test]
 fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -131,6 +132,7 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: None,
+        layer_mask: m40_llm::infer::LayerMask::default(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
@@ -225,6 +227,7 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
 
 /// The native F16 output projection preserves row-major layout and numerical
 /// parity without opt-in Q8 execution storage.
+/// Output projection matches its CPU product with every model layer enabled.
 #[test]
 fn out_proj_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -280,6 +283,7 @@ fn out_proj_f32xf16_f32_smoke() -> Result<()> {
         gguf: GgufModel::new(0),
         cuda: ctx.clone(),
         kv_cache: None,
+        layer_mask: m40_llm::infer::LayerMask::default(),
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

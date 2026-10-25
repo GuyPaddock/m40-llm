@@ -108,6 +108,7 @@ impl LoadedModel {
             gguf,
             cuda,
             kv_cache: None,
+            layer_mask: super::LayerMask::default(),
             #[cfg(feature = "cuda")]
             forward_workspace: std::sync::Mutex::new(None),
             #[cfg(feature = "cuda")]
