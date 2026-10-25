@@ -101,6 +101,9 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 
 Use `docs/perf_baselines.md` to record repeatable benchmark results rather than
 leaving one-off timing notes in the README.
+For matched client-observed Qwen/Ollama timings, use the
+[controlled comparison](controlled_benchmark.md) instead of comparing the
+in-process throughput probe with an HTTP response's decode-only rate.
 
 ## GEMM and Materialization
 

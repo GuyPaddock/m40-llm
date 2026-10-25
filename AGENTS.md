@@ -52,15 +52,35 @@ You are continuing development of m40-llm—a Rust LLM runtime/server targeting 
   - Forward smoke: `tests/forward_with_layer_smoke.rs`.
 
 ## Active Performance Plan
-The current plan still prioritizes measurement, ownership, and correctness before deeper scheduling and backend expansion.
-Packed varlen attention integration is now moving into scheduler execution after request/session
-ownership and KV addressing are established; larger experiments should wait for a validated
-batched decode path before touching persistent decode or large-model fused-dequant.
+The current authorized research follows `../M40_LLM_RESEARCH_PLAN.md`.
+Establish a matched Qwen Q8_0/Ollama baseline and buffered GPU stage timings,
+then run the bounded exact-attention and independent Q8 layout experiments.
+Use the offline n-gram acceptance gate before building speculative verification.
+Evaluate sparse weights, activation sparsity, and layer removal separately from
+the unchanged-model performance target. The older reconciled scheduling list
+below is historical context, not the current research execution order.
+
+### Research Checkpoint: 2026-10-24
+- C01/C02 are complete: MemPalace practice and opt-in buffered HTTP metrics.
+- C03 now has a release-only `compare_ollama` example with identity checks,
+  verified cache resets, paired trials/bootstrap, and untimed actual token traces.
+- The controlled five-pair baseline is 23.735 HTTP E2E tok/s m40-llm versus
+  43.035 for prebuilt Ollama 0.40.11 on M40. Both use the same Qwen Q8_0 blob,
+  65 shared ChatML IDs, dense FP16 KV, context 1024, and 512 generated IDs.
+  All rows are length-limited/cache-valid. See `docs/controlled_benchmark.md`
+  and the dated raw records in `docs/perf_baselines.md`.
+- The initial 66-versus-65-ID attempt was rejected. `2f4d7ca` fixes extra BOS
+  insertion for preformatted Qwen Raw/Auto prompts; standard automatic Qwen
+  chat formatting is unchanged.
+- Next: C04 buffered stage events and C05 available Maxwell counters, then C06
+  bottleneck report. Do not select the attention rewrite without attribution.
+- The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
+  Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
+  explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.
 
 ## Selecting Work
-- **Task selection rule:** use the strict reconciled task order below. The historical
-  task JSON remains useful context, but this strict order takes precedence when the
-  two conflict.
+- **Task selection rule:** use the current research plan above. The historical
+  task JSON and older reconciled order below describe prior implementation work.
 - Update this file (`AGENTS.md`) as you complete high-level tasks. 
 
 ## Current Progress

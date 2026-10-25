@@ -2,6 +2,58 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Controlled Qwen Q8_0 HTTP Baseline
+
+This is a new matched baseline, not a relabeling of the May measurements.
+The comparison uses the official prebuilt Ollama 0.40.11 release, verified on
+the M40 through its CUDA 12 backend with `sm_52` PTX. The installed 0.18.2
+binary was not replaced. Both engines load the same Qwen2.5-3B Q8_0 blob,
+SHA-256 `4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d`.
+
+Five alternating-order, resident-weight HTTP pairs used the same 65 prompt
+IDs, full dense FP16 KV, 1024-token context, greedy sampling, and 512 actual
+generated tokens with `length` stops. Each Ollama trial verified zero cached
+prompt tokens and 65 newly evaluated tokens from native runner logs. The RAM
+prompt cache was disabled; the replacement prompt shared no token prefix.
+Only the two benchmark processes held GPU allocations, and inference was
+sequential. Rust was release-optimized; existing CUDA 12.8 `-O3`/`sm_52`
+build flags were unchanged.
+
+| Runtime | HTTP E2E Median | Range | HTTP Wall Median | Internal Prefill Median | Internal Decode Median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| m40-llm Q8_0 large-model | 23.735 tok/s | 23.715-23.776 | 21.571 s | 1.731 s | 19.794 s |
+| Ollama 0.40.11 Q8_0 | 43.035 tok/s | 43.001-43.108 | 11.897 s | 0.230 s | 11.661 s |
+
+The internal phase boundaries differ: m40-llm prefill includes admitted setup
+through first sampling, while Ollama reports native prompt evaluation time.
+Use the client HTTP columns for E2E comparison. The m40-llm final dense KV
+allocation is 37,748,736 bytes, or 36 MiB; the native Ollama log confirms the
+same FP16 KV capacity. No FP32 weight materialization is enabled.
+
+m40-llm reaches 55.15% of Ollama throughput in this checkpoint. Its paired
+bootstrap gain is -44.846%, with 95% interval [-44.894%, -44.793%]. MAD/median
+variation is 0.059% and 0.032%, respectively. Neither a ten-pair extension
+nor a borderline twenty-pair confirmation was indicated. Both unchanged-model
+targets remain unmet: at least 53.06 E2E tok/s and at least 1.30x the refreshed
+Ollama median, now **55.945 tok/s**. Do not compare this directly to the earlier
+44-token in-process 24.95 tok/s row as an optimization regression.
+
+The shared-prompt work also found an independent correctness issue: Raw/Auto
+Qwen ChatML generation inserted an extra BOS, consuming 66 IDs instead of 65.
+Commit `2f4d7ca` fixes it and tests token identity with real special IDs.
+The [rejected attempt](experiments/2026-10-24-qwen-ollama-invalid-bos.jsonl)
+is retained but supports no speed claim. The corrected run's untimed token
+traces reproduce each runtime's measured output. Both outputs are coherent
+but differ across engines; this is not proof of cross-engine logit equality.
+
+See the [protocol and full command](controlled_benchmark.md),
+[raw valid records](experiments/2026-10-24-qwen-ollama-controlled.jsonl), and
+[separate token traces](experiments/2026-10-24-qwen-ollama-token-traces.jsonl).
+The manifest pins runtime commit `2f4d7ca`, benchmark executable SHA-256, and
+the then-uncommitted benchmark-tool worktree. No kernel changed during this
+run. Next: buffered CUDA-event stage attribution before selecting kernels to
+optimize; these HTTP timings alone do not establish which stage dominates.
+
 ## 2026-05-25: Qwen2.5-3B E2E Ollama Comparison Checkpoint
 
 The active E2E goal uses this exact prompt with `max_tokens=512`:
