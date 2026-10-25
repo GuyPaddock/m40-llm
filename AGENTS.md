@@ -80,9 +80,14 @@ below is historical context, not the current research execution order.
   18.17 ms and attention 11.42 ms; late attention rises to 20.39 ms. First-capture
   uncovered wall time is not ordinary CPU-cost evidence. See the dated profile
   record in `docs/perf_baselines.md`.
-- Next: C05 available Maxwell counters, then C06 bottleneck report. The profile
-  supports bounded exact attention work plus independent Q8 layout experiments;
-  gate/up is now the larger fixed FFN cost, not down alone.
+- C05's optional standalone CUPTI preflight enumerates 154 M40 metrics, but
+  actual legacy event-group creation and domain enumeration both fail with
+  `CUPTI_ERROR_NOT_SUPPORTED` on driver 580.159.04/CUPTI 12.8.90, even as root.
+  Traffic/occupancy measurements remain unavailable, not estimated counters.
+  See `docs/maxwell_counters.md`; ordinary builds do not depend on CUPTI.
+- Next: C06 bottleneck report. The profile supports bounded exact attention
+  work plus independent Q8 layout experiments; gate/up is now the larger fixed
+  FFN cost, not down alone. Missing counters do not block that checkpoint.
 - The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
   Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
   explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.

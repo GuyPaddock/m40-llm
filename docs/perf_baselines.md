@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Maxwell Counter Availability
+
+C05 adds an optional standalone legacy CUPTI preflight, outside ordinary Cargo
+builds and inference. On the idle M40 with driver 580.159.04 and CUPTI 12.8.90,
+it enumerates 154 metric names, but event-domain enumeration and actual
+event-group creation both return `27 / CUPTI_ERROR_NOT_SUPPORTED`. Running as
+root produces the same result as UID 1000. This is not a successful counter
+collection, and catalog availability must not be reported as measured data.
+
+DRAM read/write bytes, achieved occupancy, SM efficiency, and load/store
+efficiency remain unavailable; raw values and kernel measurements are `null`.
+No profiling access setting, system CUDA installation, or driver was changed.
+The exact compatibility cause remains unresolved. See the
+[reproduction and limitations](maxwell_counters.md) and
+[raw user/root records](experiments/2026-10-24-maxwell-counter-preflight.jsonl).
+C06 can proceed using the buffered stage profile, without invented counters.
+
 ## 2026-10-24: Buffered Qwen Decode Stage Profile
 
 The C04 profiler is opt-in, session-owned, and reuses CUDA events across sampled
