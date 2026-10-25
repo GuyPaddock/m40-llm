@@ -104,6 +104,15 @@ Runtime-disabled-upload all-target checks also pass; NVCC still compiles that
 build. No full-model quality or speed claim follows. Next implement independent
 M07 bounded prefill SGEMM, then M08 numerical/512-token/quality/E2E qualification.
 
+M07 now has a [bounded temporary Q8-to-FP32 converter](q8_prefill.md).
+Checked shapes cap one weight at 128 MiB and exclude the vocabulary matrix.
+Release M40 tests preserve every converted weight bit for both real Qwen FFN
+orientations and feed the existing async SGEMM with genuine distinct rows 4/64.
+The converter enqueues one kernel with no allocation, host copy or sync.
+Source/output guards, two-byte bases, capacity rejection and cleanup pass.
+Runtime selection, reusable prefill workspace, full bias/RoPE/KV parity and
+performance measurements are still pending; the primitive changes no defaults.
+
 ## Previous Research Checkpoints
 
 The entries below retain their original checkpoint sequence. Their historical

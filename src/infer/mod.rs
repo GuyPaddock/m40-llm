@@ -19,6 +19,7 @@ mod mapping;
 mod meta;
 pub mod q8_activation;
 mod q8_ffn;
+pub mod q8_prefill;
 pub mod sparse_weights;
 mod tensor_views;
 mod types;

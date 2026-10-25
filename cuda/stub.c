@@ -211,6 +211,12 @@ int m40llm_materialize_gguf_f16_to_f32_colmajor_nt(M40llmCudaContext* ctx, const
     (void)ctx; (void)d_B_f16; (void)d_B_f32_colmajor_nt; (void)N; (void)K; return -1;
 }
 
+int m40llm_dequantize_q8_0_to_f32_colmajor_async(M40llmCudaContext* ctx,
+    const void* source, void* output, size_t capacity_bytes, int input_dim, int output_dim) {
+    (void)ctx; (void)source; (void)output; (void)capacity_bytes; (void)input_dim; (void)output_dim;
+    return -99;
+}
+
 
 int m40llm_gemm_f16xf16_f32(M40llmCudaContext* ctx, const void* d_A_f16, const void* d_B_f16, void* d_C_f32, int M, int N, int K) {
     (void)ctx; (void)d_A_f16; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
