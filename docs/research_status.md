@@ -116,11 +116,14 @@ a reason to rewrite the C21 preservation commits.
 2. `cca45db`, `fix(cuda): publish initialized device storage`: finish native weights
    and checked KV initialization before publishing usable pointers. Depends
    on the central upload contract, without per-kernel hot-path waits.
-3. `fix(kv): publish legacy append lengths on device`: separate the legacy
+3. `3ab1377`, `fix(kv): publish legacy append lengths on device`: separate the legacy
    metadata correction from setup; remove stack-owned async transfers and
    establish the length producer's dependency before host reads. Production
    explicit-position scheduling stays enqueue-only.
-4. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
+4. `test(cuda): isolate cuBLAS graph fixtures`: independent pre-existing
+   cuBLAS-off/test-order issue found by broad validation; explicitly scope
+   dense KV and require the fixtures' async-cuBLAS backend, not all graphs.
+5. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
    parity and local CI lanes, then a bounded release generation checkpoint
    against the pinned exact trace. Record any timing impact separately from
    optimization claims. Depends on verified correctness fixes.
@@ -152,6 +155,21 @@ queued length publication, odd widths and overflow. Explicit-position append
 remains enqueue-only on head64/head128, verified by launch/copy/wait counters.
 No new waits enter production explicit-position append. Broader CUDA/cuBLAS
 parity, CI lanes and the release exact-trace checkpoint are next.
+
+Broader cuBLAS-on ownership/projection/forward/profile checks pass. The
+cuBLAS-off run exposed four old fast-fits graph fixture failures; a pre-fix
+`3818104` worktree reproduces all four. Their dense-reference state was also
+implicit in isolated runs. A separate test-only correction gives each case
+explicit dense KV, the required compiled cuBLAS backend, and explicit hardware
+invocation. Runtime graphs remain experimental/off with unchanged coverage.
+
+The corrected forward suite passes all 24 cuBLAS-on cases, including explicit
+graph inclusion, and the raw graph case now passes alone. The cuBLAS-off
+matrix passes 43 supported transfer/attention/KV/forward/projection/MLP cases;
+its four fast-fits graph fixtures are not compiled without their backend.
+Both CUDA/server Clippy configurations pass. An explicit graph request with
+the GPU hidden fails with `NoContext`, as required, rather than reporting a
+successful no-device skip. Full CI and release measurements follow.
 
 C20 was split into dependency-ordered commits:
 

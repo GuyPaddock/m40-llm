@@ -93,3 +93,19 @@ claim that arbitrary external raw-pointer misuse is safe.
 
 Benchmark timing impact must be measured separately; these correctness changes
 are not throughput optimizations.
+
+## Validation Fixture Follow-Up
+
+The broad cuBLAS-off forward run exposed four pre-existing fast-fits graph
+fixture failures. An isolated worktree at pre-fix `3818104` reproduces the
+same `20 passed / 4 failed` result and synchronous F16 GEMM capture error.
+The [baseline log](experiments/2026-10-25-upload-baseline-graph-off.txt) is
+retained. Running the raw forward graph case alone also exposed its reliance
+on prior tests selecting dense KV for head_dim=4.
+
+These four fixtures now explicitly scope dense reference KV and require
+compiled cuBLAS, because their materialized-FP32 graph uses async cuBLAS
+GEMMs. They are hardware-ignored by default and fail if explicitly requested
+without M40. This does not restrict all graph backends or claim CUDA graphs
+generally require cuBLAS. Other async kernels can be captured independently.
+Runtime graph defaults, fallback behavior and capture coverage are unchanged.
