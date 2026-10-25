@@ -1,0 +1,9 @@
+61f7db06b7f0267a73a467aa2ebab9ae175249de47f56b866acbd49d95551c6b  docs/experiments/2026-10-25-maxwell-split-stage-profile.md
+1f7a6bdb60da0218d1ff5f1ebcc0cf7f48f30ffd6a83cdb14e3f7e0a75cb674c  docs/experiments/2026-10-25-maxwell-split-stage-http.jsonl
+b725b9de51fa76b124710bc02faa2f7dac67cfc59824bd616fc1367f7885964e  docs/experiments/2026-10-25-maxwell-split-stage-events.jsonl
+c351740814904f6451a625138a76a354f6a479b0507680a55d4160983b7bf304  docs/experiments/2026-10-25-maxwell-split-stage-audit.json
+c5323ad802cccf47955c954e0079fa5ba8e3f7054c2183e995b3e794a943e135  docs/experiments/2026-10-25-maxwell-selected-stage-audit.jq
+ea4dc40271f1bd5df2f763c746233421d50e5a4b0e0786afb2e056e3b108e6e1  docs/experiments/2026-10-25-maxwell-split-stage-http-audit.jq
+da7b1191702840a38a4c63f34f48180e82b6298053cf4043eea613dab1f6babd  docs/experiments/2026-10-25-maxwell-split-stage-http-audit.json
+338a9dd79249d7a9146868ce4f3aac92743b020e34fd966cd8763ca54b63b64a  docs/experiments/2026-10-25-maxwell-split-stage-profile.log.gz
+e75b2b58d0512d2663cafa9ef7e0191172ee226d79139e9fae82df741553046c  docs/experiments/2026-10-25-maxwell-split-stage-ollama.log.gz

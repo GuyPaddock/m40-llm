@@ -2,6 +2,15 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Qualified Split Runtime Stage Profile
+
+The selected split-plane FP32/SGEMM runtime preserves all actual 512 IDs with
+profiling off/on. Five paired requests show **0.986%** profiling overhead.
+Middle-token GPU spans remain **37.43% gate/up/SwiGLU, 22.31% down, 3.62%
+attention**; gate/up is 8.047 ms across 36 layers. These instrumented spans
+are not a new HTTP gain or measured bandwidth. See [samples, overhead,
+coverage and the fixed two-column follow-up](experiments/2026-10-25-maxwell-split-stage-profile.md).
+
 ## 2026-10-25: Split-Plane FFN Passes HTTP Qualification
 
 Release Qwen2.5-3B Q8_0, dense context 1024, canonical 65 prompt IDs and
