@@ -151,6 +151,14 @@ reclamation. C26 then compares measured quality, speed, allocation and
 preparation costs. C22/C27 remain postponed under their negative sparse
 kernel gate; do not reopen rejected n-gram or dense-layout screens.
 
+C25 starts with [a checked compact copy plan](compact_gguf.md). It maps
+retained original IDs to contiguous tensor names, separates payload from
+alignment bytes and rejects unsupported/unsafe layouts before file creation.
+Safe streaming export, frozen-quality provenance and masked-source numerical
+parity remain separate dependency-ordered commits. This is not yet an exporter
+or a measured memory-saving result. Four CPU contract tests pass in both
+feature configurations; both warning-as-error CI lanes, Clippy and fmt pass.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
