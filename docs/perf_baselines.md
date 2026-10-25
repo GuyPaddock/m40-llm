@@ -27,6 +27,9 @@ relax the gate or tune another lookup policy here. See the [full study and raw
 artifacts](experiments/2026-10-25-ngram-feasibility.md) for position versus visited
 statistics, rejection histograms, CPU drafting observations, assumptions, and
 1.0/1.5/2.0/4.0x verifier-cost sensitivity.
+The [C18 unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
+reconciles both unmet speed objectives and the conditional deferral. It adds
+no new timing measurement; C19's model-quality foundation is next.
 
 ## 2026-10-25: Exact-Kernel Round Checkpoint
 

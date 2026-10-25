@@ -13,6 +13,20 @@ experiments, the offline n-gram feasibility gate, conditional speculation, and
 separately evaluated model-changing research. It is not replaced by the
 [legacy task roadmap](archive/legacy-task-roadmap.md).
 
+## Current Phase: Separate Model Research
+
+C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
+is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
+C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
+The full research plan remains active; C19-C27 remain subject to their own
+quality/performance gates. Neither exact-engine speed objective is achieved.
+
+Next is **C19**: freeze disjoint calibration and held-out inputs, exclude the
+browser benchmark from calibration, implement teacher-forced loss/perplexity
+and task-specific scoring with variant identity, and collect dense-reference
+results. No layer/sparsity/activation tuning before those data and checks are
+frozen. Modified-model speed must not be presented as an unchanged-engine win.
+
 ## N-Gram Feasibility Checkpoint: 2026-10-25
 
 C11A is complete. The selected actual C11 browser trace gives at most 4.949%
@@ -28,10 +42,9 @@ warning-as-error tests, both Clippy lanes, and formatting pass. GPU allocation
 returns to zero after capture. Runtime/KV defaults and the measured engine
 configuration are unchanged.
 
-Next is **C18**: record the unchanged-model phase checkpoint, explicitly
-postponing C12-C17 under the negative gate. Then begin **C19** calibration and
-held-out evaluation for separately labeled model-changing research. Do not
-build a verifier or reopen layout/lookup tuning to force the screen to pass.
+C18 records this negative gate and the two unmet speed objectives in the
+phase audit above. Do not build a verifier or reopen layout/lookup tuning to
+force the screen to pass; C19 is next.
 
 C11A was split into dependency-ordered commits:
 
