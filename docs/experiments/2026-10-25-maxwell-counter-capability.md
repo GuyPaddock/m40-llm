@@ -11,6 +11,10 @@ No kernel launches or throughput measurements occur in the probe.
 
 [Raw probe output](2026-10-25-maxwell-counter-capability.txt) records each API
 status. Metric-name lookup succeeds; event-group creation fails for all three.
+An [administrator retry](2026-10-25-maxwell-counter-capability-root.txt) gives
+the same statuses, confirming that privilege escalation does not enable
+these counters on the installed stack. It ran after the FFN timing process
+exited and changed no driver settings.
 No DRAM traffic, achieved occupancy or load-efficiency result is available.
 CUDA-event elapsed time and compiler resource/disassembly evidence remain
 usable, but neither measures those counters.

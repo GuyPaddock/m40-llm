@@ -2,6 +2,18 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Adjacent-Pair FFN Loads Miss The Gate
+
+A single fixed 128-thread FP32 mapping emits vector activation loads and
+reduces the predicted per-warp request footprint, but complete one-row FFN
+throughput gains only **1.84-1.98%**, below the 5% screen. Four-row gains are
+**0.70-1.70%** with confidence intervals crossing zero. All numerical checks
+pass. Keep it benchmark-only; the qualified HTTP runtime is unchanged.
+
+Legacy CUPTI counter groups are unsupported even with administrator access,
+so footprint estimates are not DRAM measurements. See [paired results,
+request-model limits and the next aligned-layout hypothesis](experiments/2026-10-25-maxwell-coalesced-ffn-screen.md).
+
 ## 2026-10-25: FP32 Scale Factoring Does Not Qualify
 
 One fixed 128-thread experiment applies Q8 scales after eight-value FP32

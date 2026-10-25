@@ -39,11 +39,23 @@ now fails the performance screen: complete one-row FFN throughput is
 **0.07-0.28% slower**, and four-row gains are only **1.59-2.96%**. All
 primitive numerical/ownership checks pass. Fewer static multiply sites did
 not yield useful speed. Implementation `498699a` is retained benchmark-only;
-do not wire it into generation or expand geometry to rescue it. Next inspect
-the qualified kernel's packed-load transaction pattern and warp work
-distribution, using Maxwell-supported counters if available, before another
-bounded hypothesis. Memory bandwidth or occupancy is not yet measured.
+do not wire it into generation or expand geometry to rescue it. The completed
+load-distribution follow-up is below. Memory bandwidth or
+occupancy is not yet measured.
 The exact-engine objective and qualified packed128/SGEMM selection remain.
+
+The [adjacent-pair load follow-up](experiments/2026-10-25-maxwell-coalesced-ffn-screen.md)
+also misses the 5% screen: complete one-row FFN gains **1.84-1.98%** with
+positive paired intervals; four-row gains are only **0.70-1.70%**. All
+primitive checks pass. Implementation `aa767eb` remains benchmark-only.
+[CUPTI group creation](experiments/2026-10-25-maxwell-counter-capability.md)
+returns unsupported even as administrator; enumerated metrics are not
+measurements. A static request model and sm_52 code confirm improved input/
+payload coalescing, but the smaller tasks issue more scale-load groups.
+Next prototype one fixed 128-thread four-value fused kernel using existing
+separate scale/value execution weights, not more native two-value geometry.
+Preserve prepared down/vocabulary and count added preparation/memory before
+the same complete-FFN screen. Runtime/quality/HTTP work remains conditional.
 
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
