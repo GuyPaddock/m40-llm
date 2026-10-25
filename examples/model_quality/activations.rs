@@ -1,3 +1,4 @@
+use super::research::{execution_hash, validate_execution};
 use super::{
     records::{self, Report},
     run, tasks, Args, SplitChoice,
@@ -59,34 +60,6 @@ impl ActivationSetup<'_> {
             }
         }
     }
-}
-
-fn execution_hash(environment: &BTreeMap<String, String>, context: u32) -> Result<String> {
-    records::sha256(&serde_json::to_vec(
-        &json!({"environment":environment,"context_tokens":context,
-        "reference":"native full-layer Q8, explicit dense sequential prefill/decode, greedy top_k=1 seed=0",
-        "task_template":"canonical Qwen system+user ChatML; Llama3 auto chat"}),
-    )?)
-}
-
-fn validate_execution(environment: &BTreeMap<String, String>) -> Result<()> {
-    ensure!(
-        environment
-            .get("M40LLM_Q8_DECODE_STREAM")
-            .map(String::as_str)
-            == Some("decode"),
-        "activation study requires M40LLM_Q8_DECODE_STREAM=decode"
-    );
-    for key in [
-        "M40LLM_PREFILL_CHUNK_SIZE",
-        "M40LLM_KV_COMPRESSED_PREFILL_CHUNK_SIZE",
-    ] {
-        ensure!(
-            environment.get(key).is_none_or(|value| value == "0"),
-            "activation study requires sequential prefill; unset {key} or set 0"
-        );
-    }
-    Ok(())
 }
 
 pub(super) fn load_variant(
@@ -257,7 +230,7 @@ mod tests {
     /// Base execution identity is deterministic and binds both kernel flags and
     /// context capacity; sequential decode is required before model loading.
     #[test]
-    fn test_activation_execution_identity_and_sequential_preflight() -> Result<()> {
+    fn test_model_research_execution_identity_and_sequential_preflight() -> Result<()> {
         let mut environment =
             BTreeMap::from([("M40LLM_Q8_DECODE_STREAM".to_owned(), "decode".to_owned())]);
         validate_execution(&environment)?;

@@ -99,7 +99,7 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
         "activation_sparsity":model.activation_research_stats()?,
         "materialized_f32_bytes":materialized_bytes,
         "combined_tracked_device_bytes":CudaContext::total_device_bytes(),
-        "scope":"per-model persistent fields; tracked total includes BOTH resident models/workspaces, not standalone peak VRAM"
+        "scope":"per-model persistent fields; tracked total includes ALL resident models/workspaces, not standalone peak VRAM"
     }))
 }
 
@@ -197,6 +197,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.rank_layers.is_some() {
+        return super::layers::rank(&args);
+    }
     if args.capture_activations.is_some() {
         return super::activations::capture(&args);
     }
@@ -204,6 +207,12 @@ pub fn evaluate(args: Args) -> Result<()> {
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
     let activation = super::activations::load_variant(&args, &environment, &corpus, &corpus_bytes)?;
+    let layer_ranking = super::layers::load_variant(&args, &environment, &corpus, &corpus_bytes)?;
+    let skipped_layers = layer_ranking
+        .as_ref()
+        .map(|value| value.skipped_layers())
+        .transpose()?
+        .unwrap_or_else(|| args.skip_layers.clone());
     let splits = args.split.selected();
     let mut report = Report::create(&args.output)?;
     let initial_device_bytes = CudaContext::total_device_bytes();
@@ -219,13 +228,16 @@ pub fn evaluate(args: Args) -> Result<()> {
     let (mut candidate, candidate_tokenizer) = load_model(
         &args.model,
         args.context_tokens,
-        &args.skip_layers,
+        &skipped_layers,
         activation.as_ref().map_or(
             super::activations::ActivationSetup::Disabled,
             super::activations::ActivationSetup::Apply,
         ),
     )?;
     let candidate_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
+    if let Some(ranking) = &layer_ranking {
+        ranking.validate_model(&candidate, &candidate_tokenizer, &corpus)?;
+    }
     ensure!(
         reference.model_config.vocab_size == candidate.model_config.vocab_size,
         "reference/candidate vocabulary sizes differ"
@@ -253,12 +265,14 @@ pub fn evaluate(args: Args) -> Result<()> {
         "timing_scope":"resident in-process generation admission-to-return including detokenization; excludes loading/HTTP/queue; loss includes full-logit readback and CPU scoring",
         "quality_timing_trials":1,"candidate_skipped_layer_ids":candidate.layer_mask.skipped_layers(),
         "step_timing_trials":args.step_timing_trials,"step_timing_warm_prefix_tokens":args.step_timing_warm_prefix_tokens,
-        "candidate_activation_calibration":activation.as_ref().map(|value|value.describe())});
+        "candidate_activation_calibration":activation.as_ref().map(|value|value.describe()),
+        "candidate_layer_ranking":layer_ranking.as_ref().map(|value|value.describe()).transpose()?});
     let mut transforms = if candidate.layer_mask.has_skipped_layers() {
         vec![
             json!({"kind":"diagnostic_layer_mask","skipped_layer_ids":candidate.layer_mask.skipped_layers(),
             "active_layer_ids":candidate_identity["active_layer_ids"],"original_layer_count":candidate.model_config.block_count,
-            "has_in_process_compaction":false}),
+            "has_in_process_compaction":false,
+            "calibration_ranking":layer_ranking.as_ref().map(|value|value.describe()).transpose()?}),
         ]
     } else {
         Vec::new()
@@ -278,7 +292,7 @@ pub fn evaluate(args: Args) -> Result<()> {
         "executable_sha256":records::file_sha256(&std::env::current_exe()?)?,
         "build_profile":if cfg!(debug_assertions) {"dev-test"} else {"release"},
         "rustc":records::command_text("rustc",&["--version"])?,"nvcc":records::command_text("nvcc",&["--version"])?,
-        "cuda_flags":"build.rs -O3 -std=c++17 -cudart=shared -fPIC -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_52,code=compute_52 -allow-unsupported-compiler; no --use_fast_math; host header defines in build.rs",
+        "cuda_flags":super::research::CUDA_FLAGS,
         "host_compiler":records::command_text("g++",&["--version"])?,
         "device":format!("{:?}",reference.cuda.current_device_props()?),
         "cold_load_reference_ms":reference_load_ms,"cold_load_candidate_ms":candidate_load_ms,

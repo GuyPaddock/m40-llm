@@ -126,9 +126,19 @@ block influence and complete iterative loss-ranking stages. Five CPU tests
 protect deterministic ranking, original IDs, population identity and first/last
 layers. Read-only model-local capture also passes M40 full-logit/launch parity
 and an independent explicit-layer hidden-transition oracle. Unsupported
-batch/packed/graph/compressed paths reject capture before launches. See
+batch/packed/graph/compressed paths reject capture before launches; this
+integration is committed in `de98d27`. See
 [the contracts and atomic sequence](layer_ranking.md). Real-model influence,
 all-interior calibration-loss ranking and frozen-mask quality/timing remain.
+
+The shared release evaluator now has explicit calibration-only `--rank-layers`
+and checked `--layer-ranking` / `--remove-layer-count` application. A single
+resident model uses completed session scopes and drained KV/workspace resets
+for all 34+33+32 original-interior loss trials, without weakening runtime
+setup guards. Scoring is committed in `c00fca7` and agrees exactly with the
+paired evaluator. Identity, reset and CLI tests pass; clean-source real-model
+ranking and held-out results are not
+yet available. No mask or other runtime default changes.
 
 C21 used these dependency-ordered commits:
 

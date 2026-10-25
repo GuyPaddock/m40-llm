@@ -22,8 +22,9 @@ independent retained-layer oracle used in tests.
 
 Source weights and physical KV capacity remain allocated for every original
 layer. A mask only removes forward computation. It is not compact model export
-and does not reclaim weight/KV memory. Later C24/C25 work will rank candidates
-and export separately identified compact artifacts after quality evaluation.
+and does not reclaim weight/KV memory. C24's [calibration layer ranking](layer_ranking.md)
+chooses candidates before held-out evaluation. C25 compact export remains a
+separate step after an explicit candidate's quality is measured.
 
 Masked session CUDA Graph replay is rejected; keep `M40LLM_DECODE_GRAPH=0`.
 Masked packed-then-compress reconstruction is rejected because it currently

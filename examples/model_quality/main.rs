@@ -6,8 +6,12 @@ mod cuda_test_scope;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/tiny_gguf.rs"]
 mod fixture;
+#[cfg(all(feature = "cuda", nvcc))]
+mod layers;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod records;
+#[cfg(all(feature = "cuda", nvcc))]
+mod research;
 #[cfg(all(feature = "cuda", nvcc))]
 mod run;
 #[cfg(all(feature = "cuda", nvcc))]
@@ -58,8 +62,20 @@ struct Args {
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
     /// Candidate-only diagnostic, zero-based interior IDs; reference stays intact.
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, value_delimiter = ',', conflicts_with_all=["rank_layers","layer_ranking"])]
     skip_layers: Vec<usize>,
+    /// Calibration-only BI and iterative loss study; create a new frozen artifact.
+    #[arg(long, conflicts_with_all=["layer_ranking","capture_activations","activation_calibration","skip_layers"])]
+    rank_layers: Option<PathBuf>,
+    #[arg(long, default_value_t=3, value_parser=clap::value_parser!(u32).range(1..=3))]
+    layer_ranking_removals: u32,
+    #[arg(long, default_value_t = 64)]
+    layer_ranking_budget_mb: usize,
+    /// Apply a mask from this already frozen calibration-only artifact.
+    #[arg(long, requires="remove_layer_count", conflicts_with_all=["rank_layers","capture_activations","activation_calibration","skip_layers"])]
+    layer_ranking: Option<PathBuf>,
+    #[arg(long, requires="layer_ranking", value_parser=clap::value_parser!(u32).range(1..=3))]
+    remove_layer_count: Option<u32>,
     /// Capture calibration-only generated SwiGLU inputs and freeze this new artifact.
     #[arg(long, conflicts_with_all=["activation_calibration","activation_target","skip_layers"])]
     capture_activations: Option<PathBuf>,
@@ -104,5 +120,95 @@ fn main() -> Result<()> {
         // Keep the CLI/error available in non-CUDA builds, not a successful skip.
         let _ = args.split.selected();
         anyhow::bail!("evaluation requires --features cuda and an NVCC build")
+    }
+}
+
+#[cfg(test)]
+mod argument_tests {
+    use super::*;
+
+    fn parse(extra: &[&str]) -> Result<Args, clap::Error> {
+        let mut values = vec![
+            "model_quality",
+            "--reference-model",
+            "reference.gguf",
+            "--model",
+            "candidate.gguf",
+            "--variant-id",
+            "test",
+            "--output",
+            "new.jsonl",
+        ];
+        values.extend_from_slice(extra);
+        Args::try_parse_from(values)
+    }
+
+    /// Frozen masks require an explicit bounded count and cannot be combined
+    /// with ad-hoc masks, activation transforms or a simultaneous fitting run.
+    #[test]
+    fn test_layer_ranking_arguments_are_explicit_and_exclusive() {
+        for count in ["1", "2", "3"] {
+            assert_eq!(
+                parse(&[
+                    "--layer-ranking",
+                    "frozen.json",
+                    "--remove-layer-count",
+                    count
+                ])
+                .unwrap()
+                .remove_layer_count,
+                Some(count.parse::<u32>().unwrap())
+            );
+        }
+        for extra in [
+            vec!["--layer-ranking", "frozen.json"],
+            vec!["--remove-layer-count", "1"],
+            vec![
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "0",
+            ],
+            vec![
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "4",
+            ],
+            vec![
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "1",
+                "--skip-layers",
+                "2",
+            ],
+            vec![
+                "--rank-layers",
+                "new.json",
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "1",
+            ],
+            vec![
+                "--rank-layers",
+                "new.json",
+                "--capture-activations",
+                "other.json",
+            ],
+            vec![
+                "--layer-ranking",
+                "frozen.json",
+                "--remove-layer-count",
+                "1",
+                "--activation-calibration",
+                "other.json",
+                "--activation-target",
+                "0.4",
+            ],
+        ] {
+            assert!(parse(&extra).is_err());
+        }
     }
 }

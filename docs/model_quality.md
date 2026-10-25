@@ -60,6 +60,10 @@ path is introduced, and session scratch is released on success or error.
 These timings include full logits readback and CPU scoring; they are not
 ordinary generated-token latency measurements.
 
+`score_teacher_forced` / `score_loaded_model` score one model with the same
+strict-prefix and full-logit loss definition. Calibration layer ranking uses
+this path instead of recomputing an unchanged reference for every trial.
+
 ## Release Runner
 
 `examples/model_quality` compares two explicitly named model files with
@@ -102,6 +106,13 @@ Optional `--step-timing-trials 5` adds alternating matched-prefix timing pairs,
 with eight warm prefix tokens by default. These are forced-prefix greedy
 prediction steps, not free-generated or HTTP TPS. See [layer masks](layer_masks.md)
 for bounds, supported paths and the frozen one/two/three-layer probe choices.
+
+For C24, `--rank-layers new.json --split calibration` records block influence
+and iteratively tests all remaining interior removals on calibration loss.
+After freezing that artifact, apply it with `--layer-ranking frozen.json` and
+`--remove-layer-count 1` instead of an ad-hoc mask. Artifact identity/lineage
+is recorded; held-out results never choose the layer set. See
+[layer-ranking contracts and commands](layer_ranking.md).
 
 The manifest records model/corpus/config/executable hashes, source revision,
 worktree, toolchains, build flags, device, and selected splits. Split records
@@ -148,7 +159,7 @@ tokenizer/context preflight, and actual tiny-model dense generation records.
 Device-dependent checks are explicitly ignored in GPU-less NVCC CI. Include
 them on hardware with the commands above; an explicit run without a device
 fails rather than turning into a successful skip. Default example tests still
-run the three CPU/IO checks. GPU checks share a serialized test scope for device
+run CPU/IO/preflight checks. GPU checks share a serialized test scope for device
 accounting and process-wide environment; separate CUDA commands remain serial.
 
 The [real release reference over both splits](experiments/2026-10-25-model-quality-dense-reference.md)
