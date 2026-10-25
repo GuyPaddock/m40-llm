@@ -25,17 +25,26 @@ pub fn build_f16() -> (GgufModel, Vec<u8>) {
 /// Synthetic model descriptor plus tensor-data bytes, matching the existing
 /// tiny-model fixtures. The seed changes signed payloads without changing layout.
 pub fn build(seed: u8) -> (GgufModel, Vec<u8>) {
-    build_with_qkv_widths(seed, [64; 3])
+    build_projection_fixture(seed, [64; 3], 128)
 }
 
 /// Override projection widths for projection-only tail/GQA tests; these
 /// synthetic descriptors are not intended to run a full transformer forward.
-pub fn build_with_qkv_widths(seed: u8, widths: [usize; 3]) -> (GgufModel, Vec<u8>) {
+pub fn build_projection_fixture(
+    seed: u8,
+    widths: [usize; 3],
+    mlp_width: usize,
+) -> (GgufModel, Vec<u8>) {
     let (mut model, _) = build_f16();
     let mut weights = Vec::new();
-    for tensor in &mut model.tensors {
+    for (tensor_index, tensor) in model.tensors.iter_mut().enumerate() {
         if let Some(index) = QKV_NAMES.iter().position(|&name| name == tensor.name) {
             tensor.shape[1] = widths[index] as u64;
+        }
+        if tensor.name.ends_with("feed_forward.w1.weight")
+            || tensor.name.ends_with("feed_forward.w3.weight")
+        {
+            tensor.shape[1] = mlp_width as u64;
         }
         let k = tensor.shape[0] as usize;
         let n = tensor.shape[1] as usize;
@@ -45,7 +54,9 @@ pub fn build_with_qkv_widths(seed: u8, widths: [usize; 3]) -> (GgufModel, Vec<u8
         let mut data = projection::make_column_blocks(k, n);
         for block in data.chunks_exact_mut(34) {
             for value in &mut block[2..] {
-                *value = value.wrapping_add(seed);
+                *value = value
+                    .wrapping_add(seed)
+                    .wrapping_add((tensor_index as u8).wrapping_mul(19));
             }
         }
         weights.extend_from_slice(&data);

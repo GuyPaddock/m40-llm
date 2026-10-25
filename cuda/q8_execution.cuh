@@ -2,37 +2,29 @@
 #pragma once
 
 template<int Columns>
-__device__ void q8_separate_dot(
-    const float* __restrict__ input,
+__device__ __forceinline__ void q8_separate_accumulate(
     const __half* __restrict__ scales,
     const int8_t* __restrict__ values,
-    int col0, int N, int K, float (&acc)[Columns]) {
-    const int tid = threadIdx.x;
-    const int blocks_per_col = (K + 31) / 32;
-    for (int task = tid; task < blocks_per_col * 4; task += blockDim.x) {
-        const int qblock = task / 4;
-        const int offset = (task % 4) * 8;
-        const int k0 = qblock * 32 + offset;
-        float activation[8];
-        #pragma unroll
-        for (int i = 0; i < 8; ++i) {
-            activation[i] = k0 + i < K ? input[k0 + i] : 0.0f;
-        }
-        #pragma unroll
-        for (int c = 0; c < Columns; ++c) {
-            if (col0 + c < N) {
-                const size_t block = static_cast<size_t>(col0 + c) * blocks_per_col + qblock;
-                const float scale = __half2float(scales[block]);
-                // Every 32-byte value block is aligned, unlike GGUF's 34-byte stride.
-                const uint2 packed = *reinterpret_cast<const uint2*>(values + block * 32 + offset);
-                const int8_t* q = reinterpret_cast<const int8_t*>(&packed);
-                #pragma unroll
-                for (int i = 0; i < 8; ++i) {
-                    acc[c] += activation[i] * (static_cast<float>(q[i]) * scale);
-                }
+    const float (&activation)[8], int col0, int N, int blocks_per_col,
+    int qblock, int offset, float (&acc)[Columns]) {
+    #pragma unroll
+    for (int c = 0; c < Columns; ++c) {
+        if (col0 + c < N) {
+            const size_t block = static_cast<size_t>(col0 + c) * blocks_per_col + qblock;
+            const float scale = __half2float(scales[block]);
+            const uint2 packed = *reinterpret_cast<const uint2*>(values + block * 32 + offset);
+            const int8_t* q = reinterpret_cast<const int8_t*>(&packed);
+            #pragma unroll
+            for (int i = 0; i < 8; ++i) {
+                acc[c] += activation[i] * (static_cast<float>(q[i]) * scale);
             }
         }
     }
+}
+
+template<int Columns>
+__device__ __forceinline__ void q8_separate_reduce(float (&acc)[Columns]) {
+    const int tid = threadIdx.x;
     extern __shared__ float reduction[];
     #pragma unroll
     for (int c = 0; c < Columns; ++c) {
@@ -54,6 +46,66 @@ __device__ void q8_separate_dot(
             acc[c] = reduction[c * blockDim.x];
         }
     }
+}
+
+template<int Columns>
+__device__ __forceinline__ void q8_separate_dot(
+    const float* input, const __half* scales, const int8_t* values,
+    int col0, int N, int K, float (&acc)[Columns]) {
+    const int blocks_per_col = (K + 31) / 32;
+    for (int task = threadIdx.x; task < blocks_per_col * 4; task += blockDim.x) {
+        const int qblock = task / 4;
+        const int offset = (task % 4) * 8;
+        const int k0 = qblock * 32 + offset;
+        float activation[8];
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) {
+            activation[i] = k0 + i < K ? input[k0 + i] : 0.0f;
+        }
+        q8_separate_accumulate<Columns>(scales, values, activation, col0, N,
+                                        blocks_per_col, qblock, offset, acc);
+    }
+    q8_separate_reduce<Columns>(acc);
+}
+
+__global__ void q8_separate_mlp_kernel(
+    const float* input, const __half* gate_scales, const int8_t* gate_values,
+    const __half* up_scales, const int8_t* up_values, float* output, int H, int K) {
+    const int col = blockIdx.x;
+    const int blocks = (K + 31) / 32;
+    float gate[1] = {};
+    float up[1] = {};
+    for (int task = threadIdx.x; task < blocks * 4; task += blockDim.x) {
+        const int qblock = task / 4;
+        const int offset = (task % 4) * 8;
+        const int k0 = qblock * 32 + offset;
+        float activation[8];
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) {
+            activation[i] = k0 + i < K ? input[k0 + i] : 0.0f;
+        }
+        q8_separate_accumulate<1>(gate_scales, gate_values, activation, col, H, blocks,
+                                 qblock, offset, gate);
+        q8_separate_accumulate<1>(up_scales, up_values, activation, col, H, blocks,
+                                 qblock, offset, up);
+    }
+    float acc[2] = {gate[0], up[0]};
+    q8_separate_reduce<2>(acc);
+    if (threadIdx.x == 0) output[col] = acc[0] * (1.0f / (1.0f + expf(-acc[0]))) * acc[1];
+}
+
+extern "C" int m40llm_mlp_gate_up_swiglu_f32xq8_separate_async(
+    M40llmCudaContext* ctx, const void* input, const void* gate_scales,
+    const void* gate_values, const void* up_scales, const void* up_values,
+    void* output, int H, int K, uint32_t stream_kind) {
+    if (!ctx || !input || !gate_scales || !gate_values || !up_scales || !up_values || !output) return -1;
+    if (H <= 0 || K <= 0 || K > INT32_MAX - 31 || stream_kind > 1) return -4;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
+    q8_separate_mlp_kernel<<<H, 128, 2 * 128 * sizeof(float), stream>>>(
+        static_cast<const float*>(input), static_cast<const __half*>(gate_scales),
+        static_cast<const int8_t*>(gate_values), static_cast<const __half*>(up_scales),
+        static_cast<const int8_t*>(up_values), static_cast<float*>(output), H, K);
+    return cudaGetLastError() == cudaSuccess ? 0 : -2;
 }
 
 template<int Columns>

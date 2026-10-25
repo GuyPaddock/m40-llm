@@ -44,8 +44,15 @@ C10A.1 is committed as `11f2fb6`. Split C10A.2 into focused consumer commits:
 its own numerical/stream tests; the HTTP gate waits for all three.
 Prepared fused QKV now preserves one-launch dispatch, optional biases, and both
 producer streams; CPU/native-GPU tail and shape tests pass. The real Qwen Q8
-canary returns `4` and records 756 prepared fused-QKV launches. Prepared fused
-MLP and greedy vocabulary consumers remain next. There is no new HTTP speed claim.
+canary returns `4` and records 756 prepared fused-QKV launches.
+Prepared fused gate/up/SwiGLU now retains a one-column/128-thread launch with
+shared activation reads and aligned split values, not the failed four-column
+fusion. Independent-weight, tail, stream, CPU/native tests pass. Greedy
+vocabulary integration remains next. There is no new HTTP speed claim.
+The real fully prepared QKV/MLP canary returns `4` with 756 launches of each
+consumer. Its unpaired debug generation total is higher than the previous
+native-MLP canary; preserve that evidence and compare native/prepared MLP
+explicitly in the release gate instead of assuming all prepared fusion wins.
 
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup

@@ -23,6 +23,21 @@ struct PreparedTensor {
     tiled: Option<DeviceQ8ExecutionWeight>,
 }
 
+impl PreparedTensor {
+    fn split_planes(&self, n: i32, k: i32) -> Result<[*const c_void; 2]> {
+        let shape = self.split.key().source.shape();
+        ensure!(
+            n > 0 && k > 0 && shape.input_dim() == k as usize && shape.output_dim() == n as usize,
+            "prepared Q8 projection shape mismatch"
+        );
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.split.view()
+        else {
+            anyhow::bail!("prepared Q8 fused projection requires split planes");
+        };
+        Ok([scales.as_ptr(), values.as_ptr()])
+    }
+}
+
 /// Immutable model-owned cache. Pointer lookup is local to this model/context;
 /// owned execution keys retain semantic model/tensor/layout identity.
 pub struct Q8ExecutionCache {
@@ -196,6 +211,39 @@ impl Q8ExecutionCache {
     }
 
     /// # Safety
+    /// All spans belong to this model/context and remain live until completion.
+    /// The caller supplies the dependency from the activation producer.
+    pub(crate) unsafe fn try_project_mlp(
+        &self,
+        ctx: &CudaContext,
+        input: *const c_void,
+        sources: [*const c_void; 2],
+        output: *mut c_void,
+        h: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<bool> {
+        let [Some(gate), Some(up)] = sources.map(|source| self.tensors.get(&(source as usize)))
+        else {
+            return Ok(false);
+        };
+        ensure!(
+            !input.is_null() && !output.is_null() && input != output.cast_const(),
+            "invalid/aliased prepared Q8 MLP pointers"
+        );
+        ctx.mlp_gate_up_swiglu_f32xq8_separate_async(
+            input,
+            gate.split_planes(h, k)?,
+            up.split_planes(h, k)?,
+            output,
+            h,
+            k,
+            stream,
+        )?;
+        Ok(true)
+    }
+
+    /// # Safety
     /// Source/input/output/bias pointers have the stated spans in this model's
     /// context. The caller supplies producer dependencies and retains all owners.
     pub(crate) unsafe fn try_project_qkv(
@@ -218,13 +266,6 @@ impl Q8ExecutionCache {
         let mut scales = [std::ptr::null(); 3];
         let mut values = [std::ptr::null(); 3];
         for (i, entry) in [q, key, v].into_iter().enumerate() {
-            let shape = entry.split.key().source.shape();
-            ensure!(
-                widths[i] > 0
-                    && shape.input_dim() == k as usize
-                    && shape.output_dim() == widths[i] as usize,
-                "prepared Q8 QKV shape mismatch"
-            );
             ensure!(
                 !outputs[i].is_null() && outputs[i].cast_const() != input,
                 "invalid/aliased prepared Q8 QKV output"
@@ -235,16 +276,7 @@ impl Q8ExecutionCache {
                     "prepared Q8 QKV outputs must not alias"
                 );
             }
-            let DeviceQ8ExecutionView::SeparateScalesValues {
-                scales: s,
-                values: v,
-                ..
-            } = entry.split.view()
-            else {
-                anyhow::bail!("prepared Q8 QKV requires split planes");
-            };
-            scales[i] = s.as_ptr();
-            values[i] = v.as_ptr();
+            [scales[i], values[i]] = entry.split_planes(widths[i], k)?;
         }
         ctx.qkv_f32xq8_separate_async(input, scales, values, biases, outputs, widths, k, stream)?;
         Ok(true)

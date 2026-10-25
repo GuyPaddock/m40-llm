@@ -271,6 +271,22 @@ impl LoadedModel {
                 && self.gguf_weight_dtype(d_w_gate_f16) == GgmlDType::Q8_0
                 && self.gguf_weight_dtype(d_w_up_f16) == GgmlDType::Q8_0
             {
+                let stream = if q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self.q8_execution.try_project_mlp(
+                    &self.cuda,
+                    d_x_f32,
+                    [d_w_gate_f16, d_w_up_f16],
+                    d_out_f32,
+                    h,
+                    k,
+                    stream,
+                )? {
+                    return Ok(true);
+                }
                 self.cuda
                     .mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(
                         d_x_f32,

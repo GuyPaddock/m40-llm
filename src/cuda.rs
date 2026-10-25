@@ -295,6 +295,18 @@ mod ffi {
             H: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_mlp_gate_up_swiglu_f32xq8_separate_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate_scales: *const c_void,
+            gate_values: *const c_void,
+            up_scales: *const c_void,
+            up_values: *const c_void,
+            output: *mut c_void,
+            h: i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_qkv_f32xq8_separate_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,
@@ -2711,6 +2723,42 @@ impl CudaContext {
             let _ = (d_a_f32, d_w_gate_q8_0, d_w_up_q8_0, d_c_f32, h, k);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// Input, split weight planes, and output have the supplied dimensions on
+    /// this context and remain live until the producer stream completes.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn mlp_gate_up_swiglu_f32xq8_separate_async(
+        &self,
+        input: *const c_void,
+        gate: [*const c_void; 2],
+        up: [*const c_void; 2],
+        output: *mut c_void,
+        h: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_mlp_gate_up_swiglu_f32xq8_separate_async(
+            self.inner.raw.as_ptr(),
+            input,
+            gate[0],
+            gate[1],
+            up[0],
+            up[1],
+            output,
+            h,
+            k,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_mlp_gate_up_swiglu_f32xq8_separate_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("mlp_gate_up_swiglu_f32xq8_separate");
+        Ok(())
     }
 
     /// # Safety

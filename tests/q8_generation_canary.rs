@@ -254,7 +254,7 @@ fn q8_projection_launches() -> u64 {
 
 /// A supplied supported Q8 model must produce a finite arithmetic answer while
 /// executing Q8 projections, whether native or opt-in prepared layouts are used.
-/// Requested prepared QKV fusion must be exercised by the real forward path.
+/// Requested prepared QKV/MLP fusion must execute in the real forward path.
 #[test]
 fn q8_0_real_model_generation_canary() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -326,6 +326,22 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
         .get("qkv_f32xq8_separate")
         .map_or(0, |counts| counts.launches);
     eprintln!("[q8-canary] prepared_qkv_launches={prepared_qkv_launches}");
+    let prepared_mlp_launches = profile::snapshot()
+        .by_op
+        .get("mlp_gate_up_swiglu_f32xq8_separate")
+        .map_or(0, |counts| counts.launches);
+    eprintln!("[q8-canary] prepared_mlp_launches={prepared_mlp_launches}");
+    if model.q8_execution_stats().mode != Q8ExecutionMode::Off
+        && matches!(
+            std::env::var("M40LLM_FUSED_Q8_MLP_SWIGLU").ok().as_deref(),
+            Some("1" | "true" | "TRUE")
+        )
+    {
+        assert!(
+            prepared_mlp_launches > 0,
+            "requested prepared fused MLP must execute"
+        );
+    }
     if model.q8_execution_stats().mode != Q8ExecutionMode::Off
         && matches!(
             std::env::var("M40LLM_FUSED_Q8_QKV").ok().as_deref(),

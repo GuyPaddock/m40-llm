@@ -20,7 +20,7 @@ fn make_model(mode: Q8ExecutionMode, widths: [usize; 3]) -> Result<LoadedModel> 
     let (gguf, bytes) = if widths == [64; 3] {
         fixture::build(0)
     } else {
-        fixture::build_with_qkv_widths(0, widths)
+        fixture::build_projection_fixture(0, widths, 128)
     };
     LoadedModel::from_gguf_with_q8_execution(
         gguf,

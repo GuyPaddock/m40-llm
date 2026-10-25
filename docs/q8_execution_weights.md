@@ -73,9 +73,18 @@ All three prepared tensors must be present and shape-compatible; missing cache
 entries retain native fused QKV, while invalid cached shapes fail before launch.
 Multi-row calls still use the standard projection path.
 
-Fused gate/up/SwiGLU and the specialized greedy vocabulary path remain native
-until their C10A.2 consumers are ready. Use of the cache is experimental, not
-a claim that the current selected fused HTTP benchmark is faster.
+`M40LLM_FUSED_Q8_MLP_SWIGLU=1` also lets prepared caches supply fused gate/up
+and SwiGLU. This keeps one output column per 128-thread block, reuses each
+activation vector across both operands, and reads aligned split value planes.
+It deliberately does not retry the earlier failed four-column fused MLP
+experiment. Split accumulation/reduction is shared with standard projections
+and QKV; no intermediate gate/up allocation or extra activation launch is added.
+Both weights must be cached and shape-compatible; missing cache entries retain
+the native fused path.
+
+The specialized greedy vocabulary path remains native until its C10A.2
+integration is ready. Use of the cache is experimental, not a claim that the
+current selected fused HTTP benchmark is faster.
 
 ## Source and Identity
 
@@ -208,6 +217,21 @@ It uses `M40LLM_Q8_EXECUTION_WEIGHTS=split`, decode-stream Q8 scheduling,
 Q8 decode/MLP split-qblock settings of 4. The KV cache is explicitly dense,
 the context bound 256, and the Rust test profile is unoptimized.
 
+Prepared MLP tests use distinct gate/up payloads and cover hidden widths
+1/31/65/128, positive/negative input amplitudes, both streams, both cache modes,
+CPU/native parity, output guards, and rejected invalid/non-decode calls.
+Synthetic tensor payloads are now distinct by tensor so accidental operand
+swaps cannot pass QKV/MLP tests merely because fixture weights were identical.
+
+The full prepared-QKV/MLP Qwen canary answers `4`, with 756 launches of each
+prepared fused consumer and finite prompt logits. See the
+[raw MLP canary](experiments/2026-10-24-q8-prepared-mlp-canary.txt). Its debug
+generation total is 15.637 s versus 10.698 s in the earlier native-MLP canary.
+These are unpaired debug correctness runs, not a release promotion comparison,
+but the increase is a reason to keep native fused MLP as an alternative in
+C10A.3. Do not infer that preparation improves every fused consumer. The later
+release gate must measure per-family choices without another broad tuning round.
+
 C08 validation passes eight CPU tests for semantic identities, source bounds,
 real/synthetic shapes, plan overflow/alignment, byte copies, and failing
 allocation/upload boundaries using a working RAII fake. A real CUDA test
@@ -236,9 +260,11 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_runtime_weights -- --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_qkv -- --nocapture --test-threads=1
+M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
+  --test q8_prepared_mlp -- --nocapture --test-threads=1
 ```
 
-Next: finish prepared fused consumers, model-level parity, and repeated HTTP
+Next: finish prepared greedy vocabulary integration, model-level parity, and repeated HTTP
 gates. C09/C10 isolated results do not prove whole-model wins or justify
 replacing useful fused operations. Keep setup,
 duplicate resident weights, and peak payload accounting explicit.

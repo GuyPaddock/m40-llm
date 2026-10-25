@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Prepared Q8 Runtime Correctness Checkpoint
+
+C10A adds opt-in model-owned split/mixed layouts and prepared fused QKV/MLP
+consumers. CUDA parity and real Qwen Q8 arithmetic canaries pass; preparation
+remains off by default. Qwen split preparation adds **3,278,553,088 bytes**
+alongside **3,279,519,744 source bytes**, before KV/workspace.
+
+Do not infer an E2E win from this checkpoint. The **unoptimized, unpaired**
+correctness canaries record 10.698 s generation with prepared QKV/native MLP
+versus 15.637 s with both prepared. This is a negative signal for prepared MLP,
+not a controlled release verdict. Keep native fused MLP as an alternative for
+the later per-family release comparison. There is no new tuning round or
+default promotion. The selected HTTP result remains **31.852 tok/s**.
+
+See [configuration, limitations, and raw canary logs](q8_execution_weights.md#validation-and-next-work).
+
 ## 2026-10-24: Input-Tiled Q8 Projection Experiment
 
 C10 completes the independent input-tiled layout screen within twelve
