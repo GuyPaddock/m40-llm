@@ -246,6 +246,14 @@ decode bitwise at Qwen down dimensions: cache dispatch currently selects 128,
 and the selected native coltile4/split4 path uses 256. No new kernel/layout
 search or parity-gate relaxation is authorized by this observation.
 
+The pointwise check now passes: existing 4-column/256-thread separate
+projection matches every native FP32 bit at K/N 2048/33 and 11008/2048.
+The 128-thread control differs in 30/33 and 1893/2048 outputs, respectively,
+using non-binary activations and synthetic Q8 payloads. Both separate-projection
+tests pass with cuBLAS on/off. This is numerical evidence, not real-model
+timing. Next correct only the single-row prepared-down launch selection,
+record it in cache telemetry, and require real same-prefix and HTTP checks.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

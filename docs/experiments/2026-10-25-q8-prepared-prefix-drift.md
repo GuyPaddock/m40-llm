@@ -98,6 +98,28 @@ add a layout/geometry sweep, weaken the trace gate, suppress stopping or
 promote the candidate from coherence alone. Any dispatch correction still
 needs fresh same-prefix and full-workload validation.
 
+### Existing-Launch Pointwise Check
+
+The added CUDA regression now checks the native coltile4/split4 kernel against
+both existing split-plane launches on identical non-binary activations and
+synthetic signed Q8 payloads. These are Qwen-shaped correctness inputs, not
+new measurements of real-model speed or quality. Rust tests use the dev
+profile; CUDA retains its normal `-O3` build.
+
+| K / N | 128-Thread Different FP32 Outputs | Maximum Absolute Difference | 256-Thread Different FP32 Outputs |
+| --- | ---: | ---: | ---: |
+| 2048 / 33 | 30 / 33 | 1.90735e-6 | 0 / 33 |
+| 11008 / 2048 | 1893 / 2048 | 2.47955e-5 | 0 / 2048 |
+
+The existing 4-column/256-thread separate kernel matches every native output
+bit at both shapes, including the output-column tail. Payload preservation
+alone did not imply bitwise native arithmetic under the old 128-thread launch.
+Both separate-projection tests pass with cuBLAS on/off, as does CUDA/server
+all-targets Clippy. See [on](2026-10-25-q8-native-order-parity-on.txt) and
+[off](2026-10-25-q8-native-order-parity-off.txt) raw logs and the regression in
+`tests/q8_separate_projection.rs`. Model-cache dispatch still uses 128 until
+a separate correction is implemented and validated; no speed claim follows.
+
 ## Setup, Memory and Validation
 
 Candidate preparation takes 9697.245 ms within 39388.540 ms setup through

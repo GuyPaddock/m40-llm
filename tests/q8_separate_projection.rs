@@ -1,5 +1,9 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+#[path = "common/cuda_test_scope.rs"]
+mod cuda_test_scope;
+#[path = "common/env_restore.rs"]
+mod env_restore;
 #[path = "common/q8_projection.rs"]
 mod fixture;
 
@@ -27,6 +31,7 @@ fn read_output(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<f32>> {
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_separate_projection_matches_source_and_rejects_invalid_buffers() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let ctx = CudaContext::new(-1)?;
     let props = ctx.current_device_props()?;
     ensure!(
@@ -135,5 +140,100 @@ fn test_separate_projection_matches_source_and_rejects_invalid_buffers() -> Resu
         );
         assert_eq!(read_output(&ctx, &d_output)?, prior);
     }
+    Ok(())
+}
+
+/// The existing 4-column/256-thread split-plane launch must preserve the
+/// selected native coltile4/split4 accumulation order at aligned decode shapes.
+/// Non-binary activations expose the 128-thread order difference; matching
+/// payload values alone is not enough to establish bitwise native parity.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_separate_256_preserves_native_decode_accumulation_bits() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
+    let _env: Vec<_> = [
+        ("M40LLM_Q8_DECODE_STREAM", "decode"),
+        ("M40LLM_Q8_DECODE_COL_TILE", "4"),
+        ("M40LLM_Q8_DECODE_SPLIT_QBLOCK", "4"),
+    ]
+    .into_iter()
+    .map(|(key, value)| env_restore::EnvRestore::set(key, value))
+    .collect();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    let mut different_128_outputs = 0;
+    for (k, n) in [(2048, 33), (11008, 2048)] {
+        let shape = Q8MatrixShape::new(k, n)?;
+        let identity =
+            Q8SourceIdentity::from_column_blocks([1; 32], "native-order".into(), 0, shape)?;
+        let bytes = fixture::make_column_blocks(k, n);
+        let source = Q8SourceView::from_tensor_bytes(&identity, &bytes)?;
+        let native = DeviceQ8ExecutionWeight::upload(
+            &ctx,
+            &HostQ8ExecutionWeight::copy_column_blocks(source)?,
+        )?;
+        let split = DeviceQ8ExecutionWeight::upload(
+            &ctx,
+            &HostQ8ExecutionWeight::separate_scales_values(source)?,
+        )?;
+        let input: Vec<f32> = (0..k)
+            .map(|i| (i as f32 * 0.017).sin() * 0.73 + (i as f32 * 0.031).cos() * 0.11)
+            .collect();
+        let d_input = DeviceBuffer::new_tagged(&ctx, k * 4, "native_order:input")?;
+        let expected = DeviceBuffer::new_tagged(&ctx, n * 4, "native_order:reference")?;
+        let output = DeviceBuffer::new_tagged(&ctx, n * 4, "native_order:output")?;
+        let m40_llm::infer::execution_weights::DeviceQ8ExecutionView::ColumnBlocks {
+            blocks, ..
+        } = native.view()
+        else {
+            unreachable!()
+        };
+        unsafe {
+            ctx.memcpy_h2d(d_input.as_mut_ptr(), input.as_ptr().cast(), d_input.bytes())?;
+            ctx.gemm_f32xq8_0_gguf_f32_decode_async(
+                d_input.as_ptr(),
+                blocks.as_ptr(),
+                expected.as_mut_ptr(),
+                1,
+                n as i32,
+                k as i32,
+            )?;
+        }
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        ctx.synchronize_stream(CudaStream::Prefill)?;
+        let expected = read_output(&ctx, &expected)?;
+        for threads in [128, 256] {
+            unsafe {
+                split.project_separate_async(
+                    &d_input,
+                    &output,
+                    1,
+                    Q8SeparateLaunch::new(4, threads)?,
+                )?;
+            }
+            ctx.synchronize_stream(CudaStream::Decode)?;
+            let actual = read_output(&ctx, &output)?;
+            let different = actual
+                .iter()
+                .zip(&expected)
+                .filter(|(a, b)| a.to_bits() != b.to_bits())
+                .count();
+            let (maximum, mean) = fixture::measure_error(&actual, &expected);
+            eprintln!("native-order K={k} N={n} threads={threads} different={different}/{n} max={maximum:e} mean={mean:e}");
+            if threads == 256 {
+                assert_eq!(
+                    different, 0,
+                    "same native thread/task/reduction order must preserve every FP32 output bit"
+                );
+            } else {
+                different_128_outputs += different;
+            }
+        }
+    }
+    assert!(
+        different_128_outputs > 0,
+        "non-binary inputs must exercise a real reduction-order difference"
+    );
+    assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
