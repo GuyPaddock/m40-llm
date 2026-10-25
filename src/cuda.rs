@@ -4624,6 +4624,11 @@ fn attention_group_name(group: u32) -> &'static str {
 }
 
 impl KVCache {
+    #[cfg(feature = "cuda")]
+    pub(crate) fn has_same_storage(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     pub fn num_heads(&self) -> u32 {
         self.inner.num_heads
     }

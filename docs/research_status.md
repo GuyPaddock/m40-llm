@@ -41,6 +41,14 @@ C19 is split into dependency-ordered commits:
    retain dense failures as capability evidence, and publish the exact current
    C19 completion status before C20/C21. No model tuning in this unit.
 
+Corpus/scoring is frozen in `d1294fc`, before dense results. Its SHA-256 is
+`2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38`.
+Teacher-forced CPU loss and CUDA session comparison are implemented next,
+including strict prefixes, token weighting, full-vocabulary drift, cache reset,
+and shared-KV rejection. See [the evaluation contract](model_quality.md).
+CLI/reporting and the real dense-reference corpus run remain required; C19
+is not complete and no variant tuning is authorized yet.
+
 ## N-Gram Feasibility Checkpoint: 2026-10-25
 
 C11A is complete. The selected actual C11 browser trace gives at most 4.949%
