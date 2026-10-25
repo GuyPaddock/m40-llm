@@ -25,6 +25,7 @@ fn read_output(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<f32>> {
 /// six retained vector configurations, including K/N tails and multiple rows. Guard outputs
 /// catch padded-column writes; invalid calls must leave prior output unchanged.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_input_tiled_projection_matches_cpu_and_gguf_with_guarded_tails() -> Result<()> {
     let ctx = CudaContext::new(-1)?;
     let props = ctx.current_device_props()?;

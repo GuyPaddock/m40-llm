@@ -151,7 +151,9 @@ mod tests {
     /// Two real independent CUDA models must emit matching prompt/output IDs,
     /// explicit dense timing/memory records, and inconclusive dense-failed scores.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_task_records_use_explicit_dense_reference() -> Result<()> {
+        let _scope = crate::cuda_test_scope::lock_cuda();
         let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
         let initial = CudaContext::total_device_bytes();
         {

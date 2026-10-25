@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+#[path = "common/cuda_test_scope.rs"]
+mod cuda_test_scope;
 #[path = "common/env_restore.rs"]
 mod env_restore;
 #[path = "common/tiny_gguf.rs"]
@@ -192,7 +194,9 @@ fn read_kv(
 /// Empty-mask full logits match the unchanged path exactly; invalid/late setup
 /// leaves allocations and a previously configured model usable.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_empty_mask_logits_and_setup_validation() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
     let config = KvCompressionConfig::dense_reference();
     let _runtime = ScopedRuntimeConfig::new(config.clone());
@@ -218,7 +222,9 @@ fn test_empty_mask_logits_and_setup_validation() -> Result<()> {
 /// launch counts match explicit layer-by-layer execution across two sequences;
 /// seeded skipped KV stays untouched and resident capacity is not reclaimed.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_masked_forward_matches_manual_layers_and_preserves_kv_ids() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
     let config = KvCompressionConfig::dense_reference();
     let _runtime = ScopedRuntimeConfig::new(config.clone());
@@ -387,7 +393,9 @@ fn check_packed_and_batched(head_dim: usize, config: KvCompressionConfig) -> Res
 /// Mixed-length packed prefill and row-batched decode must honor the same mask
 /// on head64/head128, including Qwen biases/RoPE and physical compressed state.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_masked_packed_prefill_and_batched_decode() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
     let initial = CudaContext::total_device_bytes();
     for head_dim in [64, 128] {
@@ -409,7 +417,9 @@ fn test_masked_packed_prefill_and_batched_decode() -> Result<()> {
 /// The device-parameter forward entrypoint must preserve mask routing, while
 /// unvalidated session graph replay fails explicitly before scratch allocation.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_masked_device_params_and_graph_session_guard() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
     let config = KvCompressionConfig::dense_reference();
     let _runtime = ScopedRuntimeConfig::new(config.clone());
@@ -468,7 +478,9 @@ fn test_masked_device_params_and_graph_session_guard() -> Result<()> {
 /// Reconstruction currently fills every physical slot. A masked session must
 /// reject it before mutation/allocation and remain usable for sequential decode.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_masked_reconstruction_rejects_without_mutating_session() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _graph = EnvRestore::set("M40LLM_DECODE_GRAPH", "0");
     let config = KvCompressionConfig {
         recent_window: 4,

@@ -28,6 +28,7 @@ fn context() -> Result<CudaContext> {
 /// Every typed layout owns its requested planes independently of host/source
 /// lifetime, preserves bytes on upload, and releases tracked device payload.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_device_execution_planes_round_trip_and_release() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let ctx = context()?;
@@ -87,6 +88,7 @@ fn test_device_execution_planes_round_trip_and_release() -> Result<()> {
 /// A copied column-block view remains valid after host storage is dropped and
 /// drives the real Q8 projection, including K/N tails and a nonzero source offset.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_owned_column_blocks_drive_existing_projection() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let ctx = context()?;

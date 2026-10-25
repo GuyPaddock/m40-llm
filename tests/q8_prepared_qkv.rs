@@ -179,6 +179,7 @@ fn run_qkv(
 /// streams while using one launch and no per-call allocation/copy/sync. Native
 /// GPU and CPU references agree; invalid shapes and non-decode calls do not launch.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_prepared_fused_qkv_matches_native_without_splitting_launches() -> Result<()> {
     let _fused = EnvRestore::set("M40LLM_FUSED_Q8_QKV", "1");
     let initial = CudaContext::total_device_bytes();

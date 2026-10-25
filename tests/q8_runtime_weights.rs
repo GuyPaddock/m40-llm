@@ -102,6 +102,7 @@ fn project(
 /// retains explicit sync/async producer-stream behavior, rejects failed setup
 /// without leaks, and never aliases another model's cache.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()> {
     let _decode = EnvRestore::set("M40LLM_Q8_DECODE_STREAM", "decode");
     let _tiled = EnvRestore::set("M40LLM_Q8_DECODE_TILED_COLS", "1");

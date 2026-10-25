@@ -285,18 +285,18 @@ Run through the project environment with hardware access for CUDA tests:
 source scripts/dev-env.sh
 RUSTFLAGS='-D warnings' cargo test --no-default-features --locked
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --lib \
-  infer::execution_weights -- --nocapture --test-threads=1
+  infer::execution_weights -- --include-ignored --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_execution_weights --test cuda_allocation_errors \
-  -- --nocapture --test-threads=1
+  -- --include-ignored --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
-  --test q8_runtime_weights -- --nocapture --test-threads=1
+  --test q8_runtime_weights -- --include-ignored --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
-  --test q8_prepared_qkv -- --nocapture --test-threads=1
+  --test q8_prepared_qkv -- --include-ignored --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
-  --test q8_native_mlp_cache -- --nocapture --test-threads=1
+  --test q8_native_mlp_cache -- --include-ignored --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
-  --test q8_prepared_greedy -- --nocapture --test-threads=1
+  --test q8_prepared_greedy -- --include-ignored --nocapture --test-threads=1
 ```
 
 The repeated HTTP gate is now complete. Full preparation reduces throughput

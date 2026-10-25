@@ -21,6 +21,7 @@ use m40_llm::{
 /// disabling device greedy sampling, changing tie handling, or copying logits.
 /// Both streams and cache modes agree with native and full-logits references.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_prepared_greedy_uses_cached_vocabulary_and_one_token_readback() -> Result<()> {
     let _fused = EnvRestore::set("M40LLM_Q8_LM_HEAD_ARGMAX", "1");
     let initial = CudaContext::total_device_bytes();

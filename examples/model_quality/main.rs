@@ -1,4 +1,7 @@
 #[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "../../tests/common/cuda_test_scope.rs"]
+mod cuda_test_scope;
+#[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/tiny_gguf.rs"]
 mod fixture;
 #[cfg(any(all(feature = "cuda", nvcc), test))]

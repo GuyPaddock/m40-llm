@@ -1,5 +1,7 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+#[path = "common/cuda_test_scope.rs"]
+mod cuda_test_scope;
 #[path = "common/tiny_gguf.rs"]
 mod fixture;
 use anyhow::Result;
@@ -27,7 +29,9 @@ fn model() -> Result<LoadedModel> {
 /// Independent CUDA sessions must produce identical full logits for the same
 /// model, reset KV between passages, preserve failure cleanup, and release scratch.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_cuda_teacher_forcing_isolated_sessions_and_reset() -> Result<()> {
+    let _scope = cuda_test_scope::lock_cuda();
     let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     let initial = CudaContext::total_device_bytes();
     {

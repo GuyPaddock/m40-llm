@@ -51,6 +51,7 @@ fn ctx_m40() -> Result<CudaContext> {
 
 /// Completed event queries must preserve counters and reject foreign contexts.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_event_query_does_not_synchronize() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap();
     let ctx = ctx_m40()?;
@@ -81,6 +82,7 @@ fn test_event_query_does_not_synchronize() -> Result<()> {
 /// Reuse event pairs across tokens while preserving an explicit two-stream data
 /// dependency; resolving timestamps adds no synchronization or other GPU work.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap();
     let ctx = ctx_m40()?;
@@ -163,6 +165,7 @@ fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Resu
 /// counts; disabled profiling creates no report, and layer labels survive reuse.
 /// Graph capture is rejected rather than producing incomplete attribution.
 #[test]
+#[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_sampled_generation_profile_matches_unprofiled_generation() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap();
     let _ctx = ctx_m40()?;

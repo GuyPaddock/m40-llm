@@ -138,13 +138,19 @@ errors, and verify subsequent usability and allocation cleanup.
 source scripts/dev-env.sh
 cargo test --no-default-features --test research_quality --test teacher_forced_loss
 M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
-  cargo test --features cuda --test teacher_forced_cuda -- --test-threads=1
+  cargo test --features cuda --test teacher_forced_cuda -- --include-ignored --test-threads=1
 M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
-  cargo test --features cuda --example model_quality -- --test-threads=1
+  cargo test --features cuda --example model_quality -- --include-ignored --test-threads=1
 ```
 
 Runner tests check reference-dependent conclusions, report preservation,
 tokenizer/context preflight, and actual tiny-model dense generation records.
+Device-dependent checks are explicitly ignored in GPU-less NVCC CI. Include
+them on hardware with the commands above; an explicit run without a device
+fails rather than turning into a successful skip. Default example tests still
+run the three CPU/IO checks. GPU checks share a serialized test scope for device
+accounting and process-wide environment; separate CUDA commands remain serial.
+
 The [real release reference over both splits](experiments/2026-10-25-model-quality-dense-reference.md)
 completes C19: identical generated traces/full logits, 3/6 calibration and 4/6
 held-out fixed-rubric passes, with dense failures retained as inconclusive for

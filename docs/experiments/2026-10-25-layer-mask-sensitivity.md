@@ -150,6 +150,13 @@ for the legacy minimal-forward test. Validation passes 45 CUDA tests with
 cuBLAS, 21 without, the full warning-as-error non-CUDA suite, both Clippy lanes,
 six runner CUDA tests, 13 focused CPU tests, release build and formatting.
 
+A follow-up CI audit marks hardware-only research assertions explicitly
+ignored for GPU-less NVCC CI. Current hardware commands use
+`--include-ignored --test-threads=1`; the 25 gated lib/integration assertions and evaluator checks
+were explicitly rerun on M40. The no-device lane passes, while an explicit
+hardware request without a device fails. This changes test invocation, not
+the inference implementation or the measurements above.
+
 Next is C21's bounded fixed 16-of-32 sparse-Q8 format/kernel experiment against
 matched-zero dense weights. Layer influence ranking remains C24. Keep these
 masks diagnostic, with no runtime promotion. Exact HTTP targets 53.06 and

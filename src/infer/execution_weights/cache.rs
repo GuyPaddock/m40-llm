@@ -318,6 +318,7 @@ mod tests {
     /// Aliased, out-of-bounds, and invalid-shape plans must be rejected before
     /// any prepared tensor upload is attempted, preserving native storage.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_invalid_preparation_plans_do_not_upload() -> Result<()> {
         let ctx = CudaContext::new(-1)?;
         let weights = vec![13_u8; 136];
@@ -389,6 +390,7 @@ mod tests {
     /// A real allocation error while preparing a later tensor must release
     /// earlier cached planes, preserve native weights, and leave the context usable.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_partial_cache_preparation_failure_releases_prior_tensors() -> Result<()> {
         let before_context = CudaContext::total_device_bytes();
         {

@@ -213,6 +213,7 @@ fn check_close(actual: &[f32], expected: &[f32], label: &str) -> (f32, f64) {
 /// lengths, and stable softmax for empty partitions, uniform and extreme scores.
 /// A poisoned future KV entry must never contribute to any output.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_parallel_head128_matches_dense_and_cpu() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let _backend = EnvRestore::set("M40LLM_ATTN_HEAD128_KERNEL", "fast");
@@ -294,6 +295,7 @@ fn test_parallel_head128_matches_dense_and_cpu() -> Result<()> {
 /// Opt-in runtime dispatch owns one tracked reusable partial buffer, while the
 /// reference/one-block paths allocate none. Invalid configurations are errors.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_runtime_reuses_workspace_and_rejects_invalid_configs() -> Result<()> {
     let _lock = TEST_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let _kernel = EnvRestore::set("M40LLM_ATTN_HEAD128_KERNEL", "parallel");

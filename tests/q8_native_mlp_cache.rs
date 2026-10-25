@@ -144,6 +144,7 @@ fn run_mlp(
 /// prepared fusion is removed. Native math, guards, streams, and rejection
 /// behavior must be identical with preparation off, split, or mixed.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_prepared_caches_retain_native_fused_mlp() -> Result<()> {
     let _fused = EnvRestore::set("M40LLM_FUSED_Q8_MLP_SWIGLU", "1");
     let initial = CudaContext::total_device_bytes();

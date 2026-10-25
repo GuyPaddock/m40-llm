@@ -43,7 +43,7 @@ snapshots, unsupported-mode errors, subsequent usability and RAII cleanup.
 source scripts/dev-env.sh
 cargo test --no-default-features --test layer_mask
 M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
-  cargo test --features cuda --test layer_mask_cuda -- --test-threads=1
+  cargo test --features cuda --test layer_mask_cuda -- --include-ignored --test-threads=1
 ```
 
 ## Evaluation Runner

@@ -210,7 +210,9 @@ mod tests {
     /// Fixed observed tokens, not sampled continuations, drive matched steps.
     /// Reset makes a repeated trace independent of a preceding different input.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_step_trace_forces_prefixes_and_resets() -> Result<()> {
+        let _scope = crate::cuda_test_scope::lock_cuda();
         let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
         let initial = CudaContext::total_device_bytes();
         {
@@ -236,7 +238,9 @@ mod tests {
     /// Paired records alternate order, retain equal workloads and raw times,
     /// and keep compute-skipping measurements separate from exact promotion.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_paired_step_records_preserve_scope() -> Result<()> {
+        let _scope = crate::cuda_test_scope::lock_cuda();
         let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
         let mut reference = model(&[])?;
         let mut candidate = model(&[1])?;

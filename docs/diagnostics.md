@@ -85,7 +85,7 @@ source scripts/dev-env.sh
 M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 M40LLM_HEAD128_GENERATION_MODEL=/path/to/Qwen2.5-3B-Q8_0.gguf \
   cargo test --features cuda --test head128_attention_parallel \
-  -- --nocapture --test-threads=1
+  -- --include-ignored --skip benchmark_head128_geometries --nocapture --test-threads=1
 
 M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 M40LLM_HEAD128_BENCH_REPORT=/tmp/head128-micro.jsonl \

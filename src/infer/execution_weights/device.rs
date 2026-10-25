@@ -266,6 +266,7 @@ mod tests {
     /// Real second-plane allocation failure must release the first plane after
     /// its successful upload; no host-sized OOM fixture or global fault flag.
     #[test]
+    #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
     fn test_partial_device_allocation_failure_frees_uploaded_plane() -> Result<()> {
         let ctx = CudaContext::new(-1)?;
         let props = ctx.current_device_props()?;

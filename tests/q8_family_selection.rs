@@ -147,6 +147,7 @@ fn run_fused_mlp(model: &LoadedModel) -> Result<Vec<f32>> {
 /// families retain native math and useful fused MLP/greedy paths. Separate
 /// immutable models must coexist without toggling global execution flags.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_family_selection_preserves_native_consumers_and_accounting() -> Result<()> {
     let _stream = EnvRestore::set("M40LLM_Q8_DECODE_STREAM", "decode");
     let _mlp = EnvRestore::set("M40LLM_FUSED_Q8_MLP_SWIGLU", "1");

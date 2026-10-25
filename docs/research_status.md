@@ -21,6 +21,19 @@ C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
 The full research plan remains active; C21-C27 remain subject to their own
 quality/performance gates. Neither exact-engine speed objective is achieved.
 
+Validation follow-up: the local NVCC/no-device CI reproduction exposed 25
+hardware-dependent assertions across 14 targets, including prior kernel/cache
+checks and C19/C20. They now use explicit `#[ignore]` markers, not successful
+no-device skips. Use `--include-ignored --test-threads=1` for actual hardware
+validation; an explicit request still fails without a device. New evaluation/
+mask checks also serialize shared GPU accounting and process environment.
+The normal NVCC CI lane is not evidence of GPU correctness. Local non-CUDA
+and NVCC/no-device warning-as-error lanes now pass, including default parallel
+test threads. All 25 gated lib/integration hardware assertions execute and pass
+on M40 with explicit inclusion; the six evaluator tests also pass. An explicit
+hardware request with the device hidden fails as intended. No inference or
+benchmark behavior changes in this test-policy follow-up.
+
 **C19 is complete.** Disjoint inputs/rubrics were frozen before the dense run;
 teacher-forced loss and the explicit-model release runner now have a recorded
 Qwen2.5 Q8_0 reference over both splits. See the [C19 evidence and limitations](experiments/2026-10-25-model-quality-dense-reference.md).

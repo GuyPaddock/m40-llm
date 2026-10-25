@@ -9,6 +9,7 @@ use m40_llm::{
 /// A rejected impossible allocation must return device context without locking
 /// twice, preserve live buffers/accounting, and permit subsequent allocations.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_allocation_error_preserves_allocator_and_live_buffers() -> Result<()> {
     let ctx = CudaContext::new(-1)?;
     let props = ctx.current_device_props()?;
@@ -64,6 +65,7 @@ fn test_allocation_error_preserves_allocator_and_live_buffers() -> Result<()> {
 /// Uploaded weights survive intermediate context clones and are freed/accounted
 /// exactly once when the final owner drops, including across successive models.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_uploaded_weights_drop_restores_accounting_after_last_owner() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for bytes in [16, 32] {

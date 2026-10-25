@@ -53,6 +53,8 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_parity_cuda_g
   tests. Check cuBLAS enabled/disabled parity when applicable.
 - Assert observable numerical/output behavior, not source text. An unavailable
   device, skipped test, or dense-failed quality row is not a passing result.
+  Hardware-only research checks use `#[ignore]` for GPU-less NVCC CI; invoke
+  them with `--include-ignored --test-threads=1` on hardware.
 - Use release builds for performance claims. Record inputs, flags, actual
   generated-token counts, stop reasons, trial variation, and timing boundaries.
   Follow [the controlled benchmark protocol](docs/controlled_benchmark.md).

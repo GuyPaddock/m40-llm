@@ -25,6 +25,7 @@ fn read_output(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<f32>> {
 /// negative/zero scales, signed extremes, and distinct rows. Invalid calls must
 /// not enqueue work or change the prior output.
 #[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_separate_projection_matches_source_and_rejects_invalid_buffers() -> Result<()> {
     let ctx = CudaContext::new(-1)?;
     let props = ctx.current_device_props()?;
