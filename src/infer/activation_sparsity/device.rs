@@ -56,13 +56,26 @@ impl DeviceSparseInputWorkspace {
             input.bytes() >= self.input_dim * 4,
             "sparse input buffer too small"
         );
+        self.select_raw_async(input.as_ptr(), threshold, std::ptr::null_mut())
+    }
+
+    /// # Safety
+    /// The input span holds input_dim floats on this context. Optional totals
+    /// holds two initialized u64 values, exclusively ordered on decode.
+    pub(crate) unsafe fn select_raw_async(
+        &mut self,
+        input: *const std::ffi::c_void,
+        threshold: ActivationThreshold,
+        totals: *mut std::ffi::c_void,
+    ) -> Result<()> {
         self.ctx.select_sparse_inputs_f32_async(
-            input.as_ptr(),
+            input,
             self.indices.as_mut_ptr(),
             self.values.as_mut_ptr(),
             self.count.as_mut_ptr(),
             self.input_dim as i32,
             threshold.magnitude(),
+            totals,
         )?;
         self.has_selection = true;
         Ok(())
@@ -76,6 +89,19 @@ impl DeviceSparseInputWorkspace {
         &self,
         weight: &DeviceQ8ExecutionWeight,
         output: &DeviceBuffer,
+        config: Q8TiledLaunch,
+    ) -> Result<()> {
+        self.project_raw_async(weight, output.as_mut_ptr(), output.bytes(), config)
+    }
+
+    /// # Safety
+    /// The externally checked output span and all producer/lifetime requirements
+    /// match project_tiled_async; no owning buffer is fabricated for the pointer.
+    pub(crate) unsafe fn project_raw_async(
+        &self,
+        weight: &DeviceQ8ExecutionWeight,
+        output: *mut std::ffi::c_void,
+        output_bytes: usize,
         config: Q8TiledLaunch,
     ) -> Result<()> {
         ensure!(self.has_selection, "select sparse inputs before projection");
@@ -104,7 +130,7 @@ impl DeviceSparseInputWorkspace {
             "sparse output dimension exceeds indexing"
         );
         ensure!(
-            output.bytes()
+            output_bytes
                 >= shape
                     .output_dim()
                     .checked_mul(4)
@@ -116,7 +142,7 @@ impl DeviceSparseInputWorkspace {
             self.values.as_ptr(),
             self.count.as_ptr(),
             tiles.as_ptr(),
-            output.as_mut_ptr(),
+            output,
             n,
             self.input_dim as i32,
             config.columns() as i32,

@@ -136,3 +136,26 @@ declared before capture. Prompt rows and the final sampled token that is never
 forwarded are not observations. Equal ranges are required at every layer.
 The cap bounds host payload and biases the sample toward early generation;
 report that limitation rather than implying model-wide calibration coverage.
+
+`LoadedModel::begin_activation_calibration` and
+`apply_activation_calibration` configure model-local state before KV/workspace
+creation. Capture begins/ends explicitly per eligible task and exports only
+after all layers observed the same generated ranges. Application checks the
+uploaded weight digest and exact down tensor names/offsets/shapes; the runner
+must also check the original file, corpus and execution hashes. Preparation
+reserves duplicate down weights only, one reusable selection workspace and
+two u64 counters per layer. Packing/upload proceeds one tensor at a time.
+
+This path requires sm_52, Q8_0 down weights, decode-stream Q8 scheduling,
+explicit dense KV and sequential forward/prefill. Graphs, packed/batched work,
+layer masks and other prepared-weight policies are rejected. It is not wired
+into ordinary CLI/server defaults. Device counters accumulate retained/input
+values in the existing selector CTA, on its ordered stream. Reading/resetting
+them is a report/setup operation; ordinary application adds no host readback.
+
+Zero-threshold layers keep native projection and allocate no tiled copy.
+Their inputs are unchanged, so compaction has no semantic benefit and can add
+reduction-order drift that crosses FP16 KV rounding boundaries. The full-model
+zero control requires exact native logits; independent sparse-kernel parity
+still covers threshold zero numerically. Statistics list native bypass layers
+explicitly rather than inventing selected-input counts for that route.

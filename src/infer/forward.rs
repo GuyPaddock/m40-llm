@@ -764,14 +764,23 @@ impl LoadedModel {
                         "swiglu_to_mlp_down",
                     )?;
                     let gpu_stage = GpuStageSpan::begin("mlp_down", down_stream)?;
-                    self.mlp_down_proj_f32xf16_gguf_f32_async(
-                        ws.dhid as *const c_void,
-                        1,
-                        hidden_dim,
+                    if !self.try_activation_down(
                         d_w_down_f16,
-                        d_model,
+                        ws.dhid,
                         ws.dy_mlp,
-                    )?;
+                        hidden_dim as usize,
+                        d_model as usize,
+                        seq_len.saturating_sub(1),
+                    )? {
+                        self.mlp_down_proj_f32xf16_gguf_f32_async(
+                            ws.dhid as *const c_void,
+                            1,
+                            hidden_dim,
+                            d_w_down_f16,
+                            d_model,
+                            ws.dy_mlp,
+                        )?;
+                    }
                     gpu_stage.finish()?;
                     log_profiled_op(
                         &label,
@@ -873,6 +882,10 @@ impl LoadedModel {
         if d_model <= 0 || hidden_dim <= 0 {
             anyhow::bail!("forward_one_token_minimal_graph_params: invalid dims");
         }
+        anyhow::ensure!(
+            self.activation_research.is_none(),
+            "activation research does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!("forward_one_token_minimal_graph_params: null device parameter");
         }
@@ -1963,6 +1976,10 @@ impl LoadedModel {
         &self,
         items: &[ForwardBatchItem],
     ) -> Result<usize> {
+        anyhow::ensure!(
+            self.activation_research.is_none(),
+            "activation research requires single-row sequential forward, not batching"
+        );
         if items.is_empty() {
             anyhow::bail!("batched forward requires at least one item");
         }
@@ -2420,6 +2437,10 @@ impl LoadedModel {
         items: &[ForwardPrefillSequence<'_>],
         kv: &KVCache,
     ) -> Result<usize> {
+        anyhow::ensure!(
+            self.activation_research.is_none(),
+            "activation research requires sequential prefill, not packed prefill"
+        );
         if items.is_empty() {
             anyhow::bail!("batched prefill requires at least one item");
         }

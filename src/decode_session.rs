@@ -183,6 +183,10 @@ impl DecodeSession {
     ) -> Result<Self> {
         anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
             "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
+        if model.activation_research.is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled(),
+                "activation research requires M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
+        }
         let gpu_profiler =
             DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
         if gpu_profiler.is_some() {

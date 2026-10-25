@@ -115,6 +115,8 @@ impl LoadedModel {
             materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
             #[cfg(feature = "cuda")]
             q8_execution: super::execution_weights::Q8ExecutionCache::disabled(),
+            #[cfg(feature = "cuda")]
+            activation_research: None,
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]

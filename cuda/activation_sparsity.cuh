@@ -7,7 +7,7 @@ __device__ __forceinline__ bool retain_sparse_input(float value, float threshold
 
 __global__ void select_sparse_inputs_kernel(
     const float* __restrict__ input, uint32_t* __restrict__ indices,
-    float* __restrict__ values, uint32_t* count, int K, float threshold) {
+    float* __restrict__ values, uint32_t* count, int K, float threshold, uint64_t* totals) {
     constexpr int warps = 8;
     __shared__ int warp_counts[warps];
     __shared__ int warp_offsets[warps];
@@ -35,7 +35,14 @@ __global__ void select_sparse_inputs_kernel(
             if (lane >= offset) total += previous;
         }
         if (lane < warps) warp_offsets[lane] = total - own;
-        if (lane == warps - 1) *count = static_cast<uint32_t>(total);
+        if (lane == warps - 1) {
+            *count = static_cast<uint32_t>(total);
+            // One selector CTA, ordered decode stream, exclusively owned counters.
+            if (totals) {
+                totals[0] += static_cast<uint64_t>(total);
+                totals[1] += static_cast<uint64_t>(K);
+            }
+        }
     }
     __syncthreads();
     int destination = warp_offsets[warp] + prefix - local_count;
@@ -50,14 +57,16 @@ __global__ void select_sparse_inputs_kernel(
 
 extern "C" int m40llm_select_sparse_inputs_f32_async(
     M40llmCudaContext* ctx, const void* input, void* indices, void* values,
-    void* count, int K, float threshold) {
+    void* count, int K, float threshold, void* totals) {
     if (!ctx || !input || !indices || !values || !count) return -1;
     if (K <= 0 || K > INT32_MAX - 255 || !isfinite(threshold) || threshold < 0.0f ||
         input == indices || input == values || input == count || indices == values ||
         indices == count || values == count) return -4;
+    if (totals && (totals == input || totals == indices || totals == values || totals == count)) return -4;
     select_sparse_inputs_kernel<<<1, 256, 0, ctx->decode_stream>>>(
         static_cast<const float*>(input), static_cast<uint32_t*>(indices),
-        static_cast<float*>(values), static_cast<uint32_t*>(count), K, threshold);
+        static_cast<float*>(values), static_cast<uint32_t*>(count), K, threshold,
+        static_cast<uint64_t*>(totals));
     return cudaGetLastError() == cudaSuccess ? 0 : -2;
 }
 

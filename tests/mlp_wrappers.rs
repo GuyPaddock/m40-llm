@@ -153,6 +153,8 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         materialized_weights: std::sync::Mutex::new(HashMap::new()),
         #[cfg(feature = "cuda")]
         q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
+        #[cfg(feature = "cuda")]
+        activation_research: None,
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

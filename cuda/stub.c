@@ -122,9 +122,9 @@ int m40llm_gemm_f32xq8_separate_f32_async(M40llmCudaContext* ctx, const void* in
     return -1;
 }
 
-int m40llm_select_sparse_inputs_f32_async(M40llmCudaContext* ctx, const void* input, void* indices, void* values, void* count, int K, float threshold) {
+int m40llm_select_sparse_inputs_f32_async(M40llmCudaContext* ctx, const void* input, void* indices, void* values, void* count, int K, float threshold, void* totals) {
     (void)ctx; (void)input; (void)indices; (void)values; (void)count;
-    (void)K; (void)threshold; return -1;
+    (void)K; (void)threshold; (void)totals; return -1;
 }
 
 int m40llm_project_sparse_inputs_q8_async(M40llmCudaContext* ctx, const void* indices, const void* values, const void* count, const void* tiles, void* output, int N, int K, int columns, int threads) {

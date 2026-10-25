@@ -402,6 +402,7 @@ mod ffi {
             count: *mut c_void,
             k: i32,
             threshold: f32,
+            totals: *mut c_void,
         ) -> i32;
         pub fn m40llm_project_sparse_inputs_q8_async(
             ctx: *mut M40llmCudaContext,
@@ -3513,6 +3514,7 @@ impl CudaContext {
         count: *mut c_void,
         k: i32,
         threshold: f32,
+        totals: *mut c_void,
     ) -> Result<()> {
         let _guard = self.inner.lock.lock().unwrap();
         let rc = ffi::m40llm_select_sparse_inputs_f32_async(
@@ -3523,6 +3525,7 @@ impl CudaContext {
             count,
             k,
             threshold,
+            totals,
         );
         if rc != 0 {
             return Err(anyhow!(

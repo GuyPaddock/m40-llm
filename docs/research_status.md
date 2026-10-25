@@ -86,6 +86,15 @@ evaluate both frozen C19 splits for loss/tasks/logit drift and complete latency.
 Include the duplicate tiled weights and selection cost. No held-out/browser
 fitting, new kernel sweep or default promotion. See [the contract and commands](activation_sparsity.md).
 
+The calibration artifact contract is committed in `c89b939`. Model-local
+capture/application now passes two-layer M40 tests: capture leaves native
+logits bit-identical; zero-threshold layers retain native execution and need
+no prepared allocation; nonzero layers use immutable tiled weights, reusable
+scratch and device retained/input counters. Unsupported batch/packed/graph
+paths fail before launches. Artifact identity/budget failures publish no
+partial cache. Calibration collection and real-model variant evaluation are
+still pending; there are no model-quality or E2E gain claims yet.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

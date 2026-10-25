@@ -15,6 +15,10 @@ pub use calibration::{
 mod device;
 #[cfg(feature = "cuda")]
 pub use device::DeviceSparseInputWorkspace;
+#[cfg(feature = "cuda")]
+mod runtime;
+#[cfg(feature = "cuda")]
+pub use runtime::{ActivationLayerStats, ActivationResearch, ActivationResearchStats};
 
 #[cfg(test)]
 mod tests;
