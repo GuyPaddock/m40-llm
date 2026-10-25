@@ -138,7 +138,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     pipeline.drain()?;
     let gate = compare(&pipeline.gate.read(&pipeline.model.cuda)?, &gate_cpu)?;
     let up = compare(&pipeline.up.read(&pipeline.model.cuda)?, &up_cpu)?;
-    let diagnostic_hidden = if matches!(pipeline.kernel,FfnKernel::Fp32(v) if v.has_factored_scales())
+    let diagnostic_hidden = if matches!(pipeline.kernel,FfnKernel::Fp32(v) if v.has_intermediate_capture())
     {
         Some(pipeline.hidden.read(&pipeline.model.cuda)?)
     } else {
@@ -154,7 +154,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
                 .iter()
                 .zip(diagnostic)
                 .all(|(a, b)| a.to_bits() == b.to_bits()),
-            "factored intermediate capture changed SwiGLU bits"
+            "FFN intermediate capture changed SwiGLU bits"
         );
     }
     let hidden_error = compare(&hidden, &hidden_cpu)?;

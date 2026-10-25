@@ -519,7 +519,7 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
     Ok(())
 }
 
-/// Original and scale-factor variants reuse one allocation set across kernel
+/// Original and follow-up variants reuse one allocation set across kernel
 /// switches. Repeated row-batched complete work waits before hidden reuse and
 /// returns CPU-matching outputs without timed allocation, copying or sync.
 #[test]
@@ -544,14 +544,14 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
             let resident = CudaContext::total_device_bytes();
             validation::validate(&pipeline, &layer)?;
             let native_hidden = pipeline.hidden.read(&model.cuda)?;
-            for variant in Q8FfnFp32Variant::ALL
-                .into_iter()
-                .chain([Q8FfnFp32Variant::PackedWarp128FactoredScales])
-            {
+            for variant in Q8FfnFp32Variant::ALL.into_iter().chain([
+                Q8FfnFp32Variant::PackedWarp128FactoredScales,
+                Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
+            ]) {
                 pipeline.select_kernel(FfnKernel::Fp32(variant))?;
                 let checks = validation::validate(&pipeline, &layer)?;
                 assert_eq!(checks["guards_and_immutable_inputs"], true);
-                if variant.has_factored_scales() {
+                if variant.has_intermediate_capture() {
                     assert_eq!(checks["intermediate_capture_matches_normal_kernel"], true);
                 }
                 if rows == 1 && variant.threads() == 256 {

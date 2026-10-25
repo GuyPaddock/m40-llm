@@ -325,6 +325,18 @@ mod ffi {
             hidden: i32,
             k: i32,
         ) -> i32;
+        pub fn m40llm_ffn_q8_f32_coalesced_capture_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
         pub fn m40llm_quantize_q8_1_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,

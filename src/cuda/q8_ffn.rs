@@ -19,7 +19,7 @@ impl Q8FfnQ81Launch {
     }
 }
 
-/// M03's frozen set plus one subsequent scale-factor experiment. None selects
+/// M03's frozen set plus bounded follow-up experiments. None selects
 /// a runtime policy; ALL deliberately retains the original five-variant set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -31,6 +31,7 @@ pub enum Q8FfnFp32Variant {
     PackedWarp256 = 3,
     PackedWarp128 = 4,
     PackedWarp128FactoredScales = 5,
+    PackedWarp128CoalescedPairs = 6,
 }
 
 impl Q8FfnFp32Variant {
@@ -45,7 +46,9 @@ impl Q8FfnFp32Variant {
     pub fn threads(self) -> u32 {
         if matches!(
             self,
-            Self::PackedWarp128 | Self::PackedWarp128FactoredScales
+            Self::PackedWarp128
+                | Self::PackedWarp128FactoredScales
+                | Self::PackedWarp128CoalescedPairs
         ) {
             128
         } else {
@@ -60,6 +63,7 @@ impl Q8FfnFp32Variant {
                 | Self::PackedWarp256
                 | Self::PackedWarp128
                 | Self::PackedWarp128FactoredScales
+                | Self::PackedWarp128CoalescedPairs
         )
     }
 
@@ -70,11 +74,20 @@ impl Q8FfnFp32Variant {
                 | Self::PackedWarp256
                 | Self::PackedWarp128
                 | Self::PackedWarp128FactoredScales
+                | Self::PackedWarp128CoalescedPairs
         )
     }
 
     pub fn has_factored_scales(self) -> bool {
         self == Self::PackedWarp128FactoredScales
+    }
+
+    pub fn has_coalesced_pairs(self) -> bool {
+        self == Self::PackedWarp128CoalescedPairs
+    }
+
+    pub fn has_intermediate_capture(self) -> bool {
+        self.has_factored_scales() || self.has_coalesced_pairs()
     }
 
     fn operation_name(self) -> &'static str {
@@ -85,6 +98,7 @@ impl Q8FfnFp32Variant {
             Self::PackedWarp256 => "ffn_q8_f32_packed_warp_256",
             Self::PackedWarp128 => "ffn_q8_f32_packed_warp_128",
             Self::PackedWarp128FactoredScales => "ffn_q8_f32_factored_scales_128",
+            Self::PackedWarp128CoalescedPairs => "ffn_q8_f32_coalesced_pairs_128",
         }
     }
 }
@@ -216,6 +230,7 @@ impl CudaContext {
     /// Buffers belong to this context and outlive decode completion. Input/output
     /// hold rows*k / rows*hidden f32 values and may not alias. Each weight matrix
     /// holds hidden*(k/32)*34 bytes of native Q8_0 at two-byte alignment.
+    /// Adjacent-pair input requires eight-byte alignment; other inputs need four.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn ffn_q8_f32_ablation_async(
         &self,
@@ -231,14 +246,14 @@ impl CudaContext {
         self.enqueue_ffn_fp32(input, gate, up, output, rows, hidden, k, variant, None)
     }
 
-    /// Capture gate/up and SwiGLU from the same factored-scale kernel used by
+    /// Capture gate/up and SwiGLU from the same follow-up kernel used by
     /// ordinary benchmark enqueue. Timed calls omit these extra output stores.
     ///
     /// # Safety
     /// Same span/stream contract as ffn_q8_f32_ablation_async; both intermediate
     /// spans hold rows*hidden f32 values and are disjoint from every other span.
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn ffn_q8_f32_factored_capture_async(
+    pub unsafe fn ffn_q8_f32_capture_async(
         &self,
         input: *const c_void,
         gate: *const c_void,
@@ -249,7 +264,12 @@ impl CudaContext {
         rows: i32,
         hidden: i32,
         k: i32,
+        variant: Q8FfnFp32Variant,
     ) -> Result<()> {
+        ensure!(
+            variant.has_intermediate_capture(),
+            "FFN variant has no intermediate capture"
+        );
         self.enqueue_ffn_fp32(
             input,
             gate,
@@ -258,7 +278,7 @@ impl CudaContext {
             rows,
             hidden,
             k,
-            Q8FfnFp32Variant::PackedWarp128FactoredScales,
+            variant,
             Some((gate_output, up_output)),
         )
     }
@@ -293,6 +313,10 @@ impl CudaContext {
             (input as usize).is_multiple_of(4) && (output as usize).is_multiple_of(4),
             "FP32 FFN input/output require four-byte alignment"
         );
+        ensure!(
+            !variant.has_coalesced_pairs() || (input as usize).is_multiple_of(8),
+            "coalesced FFN input requires eight-byte alignment"
+        );
         if let Some((g, u)) = capture {
             ensure!(
                 !g.is_null()
@@ -310,7 +334,12 @@ impl CudaContext {
         let _guard = self.inner.lock.lock().unwrap();
         let rc = unsafe {
             if let Some((g, u)) = capture {
-                ffi::m40llm_ffn_q8_f32_factored_capture_async(
+                let capture = if variant.has_coalesced_pairs() {
+                    ffi::m40llm_ffn_q8_f32_coalesced_capture_async
+                } else {
+                    ffi::m40llm_ffn_q8_f32_factored_capture_async
+                };
+                capture(
                     self.inner.raw.as_ptr(),
                     input,
                     gate,

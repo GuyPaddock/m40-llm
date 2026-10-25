@@ -83,12 +83,17 @@ pub(super) fn benchmark_case(
     args: &Args,
 ) -> Result<()> {
     let rows = pipeline.rows;
-    let control = if args.ffn_f32_factored_scales {
+    let is_followup = args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs;
+    let control = if is_followup {
         FfnKernel::Fp32(Q8FfnFp32Variant::PackedWarp128)
     } else {
         FfnKernel::Native
     };
-    let candidates: Vec<_> = if args.ffn_f32_factored_scales {
+    let candidates: Vec<_> = if args.ffn_f32_coalesced_pairs {
+        vec![FfnKernel::Fp32(
+            Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
+        )]
+    } else if args.ffn_f32_factored_scales {
         vec![FfnKernel::Fp32(
             Q8FfnFp32Variant::PackedWarp128FactoredScales,
         )]
@@ -172,7 +177,7 @@ pub(super) fn benchmark_case(
             "complete_output_vs_native":output_vs_native,"scratch_capacity_bytes":pipeline.scratch_bytes(),
             "fused_256_thread_row_control_bits_preserved":matches!(variant,FfnKernel::Fp32(v) if v.threads()==256),
             "is_numerical_track":variant.has_quantization(),
-            "projection_checks_scope":if variant.has_quantization() {"candidate gate/up/SwiGLU checked against quantized-input CPU reference; original FP32 drift reported separately"} else if args.ffn_f32_factored_scales {"candidate fused gate/up capture, SwiGLU and completed down outputs checked against scalar CPU references; capture and normal SwiGLU bits equal"} else {"gate/up checks use the native unfused oracle; candidate fused SwiGLU and completed down outputs are checked against scalar CPU references"}}),
+            "projection_checks_scope":if variant.has_quantization() {"candidate gate/up/SwiGLU checked against quantized-input CPU reference; original FP32 drift reported separately"} else if is_followup {"candidate fused gate/up capture, SwiGLU and completed down outputs checked against scalar CPU references; capture and normal SwiGLU bits equal"} else {"gate/up checks use the native unfused oracle; candidate fused SwiGLU and completed down outputs are checked against scalar CPU references"}}),
         )?;
     }
     // All expensive CPU references precede active warmup and primary pairs.
@@ -228,7 +233,7 @@ pub(super) fn benchmark_case(
                 "quantization_payload_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()),
                 "quantization_scratch_capacity_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()+32),
                 "has_packed_loads":variant.has_packed_loads(),"has_warp_reduction":variant.has_warp_reduction(),
-                "scope":if args.ffn_f32_factored_scales {"FP32 scale factoring versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
+                "scope":if args.ffn_f32_coalesced_pairs {"adjacent-pair FP32 loads versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if args.ffn_f32_factored_scales {"FP32 scale factoring versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
             )?;
         }
         pipeline.verify_guards_and_inputs(layer)?;

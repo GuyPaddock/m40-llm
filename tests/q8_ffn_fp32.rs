@@ -123,10 +123,10 @@ fn compare_case(
             })
         })
         .collect();
-    for variant in Q8FfnFp32Variant::ALL
-        .into_iter()
-        .chain([Q8FfnFp32Variant::PackedWarp128FactoredScales])
-    {
+    for variant in Q8FfnFp32Variant::ALL.into_iter().chain([
+        Q8FfnFp32Variant::PackedWarp128FactoredScales,
+        Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
+    ]) {
         unsafe {
             ctx.memcpy_h2d(
                 output.as_mut_ptr(),
@@ -156,7 +156,7 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
-        if variant.has_factored_scales() {
+        if variant.has_intermediate_capture() {
             let captured = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:captured")?;
             let gate_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:gate-out")?;
             let up_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:up-out")?;
@@ -170,7 +170,7 @@ fn compare_case(
                 }
             }
             unsafe {
-                ctx.ffn_q8_f32_factored_capture_async(
+                ctx.ffn_q8_f32_capture_async(
                     x.cast(),
                     gate_pointer,
                     up_pointer,
@@ -180,13 +180,14 @@ fn compare_case(
                     rows as i32,
                     hidden as i32,
                     k as i32,
+                    variant,
                 )?;
             }
             ctx.synchronize_stream(CudaStream::Decode)?;
             assert_eq!(
                 read(ctx, &captured)?,
                 actual,
-                "capture changed factored arithmetic"
+                "capture changed FFN arithmetic"
             );
             for (values, weight) in [(read(ctx, &gate_out)?, &gate), (read(ctx, &up_out)?, &up)] {
                 for row in 0..rows {
@@ -195,7 +196,7 @@ fn compare_case(
                         let actual = f64::from(values[row * hidden + column]);
                         assert!(
                             (actual - expected).abs() < 1e-3 + 2e-5 * expected.abs(),
-                            "factored projection differs: {actual} vs {expected}"
+                            "FFN projection differs: {actual} vs {expected}"
                         );
                     }
                 }
@@ -228,8 +229,8 @@ fn compare_case(
 }
 
 /// All four 256-thread load/reduction variants preserve native split4 bits.
-/// Both 128-thread arithmetic strategies obey the same numerical tolerance;
-/// factored gate/up capture must match the ordinary kernel's SwiGLU bits.
+/// All 128-thread strategies obey the same numerical tolerance; follow-up
+/// gate/up capture must match the ordinary kernel's SwiGLU bits.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -264,12 +265,24 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
         let output = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-output")?;
         let before = profile::snapshot();
         unsafe {
+            assert!(ctx
+                .ffn_q8_f32_ablation_async(
+                    input.as_ptr().cast::<u8>().add(4).cast(),
+                    weight.as_ptr(),
+                    weight.as_ptr(),
+                    output.as_mut_ptr(),
+                    1,
+                    1,
+                    32,
+                    Q8FfnFp32Variant::PackedWarp128CoalescedPairs
+                )
+                .is_err());
             for (g, u) in [
                 (output.as_mut_ptr(), output.as_mut_ptr()),
                 (std::ptr::null_mut(), output.as_mut_ptr()),
             ] {
                 assert!(ctx
-                    .ffn_q8_f32_factored_capture_async(
+                    .ffn_q8_f32_capture_async(
                         input.as_ptr(),
                         weight.as_ptr(),
                         weight.as_ptr(),
@@ -278,7 +291,8 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                         u,
                         1,
                         1,
-                        32
+                        32,
+                        Q8FfnFp32Variant::PackedWarp128FactoredScales
                     )
                     .is_err());
             }

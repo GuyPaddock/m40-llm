@@ -245,3 +245,30 @@ actual timing control and emits `control_median_ms` for this follow-up.
 Only a passing micro screen permits model-local runtime evaluation. Actual
 512-token equality, frozen-task quality and incremental HTTP gains versus
 the selected packed128/SGEMM runtime remain required before retaining it.
+
+## Bounded Adjacent-Pair Load Follow-Up
+
+Use `--ffn-f32-coalesced-pairs` instead of `--ffn-f32-ablation` for one
+128-thread lane-ownership experiment. Neighboring lanes own adjacent pairs of
+Q8 weights and FP32 activations. A lane loads one aligned `float2` activation
+and one alignment-safe `uint16_t` payload from each weight matrix; it retains
+per-weight FP32 scaling. Shared publication, final-warp reduction, fusion and
+prepared down/vocabulary are unchanged. Summation ownership changes, so the
+existing tolerance and actual 512-token runtime gates still apply.
+
+Its timing control is qualified packed/warp128, not old native or the failed
+scale-factor candidate. Only this one geometry is tested at the original
+layers 0/17/35, rows 1/4 and five alternating pairs. The manifest includes a
+static per-warp sector-request hypothesis. It assumes the scalar/float2 loads
+and must be checked against generated instructions. It does not measure
+cache misses or DRAM traffic; [legacy CUPTI counters are unavailable on the
+current stack](experiments/2026-10-25-maxwell-counter-capability.md).
+
+No activation quantization, weight repacking, runtime default or scheduling
+change is part of this screen. Whole-model runtime evaluation remains
+conditional on at least 5% complete one-row FFN gain with a positive paired
+lower confidence bound. Do not add geometry configurations to rescue a loss.
+
+The Rust validation entrypoint is now `ffn_q8_f32_capture_async` with an
+explicit variant. It replaces the factored-only name rather than adding a
+compatibility alias; timed enqueue and the existing C ABI remain separate.
