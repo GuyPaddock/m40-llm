@@ -2,6 +2,27 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Compact Model Live Equivalence and Memory
+
+C25 is complete on clean `0dfff93`, release Qwen2.5-3B Q8_0, dense KV/context
+1024. The compact 35-layer artifact exactly reproduces C24's source masked
+at original layer 8: all 12 task traces, 951 task-prefix full-logit comparisons,
+203 passage tokens and paired-step predictions match. Independent audit also
+matches C24's frozen candidate. Held-out PPL remains 40.984621 versus 39.612159
+unchanged, retaining the 3.46% model-quality cost.
+
+Actual owned weight requests fall from 3,279,519,744 to 3,197,605,888 bytes,
+saving 78.119 MiB. Native dense KV payload capacity falls from 37,748,736 to
+36,700,160 bytes, saving 1 MiB at unchanged token capacity. Native KV is separate
+from the Rust allocation tracker; these are not driver peak-VRAM measurements.
+Five alternating pairs show only +0.047/+0.060% calibration/held-out rate
+change versus the masked source, far below the promotion threshold. Physical
+compaction reclaims memory, not another established compute speedup.
+
+Preparation remains 38.683 s for the one-shot CPU export; live preflight and
+load are recorded separately. No default or unchanged-engine speed claim
+changes. See [the complete report and raw evidence](experiments/2026-10-25-compact-layer8-live.md).
+
 ## 2026-10-25: Compact Layer-8 Export Preparation
 
 C25's release CPU exporter constructs the separate 35-layer Qwen Q8_0 `[8]`
@@ -15,6 +36,8 @@ This does not establish actual uploaded-weight/KV savings or masked-source
 inference equivalence; those remain the next C25 gates. C24's `[8]` held-out
 PPL cost of +3.46% still applies. No default or exact-engine speed claim
 changes. See [the checkpoint and raw export record](experiments/2026-10-25-compact-layer8-export-checkpoint.md).
+The later live-equivalence entry above completes those gates; this entry
+retains the original file-only measurement boundary.
 
 ## 2026-10-25: Calibration-Ranked Layer Tradeoffs
 

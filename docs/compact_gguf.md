@@ -101,12 +101,13 @@ error can leave an empty/incomplete report; only `compact_export_complete`
 with `is_complete=true` is successful. Source and output are never substituted
 into normal CLI/server defaults.
 
-## Remaining Gates
+## Validation Boundary
 
-The destination must load as a distinct model and match the masked source,
-with identical tokenizer behavior and preserved absolute RoPE positions.
-Then measure actual uploaded weight and allocated KV reductions independently
-of logical active-layer counts. No original model, runtime default or
+The destination must load as a distinct model and match the masked source
+with identical tokenizer behavior and absolute RoPE positions. Actual uploaded
+weight and allocated KV reductions must be measured independently of logical
+active-layer counts. The real Qwen checkpoint below meets those checks.
+No original model, runtime default or
 unchanged-engine performance claim changes through this work.
 
 ## Live Masked-Source Comparison
@@ -165,5 +166,8 @@ fmt and whitespace checks pass.
 
 The [real Qwen export checkpoint](experiments/2026-10-25-compact-layer8-export-checkpoint.md)
 constructs the separate 35-layer artifact with unchanged source identity and
-2.498% fewer tensor-data file bytes. Live masked-source numerical parity and
-actual device-memory measurements remain; no inference speedup is established.
+2.498% fewer tensor-data file bytes. The completed
+[live release checkpoint](experiments/2026-10-25-compact-layer8-live.md) verifies
+exact masked-source logits/generation, 78.119 MiB fewer owned weight bytes and
+1 MiB fewer native dense KV bytes at context 1024. Compact-versus-masked timing
+is neutral; no additional inference speedup or quality improvement is claimed.

@@ -178,7 +178,24 @@ requires matching generation plus zero full-logit drift. Additional task-prefix
 diagnostics stay outside generation and paired timing. All 16 runner tests,
 including the real exported Qwen artifact, pass on M40 with cuBLAS on/off.
 Normal reference-mask guardrails remain intact. Clean release measurements
-over both frozen splits are the remaining C25 checkpoint.
+over both frozen splits complete that checkpoint below.
+
+**C25 is complete.** Clean release `0dfff93` compares the separate compact
+35-layer Qwen artifact against the original source with only frozen layer 8
+masked. All 12 task traces, 951 task-prefix full-logit comparisons, 203 passage
+tokens and paired-step predictions match exactly, including the historical
+C24 candidate traces/statistics. Owned uploads reclaim 81,913,856 bytes and
+native dense KV reclaims 1,048,576 bytes at context 1024. These are separate
+successful allocation requests, not peak driver VRAM. Compact-versus-masked
+timing is neutral at +0.060% held out; do not double-count C24's 35-versus-36
+layer gain. Held-out PPL still costs 3.46% versus the unchanged model.
+See [the live report and raw release evidence](experiments/2026-10-25-compact-layer8-live.md).
+
+Next is C26's held-out comparison of measured model-changing quality, speed,
+allocation and preparation costs. Combinations require independently useful
+components and their own evaluation; do not extrapolate additive gains.
+The negative sparse/ngram gates, default runtime and unmet exact objectives
+remain unchanged.
 
 C21 used these dependency-ordered commits:
 
