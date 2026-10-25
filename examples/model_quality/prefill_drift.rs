@@ -516,8 +516,9 @@ mod tests {
     }
 
     /// Real fixture forwards expose physical KV for every sampled layer and
-    /// absolute token, while manual drains and session admission preserve output
-    /// on this well-ordered fixture. Snapshot storage owns no device allocation.
+    /// absolute token. Drained and per-prefix-head execution must match the
+    /// corrected session; manual unfenced execution is a diagnostic negative
+    /// control and may race input reuse. Snapshot storage owns no allocation.
     #[test]
     #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
     fn test_prefill_snapshots_cover_physical_kv_and_release_scratch() -> Result<()> {
@@ -568,7 +569,10 @@ mod tests {
                     && s.value.len() == 128));
                 assert!(snapshot.attention.cached_decode_vs_cpu.max_abs_diff <= 2e-3);
                 assert!(snapshot.attention.packed_replay_vs_cpu.max_abs_diff <= 2e-3);
-                if !matches!(mode, ProbeMode::PackedPrefix) {
+                if matches!(
+                    mode,
+                    ProbeMode::DrainedSequential | ProbeMode::GreedyEachPrefix
+                ) {
                     assert!(compare(&reference.hidden, &snapshot.hidden)?.max_abs_diff <= 1e-5);
                     assert_eq!(reference.actual_token, snapshot.actual_token);
                 }
