@@ -229,6 +229,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.should_diagnose_prefill {
+        return super::prefill_drift::diagnose(args);
+    }
     if args.q8_runtime_candidate.is_some() {
         return super::runtime_quality::evaluate(args);
     }

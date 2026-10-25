@@ -79,6 +79,33 @@ These runs are quality diagnostics, not HTTP throughput qualification. A
 different continuation, natural stop length or dense-valid task regression
 blocks the FP32 exact-output gate. Q8_1 stays a separate numerical track.
 
+### Packed-Prefill Attribution
+
+The same runner accepts `--q8-prefill-drift` instead of a runtime candidate.
+Use identical source/reference model paths, context 1024 and the frozen M02
+environment. It compares the canonical prompt through session sequential,
+manual sequential, explicitly drained sequential, a greedy head at every
+prefix, native packed-prefix and SGEMM packed-prefix execution. All choices
+retain native FFN, prepared down/vocabulary and explicit dense KV.
+
+The untimed JSONL includes actual greedy token IDs, final hidden/full-logit
+differences, physical KV lengths and K/V comparisons at sampled absolute
+positions in every layer. A final-layer attention replay compares the real
+query against its stored FP16 cache, widened to FP32 for packed attention,
+and an independent FP64 CPU softmax. This distinguishes cache contents from
+kernel arithmetic; it does not recover the original unrounded packed K/V.
+The diagnostic adds no runtime synchronization policy or default change.
+
+```bash
+cargo run --release --features cuda,server --example model_quality -- \
+  --reference-model "$MODEL" --model "$MODEL" --variant-id prefill-drift \
+  --q8-prefill-drift --context-tokens 1024 \
+  --output /tmp/new-prefill-drift.jsonl
+```
+
+Source the development environment and request hardware escalation first.
+Run attribution separately from all timed comparisons.
+
 ### Load-Time Configuration
 
 `M40LLM_Q8_FFN_KERNEL=native|packed-f32|q8-1` is captured once by

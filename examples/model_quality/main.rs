@@ -19,6 +19,8 @@ mod fixture;
 #[cfg(all(feature = "cuda", nvcc))]
 mod layers;
 #[cfg(all(feature = "cuda", nvcc))]
+mod prefill_drift;
+#[cfg(all(feature = "cuda", nvcc))]
 mod prepared_drift;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/q8_model.rs"]
@@ -89,6 +91,10 @@ struct Args {
     q8_runtime_candidate: Option<q8_runtime::FfnChoice>,
     #[arg(long, value_enum, requires = "q8_runtime_candidate")]
     q8_runtime_prefill: Option<q8_runtime::PrefillChoice>,
+    /// Untimed comparison of sequential admission, explicit stream drains and
+    /// packed prefixes on identical prompt IDs, hidden states and physical KV.
+    #[arg(long="q8-prefill-drift", conflicts_with_all=["q8_runtime_candidate","capture_ffn_inputs","q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
+    should_diagnose_prefill: bool,
     /// Untimed M02 input capture using the qualified prepared down/vocabulary
     /// control. Requires calibration split and creates a new paired artifact.
     #[arg(long, conflicts_with_all=["q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
@@ -182,6 +188,27 @@ mod argument_tests {
         ];
         values.extend_from_slice(extra);
         Args::try_parse_from(values)
+    }
+
+    /// Prefill attribution cannot silently change the model or reuse a different
+    /// quality/capture mode. It is a separate diagnostic, not an optimization.
+    #[test]
+    fn test_prefill_drift_arguments_exclude_other_experiments() {
+        assert!(
+            parse(&["--q8-prefill-drift"])
+                .unwrap()
+                .should_diagnose_prefill
+        );
+        for extra in [
+            vec!["--q8-runtime-candidate", "native"],
+            vec!["--skip-layers", "1"],
+            vec!["--capture-ffn-inputs", "new.json"],
+            vec!["--q8-prefix-drift", "trace.jsonl"],
+            vec!["--step-timing-trials", "1"],
+        ] {
+            let values = [vec!["--q8-prefill-drift"], extra].concat();
+            assert!(parse(&values).is_err());
+        }
     }
 
     /// Runtime comparisons require explicit candidates and cannot mutate the
