@@ -82,6 +82,13 @@ signed/zero scales, distinct activation rows, and invalid-call rejection.
 See [the sparse format and kernel contract](sparse_q8.md). Release timing and
 the C22 gate remain pending; runtime model/default behavior is unchanged.
 
+The kernel is committed in `ba57428`. The release measurement tool now
+compares actual layer-0 FFN tensors with synthetic fixed-popcount masks,
+matched-zero native control, full/scalar-sample parity, alternating serial
+pairs, setup/storage/hash metadata and GPU isolation checks. CUDA/server
+all-targets Clippy and the deterministic input test pass. No benchmark result
+or calibrated model is claimed until the release run completes.
+
 C20 was split into dependency-ordered commits:
 
 1. `9674452`, `feat(infer): define diagnostic layer masks`: checked interior IDs, original

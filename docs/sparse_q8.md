@@ -55,6 +55,39 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 GPU-less CI does not run this explicit hardware test. The CPU format tests
 run with `cargo test --no-default-features --lib sparse_weights`.
 
+## Matched-Work Release Measurement
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo build --release --features cuda --example q8_sparse_bench
+target/release/examples/q8_sparse_bench \
+  --model /absolute/path/to/Qwen2.5-3B-Q8_0.gguf \
+  --output /tmp/sparse-q8.jsonl
+```
+
+Request hardware escalation for the run and ensure no other GPU workload is
+active. The tool rejects another compute process before/after each pair.
+Default scope is layer-0 FFN gate/up/down, rows 1/4/16/64, four launch
+variants and five alternating serial pairs. `--rows`, `--tensors`, `--trials`
+and `--iterations` bound or extend the measurement. The output must be a new
+file. A dev build is rejected. CUDA events and wall timings both include the
+repeated projection but exclude setup; each stream is drained before reuse.
+
+Masks are deterministic uniform sixteen-position subsets with a recorded
+seed, independent of weight values and quality prompts. This does not produce
+a calibrated model. Model/source/mask/packed/matched-dense hashes, revision,
+worktree, compiler, GPU state, storage breakdown, packing/upload times,
+full-output dense drift and scalar-sample drift are recorded. The source file
+is never modified. Native control uses C11's decode coltile4/split4 and the
+existing multi-row dispatch. Event logging is disabled for the control.
+
+Byte reduction is measured allocation size, not measured DRAM transactions.
+GPU counters are not collected by this probe; `measured_dram_bytes` is null.
+An isolated win can justify investigating C22, but cannot promote a pruned
+runtime or count toward unchanged-model HTTP throughput targets. Borderline
+timing gains require additional pairs rather than relying on five samples.
+
 ## Research Context
 
 [SparseDecoding](https://arxiv.org/abs/2610.12327) motivates decode-calibrated
