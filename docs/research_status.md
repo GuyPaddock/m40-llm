@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Current blocker to qualification: sequential prefill ordering.** The
+[real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
+shows that draining each no-logits prefix forward or running a greedy head
+at every prefix changes the old sequential output to the packed first token.
+Manual no-drain reproduces the old result bit-for-bit; layer-0 KV already
+differs substantially. Final cached attention replay agrees with CPU within
+2.51e-6. Repair prefix input/workspace ownership before any new promotion.
+Prior M08 exact-to-control gates and timings remain historical evidence,
+not corrected-control qualification. M08/M09 and both original goals remain
+incomplete. Runtime defaults are unchanged.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
