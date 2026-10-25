@@ -17,6 +17,12 @@ prove full-continuation parity. Prior timing records remain historical;
 requalify quality and speed against the repaired control. See [matched
 before/after evidence and regression scope](experiments/2026-10-25-maxwell-prefill-drift-completed.md).
 
+The [first fresh quality checkpoint](experiments/2026-10-25-maxwell-completed-packed128-quality.md)
+now passes for packed FP32/128: all 512 IDs and twelve frozen task outputs
+match corrected native FFN, with zero dense-valid regressions. This renews
+its quality gate, not the historical HTTP gain. Packed prefill and fresh
+corrected-control timings remain pending.
+
 ## 2026-10-25: Remaining Maxwell Runtime HTTP Screen
 
 The five remaining release comparisons preserve prepared down/vocabulary,

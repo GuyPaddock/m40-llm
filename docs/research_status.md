@@ -37,6 +37,14 @@ old reports cannot qualify the repaired runtime. The five remaining
 [historical HTTP comparisons](experiments/2026-10-25-maxwell-runtime-http-screen.md)
 are preserved, including FP32/256's twenty fresh below-gate pairs.
 
+The first [fresh corrected-control quality run](experiments/2026-10-25-maxwell-completed-packed128-quality.md)
+passes for FP32/128: all 512 actual browser IDs and all twelve task outputs
+match, with zero regressions across seven dense-valid tasks and unchanged
+held-out loss conclusions. It carries the new completion contract. Next
+regenerate native-packed and dequant-SGEMM quality, then remeasure qualifying
+independent/combined runtimes and the selected-runtime Ollama comparison.
+The old +8.133% HTTP number is not corrected-control timing evidence.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
