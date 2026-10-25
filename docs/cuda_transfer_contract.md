@@ -47,7 +47,25 @@ GPU correctness result. Tests use producer drains before readback and reuse.
 
 The central upload covers Rust embedding fallbacks, packed/batched metadata,
 prepared Q8 weights, graph parameters and host forward fallbacks. Its
-completion rule does not authorize changing graph or KV defaults. Native
-weight upload, KV initialization, legacy append metadata, and explicit async
-producer dependencies are being audited separately. Benchmark timing impact
-must be measured; this correctness change is not a throughput optimization.
+completion rule does not authorize changing graph or KV defaults.
+
+Native weight upload now uses the same completion contract, including the
+pageable fallback when host registration is unavailable. It selects the
+owning device, publishes a pointer only on success and releases successful
+host registrations on allocation failure. The wait is counted as
+`upload_weights_completion`.
+
+Dense and compressed KV constructors initialize all allocated buffers through
+one checked fill list and drain the default stream before publishing storage.
+Optional dense shadows, q8/q4 backing, recent rings, summary accumulators,
+counts and representatives retain their prior zero values; representative
+positions retain the invalid `u32::MAX` sentinel. Initialization failure
+destroys partial ownership rather than returning a usable cache. The setup
+wait is counted as `kvcache_initialization`, not a hot attention-kernel wait.
+Immediate first append/attention tests cover dense head64/head128, head64
+summary/q8 caches, and head64/head128 mixed FP16-K/q4-V, without a reset or
+readback before consumption. Metadata and an unused sequence stay unchanged.
+
+Legacy append metadata and explicit async producer dependencies remain under
+audit. Benchmark timing impact must be measured; these correctness changes
+are not throughput optimizations.

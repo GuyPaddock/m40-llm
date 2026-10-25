@@ -1719,6 +1719,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         size_t num_bytes,
         void** out_device_ptr) {
         if (!ctx || !host_ptr || !out_device_ptr) return -1;
+        *out_device_ptr = nullptr;
+        if (ensure_device(ctx) != 0) return -4;
 
         // Register memory if coming from mmap. This is a best-effort fast path:
         // test fixtures and Vec-backed buffers may not be registerable, and the
@@ -1733,15 +1735,19 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         cudaError_t err = cudaMalloc(&d_ptr, num_bytes);
         if (err != cudaSuccess) {
             fprintf(stderr, "cudaMalloc failed: %s\n", cudaGetErrorString(err));
+            if (registered_for_copy) {
+                cudaHostUnregister((void*)host_ptr);
+                cudaGetLastError();
+            }
             return -2;
         }
-        err = cudaMemcpy(d_ptr, host_ptr, num_bytes, cudaMemcpyHostToDevice);
+        const int copy_result = m40llm_memcpy_h2d(ctx, d_ptr, host_ptr, num_bytes);
         if (registered_for_copy) {
             cudaHostUnregister((void*)host_ptr);
             cudaGetLastError();
         }
-        if (err != cudaSuccess) {
-            fprintf(stderr, "cudaMemcpy failed: %s\n", cudaGetErrorString(err));
+        if (copy_result != 0) {
+            fprintf(stderr, "weight upload failed: %d\n", copy_result);
             cudaFree(d_ptr);
             return -3;
         }
@@ -8432,10 +8438,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) return false;
         err = cudaMalloc(&kv->d_q8_old_v_scale, vectors * sizeof(float));
         if (err != cudaSuccess) return false;
-        cudaMemset(kv->d_q8_old_k, 0, elems * sizeof(int8_t));
-        cudaMemset(kv->d_q8_old_v, 0, elems * sizeof(int8_t));
-        cudaMemset(kv->d_q8_old_k_scale, 0, vectors * sizeof(float));
-        cudaMemset(kv->d_q8_old_v_scale, 0, vectors * sizeof(float));
         kv->q8_old_backing = 1;
         return true;
     }
@@ -8448,7 +8450,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             kv->head_dim);
         cudaError_t err = cudaMalloc(&kv->d_fp16_old_k, elems * sizeof(__half));
         if (err != cudaSuccess) return false;
-        cudaMemset(kv->d_fp16_old_k, 0, elems * sizeof(__half));
         kv->fp16_k_q4_v_old_backing = 1;
         return true;
     }
@@ -8464,10 +8465,47 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) return false;
         err = cudaMalloc(&kv->d_q4_old_v_scale, vectors * sizeof(float));
         if (err != cudaSuccess) return false;
-        cudaMemset(kv->d_q4_old_v, 0, elems * sizeof(uint8_t));
-        cudaMemset(kv->d_q4_old_v_scale, 0, vectors * sizeof(float));
         kv->q4_old_v_backing = 1;
         return true;
+    }
+
+    // All optional buffers are initialized together, then published only after
+    // the default stream drains. Consumer streams are explicitly nonblocking.
+    static bool initialize_kv_device_storage(M40llmKVCache* kv) {
+        const size_t token = (size_t)kv->num_heads * kv->head_dim;
+        const size_t dense = (size_t)kv->max_batch_size * kv->max_seq_len * token;
+        const size_t vectors = (size_t)kv->max_batch_size * kv->max_seq_len * kv->num_heads;
+        const size_t recent = (size_t)kv->max_batch_size * kv->recent_window * token;
+        const size_t blocks = (size_t)kv->max_batch_size * kv->max_blocks;
+        const size_t summary = blocks * token;
+        const size_t reps = summary * kv->representatives;
+        struct Fill { void* pointer; size_t bytes; int value; };
+        const Fill fills[] = {
+            {kv->d_k, dense * sizeof(__half), 0},
+            {kv->d_v, dense * sizeof(__half), 0},
+            {kv->d_seq_map, (size_t)kv->max_batch_size * sizeof(uint32_t), 0},
+            {kv->d_recent_k, recent * sizeof(__half), 0},
+            {kv->d_recent_v, recent * sizeof(__half), 0},
+            {kv->d_summary_k_acc, summary * sizeof(float), 0},
+            {kv->d_summary_v_acc, summary * sizeof(float), 0},
+            {kv->d_summary_k, summary * sizeof(__half), 0},
+            {kv->d_summary_v, summary * sizeof(__half), 0},
+            {kv->d_block_counts, blocks * sizeof(uint32_t), 0},
+            {kv->d_rep_k, reps * sizeof(__half), 0},
+            {kv->d_rep_v, reps * sizeof(__half), 0},
+            {kv->d_rep_positions, blocks * kv->representatives * sizeof(uint32_t), 0xff},
+            {kv->d_q8_old_k, dense * sizeof(int8_t), 0},
+            {kv->d_q8_old_v, dense * sizeof(int8_t), 0},
+            {kv->d_q8_old_k_scale, vectors * sizeof(float), 0},
+            {kv->d_q8_old_v_scale, vectors * sizeof(float), 0},
+            {kv->d_fp16_old_k, dense * sizeof(__half), 0},
+            {kv->d_q4_old_v, dense / 2 * sizeof(uint8_t), 0},
+            {kv->d_q4_old_v_scale, vectors * sizeof(float), 0},
+        };
+        for (const Fill& fill : fills) {
+            if (fill.pointer && cudaMemset(fill.pointer, fill.value, fill.bytes) != cudaSuccess) return false;
+        }
+        return cudaStreamSynchronize(nullptr) == cudaSuccess;
     }
 
     M40llmKVCache* m40llm_kvcache_create(M40llmCudaContext* ctx,
@@ -8512,9 +8550,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) { cudaFree(kv->d_k); delete kv; return nullptr; }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { cudaFree(kv->d_k); cudaFree(kv->d_v); delete kv; return nullptr; }
-        cudaMemset(kv->d_k, 0, bytes);
-        cudaMemset(kv->d_v, 0, bytes);
-        cudaMemset(kv->d_seq_map, 0, seq_map_size);
+        if (!initialize_kv_device_storage(kv)) { m40llm_kvcache_destroy(kv); return nullptr; }
         return kv;
     }
 
@@ -8607,24 +8643,10 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
             err = cudaMalloc(&kv->d_v, dense_bytes);
             if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
-            cudaMemset(kv->d_k, 0, dense_bytes);
-            cudaMemset(kv->d_v, 0, dense_bytes);
         }
         err = cudaMalloc(&kv->d_seq_map, seq_map_size);
         if (err != cudaSuccess) { m40llm_kvcache_destroy(kv); return nullptr; }
-        cudaMemset(kv->d_recent_k, 0, recent_elems * sizeof(__half));
-        cudaMemset(kv->d_recent_v, 0, recent_elems * sizeof(__half));
-        cudaMemset(kv->d_summary_k_acc, 0, summary_elems * sizeof(float));
-        cudaMemset(kv->d_summary_v_acc, 0, summary_elems * sizeof(float));
-        cudaMemset(kv->d_summary_k, 0, summary_elems * sizeof(__half));
-        cudaMemset(kv->d_summary_v, 0, summary_elems * sizeof(__half));
-        cudaMemset(kv->d_block_counts, 0, block_count_size);
-        if (representatives > 0) {
-            cudaMemset(kv->d_rep_k, 0, rep_elems * sizeof(__half));
-            cudaMemset(kv->d_rep_v, 0, rep_elems * sizeof(__half));
-            cudaMemset(kv->d_rep_positions, 0xff, rep_position_size);
-        }
-        cudaMemset(kv->d_seq_map, 0, seq_map_size);
+        if (!initialize_kv_device_storage(kv)) { m40llm_kvcache_destroy(kv); return nullptr; }
         return kv;
     }
 

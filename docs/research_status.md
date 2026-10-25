@@ -110,14 +110,17 @@ consumer streams make default-stream completion an explicit requirement.
 This is a separate correctness follow-up, not a sparse-kernel correction or
 a reason to rewrite the C21 preservation commits.
 
-1. `fix(cuda): complete synchronous host uploads`: make the central upload
+1. `ad217af`, `fix(cuda): complete synchronous host uploads`: make the central upload
    return device-ready, document producer/consumer ownership, account for the
    completion wait and add immediate-consumer regressions on both streams.
-2. `fix(kv): finish native cache initialization`: audit direct native uploads,
-   initialization and length updates; finish setup before publishing cache
-   pointers and avoid stack-owned asynchronous metadata transfers. Depends
-   on the explicit upload contract, without adding per-kernel hot-path waits.
-3. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
+2. `fix(cuda): publish initialized device storage`: finish native weights
+   and checked KV initialization before publishing usable pointers. Depends
+   on the central upload contract, without per-kernel hot-path waits.
+3. `fix(kv): publish legacy append lengths on device`: separate the legacy
+   metadata correction from setup; remove stack-owned async transfers and
+   establish the length producer's dependency before host reads. Production
+   explicit-position scheduling stays enqueue-only.
+4. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
    parity and local CI lanes, then a bounded release generation checkpoint
    against the pinned exact trace. Record any timing impact separately from
    optimization claims. Depends on verified correctness fixes.
@@ -133,6 +136,13 @@ decode and exact signed Q8 reference sums on prefill. Three GPU-profile tests,
 non-CUDA library warning-as-error tests and CUDA/server all-targets Clippy
 pass. Native setup/legacy metadata and release impact remain pending.
 See [the explicit transfer contract](cuda_transfer_contract.md).
+
+Native weight and KV setup now returns initialized, device-ready storage.
+Five transfer/ownership tests pass on M40, including immediate append/attention
+for supported dense, summary/q8, mixed q4 head64/head128 and representative
+metadata layouts. No unsupported head128 diagnostic attention is enabled.
+The remaining direct native H2D sites are legacy append length publication;
+those will be corrected independently before the release checkpoint.
 
 C20 was split into dependency-ordered commits:
 

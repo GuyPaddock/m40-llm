@@ -2261,6 +2261,7 @@ impl CudaContext {
             if kv.is_null() {
                 return Err(anyhow::anyhow!("m40llm_kvcache_create returned null"));
             }
+            crate::profile::record_stream_sync("kvcache_initialization");
             Ok(kv)
         }
 
@@ -2309,6 +2310,7 @@ impl CudaContext {
                     "m40llm_kvcache_create_compressed returned null"
                 ));
             }
+            crate::profile::record_stream_sync("kvcache_initialization");
             Ok(kv)
         }
 
@@ -2377,6 +2379,7 @@ impl CudaContext {
             TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
             crate::profile::record_device_alloc("upload_weights", data.len());
             crate::profile::record_h2d_copy("upload_weights", data.len());
+            crate::profile::record_stream_sync("upload_weights_completion");
             if let Ok(mut map) = self.inner.alloc_map.lock() {
                 map.insert(
                     d_ptr,
