@@ -53,7 +53,12 @@ KV IDs; session graphs and all-slot packed-then-compress reconstruction are
 explicitly rejected for nonempty masks. See [the mask contract](layer_masks.md).
 The broader validation exposed an independent minimal-forward fixture using
 dense head_dim=4 KV with the compressed default; `fe48028` makes that reference
-explicitly dense. Runner integration and measured mask results remain pending.
+explicitly dense. Forward integration is committed in `04739c3`; 45 CUDA
+cuBLAS-on tests, 21 cuBLAS-off tests, the full non-CUDA warning-as-error suite
+and both Clippy lanes pass. The runner now adds candidate-only masks and
+matched forced-prefix timing. Before any mask result, the fixed probes are
+none, `[17]`, `[17,18]`, `[17,18,19]`, both frozen splits, five alternating
+step-timing pairs per split. Real mask quality/timing results remain pending.
 
 C19 was split into dependency-ordered commits:
 

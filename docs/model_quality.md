@@ -94,6 +94,15 @@ Use `--split calibration` for tuning and reserve `--split held-out` for
 identified quality checkpoints. Do not modify V1 inputs/rubrics after results.
 Unset `M40LLM_KV_*` diagnostics before evaluation; the runner rejects them.
 
+For the separate C20 model-changing diagnostic, `--skip-layers 17,18` applies
+only to the candidate before KV allocation. The reference stays unchanged.
+Source hashes, active original IDs and explicit in-process transforms identify
+the variant; source weights and physical KV capacity are not compacted.
+Optional `--step-timing-trials 5` adds alternating matched-prefix timing pairs,
+with eight warm prefix tokens by default. These are forced-prefix greedy
+prediction steps, not free-generated or HTTP TPS. See [layer masks](layer_masks.md)
+for bounds, supported paths and the frozen one/two/three-layer probe choices.
+
 The manifest records model/corpus/config/executable hashes, source revision,
 worktree, toolchains, build flags, device, and selected splits. Split records
 hash the serialized selected data. Task rows retain raw text, rendered prompt,

@@ -1,7 +1,12 @@
+#[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "../../tests/common/tiny_gguf.rs"]
+mod fixture;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod records;
 #[cfg(all(feature = "cuda", nvcc))]
 mod run;
+#[cfg(all(feature = "cuda", nvcc))]
+mod step_timing;
 #[cfg(all(feature = "cuda", nvcc))]
 mod tasks;
 #[cfg(all(test, feature = "cuda", nvcc))]
@@ -47,6 +52,14 @@ struct Args {
     split: SplitChoice,
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
+    /// Candidate-only diagnostic, zero-based interior IDs; reference stays intact.
+    #[arg(long, value_delimiter = ',')]
+    skip_layers: Vec<usize>,
+    /// Optional paired forced-prefix greedy step timings, not generated HTTP TPS.
+    #[arg(long, default_value_t = 0)]
+    step_timing_trials: usize,
+    #[arg(long, default_value_t = 8)]
+    step_timing_warm_prefix_tokens: usize,
     /// Must not exist. Flush each completed row; never overwrite prior evidence.
     #[arg(long)]
     output: PathBuf,
@@ -58,6 +71,10 @@ fn main() -> Result<()> {
     ensure!(
         !args.variant_id.trim().is_empty() && args.context_tokens > 1,
         "provide a nonempty variant ID and at least two context slots"
+    );
+    ensure!(
+        args.step_timing_trials <= 32 && args.step_timing_warm_prefix_tokens > 0,
+        "step timing accepts 0..32 trials and a nonempty warm prefix"
     );
     #[cfg(all(feature = "cuda", nvcc))]
     {

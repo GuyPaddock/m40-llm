@@ -1,6 +1,6 @@
 use super::{
     records::{self, Report},
-    tasks, Args,
+    step_timing, tasks, Args,
 };
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
@@ -47,7 +47,11 @@ fn environment() -> Result<BTreeMap<String, String>> {
     Ok(environment)
 }
 
-fn load_model(path: &Path, context_tokens: u32) -> Result<(LoadedModel, Tokenizer)> {
+fn load_model(
+    path: &Path,
+    context_tokens: u32,
+    skipped_layers: &[usize],
+) -> Result<(LoadedModel, Tokenizer)> {
     let gguf = gguf::load_gguf(path)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
     ensure!(
@@ -69,6 +73,7 @@ fn load_model(path: &Path, context_tokens: u32) -> Result<(LoadedModel, Tokenize
         context_tokens <= model.model_config.context_length,
         "requested context exceeds model context"
     );
+    model.set_diagnostic_layer_mask(skipped_layers)?;
     model.allocate_kv_cache_for_layers(context_tokens)?;
     model.validate_full_layer_decode()?;
     Ok((model, tokenizer))
@@ -83,6 +88,9 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
     let materialized_bytes: usize = materialized.values().map(|weight| weight.bytes).sum();
     Ok(json!({
         "uploaded_weight_payload_bytes":model.weights_len,
+        "source_layer_count":model.model_config.block_count,
+        "active_layer_count":model.active_layer_count()?,
+        "has_in_process_compaction":false,
         "resident_kv_bytes":cache.actual_bytes(),
         "head128_attention_workspace_bytes":cache.head128_attention_workspace_bytes(),
         "prepared_weight_bytes":model.q8_execution_stats().resident_bytes,
@@ -106,6 +114,9 @@ fn model_identity(path: &Path, model: &LoadedModel, tokenizer: &Tokenizer) -> Re
     Ok(
         json!({"path":fs::canonicalize(path)?,"sha256":records::file_sha256(path)?,
         "file_bytes":fs::metadata(path)?.len(),"architecture":config.architecture,"layers":config.block_count,
+        "skipped_layer_ids":model.layer_mask.skipped_layers(),
+        "active_layer_ids":model.layer_mask.active_layers(config.block_count)?.collect::<Vec<_>>(),
+        "active_layer_count":model.active_layer_count()?,
         "model_context_tokens":config.context_length,"d_model":config.embedding_length,
         "ffn_dim":config.feed_forward_length,"query_heads":config.attention_head_count,
         "kv_heads":config.attention_head_count_kv,"head_dim":config.attention_key_length,
@@ -187,10 +198,11 @@ pub fn evaluate(args: Args) -> Result<()> {
     let initial_device_bytes = CudaContext::total_device_bytes();
     let load_start = Instant::now();
     let (mut reference, reference_tokenizer) =
-        load_model(&args.reference_model, args.context_tokens)?;
+        load_model(&args.reference_model, args.context_tokens, &[])?;
     let reference_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
     let load_start = Instant::now();
-    let (mut candidate, candidate_tokenizer) = load_model(&args.model, args.context_tokens)?;
+    let (mut candidate, candidate_tokenizer) =
+        load_model(&args.model, args.context_tokens, &args.skip_layers)?;
     let candidate_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
     ensure!(
         reference.model_config.vocab_size == candidate.model_config.vocab_size,
@@ -217,12 +229,23 @@ pub fn evaluate(args: Args) -> Result<()> {
         "passage_tokenization":"plain text, metadata BOS if available, no EOS or chat wrapper; no truncation",
         "teacher_forcing":"identical observed prefixes, full vocabulary logits, no sampling",
         "timing_scope":"resident in-process generation admission-to-return including detokenization; excludes loading/HTTP/queue; loss includes full-logit readback and CPU scoring",
-        "quality_timing_trials":1});
+        "quality_timing_trials":1,"candidate_skipped_layer_ids":candidate.layer_mask.skipped_layers(),
+        "step_timing_trials":args.step_timing_trials,"step_timing_warm_prefix_tokens":args.step_timing_warm_prefix_tokens});
+    let transforms = if candidate.layer_mask.has_skipped_layers() {
+        vec![
+            json!({"kind":"diagnostic_layer_mask","skipped_layer_ids":candidate.layer_mask.skipped_layers(),
+            "active_layer_ids":candidate_identity["active_layer_ids"],"original_layer_count":candidate.model_config.block_count,
+            "has_in_process_compaction":false}),
+        ]
+    } else {
+        Vec::new()
+    };
     report.append(json!({"kind":"model_quality_manifest","schema_version":1,
         "created_unix_s":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         "variant_id":args.variant_id,"reference":reference_identity,"candidate":candidate_identity,
         "has_identical_model_source":reference_identity["sha256"] == candidate_identity["sha256"],
-        "in_process_transforms":[],"external_model_difference":"only file hashes/metadata verified; no pruning provenance inferred from label",
+        "has_identical_execution_model":reference_identity["sha256"] == candidate_identity["sha256"] && transforms.is_empty(),
+        "in_process_transforms":transforms,"external_model_difference":"only file hashes/metadata verified; no pruning provenance inferred from label",
         "corpus_path":args.corpus,"corpus_id":corpus.corpus_id,"corpus_sha256":records::sha256(&corpus_bytes)?,
         "selected_splits":splits,"configuration":configuration,"configuration_sha256":records::sha256(&serde_json::to_vec(&configuration)?)?,
         "revision":records::command_text("git",&["rev-parse","HEAD"])?,"worktree":records::command_text("git",&["status","--short"])?,
@@ -273,6 +296,22 @@ pub fn evaluate(args: Args) -> Result<()> {
                 comparison.max_abs_logit_diff
             );
             losses.push(comparison);
+        }
+        if args.step_timing_trials > 0 {
+            let timing_passage = &inputs.passages[0];
+            let ids = tasks::encode_passage(&reference_tokenizer, &timing_passage.text)?;
+            step_timing::measure_pairs(
+                &mut report,
+                split,
+                &timing_passage.id,
+                &mut reference,
+                &mut candidate,
+                &ids,
+                step_timing::StepTimingConfig {
+                    warm_prefix_tokens: args.step_timing_warm_prefix_tokens,
+                    trials: args.step_timing_trials,
+                },
+            )?;
         }
         report.append(json!({"kind":"model_quality_summary","split":split,
             "tasks":task_results.len(),"dense_reference_passes":task_results.iter().filter(|(a,_)| *a).count(),

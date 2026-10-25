@@ -13,10 +13,6 @@ use m40_llm::{
 use serde_json::{json, Value};
 use std::time::Instant;
 
-#[cfg(test)]
-#[path = "../../tests/common/tiny_gguf.rs"]
-mod fixture;
-
 pub fn encode_task(tokenizer: &Tokenizer, user_prompt: &str) -> Result<(String, Vec<u32>)> {
     let (prompt, add_bos) = if tokenizer.is_qwen2() {
         (format!("<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"), false)
@@ -134,6 +130,7 @@ pub fn evaluate_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixture;
     use m40_llm::{
         cuda::CudaContext, evaluation::scoring::ScoringRule, kv_compression::ScopedRuntimeConfig,
     };

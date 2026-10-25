@@ -46,5 +46,34 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   cargo test --features cuda --test layer_mask_cuda -- --test-threads=1
 ```
 
-The C20 evaluation-runner integration and fixed one/two/three-layer results
-remain required before this checkpoint is complete. No mask is preferred yet.
+## Evaluation Runner
+
+The release [model-quality runner](model_quality.md) accepts candidate-only
+`--skip-layers 17,18`. The reference always executes every layer. Manifest
+transform records and model identities report skipped/active original IDs,
+active counts and unchanged source allocations. Identical source hashes do
+not imply identical execution when a mask is present. No mask flag means all
+layers, including for ordinary CLI/server generation.
+
+Optional `--step-timing-trials 5 --step-timing-warm-prefix-tokens 8` measures
+the first fixed loss passage in each selected split. Every trial resets KV,
+allocates session scratch, and processes the warm prefix before timing.
+Reference/candidate runs alternate order and consume identical observed
+prefixes. Every measured step calls the real greedy next-token path, including
+GPU argmax/readback and final stream drains; predicted tokens are logged but
+never fed back into the next prefix. Repeated per-model predictions must match.
+
+This isolates matched-token compute cost when free generations stop at
+different lengths. It is not generated-token or HTTP TPS, a standalone
+per-kernel timing, or an exact-engine promotion. The report keeps raw paired
+times, medians, variation, actual prediction IDs, and first divergent prefix.
+Task rows separately retain free-generation output/quality and timing.
+
+For the initial Qwen2.5-3B Q8_0 C20 diagnostic, fixed **before observing mask
+results**, compare no mask, `[17]`, `[17,18]`, and `[17,18,19]`. Run both frozen
+splits once for quality and five alternating matched-prefix timing pairs per
+split. Do not select layers by held-out results or tune the frozen rubrics.
+These are central-layer sensitivity probes, not an influence ranking or a
+preferred pruning recipe; C24 ranking remains separate.
+
+The real release results remain required before C20 is complete.
