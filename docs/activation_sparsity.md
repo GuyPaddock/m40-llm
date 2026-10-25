@@ -2,8 +2,8 @@
 
 C23 thresholds the completed SwiGLU vector before the down projection. Gate/up
 weights and computation stay unchanged. This changes model semantics and is
-not an unchanged-model engine optimization. There is no runtime integration
-or default change yet.
+not an unchanged-model engine optimization. Application requires the explicit
+model-local research API or quality runner; generation defaults are unchanged.
 
 ## Selection Contract
 
@@ -159,3 +159,51 @@ reduction-order drift that crosses FP16 KV rounding boundaries. The full-model
 zero control requires exact native logits; independent sparse-kernel parity
 still covers threshold zero numerically. Statistics list native bypass layers
 explicitly rather than inventing selected-input counts for that route.
+
+The existing `model_quality` runner accepts `--capture-activations new.json`
+only with `--split calibration`, no candidate transforms and no timing trials.
+It uses the same task formatting, greedy generation, token accounting and
+model loader as evaluation. Capture JSONL retains actual prompt/generated IDs,
+outputs and fixed scores. Diagnostic readback timing is not decode performance.
+The artifact is created once after all eligible tasks finish; keep its hash.
+
+Evaluation uses `--activation-calibration new.json --activation-target 0.4`
+for the candidate only. Model file, uploaded source, corpus, base execution,
+task IDs and layer identities must match. All 0/25/40/50/60 targets are explicit;
+there is no implicit activation default. `--activation-budget-mb` counts extra
+device payload, while `--activation-observation-budget-mb` bounds capture host
+payload. Per-task counters cover all forwarded prompt/generated inputs since
+reset, not just decode, and never report a selected fraction for native bypass.
+
+Use the unchanged native-Q8 environment from the C11 checkpoint, with no
+prefill chunking or KV diagnostics. Keep that exact environment/context for
+capture and every evaluation; execution mismatch is an error, not a refit.
+
+```bash
+source scripts/dev-env.sh
+while IFS=$'\t' read -r key value; do
+  export "$key=$value"
+done < <(head -n 1 docs/experiments/2026-10-25-qwen-exact-checkpoint.jsonl | \
+  jq -r '.environment | to_entries[] | [.key,.value] | @tsv')
+model="$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d"
+cargo build --release --features cuda --example model_quality
+target/release/examples/model_quality --reference-model "$model" --model "$model" \
+  --variant-id native-activation-calibration --split calibration \
+  --capture-activations /tmp/qwen-activation-calibration.json \
+  --output /tmp/qwen-activation-capture.jsonl
+
+# Freeze the artifact before evaluating any candidate or held-out model output.
+for target in 0 0.25 0.4 0.5 0.6; do
+  target/release/examples/model_quality --reference-model "$model" --model "$model" \
+    --variant-id "activation-target-$target" --split all \
+    --activation-calibration /tmp/qwen-activation-calibration.json \
+    --activation-target "$target" --step-timing-trials 5 \
+    --output "/tmp/qwen-activation-$target.jsonl"
+done
+```
+
+All GPU runs are serial, without overlapping tests/builds or other inference.
+Both task and loss reports preserve dense-failed cases as inconclusive. The
+paired timing is identical forced-prefix work including selection and final
+completion, not HTTP/generated TPS. Inspect complete generation timings too;
+different stop lengths cannot justify an engine speed claim.

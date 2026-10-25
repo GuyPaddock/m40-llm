@@ -95,6 +95,13 @@ paths fail before launches. Artifact identity/budget failures publish no
 partial cache. Calibration collection and real-model variant evaluation are
 still pending; there are no model-quality or E2E gain claims yet.
 
+Model-local integration is committed in `1f2a65c`. The existing quality runner
+now exposes explicit calibration capture and artifact/target application, with
+seven passing runner tests. It verifies model/corpus/base-execution identity,
+reports actual per-layer omission and duplicate payloads, and uses the same
+formatting/greedy/accounting path as C19. Next freeze the clean-source Qwen
+calibration artifact, then measure all five declared targets on both splits.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

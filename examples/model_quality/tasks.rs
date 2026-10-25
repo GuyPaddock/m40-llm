@@ -27,7 +27,11 @@ pub fn encode_passage(tokenizer: &Tokenizer, text: &str) -> Result<Vec<u32>> {
     tokenizer.encode_with_specials(text, tokenizer.bos_id().is_some(), false)
 }
 
-fn generate(model: &LoadedModel, prompt: &str, max_tokens: usize) -> Result<GeneratedText> {
+pub(super) fn generate(
+    model: &LoadedModel,
+    prompt: &str,
+    max_tokens: usize,
+) -> Result<GeneratedText> {
     generate_text(
         model,
         GenerateOptions {
@@ -49,7 +53,7 @@ pub fn warmup(model: &LoadedModel, tokenizer: &Tokenizer) -> Result<()> {
     Ok(())
 }
 
-fn generation_record(
+pub(super) fn generation_record(
     generated: &GeneratedText,
     wall_ms: f64,
     model: &LoadedModel,
@@ -70,6 +74,8 @@ pub fn evaluate_task(
     tokenizer: &Tokenizer,
 ) -> Result<(bool, bool)> {
     let (prompt, expected_ids) = encode_task(tokenizer, &task.prompt)?;
+    reference.reset_activation_statistics()?;
+    candidate.reset_activation_statistics()?;
     let start = Instant::now();
     let reference_generated = generate(reference, &prompt, task.max_tokens)?;
     let reference_wall_ms = start.elapsed().as_secs_f64() * 1000.0;

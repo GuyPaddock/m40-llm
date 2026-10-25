@@ -1,5 +1,6 @@
 //! Experimental magnitude selection for the completed SwiGLU vector. This
-//! does not change model dispatch or use the rejected sparse-weight format.
+//! changes down dispatch only for explicit research variants, without using
+//! the rejected sparse-weight format or changing generation defaults.
 
 use anyhow::{ensure, Result};
 use serde::Serialize;

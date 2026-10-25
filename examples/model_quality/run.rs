@@ -22,7 +22,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-fn environment() -> Result<BTreeMap<String, String>> {
+pub(super) fn environment() -> Result<BTreeMap<String, String>> {
     let environment: BTreeMap<_, _> = std::env::vars()
         .filter(|(key, _)| {
             key.starts_with("M40LLM_") || key.starts_with("CUDA_") || key == "OMP_NUM_THREADS"
@@ -47,10 +47,11 @@ fn environment() -> Result<BTreeMap<String, String>> {
     Ok(environment)
 }
 
-fn load_model(
+pub(super) fn load_model(
     path: &Path,
     context_tokens: u32,
     skipped_layers: &[usize],
+    activation: super::activations::ActivationSetup<'_>,
 ) -> Result<(LoadedModel, Tokenizer)> {
     let gguf = gguf::load_gguf(path)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
@@ -74,6 +75,7 @@ fn load_model(
         "requested context exceeds model context"
     );
     model.set_diagnostic_layer_mask(skipped_layers)?;
+    activation.configure(&mut model)?;
     model.allocate_kv_cache_for_layers(context_tokens)?;
     model.validate_full_layer_decode()?;
     Ok((model, tokenizer))
@@ -94,13 +96,18 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
         "resident_kv_bytes":cache.actual_bytes(),
         "head128_attention_workspace_bytes":cache.head128_attention_workspace_bytes(),
         "prepared_weight_bytes":model.q8_execution_stats().resident_bytes,
+        "activation_sparsity":model.activation_research_stats()?,
         "materialized_f32_bytes":materialized_bytes,
         "combined_tracked_device_bytes":CudaContext::total_device_bytes(),
         "scope":"per-model persistent fields; tracked total includes BOTH resident models/workspaces, not standalone peak VRAM"
     }))
 }
 
-fn model_identity(path: &Path, model: &LoadedModel, tokenizer: &Tokenizer) -> Result<Value> {
+pub(super) fn model_identity(
+    path: &Path,
+    model: &LoadedModel,
+    tokenizer: &Tokenizer,
+) -> Result<Value> {
     let config = &model.model_config;
     let dtype_counts =
         model
@@ -139,7 +146,7 @@ fn tokenizer_sha256(model: &LoadedModel) -> Result<String> {
 
 /// Preflight every chosen input before forward execution. Tokenization and full output
 /// bounds must agree; evaluation never silently truncates passages or tasks.
-fn validate_inputs(
+pub(super) fn validate_inputs(
     corpus: &Corpus,
     splits: &[Split],
     a: &Tokenizer,
@@ -190,19 +197,34 @@ fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.capture_activations.is_some() {
+        return super::activations::capture(&args);
+    }
     let environment = environment()?;
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
+    let activation = super::activations::load_variant(&args, &environment, &corpus, &corpus_bytes)?;
     let splits = args.split.selected();
     let mut report = Report::create(&args.output)?;
     let initial_device_bytes = CudaContext::total_device_bytes();
     let load_start = Instant::now();
-    let (mut reference, reference_tokenizer) =
-        load_model(&args.reference_model, args.context_tokens, &[])?;
+    let (mut reference, reference_tokenizer) = load_model(
+        &args.reference_model,
+        args.context_tokens,
+        &[],
+        super::activations::ActivationSetup::Disabled,
+    )?;
     let reference_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
     let load_start = Instant::now();
-    let (mut candidate, candidate_tokenizer) =
-        load_model(&args.model, args.context_tokens, &args.skip_layers)?;
+    let (mut candidate, candidate_tokenizer) = load_model(
+        &args.model,
+        args.context_tokens,
+        &args.skip_layers,
+        activation.as_ref().map_or(
+            super::activations::ActivationSetup::Disabled,
+            super::activations::ActivationSetup::Apply,
+        ),
+    )?;
     let candidate_load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
     ensure!(
         reference.model_config.vocab_size == candidate.model_config.vocab_size,
@@ -230,8 +252,9 @@ pub fn evaluate(args: Args) -> Result<()> {
         "teacher_forcing":"identical observed prefixes, full vocabulary logits, no sampling",
         "timing_scope":"resident in-process generation admission-to-return including detokenization; excludes loading/HTTP/queue; loss includes full-logit readback and CPU scoring",
         "quality_timing_trials":1,"candidate_skipped_layer_ids":candidate.layer_mask.skipped_layers(),
-        "step_timing_trials":args.step_timing_trials,"step_timing_warm_prefix_tokens":args.step_timing_warm_prefix_tokens});
-    let transforms = if candidate.layer_mask.has_skipped_layers() {
+        "step_timing_trials":args.step_timing_trials,"step_timing_warm_prefix_tokens":args.step_timing_warm_prefix_tokens,
+        "candidate_activation_calibration":activation.as_ref().map(|value|value.describe())});
+    let mut transforms = if candidate.layer_mask.has_skipped_layers() {
         vec![
             json!({"kind":"diagnostic_layer_mask","skipped_layer_ids":candidate.layer_mask.skipped_layers(),
             "active_layer_ids":candidate_identity["active_layer_ids"],"original_layer_count":candidate.model_config.block_count,
@@ -240,6 +263,9 @@ pub fn evaluate(args: Args) -> Result<()> {
     } else {
         Vec::new()
     };
+    if let Some(activation) = &activation {
+        transforms.push(activation.describe());
+    }
     report.append(json!({"kind":"model_quality_manifest","schema_version":1,
         "created_unix_s":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         "variant_id":args.variant_id,"reference":reference_identity,"candidate":candidate_identity,
@@ -281,6 +307,7 @@ pub fn evaluate(args: Args) -> Result<()> {
         let mut losses = Vec::new();
         for passage in &inputs.passages {
             let ids = tasks::encode_passage(&reference_tokenizer, &passage.text)?;
+            candidate.reset_activation_statistics()?;
             let start = Instant::now();
             let comparison = compare_loaded_models(&mut reference, &mut candidate, &ids)?;
             let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;

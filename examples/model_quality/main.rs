@@ -1,3 +1,5 @@
+#[cfg(all(feature = "cuda", nvcc))]
+mod activations;
 #[cfg(all(test, feature = "cuda", nvcc))]
 #[path = "../../tests/common/cuda_test_scope.rs"]
 mod cuda_test_scope;
@@ -58,6 +60,20 @@ struct Args {
     /// Candidate-only diagnostic, zero-based interior IDs; reference stays intact.
     #[arg(long, value_delimiter = ',')]
     skip_layers: Vec<usize>,
+    /// Capture calibration-only generated SwiGLU inputs and freeze this new artifact.
+    #[arg(long, conflicts_with_all=["activation_calibration","activation_target","skip_layers"])]
+    capture_activations: Option<PathBuf>,
+    #[arg(long, default_value_t = 32)]
+    activation_capture_rows: usize,
+    #[arg(long, default_value_t = 512)]
+    activation_observation_budget_mb: usize,
+    /// Apply a checked frozen artifact only to the candidate model.
+    #[arg(long, requires = "activation_target", conflicts_with = "skip_layers")]
+    activation_calibration: Option<PathBuf>,
+    #[arg(long, requires = "activation_calibration")]
+    activation_target: Option<f64>,
+    #[arg(long, default_value_t = 1024)]
+    activation_budget_mb: usize,
     /// Optional paired forced-prefix greedy step timings, not generated HTTP TPS.
     #[arg(long, default_value_t = 0)]
     step_timing_trials: usize,
