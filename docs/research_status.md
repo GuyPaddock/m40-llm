@@ -103,6 +103,37 @@ Production CUDA/build/FFI files match the pre-C21 tree; only the standalone
 CPU format is retained as new code. No GPU benchmark runs alongside tests or
 builds, and the benchmark process releases all GPU use on exit.
 
+### Upload-Ordering Correctness Checkpoint
+
+The pre-existing pageable-copy contract dates to `8c9e3b45`; nonblocking
+consumer streams make default-stream completion an explicit requirement.
+This is a separate correctness follow-up, not a sparse-kernel correction or
+a reason to rewrite the C21 preservation commits.
+
+1. `fix(cuda): complete synchronous host uploads`: make the central upload
+   return device-ready, document producer/consumer ownership, account for the
+   completion wait and add immediate-consumer regressions on both streams.
+2. `fix(kv): finish native cache initialization`: audit direct native uploads,
+   initialization and length updates; finish setup before publishing cache
+   pointers and avoid stack-owned asynchronous metadata transfers. Depends
+   on the explicit upload contract, without adding per-kernel hot-path waits.
+3. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
+   parity and local CI lanes, then a bounded release generation checkpoint
+   against the pinned exact trace. Record any timing impact separately from
+   optimization claims. Depends on verified correctness fixes.
+
+After this checkpoint, resume C23's retained input-layout prerequisite check.
+Do not reopen sparse-Q8 tuning, calibration or runtime policy changes.
+
+The immediate-consumer regression reproduces the pre-fix failure on M40:
+rows=16,K=11008, iteration=1, index=76032 reads zero instead of 0.022460938.
+The central synchronous upload now drains the default stream and records
+`memcpy_h2d_completion`. All 48 repeated uploads match exact input values on
+decode and exact signed Q8 reference sums on prefill. Three GPU-profile tests,
+non-CUDA library warning-as-error tests and CUDA/server all-targets Clippy
+pass. Native setup/legacy metadata and release impact remain pending.
+See [the explicit transfer contract](cuda_transfer_contract.md).
+
 C20 was split into dependency-ordered commits:
 
 1. `9674452`, `feat(infer): define diagnostic layer masks`: checked interior IDs, original

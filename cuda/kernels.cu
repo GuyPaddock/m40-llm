@@ -599,6 +599,11 @@ extern "C" {
         if (ensure_device(ctx) != 0) return -3;
         cudaError_t err = cudaMemcpy(dst_device, src_host, bytes, cudaMemcpyHostToDevice);
         if (err != cudaSuccess) return -2;
+        // Pageable H2D can return after staging but before DMA completion.
+        // Both consumer streams are nonblocking, so default-stream ordering
+        // alone is insufficient. This API promises a device-ready upload.
+        err = cudaStreamSynchronize(nullptr);
+        if (err != cudaSuccess) return -4;
         return 0;
     }
 

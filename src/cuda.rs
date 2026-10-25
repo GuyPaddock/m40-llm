@@ -1966,9 +1966,14 @@ impl CudaContext {
         }
         Ok(())
     }
+    /// Copy host bytes and finish the default-stream transfer before returning.
+    /// The destination is ready for either nonblocking consumer stream on success.
+    ///
     /// # Safety
-    /// `dst_device` must be a valid, writable device pointer to at least `bytes` bytes on this context's device.
-    /// `src_host` must be a valid, readable host pointer to at least `bytes` bytes.
+    /// `dst_device` must be writable for `bytes` on this context's device and
+    /// not in use by another stream. Finish its prior producers/consumers first;
+    /// this call does not wait for nonblocking streams. `src_host` must be
+    /// readable for `bytes` until this call returns.
     pub unsafe fn memcpy_h2d(
         &self,
         dst_device: *mut c_void,
@@ -1982,6 +1987,7 @@ impl CudaContext {
             return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
         }
         crate::profile::record_h2d_copy("memcpy_h2d", bytes);
+        crate::profile::record_stream_sync("memcpy_h2d_completion");
         Ok(())
     }
     /// # Safety
