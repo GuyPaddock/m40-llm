@@ -1,0 +1,5 @@
+5a20fd04959b0c883a2cfab4fca36f47e6440f08aa24698d1ddd967105f054da  docs/experiments/2026-10-25-maxwell-completed-prefill-quality.md
+a888ca8ea254c570996ad7e049ddf4579c903255b73431e963cd4aef61a96788  docs/experiments/2026-10-25-maxwell-completed-native-packed-quality.jsonl
+d86a2a5be018bc49d44f8bb1b2661a910b8555339ed423a7ffd9a573eeecec2a  docs/experiments/2026-10-25-maxwell-completed-native-packed-quality.log.gz
+7646bc9f0dedc1f2212cf112720884ea075f5dcce9d3f1d1f8db738a78306b70  docs/experiments/2026-10-25-maxwell-completed-dequant-sgemm-quality.jsonl
+a95462bf038128e9c2e4da418e9b64a8244734b17e15e84ddea0b686b0727489  docs/experiments/2026-10-25-maxwell-completed-dequant-sgemm-quality.log.gz

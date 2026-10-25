@@ -2,6 +2,16 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Corrected Packed-Prefill Quality
+
+Native packed and dequant SGEMM both pass fresh corrected-control quality:
+all 512 actual browser IDs and all twelve frozen task outputs match, with
+no dense-valid regressions. Single diagnostic prompt intervals are roughly
+3.21 s native packed / 0.48 s SGEMM versus 1.59 s sequential. These are not
+paired HTTP performance results. The former exact-output failure was caused
+by the unsafe sequential reference, not uniquely by SGEMM. Residual sampled
+logit drift remains measured. See [full results, dispatch and scratch accounting](experiments/2026-10-25-maxwell-completed-prefill-quality.md).
+
 ## 2026-10-25: Sequential Prefill Ownership Repair
 
 Real Qwen attribution finds that the no-logits prefix loop reused its input

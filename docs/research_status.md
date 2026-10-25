@@ -45,6 +45,15 @@ regenerate native-packed and dequant-SGEMM quality, then remeasure qualifying
 independent/combined runtimes and the selected-runtime Ollama comparison.
 The old +8.133% HTTP number is not corrected-control timing evidence.
 
+Both independent [fresh packed-prefill quality checks](experiments/2026-10-25-maxwell-completed-prefill-quality.md)
+now pass too: native packed and dequant SGEMM preserve all 512 actual IDs
+and all twelve frozen task outputs against corrected sequential, with zero
+regressions across seven dense-valid tasks. Their largest sampled logit
+differences are 0.010689 / 0.013475, not bitwise parity. Diagnostic prompt
+intervals are about 3.21 s native packed and 0.48 s SGEMM versus 1.59 s
+sequential; controlled HTTP evidence is still required. Next remeasure the
+independent candidates, then a qualifying combination and fresh Ollama.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
