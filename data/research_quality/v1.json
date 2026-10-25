@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "corpus_id": "m40-research-quality-v1",
+  "provenance": "Original synthetic evaluation inputs authored for C19 before model-variant tuning. No browser benchmark input or generated answer is used.",
+  "calibration": {
+    "tasks": [
+      {
+        "id": "cal-chat-reminder", "family": "chat", "max_tokens": 48,
+        "prompt": "Earlier I said my museum visit is on Wednesday. You suggested arriving at noon. I corrected the arrival time to 10:00. What should my final reminder say? Return only a JSON object with keys day and time; use a weekday name and HH:MM time.",
+        "scoring": {"kind": "json_object", "expected": {"day": "Wednesday", "time": "10:00"}}
+      },
+      {
+        "id": "cal-fact-depot", "family": "factual_retrieval", "max_tokens": 32,
+        "prompt": "Depot register: the Juniper team works in Room 18. The Willow team works in Room 24. Which room belongs to Juniper? Return only JSON with the key room and an integer value.",
+        "scoring": {"kind": "json_object", "expected": {"room": 18}}
+      },
+      {
+        "id": "cal-multi-delivery", "family": "multi_fact", "max_tokens": 64,
+        "prompt": "Delivery notes: package Aster goes to Pier 5 on Tuesday. Package Birch goes to Pier 9 on Thursday. A draft note incorrectly sent Aster to Pier 2. Extract the final pier and day for Aster, and the pier for Birch. Return only JSON with keys aster_pier, aster_day, and birch_pier; piers are integers.",
+        "scoring": {"kind": "json_object", "expected": {"aster_pier": 5, "aster_day": "Tuesday", "birch_pier": 9}}
+      },
+      {
+        "id": "cal-config-retry", "family": "code_config", "max_tokens": 16,
+        "prompt": "Read this shell configuration. Lines starting with # are comments.\n# RETRY_BUDGET=19\nRETRY_BUDGET=6\nLOG_LEVEL=info\nWhat is the active RETRY_BUDGET? Reply with the integer only.",
+        "scoring": {"kind": "exact", "answers": ["6"]}
+      },
+      {
+        "id": "cal-arithmetic-invoice", "family": "arithmetic", "max_tokens": 16,
+        "prompt": "An invoice contains four items costing 7 dollars each and a delivery charge of 3 dollars. What is the total in dollars? Reply with the integer only.",
+        "scoring": {"kind": "exact", "answers": ["31"]}
+      },
+      {
+        "id": "cal-long-photo", "family": "long_form", "max_tokens": 160,
+        "prompt": "Explain how a local library can preserve a box of donated photographs. Include scanning, descriptive labels, backups, and keeping originals. Write two short paragraphs using at least 35 words in total.",
+        "scoring": {"kind": "concepts", "min_words": 35, "min_paragraphs": 2, "facts": [
+          {"id": "digitization", "aliases": ["scan", "scanning", "scanned", "digitize", "digitizing"]},
+          {"id": "description", "aliases": ["label", "labels", "labeling", "metadata"]},
+          {"id": "redundancy", "aliases": ["backup", "backups", "second copy", "multiple copies"]},
+          {"id": "physical-originals", "aliases": ["original", "originals", "physical photographs"]}
+        ]}
+      }
+    ],
+    "passages": [
+      {"id": "cal-passage-clock", "text": "The station clock was repaired on a quiet morning. A technician cleaned the gears, checked the power supply, and compared its hands with a reliable time source. By noon the clock was running steadily, and passengers could read it clearly from the opposite platform."},
+      {"id": "cal-passage-checklist", "text": "A maintenance checklist makes repeated work easier to verify. Record the equipment identifier, the inspection date, and every action taken. If a part is replaced, note its serial number. A second person should confirm safety-critical checks before the equipment is returned to service."}
+    ]
+  },
+  "held_out": {
+    "tasks": [
+      {
+        "id": "held-chat-tour", "family": "chat", "max_tokens": 48,
+        "prompt": "Our walking tour is on Saturday. At first we considered meeting at the south gate. We changed the meeting point to the west entrance. Remind me of the final day and meeting point. Return only JSON with keys day and meeting_point; use the exact location name from the final decision.",
+        "scoring": {"kind": "json_object", "expected": {"day": "Saturday", "meeting_point": "west entrance"}}
+      },
+      {
+        "id": "held-fact-observatory", "family": "factual_retrieval", "max_tokens": 32,
+        "prompt": "Observatory log: the Cedar telescope is on Deck 7. The Maple telescope is on Deck 11. Which deck holds Cedar? Return only JSON with the key deck and an integer value.",
+        "scoring": {"kind": "json_object", "expected": {"deck": 7}}
+      },
+      {
+        "id": "held-multi-workshop", "family": "multi_fact", "max_tokens": 64,
+        "prompt": "Workshop schedule: Indigo meets in Hall 12 on Monday. Saffron meets in Hall 16 on Friday. An obsolete schedule listed Indigo in Hall 3. Extract the final hall and day for Indigo, and the hall for Saffron. Return only JSON with keys indigo_hall, indigo_day, and saffron_hall; halls are integers.",
+        "scoring": {"kind": "json_object", "expected": {"indigo_hall": 12, "indigo_day": "Monday", "saffron_hall": 16}}
+      },
+      {
+        "id": "held-config-cache", "family": "code_config", "max_tokens": 16,
+        "prompt": "Read this shell configuration. Lines starting with # are comments.\n# CACHE_SLOTS=31\nCACHE_SLOTS=14\nTRACE=0\nWhat is the active CACHE_SLOTS? Reply with the integer only.",
+        "scoring": {"kind": "exact", "answers": ["14"]}
+      },
+      {
+        "id": "held-arithmetic-crates", "family": "arithmetic", "max_tokens": 16,
+        "prompt": "A store receives five crates with nine jars in each crate, plus two loose jars. How many jars arrive altogether? Reply with the integer only.",
+        "scoring": {"kind": "exact", "answers": ["47"]}
+      },
+      {
+        "id": "held-long-garden", "family": "long_form", "max_tokens": 160,
+        "prompt": "Describe how a neighborhood garden can reduce water use. Include mulch, collecting rainwater, drip irrigation, and watering early in the morning. Write two short paragraphs using at least 35 words in total.",
+        "scoring": {"kind": "concepts", "min_words": 35, "min_paragraphs": 2, "facts": [
+          {"id": "soil-cover", "aliases": ["mulch", "mulching"]},
+          {"id": "collection", "aliases": ["rainwater", "rain water", "rain barrel", "rain barrels"]},
+          {"id": "targeted-delivery", "aliases": ["drip", "drip irrigation"]},
+          {"id": "timing", "aliases": ["early", "morning", "mornings"]}
+        ]}
+      }
+    ],
+    "passages": [
+      {"id": "held-passage-market", "text": "The market opens before sunrise on Sundays. Farmers arrange fresh vegetables in wooden crates while bakers unpack warm bread. Customers bring baskets and compare prices before choosing their purchases. At the end of the morning, unsold produce is collected for a nearby community kitchen."},
+      {"id": "held-passage-recovery", "text": "Reliable recovery begins with a tested backup. Keep a copy separate from the working computer and protect it from accidental changes. Restore a sample file regularly to confirm that the copy is readable. A successful transfer alone does not prove that future recovery will work."}
+    ]
+  }
+}

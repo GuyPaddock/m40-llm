@@ -10,6 +10,7 @@ pub mod infer;
 
 pub mod decode;
 pub mod decode_session;
+pub mod evaluation;
 pub mod generate;
 pub mod generation_metrics;
 #[cfg(feature = "gguf_ext")]

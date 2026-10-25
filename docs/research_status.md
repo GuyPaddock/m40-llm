@@ -27,6 +27,20 @@ and task-specific scoring with variant identity, and collect dense-reference
 results. No layer/sparsity/activation tuning before those data and checks are
 frozen. Modified-model speed must not be presented as an unchanged-engine win.
 
+C19 is split into dependency-ordered commits:
+
+1. `test(quality): freeze pruning evaluation splits`: immutable authored V1
+   data, split/leakage validation, deterministic task rubrics and tests.
+2. `feat(eval): score teacher-forced tokens`: stable token-weighted NLL/PPL,
+   full-logit drift, strict-prefix prediction, and CUDA session integration
+   tests. Depends on the frozen scoring/data contract.
+3. `test(quality): evaluate explicit model variants`: release CLI with model/
+   corpus/config hashes, serial dense-reference comparisons, output/task/loss/
+   memory/timing records. Depends on the loss evaluator and existing sessions.
+4. `docs(perf): record dense quality reference`: evaluate both frozen splits,
+   retain dense failures as capability evidence, and publish the exact current
+   C19 completion status before C20/C21. No model tuning in this unit.
+
 ## N-Gram Feasibility Checkpoint: 2026-10-25
 
 C11A is complete. The selected actual C11 browser trace gives at most 4.949%
