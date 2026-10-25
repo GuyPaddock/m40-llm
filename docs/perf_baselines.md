@@ -2,6 +2,29 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Quantization-Inclusive Q8_1 FFN Screen
+
+Clean release `6431295` completes M04's two fixed packed integer-dot
+experiments at real layer 0/17/35 shapes, rows 1/4, with prepared
+FP32-activation down/vocabulary unchanged. Five alternating pairs per case
+show one-row complete-FFN throughput gains of 27.26-27.41% at 128 threads
+and 21.50-21.71% at 256, with positive paired confidence bounds. Fresh
+activation quantization is included in every gate/up and complete iteration;
+its separate one-row cost is 0.00339-0.00359 ms.
+
+All quantized-input CPU-reference checks and exact encoded-byte checks pass.
+That is not original-FP32 output parity: sampled one-row completed-output
+drift reaches 0.538361 at layer 35. Full-model logits, 512-token continuation,
+dense-valid quality and held-out loss/perplexity remain unmeasured and required
+before recommendation. This numerical track cannot satisfy exact-output goals.
+
+All 60 pairs / 420 primary interval audits pass, with zero enqueue allocation,
+copy or sync and stable observed 1113/3004 MHz clocks. Q8_1 payload is 2304 /
+9216 bytes at rows 1/4, plus 32 guards, reused by both arms. M05's micro screen
+now advances packed/warp FP32 and Q8_1 candidates conditionally to runtime
+evaluation; losers are preserved. No generation defaults change and no E2E
+gain is claimed. See [the complete screen, M05 decision and raw evidence](experiments/2026-10-25-maxwell-q81-ffn-screen.md).
+
 ## 2026-10-25: Bounded FP32 Q8 FFN Screen
 
 Clean release `bedea89` measures the five fixed M03 variants on real layer

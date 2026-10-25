@@ -61,7 +61,7 @@ qualification remain pending. Next is independent M04 Q8_1, then M05 screening
 before conditional M06 integration. M07 prefill SGEMM remains independent.
 Do not add capture infrastructure or expand the bounded geometry search.
 
-M04 now has a [pinned Q8_1 encoding and packed-dot contract](q8_activation.md).
+M04 has a [pinned Q8_1 encoding and packed-dot contract](q8_activation.md).
 The encoder preserves FP32-before-FP16 rounding and original-input XOR sums;
 release M40 tests match every CPU byte. Both fixed 128/256-thread consumers
 pass full gate/up/SwiGLU CPU-reference tests using reconstructed activation
@@ -69,9 +69,18 @@ bytes, including two-byte weight bases and genuine distinct rows 1/4.
 Optional intermediate capture matches the timed kernel's SwiGLU bits.
 Release code uses 17 quantizer / 32 consumer registers, no stack/local bytes
 and no DP4A/Tensor instructions. MIT provenance and the full upstream notice
-are included. No runtime integration, real-input latency, logit/512-token
-parity or quality conclusion follows yet. Next extend the existing FFN runner
-to include quantization cost and numerical drift before the M05 decision.
+are included. The [clean release real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md)
+now completes M04: quantization-inclusive one-row FFN gains are 27.26-27.41%
+at 128 threads and 21.50-21.71% at 256. All 18 numerical checks and 60 paired
+trials pass. Original-FP32 drift is measurable, including up to 0.538361 in
+sampled completed output; no whole-model quality or E2E claim follows.
+The report closes M05's bounded micro screen with all failed implementations
+preserved. Packed/warp FP32 and Q8_1 qualify conditionally for M06, not default
+promotion. Next capture model-local immutable selection, reusable scratch and
+clear unsupported errors, then validate full-model logits/512 IDs and quality.
+Test FP32 128-thread actual continuation equality rather than assuming drift
+is harmless or disqualifying it without evidence. Q8_1 stays a separate
+numerical track with task/loss/perplexity gates. M07 prefill remains independent.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact

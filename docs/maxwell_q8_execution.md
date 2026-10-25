@@ -31,8 +31,8 @@ enables weight preparation.
 | M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
 | M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
 | M03 | Complete: [real-input five-pair screen](experiments/2026-10-25-maxwell-fp32-ffn-screen.md); packed/warp256 gains 7.75-8.27% complete FFN with native bits on the sampled one-row inputs; 128 gains 12.18-12.63% with small arithmetic drift |
-| M04 | [Pinned Q8_1 encoder and 128/256-thread packed consumer](q8_activation.md) pass release-M40 byte/projection/SwiGLU parity; quantization-inclusive real-input FFN screen pending |
-| M05 | Pending: complete-FFN five-pair screen and preserved negative results |
+| M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, quality pending |
+| M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
 | M06 | Conditional: immutable runtime selection and reusable scratch only for qualifying decode candidates |
 | M07 | Independent pending branch: bounded reusable Q8-to-FP32 prefill SGEMM, with no full-model FP32 cache |
 | M08 | Pending: isolated decode/prefill and qualifying combination HTTP/quality comparisons |

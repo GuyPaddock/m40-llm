@@ -112,7 +112,9 @@ CPU references and readbacks precede active warmup and primary pairs.
 Release M40 runner tests pass, including guarded reuse, exact quantizer launch
 accounting, cross-stream four-row execution, unchanged down, rejection before
 scratch reservation and native/FP32 regression checks. Real-input measurement
-is still pending. Do not enable a runtime path from these tests or treat Q8_1
+is now recorded in the [M04 screen and M05 decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md).
+Both geometries pass the micro gate, but model-level quality/E2E qualification
+is pending. Do not promote a runtime path from microbenchmarks or treat Q8_1
 as satisfying exact-output acceptance.
 
 ## Atomic Delivery
