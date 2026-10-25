@@ -4,6 +4,11 @@ C19 supplies the quality foundation for later layer/weight/activation changes.
 It does not tune a variant, change generation defaults, or replace the unmet
 unchanged-Qwen HTTP throughput objectives.
 
+The same runner also supports an untimed `--q8-prefix-drift completed-http.jsonl`
+mode for the unresolved lossless prepared-Q8 branch. It uses the existing
+loader/report/identity code, not the quality corpus or a new inference path.
+See [the matched-prefix diagnostic](q8_execution_weights.md#matched-prefix-branch-diagnostic).
+
 ## Frozen Inputs
 
 [Corpus V1](../data/research_quality/README.md) contains disjoint calibration

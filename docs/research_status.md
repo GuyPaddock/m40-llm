@@ -225,6 +225,16 @@ Latest qualified unchanged HTTP rate is
 56.1115 targets remain unmet. Runtime defaults and negative research gates
 are unchanged; combined-model work cannot satisfy an unchanged-model objective.
 
+Next is a bounded diagnostic of C10A's existing down/vocabulary timing lead,
+not another kernel/layout search. `model_quality --q8-prefix-drift` forces the
+verified recorded native prefixes into both unmodified source models. It
+records actual greedy predictions through the token-310 neighborhood, plus
+native/prepared heads on both hidden vectors. Generic full-logit reductions
+are named separately from the actual fused native greedy head. Same-model
+controls, original absolute positions, evidence identity and cleanup must
+validate before the clean release probe. The old candidate remains unqualified
+until the branch is explained and the existing acceptance gate is satisfied.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

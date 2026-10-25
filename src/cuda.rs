@@ -4766,7 +4766,9 @@ fn attention_group_name(group: u32) -> &'static str {
 
 impl KVCache {
     #[cfg(feature = "cuda")]
-    pub(crate) fn has_same_storage(&self, other: &Self) -> bool {
+    /// Cloned cache handles share mutable native storage. Comparisons that
+    /// mutate two caches must reject aliases even when the handles differ.
+    pub fn has_same_storage(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 

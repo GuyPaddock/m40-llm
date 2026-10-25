@@ -10,6 +10,53 @@ and native-MLP timing regressions. Down/vocabulary-only preparation is faster
 but changes the generated continuation at step 310, so it also fails the
 combined promotion gate. No qualified generation speedup is claimed.
 
+## Matched-Prefix Branch Diagnostic
+
+The unresolved down/vocabulary branch has a bounded, untimed follow-up in
+the existing `model_quality` runner. It consumes the original completed HTTP
+report, not re-tokenized output, and validates model/prompt/config identities.
+The candidate is fixed to split down/vocabulary preparation; no kernel/layout
+or family search is added. Global preparation remains off, with immutable
+candidate configuration passed explicitly at load.
+
+The native recorded continuation is forced into both models through six
+steps after the recorded first branch. Every actual greedy prediction is
+recorded; hidden/head probes sample the branch neighborhood plus early
+checkpoints. A prepared historical prediction is comparable only through its
+first branch, because later recorded prepared tokens used different prefixes.
+
+Each probe runs native and prepared vocabulary heads on both completed hidden
+vectors, without repeating forward or changing KV. Actual native greedy uses
+its specialized fused head; generic full logits use another reduction path.
+The report names both, rather than calling generic argmax the production
+prediction. Logit differences/margins are generic-projection diagnostics;
+they are not observed logits of the fused argmax kernel.
+
+Use the unchanged C11 native-Q8 environment, including explicit
+`M40LLM_Q8_EXECUTION_WEIGHTS=off`, then:
+
+```bash
+source scripts/dev-env.sh
+cargo build --release --features cuda --example model_quality
+target/release/examples/model_quality \
+  --reference-model "$model" --model "$model" \
+  --q8-prefix-drift docs/experiments/2026-10-25-q8-down-vocab-http.jsonl \
+  --variant-id prepared-q8-prefix-drift --context-tokens 1024 \
+  --output /tmp/new-prepared-q8-prefix-drift.jsonl
+```
+
+No Ollama process, server, calibration corpus, new generation or timing trial
+is needed. The source report must be complete; changed source/prompt hashes,
+context, execution flags or trace counts are errors. Report files are new,
+flushed per row and never overwrite prior evidence. Reproduction or failure
+to reproduce the historical branch stays explicit in the summary.
+
+Atomic sequence: `feat(eval): probe prepared Q8 prefix drift` adds the shared
+loader's explicit execution configuration, evidence checks, probe and controls.
+Then `docs(perf): record Q8 prefix drift` records a clean release run. This
+diagnostic neither relaxes the parity gate nor qualifies an optimization;
+any correction or new performance claim needs its own evidence.
+
 C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
 and real-tensor release microbenchmark. See the
 [measured results](experiments/2026-10-24-q8-separate-projections.md).

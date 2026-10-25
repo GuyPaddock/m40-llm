@@ -16,6 +16,12 @@ mod env_restore;
 mod fixture;
 #[cfg(all(feature = "cuda", nvcc))]
 mod layers;
+#[cfg(all(feature = "cuda", nvcc))]
+mod prepared_drift;
+#[cfg(all(test, feature = "cuda", nvcc))]
+#[path = "../../tests/common/q8_model.rs"]
+#[allow(dead_code)]
+mod q8_fixture;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod records;
 #[cfg(all(feature = "cuda", nvcc))]
@@ -69,6 +75,10 @@ struct Args {
     split: SplitChoice,
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
+    /// Diagnose the recorded native/prepared down+vocabulary branch on identical
+    /// prefixes. No fitting, free generation or performance promotion occurs.
+    #[arg(long, conflicts_with_all=["compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
+    q8_prefix_drift: Option<PathBuf>,
     /// Compare the masked source against an unmasked compact candidate using
     /// this completed export record. Other candidate transforms are forbidden.
     #[arg(long, conflicts_with_all=["skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target"])]
@@ -243,6 +253,32 @@ mod argument_tests {
             assert!(parse(&values).is_err());
         }
         assert!(parse(&combined[..6]).is_err());
+    }
+
+    /// Prefix diagnostics cannot silently add model changes to the recorded
+    /// native/prepared comparison or start a simultaneous fitting operation.
+    #[test]
+    fn test_prefix_drift_arguments_exclude_other_experiments() {
+        assert!(parse(&["--q8-prefix-drift", "trace.jsonl"])
+            .unwrap()
+            .q8_prefix_drift
+            .is_some());
+        for extra in [
+            vec!["--skip-layers", "1"],
+            vec!["--rank-layers", "new.json"],
+            vec!["--compact-export-report", "export.json"],
+            vec!["--capture-activations", "new.json"],
+            vec!["--layer-ranking", "rank.json", "--remove-layer-count", "1"],
+            vec![
+                "--activation-calibration",
+                "act.json",
+                "--activation-target",
+                "0.5",
+            ],
+        ] {
+            let values = [vec!["--q8-prefix-drift", "trace.jsonl"], extra].concat();
+            assert!(parse(&values).is_err());
+        }
     }
 
     /// Compact equivalence has its own checked source mask. Ad-hoc candidate

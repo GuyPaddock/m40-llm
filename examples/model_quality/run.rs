@@ -54,18 +54,29 @@ pub(super) fn load_model(
     skipped_layers: &[usize],
     activation: super::activations::ActivationSetup<'_>,
 ) -> Result<(LoadedModel, Tokenizer)> {
+    load_model_with_execution(
+        path,
+        context_tokens,
+        skipped_layers,
+        activation,
+        Q8ExecutionConfig::disabled(),
+    )
+}
+
+pub(super) fn load_model_with_execution(
+    path: &Path,
+    context_tokens: u32,
+    skipped_layers: &[usize],
+    activation: super::activations::ActivationSetup<'_>,
+    execution: Q8ExecutionConfig,
+) -> Result<(LoadedModel, Tokenizer)> {
     let gguf = gguf::load_gguf(path)?;
     let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
     ensure!(
         tokenizer.is_qwen2() || tokenizer.is_llama3(),
         "quality runner requires supported Qwen2 or Llama3 tokenizer/chat formatting"
     );
-    let mut model = LoadedModel::from_gguf_with_q8_execution(
-        gguf,
-        fs::read(path)?,
-        -1,
-        Q8ExecutionConfig::disabled(),
-    )?;
+    let mut model = LoadedModel::from_gguf_with_q8_execution(gguf, fs::read(path)?, -1, execution)?;
     let props = model.cuda.current_device_props()?;
     ensure!(
         props.major == 5 && props.minor == 2,
@@ -207,6 +218,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.q8_prefix_drift.is_some() {
+        return super::prepared_drift::diagnose(args);
+    }
     if args.rank_layers.is_some() {
         return super::layers::rank(&args);
     }
