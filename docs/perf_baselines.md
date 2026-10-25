@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Split-Plane Fused FFN Clears Micro Gate
+
+One fixed 128-thread/four-value FP32 kernel on existing split weight planes
+improves complete one-row FFN throughput **15.54-15.65%** over qualified
+packed128, with positive paired intervals at original layers 0/17/35.
+Four-row work gains **13.47-15.91%** independently. All numerical checks pass.
+
+The microbenchmark adds **47,906,816 device bytes** for the current layer's
+gate/up pair, retained for both arms. Packing/upload medians are **30.615 /
+7.950 ms**, outside primary timing. All-layer extra storage is an estimate,
+not measured runtime residency. See [paired trials, memory, setup, compiler
+evidence and runtime gate](experiments/2026-10-25-maxwell-split-ffn-screen.md).
+
+This qualifies one runtime prototype, not deployment or an HTTP speed claim.
+Actual 512-token/frozen-task quality and incremental HTTP qualification remain
+required. The existing runtime/defaults and both unmet E2E targets are unchanged.
+
 ## 2026-10-25: Adjacent-Pair FFN Loads Miss The Gate
 
 A single fixed 128-thread FP32 mapping emits vector activation loads and

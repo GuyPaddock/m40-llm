@@ -52,10 +52,25 @@ primitive checks pass. Implementation `aa767eb` remains benchmark-only.
 returns unsupported even as administrator; enumerated metrics are not
 measurements. A static request model and sm_52 code confirm improved input/
 payload coalescing, but the smaller tasks issue more scale-load groups.
-Next prototype one fixed 128-thread four-value fused kernel using existing
-separate scale/value execution weights, not more native two-value geometry.
-Preserve prepared down/vocabulary and count added preparation/memory before
-the same complete-FFN screen. Runtime/quality/HTTP work remains conditional.
+The resulting split-plane screen is below; no further native two-value
+geometry was added.
+
+The [split-plane/four-value FFN screen](experiments/2026-10-25-maxwell-split-ffn-screen.md)
+now passes: **15.54-15.65%** complete one-row throughput gain over qualified
+packed128, positive paired intervals, unchanged numerical tolerance. Four-row
+work gains **13.47-15.91%**. Implementation `3420c33` remains benchmark-only
+pending conditional runtime integration. One current-layer pair adds
+**47,906,816 bytes** for both arms; median packing/upload is **30.615 / 7.950 ms**.
+All-layer extra storage **1,724,645,376 bytes** is an estimate, not observed
+runtime residency. Numerical tests do not establish generated-token parity.
+
+Next capture immutable model-local selection and cached ownership for that
+one geometry, preserving qualified down/vocabulary and dequant-SGEMM prefill.
+Check that newly cached gate/up does not change prefill dispatch, validate
+actual full-model allocation/budget errors, then run actual 512-ID/frozen-task
+quality against the current packed128/SGEMM control. Only passing quality
+permits incremental HTTP and fresh Ollama qualification. Defaults and both
+original unmet E2E objectives remain unchanged.
 
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
