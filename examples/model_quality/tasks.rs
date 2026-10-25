@@ -5,7 +5,9 @@ use super::{
 use anyhow::{ensure, Result};
 use m40_llm::{
     evaluation::corpus::{Split, Task},
-    generate::{generate_text, prepare_prompt, GenerateOptions, GeneratedText, PromptFormat},
+    generate::{
+        generate_text, prepare_prompt, GenerateOptions, GeneratedText, PromptFormat, PromptPrefill,
+    },
     infer::LoadedModel,
     kv_compression::KvCompressionConfig,
     tokenizer::Tokenizer,
@@ -15,7 +17,7 @@ use std::time::Instant;
 
 pub fn encode_task(tokenizer: &Tokenizer, user_prompt: &str) -> Result<(String, Vec<u32>)> {
     let (prompt, add_bos) = if tokenizer.is_qwen2() {
-        (format!("<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"), false)
+        (super::qwen_workload::render_user_prompt(user_prompt), false)
     } else {
         prepare_prompt(tokenizer, user_prompt, PromptFormat::Auto)
     };
@@ -32,6 +34,15 @@ pub(super) fn generate(
     prompt: &str,
     max_tokens: usize,
 ) -> Result<GeneratedText> {
+    generate_with_prefill(model, prompt, max_tokens, PromptPrefill::Environment)
+}
+
+pub(super) fn generate_with_prefill(
+    model: &LoadedModel,
+    prompt: &str,
+    max_tokens: usize,
+    prompt_prefill: PromptPrefill,
+) -> Result<GeneratedText> {
     generate_text(
         model,
         GenerateOptions {
@@ -42,6 +53,7 @@ pub(super) fn generate(
             max_tokens: Some(max_tokens),
             kv_compression: KvCompressionConfig::dense_reference(),
             reset_kv_cache: true,
+            prompt_prefill,
             ..Default::default()
         },
     )
@@ -70,6 +82,7 @@ pub(super) fn generation_record(
         "generated_token_ids":generated.token_ids[generated.prompt_token_len..],
         "metrics":generated.metrics,"resident_generation_wall_ms":wall_ms,
         "prefill_mode":generated.prefill_mode,"prefill_chunk_size":generated.prefill_chunk_size,
+        "q8_prefill_temporary_weight_bytes":generated.q8_prefill_temporary_weight_bytes,
         "memory":memory(model)?}))
 }
 
@@ -81,14 +94,37 @@ pub fn evaluate_task(
     candidate: &LoadedModel,
     tokenizer: &Tokenizer,
 ) -> Result<TaskResult> {
+    evaluate_task_with_prefill(
+        report,
+        split,
+        task,
+        reference,
+        candidate,
+        tokenizer,
+        (PromptPrefill::Environment, PromptPrefill::Environment),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn evaluate_task_with_prefill(
+    report: &mut Report,
+    split: Split,
+    task: &Task,
+    reference: &LoadedModel,
+    candidate: &LoadedModel,
+    tokenizer: &Tokenizer,
+    prefill: (PromptPrefill, PromptPrefill),
+) -> Result<TaskResult> {
     let (prompt, expected_ids) = encode_task(tokenizer, &task.prompt)?;
     reference.reset_activation_statistics()?;
     candidate.reset_activation_statistics()?;
     let start = Instant::now();
-    let reference_generated = generate(reference, &prompt, task.max_tokens)?;
+    let reference_generated =
+        generate_with_prefill(reference, &prompt, task.max_tokens, prefill.0)?;
     let reference_wall_ms = start.elapsed().as_secs_f64() * 1000.0;
     let start = Instant::now();
-    let candidate_generated = generate(candidate, &prompt, task.max_tokens)?;
+    let candidate_generated =
+        generate_with_prefill(candidate, &prompt, task.max_tokens, prefill.1)?;
     let candidate_wall_ms = start.elapsed().as_secs_f64() * 1000.0;
     for generated in [&reference_generated, &candidate_generated] {
         ensure!(

@@ -4,19 +4,14 @@ use anyhow::{bail, ensure, Context, Result};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Serialize;
 
-pub const USER_PROMPT: &str = "Explain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible";
+#[path = "../common/qwen_workload.rs"]
+mod workload;
+pub use workload::{render_user_prompt, MAX_TOKENS, USER_PROMPT};
+pub const CONTEXT_TOKENS: u32 = workload::CONTEXT_TOKENS;
 pub const REPLACEMENT_PROMPT: &str = "Orchard inventory: seven copper baskets.";
-pub const MAX_TOKENS: usize = 512;
-pub const CONTEXT_TOKENS: u32 = 1024;
 
 pub fn render_prompt() -> String {
     render_user_prompt(USER_PROMPT)
-}
-
-pub fn render_user_prompt(user_prompt: &str) -> String {
-    format!(
-        "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
-    )
 }
 
 pub fn validate_prompt_ids(expected: &[u32], actual: &[u32]) -> Result<()> {

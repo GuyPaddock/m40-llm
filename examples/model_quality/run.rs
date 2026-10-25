@@ -166,7 +166,7 @@ pub(super) fn model_identity(
     )
 }
 
-fn tokenizer_sha256(model: &LoadedModel) -> Result<String> {
+pub(super) fn tokenizer_sha256(model: &LoadedModel) -> Result<String> {
     let metadata: BTreeMap<_, _> = model
         .gguf
         .metadata
@@ -229,6 +229,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.q8_runtime_candidate.is_some() {
+        return super::runtime_quality::evaluate(args);
+    }
     if args.capture_ffn_inputs.is_some() {
         return super::ffn_capture::capture(&args);
     }

@@ -24,12 +24,19 @@ mod prepared_drift;
 #[path = "../../tests/common/q8_model.rs"]
 #[allow(dead_code)]
 mod q8_fixture;
+#[path = "../common/q8_runtime.rs"]
+mod q8_runtime;
+#[cfg(all(feature = "cuda", nvcc))]
+#[path = "../common/qwen_workload.rs"]
+mod qwen_workload;
 #[cfg(any(all(feature = "cuda", nvcc), test))]
 mod records;
 #[cfg(all(feature = "cuda", nvcc))]
 mod research;
 #[cfg(all(feature = "cuda", nvcc))]
 mod run;
+#[cfg(all(feature = "cuda", nvcc))]
+mod runtime_quality;
 #[cfg(all(feature = "cuda", nvcc))]
 mod step_timing;
 #[cfg(all(feature = "cuda", nvcc))]
@@ -77,6 +84,11 @@ struct Args {
     split: SplitChoice,
     #[arg(long, default_value_t = 1024)]
     context_tokens: u32,
+    /// M08 runtime comparison; both models keep prepared down/vocabulary.
+    #[arg(long, value_enum, conflicts_with_all=["capture_ffn_inputs","q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
+    q8_runtime_candidate: Option<q8_runtime::FfnChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_prefill: Option<q8_runtime::PrefillChoice>,
     /// Untimed M02 input capture using the qualified prepared down/vocabulary
     /// control. Requires calibration split and creates a new paired artifact.
     #[arg(long, conflicts_with_all=["q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
@@ -170,6 +182,37 @@ mod argument_tests {
         ];
         values.extend_from_slice(extra);
         Args::try_parse_from(values)
+    }
+
+    /// Runtime comparisons require explicit candidates and cannot mutate the
+    /// frozen model with pruning, capture or unrelated timing experiments.
+    #[test]
+    fn test_runtime_candidate_arguments_are_explicit_and_exclusive() {
+        for choice in [
+            "native",
+            "packed-f32-256",
+            "packed-f32-128",
+            "q8-1-128",
+            "q8-1-256",
+        ] {
+            assert!(parse(&["--q8-runtime-candidate", choice]).is_ok());
+        }
+        assert!(parse(&["--q8-runtime-prefill", "dequant-sgemm"]).is_err());
+        for extra in [
+            vec!["--skip-layers", "1"],
+            vec!["--capture-ffn-inputs", "new.json"],
+            vec!["--q8-prefix-drift", "trace.jsonl"],
+            vec!["--step-timing-trials", "1"],
+            vec![
+                "--activation-calibration",
+                "frozen.json",
+                "--activation-target",
+                "0.5",
+            ],
+        ] {
+            let values = [vec!["--q8-runtime-candidate", "native"], extra].concat();
+            assert!(parse(&values).is_err());
+        }
     }
 
     /// Frozen masks require an explicit bounded count and cannot be combined

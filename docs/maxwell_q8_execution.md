@@ -45,6 +45,42 @@ The official binary was not rebuilt for the diagnostic.
 
 ## Experimental Runtime Selection
 
+### Explicit Runtime Qualification
+
+The existing `model_quality` runner accepts independent
+`--q8-runtime-candidate native|packed-f32-256|packed-f32-128|q8-1-128|q8-1-256`
+and `--q8-runtime-prefill sequential|native-packed|dequant-sgemm` selections.
+Both models use the qualified prepared down/vocabulary configuration, dense
+KV/context 1024 and the same source GGUF. The reference always uses native FFN
+and sequential prefill. Runtime choices are explicit, not inherited from
+ambient experiment settings; model-changing/capture modes are incompatible.
+
+After restoring the frozen M02 environment, run a single candidate:
+
+```bash
+cargo run --release --features cuda,server --example model_quality -- \
+  --reference-model "$MODEL" --model "$MODEL" --variant-id packed256 \
+  --q8-runtime-candidate packed-f32-256 --q8-runtime-prefill sequential \
+  --split all --output /tmp/new-packed256-quality.jsonl
+```
+
+Source `scripts/dev-env.sh` first and request hardware escalation. The report
+records actual 512-token browser continuations with natural stopping, prompt
+IDs, first divergence, dispatch counters, memory/scratch and frozen task scores.
+Full-vocabulary logit comparisons replay identical reference prefixes at the
+final prompt, first decode, fixed later samples and the divergence step. The
+generic full-logit head is labeled separately from actual GPU-greedy output.
+Sequential candidates also report token-weighted calibration/held-out loss
+and perplexity. Packed-prefill candidates do not claim sequential passage
+loss as prefill validation; their actual packed task/browser generation and
+forced-prefix logits exercise that path instead. Reports refuse overwrites.
+
+These runs are quality diagnostics, not HTTP throughput qualification. A
+different continuation, natural stop length or dense-valid task regression
+blocks the FP32 exact-output gate. Q8_1 stays a separate numerical track.
+
+### Load-Time Configuration
+
 `M40LLM_Q8_FFN_KERNEL=native|packed-f32|q8-1` is captured once by
 `LoadedModel::from_gguf`. Unset means `native`, preserving the existing
 dispatch and all runtime defaults. `packed-f32` selects the screened
