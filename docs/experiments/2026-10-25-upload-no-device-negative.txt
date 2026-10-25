@@ -1,0 +1,21 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.85s
+     Running tests/forward_with_layer_smoke.rs (target/debug/deps/forward_with_layer_smoke-deaec1b4e12eb6ff)
+
+running 1 test
+test cuda_graph_replays_forward_one_token_with_layer ... FAILED
+
+failures:
+
+---- cuda_graph_replays_forward_one_token_with_layer stdout ----
+Error: m40llm_create_context returned null
+
+
+failures:
+    cuda_graph_replays_forward_one_token_with_layer
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test forward_with_layer_smoke`

@@ -109,3 +109,13 @@ GEMMs. They are hardware-ignored by default and fail if explicitly requested
 without M40. This does not restrict all graph backends or claim CUDA graphs
 generally require cuBLAS. Other async kernels can be captured independently.
 Runtime graph defaults, fallback behavior and capture coverage are unchanged.
+
+## Measured Checkpoint
+
+The [upload-ordering validation report](experiments/2026-10-25-upload-ordering.md)
+records native/cuBLAS-on/off parity, warning-as-error CI lanes and the fresh
+five-pair release HTTP comparison. All 65 prompt and 512 generated IDs match
+C11. Median HTTP throughput is 31.937 tok/s versus Ollama's 43.163; neither
+exact-engine speed target is met. This is not a paired pre/post-fix speedup
+claim. Canonical ChatML CLI smokes pass in default compressed and explicit
+dense modes; pre-existing user-only failures remain in the raw evidence.

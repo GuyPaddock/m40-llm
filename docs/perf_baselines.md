@@ -2,6 +2,35 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Upload Ordering and Exact-Trace Check
+
+The pageable H2D/default-stream audit now has immediate-consumer regressions,
+completed weight/KV publication, and device-side legacy append lengths.
+Production explicit-position append remains enqueue-only. These correctness
+changes do not select a new kernel, attention mode or runtime default.
+
+| Runtime | Median HTTP tok/s | HTTP ms | Internal Prefill ms | Internal Decode ms |
+| --- | ---: | ---: | ---: | ---: |
+| m40-llm | 31.937 | 16031.497 | 1687.257 | 14298.087 |
+| Ollama 0.40.11 | 43.163 | 11862.091 | 229.988 | 11626.885 |
+
+Five alternating serial release pairs use unchanged Qwen2.5-3B Q8_0, dense
+KV, 65 identical prompt IDs, 512 actual generated tokens, verified fresh KV
+and length stops. All m40 generated IDs match C11. Values are independent
+medians with different internal prefill boundaries, not additive phases.
+m40 is 26.008% slower than Ollama by HTTP throughput, paired-bootstrap 95%
+interval [-26.515%, -25.984%]. The 53.06 and fresh 1.30x-Ollama 56.1115 tok/s
+targets remain unmet. Historical C11 and this run are not paired before/after
+timings; the small rate difference is not an upload-fix speed claim.
+
+Canonical ChatML arithmetic/OK/config smokes pass in default compressed top8
+and explicit dense mode. Existing user-only Auto failures are also retained,
+not counted as compressed regressions. Native/cuBLAS-on/off parity, both
+warning-as-error CI lanes and Clippy pass; GPU-less CI is not parity evidence.
+See the [full report, commands and raw results](experiments/2026-10-25-upload-ordering.md).
+Next is C23's retained input-layout prerequisite assessment; the negative
+sparse-Q8 decode gate and postponed C22/C27 decisions remain unchanged.
+
 ## 2026-10-25: Fixed Sparse-Q8 Decode Screen
 
 C21's fixed 16-of-32 format passes scalar/matched-zero parity and reduces
@@ -26,7 +55,7 @@ the final clean run fences/validates setup input and passes all 240 pairs.
 Aborted evidence is separate, never pooled. See the [full report and raw data](experiments/2026-10-25-sparse-q8-screen.md),
 including actual mask/scale/alignment bytes, packing cost and limitations.
 Working code is preserved in `6d02feb` before separate active-code removal.
-General runtime pageable-upload ordering still needs its own audit.
+The separate runtime upload audit is recorded in the newer checkpoint above.
 
 ## 2026-10-25: Diagnostic Layer-Mask Tradeoffs
 

@@ -54,13 +54,13 @@ rows 1/4/16/64 and four geometries. Some multi-row gate/up wins are insufficient
 for a decode pruning backend. C22 and C27 are postponed under this negative
 gate. See [the screen, raw data and limitations](experiments/2026-10-25-sparse-q8-screen.md).
 
-Before more performance claims, audit pageable H2D/default-stream completion
-against nonblocking consumers. C21 reproduced a stale-input native control;
-setup readback fixes the probe, not every existing runtime site. Do not change
-numeric tolerances or blame quantization for that ordering issue. Then assess
-C23's retained input-layout prerequisite separately; it must not consume the
-rejected sparse kernel. Layer ranking remains C24, compact export C25. Do not
-tune on held-out/browser inputs or reopen failed n-gram/dense-layout screens.
+The separate pageable H2D/default-stream audit is now complete, including
+native setup and legacy metadata publication. The release checkpoint preserves
+C11's exact trace and does not establish a speedup from the correctness fixes.
+Next assess C23's retained input-layout prerequisite separately; it must not
+consume the rejected sparse kernel. Layer ranking remains C24, compact export
+C25. Do not tune on held-out/browser inputs or reopen failed n-gram/dense-layout
+screens. See [the audit and raw results](experiments/2026-10-25-upload-ordering.md).
 
 C21 used these dependency-ordered commits:
 
@@ -94,7 +94,8 @@ and scalar-sample checks. Results are preserved in `51fa76b`, after clean
 implementation `6d02feb`. The active sparse CUDA kernel, FFI/device API,
 hardware target and tool are removed separately. Reproduction commands in
 [the format/probe guide](sparse_q8.md) refer to `6d02feb`, not the post-removal
-tree. Runtime defaults are unchanged. Broader upload ordering is next.
+tree. Runtime defaults are unchanged. Broader upload ordering was audited in
+the subsequent checkpoint below.
 
 Post-removal validation passes: attention grid and projection/MLP wrappers
 with cuBLAS on/off, the CUDA forward suite, full warning-as-error non-CUDA
@@ -120,13 +121,12 @@ a reason to rewrite the C21 preservation commits.
    metadata correction from setup; remove stack-owned async transfers and
    establish the length producer's dependency before host reads. Production
    explicit-position scheduling stays enqueue-only.
-4. `test(cuda): isolate cuBLAS graph fixtures`: independent pre-existing
+4. `7245d26`, `test(cuda): isolate cuBLAS graph fixtures`: independent pre-existing
    cuBLAS-off/test-order issue found by broad validation; explicitly scope
    dense KV and require the fixtures' async-cuBLAS backend, not all graphs.
-5. `docs(perf): record upload ordering validation`: run native/cuBLAS-on/off
-   parity and local CI lanes, then a bounded release generation checkpoint
-   against the pinned exact trace. Record any timing impact separately from
-   optimization claims. Depends on verified correctness fixes.
+5. `docs(perf): record upload ordering validation`: publish native/cuBLAS-on/off
+   parity, local CI lanes and the bounded release checkpoint against the pinned
+   exact trace. No throughput improvement is attributed to the fixes.
 
 After this checkpoint, resume C23's retained input-layout prerequisite check.
 Do not reopen sparse-Q8 tuning, calibration or runtime policy changes.
@@ -135,17 +135,15 @@ The immediate-consumer regression reproduces the pre-fix failure on M40:
 rows=16,K=11008, iteration=1, index=76032 reads zero instead of 0.022460938.
 The central synchronous upload now drains the default stream and records
 `memcpy_h2d_completion`. All 48 repeated uploads match exact input values on
-decode and exact signed Q8 reference sums on prefill. Three GPU-profile tests,
-non-CUDA library warning-as-error tests and CUDA/server all-targets Clippy
-pass. Native setup/legacy metadata and release impact remain pending.
+decode and exact signed Q8 reference sums on prefill. The completed contract
+still requires caller-side ownership of prior nonblocking destination users.
 See [the explicit transfer contract](cuda_transfer_contract.md).
 
 Native weight and KV setup now returns initialized, device-ready storage.
-Five transfer/ownership tests pass on M40, including immediate append/attention
-for supported dense, summary/q8, mixed q4 head64/head128 and representative
-metadata layouts. No unsupported head128 diagnostic attention is enabled.
-The remaining direct native H2D sites are legacy append length publication;
-those will be corrected independently before the release checkpoint.
+Immediate append/attention tests cover supported dense, summary/q8, mixed q4
+head64/head128 and representative metadata layouts. No unsupported head128
+diagnostic attention is enabled. All audited native H2D operations now use
+the completed helper; default-stream KV fills share one checked setup fence.
 
 Legacy dense append now waits for its decode length producer, then publishes
 FP32/RoPE length inside the append kernel rather than copying a stack value
@@ -153,8 +151,7 @@ asynchronously. FP16 append finishes default-stream copies before return.
 Five transfer-order tests and four cast/RoPE/reset tests pass on M40, including
 queued length publication, odd widths and overflow. Explicit-position append
 remains enqueue-only on head64/head128, verified by launch/copy/wait counters.
-No new waits enter production explicit-position append. Broader CUDA/cuBLAS
-parity, CI lanes and the release exact-trace checkpoint are next.
+No new waits enter production explicit-position append.
 
 Broader cuBLAS-on ownership/projection/forward/profile checks pass. The
 cuBLAS-off run exposed four old fast-fits graph fixture failures; a pre-fix
@@ -168,8 +165,25 @@ graph inclusion, and the raw graph case now passes alone. The cuBLAS-off
 matrix passes 43 supported transfer/attention/KV/forward/projection/MLP cases;
 its four fast-fits graph fixtures are not compiled without their backend.
 Both CUDA/server Clippy configurations pass. An explicit graph request with
-the GPU hidden fails with `NoContext`, as required, rather than reporting a
-successful no-device skip. Full CI and release measurements follow.
+the GPU hidden fails with `m40llm_create_context returned null`, as required,
+rather than reporting a successful no-device skip. Full non-CUDA and
+NVCC/no-device warning-as-error suites, non-CUDA Clippy and fmt also pass.
+GPU-less CI does not establish hardware correctness.
+
+The clean `7245d26` release check uses five alternating serial HTTP pairs with
+the pinned Ollama 0.40.11. m40 median is 31.937 tok/s versus Ollama 43.163,
+with all 65 prompt and 512 generated IDs matching C11. Both speed objectives
+remain unmet: 53.06 tok/s and 1.30x fresh Ollama, now 56.1115 tok/s. The prior
+31.850 result is not a contemporaneous paired control; do not claim a tiny
+upload-fix speedup. No inference overlapped tests/builds or other inference.
+
+Canonical ChatML CLI arithmetic/OK/config outputs are `4`/`OK`/`37` in default
+compressed top8 and dense `off`, six passes. The initial user-only Auto
+exact-OK/config failures exactly reproduce archived native behavior in both
+modes; retain them as dense-failed/inconclusive, not new compression failures.
+Full commands, startup configs, traces, timing, memory and limitations are in
+the [upload-ordering report](experiments/2026-10-25-upload-ordering.md).
+The isolated Ollama runner is stopped and final GPU use is 0 MiB / 0%.
 
 C20 was split into dependency-ordered commits:
 

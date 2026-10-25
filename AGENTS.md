@@ -83,6 +83,7 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test attention_parity_cuda_g
 
 - [README](README.md): user setup, CLI/server usage, and feature docs.
 - [CUDA parity and KV layout](docs/cuda_parity_and_kv_layout.md): layout/test contracts.
+- [CUDA transfer contract](docs/cuda_transfer_contract.md): upload completion and ownership.
 - [KV compression](docs/kv_compression.md), [diagnostics](docs/diagnostics.md),
   and [Q8 execution weights](docs/q8_execution_weights.md): subsystem details.
 - [Context index](llm-context/00-index.md): historical design notes.
