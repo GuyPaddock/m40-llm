@@ -109,3 +109,30 @@ including GPU selection cost. This permits calibration/quality work, not a
 runtime promotion or C23 completion. Zero-threshold selection is correct but
 slower, and real model quality remains unmeasured. Both unchanged-model speed
 objectives remain unmet; runtime defaults are unchanged.
+
+## Calibration and Application Sequence
+
+The positive device screen permits these next atomic units without promoting
+the experiment:
+
+1. `feat(infer): define activation calibration artifacts`: bounded exact
+   observations, frozen calibration-task eligibility, generated-input absolute
+   positions, model/corpus/execution identity and per-layer thresholds. Reject
+   incomplete/held-out/nonfinite populations; include CPU behavioral tests.
+2. `feat(infer): apply calibrated sparse activations`: model-local opt-in
+   capture/application, immutable prepared down weights, reusable scratch and
+   explicit unsupported-path rejection. Depends on the checked artifact.
+   Verify zero-threshold full-model parity and observation boundaries on M40.
+3. `test(quality): evaluate sparse activation variants`: calibration-only
+   capture tooling plus explicit artifact/target inputs to the frozen quality
+   runner. Depends on application. Record outputs, actual IDs, losses, logit
+   drift, setup/memory and matched-prefix timing with selection included.
+4. `docs(perf): record activation quality tradeoffs`: freeze artifacts before
+   comparing targets0/25/40/50/60 on both C19 splits. Do not choose thresholds
+   from held-out/browser results or change defaults.
+
+The initial capture cap is 32 generated-token input rows per calibration task,
+declared before capture. Prompt rows and the final sampled token that is never
+forwarded are not observations. Equal ranges are required at every layer.
+The cap bounds host payload and biases the sample toward early generation;
+report that limitation rather than implying model-wide calibration coverage.

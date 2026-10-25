@@ -4,6 +4,13 @@
 use anyhow::{ensure, Result};
 use serde::Serialize;
 
+mod calibration;
+pub use calibration::{
+    ActivationCalibration, ActivationCalibrationCollector, ActivationCalibrationPlan,
+    CalibrationLayer, CalibrationTaskObservation, LayerActivationCalibration,
+    LayerActivationThreshold,
+};
+
 #[cfg(feature = "cuda")]
 mod device;
 #[cfg(feature = "cuda")]
