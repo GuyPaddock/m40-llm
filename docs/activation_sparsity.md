@@ -105,14 +105,19 @@ CUDA context overhead can remain until process exit.
 
 The [clean release screen](experiments/2026-10-25-activation-input-sparsity.md)
 passes the layout prerequisite at roughly 40-60% synthetic input sparsity,
-including GPU selection cost. This permits calibration/quality work, not a
-runtime promotion or C23 completion. Zero-threshold selection is correct but
-slower, and real model quality remains unmeasured. Both unchanged-model speed
-objectives remain unmet; runtime defaults are unchanged.
+including GPU selection cost. The subsequent
+[frozen real-model evaluation](experiments/2026-10-25-activation-quality.md)
+completes C23 without a promotion: target 25% is slower, target 40% regresses a
+dense-valid task, and targets 50/60% improve held-out matched-prefix rate about
+4.3/6.7% while increasing PPL 8.35/17.38%. All positive targets add about
+822.46 MiB of weights/scratch/counters. Zero-threshold full-model execution
+retains native projection and exactly matches the reference. These are
+approximate-model tradeoffs, not HTTP/generated throughput claims. Both
+unchanged-model speed objectives remain unmet; runtime defaults are unchanged.
 
 ## Calibration and Application Sequence
 
-The positive device screen permits these next atomic units without promoting
+The calibration implementation follows these atomic units without promoting
 the experiment:
 
 1. `feat(infer): define activation calibration artifacts`: bounded exact

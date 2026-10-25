@@ -62,13 +62,15 @@ kernel. Layer ranking remains C24, compact export
 C25. Do not tune on held-out/browser inputs or reopen failed n-gram/dense-layout
 screens. See [the audit and raw results](experiments/2026-10-25-upload-ordering.md).
 
-**C23's layout prerequisite is positive; C23 is not complete.** The clean
+**C23 is complete as an opt-in approximate-model experiment.** The clean
 `bd76484` release screen has 100 alternating serial pairs across four fixed
 geometries and five sparsity targets. At achieved 40.2/51.2/60.6% sparsity,
 width16/128 reduces isolated selection-plus-down latency by 18.6/30.4/39.1%.
 These synthetic inputs and real layer-0 Qwen weights do not establish model
-quality, real activation sparsity, DRAM savings or E2E gains. Zero threshold
-is numerically correct but slower. See [the full screen and raw results](experiments/2026-10-25-activation-input-sparsity.md).
+quality, real activation sparsity, DRAM savings or E2E gains by themselves.
+Zero-threshold compaction is numerically correct but slower. See
+[the prerequisite screen](experiments/2026-10-25-activation-input-sparsity.md)
+and [the completed calibration/quality evaluation](experiments/2026-10-25-activation-quality.md).
 
 Selection/quantile contracts are committed in `10478a8`, reusable CUDA scratch
 and selected-input consumption in `9b5148c`, and the shared benchmark mode in
@@ -80,27 +82,44 @@ ownership, both warning-as-error CI lanes, Clippy and fmt pass as well.
 GPU-less CI is not GPU correctness evidence. The one-iteration preflight is
 not pooled with the measured screen.
 
-Next finish C23: capture calibration-only completed SwiGLU values, freeze
-per-layer thresholds near 25/40/50/60%, add immutable opt-in application, then
-evaluate both frozen C19 splits for loss/tasks/logit drift and complete latency.
-Include the duplicate tiled weights and selection cost. No held-out/browser
-fitting, new kernel sweep or default promotion. See [the contract and commands](activation_sparsity.md).
-
 The calibration artifact contract is committed in `c89b939`. Model-local
 capture/application now passes two-layer M40 tests: capture leaves native
 logits bit-identical; zero-threshold layers retain native execution and need
 no prepared allocation; nonzero layers use immutable tiled weights, reusable
 scratch and device retained/input counters. Unsupported batch/packed/graph
 paths fail before launches. Artifact identity/budget failures publish no
-partial cache. Calibration collection and real-model variant evaluation are
-still pending; there are no model-quality or E2E gain claims yet.
+partial cache. Model-local integration is committed in `1f2a65c`, and the shared
+capture/evaluation runner in `5697e64`. See [the contract and commands](activation_sparsity.md).
 
-Model-local integration is committed in `1f2a65c`. The existing quality runner
-now exposes explicit calibration capture and artifact/target application, with
-seven passing runner tests. It verifies model/corpus/base-execution identity,
-reports actual per-layer omission and duplicate payloads, and uses the same
-formatting/greedy/accounting path as C19. Next freeze the clean-source Qwen
-calibration artifact, then measure all five declared targets on both splits.
+The calibration artifact was frozen before variant/held-out evaluation, SHA
+`a1721123485a8f1195f751538c56dc1db4dc450592df312b44cd58fc06f7fcc9`.
+All 36 layers observe 110 generated-input rows, capped at 32/task from only
+C19 calibration tasks. All six capture traces match C19. Five clean-source
+release evaluations cover targets 0/25/40/50/60 on both frozen splits.
+All references match C19, and the zero control is exact for 12 task traces,
+203 teacher-forced tokens and all timed predictions. No held-out/browser
+fitting or new geometry sweep occurs.
+
+Target 25% is about 0.8-0.9% slower. Target 40% gives about 2.2% matched-step gain
+but regresses held-out workshop JSON/stop behavior. Targets 50/60% preserve
+dense-valid task passes and improve held-out matched-prefix rate 4.325/6.684%,
+but held-out PPL rises 8.35/17.38%. Each positive target adds 862,411,332
+requested device bytes for duplicate down weights/scratch/counters. These are
+approximate-model tradeoffs, not generated/HTTP TPS or unchanged-engine wins.
+Keep all thresholds research-only; no default promotion. Both exact speed
+objectives remain unmet.
+
+Post-matrix CUDA parity/forward/transfer checks pass with cuBLAS on, focused
+parity also passes with it off, and all seven shared runner tests pass.
+Both warning-as-error CI lanes, three all-targets Clippy configurations and
+fmt pass. The explicit hardware test fails when requested without a device,
+rather than treating missing hardware as success.
+
+Next is C24: measure calibration block influence, freeze interior-layer
+rankings/masks before held-out evaluation, then compare one/two/three removals
+using the existing C20 runner. Protect first/last layers and original IDs.
+Export remains conditional C25; C26 compares measured quality/speed/memory.
+Do not reopen rejected sparse-weight, n-gram or dense-layout screens.
 
 C21 used these dependency-ordered commits:
 
@@ -168,8 +187,8 @@ a reason to rewrite the C21 preservation commits.
    parity, local CI lanes and the bounded release checkpoint against the pinned
    exact trace. No throughput improvement is attributed to the fixes.
 
-After this checkpoint, resume C23's retained input-layout prerequisite check.
-Do not reopen sparse-Q8 tuning, calibration or runtime policy changes.
+This audit preceded the C23 input-layout and calibration work recorded above.
+It did not authorize reopening static sparse-Q8 tuning or runtime policy changes.
 
 The immediate-consumer regression reproduces the pre-fix failure on M40:
 rows=16,K=11008, iteration=1, index=76032 reads zero instead of 0.022460938.

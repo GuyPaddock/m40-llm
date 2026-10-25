@@ -1,0 +1,22 @@
+    Blocking waiting for file lock on artifact directory
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.79s
+     Running tests/activation_calibration_cuda.rs (target/debug/deps/activation_calibration_cuda-ac261d51be4db6a8)
+
+running 1 test
+test test_capture_and_applied_thresholds_preserve_model_contracts ... FAILED
+
+failures:
+
+---- test_capture_and_applied_thresholds_preserve_model_contracts stdout ----
+Error: m40llm_create_context returned null
+
+
+failures:
+    test_capture_and_applied_thresholds_preserve_model_contracts
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test activation_calibration_cuda`

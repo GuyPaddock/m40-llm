@@ -2,6 +2,36 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Calibrated SwiGLU Quality Tradeoffs
+
+C23's frozen calibration/evaluation is complete on Qwen2.5-3B Q8_0, release
+M40, native-Q8 reference and explicit dense KV. Thresholds were frozen from
+110 generated-input rows per layer before evaluating both C19 splits. No
+threshold is promoted and ordinary runtime defaults are unchanged.
+
+| Target Sparsity | Held-Out Achieved | Held-Out Task Passes | Held-Out PPL | Matched-Step Rate Gain |
+| --- | ---: | --- | ---: | ---: |
+| 0%, native control | Not selected | 4/6 | 39.612159 | +0.059%, noise |
+| 25% | 23.80% | 4/6 | 40.025773 | -0.875% |
+| 40% | 37.76% | 3/6 | 40.582514 | +2.197% |
+| 50% | 47.06% | 4/6 | 42.920954 | +4.325% |
+| 60% | 56.61% | 4/6 | 46.495763 | +6.684% |
+
+Five alternating pairs per split time identical observed prefixes, including
+selection, remaining forward/logits, greedy readback and final GPU completion.
+These are not free-generated/HTTP TPS. Achieved sparsity weights each split's
+task and loss inputs, including prompt inputs, not decode alone. Dense-failed
+tasks remain inconclusive. The zero control exactly matches all C19 traces
+and full logits; all five reference runs match C19 as well.
+
+Target 40% repeats workshop JSON and hits the token limit. Targets 50/60% preserve
+dense-valid task passes but raise held-out PPL 8.35/17.38%; small task suites
+do not establish unchanged quality. Positive targets add 862,411,332 bytes of
+duplicate down weights, reusable scratch and counters. Application/setup costs
+about 10.3-10.5 s; these are approximate-model research results, not progress
+against the exact-engine speed objectives. Next is C24 layer ranking.
+See [the complete report, frozen artifact and raw pairs](experiments/2026-10-25-activation-quality.md).
+
 ## 2026-10-25: Sparse SwiGLU Input Prerequisite
 
 C23's selected-input down projection passes a bounded isolated speed gate,
