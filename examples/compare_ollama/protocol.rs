@@ -10,8 +10,12 @@ pub const MAX_TOKENS: usize = 512;
 pub const CONTEXT_TOKENS: u32 = 1024;
 
 pub fn render_prompt() -> String {
+    render_user_prompt(USER_PROMPT)
+}
+
+pub fn render_user_prompt(user_prompt: &str) -> String {
     format!(
-        "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n{USER_PROMPT}<|im_end|>\n<|im_start|>assistant\n"
+        "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
     )
 }
 

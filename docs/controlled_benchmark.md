@@ -236,7 +236,9 @@ native fused MLP. `--q8-budget-mb` limits extra prepared bytes and defaults to
 Q/output/down layouts; it is not a new launch-geometry search. CLI candidate
 settings are explicit and do not use ambient preparation env vars.
 
-Arithmetic, exact-OK, and config-lookup smokes precede warmup. Dense-failed
+Arithmetic, exact-OK, and config-lookup smokes use the same canonical Qwen
+system message as the browser prompt, supplied through the raw interface.
+They precede warmup. Dense-failed
 smokes are inconclusive, not prepared-weight failures. Fixed-workload warmups
 and every timed request must generate 512 IDs with length stops. Each model's
 output must remain stable within the run. Alternating native/prepared pairs

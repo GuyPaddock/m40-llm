@@ -81,6 +81,7 @@ impl ComparisonRun {
             ("exact_ok", "Reply with exactly the word OK.", "OK"),
             ("config_lookup", "Configuration note: the active value is M40_BATCH_LIMIT=37. What is M40_BATCH_LIMIT? Answer with the number only.", "37"),
         ] {
+            let rendered_prompt = protocol::render_user_prompt(prompt);
             let mut control_pass = false;
             for variant in [ServerVariant::Control, ServerVariant::Prepared] {
                 let server = match variant {
@@ -88,7 +89,7 @@ impl ComparisonRun {
                     ServerVariant::Prepared => self.prepared_server.as_ref().context("prepared server missing")?,
                 };
                 let response: GenerateResponse = self.client.post(&server.url)
-                    .json(&json!({"prompt":prompt,"prompt_format":"auto","max_tokens":16,"top_k":1,"seed":0,"include_metrics":true}))
+                    .json(&json!({"prompt":rendered_prompt,"prompt_format":"raw","max_tokens":16,"top_k":1,"seed":0,"include_metrics":true}))
                     .send().await?.error_for_status()?.json().await?;
                 let passed = response.output.trim() == expected;
                 match variant {
@@ -96,7 +97,7 @@ impl ComparisonRun {
                     ServerVariant::Prepared => { regressions += usize::from(control_pass && !passed); }
                 }
                 self.report.record(json!({"kind":"q8_quality_smoke","is_timed":false,
-                    "case":name,"model_variant":variant.as_str(),"prompt":prompt,"expected":expected,
+                    "case":name,"model_variant":variant.as_str(),"prompt":rendered_prompt,"user_prompt":prompt,"prompt_format":"raw","expected":expected,
                     "pass":passed,"output":response.output,"metrics":response.metrics,
                     "dense_reference_passed":control_pass,
                     "quality_conclusion":if control_pass {if passed {"pass"} else {"regression"}} else {"inconclusive"}}))?;
