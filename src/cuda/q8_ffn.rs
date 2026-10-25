@@ -57,6 +57,43 @@ impl Q8FfnFp32Variant {
 }
 
 impl CudaContext {
+    /// Enqueue the pinned Q8_1 activation contract into reusable caller storage.
+    ///
+    /// # Safety
+    /// Input/output are disjoint, four-byte-aligned buffers on this context,
+    /// holding rows*columns f32 values and shape.bytes() output bytes. Input is
+    /// finite and each nonzero block has a non-underflowing FP32 amax/127 scale.
+    /// Order producers before decode and retain both buffers through completion.
+    pub unsafe fn quantize_q8_1_async(
+        &self,
+        input: *const c_void,
+        output: *mut c_void,
+        shape: crate::infer::q8_activation::Q8ActivationShape,
+    ) -> Result<()> {
+        ensure!(
+            !input.is_null() && !output.is_null() && input != output.cast_const(),
+            "invalid/aliased Q8_1 buffers"
+        );
+        ensure!(
+            (input as usize).is_multiple_of(4) && (output as usize).is_multiple_of(4),
+            "Q8_1 buffers require four-byte alignment"
+        );
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_quantize_q8_1_async(
+                self.inner.raw.as_ptr(),
+                input,
+                output,
+                shape.rows() as i32,
+                shape.columns() as i32,
+                shape.padded_columns() as i32,
+            )
+        };
+        ensure!(rc == 0, "m40llm_quantize_q8_1_async failed: {rc}");
+        record_async_kernel("quantize_q8_1");
+        Ok(())
+    }
+
     /// Enqueue one genuine 1/4-row FP32-activation FFN ablation on decode.
     /// No allocation, transfer, environment selection or synchronization occurs.
     ///

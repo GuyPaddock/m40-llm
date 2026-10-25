@@ -311,6 +311,14 @@ mod ffi {
             k: i32,
             variant: i32,
         ) -> i32;
+        pub fn m40llm_quantize_q8_1_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            columns: i32,
+            padded_columns: i32,
+        ) -> i32;
         pub fn m40llm_qkv_f32xq8_separate_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,

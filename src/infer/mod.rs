@@ -17,6 +17,7 @@ mod load;
 mod logits;
 mod mapping;
 mod meta;
+pub mod q8_activation;
 pub mod sparse_weights;
 mod tensor_views;
 mod types;

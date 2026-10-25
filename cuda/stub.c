@@ -12,6 +12,12 @@ typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
 
+int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* output,
+    int rows, int columns, int padded_columns) {
+    (void)ctx; (void)input; (void)output; (void)rows; (void)columns; (void)padded_columns;
+    return -99;
+}
+
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
     if (name_buf && buf_len) {
         const char* name = "stub";
