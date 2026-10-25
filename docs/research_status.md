@@ -18,23 +18,28 @@ separately evaluated model-changing research. It is not replaced by the
 C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
 is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
 C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
-The full research plan remains active; C19-C27 remain subject to their own
+The full research plan remains active; C20-C27 remain subject to their own
 quality/performance gates. Neither exact-engine speed objective is achieved.
 
-Next is **C19**: freeze disjoint calibration and held-out inputs, exclude the
-browser benchmark from calibration, implement teacher-forced loss/perplexity
-and task-specific scoring with variant identity, and collect dense-reference
-results. No layer/sparsity/activation tuning before those data and checks are
-frozen. Modified-model speed must not be presented as an unchanged-engine win.
+**C19 is complete.** Disjoint inputs/rubrics were frozen before the dense run;
+teacher-forced loss and the explicit-model release runner now have a recorded
+Qwen2.5 Q8_0 reference over both splits. See the [C19 evidence and limitations](experiments/2026-10-25-model-quality-dense-reference.md).
+Modified-model speed must not be presented as an unchanged-engine win.
 
-C19 is split into dependency-ordered commits:
+Next is **C20**, diagnostic interior-layer masks with original layer/KV IDs,
+empty-mask parity, invalid-mask rejection, and explicit memory/quality/timing
+records. Then C21 tests exactly 50% static sparsity with matched-zero dense
+projections before any calibration-driven pruning. Do not tune on held-out or
+browser inputs, and do not reopen the failed n-gram/layout screens.
 
-1. `test(quality): freeze pruning evaluation splits`: immutable authored V1
+C19 was split into dependency-ordered commits:
+
+1. `d1294fc`, `test(quality): freeze pruning evaluation splits`: immutable authored V1
    data, split/leakage validation, deterministic task rubrics and tests.
-2. `feat(eval): score teacher-forced tokens`: stable token-weighted NLL/PPL,
+2. `c32ec4e`, `feat(eval): score teacher-forced tokens`: stable token-weighted NLL/PPL,
    full-logit drift, strict-prefix prediction, and CUDA session integration
    tests. Depends on the frozen scoring/data contract.
-3. `test(quality): evaluate explicit model variants`: release CLI with model/
+3. `f974162`, `test(quality): evaluate explicit model variants`: release CLI with model/
    corpus/config hashes, serial dense-reference comparisons, output/task/loss/
    memory/timing records. Depends on the loss evaluator and existing sessions.
 4. `docs(perf): record dense quality reference`: evaluate both frozen splits,
@@ -50,8 +55,13 @@ The explicit-model release runner now adds model/corpus/config identity,
 reference-dependent scoring, full-logit loss comparisons, actual token IDs,
 timing boundaries, and scoped memory accounting. It preserves both frozen
 splits and rejects tokenizer mismatch, truncation, or implicit compressed KV.
-The real dense-reference corpus run remains required; C19 is not complete
-and no variant tuning is authorized yet.
+The release self-reference run matches all 12 generated traces and all 203
+teacher-forced tokens exactly, including zero full-logit drift. Fixed-rubric
+passes are 3/6 calibration and 4/6 held-out; five dense-failed tasks remain
+inconclusive for pruning quality. Token-weighted PPL is 31.556848 calibration
+and 39.612159 held-out. These small synthetic passages are not a standard
+benchmark claim. Single in-process timing observations are not HTTP speed
+promotion evidence. Both models are released, with zero tracked/device use.
 
 ## N-Gram Feasibility Checkpoint: 2026-10-25
 

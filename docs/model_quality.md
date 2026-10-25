@@ -111,10 +111,11 @@ through first sampled token; decode is first through last sampled token.
 
 Memory fields identify per-model uploaded weight payload, resident KV,
 head128 workspace, prepared and materialized buffers. Tracked device total
-includes **both** resident models and shared workspaces; it is not standalone
-peak VRAM. Final device accounting must return to its pre-run value. File
-load timings include parsing/read/upload/KV/validation and exclude later hash
-reads; they do not establish uncached cold-disk latency.
+includes **both** resident models and shared workspaces; native allocations
+such as KV are reported separately and are not fully covered by the tracker.
+It is not standalone peak VRAM. Final device accounting must return to its
+pre-run value. File load timings include parsing/read/upload/KV/validation and
+exclude later hash reads; they do not establish uncached cold-disk latency.
 
 ## Validation
 
@@ -135,5 +136,7 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
 
 Runner tests check reference-dependent conclusions, report preservation,
 tokenizer/context preflight, and actual tiny-model dense generation records.
-The real release dense-reference run over both splits remains the final C19
-checkpoint. No layer/sparsity tuning before it is recorded.
+The [real release reference over both splits](experiments/2026-10-25-model-quality-dense-reference.md)
+completes C19: identical generated traces/full logits, 3/6 calibration and 4/6
+held-out fixed-rubric passes, with dense failures retained as inconclusive for
+pruning. No model tuning was used to establish this foundation.

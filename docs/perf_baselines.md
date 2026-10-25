@@ -2,6 +2,31 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Frozen Model-Quality Reference
+
+C19 is complete without model or default changes. The release explicit-model
+runner evaluates both frozen splits against independent unchanged Qwen2.5-3B
+Q8_0 loads, using the selected native-Q8/C07 engine and explicit dense KV.
+All 12 generated traces match; all 203 teacher-forced token comparisons have
+zero full-vocabulary logit drift and top-ten overlap 10.
+
+| Split | Fixed-Rubric Passes | Scored Passage Tokens | Token-Weighted PPL |
+| --- | --- | ---: | ---: |
+| Calibration | 3/6 | 102 | 31.556848 |
+| Held-out | 4/6 | 101 | 39.612159 |
+
+The five dense-failed tasks remain inconclusive for pruning conclusions. Their
+raw obsolete-fact, integer-format/budget, and paragraph/lexical-rubric failures
+are retained; no answer, rubric, or budget was changed after observing results.
+Each model uploads 3,279,519,744 weight bytes and reserves 36 MiB dense KV, with
+zero prepared/materialized weight bytes. GPU use returns to 0 MiB after capture.
+
+See the [full report, task timing table, commands, and raw JSONL](experiments/2026-10-25-model-quality-dense-reference.md).
+Timings are one resident in-process quality observation per model/case, not
+HTTP E2E, paired benchmark medians, or a speed promotion. Loss timing includes
+full-logit readback and CPU scoring. Next is C20's separate model-changing
+layer-mask experiment; exact-engine speed goals remain unmet.
+
 ## 2026-10-25: Offline N-Gram Feasibility Gate
 
 C11A's formal screen fails. The best **hypothetical** browser HTTP throughput
