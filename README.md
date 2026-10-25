@@ -163,6 +163,8 @@ These areas are active research and should be treated as opt-in:
 
 ## Useful Docs
 
+- Active research plan, implementation checkpoint, and archived history:
+  [`docs/research_status.md`](docs/research_status.md)
 - CUDA device selection and M40 guardrails:
   [`docs/device_selection.md`](docs/device_selection.md)
 - CUDA parity grid and KV layout:

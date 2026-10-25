@@ -1,5 +1,10 @@
 # M40 Performance Roadmap
 
+This page preserves the earlier implementation direction; it is not the active
+task order. See [research status](research_status.md) for the authorized research
+plan and checkpoint. Some admission restrictions below have since been lifted;
+verify subsystem behavior against current code and dated performance records.
+
 This project prioritizes correctness and measurement before deeper scheduling
 work. The main fast path is currently TinyLlama-class "fast-fits" inference:
 materialized FP32 projection weights plus cuBLAS on Tesla M40.
