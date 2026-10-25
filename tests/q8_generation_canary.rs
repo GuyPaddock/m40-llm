@@ -1,6 +1,8 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/q8_greedy.rs"]
+mod greedy;
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};
@@ -304,6 +306,18 @@ fn q8_0_real_model_generation_canary() -> Result<()> {
     let gguf_bytes = std::fs::read(&path)?;
     let mut model = LoadedModel::from_gguf(gguf_model, gguf_bytes, -1)?;
     model.allocate_kv_cache_for_layers(context_bound)?;
+
+    {
+        let _greedy_head = EnvRestore::set("M40LLM_Q8_LM_HEAD_ARGMAX", "1");
+        let hidden: Vec<f32> = (0..model.model_config.embedding_length)
+            .map(|i| ((i * 13 % 127) as f32 - 63.0) / 128.0)
+            .collect();
+        let (token, _) = greedy::compare_greedy_with_logits(&model, &hidden)?;
+        eprintln!(
+            "[q8-canary] greedy_reference_token={token} greedy_d2h_bytes=4 prepared_vocabulary={}",
+            model.q8_execution_stats().has_prepared_vocabulary
+        );
+    }
 
     profile::reset();
     let generated = generate_text(

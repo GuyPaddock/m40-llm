@@ -53,7 +53,8 @@ owners; pointers are not used as cross-model cache identities.
 
 `q8_execution_stats()` exposes estimated/actual prepared bytes, budget,
 source uploaded bytes, total source+prepared device payload, per-tensor/layout
-keys and bytes, and hash/preparation milliseconds. `peak_setup_host_payload_bytes`
+keys and bytes, vocabulary-prepared status, and hash/preparation milliseconds.
+`peak_setup_host_payload_bytes`
 estimates the original file + retained tensor-data blob + largest temporary
 packed tensor. These payload estimates exclude allocator/page overhead,
 metadata, CUDA contexts, workspace, and KV. Source upload remains part of cold
@@ -82,9 +83,16 @@ and QKV; no intermediate gate/up allocation or extra activation launch is added.
 Both weights must be cached and shape-compatible; missing cache entries retain
 the native fused path.
 
-The specialized greedy vocabulary path remains native until its C10A.2
-integration is ready. Use of the cache is experimental, not a claim that the
-current selected fused HTTP benchmark is faster.
+When vocabulary weights are prepared, GPU greedy selection uses the prepared
+projection into existing logits scratch followed by the existing device argmax.
+This also applies when `M40LLM_Q8_LM_HEAD_ARGMAX=1`: that flag no longer bypasses
+the cache to read native GGUF weights. Off/unprepared vocabulary still uses the
+native specialized path when requested. Output normalization, producer-stream
+dependencies, first-index tie handling, and the single-u32 D2H result remain
+unchanged. No full logits readback or extra device scratch is added.
+
+Use of the cache is experimental, not a claim that the current selected fused
+HTTP benchmark is faster.
 
 ## Source and Identity
 
@@ -232,6 +240,17 @@ but the increase is a reason to keep native fused MLP as an alternative in
 C10A.3. Do not infer that preparation improves every fused consumer. The later
 release gate must measure per-family choices without another broad tuning round.
 
+Prepared greedy tests compare native/CPU/full-logits references, zero-row ties,
+both producer streams, split/mixed caches, and both native shared-activation
+argmax variants. The hot selection performs no device allocation/free/H2D and
+copies exactly one u32 D2H. The real-model canary additionally compares device
+greedy with full logits using the loaded model's vocabulary and output norm.
+The Qwen probe agrees on token 140525 for a deterministic synthetic hidden row,
+asserts exactly four D2H bytes, then separately generates the arithmetic answer
+`4` with both prepared fused consumers active. See the
+[raw greedy canary](experiments/2026-10-24-q8-prepared-greedy-canary.txt).
+The reference token is a numerical probe, not an answer to the arithmetic prompt.
+
 C08 validation passes eight CPU tests for semantic identities, source bounds,
 real/synthetic shapes, plan overflow/alignment, byte copies, and failing
 allocation/upload boundaries using a working RAII fake. A real CUDA test
@@ -262,9 +281,11 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_qkv -- --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_prepared_mlp -- --nocapture --test-threads=1
+M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
+  --test q8_prepared_greedy -- --nocapture --test-threads=1
 ```
 
-Next: finish prepared greedy vocabulary integration, model-level parity, and repeated HTTP
+Next: model-level parity and repeated HTTP
 gates. C09/C10 isolated results do not prove whole-model wins or justify
 replacing useful fused operations. Keep setup,
 duplicate resident weights, and peak payload accounting explicit.

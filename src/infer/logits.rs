@@ -285,7 +285,7 @@ impl LoadedModel {
                 }
             }
         }
-        if q8_lm_head_argmax_enabled() {
+        if q8_lm_head_argmax_enabled() && !self.q8_execution.has_prepared_vocabulary() {
             let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
             let d_w = self.tensor_device_ptr(&name, &lm)?;
             if self.gguf_weight_dtype(d_w) == GgmlDType::Q8_0 {

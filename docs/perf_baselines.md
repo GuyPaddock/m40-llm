@@ -4,9 +4,9 @@ This file tracks measured CUDA baselines before M40-specific optimization work.
 
 ## 2026-10-24: Prepared Q8 Runtime Correctness Checkpoint
 
-C10A adds opt-in model-owned split/mixed layouts and prepared fused QKV/MLP
-consumers. CUDA parity and real Qwen Q8 arithmetic canaries pass; preparation
-remains off by default. Qwen split preparation adds **3,278,553,088 bytes**
+C10A adds opt-in model-owned split/mixed layouts, prepared fused QKV/MLP, and
+device-only greedy vocabulary consumers. CUDA parity and real Qwen Q8 canaries
+pass; preparation remains off by default. Qwen split preparation adds **3,278,553,088 bytes**
 alongside **3,279,519,744 source bytes**, before KV/workspace.
 
 Do not infer an E2E win from this checkpoint. The **unoptimized, unpaired**

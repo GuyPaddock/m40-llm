@@ -72,6 +72,7 @@ pub struct Q8PreparedTensorStats {
 #[derive(Debug, Clone, Serialize)]
 pub struct Q8ExecutionStats {
     pub mode: Q8ExecutionMode,
+    pub has_prepared_vocabulary: bool,
     pub budget_bytes: usize,
     pub estimated_bytes: usize,
     pub resident_bytes: usize,
@@ -87,6 +88,7 @@ impl Q8ExecutionStats {
     pub(super) fn empty() -> Self {
         Self {
             mode: Q8ExecutionMode::Off,
+            has_prepared_vocabulary: false,
             budget_bytes: 0,
             estimated_bytes: 0,
             resident_bytes: 0,

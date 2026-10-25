@@ -113,9 +113,11 @@ fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()>
             "runtime Q8 tests require M40"
         );
         assert!(native.q8_execution_stats().tensors.is_empty());
+        assert!(!native.q8_execution_stats().has_prepared_vocabulary);
         for mode in [Q8ExecutionMode::Split, Q8ExecutionMode::Mixed] {
             let model = make_model(mode, 0)?;
             let stats = model.q8_execution_stats();
+            assert!(stats.has_prepared_vocabulary);
             assert_eq!(
                 stats.tensors.len(),
                 if mode == Q8ExecutionMode::Mixed {

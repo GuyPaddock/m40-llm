@@ -16,8 +16,8 @@ separately evaluated model-changing research. It is not replaced by the
 ## Work in Progress: 2026-10-24
 
 C01-C10 and the uploaded-weight accounting prerequisite `81948df` are complete.
-C10A.1 adds opt-in model-owned Q8 preparation and standard projection dispatch;
-the remaining fused consumers and HTTP validation are still pending. Runtime/KV
+C10A.1/2 add opt-in model-owned Q8 preparation, standard projections, fused
+consumers, and greedy vocabulary integration. HTTP validation is pending. Runtime/KV
 defaults and the selected C07 benchmark configuration are unchanged.
 The real split-cache Qwen Q8 arithmetic canary returns `4`; cache/stream/failure
 tests, existing CUDA regressions with cuBLAS on/off, non-CUDA warning-as-error
@@ -48,11 +48,19 @@ canary returns `4` and records 756 prepared fused-QKV launches.
 Prepared fused gate/up/SwiGLU now retains a one-column/128-thread launch with
 shared activation reads and aligned split values, not the failed four-column
 fusion. Independent-weight, tail, stream, CPU/native tests pass. Greedy
-vocabulary integration remains next. There is no new HTTP speed claim.
+vocabulary integration now uses prepared projection plus device argmax, with
+exactly one u32 readback and no device allocation in selection. CPU/native/
+full-logits/tie/stream checks pass. There is no new HTTP speed claim.
 The real fully prepared QKV/MLP canary returns `4` with 756 launches of each
 consumer. Its unpaired debug generation total is higher than the previous
 native-MLP canary; preserve that evidence and compare native/prepared MLP
 explicitly in the release gate instead of assuming all prepared fusion wins.
+Next is C10A.3: immutable model controls, per-family native/prepared choices,
+actual-token parity, and the serial paired release HTTP promotion gate.
+The real Qwen vocabulary/output-norm probe matches full logits and copies only
+one u32 D2H; its subsequent text canary still answers `4`. C10A.3 must provide
+per-model native/prepared family controls before timing, particularly for MLP,
+without mutating shared dispatch configuration between active requests.
 
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup

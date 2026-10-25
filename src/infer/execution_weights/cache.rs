@@ -136,6 +136,9 @@ impl Q8ExecutionCache {
         check_budget(estimated, config.budget_bytes)?;
         let mut stats = Q8ExecutionStats::empty();
         stats.mode = config.mode;
+        stats.has_prepared_vocabulary = entries
+            .iter()
+            .any(|(_, family, _)| *family == ProjectionFamily::Vocabulary);
         stats.budget_bytes = config.budget_bytes;
         stats.model_hash_elapsed_ms = hash_elapsed_ms;
         stats.estimated_bytes = estimated;
@@ -208,6 +211,10 @@ impl Q8ExecutionCache {
 
     pub fn stats(&self) -> Q8ExecutionStats {
         self.stats.clone()
+    }
+
+    pub(crate) fn has_prepared_vocabulary(&self) -> bool {
+        self.stats.has_prepared_vocabulary
     }
 
     /// # Safety
