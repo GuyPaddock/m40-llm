@@ -112,7 +112,7 @@ impl PreparedFfnWeights {
         hidden: i32,
         k: i32,
         intermediates: Option<(*mut c_void, *mut c_void)>,
-        has_two_columns: bool,
+        kernel: super::pipeline::FfnKernel,
     ) -> Result<()> {
         let mut scales = [std::ptr::null(); 2];
         let mut values = [std::ptr::null(); 2];
@@ -126,10 +126,15 @@ impl PreparedFfnWeights {
             scales[index] = s.as_ptr();
             values[index] = v.as_ptr();
         }
-        let enqueue = if has_two_columns {
-            CudaContext::ffn_q8_split_f32_two_columns_async
-        } else {
-            CudaContext::ffn_q8_split_f32_async
+        let enqueue = match kernel {
+            super::pipeline::FfnKernel::SplitF32x4 => CudaContext::ffn_q8_split_f32_async,
+            super::pipeline::FfnKernel::SplitF32x4TwoColumns => {
+                CudaContext::ffn_q8_split_f32_two_columns_async
+            }
+            super::pipeline::FfnKernel::SplitF32x4K2048 => {
+                CudaContext::ffn_q8_split_f32_k2048_async
+            }
+            _ => anyhow::bail!("split FFN consumer requires a separate-plane kernel"),
         };
         enqueue(
             &self.ctx,

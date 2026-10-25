@@ -103,6 +103,13 @@ impl Q8FfnFp32Variant {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SplitFfnKernel {
+    Dynamic,
+    TwoColumns,
+    FixedK2048,
+}
+
 impl CudaContext {
     /// Enqueue the fixed one-column joint gate/up layout on decode.
     /// No allocation, transfer or synchronization occurs.
@@ -208,7 +215,7 @@ impl CudaContext {
             hidden,
             k,
             intermediates,
-            false,
+            SplitFfnKernel::Dynamic,
         )
     }
 
@@ -239,7 +246,38 @@ impl CudaContext {
             hidden,
             k,
             intermediates,
-            true,
+            SplitFfnKernel::TwoColumns,
+        )
+    }
+
+    /// Fixed K=2048 address/loop specialization of the one-column split kernel.
+    /// Other widths fail explicitly; this does not select a generation policy.
+    ///
+    /// # Safety
+    /// Same spans, alignment, disjointness and producer/lifetime contract as
+    /// `ffn_q8_split_f32_async`, with K exactly 2048.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_f32_k2048_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::FixedK2048,
         )
     }
 
@@ -254,8 +292,10 @@ impl CudaContext {
         hidden: i32,
         k: i32,
         intermediates: Option<(*mut c_void, *mut c_void)>,
-        has_two_columns: bool,
+        kernel: SplitFfnKernel,
     ) -> Result<()> {
+        ensure!(!matches!(kernel,SplitFfnKernel::FixedK2048) || k==2048,
+            "fixed-width split FP32 FFN requires K=2048; use the dynamic split API for other widths");
         ensure!(
             matches!(rows, 1 | 4) && hidden > 0 && k > 0 && k % 32 == 0,
             "split FP32 FFN requires rows 1/4 and complete Q8 blocks"
@@ -293,10 +333,10 @@ impl CudaContext {
             );
         }
         let _guard = self.inner.lock.lock().unwrap();
-        let enqueue = if has_two_columns {
-            ffi::m40llm_ffn_q8_split_f32_two_columns_async
-        } else {
-            ffi::m40llm_ffn_q8_split_f32_async
+        let enqueue = match kernel {
+            SplitFfnKernel::Dynamic => ffi::m40llm_ffn_q8_split_f32_async,
+            SplitFfnKernel::TwoColumns => ffi::m40llm_ffn_q8_split_f32_two_columns_async,
+            SplitFfnKernel::FixedK2048 => ffi::m40llm_ffn_q8_split_f32_k2048_async,
         };
         let rc = enqueue(
             self.inner.raw.as_ptr(),
@@ -311,10 +351,10 @@ impl CudaContext {
             k,
         );
         ensure!(rc == 0, "m40llm_ffn_q8_split_f32_async failed: {rc}");
-        record_async_kernel(if has_two_columns {
-            "ffn_q8_split_f32x4_cols2_128"
-        } else {
-            "ffn_q8_split_f32x4_128"
+        record_async_kernel(match kernel {
+            SplitFfnKernel::Dynamic => "ffn_q8_split_f32x4_128",
+            SplitFfnKernel::TwoColumns => "ffn_q8_split_f32x4_cols2_128",
+            SplitFfnKernel::FixedK2048 => "ffn_q8_split_f32x4_k2048_128",
         });
         Ok(())
     }

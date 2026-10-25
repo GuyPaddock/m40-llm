@@ -524,6 +524,8 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
 /// split and joint-record consumers with identical one-column results.
 /// Repeated row-batched complete work waits before hidden reuse and
 /// returns CPU-matching outputs without timed allocation, copying or sync.
+/// The K=2048 consumer rejects this K=64 fixture without changing allocations
+/// or silently switching to the dynamic kernel.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()> {
@@ -557,6 +559,16 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                 pipeline.prepared.as_ref().unwrap().bytes,
             )?);
             assert!(pipeline.joint.as_ref().unwrap().bytes > 0);
+            let before = m40_llm::profile::snapshot();
+            assert!(pipeline
+                .select_kernel(FfnKernel::SplitF32x4K2048)
+                .unwrap_err()
+                .to_string()
+                .contains("requires K=2048"));
+            assert_eq!(
+                m40_llm::profile::counter_delta(&before, &m40_llm::profile::snapshot()),
+                m40_llm::profile::counter_delta(&before, &before)
+            );
             let capacity = pipeline.scratch_bytes();
             let resident = CudaContext::total_device_bytes();
             validation::validate(&pipeline, &layer)?;
@@ -671,6 +683,10 @@ fn test_split_ffn_reports_do_not_alias_native_or_packed_controls() -> Result<()>
     assert_eq!(
         serde_json::to_value(FfnKernel::JointF32x4)?,
         "joint-f32x4-128"
+    );
+    assert_eq!(
+        serde_json::to_value(FfnKernel::SplitF32x4K2048)?,
+        "split-f32x4-k2048-128"
     );
     Ok(())
 }

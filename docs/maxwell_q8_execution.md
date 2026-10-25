@@ -244,6 +244,20 @@ and fresh twenty-pair confirmation show 4.66-4.74% complete one-row gains,
 below the 5% gate despite bitwise parity. It remains benchmark-only; no
 runtime selector, threshold relaxation or layout/geometry rescue follows.
 
+### Bounded Fixed-Width Address Specialization
+
+The independent [address/loop audit](experiments/2026-10-25-maxwell-fixed-k-ffn-hypothesis.md)
+motivates `--ffn-f32-fixed-k` in the shared FFN benchmark. It exposes Qwen's
+K=2048 as a compile-time constant, retaining original separate planes,
+one-column/128-thread/four-value mapping, FP32 arithmetic and reduction.
+Other widths fail explicitly, before allocation or launch. It does not
+combine the below-gate joint layout or select a new generation runtime.
+
+`CudaContext::ffn_q8_split_f32_k2048_async` has the same unsafe span,
+alignment, lifetime and optional capture contract as the dynamic split API,
+with K exactly 2048. Both arms reuse the same prepared pair and immutable
+down/vocabulary. Existing numerical, micro, quality and HTTP gates apply.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,

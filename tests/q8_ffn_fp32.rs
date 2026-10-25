@@ -22,6 +22,13 @@ use m40_llm::{
 const GUARD: usize = 8;
 const GUARD_BITS: u32 = 0x4b12_3456;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SplitKernel {
+    Dynamic,
+    TwoColumns,
+    FixedK2048,
+}
+
 fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
     let mut bytes = fixture::make_column_blocks(k, hidden);
     for (index, block) in bytes.chunks_exact_mut(34).enumerate() {
@@ -159,19 +166,24 @@ fn compare_case(
     }
     let mut split_output: Option<Vec<f32>> = None;
     let mut split_projections: Option<[Vec<f32>; 2]> = None;
-    for (variant, has_two_columns) in Q8FfnFp32Variant::ALL
+    for (variant, split_kernel) in Q8FfnFp32Variant::ALL
         .into_iter()
         .chain([
             Q8FfnFp32Variant::PackedWarp128FactoredScales,
             Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
         ])
-        .map(|variant| (Some(variant), false))
-        .chain([(None, false), (None, true)])
+        .map(|variant| (Some(variant), SplitKernel::Dynamic))
+        .chain([
+            (None, SplitKernel::Dynamic),
+            (None, SplitKernel::TwoColumns),
+            (None, SplitKernel::FixedK2048),
+        ])
+        .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
-        let enqueue_split = if has_two_columns {
-            CudaContext::ffn_q8_split_f32_two_columns_async
-        } else {
-            CudaContext::ffn_q8_split_f32_async
+        let enqueue_split = match split_kernel {
+            SplitKernel::Dynamic => CudaContext::ffn_q8_split_f32_async,
+            SplitKernel::TwoColumns => CudaContext::ffn_q8_split_f32_two_columns_async,
+            SplitKernel::FixedK2048 => CudaContext::ffn_q8_split_f32_k2048_async,
         };
         unsafe {
             ctx.memcpy_h2d(
@@ -217,7 +229,7 @@ fn compare_case(
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
         if variant.is_none() {
-            if has_two_columns {
+            if split_kernel != SplitKernel::Dynamic {
                 assert_eq!(
                     actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                     split_output
@@ -226,7 +238,7 @@ fn compare_case(
                         .iter()
                         .map(|v| v.to_bits())
                         .collect::<Vec<_>>(),
-                    "two-column split changed one-column SwiGLU bits"
+                    "split follow-up changed qualified one-column SwiGLU bits"
                 );
             } else {
                 split_output = Some(actual.clone());
@@ -284,7 +296,7 @@ fn compare_case(
             );
             let projections = [read(ctx, &gate_out)?, read(ctx, &up_out)?];
             if variant.is_none() {
-                if has_two_columns {
+                if split_kernel != SplitKernel::Dynamic {
                     for (a, b) in projections.iter().zip(split_projections.as_ref().unwrap()) {
                         assert_eq!(
                             a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
@@ -353,6 +365,8 @@ fn compare_case(
 /// The fixed split-plane/four-value strategy uses lossless typed packing and
 /// must preserve source planes as well as output guards. Its two-column
 /// experiment must keep one-column gate/up/SwiGLU bits, including odd tails.
+/// The K=2048 address specialization must preserve those bits on its supported
+/// width; other widths remain covered by the unchanged dynamic kernels.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -390,10 +404,14 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
             for enqueue in [
                 CudaContext::ffn_q8_split_f32_async,
                 CudaContext::ffn_q8_split_f32_two_columns_async,
+                CudaContext::ffn_q8_split_f32_k2048_async,
             ] {
-                for (rows, hidden, k, offset) in
-                    [(0, 1, 32, 0), (1, 0, 32, 0), (1, 1, 33, 0), (1, 1, 32, 8)]
-                {
+                for (rows, hidden, k, offset) in [
+                    (0, 1, 2048, 0),
+                    (1, 0, 2048, 0),
+                    (1, 1, 2049, 0),
+                    (1, 1, 2048, 8),
+                ] {
                     assert!(enqueue(
                         &ctx,
                         input.as_ptr().cast::<u8>().add(offset).cast(),
@@ -415,7 +433,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                     output.as_mut_ptr(),
                     1,
                     1,
-                    32,
+                    2048,
                     None
                 )
                 .is_err());
@@ -427,10 +445,25 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                     output.as_mut_ptr(),
                     1,
                     1,
-                    32,
+                    2048,
                     Some((output.as_mut_ptr(), output.as_mut_ptr()))
                 )
                 .is_err());
+            }
+            for k in [32, 96, 4096] {
+                let error = ctx
+                    .ffn_q8_split_f32_k2048_async(
+                        input.as_ptr(),
+                        [weight.as_ptr(); 2],
+                        [weight.as_ptr(); 2],
+                        output.as_mut_ptr(),
+                        1,
+                        1,
+                        k,
+                        None,
+                    )
+                    .unwrap_err();
+                assert!(error.to_string().contains("requires K=2048"));
             }
             assert!(ctx
                 .ffn_q8_f32_ablation_async(

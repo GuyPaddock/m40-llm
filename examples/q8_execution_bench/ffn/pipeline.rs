@@ -22,6 +22,7 @@ pub(super) enum FfnKernel {
     Q81(Q8FfnQ81Launch),
     SplitF32x4,
     SplitF32x4TwoColumns,
+    SplitF32x4K2048,
     JointF32x4,
 }
 
@@ -33,6 +34,7 @@ impl Serialize for FfnKernel {
             Self::Q81(launch) => launch.serialize(serializer),
             Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
             Self::SplitF32x4TwoColumns => serializer.serialize_str("split-f32x4-cols2-128"),
+            Self::SplitF32x4K2048 => serializer.serialize_str("split-f32x4-k2048-128"),
             Self::JointF32x4 => serializer.serialize_str("joint-f32x4-128"),
         }
     }
@@ -50,7 +52,10 @@ impl FfnKernel {
     pub fn has_split_weights(self) -> bool {
         matches!(
             self,
-            Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4
+            Self::SplitF32x4
+                | Self::SplitF32x4TwoColumns
+                | Self::SplitF32x4K2048
+                | Self::JointF32x4
         )
     }
 
@@ -59,7 +64,10 @@ impl FfnKernel {
             Self::Native => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => 128,
+            Self::SplitF32x4
+            | Self::SplitF32x4TwoColumns
+            | Self::SplitF32x4K2048
+            | Self::JointF32x4 => 128,
         }
     }
 
@@ -67,7 +75,11 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => true,
+            Self::Q81(_)
+            | Self::SplitF32x4
+            | Self::SplitF32x4TwoColumns
+            | Self::SplitF32x4K2048
+            | Self::JointF32x4 => true,
         }
     }
 
@@ -75,7 +87,11 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => true,
+            Self::Q81(_)
+            | Self::SplitF32x4
+            | Self::SplitF32x4TwoColumns
+            | Self::SplitF32x4K2048
+            | Self::JointF32x4 => true,
         }
     }
 }
@@ -260,6 +276,10 @@ impl<'a> FfnPipeline<'a> {
     /// Reuse the same scratch only after its previous producer has finished.
     pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
         ensure!(
+            kernel != FfnKernel::SplitF32x4K2048 || self.d_model == 2048,
+            "fixed-width FFN benchmark requires K=2048"
+        );
+        ensure!(
             kernel != FfnKernel::JointF32x4 || self.joint.is_some(),
             "prepare joint FFN weights before selecting the candidate"
         );
@@ -336,7 +356,7 @@ impl<'a> FfnPipeline<'a> {
                 self.hidden_dim as i32,
                 self.d_model as i32,
                 has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
-                self.kernel == FfnKernel::SplitF32x4TwoColumns,
+                self.kernel,
             )
         }
     }
