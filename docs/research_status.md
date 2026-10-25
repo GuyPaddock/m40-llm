@@ -274,10 +274,20 @@ This qualifies the explicit split down/vocabulary benchmark configuration,
 not general preparation, compressed attention, model changes or either original
 throughput objective. It adds 1,192,935,424 prepared device bytes.
 
-Next re-profile this qualified exact configuration, including profiler
-perturbation, before choosing any new kernel work. Keep the C11 native control
-for comparisons and frozen model-quality artifacts. Do not change runtime
-defaults, refit held-out data or reopen negative n-gram/static-sparse gates.
+The [qualified-config profile](experiments/2026-10-25-q8-native-order-profile.md)
+is complete on clean `1a5388c`. Five ordinary/profiled HTTP pairs show 0.717%
+instrumentation cost and equal 512-ID traces. Reused middle-token GPU spans
+are 11.872 ms gate/up/SwiGLU, 4.774 ms down and 0.777 ms attention. FFN is
+65.96% of interval union, attention 3.07%; completion waits overlap execution.
+Sampled tokens have no device allocations. First-use profile wall inflation
+is not ordinary CPU-cost evidence.
+
+Next investigate the remaining native gate/up cost before another kernel
+change; sequential prefill remains about 1.58 s as well. New candidates still
+require the full parity and repeated HTTP gate, followed by a fresh controlled
+Ollama comparison for goal completion. Keep C11 controls for frozen quality
+artifacts. Do not change defaults, refit held-out data, or reopen negative
+n-gram/static-sparse gates from these timings.
 
 C21 used these dependency-ordered commits:
 

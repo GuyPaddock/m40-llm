@@ -185,6 +185,11 @@ This is an instrumentation-perturbation check, not an optimization-promotion
 decision or a new Ollama speed comparison. See the
 [stage timing caveats](diagnostics.md#launch-sync-and-timing-logs) before adding
 stage or host-wait durations together.
+The [qualified prepared-weight profile](experiments/2026-10-25-q8-native-order-profile.md)
+uses this same mode with explicit load-time `split`, families
+`down,vocabulary`, budget 6144 MiB. Ordinary native profiling leaves
+preparation off. Do not combine `--compare-stage-profile` with the two-model
+`--compare-q8-execution` mode; their configuration ownership is different.
 
 ## Compare Exact Attention Kernels
 

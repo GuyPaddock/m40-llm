@@ -2,6 +2,26 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Qualified Q8 Stage Attribution
+
+Clean `1a5388c` profiles the qualified split down/vocabulary configuration
+without another kernel change. Five alternating HTTP pairs measure 35.646
+tok/s off versus 35.391 on, 0.717% instrumentation cost, with all 512 actual
+IDs equal and matching the qualified trace. Only measured sessions contribute
+to the stage medians; warmup and untimed companions are excluded.
+
+At generated step 255, gate/up/SwiGLU is 11.872 ms, down 4.774 ms, attention
+0.777 ms, and vocabulary plus argmax about 1.822 ms across all 36 layers.
+FFN is 65.96% of the 25.267 ms GPU interval union; attention is 3.07%.
+No sampled token allocates device memory; each records 435 launches and two
+completion synchronizations. Host waits overlap GPU execution, and first-use
+profile token wall is not normal CPU overhead.
+
+The next exact speed lever is native fused gate/up, with prefill still about
+1.58 s per request. No new tuning or speed claim follows from the profile.
+Both original throughput goals remain unmet. See
+[the complete attribution, perturbation and raw evidence](experiments/2026-10-25-q8-native-order-profile.md).
+
 ## 2026-10-25: Native-Order Prepared Q8 HTTP Gain
 
 Clean release `dd8c5f6` qualifies split down/vocabulary preparation on the
