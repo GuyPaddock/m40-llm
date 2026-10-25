@@ -40,6 +40,7 @@ struct M40llmCudaContext {
 };
 
 #include "q8_execution.cuh"
+#include "q8_sparse.cuh"
 
 static void CUDART_CB destroy_wait_event_host_func(void* user_data) {
     cudaEvent_t event = reinterpret_cast<cudaEvent_t>(user_data);

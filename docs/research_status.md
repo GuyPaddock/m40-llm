@@ -75,6 +75,13 @@ positions are retained even in a partial final block; out-of-range payloads
 are zero, so logical-tail sparsity is reported separately. This experiment
 does not select weights for a model or promise an end-to-end speedup.
 
+The host contract is committed in `df9de8a`; its three CPU tests and non-CUDA
+Clippy pass. The standalone CUDA probe now passes matched-zero dense and
+scalar parity on M40, with all four bounded launch variants, ragged K/N,
+signed/zero scales, distinct activation rows, and invalid-call rejection.
+See [the sparse format and kernel contract](sparse_q8.md). Release timing and
+the C22 gate remain pending; runtime model/default behavior is unchanged.
+
 C20 was split into dependency-ordered commits:
 
 1. `9674452`, `feat(infer): define diagnostic layer masks`: checked interior IDs, original
