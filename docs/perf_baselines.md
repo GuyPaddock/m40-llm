@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Remaining Maxwell Runtime HTTP Screen
+
+The five remaining release comparisons preserve prepared down/vocabulary,
+dense KV/context 1024 and actual 512-token requests. Packed FP32/256 confirms
+only **+2.783%** after twenty fresh borderline pairs, below the 3% gate.
+Q8_1/128 and /256 gain **16.833% / 13.211%**, but change output and remain
+numerical research. Native packed prefill loses **10.224%**; temporary
+dequant SGEMM gains **8.071%**, but both fail exact-output equality at token 0.
+See [raw trials, phase medians, audits and limitations](experiments/2026-10-25-maxwell-runtime-http-screen.md).
+
+Subsequent prefill attribution finds sequential buffer-reuse ordering changes
+the reference output. Preserve these historical timings; corrected-control
+qualification is required before recommending a retained runtime. No default
+or original Ollama speed-target claim follows.
+
 ## 2026-10-25: Packed FP32/128 Runtime HTTP Qualification
 
 Release `c79e919` compares the screened packed/warp FP32 128-thread FFN
