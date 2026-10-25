@@ -1,0 +1,287 @@
+use super::{
+    gpu_snapshot, protocol, start_server, ComparisonRun, GenerateResponse, LoadedModel, Pair,
+    ServerVariant, CONTEXT_TOKENS,
+};
+use anyhow::{ensure, Context, Result};
+use m40_llm::{cuda::CudaContext, gguf};
+use serde_json::json;
+use std::time::Instant;
+
+fn peak_host_rss_kib() -> Option<u64> {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()?
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("VmHWM:")?
+                .split_whitespace()
+                .next()?
+                .parse()
+                .ok()
+        })
+}
+
+impl ComparisonRun {
+    async fn load_prepared_server(&mut self) -> Result<()> {
+        let config = self
+            .args
+            .candidate_q8_config()?
+            .context("missing Q8 candidate config")?;
+        let before = CudaContext::total_device_bytes();
+        let started = Instant::now();
+        let gguf = gguf::load_gguf(&self.args.model)?;
+        let bytes = std::fs::read(&self.args.model)?;
+        let mut model = LoadedModel::from_gguf_with_q8_execution(gguf, bytes, -1, config)?;
+        ensure!(
+            model.cuda.current_device_props()?.device_id
+                == self
+                    .server
+                    .state
+                    .model
+                    .cuda
+                    .current_device_props()?
+                    .device_id,
+            "control and candidate must use the same GPU"
+        );
+        model.allocate_kv_cache_for_layers(CONTEXT_TOKENS)?;
+        let stats = model.q8_execution_stats();
+        let source_hash: String = stats
+            .tensors
+            .first()
+            .context("empty prepared cache")?
+            .key
+            .source
+            .model_sha256()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        ensure!(
+            source_hash == self.model_sha256,
+            "candidate source bytes differ from pinned control GGUF"
+        );
+        self.report.record(json!({
+            "kind": "q8_execution_setup", "is_timed": false,
+            "control_execution": self.server.state.model.q8_execution_stats(),
+            "candidate_execution": stats, "candidate_cold_load_elapsed_ms": started.elapsed().as_secs_f64() * 1000.0,
+            "tracked_device_payload_before_candidate_bytes": before,
+            "tracked_device_payload_after_candidate_bytes": CudaContext::total_device_bytes(),
+            "combined_process_peak_host_rss_kib": peak_host_rss_kib(),
+            "candidate_final_kv_bytes": model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
+            "gpu": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
+            "memory_scope": "tracked requested payload for both m40 models; GPU snapshot also includes idle Ollama; not measured peak VRAM",
+        }))?;
+        self.prepared_server = Some(start_server(model).await?);
+        Ok(())
+    }
+
+    async fn execution_smokes(&mut self) -> Result<bool> {
+        let mut dense_valid = 0;
+        let mut regressions = 0;
+        for (name, prompt, expected) in [
+            ("arithmetic", "What is 2+2? Answer with one digit.", "4"),
+            ("exact_ok", "Reply with exactly the word OK.", "OK"),
+            ("config_lookup", "Configuration note: the active value is M40_BATCH_LIMIT=37. What is M40_BATCH_LIMIT? Answer with the number only.", "37"),
+        ] {
+            let mut control_pass = false;
+            for variant in [ServerVariant::Control, ServerVariant::Prepared] {
+                let server = match variant {
+                    ServerVariant::Control => &self.server,
+                    ServerVariant::Prepared => self.prepared_server.as_ref().context("prepared server missing")?,
+                };
+                let response: GenerateResponse = self.client.post(&server.url)
+                    .json(&json!({"prompt":prompt,"prompt_format":"auto","max_tokens":16,"top_k":1,"seed":0,"include_metrics":true}))
+                    .send().await?.error_for_status()?.json().await?;
+                let passed = response.output.trim() == expected;
+                match variant {
+                    ServerVariant::Control => { control_pass = passed; dense_valid += usize::from(passed); }
+                    ServerVariant::Prepared => { regressions += usize::from(control_pass && !passed); }
+                }
+                self.report.record(json!({"kind":"q8_quality_smoke","is_timed":false,
+                    "case":name,"model_variant":variant.as_str(),"prompt":prompt,"expected":expected,
+                    "pass":passed,"output":response.output,"metrics":response.metrics,
+                    "dense_reference_passed":control_pass,
+                    "quality_conclusion":if control_pass {if passed {"pass"} else {"regression"}} else {"inconclusive"}}))?;
+            }
+        }
+        self.report.record(json!({"kind":"q8_quality_smoke_summary","dense_valid_cases":dense_valid,"regressions":regressions}))?;
+        Ok(dense_valid > 0 && regressions == 0)
+    }
+
+    async fn run_execution_pairs(
+        &mut self,
+        phase: &str,
+        start: usize,
+        end: usize,
+        expected_outputs: &(String, String),
+        pairs: &mut Vec<Pair>,
+    ) -> Result<()> {
+        for pair in start..end {
+            let (control, candidate) = if pair.is_multiple_of(2) {
+                let control = self
+                    .measure_m40_variant(phase, pair, ServerVariant::Control)
+                    .await?;
+                let candidate = self
+                    .measure_m40_variant(phase, pair, ServerVariant::Prepared)
+                    .await?;
+                (control, candidate)
+            } else {
+                let candidate = self
+                    .measure_m40_variant(phase, pair, ServerVariant::Prepared)
+                    .await?;
+                let control = self
+                    .measure_m40_variant(phase, pair, ServerVariant::Control)
+                    .await?;
+                (control, candidate)
+            };
+            ensure!(
+                control.is_fixed_workload && candidate.is_fixed_workload,
+                "invalid Q8 pair {pair}; raw rows retained, no fixed-workload claim permitted"
+            );
+            ensure!(
+                control.output == expected_outputs.0 && candidate.output == expected_outputs.1,
+                "Q8 comparison output changed within a model/configuration; raw rows retained"
+            );
+            eprintln!("[Q8 {phase} pair {pair}] native={:.3} prepared={:.3} HTTP E2E tok/s, same_output={}", control.tps, candidate.tps, control.output == candidate.output);
+            pairs.push(Pair {
+                control_tps: control.tps,
+                candidate_tps: candidate.tps,
+            });
+        }
+        Ok(())
+    }
+
+    fn record_execution_summary(
+        &mut self,
+        phase: &str,
+        comparison: &protocol::Comparison,
+    ) -> Result<()> {
+        let mut summary = serde_json::to_value(comparison)?;
+        summary
+            .as_object_mut()
+            .context("comparison object")?
+            .remove("reaches_original_target");
+        self.report.record(
+            json!({"kind":"q8_execution_summary","phase":phase,"comparison":summary,
+            "is_ollama_comparison":false,"requires_quality_parity_for_promotion":true}),
+        )
+    }
+
+    pub(super) async fn compare_q8_execution(&mut self) -> Result<()> {
+        self.load_prepared_server().await?;
+        let smokes_pass = self.execution_smokes().await?;
+        let control = self
+            .measure_m40_variant("q8-warmup", 0, ServerVariant::Control)
+            .await?;
+        let candidate = self
+            .measure_m40_variant("q8-warmup", 0, ServerVariant::Prepared)
+            .await?;
+        ensure!(
+            control.is_fixed_workload && candidate.is_fixed_workload,
+            "invalid Q8 warmup; raw rows retained"
+        );
+        let outputs = (control.output, candidate.output);
+        self.report
+            .record(json!({"kind":"q8_resident_memory","is_timed":false,
+            "tracked_device_payload_after_warmup_bytes":CudaContext::total_device_bytes(),
+            "combined_process_peak_host_rss_kib":peak_host_rss_kib(),
+            "gpu":gpu_snapshot(self.args.ollama_pid,&self.gpu_uuid)?}))?;
+        let mut pairs = Vec::new();
+        self.run_execution_pairs("screen", 0, 5, &outputs, &mut pairs)
+            .await?;
+        let mut comparison = protocol::compare_pairs(&pairs)?;
+        self.record_execution_summary("screen5", &comparison)?;
+        let mut next = protocol::next_trial_count(&comparison, false)?;
+        if next == Some(10) {
+            self.run_execution_pairs("screen", 5, 10, &outputs, &mut pairs)
+                .await?;
+            comparison = protocol::compare_pairs(&pairs)?;
+            self.record_execution_summary("screen10", &comparison)?;
+            next = protocol::next_trial_count(&comparison, false)?;
+        }
+        if next == Some(20) {
+            let mut confirmation = Vec::new();
+            self.run_execution_pairs("confirmation", 0, 20, &outputs, &mut confirmation)
+                .await?;
+            comparison = protocol::compare_pairs(&confirmation)?;
+            protocol::next_trial_count(&comparison, true)?;
+            self.record_execution_summary("confirmation20", &comparison)?;
+        }
+        let control_ids = self
+            .capture_m40_trace_variant(&outputs.0, ServerVariant::Control)
+            .await?;
+        let candidate_ids = self
+            .capture_m40_trace_variant(&outputs.1, ServerVariant::Prepared)
+            .await?;
+        let is_equal = control_ids == candidate_ids;
+        self.report.record(json!({"kind":"q8_token_comparison","is_equal":is_equal,
+            "first_different_generated_step":control_ids.iter().zip(&candidate_ids).position(|(a,b)|a!=b),
+            "different_id_count":control_ids.iter().zip(&candidate_ids).filter(|(a,b)|a!=b).count(),
+            "control_generated_tokens":control_ids.len(),"candidate_generated_tokens":candidate_ids.len()}))?;
+        self.report.record(json!({"kind":"q8_promotion_decision",
+            "passes_timing_gate":comparison.passes_promotion_gate,
+            "passes_smokes_without_dense_valid_regression":smokes_pass,
+            "actual_generated_ids_equal":is_equal,
+            "qualifies_as_benchmark_candidate":comparison.passes_promotion_gate && smokes_pass && is_equal,
+            "changes_runtime_defaults":false,"establishes_ollama_target":false}))?;
+        eprintln!("Q8 comparison: native={:.3}, prepared={:.3} HTTP E2E tok/s; gain={:.3}%, timing_gate={}, token_ids_equal={}",
+            comparison.control.median, comparison.candidate.median, comparison.gain * 100.0,
+            comparison.passes_promotion_gate, is_equal);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Args;
+    use super::*;
+    use clap::Parser;
+    use m40_llm::infer::execution_weights::{Q8ExecutionFamilies, Q8ExecutionMode};
+
+    /// Parse a complete CLI without touching the model, GPU, or filesystem.
+    fn parse_args(extra: &[&str]) -> std::result::Result<Args, clap::Error> {
+        let mut args = vec![
+            "compare_ollama",
+            "--model",
+            "model.gguf",
+            "--ollama-pid",
+            "1",
+            "--ollama-log",
+            "runner.log",
+            "--output",
+            "result.jsonl",
+        ];
+        args.extend_from_slice(extra);
+        Args::try_parse_from(args)
+    }
+
+    /// Explicit candidate settings must survive parsing without changing the
+    /// ordinary baseline mode or silently accepting incompatible comparisons.
+    #[test]
+    fn test_q8_cli_selects_an_explicit_immutable_candidate() -> Result<()> {
+        assert!(parse_args(&[])?.candidate_q8_config()?.is_none());
+        let args = parse_args(&[
+            "--compare-q8-execution",
+            "split",
+            "--q8-families",
+            "qkv,down,vocabulary",
+            "--q8-budget-mb",
+            "8",
+        ])?;
+        let config = args.candidate_q8_config()?.unwrap();
+        assert_eq!(config.mode, Q8ExecutionMode::Split);
+        assert_eq!(
+            config.families,
+            Q8ExecutionFamilies::parse("qkv,down,vocabulary")?
+        );
+        assert_eq!(config.budget_bytes, 8 * 1024 * 1024);
+        assert!(parse_args(&["--compare-q8-execution", "off"]).is_err());
+        assert!(parse_args(&["--q8-families", "down"]).is_err());
+        assert!(parse_args(&["--compare-q8-execution", "split", "--q8-families", "gate"]).is_err());
+        assert!(parse_args(&[
+            "--compare-q8-execution",
+            "split",
+            "--compare-head128-attention"
+        ])
+        .is_err());
+        Ok(())
+    }
+}

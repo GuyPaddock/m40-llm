@@ -79,6 +79,11 @@ omits excluded allocations entirely. M40 tests verify per-family native/prepared
 dispatch, retained one-launch native fused MLP, greedy parity, exact memory
 accounting, and coexistence of differently configured model instances. Defaults
 remain off for preparation; the release comparison is next.
+The HTTP runner now accepts `--compare-q8-execution split|mixed` and an explicit
+family subset. It loads an independent native control, runs serial paired
+requests, and records setup/memory, quality smokes, stable output, actual IDs,
+and request timestamps. The comparison follows the existing bounded confidence
+protocol and does not infer the Ollama target from a native-control ratio.
 
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup

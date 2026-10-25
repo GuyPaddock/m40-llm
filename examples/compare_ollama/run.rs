@@ -14,7 +14,10 @@ use m40_llm::{
     generate::{generate_text, GenerateOptions, PromptFormat},
     generation_metrics::GenerationMetrics,
     gguf,
-    infer::LoadedModel,
+    infer::{
+        execution_weights::{Q8ExecutionConfig, Q8ExecutionFamilies},
+        LoadedModel,
+    },
     kv_compression::KvCompressionConfig,
     server::{app_router, AppState, GenerateResponse},
     tokenizer::Tokenizer,
@@ -23,6 +26,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::protocol::{self, CacheEvidence, Pair, CONTEXT_TOKENS, MAX_TOKENS};
+
+#[path = "q8.rs"]
+mod q8;
 
 #[derive(Parser)]
 #[command(about = "Controlled warm HTTP Qwen Q8_0 comparison; requires an isolated Ollama server")]
@@ -49,6 +55,44 @@ struct Args {
         conflicts_with = "should_compare_stage_profile"
     )]
     should_compare_head128: bool,
+    /// Compare native/prepared m40 models; Ollama supplies only an untimed oracle.
+    #[arg(long = "compare-q8-execution", value_parser = ["split", "mixed"],
+        conflicts_with_all = ["should_compare_stage_profile", "should_compare_head128"])]
+    q8_execution_mode: Option<String>,
+    #[arg(long, default_value = "all", value_parser = Q8ExecutionFamilies::parse,
+        requires = "q8_execution_mode")]
+    q8_families: Q8ExecutionFamilies,
+    #[arg(long, default_value_t = 6144, requires = "q8_execution_mode")]
+    q8_budget_mb: usize,
+}
+
+impl Args {
+    fn candidate_q8_config(&self) -> Result<Option<Q8ExecutionConfig>> {
+        self.q8_execution_mode
+            .as_deref()
+            .map(|mode| {
+                let mut config =
+                    Q8ExecutionConfig::parse(mode, Some(&self.q8_budget_mb.to_string()), None)?;
+                config.families = self.q8_families;
+                Ok(config)
+            })
+            .transpose()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ServerVariant {
+    Control,
+    Prepared,
+}
+
+impl ServerVariant {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Control => "control",
+            Self::Prepared => "prepared",
+        }
+    }
 }
 
 struct AttentionSwitch {
@@ -161,8 +205,10 @@ struct ComparisonRun {
     args: Args,
     client: reqwest::Client,
     server: HttpServer,
+    prepared_server: Option<HttpServer>,
     prompt: String,
     prompt_ids: Vec<u32>,
+    model_sha256: String,
     gpu_uuid: String,
     runner_url: String,
     report: Report,
@@ -354,13 +400,31 @@ async fn tokenize_with_oracle(
 
 impl ComparisonRun {
     async fn measure_m40(&mut self, phase: &str, pair: usize) -> Result<Measurement> {
+        self.measure_m40_variant(phase, pair, ServerVariant::Control)
+            .await
+    }
+
+    async fn measure_m40_variant(
+        &mut self,
+        phase: &str,
+        pair: usize,
+        variant: ServerVariant,
+    ) -> Result<Measurement> {
+        let server = match variant {
+            ServerVariant::Control => &self.server,
+            ServerVariant::Prepared => self
+                .prepared_server
+                .as_ref()
+                .context("prepared server not loaded")?,
+        };
         let is_stage_profile_enabled =
             std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1");
         let before = gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?;
+        let started_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         let started_at = Instant::now();
         let response = self
             .client
-            .post(&self.server.url)
+            .post(&server.url)
             .json(&json!({
                 "prompt": self.prompt, "prompt_format": "raw", "max_tokens": MAX_TOKENS,
                 "top_k": 1, "seed": 0, "include_metrics": true,
@@ -370,6 +434,7 @@ impl ComparisonRun {
         let status = response.status();
         let bytes = response.bytes().await?;
         let wall_ms = started_at.elapsed().as_secs_f64() * 1000.0;
+        let finished_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         ensure!(
             status.is_success(),
             "m40-llm {status}: {}",
@@ -390,19 +455,24 @@ impl ComparisonRun {
             self.prompt_ids.len(),
         );
         let tps = metrics.generated_tokens as f64 * 1000.0 / wall_ms;
+        let execution = server.state.model.q8_execution_stats();
         self.report.record(json!({
             "kind": "trial", "runtime": "m40-llm", "phase": phase, "pair": pair,
+            "model_variant": variant.as_str(),
+            "client_started_unix_ms": started_unix_ms, "client_finished_unix_ms": finished_unix_ms,
+            "q8_execution_mode": execution.mode, "q8_execution_families": execution.families,
+            "q8_prepared_bytes": execution.resident_bytes,
             "client_elapsed_ms": wall_ms, "e2e_tps": tps, "metrics": metrics,
             "stage_profile_enabled": is_stage_profile_enabled,
             "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
             "head128_partitions": std::env::var("M40LLM_ATTN_HEAD128_PARTITIONS").ok(),
             "head128_threads": std::env::var("M40LLM_ATTN_HEAD128_THREADS").ok(),
-            "head128_workspace_bytes": self.server.state.model.kv_cache.as_ref().map(|kv| kv.head128_attention_workspace_bytes()),
+            "head128_workspace_bytes": server.state.model.kv_cache.as_ref().map(|kv| kv.head128_attention_workspace_bytes()),
             "is_fixed_workload": validation.is_ok(), "invalid_reason": validation.as_ref().err().map(|e| e.to_string()),
             "cache": {"reused_prompt_tokens": 0, "evaluated_prompt_tokens": metrics.prompt_tokens, "reset": "generate_text reset_kv_cache=true"},
             "gpu_before": before, "gpu_after": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
             "output": response.output, "output_sha256": sha256_bytes(response.output.as_bytes())?,
-            "final_kv_bytes": self.server.state.model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
+            "final_kv_bytes": server.state.model.kv_cache.as_ref().map(|kv| kv.actual_bytes()),
         }))?;
         Ok(Measurement {
             tps,
@@ -487,9 +557,25 @@ impl ComparisonRun {
     }
 
     async fn capture_m40_trace(&mut self, expected_output: &str) -> Result<Vec<u32>> {
-        let _generation_guard = self.server.state.generation_lock.lock().await;
+        self.capture_m40_trace_variant(expected_output, ServerVariant::Control)
+            .await
+    }
+
+    async fn capture_m40_trace_variant(
+        &mut self,
+        expected_output: &str,
+        variant: ServerVariant,
+    ) -> Result<Vec<u32>> {
+        let server = match variant {
+            ServerVariant::Control => &self.server,
+            ServerVariant::Prepared => self
+                .prepared_server
+                .as_ref()
+                .context("prepared server not loaded")?,
+        };
+        let _generation_guard = server.state.generation_lock.lock().await;
         let generated = generate_text(
-            &self.server.state.model,
+            &server.state.model,
             GenerateOptions {
                 prompt: self.prompt.clone(),
                 prompt_format: PromptFormat::Raw,
@@ -504,8 +590,21 @@ impl ComparisonRun {
             generated.output == expected_output,
             "untimed m40 continuation differs from measured configuration"
         );
+        ensure!(
+            generated.prompt_token_len <= generated.token_ids.len(),
+            "invalid token trace bounds"
+        );
+        protocol::validate_prompt_ids(
+            &self.prompt_ids,
+            &generated.token_ids[..generated.prompt_token_len],
+        )?;
+        ensure!(
+            generated.token_ids.len() - generated.prompt_token_len == MAX_TOKENS,
+            "untimed m40 trace omitted fixed-workload generated IDs"
+        );
         self.report.record(json!({
             "kind": "token_trace", "runtime": "m40-llm", "is_timed": false,
+            "model_variant": variant.as_str(),
             "prompt_token_ids": &generated.token_ids[..generated.prompt_token_len],
             "generated_token_ids": &generated.token_ids[generated.prompt_token_len..],
             "matches_measured_output": true, "output": generated.output,
@@ -747,6 +846,7 @@ pub async fn compare() -> Result<()> {
         "timing comparison requires a release Rust build"
     );
     let args = Args::parse();
+    let candidate_q8_config = args.candidate_q8_config()?;
     ensure!(
         Path::new(&format!("/proc/{}", args.ollama_pid)).exists(),
         "Ollama PID is not live"
@@ -859,7 +959,13 @@ pub async fn compare() -> Result<()> {
     protocol::validate_replacement_ids(&prompt_ids, &replacement_ids)?;
     let load_start = Instant::now();
     let bytes = std::fs::read(&args.model)?;
-    let mut model = LoadedModel::from_gguf(gguf_model, bytes, -1)?;
+    let control_execution = if candidate_q8_config.is_some() {
+        Q8ExecutionConfig::disabled()
+    } else {
+        Q8ExecutionConfig::from_env()?
+    };
+    let mut model =
+        LoadedModel::from_gguf_with_q8_execution(gguf_model, bytes, -1, control_execution)?;
     let props = model.cuda.current_device_props()?;
     ensure!(
         props.major == 5 && props.minor == 2,
@@ -898,7 +1004,8 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
-        "comparison_kind": if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "comparison_kind": if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
     }))?;
@@ -940,12 +1047,17 @@ pub async fn compare() -> Result<()> {
         args,
         client,
         server,
+        prepared_server: None,
         prompt,
         prompt_ids,
+        model_sha256,
         gpu_uuid,
         runner_url,
         report,
     };
+    if run.args.q8_execution_mode.is_some() {
+        return run.compare_q8_execution().await;
+    }
     if run.args.should_compare_stage_profile {
         return run.compare_stage_profile().await;
     }

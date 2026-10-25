@@ -205,3 +205,51 @@ identity. Numerical parity and model behavior must be checked separately.
 The summary deliberately omits the 1.30x-Ollama target calculation, since this
 mode's control is another m40-llm kernel. It cannot by itself establish a new
 Ollama comparison or completion of the unchanged-model goal.
+
+## Compare Prepared Q8 Families
+
+`--compare-q8-execution split` compares two separately loaded m40-llm models.
+The control explicitly disables preparation; the candidate uses the requested
+mode and immutable family subset. No execution flags change between requests.
+Ollama provides only the untimed same-file/tokenizer/backend oracle in this
+mode. It performs no inference during the paired m40-llm measurements.
+
+Reuse the complete Q8 backend assignments above and the selected C07 attention
+settings: `M40LLM_ATTN_HEAD128_KERNEL=parallel`,
+`M40LLM_ATTN_HEAD128_PARTITIONS=8`, `M40LLM_ATTN_HEAD128_THREADS=256`.
+Keep profiling/logging diagnostics disabled and rebuild the release example.
+
+```bash
+# Reuse every backend assignment from the full comparison command above.
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-q8-execution split \
+  --q8-families qkv,output,down,vocabulary \
+  --output /tmp/q8-native-mlp-http.jsonl
+```
+
+`--q8-families all` includes prepared fused MLP; omitting `gate-up` preserves
+native fused MLP. `--q8-budget-mb` limits extra prepared bytes and defaults to
+6144 MiB. `mixed` additionally prepares the previously measured multi-row tiled
+Q/output/down layouts; it is not a new launch-geometry search. CLI candidate
+settings are explicit and do not use ambient preparation env vars.
+
+Arithmetic, exact-OK, and config-lookup smokes precede warmup. Dense-failed
+smokes are inconclusive, not prepared-weight failures. Fixed-workload warmups
+and every timed request must generate 512 IDs with length stops. Each model's
+output must remain stable within the run. Alternating native/prepared pairs
+reuse the existing bootstrap, variation, and borderline-confirmation protocol.
+Actual untimed IDs must reproduce each model's measured output; timing alone
+cannot promote a candidate. The promotion record also requires ID equality
+and no regression on dense-valid smokes, and never changes runtime defaults.
+
+JSONL records identify each model and its families, absolute request intervals,
+cold loading/repacking, source plus extra prepared payload, resident KV, and
+combined tracked device payload. Host peak RSS covers the whole benchmark
+process, including both models; boundary GPU snapshots include idle Ollama too.
+These are not measured peak VRAM or DRAM-traffic counters. Retained setup
+payload estimates remain separately labeled in the model cache statistics.
+Do not interpret this mode's native-control ratio as a new Ollama comparison
+or as satisfying the two original throughput targets.
