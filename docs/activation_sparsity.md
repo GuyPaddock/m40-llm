@@ -68,3 +68,34 @@ guard output tails, reject invalid calls without launches, and compare every
 output against native Q8 with the same zeroed input. Independent FP64 samples
 cover real `K=11008,N=2048` down dimensions. No speed or model-quality conclusion
 follows from these numerical tests.
+
+## Release Screen
+
+The existing execution-weight benchmark has an explicit `--sparse-inputs`
+mode. It requires release, `--layout input-tiled`, `--rows 1` and explicitly
+named FFN down tensors. Other flags retain their previous lossless meaning.
+All source bytes, hashing, preparation, isolation checks and JSONL IO are
+shared with the existing runner, not another model-loading implementation.
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo build --release --features cuda --example q8_execution_bench
+target/release/examples/q8_execution_bench --sparse-inputs \
+  --layout input-tiled --rows 1 --tensors blk.0.ffn_down.weight \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --trials 5 --iterations 100 --output /tmp/sparse-input-screen.jsonl
+```
+
+Each of twenty cells has five alternating native/candidate pairs after warmup.
+Native consumes the same CPU-thresholded input as the selected-input reference;
+the candidate includes GPU selection and projection. Selection-only and
+projection-only timings are separate diagnostics, not additive E2E predictions.
+The deterministic synthetic inputs screen the layout prerequisite; their fitted
+quantile is not per-layer model calibration or a held-out quality result.
+Index/value equality, full native output parity and FP64 samples are checked
+before timing. Preparation cost, source plus duplicate tiled weights, workspace
+capacity and achieved sparsity are explicit. Source-level requested load bytes
+are not DRAM transactions; repeated scale/index loads may hit caches. Tracked
+device payloads are released before the terminal completion record; primary
+CUDA context overhead can remain until process exit.

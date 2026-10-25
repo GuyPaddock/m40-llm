@@ -19,6 +19,9 @@ use m40_llm::{
 };
 use serde_json::{json, Value};
 
+#[path = "sparse_inputs.rs"]
+mod sparse_inputs;
+
 #[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum LayoutArg {
@@ -66,6 +69,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Screen sparse completed-SwiGLU inputs, not a lossless layout change.
+    #[arg(long)]
+    sparse_inputs: bool,
     #[arg(long, value_enum, default_value = "separate")]
     layout: LayoutArg,
     #[arg(long)]
@@ -340,7 +346,9 @@ fn run_tensor(
     let start = Instant::now();
     let original_device = DeviceQ8ExecutionWeight::upload(ctx, &original)?;
     let original_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
-    for layout in args.layout.layouts() {
+    for layout in args.layout.layouts().into_iter().filter(|layout| {
+        !args.sparse_inputs || matches!(layout, Q8ExecutionLayout::InputTiled { columns: 8 | 16 })
+    }) {
         let start = Instant::now();
         let execution = match layout {
             Q8ExecutionLayout::SeparateScalesValues => {
@@ -394,7 +402,11 @@ fn run_tensor(
                     input.len() * 4,
                 )?;
             }
-            measure_rows(&projection, file, args, &bytes, &input, tensor)?;
+            if args.sparse_inputs {
+                sparse_inputs::measure(&projection, file, args, &bytes, &input, tensor)?;
+            } else {
+                measure_rows(&projection, file, args, &bytes, &input, tensor)?;
+            }
         }
     }
     Ok(())
@@ -409,6 +421,14 @@ pub fn benchmark() -> Result<()> {
             && args.rows.iter().all(|&rows| (1..=64).contains(&rows)),
         "require >=5 trials, >0 iterations and rows in 1..=64"
     );
+    if args.sparse_inputs {
+        ensure!(
+            !cfg!(debug_assertions) && matches!(args.layout, LayoutArg::InputTiled)
+                && args.rows == [1] && !args.tensors.is_empty()
+                && args.tensors.iter().all(|name| name.ends_with(".ffn_down.weight")),
+            "sparse-input screen requires release, --layout input-tiled, --rows 1 and explicit FFN down tensors"
+        );
+    }
     let mut output = OpenOptions::new()
         .create_new(true)
         .write(true)
@@ -450,10 +470,15 @@ pub fn benchmark() -> Result<()> {
         "build_profile":if cfg!(debug_assertions) {"dev"} else {"release"},
         "cuda_flags":["-O3","sm_52","compute_52"],"nvcc":command_output("nvcc", &["--version"])?,
         "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,"execution_layout":args.layout,
-        "tiled_access":"vector",
+        "tiled_access":"vector","sparse_inputs":args.sparse_inputs,
+        "rustc":command_output("rustc", &["--version"])?,
+        "host_compiler":command_output("g++", &["--version"])?,
+        "environment":std::env::vars().filter(|(key,_)| key.starts_with("M40LLM_") || key.starts_with("CUDA_")).collect::<std::collections::BTreeMap<_,_>>(),
         "control":"GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
-        "timing":"CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
-        "interpretation":"isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic"}),
+        "timing":"CUDA events per repeated operation, preparation excluded; alternating serial baseline/candidate pairs",
+        "interpretation":if args.sparse_inputs {
+            "synthetic activation-sparsity prerequisite screen; matched-zero native baseline, selection plus projection and separate stages; not calibrated model quality, E2E inference or measured DRAM traffic"
+        } else {"isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic"}}),
     )?;
     let model = load_gguf(&args.model)?;
     let mut source_file = File::open(&args.model)?;
@@ -471,6 +496,16 @@ pub fn benchmark() -> Result<()> {
             tensor,
             digest,
             &args,
+        )?;
+    }
+    drop(ctx);
+    if args.sparse_inputs {
+        write_record(
+            &mut output,
+            json!({"kind":"sparse_input_benchmark_complete",
+            "tensors":args.tensors,"tracked_device_bytes_after_release":CudaContext::total_device_bytes(),
+            "release_scope":"tracked device payloads; primary CUDA context may remain until process exit",
+            "gpu_after_release":inspect_gpu()?}),
         )?;
     }
     Ok(())

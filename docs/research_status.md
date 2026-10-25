@@ -74,6 +74,14 @@ pass. The next commit adds the release screen including selection cost; device
 speed, per-layer calibration, model quality and integration are not established.
 Runtime defaults stay unchanged.
 
+The standalone consumer is committed in `9b5148c`; cuBLAS-off sparse/tiled
+parity and existing attention/projection/MLP checks also pass. The shared
+execution-weight benchmark now has a bounded sparse-input mode. Its real
+Qwen layer-0 down preflight passes full matched-zero output, retained indices/
+values and independent FP64 samples across all twenty cells. The one-iteration
+preflight is correctness evidence only, not pooled with the release timing
+screen that follows the benchmark commit.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
