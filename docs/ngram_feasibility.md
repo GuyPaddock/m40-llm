@@ -4,6 +4,11 @@ C11A tests prompt lookup before implementing speculative verification. It does
 not enable a drafter in generation or add a KV rollback/verifier API. The
 selected C11 native-Q8/split8/256 configuration and runtime defaults are unchanged.
 
+The [2026-10-25 measured acceptance checkpoint](experiments/2026-10-25-ngram-feasibility.md)
+fails the formal gate: the best optimistic browser throughput gain is 4.949%,
+not the required 10%. C12-C17 are postponed. This is a modeled cost screen,
+not a measured GPU speedup or universal limit on speculation.
+
 The concept is related to [llama.cpp prompt lookup](https://github.com/ggml-org/llama.cpp/blob/master/examples/lookup/README.md):
 find a matching token suffix and propose its following tokens. Implementation
 here independently follows the approved plan; no upstream code is copied.

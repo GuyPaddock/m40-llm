@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Offline N-Gram Feasibility Gate
+
+C11A's formal screen fails. The best **hypothetical** browser HTTP throughput
+gain is **4.949%**, below the fixed 10% threshold even with a 1.0x verifier and
+zero drafting/commit/rollback overhead. This is not a measured inference speedup.
+
+| Draft limit | Eligible / visited rounds | Accepted draft tokens | Optimistic E2E gain |
+| --- | --- | ---: | ---: |
+| 2 | 47 / 489 | 23 | +4.185% |
+| 4 | 45 / 487 | 26 | +4.566% |
+| 8 | 43 / 485 | 28 | +4.949% |
+| 16 | 43 / 485 | 28 | +4.949% |
+
+All 24 browser/regression studies replay exact reference IDs; future tokens
+never enter draft history. Non-CUDA release confirmation agrees with the
+CUDA-feature CPU path. The five frozen real-model regression traces are stable;
+arithmetic/OK/config return `4`/`OK`/`37`. Candidate8 rejects 33/43 proposals
+immediately, and candidate16 accepts no more tokens.
+
+Postpone C12-C17, record C18, then proceed to C19's separately evaluated model
+research. Keep measured native-Q8/C07 results and all defaults unchanged; do not
+relax the gate or tune another lookup policy here. See the [full study and raw
+artifacts](experiments/2026-10-25-ngram-feasibility.md) for position versus visited
+statistics, rejection histograms, CPU drafting observations, assumptions, and
+1.0/1.5/2.0/4.0x verifier-cost sensitivity.
+
 ## 2026-10-25: Exact-Kernel Round Checkpoint
 
 C11's fresh five-pair release HTTP confirmation measures **31.850 tok/s**

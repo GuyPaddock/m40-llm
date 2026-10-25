@@ -13,18 +13,38 @@ experiments, the offline n-gram feasibility gate, conditional speculation, and
 separately evaluated model-changing research. It is not replaced by the
 [legacy task roadmap](archive/legacy-task-roadmap.md).
 
-## Exact Kernel Checkpoint: 2026-10-25
+## N-Gram Feasibility Checkpoint: 2026-10-25
 
-C11A is now in progress, in dependency order:
+C11A is complete. The selected actual C11 browser trace gives at most 4.949%
+optimistic estimated HTTP throughput improvement, below the fixed 10% gate.
+Limits8/16 both replay in 485 visited rounds, with 28 accepted draft tokens;
+33/43 eligible proposals reject immediately. No GPU verifier or measured
+speedup is claimed. See the [study and raw artifacts](experiments/2026-10-25-ngram-feasibility.md).
 
-1. `feat(decode): add bounded ngram lookup`: history-only borrowed drafts,
+Actual fixed regression captures are stable across two runs; the canonical
+smokes return `4`, `OK`, `37`. CPU-only release reproduces acceptance/replay/cost
+results from the CUDA-feature CPU path. Lookup/study tests, non-CUDA
+warning-as-error tests, both Clippy lanes, and formatting pass. GPU allocation
+returns to zero after capture. Runtime/KV defaults and the measured engine
+configuration are unchanged.
+
+Next is **C18**: record the unchanged-model phase checkpoint, explicitly
+postponing C12-C17 under the negative gate. Then begin **C19** calibration and
+held-out evaluation for separately labeled model-changing research. Do not
+build a verifier or reopen layout/lookup tuning to force the screen to pass.
+
+C11A was split into dependency-ordered commits:
+
+1. `fe392cd`, `feat(decode): add bounded ngram lookup`: history-only borrowed drafts,
    longest/recency matching, stop/budget bounds, and CPU behavioral tests.
-2. `test(bench): study ngram acceptance offline`: position/round replay,
+2. `739c195`, `test(bench): study ngram acceptance offline`: position/round replay,
    actual-trace validation and regression capture, hypothetical cost sensitivity,
    and the formal screening gate. Depends on the lookup and C11 artifacts.
 3. `docs(perf): record ngram feasibility decision`: release CPU analysis and
    raw results, with proceed/postpone status before conditional verifier work.
    Depends on the tested study tool and selected actual traces.
+
+## Exact Kernel Checkpoint: 2026-10-25
 
 C01-C11 are complete, including conditional C10A evaluation and the preserved
 failure removals. The selected opt-in benchmark remains native Q8 plus C07
@@ -45,11 +65,9 @@ paths stay opt-in, with no qualified HTTP win. CUDA/cuBLAS-on/off, non-CUDA
 warning-as-error, Clippy, and formatting checks pass. Benchmark processes are
 stopped; final GPU allocation is zero.
 
-Next is **C11A**, the formal offline history-only n-gram acceptance study on
-the selected actual trace and fixed regression prompts. Its >=10% optimistic
-browser E2E screening gate decides whether C12-C17 are justified. If negative,
-record C18 and proceed to C19; do not reopen layout tuning or build a verifier
-before the feasibility gate.
+This selected trace is the source for the completed C11A study above. Its
+negative >=10% gate postpones C12-C17; C18/C19 follow without another layout
+tuning round.
 
 ## Prepared Q8 HTTP History: 2026-10-25
 
@@ -104,7 +122,7 @@ isolated gains as qualified generation speedups.
    `docs(perf): record exact Qwen kernel results`: rerun the selected native
    configuration through the controlled release HTTP comparison after cleanup
    and reconcile all C07-C10A keep/remove decisions. Depends on both removals.
-4. Next, `test(bench): study ngram acceptance offline`: deterministic history-only
+4. Completed `739c195`, `test(bench): study ngram acceptance offline`: deterministic history-only
    lookup and simulation over the selected configuration's actual traces, with
    cost sensitivity and the formal proceed/postpone gate. Depends on C11.
 
