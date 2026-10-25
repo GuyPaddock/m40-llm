@@ -691,6 +691,19 @@ mod ffi {
             seq_len: u32,
             d_out_f32: *mut c_void,
         ) -> i32;
+        pub fn m40llm_attention_head128_parallel_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            partitions: u32,
+            threads: u32,
+            d_partials: *mut c_void,
+            partial_bytes: usize,
+            d_out_f32: *mut c_void,
+        ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_async(
             ctx: *mut M40llmCudaContext,
             kv: *const M40llmKVCache,
@@ -998,6 +1011,11 @@ fn record_sync_kernel(op: &'static str) {
 fn record_async_kernel(op: &'static str) {
     crate::profile::record_launch(op);
 }
+
+#[cfg(feature = "cuda")]
+mod dense_attention;
+#[cfg(feature = "cuda")]
+pub use dense_attention::{Head128AttentionConfig, Head128AttentionWorkspace};
 
 #[cfg(feature = "cuda")]
 fn record_sync_gemm(op: &'static str) {
@@ -4793,6 +4811,8 @@ struct KVCacheInner {
     dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
     raw: NonNull<ffi::M40llmKVCache>,
+    #[cfg(feature = "cuda")]
+    head128_attention_workspace: Mutex<Option<Head128AttentionWorkspace>>,
     #[cfg(not(feature = "cuda"))]
     k: Mutex<Vec<half::f16>>, // length = max_seq_len * max_batch_size * elems_per_token
     #[cfg(not(feature = "cuda"))]
@@ -4849,6 +4869,7 @@ impl KVCache {
                         * std::mem::size_of::<half::f16>()
                         * 2,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
+                    head128_attention_workspace: Mutex::new(None),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
                     #[cfg(not(feature = "cuda"))]
@@ -5058,6 +5079,7 @@ impl KVCache {
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
+                    head128_attention_workspace: Mutex::new(None),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
                     #[cfg(not(feature = "cuda"))]
@@ -5522,6 +5544,10 @@ impl KVCache {
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        if let Some(config) = Head128AttentionConfig::from_env()? {
+            return self
+                .enqueue_head128_cached(ctx, seq_id, d_q_f32, q_heads, seq_len, d_out_f32, config);
+        }
         let diag = Q8DecodeEventDiag::start_dynamic(
             ctx,
             format!("attention_last_token_f32_gqa seq_len={seq_len}"),

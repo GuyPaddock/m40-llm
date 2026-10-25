@@ -44,6 +44,63 @@ re-tokenizing sanitized output.
 
 See [`device_selection.md`](device_selection.md) for selection behavior.
 
+## Exact Head128 Attention Experiment
+
+For serialized dense-KV decode, opt in with:
+
+```bash
+M40LLM_ATTN_HEAD128_KERNEL=parallel \
+M40LLM_ATTN_HEAD128_PARTITIONS=8 \
+M40LLM_ATTN_HEAD128_THREADS=256 \
+  target/release/m40-llm generate /path/to/qwen.gguf "Your prompt" \
+  --kv-compress-mode off --top-k 1 --max-tokens 128
+```
+
+The kernel retains every causally valid KV position, FP16 K/V, FP32 dot/value
+accumulation, GQA head mapping, and existing absolute-position RoPE. It does
+not enable a recent window or compressed attention. `parallel` is opt-in;
+the prior `fast` kernel remains the runtime reference when the setting is unset.
+It does not replace packed scheduler attention or device-parameter graph paths.
+
+Partitions may be 1/2/4/8; threads may be 128/256. Defaults for an explicit
+`parallel` request are one partition and 128 threads. Unsupported launch choices,
+head dimensions, or lengths beyond 8192 fail when this dense path is invoked.
+The Rust explicit API is `KVCache::attention_head128_parallel_async`, and an
+optional `Head128AttentionWorkspace` owns the split-result buffer. The ordinary
+attention API caches one tracked RAII workspace per KV cache and reuses it on
+the same decode stream across layers/requests. It performs no per-call allocation
+after capacity is established. One partition needs no partial buffer or merge.
+
+At 16 query heads, split capacity is `16 * 8 * 130 * sizeof(f32) = 66,560`
+bytes. Each partition stores an FP32 max, exponential sum, and 128 weighted V
+components. The merge rescales partial sums around the global max. Workspace
+bytes are separate from KV payload bytes and exposed by
+`head128_attention_workspace_bytes()`; benchmark reports retain both.
+
+Run correctness and the separate release-only microbenchmark with hardware
+access. The optional real-model smoke never searches cache directories:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_HEAD128_GENERATION_MODEL=/path/to/Qwen2.5-3B-Q8_0.gguf \
+  cargo test --features cuda --test head128_attention_parallel \
+  -- --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_HEAD128_BENCH_REPORT=/tmp/head128-micro.jsonl \
+  cargo test --release --features cuda --test head128_attention_parallel \
+  benchmark_head128_geometries -- --ignored --nocapture --test-threads=1
+```
+
+The microbenchmark covers eight launch configurations, alternates order, and
+includes partition/merge launches and completion. It reuses hot KV without
+model-weight streaming, so it is not an E2E speed claim. Its fixture keeps the
+same maximum-capacity scratch resident for every row, including the reference;
+`active_partial_bytes` distinguishes used scratch from resident capacity.
+Use the paired HTTP mode in [controlled_benchmark.md](controlled_benchmark.md)
+before selecting a preferred benchmark configuration.
+
 ## Allocation and Copy Logs
 
 - `M40LLM_ALLOC_LOG=1`: print `device_malloc` and `device_free` traces.

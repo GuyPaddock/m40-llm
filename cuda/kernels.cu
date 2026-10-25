@@ -2267,6 +2267,136 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    // Warps visit independent context positions. Shared reductions occur once
+    // per partition, not twice per context token.
+    __global__ void attention_last_token_gqa_head128_parallel_kernel(
+        const __half* __restrict__ K,
+        const __half* __restrict__ V,
+        uint32_t max_seq_len, uint32_t kv_heads, uint32_t q_heads,
+        uint32_t seq_id, const float* __restrict__ Q, uint32_t seq_len,
+        uint32_t partitions, float* __restrict__ partials,
+        float* __restrict__ Out) {
+        const uint32_t head = blockIdx.x;
+        const uint32_t part = blockIdx.y;
+        const uint32_t tid = threadIdx.x;
+        const uint32_t lane = tid & 31u;
+        const uint32_t warp = tid >> 5;
+        const uint32_t warps = blockDim.x >> 5;
+        const uint32_t span = (seq_len + partitions - 1u) / partitions;
+        const uint32_t begin = min(part * span, seq_len);
+        const uint32_t end = min(begin + span, seq_len);
+        const uint32_t count = end - begin;
+        const uint32_t kv_head = head / (q_heads / kv_heads);
+        const size_t token_stride = (size_t)kv_heads * 128u;
+        const size_t slot_base = (size_t)seq_id * max_seq_len * token_stride
+                              + (size_t)kv_head * 128u;
+        const float* q = Q + (size_t)head * 128u + lane;
+        const float q0 = q[0], q1 = q[32], q2 = q[64], q3 = q[96];
+        extern __shared__ float shared[];
+        float* scores = shared;
+        float* warp_values = scores + span;
+        float* reduce = warp_values + warps * 128u;
+        float* stats = reduce + warps;
+        float maximum = -FLT_MAX;
+        for (uint32_t index = warp; index < count; index += warps) {
+            const __half* k = K + slot_base + (size_t)(begin + index) * token_stride + lane;
+            float dot = q0 * __half2float(k[0]) + q1 * __half2float(k[32])
+                      + q2 * __half2float(k[64]) + q3 * __half2float(k[96]);
+            #pragma unroll
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                dot += __shfl_down_sync(0xffffffffu, dot, offset);
+            }
+            if (lane == 0u) {
+                const float score = dot * 0.08838834764831845f;
+                scores[index] = score;
+                maximum = fmaxf(maximum, score);
+            }
+        }
+        if (lane == 0u) reduce[warp] = maximum;
+        __syncthreads();
+        if (tid == 0u) {
+            for (uint32_t w = 0; w < warps; ++w) maximum = fmaxf(maximum, reduce[w]);
+            stats[0] = maximum;
+        }
+        __syncthreads();
+        maximum = stats[0];
+
+        float sum = 0.0f;
+        for (uint32_t index = tid; index < count; index += blockDim.x) {
+            const float weight = expf(scores[index] - maximum);
+            scores[index] = weight;
+            sum += weight;
+        }
+        #pragma unroll
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            sum += __shfl_down_sync(0xffffffffu, sum, offset);
+        }
+        if (lane == 0u) reduce[warp] = sum;
+        __syncthreads();
+        if (tid == 0u) {
+            sum = 0.0f;
+            for (uint32_t w = 0; w < warps; ++w) sum += reduce[w];
+            stats[1] = sum;
+        }
+        __syncthreads();
+
+        float v0 = 0.0f, v1 = 0.0f, v2 = 0.0f, v3 = 0.0f;
+        for (uint32_t index = warp; index < count; index += warps) {
+            const __half* v = V + slot_base + (size_t)(begin + index) * token_stride + lane;
+            const float weight = scores[index];
+            v0 += weight * __half2float(v[0]);
+            v1 += weight * __half2float(v[32]);
+            v2 += weight * __half2float(v[64]);
+            v3 += weight * __half2float(v[96]);
+        }
+        float* values = warp_values + warp * 128u + lane;
+        values[0] = v0; values[32] = v1; values[64] = v2; values[96] = v3;
+        __syncthreads();
+        if (tid < 128u) {
+            float value = 0.0f;
+            for (uint32_t w = 0; w < warps; ++w) value += warp_values[w * 128u + tid];
+            if (partitions == 1u) {
+                Out[(size_t)head * 128u + tid] = value / stats[1];
+            } else {
+                const size_t base = ((size_t)head * partitions + part) * 130u;
+                partials[base + 2u + tid] = value;
+                if (tid == 0u) {
+                    partials[base] = maximum;
+                    partials[base + 1u] = stats[1];
+                }
+            }
+        }
+    }
+
+    __global__ void attention_head128_merge_partitions_kernel(
+        const float* __restrict__ partials, uint32_t partitions,
+        float* __restrict__ Out) {
+        const uint32_t head = blockIdx.x;
+        const uint32_t tid = threadIdx.x;
+        const float* source = partials + (size_t)head * partitions * 130u;
+        __shared__ float factors[8];
+        __shared__ float denominator;
+        if (tid == 0u) {
+            float maximum = -FLT_MAX;
+            for (uint32_t p = 0; p < partitions; ++p) {
+                maximum = fmaxf(maximum, source[p * 130u]);
+            }
+            float sum = 0.0f;
+            for (uint32_t p = 0; p < partitions; ++p) {
+                factors[p] = source[p * 130u + 1u] > 0.0f
+                           ? expf(source[p * 130u] - maximum) : 0.0f;
+                sum += factors[p] * source[p * 130u + 1u];
+            }
+            denominator = sum;
+        }
+        __syncthreads();
+        float value = 0.0f;
+        for (uint32_t p = 0; p < partitions; ++p) {
+            value += factors[p] * source[p * 130u + 2u + tid];
+        }
+        Out[(size_t)head * 128u + tid] = value / denominator;
+    }
+
     __global__ void attention_last_token_gqa_dense_recent_head64_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
@@ -5035,6 +5165,37 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (rc != 0) return rc;
         cudaError_t err = cudaStreamSynchronize(ctx->decode_stream);
         if (err != cudaSuccess) return -5;
+        return 0;
+    }
+
+    int m40llm_attention_head128_parallel_async(
+        M40llmCudaContext* ctx, const M40llmKVCache* kv, uint32_t seq_id,
+        const void* q_dev_f32, uint32_t q_heads, uint32_t seq_len,
+        uint32_t partitions, uint32_t threads, void* partials_f32,
+        size_t partial_bytes, void* out_dev_f32) {
+        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32) return -1;
+        if (seq_id >= kv->max_batch_size || seq_len == 0 ||
+            seq_len > kv->max_seq_len || seq_len > 8192u) return -2;
+        if (kv->compressed || !kv->d_k || !kv->d_v || kv->head_dim != 128u ||
+            q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -3;
+        if ((partitions != 1u && partitions != 2u && partitions != 4u && partitions != 8u) ||
+            (threads != 128u && threads != 256u)) return -4;
+        if (partitions > 1u && (!partials_f32 ||
+            partial_bytes < (size_t)q_heads * partitions * 130u * sizeof(float))) return -5;
+        const uint32_t span = (seq_len + partitions - 1u) / partitions;
+        const size_t shared_bytes = (span + (threads / 32u) * 129u + 2u) * sizeof(float);
+        const dim3 grid(q_heads, partitions);
+        attention_last_token_gqa_head128_parallel_kernel<<<grid, threads, shared_bytes, ctx->decode_stream>>>(
+            kv->d_k, kv->d_v, kv->max_seq_len, kv->num_heads, q_heads,
+            seq_id, static_cast<const float*>(q_dev_f32), seq_len, partitions,
+            static_cast<float*>(partials_f32), static_cast<float*>(out_dev_f32));
+        if (cudaGetLastError() != cudaSuccess) return -6;
+        if (partitions > 1u) {
+            attention_head128_merge_partitions_kernel<<<q_heads, 128, 0, ctx->decode_stream>>>(
+                static_cast<const float*>(partials_f32), partitions,
+                static_cast<float*>(out_dev_f32));
+            if (cudaGetLastError() != cudaSuccess) return -7;
+        }
         return 0;
     }
 

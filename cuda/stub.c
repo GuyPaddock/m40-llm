@@ -291,6 +291,15 @@ int m40llm_attention_last_token_f32_gqa(
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
 }
+int m40llm_attention_head128_parallel_async(
+    M40llmCudaContext* ctx, const M40llmKVCache* kv, uint32_t seq_id,
+    const void* q, uint32_t q_heads, uint32_t seq_len, uint32_t partitions,
+    uint32_t threads, void* partials, size_t partial_bytes, void* out) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q; (void)q_heads; (void)seq_len;
+    (void)partitions; (void)threads; (void)partials; (void)partial_bytes; (void)out;
+    return -1;
+}
+
 int m40llm_attention_last_token_f32_gqa_async(
     M40llmCudaContext* ctx,
     const M40llmKVCache* kv,

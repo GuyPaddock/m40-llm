@@ -2,6 +2,38 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Exact Parallel Head128 Attention
+
+C07's opt-in warp-parallel attention preserves full dense attention and compares
+one/two/four/eight context partitions with 128/256 threads, eight configurations
+in total. Split8/256 passes the five-pair release HTTP gate: **31.852 tok/s**
+versus **23.774 tok/s** for the current exact kernel, a **33.98% throughput gain**
+with 95% paired-bootstrap interval **[33.868%, 34.203%]**. All rows process the
+same 65 prompt IDs and 512 generated IDs with fresh dense KV and length stops;
+untimed companions match all 512 IDs. Inference and GPU tests never overlap.
+
+Median HTTP time falls from 21.536 s to 16.074 s; internal prefill is
+1.736/1.683 s and decode 19.762/14.338 s. Dense KV remains 36 MiB, with one
+65 KiB reusable FP32 partial workspace across layers/requests. No per-token
+allocation or extra synchronization is introduced. A separate single profiled
+CLI diagnostic measures middle/late attention at 0.791/0.973 ms across all 36
+layers, versus the earlier 11.421/20.387 ms baseline medians; FFN now accounts
+for about 64% of the diagnostic's middle GPU interval union.
+
+Select split8/256 for subsequent **opt-in benchmark** work, not as a global
+runtime default. This does not beat the controlled Ollama median of 43.035
+tok/s or reach either unchanged-model target. Numerical parity, real Qwen
+smokes, cuBLAS-on/off attention grids, forward/server regressions, non-CUDA
+tests, and Clippy pass. The initial user-only exact-OK smoke failed on the
+legacy reference; it is retained separately from the passing canonical ChatML
+smokes, not attributed to the new kernel.
+
+See the [full experiment](experiments/2026-10-24-head128-attention.md),
+[HTTP pairs](experiments/2026-10-24-head128-http.jsonl),
+[microbenchmark](experiments/2026-10-24-head128-micro.jsonl), and
+[raw stage events](experiments/2026-10-24-head128-stage-events.jsonl.gz).
+Next: typed benchmark execution weights and independent Q8 layout experiments.
+
 ## 2026-10-24: Controlled Baseline and Bottleneck Checkpoint
 
 C06 reconciles the existing C03/C04/C05 records; it is not a new timing run.

@@ -1,0 +1,722 @@
+[
+  {
+    "seq_len": 1,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 5.724800005555153,
+    "wall_us": 5.8864
+  },
+  {
+    "seq_len": 1,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 6.284800171852112,
+    "wall_us": 6.43445
+  },
+  {
+    "seq_len": 1,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 6.484799832105637,
+    "wall_us": 6.6442
+  },
+  {
+    "seq_len": 1,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 11.761599779129028,
+    "wall_us": 11.937850000000001
+  },
+  {
+    "seq_len": 1,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 11.672800034284592,
+    "wall_us": 11.8318
+  },
+  {
+    "seq_len": 1,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 10.899200290441513,
+    "wall_us": 11.220474999999999
+  },
+  {
+    "seq_len": 1,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 11.370400339365005,
+    "wall_us": 11.53125
+  },
+  {
+    "seq_len": 1,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 12.099199742078781,
+    "wall_us": 12.2544
+  },
+  {
+    "seq_len": 1,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 13.353599607944489,
+    "wall_us": 13.531649999999999
+  },
+  {
+    "seq_len": 32,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 34.66239869594574,
+    "wall_us": 34.82785
+  },
+  {
+    "seq_len": 32,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 12.476000189781189,
+    "wall_us": 12.6375
+  },
+  {
+    "seq_len": 32,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 9.292799979448318,
+    "wall_us": 9.462975
+  },
+  {
+    "seq_len": 32,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 14.426399767398834,
+    "wall_us": 14.5845
+  },
+  {
+    "seq_len": 32,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 13.014400005340576,
+    "wall_us": 13.176124999999999
+  },
+  {
+    "seq_len": 32,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 12.355200201272964,
+    "wall_us": 12.531225000000003
+  },
+  {
+    "seq_len": 32,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 11.901599913835526,
+    "wall_us": 12.058475
+  },
+  {
+    "seq_len": 32,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 12.92639970779419,
+    "wall_us": 13.085399999999998
+  },
+  {
+    "seq_len": 32,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 14.424799382686615,
+    "wall_us": 14.584275
+  },
+  {
+    "seq_len": 64,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 64.92239832878113,
+    "wall_us": 65.09222500000001
+  },
+  {
+    "seq_len": 64,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 19.7175994515419,
+    "wall_us": 19.882525
+  },
+  {
+    "seq_len": 64,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 13.008800148963928,
+    "wall_us": 13.168675000000002
+  },
+  {
+    "seq_len": 64,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 18.163199722766876,
+    "wall_us": 18.334525
+  },
+  {
+    "seq_len": 64,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 14.960800111293793,
+    "wall_us": 15.131225
+  },
+  {
+    "seq_len": 64,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 14.312799274921417,
+    "wall_us": 14.4736
+  },
+  {
+    "seq_len": 64,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 13.175199925899506,
+    "wall_us": 13.340225
+  },
+  {
+    "seq_len": 64,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 14.016799628734589,
+    "wall_us": 14.1715
+  },
+  {
+    "seq_len": 64,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 14.948800206184387,
+    "wall_us": 15.11505
+  },
+  {
+    "seq_len": 128,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 125.16080141067505,
+    "wall_us": 125.32985000000001
+  },
+  {
+    "seq_len": 128,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 34.15600061416626,
+    "wall_us": 34.316700000000004
+  },
+  {
+    "seq_len": 128,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 20.472800731658936,
+    "wall_us": 20.63005
+  },
+  {
+    "seq_len": 128,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 25.45439898967743,
+    "wall_us": 25.630949999999995
+  },
+  {
+    "seq_len": 128,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 18.79439949989319,
+    "wall_us": 18.960525
+  },
+  {
+    "seq_len": 128,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 18.163999915122986,
+    "wall_us": 18.328325
+  },
+  {
+    "seq_len": 128,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 15.218399465084076,
+    "wall_us": 15.382874999999999
+  },
+  {
+    "seq_len": 128,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 16.342400014400482,
+    "wall_us": 16.511699999999998
+  },
+  {
+    "seq_len": 128,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 16.673600673675537,
+    "wall_us": 16.825525
+  },
+  {
+    "seq_len": 256,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 218.88399124145508,
+    "wall_us": 219.08409999999998
+  },
+  {
+    "seq_len": 256,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 56.117600202560425,
+    "wall_us": 56.307125000000006
+  },
+  {
+    "seq_len": 256,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 31.561601161956787,
+    "wall_us": 31.717950000000002
+  },
+  {
+    "seq_len": 256,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 35.9391987323761,
+    "wall_us": 36.127425
+  },
+  {
+    "seq_len": 256,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 23.925599455833435,
+    "wall_us": 24.10765
+  },
+  {
+    "seq_len": 256,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 22.835999727249146,
+    "wall_us": 22.991825
+  },
+  {
+    "seq_len": 256,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 17.613600194454193,
+    "wall_us": 17.785874999999997
+  },
+  {
+    "seq_len": 256,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 18.459999561309814,
+    "wall_us": 18.683275
+  },
+  {
+    "seq_len": 256,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 17.402400076389313,
+    "wall_us": 17.572675
+  },
+  {
+    "seq_len": 319,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 261.78081035614014,
+    "wall_us": 261.9979
+  },
+  {
+    "seq_len": 319,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 66.26799702644348,
+    "wall_us": 66.45345
+  },
+  {
+    "seq_len": 319,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 36.58879995346069,
+    "wall_us": 36.7584
+  },
+  {
+    "seq_len": 319,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 40.97360074520111,
+    "wall_us": 41.13435
+  },
+  {
+    "seq_len": 319,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 26.101601123809814,
+    "wall_us": 26.279675000000005
+  },
+  {
+    "seq_len": 319,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 25.227200984954834,
+    "wall_us": 25.5054
+  },
+  {
+    "seq_len": 319,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 18.937599658966064,
+    "wall_us": 19.08925
+  },
+  {
+    "seq_len": 319,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 19.859999418258667,
+    "wall_us": 20.135075
+  },
+  {
+    "seq_len": 319,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 18.13119947910309,
+    "wall_us": 18.28125
+  },
+  {
+    "seq_len": 512,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 433.620023727417,
+    "wall_us": 433.81615
+  },
+  {
+    "seq_len": 512,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 103.22079658508301,
+    "wall_us": 103.401025
+  },
+  {
+    "seq_len": 512,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 55.63120245933533,
+    "wall_us": 55.79445
+  },
+  {
+    "seq_len": 512,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 60.46320199966431,
+    "wall_us": 60.63114999999999
+  },
+  {
+    "seq_len": 512,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 36.06640100479126,
+    "wall_us": 36.226524999999995
+  },
+  {
+    "seq_len": 512,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 34.811198711395264,
+    "wall_us": 34.96810000000001
+  },
+  {
+    "seq_len": 512,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 24.303999543190002,
+    "wall_us": 24.476625000000002
+  },
+  {
+    "seq_len": 512,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 24.89600032567978,
+    "wall_us": 25.05425
+  },
+  {
+    "seq_len": 512,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 21.832799911499023,
+    "wall_us": 21.9968
+  },
+  {
+    "seq_len": 575,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 468.1392192840576,
+    "wall_us": 468.3184499999999
+  },
+  {
+    "seq_len": 575,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 115.47119617462158,
+    "wall_us": 115.642525
+  },
+  {
+    "seq_len": 575,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 61.98959946632385,
+    "wall_us": 62.1631
+  },
+  {
+    "seq_len": 575,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 66.2343978881836,
+    "wall_us": 66.407575
+  },
+  {
+    "seq_len": 575,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 39.23119902610779,
+    "wall_us": 39.39985
+  },
+  {
+    "seq_len": 575,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 38.13839852809906,
+    "wall_us": 38.3078
+  },
+  {
+    "seq_len": 575,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 25.53519904613495,
+    "wall_us": 25.691899999999997
+  },
+  {
+    "seq_len": 575,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 26.74719989299774,
+    "wall_us": 26.91315
+  },
+  {
+    "seq_len": 575,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 22.816799581050873,
+    "wall_us": 22.971349999999997
+  },
+  {
+    "seq_len": 1024,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 829.0760040283203,
+    "wall_us": 829.275325
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 201.25041007995605,
+    "wall_us": 201.433025
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 105.89120388031006,
+    "wall_us": 106.0633
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 110.77519655227661,
+    "wall_us": 110.93135
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 62.195998430252075,
+    "wall_us": 62.366924999999995
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 60.741597414016724,
+    "wall_us": 60.924099999999996
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 37.85200119018555,
+    "wall_us": 38.0156
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 39.106398820877075,
+    "wall_us": 39.298475
+  },
+  {
+    "seq_len": 1024,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 31.786400079727173,
+    "wall_us": 31.945925
+  },
+  {
+    "seq_len": 1025,
+    "partitions": null,
+    "threads": null,
+    "samples": 5,
+    "gpu_us": 830.6112289428711,
+    "wall_us": 831.0874
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 1,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 202.04720497131348,
+    "wall_us": 202.23404999999997
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 1,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 106.54239654541016,
+    "wall_us": 106.70840000000001
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 2,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 111.07679605484009,
+    "wall_us": 111.29502500000001
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 2,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 62.42719888687134,
+    "wall_us": 62.589175
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 4,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 61.16080284118652,
+    "wall_us": 61.356425
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 4,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 38.120800256729126,
+    "wall_us": 38.282375
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 8,
+    "threads": 128,
+    "samples": 5,
+    "gpu_us": 39.003199338912964,
+    "wall_us": 39.170474999999996
+  },
+  {
+    "seq_len": 1025,
+    "partitions": 8,
+    "threads": 256,
+    "samples": 5,
+    "gpu_us": 31.515198945999146,
+    "wall_us": 31.67275
+  }
+]

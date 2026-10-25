@@ -43,6 +43,39 @@ struct Args {
     /// Compare five unprofiled/profiled m40-llm pairs instead of timing Ollama.
     #[arg(long = "compare-stage-profile")]
     should_compare_stage_profile: bool,
+    /// Compare legacy/parallel m40-llm attention, not Ollama throughput.
+    #[arg(
+        long = "compare-head128-attention",
+        conflicts_with = "should_compare_stage_profile"
+    )]
+    should_compare_head128: bool,
+}
+
+struct AttentionSwitch {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl AttentionSwitch {
+    fn new() -> Self {
+        Self {
+            previous: std::env::var_os("M40LLM_ATTN_HEAD128_KERNEL"),
+        }
+    }
+    fn set(&self, is_parallel: bool) {
+        std::env::set_var(
+            "M40LLM_ATTN_HEAD128_KERNEL",
+            if is_parallel { "parallel" } else { "fast" },
+        );
+    }
+}
+
+impl Drop for AttentionSwitch {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var("M40LLM_ATTN_HEAD128_KERNEL", value),
+            None => std::env::remove_var("M40LLM_ATTN_HEAD128_KERNEL"),
+        }
+    }
 }
 
 struct StageProfileSwitch {
@@ -361,6 +394,10 @@ impl ComparisonRun {
             "kind": "trial", "runtime": "m40-llm", "phase": phase, "pair": pair,
             "client_elapsed_ms": wall_ms, "e2e_tps": tps, "metrics": metrics,
             "stage_profile_enabled": is_stage_profile_enabled,
+            "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
+            "head128_partitions": std::env::var("M40LLM_ATTN_HEAD128_PARTITIONS").ok(),
+            "head128_threads": std::env::var("M40LLM_ATTN_HEAD128_THREADS").ok(),
+            "head128_workspace_bytes": self.server.state.model.kv_cache.as_ref().map(|kv| kv.head128_attention_workspace_bytes()),
             "is_fixed_workload": validation.is_ok(), "invalid_reason": validation.as_ref().err().map(|e| e.to_string()),
             "cache": {"reused_prompt_tokens": 0, "evaluated_prompt_tokens": metrics.prompt_tokens, "reset": "generate_text reset_kv_cache=true"},
             "gpu_before": before, "gpu_after": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
@@ -473,6 +510,7 @@ impl ComparisonRun {
             "generated_token_ids": &generated.token_ids[generated.prompt_token_len..],
             "matches_measured_output": true, "output": generated.output,
             "stage_profile_enabled": std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1"),
+            "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
         }))?;
         Ok(generated.token_ids[generated.prompt_token_len..].to_vec())
     }
@@ -513,6 +551,115 @@ impl ComparisonRun {
             "trace_source": "same Ollama native runner /completion return_tokens=true",
             "generation_settings": response["generation_settings"],
         }))?;
+        Ok(())
+    }
+
+    async fn run_attention_pairs(
+        &mut self,
+        switch: &AttentionSwitch,
+        phase: &str,
+        start: usize,
+        end: usize,
+        pairs: &mut Vec<Pair>,
+    ) -> Result<(String, String)> {
+        let mut outputs = (String::new(), String::new());
+        for pair in start..end {
+            let (control, candidate) = if pair.is_multiple_of(2) {
+                switch.set(false);
+                let control = self.measure_m40(&format!("{phase}-legacy"), pair).await?;
+                switch.set(true);
+                let candidate = self.measure_m40(&format!("{phase}-parallel"), pair).await?;
+                (control, candidate)
+            } else {
+                switch.set(true);
+                let candidate = self.measure_m40(&format!("{phase}-parallel"), pair).await?;
+                switch.set(false);
+                let control = self.measure_m40(&format!("{phase}-legacy"), pair).await?;
+                (control, candidate)
+            };
+            ensure!(
+                control.is_fixed_workload && candidate.is_fixed_workload,
+                "invalid attention comparison pair; raw rows retained"
+            );
+            eprintln!("[attention {phase} pair {pair}] legacy={:.3} parallel={:.3} HTTP E2E tok/s, same_output={}",
+                control.tps, candidate.tps, control.output == candidate.output);
+            pairs.push(Pair {
+                control_tps: control.tps,
+                candidate_tps: candidate.tps,
+            });
+            outputs = (control.output, candidate.output);
+        }
+        Ok(outputs)
+    }
+
+    fn record_attention_comparison(
+        &mut self,
+        phase: &str,
+        comparison: &protocol::Comparison,
+    ) -> Result<()> {
+        let mut summary = serde_json::to_value(comparison)?;
+        // Here the control is m40-llm, not Ollama. Do not reinterpret the
+        // protocol's 1.30x-Ollama target field against this different control.
+        summary
+            .as_object_mut()
+            .context("comparison object")?
+            .remove("reaches_original_target");
+        self.report
+            .record(json!({"kind":"attention_comparison_summary", "phase":phase,
+            "comparison":summary,"is_ollama_comparison":false,
+            "requires_quality_parity_for_promotion":true}))
+    }
+
+    async fn compare_head128_attention(&mut self) -> Result<()> {
+        let switch = AttentionSwitch::new();
+        for is_parallel in [false, true] {
+            switch.set(is_parallel);
+            ensure!(
+                self.measure_m40(
+                    if is_parallel {
+                        "attention-warmup-parallel"
+                    } else {
+                        "attention-warmup-legacy"
+                    },
+                    0
+                )
+                .await?
+                .is_fixed_workload,
+                "invalid attention warmup"
+            );
+        }
+        let mut pairs = Vec::new();
+        let mut outputs = self
+            .run_attention_pairs(&switch, "screen", 0, 5, &mut pairs)
+            .await?;
+        let mut comparison = protocol::compare_pairs(&pairs)?;
+        self.record_attention_comparison("screen5", &comparison)?;
+        let mut next = protocol::next_trial_count(&comparison, false)?;
+        if next == Some(10) {
+            outputs = self
+                .run_attention_pairs(&switch, "screen", 5, 10, &mut pairs)
+                .await?;
+            comparison = protocol::compare_pairs(&pairs)?;
+            self.record_attention_comparison("screen10", &comparison)?;
+            next = protocol::next_trial_count(&comparison, false)?;
+        }
+        if next == Some(20) {
+            let mut confirmation = Vec::new();
+            outputs = self
+                .run_attention_pairs(&switch, "confirmation", 0, 20, &mut confirmation)
+                .await?;
+            comparison = protocol::compare_pairs(&confirmation)?;
+            protocol::next_trial_count(&comparison, true)?;
+            self.record_attention_comparison("confirmation20", &comparison)?;
+        }
+        switch.set(false);
+        let control_ids = self.capture_m40_trace(&outputs.0).await?;
+        switch.set(true);
+        let candidate_ids = self.capture_m40_trace(&outputs.1).await?;
+        self.report.record(json!({"kind":"attention_token_comparison",
+            "is_equal":control_ids==candidate_ids,
+            "first_different_generated_step":control_ids.iter().zip(&candidate_ids).position(|(a,b)|a!=b),
+            "different_id_count":control_ids.iter().zip(&candidate_ids).filter(|(a,b)|a!=b).count()}))?;
         Ok(())
     }
 
@@ -751,7 +898,7 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
-        "comparison_kind": if args.should_compare_stage_profile { "stage-profile-perturbation" } else { "ollama-baseline" },
+        "comparison_kind": if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
     }))?;
@@ -801,6 +948,9 @@ pub async fn compare() -> Result<()> {
     };
     if run.args.should_compare_stage_profile {
         return run.compare_stage_profile().await;
+    }
+    if run.args.should_compare_head128 {
+        return run.compare_head128_attention().await;
     }
     ensure!(
         run.measure_m40("warmup", 0).await?.is_fixed_workload,

@@ -176,3 +176,32 @@ This is an instrumentation-perturbation check, not an optimization-promotion
 decision or a new Ollama speed comparison. See the
 [stage timing caveats](diagnostics.md#launch-sync-and-timing-logs) before adding
 stage or host-wait durations together.
+
+## Compare Exact Attention Kernels
+
+Keep the same server setup, model/prompt checks, release build, and Q8 backend
+assignments as the full command. Add `M40LLM_ATTN_HEAD128_PARTITIONS=8`,
+`M40LLM_ATTN_HEAD128_THREADS=256`, and `--compare-head128-attention`. This mode
+alternates complete legacy/parallel **m40-llm** HTTP requests. Ollama supplies
+only untimed model/tokenizer verification, not the timed control. The tool
+restores the attention env setting on return and keeps stage profiling off.
+
+```bash
+# Reuse every Q8 backend assignment from the full command above.
+M40LLM_ATTN_HEAD128_PARTITIONS=8 M40LLM_ATTN_HEAD128_THREADS=256 \
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-head128-attention --output /tmp/head128-http.jsonl
+```
+
+The existing five/ten-pair screen, fixed twenty-pair borderline confirmation,
+and paired-bootstrap rules apply. Actual 512-token length stops remain required.
+Rows record kernel choices, retained KV bytes, and cached partial workspace
+capacity. Untimed companions retain actual IDs and first token divergence if
+any; floating-point association changes are not assumed to preserve whole-text
+identity. Numerical parity and model behavior must be checked separately.
+The summary deliberately omits the 1.30x-Ollama target calculation, since this
+mode's control is another m40-llm kernel. It cannot by itself establish a new
+Ollama comparison or completion of the unchanged-model goal.

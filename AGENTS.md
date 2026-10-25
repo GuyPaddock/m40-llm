@@ -90,13 +90,24 @@ below is historical context, not the current research execution order.
   in `docs/experiments/2026-10-24-qwen-baseline-checkpoint.md`. FFN parameters
   are 78.90%; gate/up is the larger fixed cost, while attention grows with
   context. The report's jq program reconciles source records and calculations.
-- Next: C07's bounded exact head128 attention comparison, including one
-  block/head versus split-context 2/4/8 with stable merge and reusable scratch.
-  Hardware has 24 SMs versus 16 Qwen query heads. Then C08 benchmark-only
-  typed execution weights and independent C09/C10 layouts; neither layout
-  depends on the other succeeding. Require parity and repeated HTTP E2E gates
-  before promotion. No counter availability or original speed target blocks
-  the later formal n-gram gate and separate model-changing research.
+- C07 compares eight exact head128 geometries with reusable RAII split scratch
+  and stable softmax merge. Split8/256 passes the paired HTTP gate: 31.852
+  tok/s versus 23.774, +33.98% with 95% interval [33.868%,34.203%]. Actual
+  512-token traces match. Keep it as the selected opt-in benchmark config:
+  `M40LLM_ATTN_HEAD128_KERNEL=parallel`, partitions=8, threads=256; full env
+  names/commands and short-context limitations are in `docs/diagnostics.md`.
+  Runtime/graph/scheduler/compressed-KV defaults are unchanged. Scratch is
+  65 KiB per KV cache, not per layer/token. The separate middle/late stage
+  diagnostic measures attention at 0.791/0.973 ms and FFN at about 64% of the
+  middle GPU interval union. See `docs/experiments/2026-10-24-head128-attention.md`.
+  Canonical-system Qwen arithmetic/OK/config smokes pass both kernels; the
+  earlier user-only reference EOS is retained, not called an attention bug.
+- Next: C08 benchmark-only typed execution weights and independent C09/C10
+  Q8 layouts; neither layout depends on the other succeeding. Use the selected
+  C07 benchmark config for subsequent controls, require parity and repeated
+  HTTP E2E gates, and bound experiments before C11/C11A. Missing counters or
+  the original speed target do not block the later n-gram feasibility decision
+  and separate model-changing research. No further attention tuning round yet.
 - The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
   Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
   explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.
