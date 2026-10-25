@@ -8,8 +8,8 @@ use anyhow::{ensure, Context, Result};
 
 use super::{
     runtime::{check_budget, ProjectionFamily},
-    DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionConfig, Q8ExecutionMode,
-    Q8ExecutionStats, Q8PreparedTensorStats, Q8ProjectionLaunch, Q8SeparateLaunch,
+    DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionConfig,
+    Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats, Q8ProjectionLaunch, Q8SeparateLaunch,
     Q8SourceIdentity, Q8SourceView, Q8TiledAccess, Q8TiledLaunch,
 };
 use crate::{
@@ -193,6 +193,61 @@ impl Q8ExecutionCache {
 
     pub fn stats(&self) -> Q8ExecutionStats {
         self.stats.clone()
+    }
+
+    /// # Safety
+    /// Source/input/output/bias pointers have the stated spans in this model's
+    /// context. The caller supplies producer dependencies and retains all owners.
+    pub(crate) unsafe fn try_project_qkv(
+        &self,
+        ctx: &CudaContext,
+        input: *const c_void,
+        sources: [*const c_void; 3],
+        biases: [Option<*const c_void>; 3],
+        outputs: [*mut c_void; 3],
+        widths: [i32; 3],
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<bool> {
+        let [Some(q), Some(key), Some(v)] =
+            sources.map(|source| self.tensors.get(&(source as usize)))
+        else {
+            return Ok(false);
+        };
+        ensure!(k > 0 && !input.is_null(), "invalid prepared Q8 QKV input");
+        let mut scales = [std::ptr::null(); 3];
+        let mut values = [std::ptr::null(); 3];
+        for (i, entry) in [q, key, v].into_iter().enumerate() {
+            let shape = entry.split.key().source.shape();
+            ensure!(
+                widths[i] > 0
+                    && shape.input_dim() == k as usize
+                    && shape.output_dim() == widths[i] as usize,
+                "prepared Q8 QKV shape mismatch"
+            );
+            ensure!(
+                !outputs[i].is_null() && outputs[i].cast_const() != input,
+                "invalid/aliased prepared Q8 QKV output"
+            );
+            for previous in &outputs[..i] {
+                ensure!(
+                    *previous != outputs[i],
+                    "prepared Q8 QKV outputs must not alias"
+                );
+            }
+            let DeviceQ8ExecutionView::SeparateScalesValues {
+                scales: s,
+                values: v,
+                ..
+            } = entry.split.view()
+            else {
+                anyhow::bail!("prepared Q8 QKV requires split planes");
+            };
+            scales[i] = s.as_ptr();
+            values[i] = v.as_ptr();
+        }
+        ctx.qkv_f32xq8_separate_async(input, scales, values, biases, outputs, widths, k, stream)?;
+        Ok(true)
     }
 
     /// # Safety

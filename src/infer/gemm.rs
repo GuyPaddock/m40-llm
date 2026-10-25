@@ -938,6 +938,23 @@ impl LoadedModel {
                 && self.gguf_weight_dtype(d_wk_f16) == GgmlDType::Q8_0
                 && self.gguf_weight_dtype(d_wv_f16) == GgmlDType::Q8_0
             {
+                let stream = if q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self.q8_execution.try_project_qkv(
+                    &self.cuda,
+                    d_x_f32,
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [d_q_out_f32, d_k_out_f32, d_v_out_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                    stream,
+                )? {
+                    return Ok(true);
+                }
                 self.cuda
                     .qkv_f32xq8_0_gguf_decode_async(
                         d_x_f32,

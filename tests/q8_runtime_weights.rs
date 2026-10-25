@@ -1,9 +1,12 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
+#[path = "common/env_restore.rs"]
+mod env_restore;
 #[path = "common/q8_model.rs"]
 mod fixture;
 
 use anyhow::{ensure, Result};
+use env_restore::EnvRestore;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer},
     infer::{
@@ -12,26 +15,6 @@ use m40_llm::{
     },
     profile,
 };
-
-struct EnvRestore {
-    key: &'static str,
-    previous: Option<std::ffi::OsString>,
-}
-impl EnvRestore {
-    fn set(key: &'static str, value: &str) -> Self {
-        let previous = std::env::var_os(key);
-        std::env::set_var(key, value);
-        Self { key, previous }
-    }
-}
-impl Drop for EnvRestore {
-    fn drop(&mut self) {
-        match &self.previous {
-            Some(v) => std::env::set_var(self.key, v),
-            None => std::env::remove_var(self.key),
-        }
-    }
-}
 
 fn make_model(mode: Q8ExecutionMode, seed: u8) -> Result<LoadedModel> {
     let (gguf, bytes) = fixture::build(seed);

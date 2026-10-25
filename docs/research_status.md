@@ -17,7 +17,7 @@ separately evaluated model-changing research. It is not replaced by the
 
 C01-C10 and the uploaded-weight accounting prerequisite `81948df` are complete.
 C10A.1 adds opt-in model-owned Q8 preparation and standard projection dispatch;
-prepared fused consumers and HTTP validation are still pending. Runtime/KV
+the remaining fused consumers and HTTP validation are still pending. Runtime/KV
 defaults and the selected C07 benchmark configuration are unchanged.
 The real split-cache Qwen Q8 arithmetic canary returns `4`; cache/stream/failure
 tests, existing CUDA regressions with cuBLAS on/off, non-CUDA warning-as-error
@@ -36,6 +36,16 @@ The dependency-ordered C10A units are:
    model controls, serial paired HTTP measurements, actual token traces,
    setup/resident-memory reporting, and the promotion decision. Depends on
    C10A.2 and model parity; no microbenchmark-only promotion.
+
+C10A.1 is committed as `11f2fb6`. Split C10A.2 into focused consumer commits:
+`perf(cuda): use prepared Q8 for fused QKV`, then
+`perf(cuda): reuse prepared Q8 in fused MLP`, then
+`perf(infer): use prepared Q8 greedy logits`. Each depends on the cache and
+its own numerical/stream tests; the HTTP gate waits for all three.
+Prepared fused QKV now preserves one-launch dispatch, optional biases, and both
+producer streams; CPU/native-GPU tail and shape tests pass. The real Qwen Q8
+canary returns `4` and records 756 prepared fused-QKV launches. Prepared fused
+MLP and greedy vocabulary consumers remain next. There is no new HTTP speed claim.
 
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup

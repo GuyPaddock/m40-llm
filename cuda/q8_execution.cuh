@@ -1,18 +1,14 @@
-// Benchmark-only lossless Q8 execution layouts. Included after the context type.
+// Lossless Q8 execution layouts. Included after the context type.
 #pragma once
 
 template<int Columns>
-__global__ void q8_separate_projection_kernel(
+__device__ void q8_separate_dot(
     const float* __restrict__ input,
     const __half* __restrict__ scales,
     const int8_t* __restrict__ values,
-    float* __restrict__ output,
-    int N, int K) {
-    const int col0 = blockIdx.x * Columns;
-    const int row = blockIdx.y;
+    int col0, int N, int K, float (&acc)[Columns]) {
     const int tid = threadIdx.x;
     const int blocks_per_col = (K + 31) / 32;
-    float acc[Columns] = {};
     for (int task = tid; task < blocks_per_col * 4; task += blockDim.x) {
         const int qblock = task / 4;
         const int offset = (task % 4) * 8;
@@ -20,7 +16,7 @@ __global__ void q8_separate_projection_kernel(
         float activation[8];
         #pragma unroll
         for (int i = 0; i < 8; ++i) {
-            activation[i] = k0 + i < K ? input[static_cast<size_t>(row) * K + k0 + i] : 0.0f;
+            activation[i] = k0 + i < K ? input[k0 + i] : 0.0f;
         }
         #pragma unroll
         for (int c = 0; c < Columns; ++c) {
@@ -55,11 +51,83 @@ __global__ void q8_separate_projection_kernel(
     if (tid == 0) {
         #pragma unroll
         for (int c = 0; c < Columns; ++c) {
-            if (col0 + c < N) {
-                output[static_cast<size_t>(row) * N + col0 + c] = reduction[c * blockDim.x];
-            }
+            acc[c] = reduction[c * blockDim.x];
         }
     }
+}
+
+template<int Columns>
+__global__ void q8_separate_projection_kernel(
+    const float* __restrict__ input, const __half* __restrict__ scales,
+    const int8_t* __restrict__ values, float* __restrict__ output, int N, int K) {
+    const int col0 = blockIdx.x * Columns;
+    const int row = blockIdx.y;
+    float acc[Columns] = {};
+    q8_separate_dot<Columns>(input + static_cast<size_t>(row) * K, scales, values,
+                             col0, N, K, acc);
+    if (threadIdx.x == 0) {
+        #pragma unroll
+        for (int c = 0; c < Columns; ++c) {
+            if (col0 + c < N) output[static_cast<size_t>(row) * N + col0 + c] = acc[c];
+        }
+    }
+}
+
+__global__ void q8_separate_qkv_kernel(
+    const float* input,
+    const __half* sq, const int8_t* vq, const __half* sk, const int8_t* vk,
+    const __half* sv, const int8_t* vv,
+    const float* bq, const float* bk, const float* bv,
+    float* oq, float* ok, float* ov, int nq, int nk, int nv, int k) {
+    const int q_tiles = (nq + 3) / 4;
+    const int tile = blockIdx.x;
+    if (tile < q_tiles) {
+        const int col0 = tile * 4;
+        float acc[4] = {};
+        q8_separate_dot<4>(input, sq, vq, col0, nq, k, acc);
+        if (threadIdx.x == 0) {
+            #pragma unroll
+            for (int c = 0; c < 4; ++c) {
+                if (col0 + c < nq) oq[col0 + c] = acc[c] + (bq ? bq[col0 + c] : 0.0f);
+            }
+        }
+    } else {
+        const bool is_value = tile - q_tiles >= nk;
+        const int col = tile - q_tiles - (is_value ? nk : 0);
+        float acc[1] = {};
+        q8_separate_dot<1>(input, is_value ? sv : sk, is_value ? vv : vk,
+                             col, is_value ? nv : nk, k, acc);
+        if (threadIdx.x == 0) {
+            const float* bias = is_value ? bv : bk;
+            (is_value ? ov : ok)[col] = acc[0] + (bias ? bias[col] : 0.0f);
+        }
+    }
+}
+
+extern "C" int m40llm_qkv_f32xq8_separate_async(
+    M40llmCudaContext* ctx, const void* input, const void* const* scales,
+    const void* const* values, const void* const* biases, void* const* outputs,
+    const int* widths, int K, uint32_t stream_kind) {
+    if (!ctx || !input || !scales || !values || !biases || !outputs || !widths) return -1;
+    if (K <= 0 || K > INT32_MAX - 31 || stream_kind > 1) return -4;
+    for (int i = 0; i < 3; ++i) {
+        if (!scales[i] || !values[i] || !outputs[i]) return -1;
+        if (widths[i] <= 0 || widths[i] > INT32_MAX - 3) return -4;
+    }
+    const int64_t blocks = (static_cast<int64_t>(widths[0]) + 3) / 4 + widths[1] + widths[2];
+    if (blocks > INT32_MAX) return -4;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
+    // Host metadata arrays are unpacked before enqueue; the device never reads them.
+    q8_separate_qkv_kernel<<<static_cast<unsigned>(blocks), 128, 4 * 128 * sizeof(float), stream>>>(
+        static_cast<const float*>(input),
+        static_cast<const __half*>(scales[0]), static_cast<const int8_t*>(values[0]),
+        static_cast<const __half*>(scales[1]), static_cast<const int8_t*>(values[1]),
+        static_cast<const __half*>(scales[2]), static_cast<const int8_t*>(values[2]),
+        static_cast<const float*>(biases[0]), static_cast<const float*>(biases[1]),
+        static_cast<const float*>(biases[2]), static_cast<float*>(outputs[0]),
+        static_cast<float*>(outputs[1]), static_cast<float*>(outputs[2]),
+        widths[0], widths[1], widths[2], K);
+    return cudaGetLastError() == cudaSuccess ? 0 : -2;
 }
 
 extern "C" int m40llm_gemm_f32xq8_separate_f32_async(

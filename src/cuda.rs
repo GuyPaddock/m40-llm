@@ -295,6 +295,17 @@ mod ffi {
             H: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_qkv_f32xq8_separate_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_qkv_f32xq8_0_gguf_decode_async(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -2700,6 +2711,41 @@ impl CudaContext {
             let _ = (d_a_f32, d_w_gate_q8_0, d_w_up_q8_0, d_c_f32, h, k);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// All device spans belong to this context and outlive stream completion.
+    /// The three-element host arrays are consumed synchronously by the FFI.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn qkv_f32xq8_separate_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 3],
+        values: [*const c_void; 3],
+        biases: [Option<*const c_void>; 3],
+        outputs: [*mut c_void; 3],
+        widths: [i32; 3],
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let biases = biases.map(|bias| bias.unwrap_or(std::ptr::null()));
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_qkv_f32xq8_separate_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales.as_ptr(),
+            values.as_ptr(),
+            biases.as_ptr(),
+            outputs.as_ptr(),
+            widths.as_ptr(),
+            k,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!("m40llm_qkv_f32xq8_separate_async failed: {rc}"));
+        }
+        record_async_kernel("qkv_f32xq8_separate");
+        Ok(())
     }
 
     /// # Safety

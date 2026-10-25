@@ -65,10 +65,17 @@ stream policy: multi-row work uses prefill; single-row uses decode only when
 `M40LLM_Q8_DECODE_STREAM=decode`, otherwise prefill. The sync API waits on that
 actual producer; the async API does not synchronize.
 
-C10A.1 does not replace fused QKV, fused gate/up/SwiGLU, or the specialized
-greedy vocabulary path. Those consumers remain native until C10A.2 preserves
-their fusion and stream contracts. Use of the cache is experimental, not a
-claim that the current selected fused HTTP benchmark is faster.
+`M40LLM_FUSED_Q8_QKV=1` now lets split/mixed caches supply a single fused
+Q/K/V launch. Query tiles use four columns, K/V tiles one, all with 128 threads
+and the original optional FP32 biases. The launch preserves the existing Q8
+producer-stream policy and reuses the split projection's dot/reduction code.
+All three prepared tensors must be present and shape-compatible; missing cache
+entries retain native fused QKV, while invalid cached shapes fail before launch.
+Multi-row calls still use the standard projection path.
+
+Fused gate/up/SwiGLU and the specialized greedy vocabulary path remain native
+until their C10A.2 consumers are ready. Use of the cache is experimental, not
+a claim that the current selected fused HTTP benchmark is faster.
 
 ## Source and Identity
 
@@ -185,6 +192,22 @@ claim. See the [raw canary log](experiments/2026-10-24-q8-prepared-split-canary.
 CUDA layout/attention/forward/projection/MLP checks pass, including cuBLAS-off
 grid/wrappers; non-CUDA warning-as-error tests and both Clippy feature lanes pass.
 
+Prepared fused QKV tests cover equal/GQA-shaped/tail widths, no/partial/all
+biases, split and mixed caches, both producer streams, CPU/native GPU parity,
+and output guards. Each invocation remains one launch with no internal sync,
+allocation, free, H2D, or D2H. Invalid cached dimensions, multi-row requests,
+and a disabled fusion flag do not launch this consumer.
+
+The real Qwen2.5-3B split-cache canary with prepared QKV and native fused MLP
+also answers `4`, with finite prompt logits and **756 prepared fused-QKV
+launches** over 21 forward tokens and 36 layers. The canary asserts that
+requested prepared fusion actually executes. This debug correctness run is
+not a controlled timing comparison; see its [raw log](experiments/2026-10-24-q8-prepared-qkv-canary.txt).
+It uses `M40LLM_Q8_EXECUTION_WEIGHTS=split`, decode-stream Q8 scheduling,
+`M40LLM_FUSED_Q8_QKV=1`, `M40LLM_FUSED_Q8_MLP_SWIGLU=1`, and the native
+Q8 decode/MLP split-qblock settings of 4. The KV cache is explicitly dense,
+the context bound 256, and the Rust test profile is unoptimized.
+
 C08 validation passes eight CPU tests for semantic identities, source bounds,
 real/synthetic shapes, plan overflow/alignment, byte copies, and failing
 allocation/upload boundaries using a working RAII fake. A real CUDA test
@@ -211,6 +234,8 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   -- --nocapture --test-threads=1
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_runtime_weights -- --nocapture --test-threads=1
+M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
+  --test q8_prepared_qkv -- --nocapture --test-threads=1
 ```
 
 Next: finish prepared fused consumers, model-level parity, and repeated HTTP

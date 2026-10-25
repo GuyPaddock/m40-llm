@@ -5,6 +5,12 @@ mod tiny;
 
 use m40_llm::gguf::{GgmlDType, GgufModel};
 
+pub const QKV_NAMES: [&str; 3] = [
+    "layers.0.attention.wq.weight",
+    "layers.0.attention.wk.weight",
+    "layers.0.attention.wv.weight",
+];
+
 pub fn build_f16() -> (GgufModel, Vec<u8>) {
     tiny::make_tied_identity_tiny_gguf(tiny::TinyGgufConfig {
         vocab: 96,
@@ -19,9 +25,18 @@ pub fn build_f16() -> (GgufModel, Vec<u8>) {
 /// Synthetic model descriptor plus tensor-data bytes, matching the existing
 /// tiny-model fixtures. The seed changes signed payloads without changing layout.
 pub fn build(seed: u8) -> (GgufModel, Vec<u8>) {
+    build_with_qkv_widths(seed, [64; 3])
+}
+
+/// Override projection widths for projection-only tail/GQA tests; these
+/// synthetic descriptors are not intended to run a full transformer forward.
+pub fn build_with_qkv_widths(seed: u8, widths: [usize; 3]) -> (GgufModel, Vec<u8>) {
     let (mut model, _) = build_f16();
     let mut weights = Vec::new();
     for tensor in &mut model.tensors {
+        if let Some(index) = QKV_NAMES.iter().position(|&name| name == tensor.name) {
+            tensor.shape[1] = widths[index] as u64;
+        }
         let k = tensor.shape[0] as usize;
         let n = tensor.shape[1] as usize;
         weights.resize(weights.len().div_ceil(32) * 32, 0);
