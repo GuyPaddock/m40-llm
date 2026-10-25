@@ -62,6 +62,13 @@ consume the rejected sparse kernel. Layer ranking remains C24, compact export
 C25. Do not tune on held-out/browser inputs or reopen failed n-gram/dense-layout
 screens. See [the audit and raw results](experiments/2026-10-25-upload-ordering.md).
 
+C23 now starts with an explicit [magnitude-selection contract and bounded
+device screen](activation_sparsity.md). The retained C10 dense-Q8 input-tiled
+layout can address individual retained inputs without C21 masks. CPU selection
+and quantile fitting are foundational only; device speed, per-layer calibration,
+model quality and integration are not yet established. Runtime defaults stay
+unchanged.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
