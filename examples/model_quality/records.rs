@@ -22,13 +22,13 @@ impl QualityConclusion {
 
 #[cfg(all(feature = "cuda", nvcc))]
 mod io {
-    use anyhow::{ensure, Context, Result};
+    use anyhow::{ensure, Result};
     use serde_json::Value;
     use std::{
         fs::{File, OpenOptions},
         io::Write,
         path::Path,
-        process::{Command, Stdio},
+        process::Command,
     };
 
     pub fn command_text(program: &str, args: &[&str]) -> Result<String> {
@@ -39,36 +39,6 @@ mod io {
             String::from_utf8_lossy(&output.stderr)
         );
         Ok(String::from_utf8(output.stdout)?.trim().to_owned())
-    }
-
-    pub fn file_sha256(path: &Path) -> Result<String> {
-        Ok(command_text(
-            "sha256sum",
-            &[path.to_str().context("UTF-8 path required")?],
-        )?
-        .split_whitespace()
-        .next()
-        .context("missing file hash")?
-        .to_owned())
-    }
-
-    pub fn sha256(bytes: &[u8]) -> Result<String> {
-        let mut process = Command::new("sha256sum")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?;
-        process
-            .stdin
-            .take()
-            .context("hash stdin")?
-            .write_all(bytes)?;
-        let output = process.wait_with_output()?;
-        ensure!(output.status.success(), "sha256sum failed");
-        Ok(String::from_utf8(output.stdout)?
-            .split_whitespace()
-            .next()
-            .context("missing content hash")?
-            .to_owned())
     }
 
     pub struct Report {
@@ -92,7 +62,9 @@ mod io {
 }
 
 #[cfg(all(feature = "cuda", nvcc))]
-pub use io::{command_text, file_sha256, sha256, Report};
+pub use io::{command_text, Report};
+#[cfg(all(feature = "cuda", nvcc))]
+pub use m40_llm::evaluation::identity::{file_sha256, sha256};
 
 #[cfg(test)]
 mod tests {

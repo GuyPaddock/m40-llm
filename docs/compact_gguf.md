@@ -9,13 +9,15 @@ See [the complete quality evidence](experiments/2026-10-25-ranked-layer-tradeoff
 
 1. `feat(gguf): plan compact layer exports`: checked original-to-compact layer
    mapping, tensor ranges/alignment, explicit supported metadata and CPU tests.
-2. `feat(gguf): write separate compact variants`: byte-preserving streaming
+2. `refactor(eval): share research content hashes`: reuse the existing quality
+   runner's coreutils identity routines in CPU export without new dependencies.
+3. `feat(gguf): write separate compact variants`: byte-preserving streaming
    writer, create-new outputs, provenance/quality bindings, metadata updates
    and round-trip/file-safety tests. Depends on the validated copy plan.
-3. `test(quality): compare compact and masked models`: masked-source versus
+4. `test(quality): compare compact and masked models`: masked-source versus
    exported-model full-logit/task parity, real allocation accounting and a
    bounded runner. Depends on safe export and C24 frozen evidence.
-4. `docs(perf): record compact model costs`: clean release measurements,
+5. `docs(perf): record compact model costs`: clean release measurements,
    preparation time, memory and quality limitations. Depends on parity.
 
 ## Copy Plan
