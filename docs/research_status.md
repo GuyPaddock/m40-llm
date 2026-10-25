@@ -151,13 +151,16 @@ reclamation. C26 then compares measured quality, speed, allocation and
 preparation costs. C22/C27 remain postponed under their negative sparse
 kernel gate; do not reopen rejected n-gram or dense-layout screens.
 
-C25 starts with [a checked compact copy plan](compact_gguf.md). It maps
-retained original IDs to contiguous tensor names, separates payload from
-alignment bytes and rejects unsupported/unsafe layouts before file creation.
-Safe streaming export, frozen-quality provenance and masked-source numerical
-parity remain separate dependency-ordered commits. This is not yet an exporter
-or a measured memory-saving result. Four CPU contract tests pass in both
-feature configurations; both warning-as-error CI lanes, Clippy and fmt pass.
+C25's [copy plan and streaming writer](compact_gguf.md) now map retained
+original IDs to contiguous tensor names and preserve unchanged metadata wire
+bytes. The CPU exporter requires the frozen ranking and completed paired
+quality report; it retains regressions/PPL rather than calling evaluated masks
+quality-approved. SHA-256 checks and create-new publication protect the source
+and existing outputs. Four plan, two evidence and four writer tests pass.
+Both warning-as-error CI lanes, all-targets Clippy and fmt pass as well.
+Real compact-model load, masked-source numerical/task parity and measured
+weight/KV reclamation remain. No memory-saving or engine-speed result is
+claimed from the copy plan or successful file export alone.
 
 C21 used these dependency-ordered commits:
 

@@ -11,13 +11,15 @@ See [the complete quality evidence](experiments/2026-10-25-ranked-layer-tradeoff
    mapping, tensor ranges/alignment, explicit supported metadata and CPU tests.
 2. `refactor(eval): share research content hashes`: reuse the existing quality
    runner's coreutils identity routines in CPU export without new dependencies.
-3. `feat(gguf): write separate compact variants`: byte-preserving streaming
+3. `feat(gguf): require evaluated export masks`: frozen ranking and complete
+   paired quality evidence, with explicit adverse results. Depends on identities.
+4. `feat(gguf): write separate compact variants`: byte-preserving streaming
    writer, create-new outputs, provenance/quality bindings, metadata updates
    and round-trip/file-safety tests. Depends on the validated copy plan.
-4. `test(quality): compare compact and masked models`: masked-source versus
+5. `test(quality): compare compact and masked models`: masked-source versus
    exported-model full-logit/task parity, real allocation accounting and a
    bounded runner. Depends on safe export and C24 frozen evidence.
-5. `docs(perf): record compact model costs`: clean release measurements,
+6. `docs(perf): record compact model costs`: clean release measurements,
    preparation time, memory and quality limitations. Depends on parity.
 
 ## Copy Plan
@@ -40,26 +42,73 @@ silently rewritten.
 Sharded sources, expert metadata, architecture-prefixed array metadata,
 nonstandard global names and already compacted sources require separate
 support and are rejected. Tokenizer arrays do not depend on layer IDs.
-Preserve their original serialized types and bytes in the future writer,
+The writer preserves their original serialized types and bytes,
 including empty-array element types, merges, control tokens and templates.
 Do not round-trip them through a representation that loses wire information.
 
 The [GGUF specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
-defines aligned tensor offsets and typed metadata. Export will update the
-architecture block count and model identity, record source/ranking/quality
-hashes and original layer mapping, and keep the original file immutable.
+defines aligned tensor offsets and typed metadata. Export updates the
+architecture block count and model identity, records source/ranking/quality
+hashes and original layer mapping, and keeps the original file immutable.
+
+## Quality-Bound Streaming Writer
+
+The [evidence contract](compact_export_evidence.md) binds the frozen ranking
+to completed paired quality measurements and the exact corpus. Regressions,
+PPL costs and dense-failed inconclusive rows stay visible; an evaluated mask
+is not quality-approved.
+
+`export_compact_gguf` hashes the source before and after copying. It retains
+the original bytes of unchanged metadata, rather than serializing parsed
+tokenizer values. Only the block count, display name and stored parameter
+count change; the stale `general.size_label` is removed. Namespaced
+`m40llm.pruning.*` fields record the four evidence hashes, original layer count,
+retained/removed IDs, model-change warning and both quality summaries.
+Source license, author, base lineage and tokenizer metadata remain intact.
+
+The writer buffers at most a 64 MiB header and streams tensor data. A unique
+same-directory temporary file owns partial output. After data fsync, source
+rehash, descriptor round-trip and output hashing, a create-new hard link
+publishes the completed GGUF. Existing files, source hard links and even
+dangling symlinks are never overwritten. Temporary files are cleaned up on
+normal/error unwinding; an interrupted process can leave a `.partial` file,
+not a successfully published incomplete GGUF. Same-directory hard-link support
+and GNU coreutils `sha256sum` are required. No CUDA device is needed to export.
+
+```bash
+source scripts/dev-env.sh
+cargo build --release --no-default-features --example export_compact
+mkdir -p target/research-exports
+target/release/examples/export_compact \
+  --source "$model" \
+  --layer-ranking docs/experiments/2026-10-25-layer-ranking.json \
+  --quality-report docs/experiments/2026-10-25-ranked-layer-one.jsonl \
+  --remove-layer-count 1 \
+  --output target/research-exports/qwen-q8-pruned-layer8.gguf \
+  --report target/research-exports/qwen-q8-pruned-layer8-export.json
+```
+
+Both output and report must be new paths. The ignored `target` directory keeps
+large generated models out of Git; avoid RAM-backed `/tmp` for these files.
+The report records build profile, separate evidence/export preparation wall
+times, file/hash identities, payload/padding and
+source/output tensor-data bytes. It does not measure GPU allocation, quality
+of a newly loaded artifact, peak host memory or engine throughput. An export
+error can leave an empty/incomplete report; only `compact_export_complete`
+with `is_complete=true` is successful. Source and output are never substituted
+into normal CLI/server defaults.
 
 ## Remaining Gates
 
-The copy-plan contract alone is not an exporter. Before writing a real model,
-bind the mask to the completed frozen ranking and its evaluated quality row.
 The destination must load as a distinct model and match the masked source,
 with identical tokenizer behavior and preserved absolute RoPE positions.
 Then measure actual uploaded weight and allocated KV reductions independently
 of logical active-layer counts. No original model, runtime default or
 unchanged-engine performance claim changes through this work.
 
-The four CPU copy-plan tests pass with both CUDA feature configurations.
+Four CPU copy-plan, two evidence and four writer tests cover both supported
+architectures, scalar block-count widths, mixed payloads, custom/default
+alignment, exact unchanged metadata bytes, invalid claims and filesystem
+safety. These are format/export checks, not GPU inference equivalence.
 Both warning-as-error CI lanes, non-CUDA and CUDA/server all-targets Clippy,
-fmt and whitespace checks pass. These validate the contract, not file export
-or GPU inference equivalence.
+fmt and whitespace checks pass.
