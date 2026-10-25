@@ -43,11 +43,15 @@ C19 is split into dependency-ordered commits:
 
 Corpus/scoring is frozen in `d1294fc`, before dense results. Its SHA-256 is
 `2a1270959ef105a3ec19e0be0ab888048fb619880fd4f014ce216acfb8710c38`.
-Teacher-forced CPU loss and CUDA session comparison are implemented next,
+Teacher-forced CPU loss and CUDA session comparison are committed in `c32ec4e`,
 including strict prefixes, token weighting, full-vocabulary drift, cache reset,
 and shared-KV rejection. See [the evaluation contract](model_quality.md).
-CLI/reporting and the real dense-reference corpus run remain required; C19
-is not complete and no variant tuning is authorized yet.
+The explicit-model release runner now adds model/corpus/config identity,
+reference-dependent scoring, full-logit loss comparisons, actual token IDs,
+timing boundaries, and scoped memory accounting. It preserves both frozen
+splits and rejects tokenizer mismatch, truncation, or implicit compressed KV.
+The real dense-reference corpus run remains required; C19 is not complete
+and no variant tuning is authorized yet.
 
 ## N-Gram Feasibility Checkpoint: 2026-10-25
 
