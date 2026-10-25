@@ -79,6 +79,22 @@ errors if the requested dense/exact packed prefix is disabled or over bound.
 Errors during experimental prefill propagate rather than falling back to
 sequential. Native retains its existing fallback policy.
 
+Library callers can select prefill per request through
+`GenerateOptions::prompt_prefill`: `PromptPrefill::Sequential`,
+`PromptPrefill::PackedPrefix { max_prompt_tokens: 128 }`, or the default
+`PromptPrefill::Environment`. Explicit choices ignore the ambient prefill
+bound. Explicit packed requests fail if unsupported, over bound or unable to
+complete; they never silently become sequential. This lets paired experiments
+alternate strategies without changing process-wide environment variables.
+`AppState::prompt_prefill` applies the same choice to serialized buffered HTTP
+generation. An explicit override rejects streaming and scheduler routes, which
+do not implement this request contract. Ordinary CLI/server defaults remain
+environment-driven.
+
+API migration: full `GenerateOptions` and `AppState` struct literals must
+initialize `prompt_prefill`; use `PromptPrefill::Environment` to preserve
+existing behavior. Constructors and `GenerateOptions::default()` already do.
+
 One RAII temporary weight buffer belongs to the forward workspace. It is
 allocated before the packed forward, reused for all seven projections in each
 layer and ordered with SGEMM on prefill. Existing Q/K/V bias, split-half RoPE,

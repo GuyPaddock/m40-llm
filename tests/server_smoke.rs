@@ -701,6 +701,87 @@ async fn start_test_server_with_kv_config_state(state: AppState) -> Result<TestS
     })
 }
 
+/// Buffered generation honors a request-owned prefill strategy independently
+/// of ambient defaults. Streaming and scheduler requests must reject this
+/// override rather than silently execute a different prefill algorithm.
+#[cfg(all(feature = "cuda", nvcc))]
+#[tokio::test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+async fn test_server_explicit_prefill_is_buffered_only() -> Result<()> {
+    use m40_llm::generate::PromptPrefill;
+
+    let _upload = EnvVarGuard::set("M40LLM_ENABLE_NVCC", "1");
+    let _batch = EnvVarGuard::set("M40LLM_SERVER_BATCH_DECODE", "0");
+    let _bound = EnvVarGuard::set("M40LLM_PREFILL_CHUNK_SIZE", "invalid");
+    let (gguf, bytes) = server_smoke_model();
+    let mut model = LoadedModel::from_gguf(gguf, bytes, -1)?;
+    model.allocate_kv_cache_for_layer_sequences(16, 1)?;
+    let mut state = AppState::new_with_kv_config(model, KvCompressionConfig::dense_reference());
+    state.prompt_prefill = PromptPrefill::PackedPrefix {
+        max_prompt_tokens: 8,
+    };
+    let server = start_test_server_with_kv_config_state(state).await?;
+    let client = reqwest::Client::new();
+    let url = format!("http://{}/generate", server.addr);
+    let mut request = GenerateRequest {
+        prompt: "ABC".to_string(),
+        prompt_format: PromptFormat::Raw,
+        max_tokens: Some(1),
+        top_k: Some(1),
+        should_include_metrics: true,
+        ..Default::default()
+    };
+    let before = profile::snapshot();
+    let response = client.post(&url).json(&request).send().await?;
+    let status = response.status();
+    let response: serde_json::Value = response.json().await?;
+    assert!(status.is_success(), "{status}: {response}");
+    assert_eq!(response["metrics"]["prompt_tokens"], 3);
+    assert_eq!(response["metrics"]["generated_tokens"], 1);
+    let after = profile::snapshot();
+    let launches = |s: &m40_llm::profile::ProfileSnapshot| {
+        s.by_op
+            .get("attention_prefill_f32_gqa_varlen")
+            .map_or(0, |c| c.launches)
+    };
+    assert_eq!(launches(&after) - launches(&before), 1);
+
+    request.stream = true;
+    request.should_include_metrics = false;
+    let response = client.post(&url).json(&request).send().await?;
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let response: serde_json::Value = response.json().await?;
+    assert!(response["error"]
+        .as_str()
+        .unwrap()
+        .contains("serialized buffered"));
+    assert_eq!(launches(&profile::snapshot()), launches(&after));
+    server.shutdown().await?;
+
+    let (gguf, bytes) = server_smoke_model();
+    let model = LoadedModel::from_gguf(gguf, bytes, -1)?;
+    let mut state = AppState::new_with_kv_config(model, KvCompressionConfig::dense_reference());
+    state.prompt_prefill = PromptPrefill::Sequential;
+    state.decode_batching_requested = true;
+    let server = start_test_server_with_kv_config_state(state).await?;
+    request.stream = false;
+    let before = profile::snapshot();
+    let response = client
+        .post(format!("http://{}/generate", server.addr))
+        .json(&request)
+        .send()
+        .await?;
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let response: serde_json::Value = response.json().await?;
+    assert!(response["error"]
+        .as_str()
+        .unwrap()
+        .contains("serialized buffered"));
+    assert_eq!(launches(&profile::snapshot()), launches(&before));
+    server.shutdown().await?;
+    Ok(())
+}
+
 #[tokio::test]
 async fn server_streaming_respects_dense_kv_config() -> Result<()> {
     if std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("1") {

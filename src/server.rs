@@ -19,7 +19,7 @@ use crate::cuda::CudaContext;
 use crate::decode::{decode_loop_with, StoppingCriteria};
 use crate::generate::{
     decode_generated_text, generate_text, prepare_prompt, sampler_from_options, sanitize_output,
-    GenerateOptions, PromptFormat,
+    GenerateOptions, PromptFormat, PromptPrefill,
 };
 use crate::generation_metrics::GenerationMetrics;
 #[cfg(feature = "cuda")]
@@ -139,6 +139,7 @@ fn options_from_request(
         reset_kv_cache: true,
         kv_compression,
         prompt_format: req.prompt_format,
+        prompt_prefill: PromptPrefill::Environment,
     }
 }
 
@@ -1111,6 +1112,8 @@ mod tests {
 pub struct AppState {
     pub model: LoadedModel,
     pub kv_compression: KvCompressionConfig,
+    /// Buffered serialized generation only; no process-global prefill switches.
+    pub prompt_prefill: PromptPrefill,
     pub generation_lock: Arc<tokio::sync::Mutex<()>>,
     pub decode_batching_requested: bool,
     pub decode_sequence_pool: Option<crate::decode_batch::DecodeSequencePool>,
@@ -1148,6 +1151,7 @@ impl AppState {
         Self {
             model,
             kv_compression,
+            prompt_prefill: PromptPrefill::Environment,
             generation_lock: Arc::new(tokio::sync::Mutex::new(())),
             decode_batching_requested,
             decode_sequence_pool,
@@ -1191,6 +1195,16 @@ async fn generate(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+    if !state.prompt_prefill.is_environment() && (req.stream || state.decode_batching_requested) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error:
+                    "explicit prompt prefill is supported only for serialized buffered generation"
+                        .to_string(),
+            }),
+        ));
+    }
     if req.stream && req.should_include_metrics {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -1215,6 +1229,7 @@ async fn generate(
         let sequence_lease = lease_decode_sequence(&state)?;
         let _generation_guard = state.generation_lock.clone().lock_owned().await;
         let mut options = options_from_request(&req, "server", state.kv_compression.clone());
+        options.prompt_prefill = state.prompt_prefill;
         if let Some(lease) = sequence_lease.as_ref() {
             options.sequence_id = lease.sequence_id();
             options.reset_kv_cache = false;

@@ -232,6 +232,7 @@ async fn main() -> Result<()> {
                     reset_kv_cache: true,
                     kv_compression,
                     prompt_format: prompt_format.into(),
+                    prompt_prefill: m40_llm::generate::PromptPrefill::Environment,
                 },
             )?;
             print!("{}", generated.output);

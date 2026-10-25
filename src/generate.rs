@@ -40,6 +40,26 @@ pub struct GenerateOptions {
     pub reset_kv_cache: bool,
     pub kv_compression: KvCompressionConfig,
     pub prompt_format: PromptFormat,
+    pub prompt_prefill: PromptPrefill,
+}
+
+/// Request-owned admission to the existing packed-prefix path. Environment
+/// preserves legacy behavior; explicit requests never silently change strategy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PromptPrefill {
+    #[default]
+    Environment,
+    Sequential,
+    PackedPrefix {
+        max_prompt_tokens: usize,
+    },
+}
+
+impl PromptPrefill {
+    pub fn is_environment(self) -> bool {
+        self == Self::Environment
+    }
 }
 
 impl Default for GenerateOptions {
@@ -56,6 +76,7 @@ impl Default for GenerateOptions {
             reset_kv_cache: true,
             kv_compression: KvCompressionConfig::default(),
             prompt_format: PromptFormat::Auto,
+            prompt_prefill: PromptPrefill::Environment,
         }
     }
 }
@@ -368,6 +389,16 @@ fn log_tokenizer_diag(
 }
 
 pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<GeneratedText> {
+    if let PromptPrefill::PackedPrefix { max_prompt_tokens } = options.prompt_prefill {
+        anyhow::ensure!(
+            max_prompt_tokens > 0,
+            "packed-prefix bound must be positive"
+        );
+        anyhow::ensure!(
+            cfg!(feature = "cuda"),
+            "packed-prefix prefill requires CUDA"
+        );
+    }
     let total_start = std::time::Instant::now();
     let mut generation_timer = GenerationTimer::new(total_start);
     #[cfg(feature = "cuda")]
@@ -474,7 +505,11 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
 
     let log_prefix = options.log_prefix;
     #[cfg(feature = "cuda")]
-    let prefill_chunk_size_setting = prefill_chunk_size_setting_from_env()?;
+    let prefill_chunk_size_setting = match options.prompt_prefill {
+        PromptPrefill::Environment => prefill_chunk_size_setting_from_env()?,
+        PromptPrefill::Sequential => Some(None),
+        PromptPrefill::PackedPrefix { max_prompt_tokens } => Some(Some(max_prompt_tokens)),
+    };
     #[cfg(feature = "cuda")]
     let prefill_chunk_size = prefill_chunk_size_setting.flatten();
     #[cfg(feature = "cuda")]
@@ -635,8 +670,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                     };
                     let should_pack_prefix = logits_call_count == 0
                         && packed_bound.is_some_and(|bound| ids.len() <= bound);
-                    anyhow::ensure!(model.q8_prefill.is_native() || logits_call_count != 0 || should_pack_prefix,
-                        "dequant-sgemm requires bounded dense/exact packed-prefix prefill; set M40LLM_PREFILL_CHUNK_SIZE at least to the prompt token count or use M40LLM_Q8_PREFILL_BACKEND=native");
+                    let has_explicit_packed_request =
+                        matches!(options.prompt_prefill, PromptPrefill::PackedPrefix { .. });
+                    anyhow::ensure!((model.q8_prefill.is_native() && !has_explicit_packed_request) || logits_call_count != 0 || should_pack_prefix,
+                        "packed-prefix request is unsupported or over bound; use dense/exact KV and increase the request bound or M40LLM_PREFILL_CHUNK_SIZE, or use M40LLM_Q8_PREFILL_BACKEND=native with sequential prefill");
                     if cuda_greedy_logits_enabled {
                         if should_pack_prefix
                             && (prefill_chunk_size_setting.is_some()
@@ -666,8 +703,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                                         Ok(logits)
                                     }
                                     Err(err) => {
-                                        if !model.q8_prefill.is_native() {
-                                            return Err(err.context("experimental Q8 prefill failed; no sequential fallback"));
+                                        if !model.q8_prefill.is_native()
+                                            || has_explicit_packed_request
+                                        {
+                                            return Err(err.context("explicit packed prefill failed; no sequential fallback"));
                                         }
                                         eprintln!(
                                             "[{log_prefix}] dense/exact diagnostic packed prefill fallback: {err:#}"
@@ -782,8 +821,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                                         Ok(logits)
                                     }
                                     Err(err) => {
-                                        if !model.q8_prefill.is_native() {
-                                            return Err(err.context("experimental Q8 prefill failed; no sequential fallback"));
+                                        if !model.q8_prefill.is_native()
+                                            || has_explicit_packed_request
+                                        {
+                                            return Err(err.context("explicit packed prefill failed; no sequential fallback"));
                                         }
                                         eprintln!(
                                             "[{log_prefix}] packed prefill fallback: {err:#}"
