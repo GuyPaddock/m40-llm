@@ -142,6 +142,10 @@ pub(super) struct GuardedF32 {
 }
 
 impl GuardedF32 {
+    pub fn bytes(&self) -> usize {
+        self.storage.bytes()
+    }
+
     pub fn new(ctx: &CudaContext, values: &[f32], tag: &'static str) -> Result<Self> {
         let count = values
             .len()

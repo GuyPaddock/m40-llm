@@ -104,6 +104,9 @@ int m40llm_ffn_q8_f32_coalesced_capture_async(M40llmCudaContext* ctx, const void
     (void)ctx; (void)input; (void)gate; (void)up; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
 }
+int m40llm_qkv_f32xq8_0_gguf_warp_async(M40llmCudaContext* ctx, const void* input, const void* const* weights, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weights; (void)biases; (void)outputs; (void)widths; (void)k; (void)stream_kind; return -99;
+}
 int m40llm_qkv_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_q8_0, const void* d_Wk_q8_0, const void* d_Wv_q8_0, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
     (void)ctx; (void)d_A_f32; (void)d_Wq_q8_0; (void)d_Wk_q8_0; (void)d_Wv_q8_0; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
 }

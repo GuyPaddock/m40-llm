@@ -4,6 +4,7 @@ mod fixture;
 mod joint;
 mod pipeline;
 mod prepared;
+mod qkv;
 mod validation;
 
 use super::{command_output, inspect_gpu, write_record, Args};
@@ -23,6 +24,9 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.qkv_f32_warp {
+        return qkv::benchmark(args);
+    }
     let is_fp32_ablation = args.ffn_f32_ablation
         || args.ffn_f32_factored_scales
         || args.ffn_f32_coalesced_pairs

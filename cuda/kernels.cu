@@ -7444,6 +7444,65 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
+    // Original raw-Q8 split4 math/routing; only the 256-thread reduction differs.
+    __global__ void qkv_f32xq8_0_gguf_decode_warp_kernel(
+        const float* __restrict__ A,
+        const unsigned char* __restrict__ Wq,
+        const unsigned char* __restrict__ Wk,
+        const unsigned char* __restrict__ Wv,
+        const float* __restrict__ bq,
+        const float* __restrict__ bk,
+        const float* __restrict__ bv,
+        float* __restrict__ Q,
+        float* __restrict__ Kout,
+        float* __restrict__ Vout,
+        int Nq, int Nk, int Nv, int Kdim) {
+        const int out_col = blockIdx.x;
+        const int tid = threadIdx.x;
+        const int total = Nq + Nk + Nv;
+        if (out_col >= total) return;
+        const unsigned char* W = Wq;
+        const float* bias = bq;
+        float* out = Q;
+        int local_col = out_col;
+        if (out_col >= Nq + Nk) {
+            W = Wv; bias = bv; out = Vout; local_col = out_col - Nq - Nk;
+        } else if (out_col >= Nq) {
+            W = Wk; bias = bk; out = Kout; local_col = out_col - Nq;
+        }
+        const int qk = 32;
+        const int split = 4;
+        const int vals_per_split = qk / split;
+        const int block_bytes = 34;
+        const int blocks_per_col = Kdim / qk;
+        const int tasks = blocks_per_col * split;
+        float acc = 0.0f;
+        for (int task = tid; task < tasks; task += blockDim.x) {
+            const int block_idx = task / split;
+            const int split_idx = task - block_idx * split;
+            const int q_offset = split_idx * vals_per_split;
+            const int k_base = block_idx * qk + q_offset;
+            const size_t block_base =
+                (static_cast<size_t>(local_col) * blocks_per_col + block_idx) * block_bytes;
+            const float scale = __half2float(*reinterpret_cast<const __half*>(W + block_base));
+            #pragma unroll
+            for (int q_idx = 0; q_idx < vals_per_split; ++q_idx) {
+                const int8_t q = *reinterpret_cast<const int8_t*>(W + block_base + 2 + q_offset + q_idx);
+                acc += A[k_base + q_idx] * (static_cast<float>(q) * scale);
+            }
+        }
+        extern __shared__ float partials[];
+        partials[tid] = acc;
+        __syncthreads();
+        if (tid < 32) {
+            float value = m40llm_q8_ffn::reduce_published<256>(partials, tid);
+            if (tid == 0) {
+                if (bias) value += bias[local_col];
+                out[local_col] = value;
+            }
+        }
+    }
+
     __global__ void mlp_gate_up_swiglu_f32xq4_0_gguf_decode_kernel(
         const float* __restrict__ A,
         const unsigned char* __restrict__ W_gate,
@@ -7848,6 +7907,31 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -3;
         }
         return 0;
+    }
+
+    int m40llm_qkv_f32xq8_0_gguf_warp_async(
+        M40llmCudaContext* ctx, const void* input, const void* const* weights,
+        const void* const* biases, void* const* outputs, const int* widths,
+        int k, uint32_t stream_kind) {
+        if (!ctx || !input || !weights || !biases || !outputs || !widths) return -1;
+        if (k <= 0 || k % 32 || stream_kind > 1 || reinterpret_cast<uintptr_t>(input) % 4) return -2;
+        int64_t total = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (widths[i] <= 0 || !weights[i] || !outputs[i] || outputs[i] == input ||
+                reinterpret_cast<uintptr_t>(weights[i]) % 2 || reinterpret_cast<uintptr_t>(outputs[i]) % 4 ||
+                (biases[i] && reinterpret_cast<uintptr_t>(biases[i]) % 4)) return -2;
+            for (int j = 0; j < i; ++j) if (outputs[i] == outputs[j]) return -2;
+            total += widths[i];
+        }
+        if (total > INT32_MAX) return -2;
+        cudaStream_t stream = stream_kind == 0 ? ctx->prefill_stream : ctx->decode_stream;
+        qkv_f32xq8_0_gguf_decode_warp_kernel<<<static_cast<int>(total),256,1024,stream>>>(
+            static_cast<const float*>(input),static_cast<const unsigned char*>(weights[0]),
+            static_cast<const unsigned char*>(weights[1]),static_cast<const unsigned char*>(weights[2]),
+            static_cast<const float*>(biases[0]),static_cast<const float*>(biases[1]),static_cast<const float*>(biases[2]),
+            static_cast<float*>(outputs[0]),static_cast<float*>(outputs[1]),static_cast<float*>(outputs[2]),
+            widths[0],widths[1],widths[2],k);
+        return cudaGetLastError() == cudaSuccess ? 0 : -3;
     }
 
     int m40llm_qkv_f32xq8_0_gguf_decode_async(

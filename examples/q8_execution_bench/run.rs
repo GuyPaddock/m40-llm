@@ -100,6 +100,9 @@ struct Args {
     /// One K=2048 address/loop specialization of the qualified split kernel.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint"])]
     ffn_f32_fixed_k: bool,
+    /// Complete native QKV warp reduction using frozen normalized input vectors.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k"])]
+    qkv_f32_warp: bool,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -586,6 +589,25 @@ mod argument_tests {
         assert!(!parse(&flags).unwrap().ffn_f32_split_two_columns);
         assert!(!parse(&flags).unwrap().ffn_f32_joint);
         assert!(!parse(&flags).unwrap().ffn_f32_fixed_k);
+        assert!(!parse(&flags).unwrap().qkv_f32_warp);
+        assert!(
+            parse(&[flags.as_slice(), &["--qkv-f32-warp"]].concat())
+                .unwrap()
+                .qkv_f32_warp
+        );
+        assert!(parse(&["--qkv-f32-warp"]).is_err());
+        for other in [
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-split-two-columns",
+            "--ffn-f32-joint",
+            "--ffn-f32-fixed-k",
+        ] {
+            assert!(parse(&[flags.as_slice(), &["--qkv-f32-warp", other]].concat()).is_err());
+        }
         assert!(
             parse(&[flags.as_slice(), &["--ffn-f32-fixed-k"]].concat())
                 .unwrap()

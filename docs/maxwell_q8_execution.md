@@ -261,6 +261,27 @@ The [completed screen](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md)
 preserves bits but gains only 1.24-1.32% complete one-row throughput, below
 5%. Keep it benchmark-only without another unroll/width/geometry search.
 
+### Bounded Native QKV Reduction Probe
+
+`q8_execution_bench --qkv-f32-warp --ffn-inputs ... --ffn-capture-report ...`
+compares the original raw-Q8 split4 fused QKV with one fixed 256-thread
+exact-tree warp finish. It reuses original Q/K/V weights and biases, with
+no execution-weight preparation for QKV or generation selector. See the
+[pre-implementation audit and gates](experiments/2026-10-25-maxwell-qkv-warp-hypothesis.md).
+
+The mode uses frozen actual normalized FFN vectors as projection surrogates,
+not captured attention-norm inputs. Rows 1/4 are one or four distinct
+single-token requests, one fused launch per row, not a batched GEMM.
+Reports include source identities, CPU/bitwise checks, guarded immutable
+spans, actual enqueue-operation counters and paired complete-QKV latency.
+Whole-model actual-token quality and original HTTP gates remain mandatory.
+
+`CudaContext::qkv_f32xq8_0_gguf_warp_async` enqueues raw Q8_0 on an explicit
+stream with caller-owned spans. It preserves split4 math and optional FP32
+biases while removing repeated reduction barriers. It neither allocates,
+transfers nor synchronizes. The unsafe contract requires aligned, disjoint
+live outputs and properly ordered input/weight/bias producers.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,
