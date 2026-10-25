@@ -164,6 +164,51 @@ extern "C" int m40llm_gemm_f32xq8_separate_f32_async(
 }
 
 template<int Columns>
+__device__ __forceinline__ void accumulate_q8_tiled_values(
+    const unsigned char* record, int offset, float activation, float (&acc)[Columns]) {
+    constexpr int values_offset = ((Columns * 2 + 15) / 16) * 16;
+    const unsigned char* values = record + values_offset + offset * Columns;
+    uint4 packed = {};
+    if constexpr (Columns == 4) {
+        packed.x = *reinterpret_cast<const unsigned int*>(values);
+    } else if constexpr (Columns == 8) {
+        const uint2 pair = *reinterpret_cast<const uint2*>(values);
+        packed.x = pair.x;
+        packed.y = pair.y;
+    } else {
+        packed = *reinterpret_cast<const uint4*>(values);
+    }
+    const int8_t* quant = reinterpret_cast<const int8_t*>(&packed);
+    #pragma unroll
+    for (int col = 0; col < Columns; ++col) {
+        const float scale = __half2float(reinterpret_cast<const __half*>(record)[col]);
+        acc[col] += activation * (static_cast<float>(quant[col]) * scale);
+    }
+}
+
+template<int Columns>
+__device__ __forceinline__ void write_q8_tiled_projection(
+    float (&acc)[Columns], float* output, int N, int tile) {
+    const int lane = threadIdx.x & 31;
+    const int warp = threadIdx.x >> 5;
+    const int warps = blockDim.x / 32;
+    extern __shared__ float partial[];
+    #pragma unroll
+    for (int col = 0; col < Columns; ++col) {
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            acc[col] += __shfl_down_sync(0xffffffffu, acc[col], offset);
+        }
+        if (lane == 0) partial[warp * Columns + col] = acc[col];
+    }
+    __syncthreads();
+    if (threadIdx.x < Columns && tile * Columns + threadIdx.x < N) {
+        float sum = 0.0f;
+        for (int w = 0; w < warps; ++w) sum += partial[w * Columns + threadIdx.x];
+        output[tile * Columns + threadIdx.x] = sum;
+    }
+}
+
+template<int Columns>
 __global__ void q8_input_tiled_projection_kernel(
     const float* __restrict__ input,
     const unsigned char* __restrict__ tiles,
@@ -182,38 +227,9 @@ __global__ void q8_input_tiled_projection_kernel(
         const unsigned char* record = tiles + (qb * output_tiles + tile) * record_bytes;
         const int k = qb * 32 + lane;
         const float activation = k < K ? input[static_cast<size_t>(row) * K + k] : 0.0f;
-        const unsigned char* values = record + values_offset + lane * Columns;
-        uint4 packed = {};
-        if constexpr (Columns == 4) {
-            packed.x = *reinterpret_cast<const unsigned int*>(values);
-        } else if constexpr (Columns == 8) {
-            const uint2 pair = *reinterpret_cast<const uint2*>(values);
-            packed.x = pair.x;
-            packed.y = pair.y;
-        } else {
-            packed = *reinterpret_cast<const uint4*>(values);
-        }
-        const int8_t* quant = reinterpret_cast<const int8_t*>(&packed);
-        #pragma unroll
-        for (int col = 0; col < Columns; ++col) {
-            const float scale = __half2float(reinterpret_cast<const __half*>(record)[col]);
-            acc[col] += activation * (static_cast<float>(quant[col]) * scale);
-        }
+        accumulate_q8_tiled_values(record, lane, activation, acc);
     }
-    extern __shared__ float partial[];
-    #pragma unroll
-    for (int col = 0; col < Columns; ++col) {
-        for (int offset = 16; offset > 0; offset >>= 1) {
-            acc[col] += __shfl_down_sync(0xffffffffu, acc[col], offset);
-        }
-        if (lane == 0) partial[warp * Columns + col] = acc[col];
-    }
-    __syncthreads();
-    if (threadIdx.x < Columns && tile * Columns + threadIdx.x < N) {
-        float sum = 0.0f;
-        for (int w = 0; w < warps; ++w) sum += partial[w * Columns + threadIdx.x];
-        output[static_cast<size_t>(row) * N + tile * Columns + threadIdx.x] = sum;
-    }
+    write_q8_tiled_projection(acc, output + static_cast<size_t>(row) * N, N, tile);
 }
 
 template<int Columns>

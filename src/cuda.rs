@@ -394,6 +394,27 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_select_sparse_inputs_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            indices: *mut c_void,
+            values: *mut c_void,
+            count: *mut c_void,
+            k: i32,
+            threshold: f32,
+        ) -> i32;
+        pub fn m40llm_project_sparse_inputs_q8_async(
+            ctx: *mut M40llmCudaContext,
+            indices: *const c_void,
+            values: *const c_void,
+            count: *const c_void,
+            tiles: *const c_void,
+            output: *mut c_void,
+            n: i32,
+            k: i32,
+            columns: i32,
+            threads: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_tiled_f32_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,
@@ -3477,6 +3498,77 @@ impl CudaContext {
             return Err(anyhow!("m40llm_gemm_f32xq8_tiled_f32_async failed: {rc}"));
         }
         record_async_kernel("gemm_f32xq8_tiled_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Single-row input and K-sized index/value outputs belong to this context;
+    /// count holds one u32. All buffers survive ordered decode completion.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn select_sparse_inputs_f32_async(
+        &self,
+        input: *const c_void,
+        indices: *mut c_void,
+        values: *mut c_void,
+        count: *mut c_void,
+        k: i32,
+        threshold: f32,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_select_sparse_inputs_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            indices,
+            values,
+            count,
+            k,
+            threshold,
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_select_sparse_inputs_f32_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("select_sparse_inputs_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Indices/count come from ordered sparse selection, with count <= K.
+    /// Tiled weights follow the given width; all buffers belong to this context
+    /// and survive decode completion. No raw malformed index lists are accepted.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn project_sparse_inputs_q8_async(
+        &self,
+        indices: *const c_void,
+        values: *const c_void,
+        count: *const c_void,
+        tiles: *const c_void,
+        output: *mut c_void,
+        n: i32,
+        k: i32,
+        columns: i32,
+        threads: i32,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_project_sparse_inputs_q8_async(
+            self.inner.raw.as_ptr(),
+            indices,
+            values,
+            count,
+            tiles,
+            output,
+            n,
+            k,
+            columns,
+            threads,
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_project_sparse_inputs_q8_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("project_sparse_inputs_q8");
         Ok(())
     }
 

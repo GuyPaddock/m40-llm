@@ -4,6 +4,11 @@
 use anyhow::{ensure, Result};
 use serde::Serialize;
 
+#[cfg(feature = "cuda")]
+mod device;
+#[cfg(feature = "cuda")]
+pub use device::DeviceSparseInputWorkspace;
+
 #[cfg(test)]
 mod tests;
 

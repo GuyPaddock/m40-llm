@@ -65,9 +65,14 @@ screens. See [the audit and raw results](experiments/2026-10-25-upload-ordering.
 C23 now starts with an explicit [magnitude-selection contract and bounded
 device screen](activation_sparsity.md). The retained C10 dense-Q8 input-tiled
 layout can address individual retained inputs without C21 masks. CPU selection
-and quantile fitting are foundational only; device speed, per-layer calibration,
-model quality and integration are not yet established. Runtime defaults stay
-unchanged.
+and quantile fitting are committed in `10478a8`. Two explicit M40 tests now
+verify deterministic GPU compaction, same-zeroed native/CPU projection parity,
+tails, scratch reuse and nonfinite preservation. Enqueue issues two launches
+with zero allocation/copy/sync. Existing tiled-Q8 parity, attention/forward/
+projection/ownership checks, non-CUDA library tests and CUDA/server Clippy
+pass. The next commit adds the release screen including selection cost; device
+speed, per-layer calibration, model quality and integration are not established.
+Runtime defaults stay unchanged.
 
 C21 used these dependency-ordered commits:
 
