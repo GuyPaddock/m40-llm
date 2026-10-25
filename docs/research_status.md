@@ -34,10 +34,15 @@ stage shares are 37.43% gate/up, 22.31% down and 3.62% attention. The fixed
 preserves bits but regresses complete one-row FFN throughput 5.85-6.01%.
 Keep `414f2a5` benchmark-only and stop column tuning. The
 [one-column instruction audit](experiments/2026-10-25-maxwell-joint-ffn-audit.md)
-identifies two payload and two scale loads per task, with separate address
-bases. Next test one lossless joint gate/up layout seeking two weight loads
-instead of four, without removing numerical conversions. Keep one-column geometry, prepared down/head,
-and original micro/quality/HTTP gates fixed. Do not
+motivated one lossless joint gate/up layout. Its
+[completed screen and fresh twenty-pair confirmation](experiments/2026-10-25-maxwell-joint-ffn-screen.md)
+preserve bits and confirm three total loads per task instead of five, but
+complete one-row gains are only **4.66-4.74%**, below the unchanged 5% gate.
+Keep `8881763` benchmark-only, without runtime integration or more packing/
+geometry tuning. Both arms retained 95,813,632 bytes of control plus joint
+preparation. Next require an independent remaining-bottleneck hypothesis,
+not another variant to rescue this near miss. Prepared down/head and
+original micro/quality/HTTP gates remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
 Earlier checkpoints below record their historical next steps, not a second

@@ -2,6 +2,24 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Joint Gate/Up Packing Misses Micro Gate
+
+One fixed lossless joint layout removes two global load instructions per
+four-value task while keeping one-column/128-thread FP32 arithmetic and
+the current split-plane control. Five pairs show 4.68-4.75% complete one-row
+FFN gains. A fresh **twenty-pair** confirmation shows **4.66-4.74%**, with
+all one-row upper confidence bounds below the unchanged 5% gate. Four-row
+confirmation gains are 3.19-3.49%. All control hidden/completed-down bits
+and numerical/ownership checks pass. Both kernels use 32 registers and no
+reported spills. See [paired results, emitted instructions, memory and the
+decision](experiments/2026-10-25-maxwell-joint-ffn-screen.md).
+
+This is a repeatable small kernel gain, not an E2E improvement or a qualified
+runtime candidate. Keep `8881763` benchmark-only; do not lower the gate or
+run a rescue layout/geometry sweep. Both arms retain 95,813,632 bytes of
+control plus joint preparation, not a memory saving. The qualified runtime
+remains 45.075 HTTP tok/s; both original targets remain unmet.
+
 ## 2026-10-25: Two-Column Split FFN Regresses
 
 One fixed two-column/128-thread split-plane kernel preserves current

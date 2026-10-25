@@ -239,6 +239,10 @@ Report the joint pair and combined preparation bytes separately; each Qwen
 pair is 47,906,816 bytes, so combined preparation is 95,813,632 bytes. Reject
 combined preparation above 128 MiB before packing the joint pair. CPU/bitwise,
 guard, cleanup and complete-FFN timing gates precede any runtime work.
+The [completed screen](experiments/2026-10-25-maxwell-joint-ffn-screen.md)
+and fresh twenty-pair confirmation show 4.66-4.74% complete one-row gains,
+below the 5% gate despite bitwise parity. It remains benchmark-only; no
+runtime selector, threshold relaxation or layout/geometry rescue follows.
 
 ### M03 Primitive Checkpoint
 
