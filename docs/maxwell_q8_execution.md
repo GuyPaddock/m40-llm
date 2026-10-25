@@ -48,10 +48,10 @@ The official binary was not rebuilt for the diagnostic.
 ### Explicit Runtime Qualification
 
 The existing `model_quality` runner accepts independent
-`--q8-runtime-candidate native|packed-f32-256|packed-f32-128|q8-1-128|q8-1-256`
+`--q8-runtime-candidate native|packed-f32-256|packed-f32-128|split-f32x4-128|q8-1-128|q8-1-256`
 and `--q8-runtime-prefill sequential|native-packed|dequant-sgemm` selections.
 Both models use the qualified prepared down/vocabulary configuration, dense
-KV/context 1024 and the same source GGUF. The reference always uses native FFN
+KV/context 1024 and the same source GGUF. The historical reference uses native FFN
 and sequential prefill. Runtime choices are explicit, not inherited from
 ambient experiment settings; model-changing/capture modes are incompatible.
 Quality manifests now record `prefill_execution_contract` as
@@ -79,6 +79,31 @@ Sequential candidates also report token-weighted calibration/held-out loss
 and perplexity. Packed-prefill candidates do not claim sequential passage
 loss as prefill validation; their actual packed task/browser generation and
 forced-prefix logits exercise that path instead. Reports refuse overwrites.
+
+For incremental split-plane qualification, both tools also accept
+`--q8-runtime-control qualified-packed128-sgemm`. This names the current
+qualified FP32/128 decode plus SGEMM prefill, rather than the historical
+`native-sequential` control. The default control remains historical for
+reproducibility. Quality and HTTP must request the same control; mismatched
+evidence is rejected. Reference-prefix replay exercises the control's packed
+prefill too, not a sequential substitute.
+
+```bash
+target/release/examples/model_quality \
+  --reference-model "$MODEL" --model "$MODEL" --variant-id split-f32x4 \
+  --q8-runtime-candidate split-f32x4-128 --q8-runtime-prefill dequant-sgemm \
+  --q8-runtime-control qualified-packed128-sgemm \
+  --split all --output /tmp/new-split-f32x4-quality.jsonl
+```
+
+The split candidate may add only gate/up cache entries. Shared validation
+pins every prepared down/vocabulary key, byte count and launch configuration,
+checks model/layout identity and total accounting, and rejects duplicates or
+extra projection families. Reports preserve both full cache inventories and
+setup costs. Each inventory must remain unchanged during evaluation. Actual
+browser counters must cover every selected FFN layer forward plus all 252
+dequantizations/SGEMMs for a Qwen 64-token prefix. This guards against caching
+gate/up accidentally changing the already-qualified prompt strategy.
 
 These runs are quality diagnostics, not HTTP throughput qualification. A
 different continuation, natural stop length or dense-valid task regression

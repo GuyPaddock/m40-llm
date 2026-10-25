@@ -91,6 +91,8 @@ struct Args {
     q8_runtime_candidate: Option<q8_runtime::FfnChoice>,
     #[arg(long, value_enum, requires = "q8_runtime_candidate")]
     q8_runtime_prefill: Option<q8_runtime::PrefillChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_control: Option<q8_runtime::ControlChoice>,
     /// Untimed comparison of sequential admission, explicit stream drains and
     /// packed prefixes on identical prompt IDs, hidden states and physical KV.
     #[arg(long="q8-prefill-drift", conflicts_with_all=["q8_runtime_candidate","capture_ffn_inputs","q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]

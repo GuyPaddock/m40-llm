@@ -10,6 +10,12 @@ use m40_llm::{
 };
 use serde::Serialize;
 
+#[cfg(all(feature = "cuda", nvcc))]
+#[path = "q8_prepared_control.rs"]
+mod prepared_control;
+#[cfg(all(feature = "cuda", nvcc))]
+pub use prepared_control::validate_prepared_control;
+
 /// Reject quality evidence collected before no-logits prefix input reuse was
 /// ordered. Historical reports remain readable, but cannot qualify a new run.
 pub const PREFILL_EXECUTION_CONTRACT: &str = "prefix-decode-completed-v1";
@@ -22,6 +28,9 @@ pub enum FfnChoice {
     Native,
     PackedF32_256,
     PackedF32_128,
+    #[value(name = "split-f32x4-128")]
+    #[serde(rename = "split-f32x4-128")]
+    SplitF32x4,
     #[value(name = "q8-1-128")]
     Q81_128,
     #[value(name = "q8-1-256")]
@@ -37,6 +46,27 @@ pub enum PrefillChoice {
     DequantSgemm,
 }
 
+/// Historical comparisons remain reproducible; incremental work names the
+/// already qualified packed128/SGEMM control instead of silently replacing it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ControlChoice {
+    #[default]
+    NativeSequential,
+    QualifiedPacked128Sgemm,
+}
+
+impl ControlChoice {
+    pub fn config(self) -> RuntimeConfig {
+        match self {
+            Self::NativeSequential => RuntimeConfig::default(),
+            Self::QualifiedPacked128Sgemm => RuntimeConfig {
+                ffn: FfnChoice::PackedF32_128,
+                prefill: PrefillChoice::DequantSgemm,
+            },
+        }
+    }
+}
+
 /// Independent decode/prefill axes, with identical prepared down/vocabulary.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct RuntimeConfig {
@@ -50,6 +80,7 @@ impl RuntimeConfig {
             FfnChoice::Native => Ok(Q8FfnConfig::native()),
             FfnChoice::PackedF32_256 => Q8FfnConfig::packed_f32(256),
             FfnChoice::PackedF32_128 => Q8FfnConfig::packed_f32(128),
+            FfnChoice::SplitF32x4 => Ok(Q8FfnConfig::split_f32x4()),
             FfnChoice::Q81_128 => Q8FfnConfig::q8_1(128),
             FfnChoice::Q81_256 => Q8FfnConfig::q8_1(256),
         }
@@ -75,17 +106,25 @@ impl RuntimeConfig {
         matches!(self.ffn, FfnChoice::Q81_128 | FfnChoice::Q81_256)
     }
 
+    pub fn execution_config(self) -> Result<m40_llm::infer::execution_weights::Q8ExecutionConfig> {
+        m40_llm::infer::execution_weights::Q8ExecutionConfig::parse(
+            "split",
+            Some("6144"),
+            Some(if self.ffn == FfnChoice::SplitF32x4 {
+                "gate-up,down,vocabulary"
+            } else {
+                "down,vocabulary"
+            }),
+        )
+    }
+
     #[cfg(all(feature = "cuda", nvcc))]
     pub fn load_model(
         self,
         path: &std::path::Path,
         context: u32,
     ) -> Result<(m40_llm::infer::LoadedModel, m40_llm::tokenizer::Tokenizer)> {
-        use m40_llm::{
-            gguf,
-            infer::{execution_weights::Q8ExecutionConfig, LoadedModel},
-            tokenizer::Tokenizer,
-        };
+        use m40_llm::{gguf, infer::LoadedModel, tokenizer::Tokenizer};
         let gguf = gguf::load_gguf(path)?;
         let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
         ensure!(
@@ -96,7 +135,7 @@ impl RuntimeConfig {
             gguf,
             std::fs::read(path)?,
             -1,
-            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+            self.execution_config()?,
             self.ffn_config()?,
             self.prefill_backend(),
         )?;
@@ -174,6 +213,7 @@ mod tests {
             FfnChoice::Native,
             FfnChoice::PackedF32_256,
             FfnChoice::PackedF32_128,
+            FfnChoice::SplitF32x4,
             FfnChoice::Q81_128,
             FfnChoice::Q81_256,
         ] {
@@ -197,6 +237,39 @@ mod tests {
                 );
             }
         }
+        Ok(())
+    }
+
+    /// The incremental control keeps both qualified axes, while split decode
+    /// adds only gate/up preparation and no activation quantization.
+    #[test]
+    fn test_incremental_control_and_split_weight_selection_are_explicit() -> Result<()> {
+        use m40_llm::infer::execution_weights::Q8ProjectionGroup;
+        let control = ControlChoice::QualifiedPacked128Sgemm.config();
+        assert_eq!(control.ffn_config()?, Q8FfnConfig::packed_f32(128)?);
+        assert_eq!(control.prefill_backend(), Q8PrefillBackend::DequantSgemm);
+        let split = RuntimeConfig {
+            ffn: FfnChoice::SplitF32x4,
+            ..control
+        };
+        assert_eq!(split.ffn_config()?, Q8FfnConfig::split_f32x4());
+        assert_eq!(split.prompt_prefill(), control.prompt_prefill());
+        assert!(!split.is_numerical());
+        assert!(!control
+            .execution_config()?
+            .families
+            .contains(Q8ProjectionGroup::GateUp));
+        for group in [
+            Q8ProjectionGroup::GateUp,
+            Q8ProjectionGroup::Down,
+            Q8ProjectionGroup::Vocabulary,
+        ] {
+            assert!(split.execution_config()?.families.contains(group));
+        }
+        assert!(!split
+            .execution_config()?
+            .families
+            .contains(Q8ProjectionGroup::Qkv));
         Ok(())
     }
 }

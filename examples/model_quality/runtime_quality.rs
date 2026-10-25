@@ -73,15 +73,20 @@ fn record_generation(
         q8_runtime::FfnChoice::Native => None,
         q8_runtime::FfnChoice::PackedF32_256 => Some("ffn_q8_f32_packed_warp_256"),
         q8_runtime::FfnChoice::PackedF32_128 => Some("ffn_q8_f32_packed_warp_128"),
+        q8_runtime::FfnChoice::SplitF32x4 => Some("ffn_q8_split_f32x4_128"),
         q8_runtime::FfnChoice::Q81_128 => Some("ffn_q8_1_threads128"),
         q8_runtime::FfnChoice::Q81_256 => Some("ffn_q8_1_threads256"),
     };
     if let Some(operation) = expected_ffn {
+        let forwarded_tokens = if config.prefill == PrefillChoice::Sequential {
+            generated.prompt_token_len + generated.metrics.generated_tokens - 1
+        } else {
+            generated.metrics.generated_tokens
+        };
         ensure!(
-            counters["operations"][operation]["launches"]
-                .as_u64()
-                .is_some_and(|n| n > 0),
-            "requested FFN candidate was not dispatched"
+            counters["operations"][operation]["launches"].as_u64()
+                == Some(forwarded_tokens as u64 * u64::from(model.model_config.block_count)),
+            "requested FFN candidate did not execute every one-row layer forward"
         );
     }
     if config.prefill == PrefillChoice::DequantSgemm {
@@ -93,6 +98,10 @@ fn record_generation(
         ensure!(
             generated.q8_prefill_temporary_weight_bytes.is_some(),
             "missing actual temporary capacity"
+        );
+        ensure!(
+            counters["totals"]["cublas_calls"] == 7 * model.model_config.block_count,
+            "temporary SGEMM prefix did not execute all cuBLAS projections"
         );
     }
     report.append(json!({"kind":"q8_runtime_browser_generation","label":label,"config":config,
@@ -124,6 +133,7 @@ fn record_prefix_logits(
     report: &mut Report,
     reference: &mut LoadedModel,
     candidate: &mut LoadedModel,
+    control: RuntimeConfig,
     config: RuntimeConfig,
     generated: &GeneratedText,
     candidate_generated: &GeneratedText,
@@ -146,6 +156,9 @@ fn record_prefix_logits(
     let last = *steps.last().context("no sampled prefixes")?;
     let mut a = create_session(reference)?;
     let mut b = create_session(candidate)?;
+    if control.prefill != PrefillChoice::Sequential {
+        a.prefill_packed_prefix_ids(&generated.token_ids[..prompt_len])?;
+    }
     if config.prefill != PrefillChoice::Sequential {
         b.prefill_packed_prefix_ids(&generated.token_ids[..prompt_len])?;
     }
@@ -206,7 +219,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
         ffn: args.q8_runtime_candidate.context("runtime candidate")?,
         prefill: args.q8_runtime_prefill.unwrap_or_default(),
     };
-    let control = RuntimeConfig::default();
+    let control = args.q8_runtime_control.unwrap_or_default().config();
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
     let splits = args.split.selected();
@@ -230,10 +243,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
     );
     let a_stats = reference.q8_execution_stats();
     let b_stats = candidate.q8_execution_stats();
-    ensure!(
-        prepared_identity(&a_stats)? == prepared_identity(&b_stats)?,
-        "prepared control differs"
-    );
+    q8_runtime::validate_prepared_control(&a_stats, &b_stats, config)?;
     let prompt = qwen_workload::render_user_prompt(qwen_workload::USER_PROMPT);
     let prompt_ids = tokenizer.encode_with_specials(&prompt, false, false)?;
     ensure!(
@@ -258,7 +268,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
         "candidate":run::model_identity(&args.model,&candidate,&candidate_tokenizer)?,
         "control_config":control,"candidate_config":config,"is_numerical_track":config.is_numerical(),
         "original_exact_goal_eligible":!config.is_numerical(),"environment":environment,
-        "prepared_control":a_stats,"corpus_sha256":records::sha256(&corpus_bytes)?,"selected_splits":splits,
+        "prepared_control":a_stats,"prepared_candidate":b_stats,"corpus_sha256":records::sha256(&corpus_bytes)?,"selected_splits":splits,
         "reference_memory":run::memory(&reference)?,"candidate_memory":run::memory(&candidate)?,
         "revision":records::command_text("git", &["rev-parse","HEAD"])?,
         "worktree":records::command_text("git", &["status","--short"])?,
@@ -291,7 +301,15 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
     report.append(json!({"kind":"q8_runtime_browser_comparison","has_identical_generation":has_identical_generation,
         "has_fixed_workload":has_fixed_workload,"first_generated_divergence_step_zero_based":divergence,
         "control_generated_tokens":a.metrics.generated_tokens,"candidate_generated_tokens":b.metrics.generated_tokens}))?;
-    record_prefix_logits(&mut report, &mut reference, &mut candidate, config, &a, &b)?;
+    record_prefix_logits(
+        &mut report,
+        &mut reference,
+        &mut candidate,
+        control,
+        config,
+        &a,
+        &b,
+    )?;
     let mut regressions = 0;
     let mut dense_valid = 0;
     for split in splits {
@@ -330,7 +348,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
     let candidate_stats_after = candidate.q8_execution_stats();
     ensure!(
         prepared_identity(&reference_stats_after)? == prepared_identity(&a_stats)?
-            && prepared_identity(&candidate_stats_after)? == prepared_identity(&a_stats)?,
+            && prepared_identity(&candidate_stats_after)? == prepared_identity(&b_stats)?,
         "prepared control changed during evaluation"
     );
     drop(reference);
@@ -368,10 +386,7 @@ mod tests {
     #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
     fn test_runtime_prefix_diagnostics_exercise_candidates() -> Result<()> {
         use super::q8_runtime::FfnChoice;
-        use m40_llm::{
-            generate::{generate_text, GenerateOptions, PromptFormat},
-            infer::execution_weights::Q8ExecutionConfig,
-        };
+        use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};
         let _lock = crate::cuda_test_scope::lock_cuda();
         let _env: Vec<_> = [
             ("M40LLM_ENABLE_NVCC", "1"),
@@ -403,6 +418,10 @@ mod tests {
                 ffn: FfnChoice::Native,
                 prefill: PrefillChoice::DequantSgemm,
             },
+            RuntimeConfig {
+                ffn: FfnChoice::SplitF32x4,
+                prefill: PrefillChoice::DequantSgemm,
+            },
         ] {
             let load = |config: RuntimeConfig| -> Result<LoadedModel> {
                 let (mut gguf, bytes) = crate::q8_fixture::build_prefill_fixture(false);
@@ -411,16 +430,36 @@ mod tests {
                     gguf,
                     bytes,
                     -1,
-                    Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+                    config.execution_config()?,
                     config.ffn_config()?,
                     config.prefill_backend(),
                 )?;
                 model.allocate_kv_cache_for_layers(16)?;
                 Ok(model)
             };
-            let mut reference = load(RuntimeConfig::default())?;
+            let control = if config.ffn == FfnChoice::SplitF32x4 {
+                q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config()
+            } else {
+                RuntimeConfig::default()
+            };
+            let mut reference = load(control)?;
             let mut candidate = load(config)?;
             let a_stats = reference.q8_execution_stats();
+            let b_stats = candidate.q8_execution_stats();
+            q8_runtime::validate_prepared_control(&a_stats, &b_stats, config)?;
+            let mut invalid = b_stats.clone();
+            invalid.resident_bytes += 1;
+            assert!(q8_runtime::validate_prepared_control(&a_stats, &invalid, config).is_err());
+            let mut invalid = b_stats.clone();
+            invalid.tensors[0].key.layout =
+                m40_llm::infer::execution_weights::Q8ExecutionLayout::ColumnBlocks;
+            assert!(q8_runtime::validate_prepared_control(&a_stats, &invalid, config).is_err());
+            if config.ffn == FfnChoice::SplitF32x4 {
+                assert!(q8_runtime::validate_prepared_control(&a_stats, &a_stats, config).is_err());
+                assert!(
+                    q8_runtime::validate_prepared_control(&a_stats, &b_stats, control).is_err()
+                );
+            }
             let mut changed_times = a_stats.clone();
             changed_times.preparation_elapsed_ms += 1000.0;
             assert_eq!(
@@ -446,13 +485,14 @@ mod tests {
                     },
                 )
             };
-            let a = generate(&reference, RuntimeConfig::default())?;
+            let a = generate(&reference, control)?;
             let before = profile::snapshot();
             let b = generate(&candidate, config)?;
             let counters = dispatch(&before);
             let operation = match config.ffn {
                 FfnChoice::PackedF32_256 => "ffn_q8_f32_packed_warp_256",
                 FfnChoice::Q81_128 => "ffn_q8_1_threads128",
+                FfnChoice::SplitF32x4 => "ffn_q8_split_f32x4_128",
                 _ => "dequantize_q8_0_to_f32_colmajor",
             };
             assert!(
@@ -463,7 +503,15 @@ mod tests {
             );
             let destination = crate::test_files::TestReportPath::new();
             let mut report = Report::create(destination.path())?;
-            record_prefix_logits(&mut report, &mut reference, &mut candidate, config, &a, &b)?;
+            record_prefix_logits(
+                &mut report,
+                &mut reference,
+                &mut candidate,
+                control,
+                config,
+                &a,
+                &b,
+            )?;
             let records: Vec<Value> = fs::read_to_string(destination.path())?
                 .lines()
                 .map(serde_json::from_str)

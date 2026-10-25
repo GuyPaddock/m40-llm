@@ -26,7 +26,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::protocol::{self, CacheEvidence, Pair, CONTEXT_TOKENS, MAX_TOKENS};
-use super::q8_runtime::{FfnChoice, PrefillChoice, RuntimeConfig};
+use super::q8_runtime::{ControlChoice, FfnChoice, PrefillChoice, RuntimeConfig};
 
 #[path = "q8.rs"]
 mod q8;
@@ -73,6 +73,8 @@ struct Args {
     q8_runtime_candidate: Option<FfnChoice>,
     #[arg(long, value_enum, requires = "q8_runtime_candidate")]
     q8_runtime_prefill: Option<PrefillChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_control: Option<ControlChoice>,
     /// Completed model_quality report for this exact candidate/source/corpus.
     #[arg(long, requires = "q8_runtime_candidate")]
     q8_runtime_quality_report: Option<PathBuf>,
@@ -89,6 +91,10 @@ struct Args {
 }
 
 impl Args {
+    fn control_runtime_config(&self) -> RuntimeConfig {
+        self.q8_runtime_control.unwrap_or_default().config()
+    }
+
     fn candidate_runtime_config(&self) -> Option<RuntimeConfig> {
         self.q8_runtime_candidate.map(|ffn| RuntimeConfig {
             ffn,
@@ -101,7 +107,7 @@ impl Args {
             if self.should_time_ollama || self.should_profile_runtime {
                 candidate
             } else {
-                RuntimeConfig::default()
+                self.control_runtime_config()
             }
         })
     }
@@ -1081,6 +1087,7 @@ pub async fn compare() -> Result<()> {
                 .as_deref()
                 .context("selected quality report")?,
             candidate_runtime.context("selected runtime")?,
+            args.control_runtime_config(),
             &model_sha256,
             &prompt_ids,
         )?;
@@ -1156,6 +1163,8 @@ pub async fn compare() -> Result<()> {
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
     });
     manifest["primary_runtime_config"] = serde_json::to_value(primary_runtime)?;
+    manifest["quality_control_runtime_config"] =
+        serde_json::to_value(args.control_runtime_config())?;
     manifest["prefill_execution_contract"] = json!(super::q8_runtime::PREFILL_EXECUTION_CONTRACT);
     report.record(manifest)?;
     if let Some(evidence) = &selected_quality {

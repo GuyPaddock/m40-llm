@@ -30,6 +30,7 @@ fn only_record<'a>(rows: &'a [Value], kind: &str) -> Result<&'a Value> {
 fn validate(
     rows: &[Value],
     config: RuntimeConfig,
+    control_config: RuntimeConfig,
     model_sha: &str,
     corpus_bytes: &[u8],
     prompt_ids: &[u32],
@@ -51,7 +52,7 @@ fn validate(
         "quality report runtime candidate differs"
     );
     ensure!(
-        manifest["control_config"] == serde_json::to_value(RuntimeConfig::default())?,
+        manifest["control_config"] == serde_json::to_value(control_config)?,
         "quality reference differs"
     );
     ensure!(
@@ -150,6 +151,7 @@ fn validate(
 pub(super) fn load(
     path: &Path,
     config: RuntimeConfig,
+    control_config: RuntimeConfig,
     model_sha: &str,
     prompt_ids: &[u32],
 ) -> Result<QualityEvidence> {
@@ -159,7 +161,14 @@ pub(super) fn load(
         .map(serde_json::from_str)
         .collect::<Result<Vec<Value>, _>>()?;
     let corpus = std::fs::read("data/research_quality/v1.json")?;
-    let passes_exact_gate = validate(&rows, config, model_sha, &corpus, prompt_ids)?;
+    let passes_exact_gate = validate(
+        &rows,
+        config,
+        control_config,
+        model_sha,
+        &corpus,
+        prompt_ids,
+    )?;
     let candidate = rows
         .iter()
         .find(|row| row["kind"] == "q8_runtime_browser_generation" && row["label"] == "candidate")
@@ -175,6 +184,7 @@ pub(super) fn load(
         )?,
         record: json!({"kind":"q8_runtime_quality_evidence",
         "path":std::fs::canonicalize(path)?,"sha256":sha256_file(path)?,"candidate_config":config,
+        "control_config":control_config,
         "manifest":only_record(&rows,"q8_runtime_manifest")?,"summary":only_record(&rows,"q8_runtime_summary")?,
         "passes_exact_quality_gate":passes_exact_gate,"is_numerical_track":config.is_numerical()}),
     })
@@ -207,22 +217,24 @@ mod tests {
     fn test_quality_preflight_rejects_incomplete_or_mismatched_evidence() -> Result<()> {
         let config = RuntimeConfig::default();
         let corpus = include_bytes!("../../data/research_quality/v1.json");
-        assert!(validate(&[], config, "model", corpus, &[1, 2]).is_err());
+        assert!(validate(&[], config, config, "model", corpus, &[1, 2]).is_err());
         let rows = vec![
             json!({"kind":"q8_runtime_manifest","reference":{"sha256":"different"}}),
             json!({"kind":"q8_runtime_summary"}),
             json!({"kind":"q8_runtime_browser_comparison"}),
         ];
-        assert!(validate(&rows, config, "model", corpus, &[1, 2])
+        assert!(validate(&rows, config, config, "model", corpus, &[1, 2])
             .unwrap_err()
             .to_string()
             .contains("model differs"));
         let mut duplicate = rows.clone();
         duplicate.push(rows[0].clone());
-        assert!(validate(&duplicate, config, "model", corpus, &[1, 2])
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate"));
+        assert!(
+            validate(&duplicate, config, config, "model", corpus, &[1, 2])
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate")
+        );
         Ok(())
     }
 
@@ -259,26 +271,42 @@ mod tests {
                 "reference_score":{"passed":true},"candidate_score":{"passed":true}})
                 }),
         );
-        assert!(validate(&rows, config, "model", corpus, &[1, 2])?);
+        assert!(validate(&rows, config, config, "model", corpus, &[1, 2])?);
+        let qualified =
+            super::super::super::q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config();
+        assert!(validate(&rows, config, qualified, "model", corpus, &[1, 2])
+            .unwrap_err()
+            .to_string()
+            .contains("quality reference differs"));
+        rows[0]["control_config"] = serde_json::to_value(qualified)?;
+        assert!(validate(
+            &rows,
+            config,
+            qualified,
+            "model",
+            corpus,
+            &[1, 2]
+        )?);
+        rows[0]["control_config"] = serde_json::to_value(config)?;
         for contract in [Value::Null, json!("prefix-unfenced-v0")] {
             let mut stale = rows.clone();
             stale[0]["prefill_execution_contract"] = contract;
-            assert!(validate(&stale, config, "model", corpus, &[1, 2])
+            assert!(validate(&stale, config, config, "model", corpus, &[1, 2])
                 .unwrap_err()
                 .to_string()
                 .contains("rerun quality"));
         }
-        assert!(validate(&rows, config, "model", corpus, &[2, 1])
+        assert!(validate(&rows, config, config, "model", corpus, &[2, 1])
             .unwrap_err()
             .to_string()
             .contains("prompt differs"));
         rows[4]["generation"]["generated_token_ids"][20] = json!(4);
-        assert!(validate(&rows, config, "model", corpus, &[1, 2]).is_err());
+        assert!(validate(&rows, config, config, "model", corpus, &[1, 2]).is_err());
         rows[2]["has_identical_generation"] = json!(false);
         rows[1]["passes_exact_quality_gate"] = json!(false);
-        assert!(!validate(&rows, config, "model", corpus, &[1, 2])?);
+        assert!(!validate(&rows, config, config, "model", corpus, &[1, 2])?);
         rows.pop();
-        assert!(validate(&rows, config, "model", corpus, &[1, 2])
+        assert!(validate(&rows, config, config, "model", corpus, &[1, 2])
             .unwrap_err()
             .to_string()
             .contains("quality tasks"));

@@ -50,16 +50,9 @@ impl ComparisonRun {
             "control and candidate must use the same GPU"
         );
         let stats = model.q8_execution_stats();
-        if runtime.is_some() {
+        if let Some(config) = runtime {
             let control = self.server.state.model.q8_execution_stats();
-            ensure!(
-                stats.mode == control.mode
-                    && stats.families == control.families
-                    && stats.resident_bytes == control.resident_bytes
-                    && stats.source_weights_bytes == control.source_weights_bytes
-                    && stats.single_row_down_split_launch == control.single_row_down_split_launch,
-                "runtime comparison changed prepared down/vocabulary control"
-            );
+            super::super::q8_runtime::validate_prepared_control(&control, &stats, config)?;
         }
         let source_hash: String = stats
             .tensors
@@ -80,6 +73,7 @@ impl ComparisonRun {
             "control_execution": self.server.state.model.q8_execution_stats(),
             "candidate_execution": stats, "candidate_cold_load_elapsed_ms": started.elapsed().as_secs_f64() * 1000.0,
             "candidate_runtime_config":runtime,
+            "control_runtime_config":self.args.control_runtime_config(),
             "tracked_device_payload_before_candidate_bytes": before,
             "tracked_device_payload_after_candidate_bytes": CudaContext::total_device_bytes(),
             "combined_process_peak_host_rss_kib": peak_host_rss_kib(),
@@ -185,6 +179,7 @@ impl ComparisonRun {
         self.report.record(
             json!({"kind":"q8_execution_summary","phase":phase,"comparison":summary,
             "candidate_runtime_config":self.args.candidate_runtime_config(),
+            "control_runtime_config":self.args.control_runtime_config(),
             "is_ollama_comparison":false,"requires_quality_parity_for_promotion":true}),
         )
     }
@@ -199,11 +194,17 @@ impl ComparisonRun {
                     .as_deref()
                     .context("runtime quality report")?,
                 config,
+                self.args.control_runtime_config(),
                 &self.model_sha256,
                 &self.prompt_ids,
             )?;
             passes_runtime_quality = evidence.passes_exact_gate;
-            self.report.record(evidence.record)?;
+            self.report.record(evidence.record.clone())?;
+            if passes_runtime_quality {
+                // Passing exact evidence binds both controls' timed output and
+                // actual replay IDs, not merely a configuration name/summary.
+                self.selected_quality = Some(evidence);
+            }
         }
         self.load_prepared_server().await?;
         let smokes_pass = self.execution_smokes().await?;
@@ -390,6 +391,43 @@ mod tests {
         assert!(parse_args(&["--time-ollama"]).is_err());
         assert!(parse_args(&["--time-ollama", "--compare-q8-runtime", "native"]).is_err());
         assert!(parse_args(&[]).unwrap().primary_runtime_config().is_none());
+        Ok(())
+    }
+
+    /// Incremental pairs name the current qualified control rather than the
+    /// old native/sequential baseline; selected-vs-Ollama still uses candidate.
+    #[test]
+    fn test_split_ffn_incremental_control_is_explicit() -> Result<()> {
+        let values = [
+            "--compare-q8-runtime",
+            "split-f32x4-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-control",
+            "qualified-packed128-sgemm",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+        ];
+        let args = parse_args(&values)?;
+        assert_eq!(
+            args.primary_runtime_config(),
+            Some(super::super::super::q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config())
+        );
+        let candidate = args.candidate_runtime_config().unwrap();
+        assert_eq!(
+            candidate.ffn_config()?,
+            m40_llm::infer::Q8FfnConfig::split_f32x4()
+        );
+        assert_eq!(
+            candidate.prompt_prefill(),
+            args.primary_runtime_config().unwrap().prompt_prefill()
+        );
+        let args = parse_args(&[values.as_slice(), &["--time-ollama"]].concat())?;
+        assert_eq!(
+            args.primary_runtime_config(),
+            args.candidate_runtime_config()
+        );
+        assert!(parse_args(&["--q8-runtime-control", "qualified-packed128-sgemm"]).is_err());
         Ok(())
     }
 
