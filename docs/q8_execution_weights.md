@@ -89,7 +89,9 @@ empty, or duplicate family names fail; use mode `off` to disable all preparation
 `split` prepares separate original FP16 scales and signed Q8 values for each
 recognized Q/K/V/O, gate/up/down, and vocabulary projection. Tied output
 embeddings are prepared once under their chosen tensor identity. The measured
-single-token launch uses four columns/128 threads, except K/V use one column.
+single-token launch uses four columns/128 threads, except K/V use one column
+and down uses the existing four-column/256-thread launch to match native
+coltile4/split4 FP32 accumulation order. Multi-row down remains unchanged.
 `mixed` adds width16 input-tiled Q/O/down copies for rows >=64; smaller rows
 still use split planes. It does not globally replace the layout for every role.
 
@@ -116,6 +118,8 @@ owners; pointers are not used as cross-model cache identities.
 `q8_execution_stats()` exposes estimated/actual prepared bytes, budget,
 source uploaded bytes, total source+prepared device payload, selected families, per-tensor/layout
 keys and bytes, vocabulary-prepared status, and hash/preparation milliseconds.
+`single_row_down_split_launch` reports effective columns/threads when down
+is actually prepared; it is null for off or caches without down weights.
 `peak_setup_host_payload_bytes`
 estimates the original file + retained tensor-data blob + largest temporary
 packed tensor. These payload estimates exclude allocator/page overhead,

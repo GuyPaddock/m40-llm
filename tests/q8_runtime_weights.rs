@@ -100,7 +100,8 @@ fn project(
 /// Preparation must be model-owned and complete before any forward work.
 /// Split/mixed dispatch preserves native math, uses no per-call allocations,
 /// retains explicit sync/async producer-stream behavior, rejects failed setup
-/// without leaks, and never aliases another model's cache.
+/// without leaks, and never aliases another model's cache. Telemetry exposes
+/// the native-order single-row down launch only when that cache exists.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()> {
@@ -116,10 +117,16 @@ fn test_runtime_cache_prepares_dispatches_and_releases_per_model() -> Result<()>
         );
         assert!(native.q8_execution_stats().tensors.is_empty());
         assert!(!native.q8_execution_stats().has_prepared_vocabulary);
+        assert!(native
+            .q8_execution_stats()
+            .single_row_down_split_launch
+            .is_none());
         for mode in [Q8ExecutionMode::Split, Q8ExecutionMode::Mixed] {
             let model = make_model(mode, 0)?;
             let stats = model.q8_execution_stats();
             assert!(stats.has_prepared_vocabulary);
+            let launch = stats.single_row_down_split_launch.unwrap();
+            assert_eq!((launch.columns(), launch.threads()), (4, 256));
             assert_eq!(
                 stats.tensors.len(),
                 if mode == Q8ExecutionMode::Mixed {

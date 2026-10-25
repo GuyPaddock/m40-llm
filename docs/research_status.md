@@ -254,6 +254,14 @@ tests pass with cuBLAS on/off. This is numerical evidence, not real-model
 timing. Next correct only the single-row prepared-down launch selection,
 record it in cache telemetry, and require real same-prefix and HTTP checks.
 
+The dispatch correction now selects existing 4-column/256-thread separate
+execution only for single-row prepared down. Other families, multi-row paths,
+storage and global preparation-off defaults stay unchanged. Cache telemetry
+records `single_row_down_split_launch` for actual prepared-down ownership.
+Cache/parity checks, the full 21-test runner, both warning-as-error CI lanes
+and non-CUDA/CUDA-server Clippy pass. A clean real prefix probe and the
+original full-workload gate remain; no new speed claim is made yet.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host

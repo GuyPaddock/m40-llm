@@ -9,8 +9,8 @@ use anyhow::{ensure, Context, Result};
 use super::{
     runtime::{check_budget, ProjectionFamily},
     DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionConfig,
-    Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats, Q8ProjectionLaunch, Q8SeparateLaunch,
-    Q8SourceIdentity, Q8SourceView, Q8TiledLaunch,
+    Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats, Q8ProjectionLaunch, Q8SourceIdentity,
+    Q8SourceView, Q8TiledLaunch,
 };
 use crate::{
     cuda::{CudaContext, CudaStream},
@@ -143,6 +143,11 @@ impl Q8ExecutionCache {
         stats.has_prepared_vocabulary = entries
             .iter()
             .any(|(_, family, _)| *family == ProjectionFamily::Vocabulary);
+        stats.single_row_down_split_launch = entries
+            .iter()
+            .any(|(_, family, _)| *family == ProjectionFamily::Down)
+            .then(|| ProjectionFamily::Down.select_split_launch(1))
+            .transpose()?;
         stats.budget_bytes = config.budget_bytes;
         stats.model_hash_elapsed_ms = hash_elapsed_ms;
         stats.estimated_bytes = estimated;
@@ -284,10 +289,7 @@ impl Q8ExecutionCache {
         } else {
             (
                 &entry.split,
-                Q8ProjectionLaunch::Separate(Q8SeparateLaunch::new(
-                    entry.family.split_columns(),
-                    128,
-                )?),
+                Q8ProjectionLaunch::Separate(entry.family.select_split_launch(m)?),
             )
         };
         weight.enqueue_projection_async(input, output, m, n, k, stream, launch)?;

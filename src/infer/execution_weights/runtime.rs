@@ -1,7 +1,7 @@
 use anyhow::{ensure, Context, Result};
 use serde::{Serialize, Serializer};
 
-use super::{Q8ExecutionKey, Q8ExecutionLayout};
+use super::{Q8ExecutionKey, Q8ExecutionLayout, Q8SeparateLaunch};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -158,6 +158,7 @@ pub struct Q8ExecutionStats {
     pub mode: Q8ExecutionMode,
     pub families: Q8ExecutionFamilies,
     pub has_prepared_vocabulary: bool,
+    pub single_row_down_split_launch: Option<Q8SeparateLaunch>,
     pub budget_bytes: usize,
     pub estimated_bytes: usize,
     pub resident_bytes: usize,
@@ -175,6 +176,7 @@ impl Q8ExecutionStats {
             mode: Q8ExecutionMode::Off,
             families: Q8ExecutionFamilies::none(),
             has_prepared_vocabulary: false,
+            single_row_down_split_launch: None,
             budget_bytes: 0,
             estimated_bytes: 0,
             resident_bytes: 0,
@@ -249,6 +251,19 @@ impl ProjectionFamily {
         } else {
             4
         }
+    }
+
+    pub(super) fn select_split_launch(self, rows: i32) -> Result<Q8SeparateLaunch> {
+        // Match native coltile4/split4 task and reduction order for decode down.
+        // Other projection families and multi-row policies stay intact.
+        Q8SeparateLaunch::new(
+            self.split_columns(),
+            if self == Self::Down && rows == 1 {
+                256
+            } else {
+                128
+            },
+        )
     }
 }
 
@@ -371,6 +386,18 @@ mod tests {
                     4
                 }
             );
+            for rows in [1, 4, 64] {
+                let launch = family.select_split_launch(rows).unwrap();
+                assert_eq!(launch.columns(), family.split_columns());
+                assert_eq!(
+                    launch.threads(),
+                    if family == ProjectionFamily::Down && rows == 1 {
+                        256
+                    } else {
+                        128
+                    }
+                );
+            }
         }
         assert!(ProjectionFamily::from_name("blk.bad.ffn_down.weight", "output.weight").is_none());
         assert!(ProjectionFamily::from_name("blk.0.attn_q.bias", "output.weight").is_none());
