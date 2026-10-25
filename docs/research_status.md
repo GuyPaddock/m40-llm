@@ -57,30 +57,34 @@ gate. See [the screen, raw data and limitations](experiments/2026-10-25-sparse-q
 The separate pageable H2D/default-stream audit is now complete, including
 native setup and legacy metadata publication. The release checkpoint preserves
 C11's exact trace and does not establish a speedup from the correctness fixes.
-Next assess C23's retained input-layout prerequisite separately; it must not
-consume the rejected sparse kernel. Layer ranking remains C24, compact export
+The C23 input-layout screen below is independent of the rejected sparse
+kernel. Layer ranking remains C24, compact export
 C25. Do not tune on held-out/browser inputs or reopen failed n-gram/dense-layout
 screens. See [the audit and raw results](experiments/2026-10-25-upload-ordering.md).
 
-C23 now starts with an explicit [magnitude-selection contract and bounded
-device screen](activation_sparsity.md). The retained C10 dense-Q8 input-tiled
-layout can address individual retained inputs without C21 masks. CPU selection
-and quantile fitting are committed in `10478a8`. Two explicit M40 tests now
-verify deterministic GPU compaction, same-zeroed native/CPU projection parity,
-tails, scratch reuse and nonfinite preservation. Enqueue issues two launches
-with zero allocation/copy/sync. Existing tiled-Q8 parity, attention/forward/
-projection/ownership checks, non-CUDA library tests and CUDA/server Clippy
-pass. The next commit adds the release screen including selection cost; device
-speed, per-layer calibration, model quality and integration are not established.
-Runtime defaults stay unchanged.
+**C23's layout prerequisite is positive; C23 is not complete.** The clean
+`bd76484` release screen has 100 alternating serial pairs across four fixed
+geometries and five sparsity targets. At achieved 40.2/51.2/60.6% sparsity,
+width16/128 reduces isolated selection-plus-down latency by 18.6/30.4/39.1%.
+These synthetic inputs and real layer-0 Qwen weights do not establish model
+quality, real activation sparsity, DRAM savings or E2E gains. Zero threshold
+is numerically correct but slower. See [the full screen and raw results](experiments/2026-10-25-activation-input-sparsity.md).
 
-The standalone consumer is committed in `9b5148c`; cuBLAS-off sparse/tiled
-parity and existing attention/projection/MLP checks also pass. The shared
-execution-weight benchmark now has a bounded sparse-input mode. Its real
-Qwen layer-0 down preflight passes full matched-zero output, retained indices/
-values and independent FP64 samples across all twenty cells. The one-iteration
-preflight is correctness evidence only, not pooled with the release timing
-screen that follows the benchmark commit.
+Selection/quantile contracts are committed in `10478a8`, reusable CUDA scratch
+and selected-input consumption in `9b5148c`, and the shared benchmark mode in
+`bd76484`. Two explicit M40 tests verify deterministic GPU compaction,
+same-zeroed native/CPU parity, tails, nonfinite bits and scratch reuse. Enqueue
+adds two launches with zero allocation/copy/sync. Existing tiled-Q8,
+attention/projection/MLP checks pass with cuBLAS on/off; cuBLAS-on forward/
+ownership, both warning-as-error CI lanes, Clippy and fmt pass as well.
+GPU-less CI is not GPU correctness evidence. The one-iteration preflight is
+not pooled with the measured screen.
+
+Next finish C23: capture calibration-only completed SwiGLU values, freeze
+per-layer thresholds near 25/40/50/60%, add immutable opt-in application, then
+evaluate both frozen C19 splits for loss/tasks/logit drift and complete latency.
+Include the duplicate tiled weights and selection cost. No held-out/browser
+fitting, new kernel sweep or default promotion. See [the contract and commands](activation_sparsity.md).
 
 C21 used these dependency-ordered commits:
 

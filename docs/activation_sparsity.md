@@ -17,7 +17,8 @@ to zero; an empty source vector is invalid.
 Quantile calibration consumes caller-supplied finite observations only. It
 does not discover models or mix calibration and held-out data. Tied magnitudes
 may exceed the target sparsity, so reports must measure the retained count.
-Per-layer model calibration remains gated on a useful device consumer.
+Per-layer model calibration follows a useful device-consumer screen, not
+assumed savings from zero-valued activations alone.
 
 ## Bounded Implementation Sequence
 
@@ -99,3 +100,12 @@ capacity and achieved sparsity are explicit. Source-level requested load bytes
 are not DRAM transactions; repeated scale/index loads may hit caches. Tracked
 device payloads are released before the terminal completion record; primary
 CUDA context overhead can remain until process exit.
+
+## Current Checkpoint
+
+The [clean release screen](experiments/2026-10-25-activation-input-sparsity.md)
+passes the layout prerequisite at roughly 40-60% synthetic input sparsity,
+including GPU selection cost. This permits calibration/quality work, not a
+runtime promotion or C23 completion. Zero-threshold selection is correct but
+slower, and real model quality remains unmeasured. Both unchanged-model speed
+objectives remain unmet; runtime defaults are unchanged.

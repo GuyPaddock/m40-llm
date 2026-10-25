@@ -2,6 +2,31 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Sparse SwiGLU Input Prerequisite
+
+C23's selected-input down projection passes a bounded isolated speed gate,
+independently of C21's rejected sparse-weight representation. Real Qwen2.5-3B
+Q8_0 down weights, synthetic inputs, release M40, five alternating pairs per
+cell and 100 repeated operations per event interval. Selection is included.
+
+| Achieved Input Sparsity | Native ms | Selection + Down ms | Paired Latency Change |
+| --- | ---: | ---: | ---: |
+| 0.79% | 0.172750 | 0.210915 | +22.16% |
+| 25.99% | 0.172651 | 0.167173 | -3.20% |
+| 40.16% | 0.172722 | 0.140674 | -18.55% |
+| 51.19% | 0.172701 | 0.120183 | -30.43% |
+| 60.64% | 0.172767 | 0.105122 | -39.14% |
+
+Width16/128 throughout the table; all four fixed geometries and twenty cells
+are retained. The marginal 25% row is not promoted. GPU/native matched-zero
+and FP64 checks pass, but no model threshold, quality or E2E gain is established.
+Activation thresholding is a model change, not unchanged-engine optimization.
+The extra tiled down tensor costs 23,953,408 bytes plus 88,068 bytes scratch;
+reduced requested value loads are not measured DRAM traffic. Final GPU use is
+0 MiB. See [the full report and raw pairs](experiments/2026-10-25-activation-input-sparsity.md).
+Next finish per-layer C19-calibration-only fitting and opt-in model evaluation.
+Runtime defaults and both unmet exact-engine speed objectives are unchanged.
+
 ## 2026-10-25: Upload Ordering and Exact-Trace Check
 
 The pageable H2D/default-stream audit now has immediate-consumer regressions,
