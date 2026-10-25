@@ -72,10 +72,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                     "resident_kv":0,"tracked_device_bytes":CudaContext::total_device_bytes()},
                 "scope":"whole model weights and qualified vocabulary cache resident but only this layer FFN executes; native CUDA allocator/driver overhead excluded"}),
             )?;
-            for _ in 0..3 {
-                pipeline.enqueue(Stage::Complete)?;
-            }
-            pipeline.drain()?;
+            let warmup = pipeline.warm_up(1000.0, 256)?;
+            write_record(
+                &mut output,
+                json!({"kind":"ffn_baseline_warmup","layer_id":layer.source.layer_id,"rows":rows,"warmup":warmup,"gpu_after":inspect_gpu()?}),
+            )?;
             for trial in 0..args.trials {
                 let gpu_before = inspect_gpu()?;
                 let mut stages = [Stage::GateUpSwiglu, Stage::IsolatedDown, Stage::Complete];

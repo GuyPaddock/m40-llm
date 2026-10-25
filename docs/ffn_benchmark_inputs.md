@@ -162,6 +162,12 @@ freshly computed SwiGLU separately. Events cover each causal multi-stream path;
 host enqueue/completion time and enqueue counters accompany GPU elapsed time.
 Stage order alternates across baseline trials. This is not yet an A/B speedup
 screen; the later bounded candidates require their own alternating pairs.
+After CPU validation, each shape warms through at least 1000 ms of measured
+complete-FFN work, in 32-iteration batches capped at 256. Warmup records are
+separate from primary trials; exhaustion fails rather than extending until a
+desired latency appears. GPU boundary clocks remain reported and no system
+clock settings are changed. The [initial three-iteration run](experiments/2026-10-25-maxwell-ffn-baseline.md)
+is preserved because its clock ramp limits cross-case comparisons.
 Quantization cost is explicitly zero because the FP32 control has no activation
 quantization operation. Allocation, upload, CPU references, readbacks and the
 single completion wait lie outside the repeated enqueue region. Any enqueue

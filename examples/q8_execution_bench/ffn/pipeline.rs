@@ -300,6 +300,34 @@ impl<'a> FfnPipeline<'a> {
         )
     }
 
+    /// Run a fixed minimum of measured complete-FFN work, not a search for a
+    /// favorable latency. A finite batch cap fails explicitly if it cannot finish.
+    pub fn warm_up(&self, minimum_gpu_ms: f64, maximum_batches: usize) -> Result<Value> {
+        ensure!(
+            minimum_gpu_ms.is_finite()
+                && minimum_gpu_ms > 0.0
+                && (1..=256).contains(&maximum_batches),
+            "invalid bounded FFN warmup policy"
+        );
+        let began = Instant::now();
+        let mut elapsed_gpu_ms = 0.0;
+        for batch in 1..=maximum_batches {
+            let timing = self.time(Stage::Complete, 32)?;
+            elapsed_gpu_ms += timing["gpu_ms"]
+                .as_f64()
+                .context("missing warmup GPU time")?
+                * 32.0;
+            if elapsed_gpu_ms >= minimum_gpu_ms {
+                return Ok(
+                    json!({"minimum_gpu_ms":minimum_gpu_ms,"elapsed_gpu_ms":elapsed_gpu_ms,
+                    "batches":batch,"iterations_per_batch":32,"maximum_batches":maximum_batches,
+                    "wall_ms":began.elapsed().as_secs_f64()*1000.0,"scope":"untimed warmup; not pooled with primary trials; no clock settings modified"}),
+                );
+            }
+        }
+        anyhow::bail!("bounded FFN warmup exhausted {maximum_batches} batches after {elapsed_gpu_ms} ms; required {minimum_gpu_ms} ms")
+    }
+
     pub fn verify_guards_and_inputs(&self, layer: &FfnLayerSamples) -> Result<()> {
         self.drain()?;
         for buffer in [

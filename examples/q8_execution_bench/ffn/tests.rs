@@ -277,6 +277,7 @@ fn sample_layer(model: &LoadedModel) -> Result<FfnLayerSamples> {
 /// Genuine one/four-row pipelines use the production wrappers and prepared
 /// down, preserve guards/inputs across repeated asynchronous stages, and match
 /// scalar CPU references without per-iteration allocation/copy/synchronization.
+/// Warmup records actual work and fails at its declared finite batch cap.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()> {
@@ -334,6 +335,14 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
                 assert_eq!(CudaContext::total_device_bytes(), resident);
             }
             pipeline.verify_guards_and_inputs(&layer)?;
+            let warmup = pipeline.warm_up(0.25, 128)?;
+            assert!(warmup["elapsed_gpu_ms"].as_f64().unwrap() >= 0.25);
+            assert!(warmup["batches"].as_u64().unwrap() <= 128);
+            assert!(pipeline.warm_up(f64::MAX, 1).is_err());
+            assert!(pipeline.warm_up(f64::NAN, 1).is_err());
+            assert!(pipeline.warm_up(0.0, 1).is_err());
+            assert!(pipeline.warm_up(1.0, 0).is_err());
+            assert_eq!(CudaContext::total_device_bytes(), resident);
             // Queue a changing producer on decode before each full pipeline.
             // Four-row gate/up consumes on prefill and must wait for this write.
             let mut expected_input = layer.normalized_inputs[..rows * 64].to_vec();
