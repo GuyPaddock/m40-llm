@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Input-Tiled Q8 Projection Experiment
+
+C10 completes the independent input-tiled layout screen within twelve
+configurations. Packing preserves every Q8 value/FP16 scale bit. Best vector
+decode medians are gate **0.141 ms**, down **0.161 ms**, vocabulary **1.661 ms**,
+versus GGUF **0.229/0.191/2.586 ms**. A split-plane compatibility refresh gives
+**0.140/0.142/1.623 ms**, so input tiling does not replace split planes globally.
+
+The vector mapping is more interesting for larger rows: rows=64 Q/down are
+**1.244/6.480 ms** versus native GGUF **6.736/20.430 ms**. These are isolated
+projection results, not full-model prefill or E2E improvements. A scale-reusing
+coalesced-lane mapping was slower and did not reduce compiler registers;
+its negative code/results are preserved. The twelve-case tuning budget is closed.
+
+Width4 adds 5.88% payload at aligned shapes; widths8/16 do not. Input-tiled
+preparation is slower than split planes, and caching beside source weights
+requires extra resident memory. Initial noisy K/V rows received one longer
+vector confirmation; no precise coalesced K/V gain is claimed. Across five
+datasets, all 2,460 measured intervals are serial, with one GPU compute PID
+at boundaries. CUDA/non-CUDA checks pass; runtime/KV defaults are unchanged.
+
+See the [full report and raw artifacts](experiments/2026-10-24-q8-input-tiled.md).
+Next: conditional C10A per-family integration and model/paired HTTP gates.
+The selected HTTP checkpoint remains 31.852 tok/s; both original targets
+remain unmet. Do not turn these projection ratios into generation speed claims.
+
 ## 2026-10-24: Separate-Plane Q8 Projection Experiment
 
 C09's lossless separate-scale/value layout passes parity on real Qwen Q8_0

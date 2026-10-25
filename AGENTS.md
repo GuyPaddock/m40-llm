@@ -125,8 +125,22 @@ below is historical context, not the current research execution order.
   fused generation kernels, and model loader/cache remain unchanged. See
   `docs/experiments/2026-10-24-q8-separate-projections.md` for raw trials,
   memory/setup costs, clock/measurement limitations, and negative configs.
-- Next: independent C10 input-tiled experiment, then conditional C10A useful
-  per-family integration. C10 does not depend on C09 succeeding. Use the selected
+- C10 completes independent input-tiled Q8 packing and twelve CUDA cases:
+  widths4/8/16, threads128/256, vector/coalesced-lane mappings. All source
+  bytes/scales and tails are preserved; padded output guards and CPU/GPU parity
+  pass. Best vector M1 gate/down/vocabulary are 0.141/0.161/1.661 ms; refreshed
+  split planes are 0.140/0.142/1.623 ms. Vector rows=64 Q/down are promising
+  at 1.244/6.480 ms, but no model/HTTP speedup is claimed. Coalesced lanes
+  were slower and did not reduce registers; code/results are preserved before
+  any later removal. Width4 adds 5.88% storage, and tiled preparation is slower.
+  All 2,460 measured intervals are serial; raw records, compiler output,
+  configuration bounds, and clock limits are in
+  `docs/experiments/2026-10-24-q8-input-tiled.md`. The C10 tuning budget is closed.
+  CUDA parity with cuBLAS on/off, forward/ownership, non-CUDA warning-as-error
+  tests, and Clippy pass. Loader/cache, generation dispatch, and defaults do not change.
+- Next: conditional C10A useful per-family integration, not another layout
+  tuning round. Preserve useful fused operations and explicitly budget duplicate
+  source/prepared weights, then require model parity and HTTP E2E gates. Use the selected
   C07 benchmark config for subsequent controls, require parity and repeated
   HTTP E2E gates, and bound experiments before C11/C11A. Missing counters or
   the original speed target do not block the later n-gram feasibility decision

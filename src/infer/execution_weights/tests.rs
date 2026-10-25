@@ -125,6 +125,90 @@ fn test_separate_launch_accepts_only_fixed_experiment_configs() {
     }
 }
 
+/// Every supported storage width must reconstruct the original bytes exactly,
+/// including scale bit patterns and stored K tails; padded columns/headers are
+/// zero rather than uninitialized data interpreted as weights.
+#[test]
+fn test_input_tiles_preserve_bytes_and_zero_padding() {
+    let shape = Q8MatrixShape::new(35, 33).unwrap();
+    let identity =
+        Q8SourceIdentity::from_column_blocks([2; 32], "tiled".into(), 103, shape).unwrap();
+    let mut bytes = Vec::new();
+    for block in 0..shape.block_count().unwrap() {
+        let bits = [0_u16, 0x8000, 0x3c00, 0xbc00, 0x7c00, 0x7e31][block % 6];
+        bytes.extend_from_slice(&bits.to_le_bytes());
+        bytes.extend((0..32).map(|lane| (block * 51 + lane * 7) as u8));
+    }
+    let source = Q8SourceView::from_tensor_bytes(&identity, &bytes).unwrap();
+    for columns in [1, 2, 4, 8, 16, 32] {
+        let tiled = HostQ8ExecutionWeight::tile_inputs(source, columns).unwrap();
+        assert_eq!(tiled.key().source, identity);
+        let geometry = tiled.plan().tile().unwrap();
+        let tiles = &tiled.planes()[0];
+        let mut restored = vec![0; bytes.len()];
+        for qb in 0..shape.blocks_per_column() {
+            for tile in 0..geometry.output_tiles {
+                let base = (qb * geometry.output_tiles + tile) * geometry.record_bytes;
+                assert!(tiles[base + columns * 2..base + geometry.values_offset]
+                    .iter()
+                    .all(|&b| b == 0));
+                for local in 0..columns {
+                    let col = tile * columns + local;
+                    let scale = &tiles[base + local * 2..base + local * 2 + 2];
+                    if col < shape.output_dim() {
+                        let dest = (col * shape.blocks_per_column() + qb) * 34;
+                        restored[dest..dest + 2].copy_from_slice(scale);
+                        for lane in 0..32 {
+                            restored[dest + 2 + lane] =
+                                tiles[base + geometry.values_offset + lane * columns + local];
+                        }
+                    } else {
+                        assert_eq!(scale, [0, 0]);
+                        for lane in 0..32 {
+                            assert_eq!(
+                                tiles[base + geometry.values_offset + lane * columns + local],
+                                0
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(restored, bytes, "columns={columns}");
+        assert_eq!(tiles.len(), tiled.plan().resident_bytes());
+    }
+    for columns in [0, 3, 64] {
+        assert!(HostQ8ExecutionWeight::tile_inputs(source, columns).is_err());
+    }
+}
+
+/// The CUDA experiment offers twelve launch shapes, not every storage descriptor
+/// width or arbitrary thread count. Reject unsupported choices before enqueue.
+#[test]
+fn test_tiled_launch_accepts_only_twelve_experiment_configs() {
+    for access in [Q8TiledAccess::Vector, Q8TiledAccess::CoalescedLanes] {
+        for columns in [4, 8, 16] {
+            for threads in [128, 256] {
+                let launch = Q8TiledLaunch::new(columns, threads, access).unwrap();
+                assert_eq!(launch.columns(), columns);
+                assert_eq!(launch.threads(), threads);
+                assert_eq!(launch.access(), access);
+            }
+        }
+        for (columns, threads) in [
+            (0, 128),
+            (1, 128),
+            (2, 128),
+            (32, 256),
+            (4, 0),
+            (8, 64),
+            (16, 512),
+        ] {
+            assert!(Q8TiledLaunch::new(columns, threads, access).is_err());
+        }
+    }
+}
+
 /// Real GGUF sources must be rank-two Q8 with complete rows; synthetic ragged
 /// rows require the explicit padded-column constructor, never implicit sizing.
 #[test]

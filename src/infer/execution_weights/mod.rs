@@ -203,6 +203,48 @@ impl Q8SeparateLaunch {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Q8TiledAccess {
+    Vector,
+    CoalescedLanes,
+}
+
+/// Twelve bounded configurations; storage width is part of identity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Q8TiledLaunch {
+    columns: u32,
+    threads: u32,
+    access: Q8TiledAccess,
+}
+
+impl Q8TiledLaunch {
+    pub fn new(columns: u32, threads: u32, access: Q8TiledAccess) -> Result<Self> {
+        ensure!(
+            matches!(columns, 4 | 8 | 16),
+            "Q8 tiled columns must be 4, 8, or 16"
+        );
+        ensure!(
+            matches!(threads, 128 | 256),
+            "Q8 tiled threads must be 128 or 256"
+        );
+        Ok(Self {
+            columns,
+            threads,
+            access,
+        })
+    }
+    pub fn columns(self) -> u32 {
+        self.columns
+    }
+    pub fn threads(self) -> u32 {
+        self.threads
+    }
+    pub fn access(self) -> Q8TiledAccess {
+        self.access
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Q8ExecutionKey {
     pub source: Q8SourceIdentity,
@@ -330,6 +372,38 @@ pub struct HostQ8ExecutionWeight {
 }
 
 impl HostQ8ExecutionWeight {
+    /// Losslessly transpose byte payloads into input-block/output-tile records.
+    /// Padded columns and alignment bytes are zero; stored K tails are copied.
+    pub fn tile_inputs(source: Q8SourceView<'_>, columns: usize) -> Result<Self> {
+        let shape = source.identity().shape();
+        let layout = Q8ExecutionLayout::InputTiled { columns };
+        let plan = layout.allocation_plan(shape)?;
+        let geometry = plan.tile().expect("input-tiled plan has geometry");
+        let mut tiles = vec![0; plan.resident_bytes()];
+        for qblock in 0..shape.blocks_per_column() {
+            for tile in 0..geometry.output_tiles {
+                let base = (qblock * geometry.output_tiles + tile) * geometry.record_bytes;
+                for local_col in 0..columns.min(shape.output_dim() - tile * columns) {
+                    let col = tile * columns + local_col;
+                    let block = (col * shape.blocks_per_column() + qblock) * Q8_BLOCK_BYTES;
+                    tiles[base + local_col * 2..base + local_col * 2 + 2]
+                        .copy_from_slice(&source.blocks()[block..block + 2]);
+                    for qindex in 0..Q8_BLOCK_ELEMENTS {
+                        tiles[base + geometry.values_offset + qindex * columns + local_col] =
+                            source.blocks()[block + 2 + qindex];
+                    }
+                }
+            }
+        }
+        Self::new(
+            Q8ExecutionKey {
+                source: source.identity().clone(),
+                layout,
+            },
+            vec![tiles],
+        )
+    }
+
     /// Copy scale bit patterns and all signed bytes, including inactive tails.
     /// No floating-point conversion or re-quantization occurs during packing.
     pub fn separate_scales_values(source: Q8SourceView<'_>) -> Result<Self> {

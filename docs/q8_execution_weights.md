@@ -8,8 +8,10 @@ this API, and no runtime/default layout selection or model cache is added.
 C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
 and real-tensor release microbenchmark. See the
 [measured results](experiments/2026-10-24-q8-separate-projections.md).
-C10 will independently test input-tiled storage; its descriptor alone is not
-a kernel speed or quality result.
+C10 independently implements lossless input-tiled storage and two bounded
+CUDA mappings. See the [tiled experiment](experiments/2026-10-24-q8-input-tiled.md).
+Its vector mapping is a per-family candidate; the coalesced-lane mapping was
+slower. Neither microbenchmark changes production dispatch or model loading.
 
 ## Source and Identity
 
@@ -39,8 +41,8 @@ again when invoking a projection.
 ## Layout and Memory Contracts
 
 Each Q8_0 block has the original two FP16 scale bytes and 32 signed-value
-bytes. C08 copies existing column blocks verbatim. C09 implements the separate
-planes; input-tiled storage is still a descriptor for the independent experiment:
+bytes. C08 copies existing column blocks verbatim. C09 implements separate
+planes, and C10 implements the input-tiled representation:
 
 | Layout | Owned Planes | Ordering |
 | --- | --- | --- |
@@ -60,6 +62,14 @@ matrix `K=2048,N=11008`, original and eight-column-tiled payloads both require
 23,953,408 bytes. These are format calculations, not measured memory traffic.
 `resident_bytes` reports requested device payload bytes, not allocator/page
 granularity, CUDA context overhead, or total process VRAM.
+
+`HostQ8ExecutionWeight::tile_inputs` copies all original payload bytes and scale
+bits into those records, zeroing only alignment and padded output columns.
+`Q8TiledLaunch` permits widths4/8/16, threads128/256, and vector/coalesced-lane
+access. Storage widths1/2/32 remain valid descriptors/host packing choices but
+are not CUDA launch choices in this experiment. The requested launch width
+must match the owning execution layout. `project_tiled_async` enqueues on the
+decode stream after validating dimensions, buffer sizes, and non-aliasing.
 
 ## Ownership and Use
 
@@ -126,9 +136,10 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   -- --nocapture --test-threads=1
 ```
 
-Next: C10 uses these owners independently for input-tiled lossless repacking,
-projection parity, and real-shape isolated measurements. It does not depend
-on C09 winning. Only measured winners proceed to C10A loader/
-model-cache integration and repeated HTTP gates. The selected exact-attention
+Next: only measured per-family winners proceed to C10A loader/model-cache
+integration and repeated HTTP gates. C09/C10 isolated results do not prove
+whole-model wins or justify replacing useful fused operations. Keep setup,
+duplicate resident weights, and peak payload accounting explicit.
+The selected exact-attention
 benchmark configuration remains split8/256 from C07; global runtime/KV defaults
 are unchanged, and neither unchanged-model throughput target has been reached.

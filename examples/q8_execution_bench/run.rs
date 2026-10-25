@@ -3,24 +3,94 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
     process::Command,
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{ensure, Context, Result};
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use half::f16;
 use m40_llm::{
     cuda::{CudaContext, CudaStream, DeviceBuffer},
     gguf::{load_gguf, GgufTensor},
     infer::execution_weights::{
-        DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8SeparateLaunch,
-        Q8SourceIdentity, Q8SourceView,
+        DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8ExecutionLayout,
+        Q8SeparateLaunch, Q8SourceIdentity, Q8SourceView, Q8TiledAccess, Q8TiledLaunch,
     },
 };
 use serde_json::{json, Value};
 
+#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum LayoutArg {
+    Separate,
+    InputTiled,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum TiledAccessArg {
+    Vector,
+    CoalescedLanes,
+}
+
+impl TiledAccessArg {
+    fn launch_access(self) -> Q8TiledAccess {
+        match self {
+            Self::Vector => Q8TiledAccess::Vector,
+            Self::CoalescedLanes => Q8TiledAccess::CoalescedLanes,
+        }
+    }
+}
+
+impl LayoutArg {
+    fn layouts(self) -> Vec<Q8ExecutionLayout> {
+        match self {
+            Self::Separate => vec![Q8ExecutionLayout::SeparateScalesValues],
+            Self::InputTiled => [4, 8, 16]
+                .map(|columns| Q8ExecutionLayout::InputTiled { columns })
+                .into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[serde(untagged)]
+enum ProjectionLaunch {
+    Separate(Q8SeparateLaunch),
+    Tiled(Q8TiledLaunch),
+}
+
+fn configurations(
+    layout: Q8ExecutionLayout,
+    access: Q8TiledAccess,
+) -> Result<Vec<ProjectionLaunch>> {
+    match layout {
+        Q8ExecutionLayout::SeparateScalesValues => [1, 4]
+            .into_iter()
+            .flat_map(|columns| {
+                [128, 256].map(move |threads| {
+                    Q8SeparateLaunch::new(columns, threads).map(ProjectionLaunch::Separate)
+                })
+            })
+            .collect(),
+        Q8ExecutionLayout::InputTiled { columns } => [128, 256]
+            .map(|threads| {
+                Q8TiledLaunch::new(columns as u32, threads, access).map(ProjectionLaunch::Tiled)
+            })
+            .into_iter()
+            .collect(),
+        Q8ExecutionLayout::ColumnBlocks => {
+            anyhow::bail!("column blocks are the control, not a candidate")
+        }
+    }
+}
+
 #[derive(Parser)]
 struct Args {
+    #[arg(long, value_enum, default_value = "separate")]
+    layout: LayoutArg,
+    #[arg(long, value_enum, default_value = "vector")]
+    tiled_access: TiledAccessArg,
     #[arg(long)]
     model: PathBuf,
     #[arg(long)]
@@ -93,7 +163,7 @@ fn read_output(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<f32>> {
 struct Projection<'a> {
     ctx: CudaContext,
     original: &'a DeviceQ8ExecutionWeight,
-    separate: &'a DeviceQ8ExecutionWeight,
+    execution: &'a DeviceQ8ExecutionWeight,
     input: DeviceBuffer,
     output: DeviceBuffer,
     reference: DeviceBuffer,
@@ -101,10 +171,20 @@ struct Projection<'a> {
 }
 
 impl Projection<'_> {
-    unsafe fn enqueue(&self, config: Option<Q8SeparateLaunch>) -> Result<()> {
+    unsafe fn enqueue(&self, config: Option<ProjectionLaunch>) -> Result<()> {
         if let Some(config) = config {
-            self.separate
-                .project_separate_async(&self.input, &self.output, self.rows, config)
+            match config {
+                ProjectionLaunch::Separate(config) => self.execution.project_separate_async(
+                    &self.input,
+                    &self.output,
+                    self.rows,
+                    config,
+                ),
+                ProjectionLaunch::Tiled(config) => {
+                    self.execution
+                        .project_tiled_async(&self.input, &self.output, self.rows, config)
+                }
+            }
         } else {
             let DeviceQ8ExecutionView::ColumnBlocks { key, blocks } = self.original.view() else {
                 unreachable!()
@@ -121,7 +201,7 @@ impl Projection<'_> {
         }
     }
 
-    fn stream(&self, config: Option<Q8SeparateLaunch>) -> CudaStream {
+    fn stream(&self, config: Option<ProjectionLaunch>) -> CudaStream {
         if config.is_some() || self.rows == 1 {
             CudaStream::Decode
         } else {
@@ -129,9 +209,10 @@ impl Projection<'_> {
         }
     }
 
-    fn time(&self, config: Option<Q8SeparateLaunch>, iterations: usize) -> Result<Value> {
+    fn time(&self, config: Option<ProjectionLaunch>, iterations: usize) -> Result<Value> {
         let start = self.ctx.create_event()?;
         let stop = self.ctx.create_event()?;
+        let started_unix_us = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
         let began = Instant::now();
         start.record(self.stream(config))?;
         for _ in 0..iterations {
@@ -142,12 +223,15 @@ impl Projection<'_> {
         stop.record(self.stream(config))?;
         let gpu_ms =
             f64::from(start.elapsed_sync(&stop, "q8_execution_bench")?) / iterations as f64;
+        let wall_ms = began.elapsed().as_secs_f64() * 1000.0 / iterations as f64;
+        let completed_unix_us = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
         Ok(
-            json!({"gpu_ms":gpu_ms,"wall_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64}),
+            json!({"gpu_ms":gpu_ms,"wall_ms":wall_ms,"started_unix_us":started_unix_us,
+                "completed_unix_us":completed_unix_us}),
         )
     }
 
-    fn check(&self, blocks: &[u8], input: &[f32], config: Q8SeparateLaunch) -> Result<Value> {
+    fn check(&self, blocks: &[u8], input: &[f32], config: ProjectionLaunch) -> Result<Value> {
         unsafe {
             self.enqueue(None)?;
         }
@@ -172,7 +256,7 @@ impl Projection<'_> {
             total += difference;
             ensure!(
                 difference < 1e-3 + f64::from(b.abs()) * 2e-5,
-                "separate projection drift {difference}"
+                "execution projection drift {difference}"
             );
         }
         let mut cpu_max = 0.0_f64;
@@ -204,6 +288,56 @@ impl Projection<'_> {
     }
 }
 
+fn measure_rows(
+    projection: &Projection<'_>,
+    file: &mut File,
+    args: &Args,
+    bytes: &[u8],
+    input: &[f32],
+    tensor: &GgufTensor,
+) -> Result<()> {
+    let rows = projection.rows;
+    let shape = projection.execution.key().source.shape();
+    let layout = projection.execution.key().layout;
+    let resident_bytes = projection.execution.plan().resident_bytes();
+    let iterations = args.iterations.div_ceil(rows).max(2);
+    for config in configurations(layout, args.tiled_access.launch_access())? {
+        let errors = projection.check(bytes, input, config)?;
+        for _ in 0..3 {
+            unsafe {
+                projection.enqueue(None)?;
+            }
+            projection.ctx.synchronize_stream(projection.stream(None))?;
+            unsafe {
+                projection.enqueue(Some(config))?;
+            }
+            projection.ctx.synchronize_stream(CudaStream::Decode)?;
+        }
+        for trial in 0..args.trials {
+            let gpu_before = inspect_gpu()?;
+            let (baseline, candidate) = if trial % 2 == 0 {
+                (
+                    projection.time(None, iterations)?,
+                    projection.time(Some(config), iterations)?,
+                )
+            } else {
+                let candidate = projection.time(Some(config), iterations)?;
+                (projection.time(None, iterations)?, candidate)
+            };
+            write_record(
+                file,
+                json!({"kind":"timing","tensor":tensor.name,"shape":shape,"rows":rows,
+                "execution_layout":layout,"config":config,"trial":trial,"iterations":iterations,
+                "baseline":baseline,"candidate":candidate,"errors":errors,
+                "resident_execution_bytes":resident_bytes,"source_bytes":bytes.len(),
+                "gpu_before":gpu_before,"gpu_after":inspect_gpu()?}),
+            )?;
+        }
+        eprintln!("[q8_execution_bench] tensor={} rows={rows} layout={layout:?} config={config:?} parity={errors}",tensor.name);
+    }
+    Ok(())
+}
+
 fn run_tensor(
     ctx: &CudaContext,
     file: &mut File,
@@ -227,93 +361,63 @@ fn run_tensor(
     let original = HostQ8ExecutionWeight::copy_column_blocks(source)?;
     let original_copy_ms = start.elapsed().as_secs_f64() * 1000.0;
     let start = Instant::now();
-    let separate = HostQ8ExecutionWeight::separate_scales_values(source)?;
-    let repack_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let start = Instant::now();
     let original_device = DeviceQ8ExecutionWeight::upload(ctx, &original)?;
     let original_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let start = Instant::now();
-    let separate_device = DeviceQ8ExecutionWeight::upload(ctx, &separate)?;
-    let separate_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
-    let resident_bytes = separate.plan().resident_bytes();
-    write_record(
-        file,
-        json!({"kind":"preparation","tensor":tensor,"source_bytes":bytes.len(),
+    for layout in args.layout.layouts() {
+        let start = Instant::now();
+        let execution = match layout {
+            Q8ExecutionLayout::SeparateScalesValues => {
+                HostQ8ExecutionWeight::separate_scales_values(source)?
+            }
+            Q8ExecutionLayout::InputTiled { columns } => {
+                HostQ8ExecutionWeight::tile_inputs(source, columns)?
+            }
+            Q8ExecutionLayout::ColumnBlocks => unreachable!(),
+        };
+        let repack_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let start = Instant::now();
+        let execution_device = DeviceQ8ExecutionWeight::upload(ctx, &execution)?;
+        let execution_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let resident_bytes = execution.plan().resident_bytes();
+        write_record(
+            file,
+            json!({"kind":"preparation","tensor":tensor,"source_bytes":bytes.len(),"execution_layout":layout,
         "resident_execution_bytes":resident_bytes,"extra_resident_bytes":resident_bytes as i64 - bytes.len() as i64,
         "benchmark_weight_device_bytes":resident_bytes+bytes.len(),
         "host_peak_payload_bytes":bytes.len()+original.plan().resident_bytes()+resident_bytes,
         "original_copy_ms":original_copy_ms,"repack_ms":repack_ms,
-        "original_upload_ms":original_upload_ms,"separate_upload_ms":separate_upload_ms}),
-    )?;
-    drop(original);
-    drop(separate);
-    for &rows in &args.rows {
-        let input: Vec<f32> = (0..rows * shape.input_dim())
-            .map(|i| ((i * 13 % 127) as f32 - 63.0) * 0.0078125)
-            .collect();
-        let projection = Projection {
-            ctx: ctx.clone(),
-            original: &original_device,
-            separate: &separate_device,
-            input: DeviceBuffer::new_tagged(ctx, input.len() * 4, "q8_bench:input")?,
-            output: DeviceBuffer::new_tagged(
-                ctx,
-                rows * shape.output_dim() * 4,
-                "q8_bench:output",
-            )?,
-            reference: DeviceBuffer::new_tagged(
-                ctx,
-                rows * shape.output_dim() * 4,
-                "q8_bench:reference",
-            )?,
-            rows,
-        };
-        unsafe {
-            ctx.memcpy_h2d(
-                projection.input.as_mut_ptr(),
-                input.as_ptr().cast(),
-                input.len() * 4,
-            )?;
-        }
-        let iterations = args.iterations.div_ceil(rows).max(2);
-        for columns in [1, 4] {
-            for threads in [128, 256] {
-                let config = Q8SeparateLaunch::new(columns, threads)?;
-                let errors = projection.check(&bytes, &input, config)?;
-                for _ in 0..3 {
-                    unsafe {
-                        projection.enqueue(None)?;
-                    }
-                    ctx.synchronize_stream(projection.stream(None))?;
-                    unsafe {
-                        projection.enqueue(Some(config))?;
-                    }
-                    ctx.synchronize_stream(CudaStream::Decode)?;
-                }
-                for trial in 0..args.trials {
-                    let gpu_before = inspect_gpu()?;
-                    let (baseline, candidate) = if trial % 2 == 0 {
-                        (
-                            projection.time(None, iterations)?,
-                            projection.time(Some(config), iterations)?,
-                        )
-                    } else {
-                        let candidate = projection.time(Some(config), iterations)?;
-                        (projection.time(None, iterations)?, candidate)
-                    };
-                    write_record(
-                        file,
-                        json!({"kind":"timing","tensor":tensor.name,"shape":shape,"rows":rows,
-                        "config":config,"trial":trial,"iterations":iterations,"baseline":baseline,"candidate":candidate,
-                        "errors":errors,"resident_execution_bytes":resident_bytes,
-                        "source_bytes":bytes.len(),"gpu_before":gpu_before,"gpu_after":inspect_gpu()?}),
-                    )?;
-                }
-                eprintln!(
-                    "[q8_execution_bench] tensor={} rows={rows} config={config:?} parity={errors}",
-                    tensor.name
-                );
+        "original_upload_ms":original_upload_ms,"execution_upload_ms":execution_upload_ms}),
+        )?;
+        drop(execution);
+        for &rows in &args.rows {
+            let input: Vec<f32> = (0..rows * shape.input_dim())
+                .map(|i| ((i * 13 % 127) as f32 - 63.0) * 0.0078125)
+                .collect();
+            let projection = Projection {
+                ctx: ctx.clone(),
+                original: &original_device,
+                execution: &execution_device,
+                input: DeviceBuffer::new_tagged(ctx, input.len() * 4, "q8_bench:input")?,
+                output: DeviceBuffer::new_tagged(
+                    ctx,
+                    rows * shape.output_dim() * 4,
+                    "q8_bench:output",
+                )?,
+                reference: DeviceBuffer::new_tagged(
+                    ctx,
+                    rows * shape.output_dim() * 4,
+                    "q8_bench:reference",
+                )?,
+                rows,
+            };
+            unsafe {
+                ctx.memcpy_h2d(
+                    projection.input.as_mut_ptr(),
+                    input.as_ptr().cast(),
+                    input.len() * 4,
+                )?;
             }
+            measure_rows(&projection, file, args, &bytes, &input, tensor)?;
         }
     }
     Ok(())
@@ -363,10 +467,13 @@ pub fn benchmark() -> Result<()> {
         &mut output,
         json!({"kind":"manifest","model":args.model,"model_sha256":digest_text,
         "revision":command_output("git", &["rev-parse","HEAD"])?,
+        "created_unix_s":SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
+        "executable_sha256":command_output("sha256sum",&[std::env::current_exe()?.to_str().context("non-UTF8 executable path")?])?,
         "worktree":command_output("git", &["status","--short"])?,
         "build_profile":if cfg!(debug_assertions) {"dev"} else {"release"},
         "cuda_flags":["-O3","sm_52","compute_52"],"nvcc":command_output("nvcc", &["--version"])?,
-        "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,
+        "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,"execution_layout":args.layout,
+        "tiled_access":args.tiled_access,
         "control":"GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
         "timing":"CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
         "interpretation":"isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic"}),

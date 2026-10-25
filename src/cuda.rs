@@ -383,6 +383,18 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xq8_tiled_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            tiles: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            columns: i32,
+            threads: i32,
+            access: i32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_separate_f32_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,
@@ -3374,6 +3386,42 @@ impl CudaContext {
             let _ = (d_a_f32, d_b_q8_0, d_c_f32, m, n, k);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// Validated input-tiled buffers must belong to this context and outlive
+    /// decode-stream completion. This is benchmark-only, with no implicit sync.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_tiled_f32_async(
+        &self,
+        input: *const c_void,
+        tiles: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        columns: i32,
+        threads: i32,
+        access: i32,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_tiled_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            tiles,
+            output,
+            m,
+            n,
+            k,
+            columns,
+            threads,
+            access,
+        );
+        if rc != 0 {
+            return Err(anyhow!("m40llm_gemm_f32xq8_tiled_f32_async failed: {rc}"));
+        }
+        record_async_kernel("gemm_f32xq8_tiled_f32");
+        Ok(())
     }
 
     /// Benchmark-only separate-plane projection on the decode stream.
