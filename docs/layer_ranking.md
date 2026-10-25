@@ -119,8 +119,10 @@ done
 
 `--layer-ranking` application verifies model/corpus/base-execution hashes,
 dimensions and calibration passage tokenization, then uses only the requested
-already-frozen mask. It conflicts with ad-hoc `--skip-layers` and activation
-transforms. Manifests retain artifact SHA and original skipped IDs. The ordinary
+already-frozen mask. It conflicts with ad-hoc `--skip-layers` and fitting runs.
+A frozen activation artifact may compose on the original source through
+[C26's explicit research path](activation_sparsity.md#frozen-layeractivation-composition).
+Manifests retain both artifact hashes and original skipped IDs. The ordinary
 reference stays all-layers. Also run an empty-mask control, retaining the usual
 dense-failed inconclusive classifications and full-logit/task/timing records.
 

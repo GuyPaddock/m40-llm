@@ -114,6 +114,12 @@ After freezing that artifact, apply it with `--layer-ranking frozen.json` and
 is recorded; held-out results never choose the layer set. See
 [layer-ranking contracts and commands](layer_ranking.md).
 
+C26 may supply both the frozen ranking/count and frozen activation
+calibration/target. This composes already evaluated changes on the original
+source only, keeping the reference unmodified and recording both artifacts.
+Capture, ad-hoc masks and compact-export comparison cannot be mixed with it.
+See [the composition contract](activation_sparsity.md#frozen-layeractivation-composition).
+
 For C25, `--compact-export-report completed-export.json` selects a separate
 equivalence check. The reference receives the export's checked original-layer
 mask before allocating KV; the compact candidate runs all retained layers.

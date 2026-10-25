@@ -24,29 +24,39 @@ use m40_llm::{
 };
 
 fn model() -> Result<LoadedModel> {
+    model_with_layers(2)
+}
+
+fn model_with_layers(layer_count: u32) -> Result<LoadedModel> {
     let (mut gguf, mut bytes) = fixture::build(0);
     let original = bytes.clone();
-    for tensor in gguf.tensors.clone() {
-        if !tensor.name.starts_with("layers.0.") {
-            continue;
-        }
-        let mut copied = tensor.clone();
-        copied.name = copied.name.replacen("layers.0.", "layers.1.", 1);
-        bytes.resize(bytes.len().div_ceil(32) * 32, 0);
-        copied.offset = bytes.len() as u64;
-        let size = tensor.shape.iter().product::<u64>() as usize / 32 * 34;
-        let mut payload = original[tensor.offset as usize..tensor.offset as usize + size].to_vec();
-        for block in payload.chunks_exact_mut(34) {
-            for value in &mut block[2..] {
-                *value = value.wrapping_add(7);
+    let tensors = gguf.tensors.clone();
+    for layer in 1..layer_count {
+        for tensor in &tensors {
+            if !tensor.name.starts_with("layers.0.") {
+                continue;
             }
+            let mut copied = tensor.clone();
+            copied.name = copied
+                .name
+                .replacen("layers.0.", &format!("layers.{layer}."), 1);
+            bytes.resize(bytes.len().div_ceil(32) * 32, 0);
+            copied.offset = bytes.len() as u64;
+            let size = tensor.shape.iter().product::<u64>() as usize / 32 * 34;
+            let mut payload =
+                original[tensor.offset as usize..tensor.offset as usize + size].to_vec();
+            for block in payload.chunks_exact_mut(34) {
+                for value in &mut block[2..] {
+                    *value = value.wrapping_add((layer as u8).wrapping_mul(7));
+                }
+            }
+            bytes.extend_from_slice(&payload);
+            gguf.tensors.push(copied);
         }
-        bytes.extend_from_slice(&payload);
-        gguf.tensors.push(copied);
     }
     gguf.metadata.insert(
         "llama.block_count".to_owned(),
-        m40_llm::gguf::GgufValue::Scalar(m40_llm::gguf::GgufScalar::U32(2)),
+        m40_llm::gguf::GgufValue::Scalar(m40_llm::gguf::GgufScalar::U32(layer_count)),
     );
     LoadedModel::from_gguf_with_q8_execution(gguf, bytes, -1, Q8ExecutionConfig::disabled())
 }
@@ -80,12 +90,17 @@ fn session(model: &LoadedModel) -> Result<DecodeSession> {
 }
 
 fn capture() -> Result<ActivationCalibration> {
+    capture_layers(2)
+}
+
+fn capture_layers(layer_count: u32) -> Result<ActivationCalibration> {
     let corpus = Corpus::parse(include_str!("../data/research_quality/v1.json"))?;
     let plan =
         ActivationCalibrationPlan::new("1".repeat(64), "2".repeat(64), "3".repeat(64), &corpus, 2)?;
-    let mut observed = model()?;
-    let mut reference = model()?;
+    let mut observed = model_with_layers(layer_count)?;
+    let mut reference = model_with_layers(layer_count)?;
     observed.begin_activation_calibration(plan, 1_000_000)?;
+    assert!(observed.set_diagnostic_layer_mask(&[]).is_err());
     observed.allocate_kv_cache_for_layers(16)?;
     reference.allocate_kv_cache_for_layers(16)?;
     for task in &corpus.calibration.tasks {
@@ -110,9 +125,11 @@ fn capture() -> Result<ActivationCalibration> {
     }
     let artifact = observed.finish_activation_calibration()?;
     assert!(observed.activation_research.is_none());
-    assert_eq!(artifact.layers[0].observed_rows, 12);
-    assert_eq!(artifact.layers.len(), 2);
-    assert_eq!(artifact.layers[1].observed_rows, 12);
+    assert_eq!(artifact.layers.len(), layer_count as usize);
+    assert!(artifact
+        .layers
+        .iter()
+        .all(|layer| layer.observed_rows == 12));
     assert!(artifact
         .tasks
         .iter()
@@ -270,5 +287,86 @@ fn test_activation_setup_rejects_mismatched_artifacts_and_unsupported_sessions()
     assert!(candidate
         .apply_activation_calibration(&artifact, 0.5, 1_000_000)
         .is_err());
+    Ok(())
+}
+
+/// Frozen thresholds retain original source IDs with an interior compute mask.
+/// The zero control matches the masked native model exactly; positive thresholds
+/// count only active layers. Capture and post-application mask changes must fail
+/// before publishing state or allocating additional storage.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_masked_activation_application_preserves_original_layer_routing() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _dense = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    let artifact = capture_layers(3)?;
+    {
+        let mut rejected = model_with_layers(3)?;
+        rejected.set_diagnostic_layer_mask(&[1])?;
+        let before = CudaContext::total_device_bytes();
+        assert!(rejected
+            .begin_activation_calibration(artifact.plan.clone(), 1_000_000)
+            .is_err());
+        assert!(rejected.activation_research.is_none());
+        assert_eq!(CudaContext::total_device_bytes(), before);
+    }
+    for target in [0.0, 0.5] {
+        let mut reference = model_with_layers(3)?;
+        let mut candidate = model_with_layers(3)?;
+        reference.set_diagnostic_layer_mask(&[1])?;
+        candidate.set_diagnostic_layer_mask(&[1])?;
+        if target > 0.0 {
+            let before = CudaContext::total_device_bytes();
+            assert!(candidate
+                .apply_activation_calibration(&artifact, target, 1)
+                .is_err());
+            assert!(candidate.activation_research.is_none());
+            assert_eq!(CudaContext::total_device_bytes(), before);
+        }
+        candidate.apply_activation_calibration(
+            &artifact,
+            target,
+            if target == 0.0 { 0 } else { 1_000_000 },
+        )?;
+        let prepared = candidate.activation_research_stats()?;
+        assert_eq!(prepared.skipped_layer_ids, [1]);
+        assert_eq!(prepared.thresholds.len(), 3);
+        let before = CudaContext::total_device_bytes();
+        assert!(candidate.set_diagnostic_layer_mask(&[]).is_err());
+        assert_eq!(candidate.layer_mask.skipped_layers(), [1]);
+        assert_eq!(CudaContext::total_device_bytes(), before);
+        reference.allocate_kv_cache_for_layers(16)?;
+        candidate.allocate_kv_cache_for_layers(16)?;
+        let compared = compare_loaded_models(&mut reference, &mut candidate, &[2, 3, 4, 7, 8, 9])?;
+        let stats = candidate.activation_research_stats()?;
+        assert_eq!(stats.layers.len(), 3);
+        assert_eq!(stats.layers[1].input_values, 0);
+        assert_eq!(stats.layers[1].retained_values, 0);
+        assert_eq!(stats.layers[1].achieved_sparsity, None);
+        if target == 0.0 {
+            assert_eq!(compared.max_abs_logit_diff, 0.0);
+            assert_eq!(prepared.extra_weight_bytes, 0);
+            assert_eq!(prepared.counter_bytes, 0);
+        } else {
+            assert!(prepared.extra_weight_bytes > 0);
+            assert_eq!(prepared.counter_bytes, 3 * 16);
+            for layer in [0, 2] {
+                assert_eq!(stats.layers[layer].layer_id, layer);
+                assert_eq!(stats.layers[layer].input_values, 5 * 128);
+                assert!(stats.layers[layer].achieved_sparsity.unwrap() > 0.0);
+            }
+            assert!(compared.candidate.nll_sum.is_finite());
+        }
+        candidate.reset_activation_statistics()?;
+        assert!(candidate
+            .activation_research_stats()?
+            .layers
+            .iter()
+            .all(|layer| layer.input_values == 0 && layer.retained_values == 0));
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }

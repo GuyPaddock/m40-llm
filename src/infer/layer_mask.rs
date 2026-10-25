@@ -84,6 +84,11 @@ impl super::LoadedModel {
         );
         #[cfg(feature = "cuda")]
         ensure!(
+            self.activation_research.is_none(),
+            "configure the layer mask before activation capture or application"
+        );
+        #[cfg(feature = "cuda")]
+        ensure!(
             self.forward_workspace
                 .lock()
                 .map_err(|_| anyhow::anyhow!("poisoned forward workspace"))?

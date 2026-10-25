@@ -84,7 +84,7 @@ struct Args {
     #[arg(long, default_value_t = 64)]
     layer_ranking_budget_mb: usize,
     /// Apply a mask from this already frozen calibration-only artifact.
-    #[arg(long, requires="remove_layer_count", conflicts_with_all=["rank_layers","capture_activations","activation_calibration","skip_layers"])]
+    #[arg(long, requires="remove_layer_count", conflicts_with_all=["rank_layers","capture_activations","skip_layers"])]
     layer_ranking: Option<PathBuf>,
     #[arg(long, requires="layer_ranking", value_parser=clap::value_parser!(u32).range(1..=3))]
     remove_layer_count: Option<u32>,
@@ -95,7 +95,8 @@ struct Args {
     activation_capture_rows: usize,
     #[arg(long, default_value_t = 512)]
     activation_observation_budget_mb: usize,
-    /// Apply a checked frozen artifact only to the candidate model.
+    /// Apply a checked frozen artifact only to the candidate. A simultaneous
+    /// frozen layer ranking composes both changes on original source layer IDs.
     #[arg(long, requires = "activation_target", conflicts_with = "skip_layers")]
     activation_calibration: Option<PathBuf>,
     #[arg(long, requires = "activation_calibration")]
@@ -156,7 +157,8 @@ mod argument_tests {
     }
 
     /// Frozen masks require an explicit bounded count and cannot be combined
-    /// with ad-hoc masks, activation transforms or a simultaneous fitting run.
+    /// with ad-hoc masks or simultaneous fitting. Frozen activation thresholds
+    /// may compose with a frozen ranking, but not with capture or compact export.
     #[test]
     fn test_layer_ranking_arguments_are_explicit_and_exclusive() {
         for count in ["1", "2", "3"] {
@@ -209,19 +211,38 @@ mod argument_tests {
                 "--capture-activations",
                 "other.json",
             ],
-            vec![
-                "--layer-ranking",
-                "frozen.json",
-                "--remove-layer-count",
-                "1",
-                "--activation-calibration",
-                "other.json",
-                "--activation-target",
-                "0.4",
-            ],
         ] {
             assert!(parse(&extra).is_err());
         }
+    }
+
+    /// Combinations require both independently frozen artifacts and explicit
+    /// parameters; no fitting, ad-hoc mask or compact model can be substituted.
+    #[test]
+    fn test_frozen_layer_activation_combination_arguments() {
+        let combined = [
+            "--layer-ranking",
+            "frozen-ranking.json",
+            "--remove-layer-count",
+            "1",
+            "--activation-calibration",
+            "frozen-activations.json",
+            "--activation-target",
+            "0.5",
+        ];
+        let args = parse(&combined).unwrap();
+        assert_eq!(args.remove_layer_count, Some(1));
+        assert_eq!(args.activation_target, Some(0.5));
+        for extra in [
+            ["--skip-layers", "1"],
+            ["--rank-layers", "new.json"],
+            ["--capture-activations", "new.json"],
+            ["--compact-export-report", "export.json"],
+        ] {
+            let values = [combined.as_slice(), extra.as_slice()].concat();
+            assert!(parse(&values).is_err());
+        }
+        assert!(parse(&combined[..6]).is_err());
     }
 
     /// Compact equivalence has its own checked source mask. Ad-hoc candidate

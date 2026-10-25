@@ -48,6 +48,7 @@ pub struct ActivationResearchStats {
     pub is_capturing: bool,
     pub target_sparsity: Option<f64>,
     pub thresholds: Vec<f32>,
+    pub skipped_layer_ids: Vec<usize>,
     pub native_bypass_layer_ids: Vec<usize>,
     pub extra_weight_bytes: usize,
     pub selection_workspace_bytes: usize,
@@ -93,10 +94,10 @@ impl LoadedModel {
             "configure activation research before KV/workspace/session creation"
         );
         ensure!(
-            !self.layer_mask.has_skipped_layers()
-                && self.q8_execution_stats().mode == Q8ExecutionMode::Off,
-            "activation research cannot combine layer masks or other prepared-weight policies"
+            self.q8_execution_stats().mode == Q8ExecutionMode::Off,
+            "activation research cannot combine other prepared-weight policies"
         );
+        self.layer_mask.validate(self.model_config.block_count)?;
         ensure!(
             super::super::gemm::q8_decode_kernel_decode_stream_enabled(),
             "activation research requires M40LLM_Q8_DECODE_STREAM=decode"
@@ -144,6 +145,10 @@ impl LoadedModel {
         plan: ActivationCalibrationPlan,
         budget_bytes: usize,
     ) -> Result<()> {
+        ensure!(
+            !self.layer_mask.has_skipped_layers(),
+            "activation calibration capture requires every original layer"
+        );
         let (sources, pointers) = self.activation_sources()?;
         let row = vec![0.0; self.model_config.feed_forward_length as usize];
         let collector = ActivationCalibrationCollector::new(
@@ -229,7 +234,9 @@ impl LoadedModel {
 
     /// Freeze the checked artifact before session creation. Caller verifies the
     /// original GGUF file hash; uploaded-source hash and every down identity are
-    /// independently checked here. The budget counts duplicate device payloads.
+    /// independently checked here. A preconfigured mask keeps original IDs;
+    /// all original down tensors are prepared, including skipped layers. The
+    /// budget counts duplicate device payloads, not only active-layer work.
     pub fn apply_activation_calibration(
         &mut self,
         artifact: &ActivationCalibration,
@@ -389,6 +396,7 @@ impl LoadedModel {
                         .iter()
                         .map(|threshold| threshold.magnitude())
                         .collect(),
+                    skipped_layer_ids: self.layer_mask.skipped_layers().to_vec(),
                     native_bypass_layer_ids: thresholds
                         .iter()
                         .enumerate()

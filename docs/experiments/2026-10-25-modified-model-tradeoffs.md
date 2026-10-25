@@ -2,7 +2,7 @@
 
 ## Decision
 
-C26 compares completed C20/C23/C24/C25 evidence without another fit or sweep.
+C26's individual comparison covers completed C20/C23/C24/C25 evidence without another fit or sweep.
 No modified model is promoted. Ranked layer removal gives the smaller observed
 quality cost, and compact export reclaims real storage. Activation sparsity
 gives larger matched-step gains but costs more loss and device memory.
@@ -132,13 +132,15 @@ saving 29.41% against 34-byte native blocks. It nevertheless takes
 justify decode pruning. C22 saliency calibration and C27 sparse Q4 remain
 postponed. No integrated sparse-model quality or E2E result exists.
 
-No combined model is tested or inferred here. Static-plus-activation sparsity
+No combined model is tested or inferred in these original 13 reports. Static-plus-activation sparsity
 lacks an independently useful static decode kernel. Layer-plus-activation
-removal has independently measured costs, but neither has a demonstrated
-controlled generated-E2E win or an approved general-use quality budget.
-This checkpoint therefore publishes individual tradeoffs rather than adding
-new combined tuning. If a later task authorizes a combination, it needs a
-predeclared quality budget, original-ID mapping and fresh held-out evaluation.
+removal has independently measured costs. The initial comparison required a
+controlled generated-E2E win or approved quality budget before further research;
+that was an extra restriction, not C26's authorized experiment gate. The next
+bounded checkpoint therefore composes frozen mask `[8]` with existing targets
+0/50/60% on both unchanged splits, with no fitting or promotion. It needs
+original-ID routing, a zero control and measured held-out evaluation, not an
+assumption that individual gains add.
 The existing activation artifact is bound to the original source/hash and
 must not be applied blindly to a renumbered compact model.
 
@@ -155,11 +157,9 @@ fresh Ollama reference, approximately 56.1115 tok/s. That matched five-pair
 run uses the same Qwen Q8_0 model, 65 prompt tokens, 512 generated tokens,
 verified fresh KV and length stops.
 
-All unconditional research units and their applicable conditional checkpoints
-are now recorded. This completes C26's comparison, not the original speed
-objective. The bounded kernel, layout and feasibility studies are exhausted;
-another optimization round or drafter needs a new explicit research decision,
-not an unreported expansion of a failed screen. General runtime defaults
+This records individual costs, not completion of C26's combined experiment or
+the original speed objective. The bounded kernel, layout and feasibility
+screens are not reopened by composition. General runtime defaults
 remain preferred compressed exact-old top8; the short exact-engine benchmark
 continues to request dense mode explicitly.
 

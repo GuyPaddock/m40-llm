@@ -152,9 +152,11 @@ reserves duplicate down weights only, one reusable selection workspace and
 two u64 counters per layer. Packing/upload proceeds one tensor at a time.
 
 This path requires sm_52, Q8_0 down weights, decode-stream Q8 scheduling,
-explicit dense KV and sequential forward/prefill. Graphs, packed/batched work,
-layer masks and other prepared-weight policies are rejected. It is not wired
-into ordinary CLI/server defaults. Device counters accumulate retained/input
+explicit dense KV and sequential forward/prefill. Graphs, packed/batched work
+and other prepared-weight policies are rejected. Capture requires all original
+layers. Application may follow a diagnostic mask on the same original source;
+the mask is frozen before activation setup and cannot change afterward. It is
+not wired into ordinary CLI/server defaults. Device counters accumulate retained/input
 values in the existing selector CTA, on its ordered stream. Reading/resetting
 them is a report/setup operation; ordinary application adds no host readback.
 
@@ -183,6 +185,28 @@ reset, not just decode, and never report a selected fraction for native bypass.
 Use the unchanged native-Q8 environment from the C11 checkpoint, with no
 prefill chunking or KV diagnostics. Keep that exact environment/context for
 capture and every evaluation; execution mismatch is an error, not a refit.
+
+## Frozen Layer/Activation Composition
+
+C26 may combine `--layer-ranking frozen-ranking.json --remove-layer-count 1`
+with `--activation-calibration frozen-activations.json --activation-target 0.5`.
+Both artifacts must still match the original model, corpus and base execution.
+The reference remains the unchanged all-layer model. No calibration, new mask
+selection or threshold fitting occurs during the combined evaluation.
+
+Use original layer IDs and original GGUF bytes, never a compact export.
+All original down matrices remain prepared at positive thresholds, including
+the skipped layer; this deliberately measures composition without another
+memory/layout optimization. `skipped_layer_ids` and per-original-layer counters
+make unused work explicit. A skipped layer must accumulate zero input/retained
+counts, while active layers consume their original thresholds. At target zero,
+the result must match the masked native model exactly without prepared storage.
+
+The predeclared checkpoint is frozen mask `[8]` with targets 0/50/60%, both
+C19 splits and five paired timing trials. Target zero checks composition;
+positive targets have independent C23 speed/quality evidence. No combined
+gain is inferred by adding individual percentages. This is opt-in research,
+not a quality approval or an unchanged-model performance result.
 
 ```bash
 source scripts/dev-env.sh
