@@ -196,6 +196,24 @@ an owned `Q8FfnScratch` view for Q8_1. Workspace allocation/estimation also
 takes the FFN configuration. Configure before creating workspace/session
 state; do not replace model components while sessions reference them.
 
+### Bounded Split-Plane Column-Reuse Follow-Up
+
+After [qualified split-runtime profiling](experiments/2026-10-25-maxwell-split-stage-profile.md),
+the shared FFN benchmark accepts `--ffn-f32-split-two-columns`. It compares
+one fixed two-column/four-value/128-thread kernel with the current qualified
+one-column split kernel, not packed/warp128. Both arms retain the same
+existing gate/up planes and prepared down/vocabulary. There is no new layout,
+activation quantization, preparation memory or generation configuration.
+
+`CudaContext::ffn_q8_split_f32_two_columns_async` uses the same pointer,
+alignment and lifetime contract as the one-column API. It enqueues on decode
+without allocation, transfer or synchronization, and optionally captures
+gate/up through the same kernel. Odd hidden tails skip only the missing
+column, not the block-wide barrier. The original one-column kernel body
+and C ABI remain intact. Tests require gate/up/SwiGLU bit equality with the
+current control, CPU tolerance, guards, immutable planes and scratch reuse.
+No runtime selection is added unless the complete-FFN screen qualifies.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,

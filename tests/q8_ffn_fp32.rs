@@ -157,15 +157,22 @@ fn compare_case(
         scales[index] = s.as_ptr();
         values[index] = v.as_ptr();
     }
-    for variant in Q8FfnFp32Variant::ALL
+    let mut split_output: Option<Vec<f32>> = None;
+    let mut split_projections: Option<[Vec<f32>; 2]> = None;
+    for (variant, has_two_columns) in Q8FfnFp32Variant::ALL
         .into_iter()
         .chain([
             Q8FfnFp32Variant::PackedWarp128FactoredScales,
             Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
         ])
-        .map(Some)
-        .chain([None])
+        .map(|variant| (Some(variant), false))
+        .chain([(None, false), (None, true)])
     {
+        let enqueue_split = if has_two_columns {
+            CudaContext::ffn_q8_split_f32_two_columns_async
+        } else {
+            CudaContext::ffn_q8_split_f32_async
+        };
         unsafe {
             ctx.memcpy_h2d(
                 output.as_mut_ptr(),
@@ -187,7 +194,8 @@ fn compare_case(
                     variant,
                 )?;
             } else {
-                ctx.ffn_q8_split_f32_async(
+                enqueue_split(
+                    ctx,
                     x.cast(),
                     scales,
                     values,
@@ -208,6 +216,22 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
+        if variant.is_none() {
+            if has_two_columns {
+                assert_eq!(
+                    actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    split_output
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    "two-column split changed one-column SwiGLU bits"
+                );
+            } else {
+                split_output = Some(actual.clone());
+            }
+        }
         if variant.is_none_or(|v| v.has_intermediate_capture()) {
             let captured = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:captured")?;
             let gate_out = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:gate-out")?;
@@ -236,7 +260,8 @@ fn compare_case(
                         variant,
                     )?;
                 } else {
-                    ctx.ffn_q8_split_f32_async(
+                    enqueue_split(
+                        ctx,
                         x.cast(),
                         scales,
                         values,
@@ -257,7 +282,20 @@ fn compare_case(
                 actual,
                 "capture changed FFN arithmetic"
             );
-            for (values, weight) in [(read(ctx, &gate_out)?, &gate), (read(ctx, &up_out)?, &up)] {
+            let projections = [read(ctx, &gate_out)?, read(ctx, &up_out)?];
+            if variant.is_none() {
+                if has_two_columns {
+                    for (a, b) in projections.iter().zip(split_projections.as_ref().unwrap()) {
+                        assert_eq!(
+                            a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+                        );
+                    }
+                } else {
+                    split_projections = Some(projections.clone());
+                }
+            }
+            for (values, weight) in projections.into_iter().zip([&gate, &up]) {
                 for row in 0..rows {
                     for column in 0..hidden {
                         let expected = fixture::project_cpu(&input, weight, row, column, k);
@@ -313,7 +351,8 @@ fn compare_case(
 /// All 128-thread strategies obey the same numerical tolerance; follow-up
 /// gate/up capture must match the ordinary kernel's SwiGLU bits.
 /// The fixed split-plane/four-value strategy uses lossless typed packing and
-/// must preserve source planes as well as output guards.
+/// must preserve source planes as well as output guards. Its two-column
+/// experiment must keep one-column gate/up/SwiGLU bits, including odd tails.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -348,11 +387,15 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
         let output = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-output")?;
         let before = profile::snapshot();
         unsafe {
-            for (rows, hidden, k, offset) in
-                [(0, 1, 32, 0), (1, 0, 32, 0), (1, 1, 33, 0), (1, 1, 32, 8)]
-            {
-                assert!(ctx
-                    .ffn_q8_split_f32_async(
+            for enqueue in [
+                CudaContext::ffn_q8_split_f32_async,
+                CudaContext::ffn_q8_split_f32_two_columns_async,
+            ] {
+                for (rows, hidden, k, offset) in
+                    [(0, 1, 32, 0), (1, 0, 32, 0), (1, 1, 33, 0), (1, 1, 32, 8)]
+                {
+                    assert!(enqueue(
+                        &ctx,
                         input.as_ptr().cast::<u8>().add(offset).cast(),
                         [weight.as_ptr(); 2],
                         [weight.as_ptr(); 2],
@@ -363,9 +406,9 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                         None
                     )
                     .is_err());
-            }
-            assert!(ctx
-                .ffn_q8_split_f32_async(
+                }
+                assert!(enqueue(
+                    &ctx,
                     input.as_ptr(),
                     [std::ptr::null(), weight.as_ptr()],
                     [weight.as_ptr(); 2],
@@ -376,8 +419,8 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                     None
                 )
                 .is_err());
-            assert!(ctx
-                .ffn_q8_split_f32_async(
+                assert!(enqueue(
+                    &ctx,
                     input.as_ptr(),
                     [weight.as_ptr(); 2],
                     [weight.as_ptr(); 2],
@@ -388,6 +431,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                     Some((output.as_mut_ptr(), output.as_mut_ptr()))
                 )
                 .is_err());
+            }
             assert!(ctx
                 .ffn_q8_f32_ablation_async(
                     input.as_ptr().cast::<u8>().add(4).cast(),

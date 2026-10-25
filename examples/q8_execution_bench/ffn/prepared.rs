@@ -112,6 +112,7 @@ impl PreparedFfnWeights {
         hidden: i32,
         k: i32,
         intermediates: Option<(*mut c_void, *mut c_void)>,
+        has_two_columns: bool,
     ) -> Result<()> {
         let mut scales = [std::ptr::null(); 2];
         let mut values = [std::ptr::null(); 2];
@@ -125,7 +126,13 @@ impl PreparedFfnWeights {
             scales[index] = s.as_ptr();
             values[index] = v.as_ptr();
         }
-        self.ctx.ffn_q8_split_f32_async(
+        let enqueue = if has_two_columns {
+            CudaContext::ffn_q8_split_f32_two_columns_async
+        } else {
+            CudaContext::ffn_q8_split_f32_async
+        };
+        enqueue(
+            &self.ctx,
             input,
             scales,
             values,

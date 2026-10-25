@@ -21,6 +21,7 @@ pub(super) enum FfnKernel {
     Fp32(Q8FfnFp32Variant),
     Q81(Q8FfnQ81Launch),
     SplitF32x4,
+    SplitF32x4TwoColumns,
 }
 
 impl Serialize for FfnKernel {
@@ -30,6 +31,7 @@ impl Serialize for FfnKernel {
             Self::Fp32(variant) => variant.serialize(serializer),
             Self::Q81(launch) => launch.serialize(serializer),
             Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
+            Self::SplitF32x4TwoColumns => serializer.serialize_str("split-f32x4-cols2-128"),
         }
     }
 }
@@ -40,7 +42,11 @@ impl FfnKernel {
     }
 
     pub fn has_intermediate_capture(self) -> bool {
-        self == Self::SplitF32x4 || matches!(self,Self::Fp32(v) if v.has_intermediate_capture())
+        self.has_split_weights() || matches!(self,Self::Fp32(v) if v.has_intermediate_capture())
+    }
+
+    pub fn has_split_weights(self) -> bool {
+        matches!(self, Self::SplitF32x4 | Self::SplitF32x4TwoColumns)
     }
 
     pub fn threads(self) -> u32 {
@@ -48,7 +54,7 @@ impl FfnKernel {
             Self::Native => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::SplitF32x4 => 128,
+            Self::SplitF32x4 | Self::SplitF32x4TwoColumns => 128,
         }
     }
 
@@ -56,7 +62,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::Q81(_) | Self::SplitF32x4 => true,
+            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns => true,
         }
     }
 
@@ -64,7 +70,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::Q81(_) | Self::SplitF32x4 => true,
+            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns => true,
         }
     }
 }
@@ -247,7 +253,7 @@ impl<'a> FfnPipeline<'a> {
     /// Reuse the same scratch only after its previous producer has finished.
     pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
         ensure!(
-            kernel != FfnKernel::SplitF32x4 || self.prepared.is_some(),
+            !kernel.has_split_weights() || self.prepared.is_some(),
             "prepare split FFN weights before selecting the candidate"
         );
         ensure!(
@@ -303,6 +309,7 @@ impl<'a> FfnPipeline<'a> {
                 self.hidden_dim as i32,
                 self.d_model as i32,
                 has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+                self.kernel == FfnKernel::SplitF32x4TwoColumns,
             )
         }
     }
@@ -332,7 +339,7 @@ impl<'a> FfnPipeline<'a> {
     }
 
     pub fn enqueue_gate_up_projections(&self) -> Result<()> {
-        if self.kernel == FfnKernel::SplitF32x4 {
+        if self.kernel.has_split_weights() {
             return self.enqueue_split(true);
         }
         if let FfnKernel::Fp32(variant) = self.kernel {
@@ -381,7 +388,7 @@ impl<'a> FfnPipeline<'a> {
     }
 
     fn enqueue_gate_up_swiglu(&self) -> Result<()> {
-        if self.kernel == FfnKernel::SplitF32x4 {
+        if self.kernel.has_split_weights() {
             return self.enqueue_split(false);
         }
         if self.kernel.has_quantization() {

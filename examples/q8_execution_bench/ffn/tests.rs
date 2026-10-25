@@ -520,8 +520,8 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
 }
 
 /// Original and follow-up variants, including prepared split planes, reuse
-/// one allocation set across kernel
-/// switches. Repeated row-batched complete work waits before hidden reuse and
+/// one allocation set across kernel switches, including the two-column
+/// split consumer with identical one-column results. Repeated row-batched complete work waits before hidden reuse and
 /// returns CPU-matching outputs without timed allocation, copying or sync.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
@@ -542,6 +542,9 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
             assert!(pipeline.select_kernel(FfnKernel::SplitF32x4).is_err());
+            assert!(pipeline
+                .select_kernel(FfnKernel::SplitF32x4TwoColumns)
+                .is_err());
             let qualified = serde_json::to_value(model.q8_execution_stats())?;
             pipeline.prepare_split_weights(&layer)?;
             assert!(pipeline.prepare_split_weights(&layer).is_err());
@@ -550,6 +553,8 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
             let resident = CudaContext::total_device_bytes();
             validation::validate(&pipeline, &layer)?;
             let native_hidden = pipeline.hidden.read(&model.cuda)?;
+            let mut split_hidden: Option<Vec<f32>> = None;
+            let mut split_output: Option<Vec<f32>> = None;
             for kernel in Q8FfnFp32Variant::ALL
                 .into_iter()
                 .chain([
@@ -557,13 +562,26 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                     Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
                 ])
                 .map(FfnKernel::Fp32)
-                .chain([FfnKernel::SplitF32x4])
+                .chain([FfnKernel::SplitF32x4, FfnKernel::SplitF32x4TwoColumns])
             {
                 pipeline.select_kernel(kernel)?;
                 let checks = validation::validate(&pipeline, &layer)?;
                 assert_eq!(checks["guards_and_immutable_inputs"], true);
                 if kernel.has_intermediate_capture() {
                     assert_eq!(checks["intermediate_capture_matches_normal_kernel"], true);
+                }
+                if kernel == FfnKernel::SplitF32x4 {
+                    split_hidden = Some(pipeline.hidden.read(&model.cuda)?);
+                    split_output = Some(pipeline.output.read(&model.cuda)?);
+                } else if kernel == FfnKernel::SplitF32x4TwoColumns {
+                    assert_eq!(
+                        pipeline.hidden.read(&model.cuda)?,
+                        *split_hidden.as_ref().unwrap()
+                    );
+                    assert_eq!(
+                        pipeline.output.read(&model.cuda)?,
+                        *split_output.as_ref().unwrap()
+                    );
                 }
                 if rows == 1 && kernel.threads() == 256 {
                     assert_eq!(pipeline.hidden.read(&model.cuda)?, native_hidden);
@@ -630,6 +648,10 @@ fn test_split_ffn_reports_do_not_alias_native_or_packed_controls() -> Result<()>
     assert_eq!(
         serde_json::to_value(FfnKernel::SplitF32x4)?,
         "split-f32x4-128"
+    );
+    assert_eq!(
+        serde_json::to_value(FfnKernel::SplitF32x4TwoColumns)?,
+        "split-f32x4-cols2-128"
     );
     Ok(())
 }

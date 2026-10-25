@@ -169,7 +169,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
     ensure!(
         rows != 1
             || pipeline.kernel.has_quantization()
-            || pipeline.kernel == FfnKernel::SplitF32x4
+            || pipeline.kernel.has_split_weights()
             || matches!(pipeline.kernel,FfnKernel::Fp32(variant) if variant.threads()==128)
             || capture_error.bitwise_equal,
         "single-row native/256-thread FFN no longer reproduces frozen captured SwiGLU bits"
