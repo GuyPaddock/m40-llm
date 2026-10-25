@@ -27,7 +27,7 @@ PTX is shipped; offline ptxas resource checks are not the actual driver JIT.
 The source pin, compatibility scope, licenses, raw data and limitations are
 recorded. No kernel, runtime default or acceptance gate changes.
 
-M02 is in progress. The [paired FFN input contract](ffn_benchmark_inputs.md)
+M02 is complete. The [paired FFN input contract](ffn_benchmark_inputs.md)
 has eight CPU tests covering unmodified paired vectors, generated positions,
 source/provenance binding, bounded storage and rejection of invalid captures.
 It does not enable activation sparsity. The model-local read-only CUDA observer
@@ -40,8 +40,13 @@ path rejection. Clean release `f459c97` now has
 provenance and allocation cleanup. Three control tasks pass and three fail
 their fixed rubrics; capture changes no output. The shared benchmark now has a
 complete-FFN mode using production wrappers, genuine rows 1/4, CPU references,
-guarded reusable scratch and enqueue counters. Clean release measurements
-remain; no M02 GPU timing or inference speed improvement is claimed.
+guarded reusable scratch and enqueue counters. Clean release `29dee55` now has
+[warm complete-FFN measurements](experiments/2026-10-25-maxwell-ffn-baseline-warm.md):
+about 0.457 ms/layer at one row, versus 4.67-4.72 ms for rows4, with gate/up
+dominant. All numerical/ownership checks pass. The initial 949 MHz clock-ramp
+run is preserved; bounded warmup yields 1113 MHz at every primary sample.
+This is a baseline, not an inference speed improvement. Next is M03's bounded
+FP32 load/reduction ablation; do not add more capture infrastructure.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact

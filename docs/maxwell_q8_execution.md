@@ -29,7 +29,7 @@ enables weight preparation.
 | Unit | Current State |
 | --- | --- |
 | M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
-| M02 | In progress: [frozen real layer 0/17/35 inputs](experiments/2026-10-25-maxwell-ffn-inputs.md) preserve all 163 generated IDs and contain 21 paired rows/layer; complete rows 1/4 FFN timing remains |
+| M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
 | M03 | Pending: fixed FP32 packed-load/reduction ablation, then one additional 128-thread combined variant |
 | M04 | Pending independently: packed Q8_1 activation/dot experiment, quantization-inclusive cost and numerical checks |
 | M05 | Pending: complete-FFN five-pair screen and preserved negative results |

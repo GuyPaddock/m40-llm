@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Warm Complete Q8 FFN Baseline
+
+M02 measures real layer 0/17/35 FFNs with frozen calibration inputs, genuine
+rows 1/4 and qualified prepared down/vocabulary unchanged. After bounded
+1000 ms active warmup, every primary clock sample is 1113 MHz SM / 3004 MHz
+memory. Five-trial one-row complete latency is 0.4566-0.4575 ms/layer:
+gate/up/SwiGLU 0.3267-0.3279 ms, down 0.1313-0.1315 ms. Rows4 complete is
+4.6711-4.7205 ms, dominated by 4.1415-4.1590 ms gate/up.
+
+All CPU references and guards pass; one-row SwiGLU matches frozen bits exactly.
+The 90 primary intervals add no enqueue allocation, copy or synchronization;
+tracked device bytes return zero to zero. The initial clock-ramp run is retained
+separately, not pooled or presented as an optimization. These are complete FFN
+microbenchmarks, not E2E speedups or measured bandwidth. M03 now has a real
+baseline; both original throughput goals remain unmet. See
+[the warm protocol, memory scope and raw evidence](experiments/2026-10-25-maxwell-ffn-baseline-warm.md).
+
 ## 2026-10-25: Pinned Ollama Maxwell Dispatch
 
 M01 verifies actual launches from official Ollama 0.40.11, llama.cpp
