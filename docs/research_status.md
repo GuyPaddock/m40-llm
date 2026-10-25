@@ -27,8 +27,13 @@ PTX is shipped; offline ptxas resource checks are not the actual driver JIT.
 The source pin, compatibility scope, licenses, raw data and limitations are
 recorded. No kernel, runtime default or acceptance gate changes.
 
-Next is M02: use layer 0/17/35 tensors and read-only frozen-calibration
-activation samples for complete FFN baselines at genuine rows 1/4. Preserve
+M02 is in progress. The [paired FFN input contract](ffn_benchmark_inputs.md)
+has eight CPU tests covering unmodified paired vectors, generated positions,
+source/provenance binding, bounded storage and rejection of invalid captures.
+It does not enable activation sparsity. The model observer, real calibration
+capture and shared benchmark still remain; no M02 GPU timing is claimed.
+Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
+for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact
 512-token parity; Q8_1 stays a separate opt-in numerical track. Independent
 prefill work has a bounded temporary dequant buffer, not full FP32 caching.
