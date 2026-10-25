@@ -13,6 +13,11 @@ The [2026-10-25 exact-kernel checkpoint](experiments/2026-10-25-exact-kernel-che
 records the selected native-Q8/split8/256 configuration after cleanup and a
 fresh 31.850 versus 43.032 HTTP tok/s confirmation. Both speed targets remain
 unmet; prepared projection microbenchmarks are not promoted generation results.
+The later [native-order prepared confirmation](experiments/2026-10-25-q8-native-order-http.md)
+qualifies split down/vocabulary on the same exact workload at 35.725 versus
+31.962 native HTTP tok/s, with all 512 IDs equal. General preparation remains
+off. This paired m40-llm screen is not a fresh timed Ollama comparison, and
+both original speed goals remain unmet.
 
 ## Ollama Setup
 
@@ -230,8 +235,8 @@ target/release/examples/compare_ollama \
   --ollama-pid OLLAMA_SERVER_PID \
   --ollama-log /tmp/m40-ollama-controlled.log \
   --compare-q8-execution split \
-  --q8-families qkv,output,down,vocabulary \
-  --output /tmp/q8-native-mlp-http.jsonl
+  --q8-families down,vocabulary \
+  --output /tmp/q8-down-vocabulary-http.jsonl
 ```
 
 `--q8-families all` prepares all projection families; native fused MLP is
@@ -241,6 +246,11 @@ than current code. `--q8-budget-mb` limits extra prepared bytes and defaults to
 6144 MiB. `mixed` additionally prepares the previously measured multi-row tiled
 Q/output/down layouts; it is not a new launch-geometry search. CLI candidate
 settings are explicit and do not use ambient preparation env vars.
+Keep `M40LLM_Q8_EXECUTION_WEIGHTS=off` for the native control. Only
+down/vocabulary qualifies in the current full-workload screen; other subsets
+remain separate experiments. Standalone single-model timing must explicitly
+select `split`, `down,vocabulary`, and its budget before loading, rather than
+assuming the candidate flags change runtime defaults.
 
 Arithmetic, exact-OK, and config-lookup smokes use the same canonical Qwen
 system message as the browser prompt, supplied through the raw interface.

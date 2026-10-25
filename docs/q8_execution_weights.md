@@ -4,15 +4,19 @@ The API in `infer::execution_weights` owns lossless execution representations,
 separate from `DeviceTensorView`, uploaded GGUF weights, and the model's FP32
 materialization cache. C08-C10 established ownership and isolated measurements;
 C10A.1 adds opt-in model-owned preparation and standard projection dispatch.
-Preparation remains disabled by default. The
+Preparation remains disabled by default. The historical
 [release HTTP gate](experiments/2026-10-25-q8-prepared-http.md) rejects all-family
-and native-MLP timing regressions. Down/vocabulary-only preparation is faster
-but changes the generated continuation at step 310, so it also fails the
-combined promotion gate. No qualified generation speedup is claimed.
+and native-MLP timing regressions. Down/vocabulary-only preparation initially
+failed token parity at step 310. Matching native down reduction order now
+removes that branch and passes the unchanged full-workload gate: 35.725 versus
+31.962 HTTP tok/s, +11.771%, with all 512 actual IDs equal. See
+[the corrected confirmation and costs](experiments/2026-10-25-q8-native-order-http.md).
+This qualifies an opt-in benchmark configuration, not a global default or
+achievement of either original throughput target.
 
 ## Matched-Prefix Branch Diagnostic
 
-The unresolved down/vocabulary branch has a bounded, untimed follow-up in
+The historical down/vocabulary branch has a bounded, untimed follow-up in
 the existing `model_quality` runner. It consumes the original completed HTTP
 report, not re-tokenized output, and validates model/prompt/config identities.
 The candidate is fixed to split down/vocabulary preparation; no kernel/layout
@@ -155,8 +159,10 @@ native specialized path when requested. Output normalization, producer-stream
 dependencies, first-index tie handling, and the single-u32 D2H result remain
 unchanged. No full logits readback or extra device scratch is added.
 
-Use of the cache is experimental, not a claim that the current selected fused
-HTTP benchmark is faster.
+Use of the cache remains experimental. The qualified HTTP result applies
+specifically to `split`, families `down,vocabulary`, native-order down and
+the documented C11 flags. It does not qualify all-family preparation, another
+model/workload or a frozen model-quality baseline.
 
 ## Source and Identity
 

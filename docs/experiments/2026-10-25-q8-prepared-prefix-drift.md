@@ -9,6 +9,10 @@ token 5815 from prepared hidden state. Forward drift crosses a narrow
 top-two margin. This does not establish harmless rounding or a kernel bug,
 and it does not qualify the historical +12.53% timing lead for promotion.
 
+The later [native-order correction and fresh HTTP screen](2026-10-25-q8-native-order-http.md)
+remove this branch while preserving the original acceptance rules. The
+pre-fix measurements below remain historical evidence, not current status.
+
 ## Identity and Scope
 
 The release revision is `6ff0f630439e1cd431ff45bbdd232763e885012d`, executable

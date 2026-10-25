@@ -220,10 +220,12 @@ The 60% combination regresses calibration config lookup from `6` to `19`.
 Both are research-only model changes, not unchanged-engine gains. See
 [the report and complete raw evidence](experiments/2026-10-25-combined-model-tradeoffs.md).
 
-Latest qualified unchanged HTTP rate is
-31.937130 tok/s versus Ollama 43.162711; both 53.06 and fresh 1.30x-Ollama
-56.1115 targets remain unmet. Runtime defaults and negative research gates
-are unchanged; combined-model work cannot satisfy an unchanged-model objective.
+Latest qualified unchanged HTTP rate is 35.724705 tok/s with explicit split
+down/vocabulary preparation after the native-order correction below. Its
+contemporaneous native control is 31.962281. The latest separate timed Ollama
+baseline remains 43.162711; both 53.06 and 1.30x-Ollama 56.1115 targets are
+unmet. Runtime defaults and negative research gates are unchanged;
+combined-model work cannot satisfy an unchanged-model objective.
 
 Next is a bounded diagnostic of C10A's existing down/vocabulary timing lead,
 not another kernel/layout search. `model_quality --q8-prefix-drift` forces the
@@ -260,7 +262,22 @@ storage and global preparation-off defaults stay unchanged. Cache telemetry
 records `single_row_down_split_launch` for actual prepared-down ownership.
 Cache/parity checks, the full 21-test runner, both warning-as-error CI lanes
 and non-CUDA/CUDA-server Clippy pass. A clean real prefix probe and the
-original full-workload gate remain; no new speed claim is made yet.
+original full-workload gate were required before making the result below.
+
+The clean `dd8c5f6` release probe now matches all 317 actual predictions and
+all twelve sampled hidden vectors exactly. The old step-310 branch is gone.
+The original five-pair HTTP screen then measures 35.724705 versus 31.962281
+tok/s, +11.771%, 95% paired bootstrap interval 11.631-11.866%, with identical
+512 actual generated IDs and no dense-valid smoke regressions. See
+[the complete confirmation, costs and raw evidence](experiments/2026-10-25-q8-native-order-http.md).
+This qualifies the explicit split down/vocabulary benchmark configuration,
+not general preparation, compressed attention, model changes or either original
+throughput objective. It adds 1,192,935,424 prepared device bytes.
+
+Next re-profile this qualified exact configuration, including profiler
+perturbation, before choosing any new kernel work. Keep the C11 native control
+for comparisons and frozen model-quality artifacts. Do not change runtime
+defaults, refit held-out data or reopen negative n-gram/static-sparse gates.
 
 C21 used these dependency-ordered commits:
 

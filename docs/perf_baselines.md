@@ -2,6 +2,28 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Native-Order Prepared Q8 HTTP Gain
+
+Clean release `dd8c5f6` qualifies split down/vocabulary preparation on the
+original 512-token browser workload. Five alternating pairs give 35.724705
+versus 31.962281 HTTP E2E tok/s, +11.771%, 95% paired bootstrap interval
+11.631-11.866%. All 512 actual generated IDs match; every request processes
+all 65 prompt tokens with fresh dense KV and stops at the length limit.
+All three dense-valid quality smokes pass.
+
+The existing 4-column/256-thread prepared-down launch restores native FP32
+reduction order. All 317 forced-prefix predictions now agree and twelve
+sampled hidden vectors match exactly, removing the historical token-310
+branch without changing kernels, storage or acceptance rules.
+
+Median prefill is 1672.089 -> 1576.200 ms, decode 14300.146 -> 12714.413 ms,
+client HTTP total 16018.882 -> 14331.819 ms. Candidate preparation adds
+1,192,935,424 device bytes and takes 9499.437 ms including hashing, outside
+warm timing. General preparation remains off; the project compressed-KV
+default is unchanged. Ollama is only an untimed oracle here, so this is not
+a fresh Ollama comparison. Both original exact speed goals remain unmet.
+See [the complete screen, causal check, audit and raw data](experiments/2026-10-25-q8-native-order-http.md).
+
 ## 2026-10-25: Prepared Q8 Same-Prefix Branch Diagnostic
 
 Clean release `6ff0f63` reproduces C10A's down/vocabulary branch at generated
