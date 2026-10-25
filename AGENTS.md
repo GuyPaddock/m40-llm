@@ -85,9 +85,18 @@ below is historical context, not the current research execution order.
   `CUPTI_ERROR_NOT_SUPPORTED` on driver 580.159.04/CUPTI 12.8.90, even as root.
   Traffic/occupancy measurements remain unavailable, not estimated counters.
   See `docs/maxwell_counters.md`; ordinary builds do not depend on CUPTI.
-- Next: C06 bottleneck report. The profile supports bounded exact attention
-  work plus independent Q8 layout experiments; gate/up is now the larger fixed
-  FFN cost, not down alone. Missing counters do not block that checkpoint.
+- C06 now consolidates the raw baseline, sampled stage medians, counter
+  limitations, actual tensor inventory, and explicitly estimated Amdahl limits
+  in `docs/experiments/2026-10-24-qwen-baseline-checkpoint.md`. FFN parameters
+  are 78.90%; gate/up is the larger fixed cost, while attention grows with
+  context. The report's jq program reconciles source records and calculations.
+- Next: C07's bounded exact head128 attention comparison, including one
+  block/head versus split-context 2/4/8 with stable merge and reusable scratch.
+  Hardware has 24 SMs versus 16 Qwen query heads. Then C08 benchmark-only
+  typed execution weights and independent C09/C10 layouts; neither layout
+  depends on the other succeeding. Require parity and repeated HTTP E2E gates
+  before promotion. No counter availability or original speed target blocks
+  the later formal n-gram gate and separate model-changing research.
 - The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
   Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
   explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.

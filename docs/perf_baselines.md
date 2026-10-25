@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Controlled Baseline and Bottleneck Checkpoint
+
+C06 reconciles the existing C03/C04/C05 records; it is not a new timing run.
+The warm HTTP baseline remains 23.735 tok/s m40-llm versus 43.035 Ollama,
+with 65 identical prompt IDs, 512 actual generated tokens, length stops,
+fresh prompt KV, and no concurrent inference. The binding unchanged-model
+target is now 55.945 E2E tok/s, requiring 2.357x current throughput. The
+original 53.06 target also remains in force; neither is reached.
+
+Actual tensors put 78.90% of parameters in FFN matrices. Sampled stage costs
+justify the bounded exact attention experiment and independent Q8 layout
+experiments: gate/up is the largest fixed cost, while attention grows strongly
+with context. Extrapolated Amdahl estimates suggest zero-cost FFN alone gives
+about 1.943x E2E and zero-cost attention alone about 1.381x; these are estimates,
+not measured whole-workload stage totals or predicted kernel improvements.
+
+No DRAM/occupancy counters are available on this stack. Matrix-bytes-times-rate
+estimates are 77.82 GB/s at current throughput and 183.42 GB/s at the refreshed
+target, not measured bandwidth. Dense sequential prefill, the first-capture
+profiling gap, and different cross-engine outputs remain explicit limitations.
+See the [checkpoint report](experiments/2026-10-24-qwen-baseline-checkpoint.md),
+[derived JSON](experiments/2026-10-24-qwen-baseline-checkpoint.json), and
+[reproducible calculations](experiments/2026-10-24-qwen-baseline-checkpoint.jq).
+Next: C07 exact head128 attention, then benchmark-only execution-weight views
+and the independent C09/C10 Q8 layout experiments. Runtime defaults do not change.
+
 ## 2026-10-24: Maxwell Counter Availability
 
 C05 adds an optional standalone legacy CUPTI preflight, outside ordinary Cargo

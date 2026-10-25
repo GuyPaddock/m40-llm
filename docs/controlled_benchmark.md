@@ -5,6 +5,11 @@ weights, a fresh prompt KV state, and the same Qwen2.5-3B Q8_0 GGUF bytes.
 It does not change the runtime's general compressed-KV default. This short
 workload explicitly uses full dense FP16 KV in both engines.
 
+The [2026-10-24 baseline checkpoint](experiments/2026-10-24-qwen-baseline-checkpoint.md)
+combines the repeated HTTP results, stage profile, counter availability, and
+bounded optimization decisions. It distinguishes measured timings from
+bandwidth/Amdahl estimates.
+
 ## Ollama Setup
 
 Use an isolated server, not an existing server with unrelated traffic. The

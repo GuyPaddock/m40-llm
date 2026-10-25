@@ -1,0 +1,319 @@
+{
+  "kind": "controlled_baseline_checkpoint",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "prompt_sha256": "3005a73b43160b265f25b4545853c3fdab0ab75014d315c701ec6bef62648f9a",
+  "prompt_token_ids_sha256": "395153b63b714fd6b481f4cc148988649d1220f4c788915ded1e6c3caf3c6ad2",
+  "source_files": [
+    "2026-10-24-qwen-ollama-controlled.jsonl",
+    "2026-10-24-qwen-profile-comparison.jsonl",
+    "2026-10-24-qwen-stage-events.jsonl.gz",
+    "2026-10-24-maxwell-counter-preflight.jsonl"
+  ],
+  "hardware": {
+    "sm_count": 24,
+    "max_threads_per_sm": 2048,
+    "shared_bytes_per_sm": 98304,
+    "registers_per_sm": 65536,
+    "memory_bus_bits": 384
+  },
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      -0.44893501354799714,
+      -0.44792695391151316
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0005883811011408183,
+      "max": 23.775731956750366,
+      "median": 23.735368760276963,
+      "min": 23.714996731349263
+    },
+    "control": {
+      "mad_over_median": 0.00032382788398002454,
+      "max": 43.10769226634364,
+      "median": 43.03484582469442,
+      "min": 43.00057438647127
+    },
+    "gain": -0.44846162904905673,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": false,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "original_target_tps": 53.06,
+  "refreshed_target_tps": 55.94529957210275,
+  "required_e2e_speedup": 2.357043622837311,
+  "weight_inventory": {
+    "parameters": 3085938688,
+    "payload_bytes": 3279519744,
+    "q8_matrix_bytes": 3278553088,
+    "ffn_parameter_fraction": 0.7889960618686148,
+    "families": [
+      {
+        "family": "attention_output",
+        "tensors": 36,
+        "parameters": 150994944,
+        "bytes": 160432128
+      },
+      {
+        "family": "down",
+        "tensors": 36,
+        "parameters": 811597824,
+        "bytes": 862322688
+      },
+      {
+        "family": "gate_up",
+        "tensors": 72,
+        "parameters": 1623195648,
+        "bytes": 1724645376
+      },
+      {
+        "family": "norms_biases",
+        "tensors": 181,
+        "parameters": 241664,
+        "bytes": 966656
+      },
+      {
+        "family": "qkv",
+        "tensors": 108,
+        "parameters": 188743680,
+        "bytes": 200540160
+      },
+      {
+        "family": "tied_vocabulary",
+        "tensors": 1,
+        "parameters": 311164928,
+        "bytes": 330612736
+      }
+    ]
+  },
+  "estimated_once_per_token_matrix_GB_s": [
+    {
+      "tps": 23.735368760276963,
+      "GB_s": 77.81766654382477
+    },
+    {
+      "tps": 43.03484582469442,
+      "GB_s": 141.0920266701558
+    },
+    {
+      "tps": 53.06,
+      "GB_s": 173.96002684928
+    },
+    {
+      "tps": 55.94529957210275,
+      "GB_s": 183.41963467120254
+    }
+  ],
+  "samples": [
+    {
+      "step": 0,
+      "absolute_position": 64,
+      "samples": 5,
+      "wall_ms": 97.546831,
+      "gpu_union_ms": 29.986679116962478,
+      "stages": {
+        "attention": 2.5088319999999995,
+        "attn_norm": 0.39321599999999995,
+        "attn_residual": 0.15791999999999998,
+        "embedding": 0.001376,
+        "ffn_norm": 0.404544,
+        "kv_append_rope_k": 0.26236800000000005,
+        "lm_head_argmax": 3.438016,
+        "mlp_down": 6.314752000000001,
+        "mlp_gate_up_swiglu": 11.85248,
+        "mlp_residual": 0.160096,
+        "out_project": 1.7153599999999998,
+        "output_norm": 0.010496,
+        "qkv_project": 2.4921920000000006,
+        "rope_q": 0.262016
+      }
+    },
+    {
+      "step": 255,
+      "absolute_position": 319,
+      "samples": 5,
+      "wall_ms": 39.723722,
+      "gpu_union_ms": 38.88851226074621,
+      "stages": {
+        "attention": 11.420511999999999,
+        "attn_norm": 0.385696,
+        "attn_residual": 0.15683200000000003,
+        "embedding": 0.023456,
+        "ffn_norm": 0.4040960000000001,
+        "kv_append_rope_k": 0.261504,
+        "lm_head_argmax": 3.43248,
+        "mlp_down": 6.314976,
+        "mlp_gate_up_swiglu": 11.856608,
+        "mlp_residual": 0.159296,
+        "out_project": 1.71312,
+        "output_norm": 0.010688,
+        "qkv_project": 2.4896640000000003,
+        "rope_q": 0.25465600000000005
+      }
+    },
+    {
+      "step": 511,
+      "absolute_position": 575,
+      "samples": 5,
+      "wall_ms": 48.713019,
+      "gpu_union_ms": 47.89845060091466,
+      "stages": {
+        "attention": 20.387200000000007,
+        "attn_norm": 0.3867839999999999,
+        "attn_residual": 0.158144,
+        "embedding": 0.024416,
+        "ffn_norm": 0.4049599999999999,
+        "kv_append_rope_k": 0.25868800000000003,
+        "lm_head_argmax": 3.433536,
+        "mlp_down": 6.318112000000002,
+        "mlp_gate_up_swiglu": 11.857632000000002,
+        "mlp_residual": 0.15878399999999998,
+        "out_project": 1.7196799999999999,
+        "output_norm": 0.010496,
+        "qkv_project": 2.4945280000000003,
+        "rope_q": 0.256896
+      }
+    }
+  ],
+  "estimated_amdahl_limits": [
+    {
+      "stage": "attention",
+      "estimated_workload_ms": 5949.176435225051,
+      "estimated_e2e_fraction": 0.27579276662112606,
+      "idealized_e2e_speedup_if_removed": 1.3808202319857845
+    },
+    {
+      "stage": "gate_up",
+      "estimated_workload_ms": 6829.406207999999,
+      "estimated_e2e_fraction": 0.31659858351680614,
+      "idealized_e2e_speedup_if_removed": 1.4632688429971845
+    },
+    {
+      "stage": "down",
+      "estimated_workload_ms": 3637.426176,
+      "estimated_e2e_fraction": 0.1686243195813361,
+      "idealized_e2e_speedup_if_removed": 1.202825658186706
+    },
+    {
+      "stage": "combined_ffn",
+      "estimated_workload_ms": 10466.832384,
+      "estimated_e2e_fraction": 0.48522290309814226,
+      "idealized_e2e_speedup_if_removed": 1.9425883669231112
+    },
+    {
+      "stage": "qkv",
+      "estimated_workload_ms": 1434.0464640000002,
+      "estimated_e2e_fraction": 0.06647972977033446,
+      "idealized_e2e_speedup_if_removed": 1.0712140184743701
+    },
+    {
+      "stage": "attention_output",
+      "estimated_workload_ms": 986.75712,
+      "estimated_e2e_fraction": 0.04574422679693138,
+      "idealized_e2e_speedup_if_removed": 1.0479370710468805
+    },
+    {
+      "stage": "vocabulary_argmax",
+      "estimated_workload_ms": 1757.42976,
+      "estimated_e2e_fraction": 0.08147117856227547,
+      "idealized_e2e_speedup_if_removed": 1.0886974656219854
+    }
+  ],
+  "extrapolation": {
+    "forward_calls": 576,
+    "vocabulary_calls": 512,
+    "projection_cost": "middle-sample constant across all sequential forwards",
+    "attention_cost": "linear fit from early and late samples, including prompt prefix",
+    "is_measured_workload_stage_total": false,
+    "is_measured_dram_traffic": false
+  },
+  "perturbation": {
+    "is_optimization_claim": false,
+    "kind": "profile_comparison_summary",
+    "pairs": 5,
+    "profile_off": {
+      "mad_over_median": 0.00046768206147897434,
+      "max": 23.839445490877267,
+      "median": 23.779834904600367,
+      "min": 23.756943358024742
+    },
+    "profile_on": {
+      "mad_over_median": 0.0006887672306032634,
+      "max": 23.70610192931037,
+      "median": 23.667273961828673,
+      "min": 23.650972719086056
+    },
+    "report_path": {
+      "Unix": [
+        47,
+        116,
+        109,
+        112,
+        47,
+        109,
+        52,
+        48,
+        45,
+        108,
+        108,
+        109,
+        45,
+        99,
+        48,
+        52,
+        45,
+        115,
+        116,
+        97,
+        103,
+        101,
+        45,
+        101,
+        118,
+        101,
+        110,
+        116,
+        115,
+        46,
+        106,
+        115,
+        111,
+        110,
+        108
+      ]
+    },
+    "throughput_change": -0.004733461911037851
+  },
+  "counter_availability": [
+    {
+      "effective_uid": 1000,
+      "collection_status": "unavailable",
+      "domain_status": {
+        "code": 27,
+        "name": "CUPTI_ERROR_NOT_SUPPORTED"
+      },
+      "event_group_status": {
+        "code": 27,
+        "name": "CUPTI_ERROR_NOT_SUPPORTED"
+      },
+      "kernel_measurements": null
+    },
+    {
+      "effective_uid": 0,
+      "collection_status": "unavailable",
+      "domain_status": {
+        "code": 27,
+        "name": "CUPTI_ERROR_NOT_SUPPORTED"
+      },
+      "event_group_status": {
+        "code": 27,
+        "name": "CUPTI_ERROR_NOT_SUPPORTED"
+      },
+      "kernel_measurements": null
+    }
+  ]
+}
