@@ -72,8 +72,17 @@ below is historical context, not the current research execution order.
 - The initial 66-versus-65-ID attempt was rejected. `2f4d7ca` fixes extra BOS
   insertion for preformatted Qwen Raw/Auto prompts; standard automatic Qwen
   chat formatting is unchanged.
-- Next: C04 buffered stage events and C05 available Maxwell counters, then C06
-  bottleneck report. Do not select the attention rewrite without attribution.
+- C04 now records buffered per-layer CUDA-event spans with session-owned reused
+  events and nonblocking resolution at existing logits completion. CUDA tests
+  preserve results and launch/sync/copy/allocation counts, including two streams.
+  Five same-workload HTTP pairs show 23.780 tok/s off versus 23.667 on, a 0.47%
+  profiling reduction with identical generated IDs. Mid-token FFN spans total
+  18.17 ms and attention 11.42 ms; late attention rises to 20.39 ms. First-capture
+  uncovered wall time is not ordinary CPU-cost evidence. See the dated profile
+  record in `docs/perf_baselines.md`.
+- Next: C05 available Maxwell counters, then C06 bottleneck report. The profile
+  supports bounded exact attention work plus independent Q8 layout experiments;
+  gate/up is now the larger fixed FFN cost, not down alone.
 - The unchanged-model target requires both 53.06 E2E tok/s and 1.30x the fresh
   Ollama median, currently 55.945 tok/s. Neither is reached. The short benchmark
   explicitly uses dense `off`; the project's compressed-KV defaults are unchanged.

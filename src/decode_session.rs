@@ -5,6 +5,8 @@ use crate::cuda::{
     CudaContext, CudaEvent, CudaGraphExec, CudaStream, DeviceBuffer, ExactBlockStagingWorkspace,
 };
 #[cfg(feature = "cuda")]
+use crate::gpu_profile::{self, DecodeGpuProfiler, GpuStageSpan};
+#[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::timing;
@@ -116,6 +118,7 @@ pub struct DecodeSession {
     logged_full_forward: bool,
     last_prefill_sync_diag: Option<PrefillSyncDiagTimings>,
     last_forward_sync_diag: Option<PrefillSyncDiagTimings>,
+    gpu_profiler: Option<DecodeGpuProfiler>,
 }
 
 #[cfg(feature = "cuda")]
@@ -178,6 +181,16 @@ impl DecodeSession {
         d_x_tag: &'static str,
         d_out_tag: &'static str,
     ) -> Result<Self> {
+        let gpu_profiler =
+            DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
+        if gpu_profiler.is_some() {
+            anyhow::ensure!(
+                !decode_graph_enabled(),
+                "stage profiling does not support CUDA Graph capture; set M40LLM_DECODE_GRAPH=0"
+            );
+            #[cfg(feature = "server")]
+            anyhow::ensure!(!crate::decode_batch::server_batch_decode_requested(), "stage profiling currently requires serialized generation, not the batched scheduler");
+        }
         if can_forward && !model.kv_cache_can_address_layer_sequence(0, sequence_id) {
             anyhow::bail!(
                 "decode session sequence_id {sequence_id} is not addressable by KV cache"
@@ -289,6 +302,7 @@ impl DecodeSession {
             logged_full_forward: false,
             last_prefill_sync_diag: None,
             last_forward_sync_diag: None,
+            gpu_profiler,
         })
     }
 
@@ -363,6 +377,9 @@ impl DecodeSession {
     pub unsafe fn load_next_unprocessed_token(&mut self, ids: &[u32]) -> Result<Option<usize>> {
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -670,6 +687,9 @@ impl DecodeSession {
         }
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -688,7 +708,19 @@ impl DecodeSession {
                 eprintln!("[{}] token id {}", self.log_prefix, tok_id);
             }
 
+            let scope = self
+                .gpu_profiler
+                .as_mut()
+                .map(|profiler| profiler.begin_for_ids(ids.len(), token_idx))
+                .transpose()?
+                .flatten();
             let token_logits = unsafe { self.logits_for_token(tok_id, token_idx, start)? };
+            if let Some(scope) = scope {
+                self.gpu_profiler
+                    .as_mut()
+                    .expect("active profiler")
+                    .finish_token(scope)?;
+            }
             on_token_logits(&token_logits);
             timing::timing_log!(
                 token_start.elapsed(),
@@ -719,6 +751,9 @@ impl DecodeSession {
         }
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -734,6 +769,12 @@ impl DecodeSession {
         for (token_idx, &tok_id_u32) in ids.iter().enumerate().skip(start) {
             let token_start = std::time::Instant::now();
             let tok_id = tok_id_u32 as u64;
+            let scope = self
+                .gpu_profiler
+                .as_mut()
+                .map(|profiler| profiler.begin_for_ids(ids.len(), token_idx))
+                .transpose()?
+                .flatten();
             if token_idx == final_idx {
                 next = Some(unsafe { self.greedy_token_for_token(tok_id, token_idx, start)? });
             } else if self.can_forward {
@@ -747,6 +788,12 @@ impl DecodeSession {
                     .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
                     .ok_or_else(|| anyhow::anyhow!("empty logits"))?;
                 next = Some(idx as u32);
+            }
+            if let Some(scope) = scope {
+                self.gpu_profiler
+                    .as_mut()
+                    .expect("active profiler")
+                    .finish_token(scope)?;
             }
             timing::timing_log!(
                 token_start.elapsed(),
@@ -774,7 +821,9 @@ impl DecodeSession {
         start: usize,
     ) -> Result<Vec<f32>> {
         let embed_start = std::time::Instant::now();
+        let gpu_stage = GpuStageSpan::begin("embedding", CudaStream::Decode)?;
         (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        gpu_stage.finish()?;
         timing::timing_log!(
             embed_start.elapsed(),
             "{}.token.{token_idx}.embedding_load",
@@ -825,6 +874,7 @@ impl DecodeSession {
             if let Some(sync_diag) = forward_sync_diag {
                 self.last_forward_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
             }
+            gpu_profile::set_layer(None);
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(
                     d_out as *const _,
@@ -865,7 +915,9 @@ impl DecodeSession {
         start: usize,
     ) -> Result<u32> {
         let embed_start = std::time::Instant::now();
+        let gpu_stage = GpuStageSpan::begin("embedding", CudaStream::Decode)?;
         (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        gpu_stage.finish()?;
         timing::timing_log!(
             embed_start.elapsed(),
             "{}.token.{token_idx}.embedding_load",
@@ -934,6 +986,7 @@ impl DecodeSession {
             .d_greedy_token
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("missing d_greedy_token scratch"))?;
+        gpu_profile::set_layer(None);
         let token = (*self.model).greedy_token_from_hidden_into(
             d_out as *const _,
             d_logits.as_mut_ptr(),

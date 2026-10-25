@@ -138,3 +138,36 @@ cargo test --no-default-features --example compare_ollama
 
 Long benchmark records belong in linked experiment artifacts. Dated summaries
 and interpretations belong in [perf_baselines.md](perf_baselines.md).
+
+## Check Stage-Profiler Perturbation
+
+After building the same release example, keep the backend flags above and add:
+Reuse every backend assignment from the full command; the abbreviated invocation
+below omits those assignments, not their effect.
+
+```bash
+M40LLM_STAGE_PROFILE_TOKENS=0,255,511 \
+M40LLM_STAGE_PROFILE_REPORT=/tmp/m40-stages.jsonl \
+target/release/examples/compare_ollama \
+  --model "$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d" \
+  --ollama-pid OLLAMA_SERVER_PID \
+  --ollama-log /tmp/m40-ollama-controlled.log \
+  --compare-stage-profile \
+  --output /tmp/m40-profile-comparison.jsonl
+```
+
+Keep `M40LLM_STAGE_PROFILE` unset initially. This mode alternates five pairs
+of ordinary and profiled **m40-llm** HTTP requests; it does not time Ollama
+inference. Ollama is used only for the same model/tokenizer/oracle verification
+before timing. Each engine invocation completes before the next begins. No
+GPU tests or competing work should run during measurement.
+
+The comparison checks equal output for every pair and actual generated-ID
+equality in untimed companions. The HTTP report identifies profiling on/off.
+The separate stage report contains one profiler session for the enabled warmup,
+then the five enabled measured requests, then the enabled untimed companion.
+Use measured sessions for attribution rather than mixing in warmup or traces.
+This is an instrumentation-perturbation check, not an optimization-promotion
+decision or a new Ollama speed comparison. See the
+[stage timing caveats](diagnostics.md#launch-sync-and-timing-logs) before adding
+stage or host-wait durations together.

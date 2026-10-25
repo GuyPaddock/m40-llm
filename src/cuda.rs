@@ -207,6 +207,12 @@ mod ffi {
             stop: *mut M40llmCudaEvent,
             elapsed_ms: *mut f32,
         ) -> i32;
+        pub fn m40llm_cuda_event_elapsed_ready(
+            ctx: *mut M40llmCudaContext,
+            start: *mut M40llmCudaEvent,
+            stop: *mut M40llmCudaEvent,
+            elapsed_ms: *mut f32,
+        ) -> i32;
         pub fn m40llm_cuda_event_destroy(event: *mut M40llmCudaEvent);
 
         pub fn m40llm_upload_weights(
@@ -1212,6 +1218,30 @@ unsafe impl Sync for CudaEvent {}
 
 #[cfg(feature = "cuda")]
 impl CudaEvent {
+    /// Query completed timestamps without waiting or changing either stream.
+    pub fn elapsed_ready(&self, stop: &CudaEvent) -> Result<Option<f32>> {
+        if !Arc::ptr_eq(&self.ctx.inner, &stop.ctx.inner) {
+            return Err(anyhow!(
+                "CUDA event timestamps belong to different contexts"
+            ));
+        }
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_ready(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms,
+            )
+        };
+        match rc {
+            0 => Ok(Some(elapsed_ms)),
+            1 => Ok(None),
+            _ => Err(anyhow!("m40llm_cuda_event_elapsed_ready failed: {rc}")),
+        }
+    }
+
     pub fn record(&self, stream: CudaStream) -> Result<()> {
         let _g = self.ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
@@ -1630,15 +1660,17 @@ impl CudaContext {
     pub fn synchronize_stream(&self, stream: CudaStream) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = unsafe {
-                ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
-            };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
-            }
-            crate::profile::record_stream_sync("stream_synchronize");
-            Ok(())
+            crate::gpu_profile::measure_host("stream_synchronize", || {
+                let _g = self.inner.lock.lock().unwrap();
+                let rc = unsafe {
+                    ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
+                };
+                if rc != 0 {
+                    return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
+                }
+                crate::profile::record_stream_sync("stream_synchronize");
+                Ok(())
+            })
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1904,14 +1936,17 @@ impl CudaContext {
         src_device: *const c_void,
         bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
-        }
-        crate::profile::record_d2h_copy("memcpy_d2h", bytes);
-        Ok(())
+        crate::gpu_profile::measure_host("d2h_copy", || {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes)
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
+            }
+            crate::profile::record_d2h_copy("memcpy_d2h", bytes);
+            Ok(())
+        })
     }
 
     /// # Safety

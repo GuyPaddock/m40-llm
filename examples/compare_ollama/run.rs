@@ -40,6 +40,33 @@ struct Args {
     /// New report file; refusing overwrite keeps earlier evidence intact.
     #[arg(long)]
     output: PathBuf,
+    /// Compare five unprofiled/profiled m40-llm pairs instead of timing Ollama.
+    #[arg(long = "compare-stage-profile")]
+    should_compare_stage_profile: bool,
+}
+
+struct StageProfileSwitch {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl StageProfileSwitch {
+    fn new() -> Self {
+        Self {
+            previous: std::env::var_os("M40LLM_STAGE_PROFILE"),
+        }
+    }
+    fn set(&self, is_enabled: bool) {
+        std::env::set_var("M40LLM_STAGE_PROFILE", if is_enabled { "1" } else { "0" });
+    }
+}
+
+impl Drop for StageProfileSwitch {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => std::env::set_var("M40LLM_STAGE_PROFILE", value),
+            None => std::env::remove_var("M40LLM_STAGE_PROFILE"),
+        }
+    }
 }
 
 struct Report {
@@ -294,6 +321,8 @@ async fn tokenize_with_oracle(
 
 impl ComparisonRun {
     async fn measure_m40(&mut self, phase: &str, pair: usize) -> Result<Measurement> {
+        let is_stage_profile_enabled =
+            std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1");
         let before = gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?;
         let started_at = Instant::now();
         let response = self
@@ -331,6 +360,7 @@ impl ComparisonRun {
         self.report.record(json!({
             "kind": "trial", "runtime": "m40-llm", "phase": phase, "pair": pair,
             "client_elapsed_ms": wall_ms, "e2e_tps": tps, "metrics": metrics,
+            "stage_profile_enabled": is_stage_profile_enabled,
             "is_fixed_workload": validation.is_ok(), "invalid_reason": validation.as_ref().err().map(|e| e.to_string()),
             "cache": {"reused_prompt_tokens": 0, "evaluated_prompt_tokens": metrics.prompt_tokens, "reset": "generate_text reset_kv_cache=true"},
             "gpu_before": before, "gpu_after": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
@@ -419,7 +449,7 @@ impl ComparisonRun {
         Ok(last_outputs)
     }
 
-    async fn capture_traces(&mut self, last_outputs: &(String, String)) -> Result<()> {
+    async fn capture_m40_trace(&mut self, expected_output: &str) -> Result<Vec<u32>> {
         let _generation_guard = self.server.state.generation_lock.lock().await;
         let generated = generate_text(
             &self.server.state.model,
@@ -434,7 +464,7 @@ impl ComparisonRun {
             },
         )?;
         ensure!(
-            generated.output == last_outputs.0,
+            generated.output == expected_output,
             "untimed m40 continuation differs from measured configuration"
         );
         self.report.record(json!({
@@ -442,8 +472,13 @@ impl ComparisonRun {
             "prompt_token_ids": &generated.token_ids[..generated.prompt_token_len],
             "generated_token_ids": &generated.token_ids[generated.prompt_token_len..],
             "matches_measured_output": true, "output": generated.output,
+            "stage_profile_enabled": std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1"),
         }))?;
-        drop(_generation_guard);
+        Ok(generated.token_ids[generated.prompt_token_len..].to_vec())
+    }
+
+    async fn capture_traces(&mut self, last_outputs: &(String, String)) -> Result<()> {
+        self.capture_m40_trace(&last_outputs.0).await?;
         let response: Value = self
             .client
             .post(format!("{}/completion", self.runner_url))
@@ -478,6 +513,83 @@ impl ComparisonRun {
             "trace_source": "same Ollama native runner /completion return_tokens=true",
             "generation_settings": response["generation_settings"],
         }))?;
+        Ok(())
+    }
+
+    async fn compare_stage_profile(&mut self) -> Result<()> {
+        ensure!(
+            std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").is_some(),
+            "set M40LLM_STAGE_PROFILE_REPORT for the profile comparison"
+        );
+        let switch = StageProfileSwitch::new();
+        switch.set(false);
+        ensure!(
+            self.measure_m40("profile-warmup-off", 0)
+                .await?
+                .is_fixed_workload,
+            "invalid unprofiled warmup"
+        );
+        switch.set(true);
+        ensure!(
+            self.measure_m40("profile-warmup-on", 0)
+                .await?
+                .is_fixed_workload,
+            "invalid profiled warmup"
+        );
+        let mut ordinary = Vec::new();
+        let mut profiled = Vec::new();
+        let mut last_output = String::new();
+        for pair in 0_usize..5 {
+            let (plain, traced) = if pair.is_multiple_of(2) {
+                switch.set(false);
+                let plain = self.measure_m40("profile-off", pair).await?;
+                switch.set(true);
+                let traced = self.measure_m40("profile-on", pair).await?;
+                (plain, traced)
+            } else {
+                switch.set(true);
+                let traced = self.measure_m40("profile-on", pair).await?;
+                switch.set(false);
+                let plain = self.measure_m40("profile-off", pair).await?;
+                (plain, traced)
+            };
+            ensure!(
+                plain.is_fixed_workload && traced.is_fixed_workload,
+                "invalid stage-profile pair"
+            );
+            ensure!(
+                plain.output == traced.output,
+                "stage profiling changed generated output"
+            );
+            eprintln!(
+                "[stage-profile pair {pair}] off={:.3} on={:.3} HTTP E2E tok/s",
+                plain.tps, traced.tps
+            );
+            ordinary.push(plain.tps);
+            profiled.push(traced.tps);
+            last_output = plain.output;
+        }
+        let ordinary = protocol::distribution(&ordinary)?;
+        let profiled = protocol::distribution(&profiled)?;
+        self.report.record(json!({
+            "kind": "profile_comparison_summary", "pairs": 5,
+            "profile_off": ordinary, "profile_on": profiled,
+            "throughput_change": profiled.median / ordinary.median - 1.0,
+            "report_path": std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").map(PathBuf::from),
+            "is_optimization_claim": false,
+        }))?;
+        switch.set(false);
+        let plain_ids = self.capture_m40_trace(&last_output).await?;
+        switch.set(true);
+        let profiled_ids = self.capture_m40_trace(&last_output).await?;
+        ensure!(
+            plain_ids == profiled_ids,
+            "stage profiling changed actual generated token IDs"
+        );
+        eprintln!(
+            "Stage-profile comparison and token-ID parity complete: {}",
+            self.args.output.display()
+        );
         Ok(())
     }
 }
@@ -534,6 +646,7 @@ pub async fn compare() -> Result<()> {
         "M40LLM_SYNC_LOG",
         "M40LLM_COPY_LOG",
         "M40LLM_Q8_DECODE_EVENT_LOG",
+        "M40LLM_STAGE_PROFILE",
     ] {
         ensure!(
             std::env::var(key).map_or(true, |v| v == "0" || v.is_empty()),
@@ -638,6 +751,7 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
+        "comparison_kind": if args.should_compare_stage_profile { "stage-profile-perturbation" } else { "ollama-baseline" },
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
     }))?;
@@ -685,6 +799,9 @@ pub async fn compare() -> Result<()> {
         runner_url,
         report,
     };
+    if run.args.should_compare_stage_profile {
+        return run.compare_stage_profile().await;
+    }
     ensure!(
         run.measure_m40("warmup", 0).await?.is_fixed_workload,
         "m40 warmup did not match the fixed workload; inspect retained row before timing"

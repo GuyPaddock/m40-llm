@@ -55,6 +55,41 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 
 ## Launch, Sync, and Timing Logs
 
+- `M40LLM_STAGE_PROFILE=1`: enable session-owned buffered CUDA-event profiling
+  for serialized one-token forward/logits work. Ordinary generation is unchanged
+  when unset. CUDA Graph capture and the queued batch scheduler are rejected
+  rather than producing incomplete stage attribution. Q/K/V must share one
+  producer stream, as must gate/up; incompatible mixed-stream projection groups
+  fail explicitly instead of being timed on the wrong stream.
+- `M40LLM_STAGE_PROFILE_TOKENS=0,255,511`: select zero-based generated-token
+  prediction steps; the default samples early, middle, and late in a 512-token
+  run. Step zero processes the final prompt token. Prefix prompt tokens are not
+  sampled. Select at most 32 distinct steps.
+- `M40LLM_STAGE_PROFILE_REPORT=/tmp/stages.jsonl`: append structured token
+  reports instead of printing `[gpu-stage-profile]` JSON to stderr. Each record
+  includes process/session IDs, absolute position, per-layer stage names,
+  producer stream, event offsets/duration, CPU call duration, launch/sync/copy/
+  allocation deltas, and named host stream-synchronization/D2H-copy durations.
+
+The event pool is allocated once per decode session and reused across sampled
+tokens. Markers add no stream waits. The collector uses nonblocking event
+queries only after the existing logits/argmax completion boundary; an
+unfinished timestamp is an error, not an implicit new synchronization.
+
+`gpu_stage_sum_ms` is not an elapsed total when streams overlap. Use
+`gpu_stage_union_ms` for the union of event intervals and inspect each stream's
+timeline. Event-delimited spans can include host enqueue gaps and synchronization
+already inside a wrapper; they are not isolated kernel-service times. CPU call,
+host wait/copy, and GPU durations overlap and must not be added. In particular,
+`wall_minus_gpu_union_ms` is the uncovered wall interval, not a precise estimate
+of CPU execution time. Cold initialization can inflate spans; use warm samples
+and compare profiled versus ordinary HTTP timings before interpreting shares.
+The first captured token has substantially more uncovered wall time in the
+current checkpoint; `event_pool_reused=false` identifies it. First-use event
+and collector costs have not been isolated from other host work. Use reused
+captures for steady host-cost analysis; do not label that first gap as ordinary
+model CPU overhead.
+
 - `M40LLM_LAUNCH_LOG=1`: log kernel launch and cuBLAS counter events.
 - `M40LLM_SYNC_LOG=1`: log stream synchronization counter events.
 - `M40LLM_PROFILE_LOG=1`: print lower-noise per-operation counter deltas around

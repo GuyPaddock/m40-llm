@@ -14,6 +14,8 @@ pub mod generate;
 pub mod generation_metrics;
 #[cfg(feature = "gguf_ext")]
 pub mod gguf_ext;
+#[cfg(feature = "cuda")]
+pub mod gpu_profile;
 pub mod kv_compression;
 pub mod kv_selection;
 pub mod model;

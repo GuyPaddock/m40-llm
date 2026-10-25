@@ -2,6 +2,53 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Buffered Qwen Decode Stage Profile
+
+The C04 profiler is opt-in, session-owned, and reuses CUDA events across sampled
+tokens. It inserts no stream waits and resolves timestamps with nonblocking
+queries after the existing logits completion boundary. CUDA tests preserve
+generated IDs and launch/sync/copy/allocation counts, including a two-stream
+dependency test. It is off during ordinary performance comparisons.
+
+Five alternating same-model HTTP pairs, with the C03 Q8 backend flags and shared
+65-token prompt, measured **23.780 tok/s off** versus **23.667 tok/s on**.
+The observed throughput reduction is 0.47%, not an optimization result. All
+rows generated 512 IDs, and untimed on/off companions matched token-for-token.
+No Ollama inference or GPU tests overlapped these timed requests.
+
+Median GPU-event spans, summed across 36 layers for each stage, from the five
+measured profiling sessions:
+
+| Stage | Step 0 / Position 64 | Step 255 / Position 319 | Step 511 / Position 575 |
+| --- | ---: | ---: | ---: |
+| Attention | 2.509 ms | 11.421 ms | 20.387 ms |
+| Gate/up/SwiGLU | 11.852 ms | 11.857 ms | 11.858 ms |
+| Down projection | 6.315 ms | 6.315 ms | 6.318 ms |
+| Vocabulary + greedy argmax | 3.438 ms | 3.432 ms | 3.434 ms |
+| QKV | 2.492 ms | 2.490 ms | 2.495 ms |
+| Attention output projection | 1.715 ms | 1.713 ms | 1.720 ms |
+| All measured interval union | 29.987 ms | 38.889 ms | 47.898 ms |
+
+At the middle sample, FFN gate/up plus down accounts for about 47% of measured
+GPU intervals; attention accounts for about 29%, rising to about 43% late.
+Gate/up is now the larger fixed FFN cost, not down alone. Both bounded exact
+attention work and independent Q8 layout experiments are justified; this is
+not evidence for more approximate KV policies.
+
+Each sampled token records 399 launches, no cuBLAS calls, one completion sync,
+zero stream waits, and no device allocations/frees. There is one 8192-byte H2D
+copy and two D2H copies totaling 2180 bytes. CPU call, synchronization, and GPU
+durations overlap; do not add them. The first capture's wall time is 97.55 ms
+versus 29.99 ms of measured GPU intervals, unlike reused middle/late captures.
+Do not interpret that first gap as ordinary model CPU cost; first-use profiler
+costs have not been isolated. No DRAM traffic/occupancy counters are claimed.
+
+See the [full profiling record](experiments/2026-10-24-qwen-stage-profile.md),
+[HTTP pair records](experiments/2026-10-24-qwen-profile-comparison.jsonl), and
+[compressed raw event JSONL](experiments/2026-10-24-qwen-stage-events.jsonl.gz).
+Next: C05 counter availability, then C06's final baseline/bottleneck checkpoint
+before selecting the bounded kernel experiments.
+
 ## 2026-10-24: Controlled Qwen Q8_0 HTTP Baseline
 
 This is a new matched baseline, not a relabeling of the May measurements.

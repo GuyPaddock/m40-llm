@@ -1089,6 +1089,24 @@ extern "C" {
         return err == cudaSuccess ? 0 : -4;
     }
 
+    int m40llm_cuda_event_elapsed_ready(
+        M40llmCudaContext* ctx,
+        M40llmCudaEvent* start,
+        M40llmCudaEvent* stop,
+        float* elapsed_ms) {
+        if (!ctx || !start || !stop || !start->event || !stop->event || !elapsed_ms) return -1;
+        *elapsed_ms = 0.0f;
+        if (ensure_device(ctx) != 0) return -2;
+        cudaError_t err = cudaEventQuery(start->event);
+        if (err == cudaErrorNotReady) return 1;
+        if (err != cudaSuccess) return -3;
+        err = cudaEventQuery(stop->event);
+        if (err == cudaErrorNotReady) return 1;
+        if (err != cudaSuccess) return -4;
+        err = cudaEventElapsedTime(elapsed_ms, start->event, stop->event);
+        return err == cudaSuccess ? 0 : -5;
+    }
+
     void m40llm_cuda_event_destroy(M40llmCudaEvent* event) {
         if (!event) return;
         if (event->event) cudaEventDestroy(event->event);
