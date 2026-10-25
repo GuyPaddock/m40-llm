@@ -58,19 +58,26 @@ geometry was added.
 The [split-plane/four-value FFN screen](experiments/2026-10-25-maxwell-split-ffn-screen.md)
 now passes: **15.54-15.65%** complete one-row throughput gain over qualified
 packed128, positive paired intervals, unchanged numerical tolerance. Four-row
-work gains **13.47-15.91%**. Implementation `3420c33` remains benchmark-only
-pending conditional runtime integration. One current-layer pair adds
+work gains **13.47-15.91%**. Primitive implementation `3420c33` now has
+opt-in model-local runtime integration `05607ab`. One current-layer pair adds
 **47,906,816 bytes** for both arms; median packing/upload is **30.615 / 7.950 ms**.
-All-layer extra storage **1,724,645,376 bytes** is an estimate, not observed
-runtime residency. Numerical tests do not establish generated-token parity.
+The microbenchmark's all-layer extra-storage estimate is now confirmed by
+the runtime quality checkpoint below. Primitive tests alone do not establish
+generated-token parity.
 
-Next capture immutable model-local selection and cached ownership for that
-one geometry, preserving qualified down/vocabulary and dequant-SGEMM prefill.
-Check that newly cached gate/up does not change prefill dispatch, validate
-actual full-model allocation/budget errors, then run actual 512-ID/frozen-task
-quality against the current packed128/SGEMM control. Only passing quality
-permits incremental HTTP and fresh Ollama qualification. Defaults and both
-original unmet E2E objectives remain unchanged.
+The [split-plane runtime quality checkpoint](experiments/2026-10-25-maxwell-split-runtime-quality.md)
+passes against explicit current packed128/SGEMM control: **512 actual IDs and
+all twelve task outputs equal, zero regressions across seven dense-valid
+tasks**. Maximum sampled logit drift is 0.004531, top-10 overlap stays 10.
+Observed gate/up preparation adds **1,724,645,376 bytes**; source plus all
+prepared weights is **6,197,100,544 bytes**, excluding KV/workspace. Both arms
+retain 252 prefix conversions/SGEMMs, identical enqueue counts, no quantized
+activation storage and complete tracked cleanup. Missing preparation,
+budget, foreign-pointer and ownership checks pass. New tooling `f6078fe`
+binds control/candidate quality and pins down/vocabulary identities while
+allowing only the gate/up delta. Next run incremental controlled HTTP pairs,
+then fresh Ollama if they qualify. No new HTTP speed claim or default change;
+both original unmet objectives remain intact.
 
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)

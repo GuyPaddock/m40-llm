@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Split-Plane Runtime Passes Exact Quality
+
+The opt-in split-plane/four-value FP32 FFN runtime now preserves **all 512
+actual browser IDs and all twelve task outputs** against the current
+packed128/SGEMM control, with zero regressions across seven dense-valid tasks.
+Top-10 logit overlap remains 10; maximum sampled drift is **0.004531**.
+Both arms retain all 252 prefill conversions/SGEMMs and the same enqueue counts.
+
+Actual gate/up preparation adds **1,724,645,376 bytes**, bringing source plus
+prepared weight payload to **6,197,100,544 bytes** before KV/workspace.
+See [ownership, complete quality, setup costs and audit](experiments/2026-10-25-maxwell-split-runtime-quality.md).
+This passes quality, not HTTP timing. No default change or new E2E throughput
+claim follows; incremental HTTP and fresh Ollama qualification are next.
+
 ## 2026-10-25: Split-Plane Fused FFN Clears Micro Gate
 
 One fixed 128-thread/four-value FP32 kernel on existing split weight planes
