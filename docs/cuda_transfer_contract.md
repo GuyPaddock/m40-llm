@@ -94,6 +94,28 @@ claim that arbitrary external raw-pointer misuse is safe.
 Benchmark timing impact must be measured separately; these correctness changes
 are not throughput optimizations.
 
+## Sequential Prefix Reuse
+
+`DecodeSession` no-logits prefix tokens now complete their decode stream before
+returning. Unlike normal generation, they have no logits readback to finish
+the prior forward before the next host embedding upload overwrites `d_x`.
+Same-stream kernel order alone does not order that default-stream upload.
+The completion also finishes producer dependencies already joined by the
+forward's decode schedule. It adds no allocation, copy or new kernel.
+
+The queued-work regression in `q8_ffn_runtime` compares one-call greedy
+prefill against independently completed token steps, including hidden values
+and physical K/V. Before the fix, the head128/Qwen fixture generates token
+206 rather than 225 behind a decode backlog; after completion is added it
+matches. The [real-model diagnostic](experiments/2026-10-25-maxwell-prefill-drift.md)
+preserves the earlier unsafe reference. Historical performance and quality
+reports using that reference need corrected-control requalification.
+
+This deliberately conservative host wait applies only to prefix tokens that
+skip logits. Normal sampled tokens and packed-prefix kernels are unchanged.
+Replacing the boundary with a stream-ordered embedding implementation is a
+separate optimization requiring the same ownership/parity tests.
+
 ## Validation Fixture Follow-Up
 
 The broad cuBLAS-off forward run exposed four pre-existing fast-fits graph

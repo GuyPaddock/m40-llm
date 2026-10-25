@@ -149,6 +149,129 @@ mod hardware {
         )
     }
 
+    /// A no-logits prefix must finish reading its input before the next host
+    /// embedding upload reuses that buffer, even with queued nonblocking work.
+    /// One-call prefill must match independently completed token steps and KV.
+    #[test]
+    #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+    fn test_greedy_prefix_preserves_input_under_decode_backlog() -> Result<()> {
+        let _scope = crate::cuda_test_scope::lock_cuda();
+        let _env = configure();
+        let _device = CudaContext::new_m40()?;
+        let initial = CudaContext::total_device_bytes();
+        {
+            let (gguf, weights) = fixture::build_prefill_fixture(true);
+            let mut model = LoadedModel::from_gguf_with_q8_backends(
+                gguf,
+                weights,
+                -1,
+                Q8ExecutionConfig::disabled(),
+                Q8FfnConfig::native(),
+                m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
+            )?;
+            model.allocate_kv_cache_for_layers(16)?;
+            let create_session = || {
+                DecodeSession::new_for_sequence_with_kv_config(
+                    &model,
+                    0,
+                    KvCompressionConfig::dense_reference(),
+                    256,
+                    true,
+                    "prefix-reuse",
+                    "prefix-reuse:in",
+                    "prefix-reuse:out",
+                )
+            };
+            let ids = [65, 66, 67, 68];
+            let mut reference = create_session()?;
+            let mut expected_token = 0;
+            for length in 1..=ids.len() {
+                expected_token = reference.greedy_token_for_ids(&ids[..length])?;
+            }
+            let read_hidden = |session: &DecodeSession| -> Result<Vec<f32>> {
+                let mut values = vec![0.0f32; 256];
+                unsafe {
+                    model.cuda.memcpy_d2h(
+                        values.as_mut_ptr().cast(),
+                        session.d_out_ptr()?.cast_const(),
+                        values.len() * 4,
+                    )?;
+                }
+                Ok(values)
+            };
+            let read_keys = || -> Result<Vec<u8>> {
+                let cache = model.kv_cache.as_ref().unwrap();
+                let mut result = Vec::new();
+                for layer in 0..2 {
+                    let slot = model.kv_cache_physical_slot_for_layer_sequence(layer, 0)?;
+                    for position in 0..ids.len() {
+                        let mut key = vec![0u8; 256];
+                        let mut value = key.clone();
+                        let rc = unsafe {
+                            ffi_debug_read_kv_token(
+                                &model.cuda,
+                                cache,
+                                slot,
+                                position as u32,
+                                key.as_mut_ptr(),
+                                value.as_mut_ptr(),
+                            )
+                        };
+                        anyhow::ensure!(rc == 0, "KV read failed: {rc}");
+                        result.extend(key);
+                        result.extend(value);
+                    }
+                }
+                Ok(result)
+            };
+            let expected_hidden = read_hidden(&reference)?;
+            let expected_kv = read_keys()?;
+            drop(reference);
+            model.reset_kv_cache()?;
+            let mut actual = create_session()?;
+            let elements = 1 << 20;
+            let host = vec![1.0f32; elements];
+            let a = DeviceBuffer::new_tagged(&model.cuda, elements * 4, "prefix-reuse:delay-a")?;
+            let b = DeviceBuffer::new_tagged(&model.cuda, elements * 4, "prefix-reuse:delay-b")?;
+            let out =
+                DeviceBuffer::new_tagged(&model.cuda, elements * 4, "prefix-reuse:delay-out")?;
+            unsafe {
+                model
+                    .cuda
+                    .memcpy_h2d(a.as_mut_ptr(), host.as_ptr().cast(), elements * 4)?;
+                model
+                    .cuda
+                    .memcpy_h2d(b.as_mut_ptr(), host.as_ptr().cast(), elements * 4)?;
+                for _ in 0..256 {
+                    model.cuda.residual_add_f32_async(
+                        a.as_ptr(),
+                        b.as_ptr(),
+                        out.as_mut_ptr(),
+                        elements,
+                    )?;
+                }
+            }
+            assert_eq!(actual.greedy_token_for_ids(&ids)?, expected_token);
+            let actual_hidden = read_hidden(&actual)?;
+            let maximum = actual_hidden
+                .iter()
+                .zip(&expected_hidden)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0f32, f32::max);
+            assert!(
+                maximum <= 1e-5,
+                "prefix hidden drift under backlog: {maximum}"
+            );
+            assert_eq!(
+                read_keys()?,
+                expected_kv,
+                "prefix physical KV differs under backlog"
+            );
+        }
+        assert_eq!(CudaContext::total_device_bytes(), initial);
+        Ok(())
+    }
+
     fn compare_kv(reference: &LoadedModel, candidate: &LoadedModel, tokens: u32) -> Result<()> {
         for model in [reference, candidate] {
             model.cuda.synchronize_stream(CudaStream::Decode)?;

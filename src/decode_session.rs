@@ -1069,6 +1069,9 @@ impl DecodeSession {
             .expect("d_out allocated when full forward is enabled")
             .as_mut_ptr();
         let _layers = self.forward_with_optional_graph(token_idx, d_out)?;
+        // No logits readback follows a prefix token. Finish its consumers
+        // before the next default-stream embedding upload overwrites d_x.
+        self.model().cuda.synchronize_stream(CudaStream::Decode)?;
         timing::timing_log!(
             forward_start.elapsed(),
             "{}.token.{token_idx}.forward_all_layers",
