@@ -140,6 +140,8 @@ fn make_model_with_layer(
         activation_research: None,
         #[cfg(feature = "cuda")]
         layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

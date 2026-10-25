@@ -30,8 +30,12 @@ recorded. No kernel, runtime default or acceptance gate changes.
 M02 is in progress. The [paired FFN input contract](ffn_benchmark_inputs.md)
 has eight CPU tests covering unmodified paired vectors, generated positions,
 source/provenance binding, bounded storage and rejection of invalid captures.
-It does not enable activation sparsity. The model observer, real calibration
-capture and shared benchmark still remain; no M02 GPU timing is claimed.
+It does not enable activation sparsity. The model-local read-only CUDA observer
+now preserves exact logits/KV bytes under prepared down/vocabulary, with fused
+and unfused gate/up and selected-layer capture. Two M40 tests verify replay,
+CPU-reference agreement, copy/sync counts, allocation cleanup and unsupported
+path rejection. Real calibration capture and the shared benchmark still remain;
+no M02 GPU timing or inference speed improvement is claimed.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact

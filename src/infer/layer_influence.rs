@@ -27,6 +27,7 @@ impl LoadedModel {
         ensure!(
             self.layer_influence.is_none()
                 && self.activation_research.is_none()
+                && self.ffn_capture.is_none()
                 && !self.layer_mask.has_skipped_layers()
                 && self.kv_cache.is_none()
                 && self.forward_workspace.lock().map_err(|_| anyhow::anyhow!("poisoned workspace"))?.is_none(),

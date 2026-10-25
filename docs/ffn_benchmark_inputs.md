@@ -10,7 +10,7 @@ sparsity transform to obtain these observations.
 
 `evaluation::ffn_capture` provides a CPU-only collector and checked JSON
 artifact. It has no inference policy, threshold fitting or CUDA dependency.
-The model observer and shared benchmark consumer are separate M02 steps.
+The shared benchmark consumer remains a separate M02 step.
 
 - A plan binds model, corpus and execution SHA-256 identities, original layer
   count, selected original IDs, dimensions and ordered calibration task IDs.
@@ -44,11 +44,48 @@ original model and tensor hashes and execution identity, and verify the row
 selection against their benchmark configuration. No held-out or browser input
 may supply these calibration observations.
 
+## Model Observer
+
+`LoadedModel::begin_ffn_capture` installs model-owned host observations before
+KV or forward workspace creation. It permits prepared down/vocabulary weights,
+but forbids concurrent activation transforms, layer influence and layer masks.
+It requires sm_52, decode-stream Q8 projections, sequence zero, explicit dense
+KV and ordinary sequential forward. Packed prefill, batched forward and graph
+entrypoints reject capture before device work. Configure this only for untimed
+diagnostics, never an authoritative throughput trial.
+
+Call `begin_ffn_capture_task` with the next frozen task ID and encoded prompt
+IDs. Immediately before down projection, the observer drains the decode stream
+once and reads normalized input plus completed SwiGLU for selected original
+layers at eligible positions. Inactive capture and unselected layers add no
+GPU copies, launches or synchronization. `finish_ffn_capture_task` supplies the
+actual generated IDs; `finish_ffn_capture` validates all tasks before removing
+the observer and exporting the artifact. Incomplete export preserves the state.
+
+Setup reserves two reusable host read buffers in addition to the observation
+vectors, under the same host budget. Their capacity is
+`4 * (d_model + hidden_dim)` bytes. The artifact's observation counts exclude
+these temporary read buffers, which are freed on export/model drop. Capture
+owns no device allocation and never writes model buffers.
+
 ## Current Validation
 
 Eight CPU tests cover paired values and distinct rows, original IDs and source
 shapes, signed-zero/subnormal JSON round-trip, calibration-only eligibility,
 row bounds, invalid-pair atomicity, incomplete capture, short generation,
 budget/overflow/alias failures, external artifact corruption and corpus binding.
-This contract alone is not GPU observer parity, real-model capture evidence,
-complete FFN timing or a performance improvement.
+Two explicit M40 observer tests cover fused/unfused gate/up, all/selected-layer
+capture, prepared down/vocabulary, exact logits and KV-byte parity, no added
+kernel/allocation activity, the documented D2H/sync deltas, paired-input replay
+and an independent CPU projection/SwiGLU reference. They also cover invalid
+setup, incomplete export, unsupported paths and device-allocation cleanup.
+
+The warning-as-error non-CUDA test lane and CUDA/server all-targets Clippy
+pass. M40 attention/projection/MLP parity passes with cuBLAS enabled/disabled;
+the cuBLAS-enabled lane also passes activation calibration, layer influence,
+full forward/prefill and allocation ownership regressions. Explicitly invoking
+the observer hardware test with `CUDA_VISIBLE_DEVICES=''` fails with a context
+creation error, as required; GPU-less CI does not establish observer parity.
+
+Real-model capture evidence and complete FFN timing still remain. No performance
+improvement follows from these contracts or correctness tests.

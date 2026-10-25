@@ -5,6 +5,8 @@ mod backend;
 mod batch;
 mod embeddings;
 pub mod execution_weights;
+#[cfg(feature = "cuda")]
+mod ffn_capture;
 mod forward;
 mod gemm;
 mod kv;
@@ -30,6 +32,8 @@ pub use batch::{
     BatchMetadata, BatchSequence, BucketStats, BucketedBatch, LengthBucket, PackedSequenceOffsets,
     VarlenPrefillTile, VarlenPrefillTileSelection,
 };
+#[cfg(feature = "cuda")]
+pub use ffn_capture::FfnCapture;
 #[cfg(feature = "cuda")]
 pub use forward::{ForwardBatchItem, ForwardPrefillSequence};
 #[cfg(feature = "cuda")]

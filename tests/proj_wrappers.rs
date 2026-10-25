@@ -143,6 +143,8 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
         activation_research: None,
         #[cfg(feature = "cuda")]
         layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]
@@ -298,6 +300,8 @@ fn out_proj_f32xf16_f32_smoke() -> Result<()> {
         activation_research: None,
         #[cfg(feature = "cuda")]
         layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

@@ -85,6 +85,7 @@ impl LoadedModel {
         ensure!(
             self.activation_research.is_none()
                 && self.layer_influence.is_none()
+                && self.ffn_capture.is_none()
                 && self.kv_cache.is_none()
                 && self
                     .forward_workspace

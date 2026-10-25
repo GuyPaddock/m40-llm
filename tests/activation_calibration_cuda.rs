@@ -28,36 +28,7 @@ fn model() -> Result<LoadedModel> {
 }
 
 fn model_with_layers(layer_count: u32) -> Result<LoadedModel> {
-    let (mut gguf, mut bytes) = fixture::build(0);
-    let original = bytes.clone();
-    let tensors = gguf.tensors.clone();
-    for layer in 1..layer_count {
-        for tensor in &tensors {
-            if !tensor.name.starts_with("layers.0.") {
-                continue;
-            }
-            let mut copied = tensor.clone();
-            copied.name = copied
-                .name
-                .replacen("layers.0.", &format!("layers.{layer}."), 1);
-            bytes.resize(bytes.len().div_ceil(32) * 32, 0);
-            copied.offset = bytes.len() as u64;
-            let size = tensor.shape.iter().product::<u64>() as usize / 32 * 34;
-            let mut payload =
-                original[tensor.offset as usize..tensor.offset as usize + size].to_vec();
-            for block in payload.chunks_exact_mut(34) {
-                for value in &mut block[2..] {
-                    *value = value.wrapping_add((layer as u8).wrapping_mul(7));
-                }
-            }
-            bytes.extend_from_slice(&payload);
-            gguf.tensors.push(copied);
-        }
-    }
-    gguf.metadata.insert(
-        "llama.block_count".to_owned(),
-        m40_llm::gguf::GgufValue::Scalar(m40_llm::gguf::GgufScalar::U32(layer_count)),
-    );
+    let (gguf, bytes) = fixture::build_with_layers(0, layer_count);
     LoadedModel::from_gguf_with_q8_execution(gguf, bytes, -1, Q8ExecutionConfig::disabled())
 }
 

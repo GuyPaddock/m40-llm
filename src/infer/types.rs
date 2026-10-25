@@ -274,6 +274,8 @@ pub struct LoadedModel {
     pub activation_research: Option<super::activation_sparsity::ActivationResearch>,
     #[cfg(feature = "cuda")]
     pub layer_influence: Option<super::LayerInfluenceCapture>,
+    #[cfg(feature = "cuda")]
+    pub ffn_capture: Option<super::FfnCapture>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]

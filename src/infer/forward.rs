@@ -291,6 +291,7 @@ impl LoadedModel {
         if d_model <= 0 || hidden_dim <= 0 {
             anyhow::bail!("forward_one_token_minimal: invalid dims");
         }
+        self.validate_ffn_capture_forward(d_w_gate_f16, seq_id, d_model, hidden_dim)?;
 
         #[cfg(feature = "cuda")]
         {
@@ -754,6 +755,12 @@ impl LoadedModel {
                         ws.dhid as *const c_void,
                         hidden_dim as usize,
                     )?;
+                    self.observe_ffn_inputs(
+                        d_w_gate_f16,
+                        seq_len.saturating_sub(1),
+                        ws.d_x1n,
+                        ws.dhid,
+                    )?;
 
                     // Down projection
                     let profile_before = profile::snapshot_if_enabled();
@@ -883,7 +890,9 @@ impl LoadedModel {
             anyhow::bail!("forward_one_token_minimal_graph_params: invalid dims");
         }
         anyhow::ensure!(
-            self.activation_research.is_none() && self.layer_influence.is_none(),
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
             "model calibration does not support CUDA Graphs"
         );
         if d_position.is_null() || d_seq_len.is_null() {
@@ -1491,6 +1500,12 @@ impl LoadedModel {
         let position = seq_len.saturating_sub(1);
         #[cfg(feature = "cuda")]
         {
+            anyhow::ensure!(
+                self.ffn_capture.is_none()
+                    || (sequence_id == 0
+                        && self.kv_cache.as_ref().is_some_and(|kv| !kv.is_compressed())),
+                "FFN capture requires sequence 0 and explicit dense KV"
+            );
             kv_selection::set_attention_context(Some(layer_id), Some(position));
             gpu_profile::set_layer(Some(layer_id));
         }
@@ -1802,6 +1817,11 @@ impl LoadedModel {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        #[cfg(feature = "cuda")]
+        anyhow::ensure!(
+            self.ffn_capture.is_none(),
+            "FFN capture does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!("forward_one_token_with_layer_graph_params: null device parameter");
         }
@@ -1925,8 +1945,9 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             anyhow::ensure!(
-                self.layer_influence.is_none() || (sequence_id == 0 && !kv.is_compressed()),
-                "layer influence capture requires sequence 0 and explicit dense KV"
+                (self.layer_influence.is_none() && self.ffn_capture.is_none())
+                    || (sequence_id == 0 && !kv.is_compressed()),
+                "model read-only capture requires sequence 0 and explicit dense KV"
             );
             if layer_count == 1 {
                 self.forward_one_token_with_layer(d_x_f32, 0, sequence_id, seq_len, d_out_f32)?;
@@ -1982,7 +2003,9 @@ impl LoadedModel {
         items: &[ForwardBatchItem],
     ) -> Result<usize> {
         anyhow::ensure!(
-            self.activation_research.is_none() && self.layer_influence.is_none(),
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
             "model calibration requires single-row sequential forward, not batching"
         );
         if items.is_empty() {
@@ -2443,7 +2466,9 @@ impl LoadedModel {
         kv: &KVCache,
     ) -> Result<usize> {
         anyhow::ensure!(
-            self.activation_research.is_none() && self.layer_influence.is_none(),
+            self.activation_research.is_none()
+                && self.layer_influence.is_none()
+                && self.ffn_capture.is_none(),
             "model calibration requires sequential prefill, not packed prefill"
         );
         if items.is_empty() {
@@ -2936,6 +2961,11 @@ impl LoadedModel {
         d_seq_len: *const u32,
         d_out_f32: *mut c_void,
     ) -> Result<usize> {
+        #[cfg(feature = "cuda")]
+        anyhow::ensure!(
+            self.ffn_capture.is_none(),
+            "FFN capture does not support CUDA Graphs"
+        );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!(
                 "forward_one_token_all_layers_for_sequence_graph_params: null device parameter"

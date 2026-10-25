@@ -101,6 +101,8 @@ fn base_model_with_emb(vocab: usize, d_model: usize) -> Result<LoadedModel> {
         activation_research: None,
         #[cfg(feature = "cuda")]
         layer_influence: None,
+        #[cfg(feature = "cuda")]
+        ffn_capture: None,
         device_tensors,
         weights_len: 0,
         #[cfg(feature = "cuda")]

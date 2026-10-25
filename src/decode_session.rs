@@ -191,6 +191,10 @@ impl DecodeSession {
             anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled(),
                 "layer influence capture requires M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
         }
+        if model.ffn_capture.is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled() && sequence_id == 0,
+                "FFN capture requires sequence 0, M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
+        }
         let gpu_profiler =
             DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
         if gpu_profiler.is_some() {

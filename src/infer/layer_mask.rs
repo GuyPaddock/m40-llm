@@ -79,6 +79,11 @@ impl super::LoadedModel {
         );
         #[cfg(feature = "cuda")]
         ensure!(
+            self.ffn_capture.is_none(),
+            "finish FFN capture before configuring a diagnostic mask"
+        );
+        #[cfg(feature = "cuda")]
+        ensure!(
             self.layer_influence.is_none(),
             "finish influence capture before configuring a diagnostic mask"
         );
