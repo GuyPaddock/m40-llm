@@ -45,6 +45,8 @@ fn test_sparse_q8_matches_pruned_dense_and_scalar() -> Result<()> {
         (4, 129, 31),
         (64, 65, 17),
         (1, 2048, 2048),
+        (16, 11008, 33),
+        (64, 11008, 17),
     ] {
         let source = Q8SourceIdentity::from_column_blocks(
             [3; 32],
@@ -69,6 +71,11 @@ fn test_sparse_q8_matches_pruned_dense_and_scalar() -> Result<()> {
         unsafe {
             ctx.memcpy_h2d(d_dense.as_mut_ptr(), dense.as_ptr().cast(), dense.len())?;
             ctx.memcpy_h2d(d_input.as_mut_ptr(), input.as_ptr().cast(), d_input.bytes())?;
+        }
+        // Finish the default-stream pageable upload before launching either
+        // nonblocking consumer stream. Readback also validates the whole span.
+        assert_eq!(read(&ctx, &d_input)?, input);
+        unsafe {
             ctx.gemm_f32xq8_0_gguf_f32_async(
                 d_input.as_ptr(),
                 d_dense.as_ptr(),

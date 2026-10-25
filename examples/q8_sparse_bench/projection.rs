@@ -67,6 +67,12 @@ impl Projection<'_> {
     }
 
     pub fn check(&self, launch: SparseQ8Launch, dense: &[u8], input: &[f32]) -> Result<Value> {
+        // Pageable H2D may return before DMA completes. This default-stream
+        // readback finishes setup before either nonblocking consumer stream.
+        ensure!(
+            self.read(&self.input)? == input,
+            "uploaded activation values differ"
+        );
         self.enqueue(None)?;
         self.ctx.synchronize_stream(self.stream(None))?;
         self.enqueue(Some(launch))?;
@@ -75,7 +81,7 @@ impl Projection<'_> {
         let actual = self.read(&self.output)?;
         let mut maximum = 0.0_f64;
         let mut total = 0.0;
-        for (&a, &b) in actual.iter().zip(&expected) {
+        for (index, (&a, &b)) in actual.iter().zip(&expected).enumerate() {
             ensure!(
                 a.is_finite() && b.is_finite(),
                 "non-finite sparse projection"
@@ -83,10 +89,12 @@ impl Projection<'_> {
             let diff = (f64::from(a) - f64::from(b)).abs();
             maximum = maximum.max(diff);
             total += diff;
-            ensure!(
-                diff < 1e-3 + f64::from(b.abs()) * 2e-5,
-                "sparse/dense mismatch: {diff}"
-            );
+            if diff >= 1e-3 + f64::from(b.abs()) * 2e-5 {
+                let n = self.shape.output_dim();
+                let k = self.shape.input_dim();
+                let cpu = scalar_projection(dense, input, index / n, index % n, k);
+                anyhow::bail!("sparse/dense mismatch at row={} column={}: sparse={a} dense={b} scalar={cpu} diff={diff}", index/n, index%n);
+            }
         }
         let k = self.shape.input_dim();
         let n = self.shape.output_dim();
@@ -94,15 +102,7 @@ impl Projection<'_> {
         for row in [0, self.rows - 1] {
             for sample in 0..8 {
                 let column = sample * (n - 1) / 7;
-                let expected: f64 = (0..k)
-                    .map(|index| {
-                        let base = (column * k.div_ceil(32) + index / 32) * 34;
-                        let scale = f16::from_le_bytes([dense[base], dense[base + 1]]).to_f64();
-                        f64::from(input[row * k + index])
-                            * scale
-                            * f64::from(dense[base + 2 + index % 32] as i8)
-                    })
-                    .sum();
+                let expected = scalar_projection(dense, input, row, column, k);
                 let difference = (f64::from(actual[row * n + column]) - expected).abs();
                 cpu_max = cpu_max.max(difference);
                 ensure!(
@@ -124,4 +124,16 @@ impl Projection<'_> {
         }
         Ok(result)
     }
+}
+
+fn scalar_projection(dense: &[u8], input: &[f32], row: usize, column: usize, k: usize) -> f64 {
+    (0..k)
+        .map(|index| {
+            let base = (column * k.div_ceil(32) + index / 32) * 34;
+            let scale = f16::from_le_bytes([dense[base], dense[base + 1]]).to_f64();
+            f64::from(input[row * k + index])
+                * scale
+                * f64::from(dense[base + 2 + index % 32] as i8)
+        })
+        .sum()
 }

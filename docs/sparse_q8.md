@@ -88,6 +88,18 @@ An isolated win can justify investigating C22, but cannot promote a pruned
 runtime or count toward unchanged-model HTTP throughput targets. Borderline
 timing gains require additional pairs rather than relying on five samples.
 
+The first release attempt stopped on a down-projection `M=16` control mismatch.
+An isolated `M=16` run passed, but running `M=1,4,16` reproduced it: sparse
+`0.5484369` and scalar `0.54843678` versus native dense `0.5027627`, row 5,
+column 0. The probe had not fenced its last pageable H2D input copy before
+launching the nonblocking prefill stream. It now reads back and validates
+the full input before numerical checks, outside timing. According to
+[CUDA's copy synchronization contract](https://docs.nvidia.com/cuda/archive/12.8.0/cuda-runtime-api/api-sync-behavior.html),
+pageable H2D can return after staging but before final DMA; a D2H on the same
+default stream completes after that upload. This is not a kernel change or a
+claim that all existing runtime copy sites have been audited. Aborted runs
+must not be combined with a complete qualified matrix.
+
 ## Research Context
 
 [SparseDecoding](https://arxiv.org/abs/2610.12327) motivates decode-calibrated
