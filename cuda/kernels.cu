@@ -9438,6 +9438,17 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    int m40llm_kvcache_debug_read_length(M40llmCudaContext* ctx, M40llmKVCache* kv,
+                                       uint32_t seq_id, uint32_t* out_length) {
+        if (!ctx || !kv || !out_length) return -1;
+        if (seq_id >= kv->max_batch_size) return -2;
+        if (ensure_device(ctx) != 0) return -3;
+        if (cudaStreamSynchronize(ctx->decode_stream) != cudaSuccess) return -4;
+        if (cudaStreamSynchronize(ctx->prefill_stream) != cudaSuccess) return -5;
+        return cudaMemcpy(out_length, kv->d_seq_map + seq_id, sizeof(uint32_t),
+                          cudaMemcpyDeviceToHost) == cudaSuccess ? 0 : -6;
+    }
+
     int m40llm_kvcache_debug_read_token(M40llmCudaContext* ctx,
                                          M40llmKVCache* kv,
                                          uint32_t seq_id,

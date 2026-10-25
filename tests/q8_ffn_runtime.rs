@@ -67,6 +67,7 @@ fn test_q8_ffn_explicit_request_requires_compiled_cuda() -> Result<()> {
             -1,
             m40_llm::infer::execution_weights::Q8ExecutionConfig::disabled(),
             config,
+            m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
         )
         .err()
         .expect("unsupported request must fail");
@@ -131,6 +132,7 @@ mod hardware {
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
             config,
+            m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
         )
     }
 
@@ -343,6 +345,7 @@ mod hardware {
                 -1,
                 Q8ExecutionConfig::disabled(),
                 config,
+                m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
             )
             .err()
             .expect("unsupported F16 must fail");

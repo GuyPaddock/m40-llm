@@ -726,6 +726,12 @@ mod ffi {
             rope_layout: u32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
+        pub fn m40llm_kvcache_debug_read_length(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            out_length: *mut u32,
+        ) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -4834,6 +4840,31 @@ impl KVCache {
     }
     pub fn is_compressed(&self) -> bool {
         self.inner.compressed
+    }
+
+    /// Drain both producer streams and read a physical layer/sequence slot's
+    /// device length. Debug-only host visibility, never a warm decode dependency.
+    #[cfg(feature = "cuda")]
+    pub fn debug_sequence_length(&self, ctx: &CudaContext, physical_slot: u32) -> Result<u32> {
+        anyhow::ensure!(
+            physical_slot < self.max_batch_size(),
+            "invalid KV debug slot"
+        );
+        let _guard = ctx.inner.lock.lock().unwrap();
+        let mut length = 0;
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_read_length(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                physical_slot,
+                &mut length,
+            )
+        };
+        anyhow::ensure!(rc == 0, "m40llm_kvcache_debug_read_length failed: {rc}");
+        crate::profile::record_stream_sync("kv_debug_length_decode");
+        crate::profile::record_stream_sync("kv_debug_length_prefill");
+        crate::profile::record_d2h_copy("kv_debug_length", 4);
+        Ok(length)
     }
 
     #[cfg(feature = "cuda")]

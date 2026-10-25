@@ -73,8 +73,8 @@ impl super::LoadedModel {
     /// not source tensors or physical KV layer slots; no layer IDs are renumbered.
     pub fn set_diagnostic_layer_mask(&mut self, skipped_layers: &[usize]) -> Result<()> {
         ensure!(
-            self.q8_ffn.is_native(),
-            "diagnostic layer masks require M40LLM_Q8_FFN_KERNEL=native"
+            self.q8_ffn.is_native() && self.q8_prefill.is_native(),
+            "diagnostic layer masks require native Q8 FFN and prefill backends"
         );
         let mask = LayerMask::new(self.model_config.block_count, skipped_layers)?;
         ensure!(

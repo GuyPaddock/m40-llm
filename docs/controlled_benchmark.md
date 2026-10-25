@@ -19,6 +19,14 @@ qualifies split down/vocabulary on the same exact workload at 35.725 versus
 off. This paired m40-llm screen is not a fresh timed Ollama comparison, and
 both original speed goals remain unmet.
 
+## Build Isolation
+
+Use a separate `CARGO_TARGET_DIR` for each source checkout or archived revision.
+Sharing a release target directory between snapshots can reuse another
+revision's package artifacts. Verify the executable hash and actual dispatch
+before timing. If a shared-target comparison contaminated package outputs,
+clear the affected package artifacts and rebuild from the intended source.
+
 ## Ollama Setup
 
 Use an isolated server, not an existing server with unrelated traffic. The

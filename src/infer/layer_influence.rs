@@ -24,8 +24,8 @@ impl LoadedModel {
         budget_bytes: usize,
     ) -> Result<()> {
         ensure!(
-            self.q8_ffn.is_native(),
-            "layer influence capture requires M40LLM_Q8_FFN_KERNEL=native"
+            self.q8_ffn.is_native() && self.q8_prefill.is_native(),
+            "layer influence capture requires native Q8 FFN and prefill backends"
         );
         plan.validate()?;
         ensure!(

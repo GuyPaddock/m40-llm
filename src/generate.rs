@@ -74,6 +74,7 @@ pub struct GeneratedText {
     pub prefill_chunk_size: Option<usize>,
     pub compressed_prefill_chunk_size: Option<usize>,
     pub temporary_dense_kv_bytes: Option<usize>,
+    pub q8_prefill_temporary_weight_bytes: Option<usize>,
     pub packed_prefill_sync_wall_ms: Option<u128>,
     pub packed_prefill_sync_decode_gpu_ms: Option<f32>,
     pub packed_prefill_sync_prefill_gpu_ms: Option<f32>,
@@ -483,6 +484,15 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         } else {
             prefill_chunk_size
         };
+    #[cfg(feature = "cuda")]
+    let packed_prefix_mode = match (options.kv_compression.mode, model.q8_prefill.is_native()) {
+        (KvCompressMode::BlockSelectExact, true) => "packed-prefix-block-select-exact",
+        (KvCompressMode::BlockSelectExact, false) => {
+            "packed-prefix-block-select-exact-dequant-sgemm"
+        }
+        (_, true) => "packed-prefix",
+        (_, false) => "packed-prefix-dequant-sgemm",
+    };
     #[cfg(not(feature = "cuda"))]
     let prefill_chunk_size = None;
     #[cfg(feature = "cuda")]
@@ -618,24 +628,22 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                 #[cfg(feature = "cuda")]
                 {
                     let _ = logits_fn_start;
+                    let packed_bound = match options.kv_compression.mode {
+                        KvCompressMode::Off => prefill_chunk_size,
+                        KvCompressMode::BlockSelectExact => preferred_compressed_prefill_chunk_size,
+                        _ => None,
+                    };
+                    let should_pack_prefix = logits_call_count == 0
+                        && packed_bound.is_some_and(|bound| ids.len() <= bound);
+                    anyhow::ensure!(model.q8_prefill.is_native() || logits_call_count != 0 || should_pack_prefix,
+                        "dequant-sgemm requires bounded dense/exact packed-prefix prefill; set M40LLM_PREFILL_CHUNK_SIZE at least to the prompt token count or use M40LLM_Q8_PREFILL_BACKEND=native");
                     if cuda_greedy_logits_enabled {
-                        if logits_call_count == 0 && prefill_chunk_size_setting.is_some() {
-                            let bound = match options.kv_compression.mode {
-                                KvCompressMode::Off => prefill_chunk_size,
-                                KvCompressMode::BlockSelectExact => {
-                                    preferred_compressed_prefill_chunk_size
-                                }
-                                _ => None,
-                            };
-                            if bound.is_some_and(|bound| ids.len() <= bound) {
-                                decode_session.prefill_packed_prefix_ids(ids)?;
-                                prefill_mode = if options.kv_compression.mode == KvCompressMode::Off
-                                {
-                                    "packed-prefix".to_string()
-                                } else {
-                                    "packed-prefix-block-select-exact".to_string()
-                                };
-                            }
+                        if should_pack_prefix
+                            && (prefill_chunk_size_setting.is_some()
+                                || !model.q8_prefill.is_native())
+                        {
+                            decode_session.prefill_packed_prefix_ids(ids)?;
+                            prefill_mode = packed_prefix_mode.to_string();
                         }
                         let token = decode_session.greedy_token_for_ids(ids)?;
                         let mut logits = vec![f32::NEG_INFINITY; token as usize + 1];
@@ -654,17 +662,13 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                                         log_top_logits(logits, 8, log_prefix)
                                     }) {
                                     Ok(logits) => {
-                                        prefill_mode = format!(
-                                            "packed-prefix-{}",
-                                            match options.kv_compression.mode {
-                                                KvCompressMode::BlockSelectExact =>
-                                                    "block-select-exact",
-                                                _ => unreachable!(),
-                                            }
-                                        );
+                                        prefill_mode = packed_prefix_mode.to_string();
                                         Ok(logits)
                                     }
                                     Err(err) => {
+                                        if !model.q8_prefill.is_native() {
+                                            return Err(err.context("experimental Q8 prefill failed; no sequential fallback"));
+                                        }
                                         eprintln!(
                                             "[{log_prefix}] dense/exact diagnostic packed prefill fallback: {err:#}"
                                         );
@@ -774,10 +778,13 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                                         log_top_logits(logits, 8, log_prefix)
                                     }) {
                                     Ok(logits) => {
-                                        prefill_mode = "packed-prefix".to_string();
+                                        prefill_mode = packed_prefix_mode.to_string();
                                         Ok(logits)
                                     }
                                     Err(err) => {
+                                        if !model.q8_prefill.is_native() {
+                                            return Err(err.context("experimental Q8 prefill failed; no sequential fallback"));
+                                        }
                                         eprintln!(
                                             "[{log_prefix}] packed prefill fallback: {err:#}"
                                         );
@@ -1075,6 +1082,10 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
     let reported_prefill_chunk_size = prefill_chunk_size;
 
     let metrics = generation_timer.finish(prompt_token_len, &generated, &stopping)?;
+    #[cfg(feature = "cuda")]
+    let q8_prefill_temporary_weight_bytes = decode_session.prefill_temporary_weight_bytes();
+    #[cfg(not(feature = "cuda"))]
+    let q8_prefill_temporary_weight_bytes = None;
     Ok(GeneratedText {
         output: sanitize_output(&text),
         metrics,
@@ -1088,6 +1099,7 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
         prefill_chunk_size: reported_prefill_chunk_size,
         compressed_prefill_chunk_size,
         temporary_dense_kv_bytes,
+        q8_prefill_temporary_weight_bytes,
         packed_prefill_sync_wall_ms,
         packed_prefill_sync_decode_gpu_ms,
         packed_prefill_sync_prefill_gpu_ms,

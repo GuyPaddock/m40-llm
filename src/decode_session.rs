@@ -117,6 +117,7 @@ pub struct DecodeSession {
     step: usize,
     logged_full_forward: bool,
     last_prefill_sync_diag: Option<PrefillSyncDiagTimings>,
+    last_prefill_weight_bytes: Option<usize>,
     last_forward_sync_diag: Option<PrefillSyncDiagTimings>,
     gpu_profiler: Option<DecodeGpuProfiler>,
 }
@@ -182,8 +183,8 @@ impl DecodeSession {
         d_out_tag: &'static str,
     ) -> Result<Self> {
         anyhow::ensure!(
-            model.q8_ffn.is_native() || !decode_graph_enabled(),
-            "experimental Q8 FFN requires M40LLM_DECODE_GRAPH=0; graph capture is not validated"
+            (model.q8_ffn.is_native() && model.q8_prefill.is_native()) || !decode_graph_enabled(),
+            "experimental Q8 backends require M40LLM_DECODE_GRAPH=0; graph capture is not validated"
         );
         anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
             "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
@@ -319,6 +320,7 @@ impl DecodeSession {
             step: 0,
             logged_full_forward: false,
             last_prefill_sync_diag: None,
+            last_prefill_weight_bytes: None,
             last_forward_sync_diag: None,
             gpu_profiler,
         })
@@ -457,6 +459,7 @@ impl DecodeSession {
     /// The final token remains on the caller's normal logits or GPU-greedy path.
     pub fn prefill_packed_prefix_ids(&mut self, ids: &[u32]) -> Result<()> {
         self.last_prefill_sync_diag = None;
+        self.last_prefill_weight_bytes = None;
         if !self.can_forward {
             anyhow::bail!("packed prefill requires full-layer forward");
         }
@@ -510,6 +513,18 @@ impl DecodeSession {
             self.logged_full_forward = true;
         }
         self.processed_len = prefix_len;
+        let capacity = {
+            let guard = self
+                .model()
+                .forward_workspace
+                .lock()
+                .map_err(|_| anyhow::anyhow!("poisoned prefill workspace"))?;
+            guard
+                .as_ref()
+                .and_then(|workspace| workspace.ptrs().q8_prefill_weight)
+                .map(|view| view.bytes)
+        };
+        self.last_prefill_weight_bytes = capacity;
         Ok(())
     }
 
@@ -681,6 +696,12 @@ impl DecodeSession {
 
     pub fn prefill_sync_diag_timings(&self) -> Option<PrefillSyncDiagTimings> {
         self.last_prefill_sync_diag
+    }
+
+    /// Actual temporary projection-weight capacity used by the last packed
+    /// prefix, retained for reporting after one-row decode releases that scratch.
+    pub fn prefill_temporary_weight_bytes(&self) -> Option<usize> {
+        self.last_prefill_weight_bytes
     }
 
     pub fn forward_sync_diag_timings(&self) -> Option<PrefillSyncDiagTimings> {

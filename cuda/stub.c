@@ -217,6 +217,11 @@ int m40llm_dequantize_q8_0_to_f32_colmajor_async(M40llmCudaContext* ctx,
     return -99;
 }
 
+int m40llm_kvcache_debug_read_length(M40llmCudaContext* ctx, M40llmKVCache* kv,
+    uint32_t seq_id, uint32_t* out_length) {
+    (void)ctx; (void)kv; (void)seq_id; (void)out_length; return -99;
+}
+
 
 int m40llm_gemm_f16xf16_f32(M40llmCudaContext* ctx, const void* d_A_f16, const void* d_B_f16, void* d_C_f32, int M, int N, int K) {
     (void)ctx; (void)d_A_f16; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;

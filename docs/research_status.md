@@ -104,14 +104,27 @@ Runtime-disabled-upload all-target checks also pass; NVCC still compiles that
 build. No full-model quality or speed claim follows. Next implement independent
 M07 bounded prefill SGEMM, then M08 numerical/512-token/quality/E2E qualification.
 
-M07 now has a [bounded temporary Q8-to-FP32 converter](q8_prefill.md).
+M07 is complete: [bounded temporary Q8-to-FP32 prefill SGEMM](q8_prefill.md).
 Checked shapes cap one weight at 128 MiB and exclude the vocabulary matrix.
 Release M40 tests preserve every converted weight bit for both real Qwen FFN
 orientations and feed the existing async SGEMM with genuine distinct rows 4/64.
 The converter enqueues one kernel with no allocation, host copy or sync.
 Source/output guards, two-byte bases, capacity rejection and cleanup pass.
-Runtime selection, reusable prefill workspace, full bias/RoPE/KV parity and
-performance measurements are still pending; the primitive changes no defaults.
+Model-local `native|dequant-sgemm` selection now reuses one RAII temporary
+weight across all seven projections/layer, on prefill. Decode/vocabulary keep
+their original paths and no full-model FP32 cache is retained. Tests cover
+final logits/KV at existing tolerance, device lengths, Qwen head128 GQA with
+bias/split-half RoPE, pointer reuse and unchanged warm decode allocations.
+GPU-greedy now honors an explicit packed-prefix bound while keeping its final
+token/head path; disabled/over-bound experimental requests fail, not silently
+fall back. Actual temporary capacity is retained in generation reporting.
+The real Qwen arithmetic smoke observes 252 conversions/SGEMMs and output
+`4`, matching native packed. Sequential outputs `2` in both the parent
+`5d7472d` and current integration: not a new sequential regression, but not
+exact-output equality either. Raw evidence and limitations are linked above.
+No default changes or throughput claim follow. Next is M08: full-model
+512-token equality, dense-valid tasks, Q8_1 quality/loss, isolated prefill and
+decode E2E pairs, then a qualifying combination and fresh Ollama comparison.
 
 ## Previous Research Checkpoints
 

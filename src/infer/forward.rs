@@ -235,7 +235,7 @@ impl LoadedModel {
         hidden_dim: usize,
         f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
     ) -> Result<R> {
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, 1, f)
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, 1, 0, f)
     }
 
     #[cfg(feature = "cuda")]
@@ -245,6 +245,7 @@ impl LoadedModel {
         kv_dim: usize,
         hidden_dim: usize,
         rows: usize,
+        prefill_weight_bytes: usize,
         f: impl FnOnce(ForwardWorkspacePtrs) -> Result<R>,
     ) -> Result<R> {
         if rows == 0 {
@@ -253,7 +254,16 @@ impl LoadedModel {
         let mut guard = self.forward_workspace.lock().unwrap();
         if !guard
             .as_ref()
-            .map(|ws| ws.matches(d_model, kv_dim, hidden_dim, rows, self.q8_ffn))
+            .map(|ws| {
+                ws.matches(
+                    d_model,
+                    kv_dim,
+                    hidden_dim,
+                    rows,
+                    self.q8_ffn,
+                    prefill_weight_bytes,
+                )
+            })
             .unwrap_or(false)
         {
             if let Some(old) = guard.take() {
@@ -266,6 +276,7 @@ impl LoadedModel {
                 hidden_dim,
                 rows,
                 self.q8_ffn,
+                prefill_weight_bytes,
             )?);
         }
         let ptrs = guard.as_ref().expect("workspace initialized").ptrs();
@@ -2081,7 +2092,7 @@ impl LoadedModel {
         let bytes_kv = kv_dim
             .checked_mul(std::mem::size_of::<f32>())
             .context("batched forward kv byte size overflow")?;
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, 0, |ws| {
             for layer in self
                 .layer_mask
                 .active_layers(self.model_config.block_count)?
@@ -2485,6 +2496,8 @@ impl LoadedModel {
         items: &[ForwardPrefillSequence<'_>],
         kv: &KVCache,
     ) -> Result<usize> {
+        anyhow::ensure!(self.q8_prefill.is_native() || items.len() == 1,
+            "experimental Q8 prefill supports one packed prompt; use M40LLM_Q8_PREFILL_BACKEND=native for server batching");
         anyhow::ensure!(
             self.activation_research.is_none()
                 && self.layer_influence.is_none()
@@ -2564,7 +2577,8 @@ impl LoadedModel {
             .context("batched prefill total d_model byte size overflow")?;
         let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
 
-        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, |ws| {
+        let prefill_weight_bytes = self.q8_prefill_weight_bytes()?;
+        self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, prefill_weight_bytes, |ws| {
             for (seq_idx, item) in items.iter().enumerate() {
                 let q_offset = meta.offsets()[seq_idx].q_offset as usize;
                 for (tok_idx, &tok_id) in item.token_ids.iter().enumerate() {
@@ -2642,20 +2656,10 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_attn_norm_to_qkv_project",
                 )?;
-                self.qkv_project_f32xf16_gguf_f32_async(
-                    ws.d_xn,
-                    rows as i32,
-                    d_model as i32,
-                    wq_ptr,
-                    d_model as i32,
-                    wk_ptr,
-                    kv_dim as i32,
-                    wv_ptr,
-                    kv_dim as i32,
-                    ws.dq,
-                    ws.dk,
-                    ws.dv,
-                )?;
+                for (weight, output, width) in [(wq_ptr, ws.dq, d_model), (wk_ptr, ws.dk, kv_dim), (wv_ptr, ws.dv, kv_dim)] {
+                    self.matmul_prefill_f32_gguf_async(ws.d_xn, weight, output,
+                        rows as i32, width as i32, d_model as i32, ws.q8_prefill_weight)?;
+                }
                 self.apply_qkv_bias_async(qkv_bias, rows, d_model, kv_dim, ws)?;
                 log_profiled_op(
                     &label,
@@ -2754,13 +2758,14 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
-                self.out_proj_f32xf16_gguf_f32_async(
+                self.matmul_prefill_f32_gguf_async(
                     ws.datt as *const c_void,
                     wo_ptr,
                     ws.dy_attn,
                     rows as i32,
                     d_model as i32,
                     d_model as i32,
+                    ws.q8_prefill_weight,
                 )?;
                 log_profiled_op(
                     &label,
@@ -2819,16 +2824,10 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_ffn_norm_to_mlp_gate_up",
                 )?;
-                self.mlp_gates_f32xf16_gguf_f32_async(
-                    ws.d_x1n,
-                    rows as i32,
-                    d_model as i32,
-                    w_gate_ptr,
-                    w_up_ptr,
-                    hidden_dim as i32,
-                    ws.dgate,
-                    ws.dup,
-                )?;
+                for (weight, output) in [(w_gate_ptr, ws.dgate), (w_up_ptr, ws.dup)] {
+                    self.matmul_prefill_f32_gguf_async(ws.d_x1n, weight, output,
+                        rows as i32, hidden_dim as i32, d_model as i32, ws.q8_prefill_weight)?;
+                }
                 log_profiled_op(
                     &label,
                     "mlp_gate_up",
@@ -2858,13 +2857,14 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_swiglu_to_mlp_down",
                 )?;
-                self.mlp_down_proj_f32xf16_gguf_f32_async(
+                self.matmul_prefill_f32_gguf_async(
                     ws.dhid as *const c_void,
-                    rows as i32,
-                    hidden_dim as i32,
                     w_down_ptr,
-                    d_model as i32,
                     ws.dy_mlp,
+                    rows as i32,
+                    d_model as i32,
+                    hidden_dim as i32,
+                    ws.q8_prefill_weight,
                 )?;
                 log_profiled_op(
                     &label,

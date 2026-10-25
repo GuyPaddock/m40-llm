@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Bounded Q8 Prefill Runtime Checkpoint
+
+M07 adds opt-in, model-local `dequant-sgemm` packed-prefix prefill with one
+reusable temporary weight capped at 128 MiB. Qwen FFN capacity is 86 MiB;
+decode/vocabulary and prepared down/vocabulary payload remain unchanged.
+Fixture logits/KV, device lengths, Qwen bias/RoPE and allocation reuse pass.
+GPU-greedy now honors an explicit packed-prefix bound rather than bypassing it.
+
+An untimed real-Qwen smoke observes all 252 conversions and 252 SGEMM calls,
+with output `4`, matching native packed. Native sequential returns `2` in
+both parent `5d7472d` and the integration. Preserve that discrepancy; this is
+neither exact-output qualification nor a performance result. Full 512-token
+and task gates plus controlled E2E timing remain pending. See
+[runtime contract, source comparison and raw smoke evidence](q8_prefill.md).
+
 ## 2026-10-25: Experimental FFN Runtime Checkpoint
 
 M06 now exposes model-local `native|packed-f32|q8-1` single-row FFN selection,

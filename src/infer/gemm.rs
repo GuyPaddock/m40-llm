@@ -773,7 +773,7 @@ impl LoadedModel {
             * self.model_config.attention_key_length) as usize;
         let hidden_dim = self.model_config.feed_forward_length as usize;
         let workspace_bytes =
-            ForwardWorkspace::estimated_bytes(d_model, kv_dim, hidden_dim, 1, self.q8_ffn)
+            ForwardWorkspace::estimated_bytes(d_model, kv_dim, hidden_dim, 1, self.q8_ffn, 0)
                 .unwrap_or(0);
         let kv_bytes = self
             .kv_cache

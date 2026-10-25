@@ -148,6 +148,7 @@ fn mlp_gates_and_down_proj_f32xf16_f32_smoke() -> Result<()> {
         kv_cache: None,
         layer_mask: m40_llm::infer::LayerMask::default(),
         q8_ffn: m40_llm::infer::Q8FfnConfig::native(),
+        q8_prefill: m40_llm::infer::q8_prefill::Q8PrefillBackend::Native,
         #[cfg(feature = "cuda")]
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]

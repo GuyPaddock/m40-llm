@@ -34,7 +34,7 @@ enables weight preparation.
 | M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, quality pending |
 | M05 | Complete: [bounded screening decision](experiments/2026-10-25-maxwell-q81-ffn-screen.md#m05-screening-decision); packed/warp FP32 and Q8_1 advance conditionally, failed variants preserved |
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
-| M07 | In progress: [bounded Q8-to-FP32 layout primitive and SGEMM checks](q8_prefill.md); reusable runtime prefill ownership/dispatch pending |
+| M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
 | M08 | Pending: isolated decode/prefill and qualifying combination HTTP/quality comparisons |
 | M09 | Pending: measured attribution, retained configuration, fresh Ollama comparison and remaining-goal audit |
 

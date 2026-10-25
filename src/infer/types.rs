@@ -267,6 +267,8 @@ pub struct LoadedModel {
     /// Load-time, model-local FFN selection. In-memory fixtures must choose an
     /// explicit native config; do not replace this after workspace/session use.
     pub q8_ffn: super::Q8FfnConfig,
+    /// Load-time experimental prefill backend; native for in-memory references.
+    pub q8_prefill: super::q8_prefill::Q8PrefillBackend,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]

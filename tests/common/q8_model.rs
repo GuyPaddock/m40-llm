@@ -65,6 +65,74 @@ pub fn build_with_layers(seed: u8, layer_count: u32) -> (GgufModel, Vec<u8>) {
     (model, weights)
 }
 
+/// Two-layer prefill fixtures with nonzero quantized FFNs. The Qwen case has
+/// head128 GQA, split-half RoPE and real Q/K/V bias tensors. Small weights keep
+/// storage-rounding drift within the existing packed/sequential tolerance.
+#[allow(dead_code)]
+pub fn build_prefill_fixture(is_qwen: bool) -> (GgufModel, Vec<u8>) {
+    let (mut model, original) = if is_qwen {
+        let (mut model, bytes) = tiny::make_qwen2_attention_bias_tiny_gguf(tiny::TinyGgufConfig {
+            vocab: 320,
+            d_model: 256,
+            hidden: 512,
+            head_count: 2,
+            block_count: 2,
+            context_length: 128,
+        });
+        for prefix in ["llama", "qwen2"] {
+            model.metadata.insert(
+                format!("{prefix}.attention.head_count_kv"),
+                m40_llm::gguf::GgufValue::Scalar(m40_llm::gguf::GgufScalar::U32(1)),
+            );
+        }
+        (model, bytes)
+    } else {
+        build_with_layers(0, 2)
+    };
+    let mut weights = Vec::new();
+    for tensor in &mut model.tensors {
+        let old = tensor.clone();
+        if is_qwen
+            && (tensor.name.ends_with("attention.wk.weight")
+                || tensor.name.ends_with("attention.wv.weight"))
+        {
+            tensor.shape[1] = 128;
+        }
+        if is_qwen
+            && (tensor.name.ends_with("attention.wk.bias")
+                || tensor.name.ends_with("attention.wv.bias"))
+        {
+            tensor.shape[0] = 128;
+        }
+        weights.resize(weights.len().div_ceil(32) * 32, 0);
+        tensor.offset = weights.len() as u64;
+        if tensor.shape.len() == 2 {
+            let mut payload = if old.dtype == GgmlDType::Q8_0 {
+                let size = tensor.shape.iter().product::<u64>() as usize / 32 * 34;
+                original[old.offset as usize..old.offset as usize + size].to_vec()
+            } else {
+                projection::make_column_blocks(tensor.shape[0] as usize, tensor.shape[1] as usize)
+            };
+            for block in payload.chunks_exact_mut(34) {
+                let scale =
+                    half::f16::from_bits(u16::from_le_bytes([block[0], block[1]])).to_f32() / 32.0;
+                block[..2].copy_from_slice(&half::f16::from_f32(scale).to_bits().to_le_bytes());
+            }
+            tensor.dtype = GgmlDType::Q8_0;
+            weights.extend_from_slice(&payload);
+        } else {
+            assert_eq!(tensor.dtype, GgmlDType::F32);
+            let size = tensor.shape.iter().product::<u64>() as usize * 4;
+            for value in original[old.offset as usize..old.offset as usize + size].chunks_exact(4) {
+                weights.extend_from_slice(
+                    &(f32::from_le_bytes(value.try_into().unwrap()) / 16.0).to_le_bytes(),
+                );
+            }
+        }
+    }
+    (model, weights)
+}
+
 /// Override projection widths for projection-only tail/GQA tests; these
 /// synthetic descriptors are not intended to run a full transformer forward.
 pub fn build_projection_fixture(

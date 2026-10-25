@@ -16,6 +16,7 @@ impl LoadedModel {
             device_id,
             Q8ExecutionConfig::from_env()?,
             super::Q8FfnConfig::from_env()?,
+            super::q8_prefill::Q8PrefillBackend::from_env()?,
         )
     }
 
@@ -33,6 +34,7 @@ impl LoadedModel {
             device_id,
             execution,
             super::Q8FfnConfig::native(),
+            super::q8_prefill::Q8PrefillBackend::Native,
         )
     }
 
@@ -42,6 +44,7 @@ impl LoadedModel {
         device_id: i32,
         execution: Q8ExecutionConfig,
         ffn: super::Q8FfnConfig,
+        prefill: super::q8_prefill::Q8PrefillBackend,
     ) -> Result<Self> {
         anyhow::ensure!(
             ffn.is_native()
@@ -49,6 +52,12 @@ impl LoadedModel {
                     && cfg!(nvcc)
                     && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
             "experimental Q8 FFN requires compiled CUDA kernels; use M40LLM_Q8_FFN_KERNEL=native"
+        );
+        anyhow::ensure!(
+            prefill.is_native()
+                || (cfg!(feature = "cuda") && cfg!(nvcc) && cfg!(have_cublas)
+                    && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
+            "experimental Q8 prefill requires compiled CUDA/cuBLAS; use M40LLM_Q8_PREFILL_BACKEND=native"
         );
         #[cfg(not(feature = "cuda"))]
         anyhow::ensure!(
@@ -136,6 +145,7 @@ impl LoadedModel {
             kv_cache: None,
             layer_mask: super::LayerMask::default(),
             q8_ffn: ffn,
+            q8_prefill: prefill,
             #[cfg(feature = "cuda")]
             forward_workspace: std::sync::Mutex::new(None),
             #[cfg(feature = "cuda")]
@@ -161,6 +171,11 @@ impl LoadedModel {
         let mut model = model;
         #[cfg(feature = "cuda")]
         model.validate_q8_ffn_backend()?;
+        #[cfg(feature = "cuda")]
+        if !model.q8_prefill.is_native() {
+            let bytes = model.q8_prefill_weight_bytes()?;
+            eprintln!("[q8-prefill] backend=dequant-sgemm temporary_weight_capacity_bytes={bytes} budget_bytes={} scope=single-prompt-packed-prefix decode=unchanged", super::q8_prefill::Q8_PREFILL_MAX_WEIGHT_BYTES);
+        }
         #[cfg(feature = "cuda")]
         if let Some((sha256, hash_ms)) = source_sha256 {
             let props = model.cuda.current_device_props()?;

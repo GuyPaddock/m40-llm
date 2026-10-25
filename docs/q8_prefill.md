@@ -64,12 +64,109 @@ With cuBLAS disabled, both conversion hardware checks and the CPU shape check
 pass. The SGEMM-specific test is compile-gated out rather than reporting a
 successful no-cuBLAS skip.
 
-## Remaining Integration
+## Runtime Selection and Ownership
 
-The converter is not yet selected by runtime prefill. M07 still needs a
-model-local opt-in configuration, one RAII temporary buffer reused projection
-by projection, complete Qwen bias/RoPE/KV parity and unchanged decode dispatch.
-Include every conversion in per-prompt timings. Do not retain a full FP32
-model, materialize the vocabulary, silently fall back or infer an E2E gain
-from these correctness checks. M08 must compare sequential, existing packed
-and temporary-SGEMM prefill independently before combining with FFN candidates.
+`M40LLM_Q8_PREFILL_BACKEND=native|dequant-sgemm` is captured at model load.
+Native remains the default. The experimental backend requires compiled
+CUDA/cuBLAS, sm_52, head64/head128, uploaded Q8_0 transformer projections and
+the 128 MiB per-weight bound. Unsupported requests give a native-mode remedy,
+not a silent algorithm change.
+
+Use the existing `M40LLM_PREFILL_CHUNK_SIZE` bound to admit a packed prompt;
+for the canonical 65-token prompt, use 128 to cover the whole prompt while
+prefilling only its 64-token prefix. An explicitly selected SGEMM backend
+errors if the requested dense/exact packed prefix is disabled or over bound.
+Errors during experimental prefill propagate rather than falling back to
+sequential. Native retains its existing fallback policy.
+
+One RAII temporary weight buffer belongs to the forward workspace. It is
+allocated before the packed forward, reused for all seven projections in each
+layer and ordered with SGEMM on prefill. Existing Q/K/V bias, split-half RoPE,
+absolute-position append, attention/masks and stream waits remain in place.
+The vocabulary and ordinary one-row decode do not use the buffer. Prepared
+down/vocabulary stay resident and unchanged; the prefill temporary does not
+become a full-model FP32 cache. One-row workspace setup releases it after
+packed prefill has drained. Allocation/conversion cost belongs in prompt/E2E
+timing, not outside the measured request.
+
+`DecodeSession::prefill_packed_prefix_ids` leaves the final prompt token on
+the normal logits or GPU-greedy path. The independent native-path fix in
+`eb39200` addresses an older integration gap: GPU-greedy generation previously
+ignored an explicit packed-prefill bound. Its regression
+[fails before](experiments/2026-10-25-greedy-prefill-before.txt) and
+[passes after](experiments/2026-10-25-greedy-prefill-after.txt) that fix without
+the SGEMM runtime integration present.
+Native sequential with bound zero is unchanged. No implicit packed admission
+is added to the native GPU-greedy path without an explicit bound. Generation
+reports `packed-prefix-dequant-sgemm` and the actual
+`q8_prefill_temporary_weight_bytes`, retained after decode releases scratch.
+
+`from_gguf_with_q8_backends` accepts independent execution-weight, FFN and
+prefill choices. The explicit existing weight-cache constructor keeps both
+FFN and prefill native regardless of ambient experiment flags. In-memory
+models initialize `q8_prefill: Q8PrefillBackend::Native`; direct workspace
+callers pass zero prefill weight bytes for decode. Multi-request prefill,
+experimental graphs and model-changing research combinations are rejected.
+
+## Runtime Correctness Checkpoint
+
+Release M40 runtime tests compare sequential, native packed and SGEMM packed
+prefill for two-layer head64 and Qwen-shaped head128 GQA fixtures. They retain
+the existing 2e-3 absolute tolerance for final logits and decoded FP16 K/V.
+Device sequence lengths and K/V at every tested absolute position agree.
+The Qwen case includes Q/K/V biases and split-half RoPE. There is exactly one
+additional allocation, fourteen conversions and fourteen cuBLAS calls for
+two layers, not one weight allocation per projection. Repeated prefix calls
+reuse the same pointer/capacity. Subsequent decode allocates/frees nothing
+after one-row setup, performs no temporary conversion and leaves prepared
+cache statistics unchanged.
+
+Generation tests verify actual conversion dispatch with both CPU and GPU
+greedy sampling, identical fixture token IDs, actual temporary capacity and
+clear rejection when the prefix bound is disabled. The new synchronous
+`KVCache::debug_sequence_length` exposes device metadata only for diagnostics;
+it is not part of warm decode. Warning-as-error non-CUDA tests, CUDA/server
+all-target Clippy, attention/forward/prefill/ownership regressions and
+no-cuBLAS rejection checks pass. These are fixture correctness checks, not
+full-model continuation equality.
+
+### Real Qwen Dispatch Smoke
+
+The original Qwen2.5-3B Q8_0 model, prepared down/vocabulary control and dense
+KV/context 1024 were run serially with GPU-greedy enabled, eight maximum
+generated tokens and the prompt `What is 2+2? Answer with one digit.`.
+The rendered prompt has twenty tokens; packed runs process nineteen prefix
+rows. Launch logging is enabled, so this is not a throughput measurement.
+
+| Path | Output | Temporary conversions / SGEMM calls |
+| --- | --- | --- |
+| Parent `5d7472d`, native sequential | `2` | 0 / 0 |
+| Runtime integration, native sequential | `2` | 0 / 0 |
+| Runtime integration, native packed | `4` | 0 / 0 |
+| Runtime integration, SGEMM packed | `4` | 252 / 252 |
+
+The sequential result predates this integration, verified by compiling the
+parent source in an isolated temporary snapshot and rerunning the identical
+command. This is not evidence of a new sequential regression. Native packed
+and SGEMM packed agree on this answer, but they do **not** preserve the
+sequential answer. Do not call the smoke exact-output qualification, a quality
+improvement of the inference engine, or evidence of a speedup. The fixed
+512-token benchmark equality and dense-valid task gates remain mandatory.
+
+The [diagnostic JSONL and linked compressed launch logs](experiments/2026-10-25-maxwell-q8-prefill-smoke.jsonl)
+preserve the original model hash, execution configuration, runtime binary
+hash and source-patch digest. The parent binary hash was not retained; its
+source revision, [release build log](experiments/2026-10-25-maxwell-q8-prefill-parent-build.txt),
+output and full launch log are recorded. The parent used `git archive
+5d7472d Cargo.toml Cargo.lock build.rs src cuda benches tests` into a temporary
+source tree, followed by an offline locked release build. Its initially shared
+target directory caused a later stale-library compile failure, not an inference
+result; package outputs were cleared and all integrated regressions rerun from
+the current source. Follow the [separate-target rule](controlled_benchmark.md#build-isolation)
+for future cross-revision checks. The GPU process list was empty before and
+after each serial smoke group. No Ollama inference overlapped these runs.
+
+M08 must compare sequential, existing packed and temporary-SGEMM prefill
+independently before combining with FFN candidates. Include every conversion
+and allocation in prompt timing. Do not materialize vocabulary, promote from
+microbenchmarks, or weaken exact-output acceptance to accommodate drift.

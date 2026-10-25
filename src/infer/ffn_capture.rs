@@ -73,8 +73,8 @@ impl LoadedModel {
     /// control. Caller binds the original model/corpus/execution hashes.
     pub fn begin_ffn_capture(&mut self, plan: FfnCapturePlan, budget_bytes: usize) -> Result<()> {
         ensure!(
-            self.q8_ffn.is_native(),
-            "frozen FFN capture requires M40LLM_Q8_FFN_KERNEL=native"
+            self.q8_ffn.is_native() && self.q8_prefill.is_native(),
+            "frozen FFN capture requires native Q8 FFN and prefill backends"
         );
         plan.validate()?;
         ensure!(
