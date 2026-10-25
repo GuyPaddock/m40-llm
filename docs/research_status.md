@@ -23,17 +23,27 @@ measures typed FP32/128 plus SGEMM at **41.331 vs 42.946 HTTP tok/s**,
 **3.761% slower**, with verified actual IDs, quality and cache resets.
 Both original targets remain unmet: **53.06** and **55.829 tok/s** for
 1.30x this fresh Ollama median. The selected exact combination is retained
-experimentally; no global defaults change. Next measure its current stage
-costs without timing contamination, then test one bounded FP32-only
-scale-factored gate/up hypothesis if the profile supports it. Do not replace
+experimentally; no global defaults change. Its stage profile and bounded
+FP32 scale-factoring follow-up are complete below. Do not replace
 the exact-engine objective with numerical, pruning or scheduling results.
 
 The [selected-runtime stage profile](experiments/2026-10-25-maxwell-selected-stage-profile.md)
 now preserves actual IDs off/on and locates middle-token GPU stage time at
 **42.94% gate/up/SwiGLU, 20.32% down, 3.34% attention**. Instrumentation
 lowers HTTP throughput by 3.79%, so it is diagnostic, not a new speed claim.
-This supports one fixed 128-thread FP32 scale-factored gate/up experiment,
+This supported one fixed 128-thread FP32 scale-factored gate/up experiment,
 with current packed FP32/128 as timing control and all original gates intact.
+
+That [bounded follow-up](experiments/2026-10-25-maxwell-factored-ffn-screen.md)
+now fails the performance screen: complete one-row FFN throughput is
+**0.07-0.28% slower**, and four-row gains are only **1.59-2.96%**. All
+primitive numerical/ownership checks pass. Fewer static multiply sites did
+not yield useful speed. Implementation `498699a` is retained benchmark-only;
+do not wire it into generation or expand geometry to rescue it. Next inspect
+the qualified kernel's packed-load transaction pattern and warp work
+distribution, using Maxwell-supported counters if available, before another
+bounded hypothesis. Memory bandwidth or occupancy is not yet measured.
+The exact-engine objective and qualified packed128/SGEMM selection remain.
 
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)

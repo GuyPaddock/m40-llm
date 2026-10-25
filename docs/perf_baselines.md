@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: FP32 Scale Factoring Does Not Qualify
+
+One fixed 128-thread experiment applies Q8 scales after eight-value FP32
+partial dot products. All numerical checks pass, but complete one-row FFN
+throughput is **0.07-0.28% slower** than the qualified packed/warp128 control.
+Four-row gains are only **1.59-2.96%**, below the 5% screen. Fewer static
+multiply sites and no spills do not establish a useful performance gain.
+
+Keep the code benchmark-only and preserve this negative result. No runtime
+integration or default change follows; the last qualified HTTP configuration
+and both unmet original targets are unchanged. See [paired trials, numerical
+errors, compiler evidence and audit](experiments/2026-10-25-maxwell-factored-ffn-screen.md).
+
 ## 2026-10-25: Selected-Runtime Stage Profile
 
 The qualified FP32/128-plus-SGEMM runtime remains FFN dominated. Median

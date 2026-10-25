@@ -1,0 +1,14 @@
+2ffe4b232b1363da41ea50db26c9162a807fb72bc0d9ca43cc81138ca3a1f4f5  docs/experiments/2026-10-25-maxwell-factored-ffn-audit.jq
+cbb07e9887f2dcd7ceb7e610061719bed6daef7f30dffdde66b46950d8dad43e  docs/experiments/2026-10-25-maxwell-factored-ffn-audit.json
+e42e8bb485e6274d3789e8bd733f40cfc0811c9b95f97d5b22a583aa62345d3b  docs/experiments/2026-10-25-maxwell-factored-ffn-clippy.log.gz
+faeecb415b749231d976478a5060e4224e0666310c5a2f9bf77815890cd93058  docs/experiments/2026-10-25-maxwell-factored-ffn-cuda-tests.log.gz
+06d593b04dda03dd43be54da9cc78663dd68549fd84e76d6b365ef79a1e3a237  docs/experiments/2026-10-25-maxwell-factored-ffn-instructions.txt
+20d5437f6c4cba8d4418a8c84a378a65ecead7c5b247c9cb4e05b904bc7ff9e3  docs/experiments/2026-10-25-maxwell-factored-ffn-no-cublas.log.gz
+8afec50ead19f760eb4f02506c786a67f73ebad8e53d417bcb22ee8a676cf03e  docs/experiments/2026-10-25-maxwell-factored-ffn-noncuda.log.gz
+f0c77851a89ceb0257392f4974d7d7d80c23e5ff0265333f16cfc3eae83b3fce  docs/experiments/2026-10-25-maxwell-factored-ffn-regressions.log.gz
+415433ee47665549d38c1c2787b5f05b9a55b9f5398ec3beef9c8506b6f88535  docs/experiments/2026-10-25-maxwell-factored-ffn-rejected-env.log.gz
+8dbb04a45e354831b121e70eed28aa18ac83a51f40e37358f0020e85a33bf851  docs/experiments/2026-10-25-maxwell-factored-ffn-resources.txt
+58e8b60de5be8c3f332462340654689b54cf758d2b9f0b24736e05e2d62a8ecb  docs/experiments/2026-10-25-maxwell-factored-ffn-sass.txt.gz
+9701811f60e1f105a101780359ef24f305f22e3a433f35a3cef595b7a852eb6b  docs/experiments/2026-10-25-maxwell-factored-ffn-screen.jsonl
+065a157b409ef136f175872d248b910bcd407358bf95050ed564cff7119dbd2c  docs/experiments/2026-10-25-maxwell-factored-ffn-screen.log.gz
+a84d07f47b36f20b410ed61ab172e079d109d7c6e30c2270a1fbcb07d2538933  docs/experiments/2026-10-25-maxwell-factored-ffn-screen.md
