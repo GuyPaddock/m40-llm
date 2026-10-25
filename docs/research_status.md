@@ -32,6 +32,21 @@ records. Then C21 tests exactly 50% static sparsity with matched-zero dense
 projections before any calibration-driven pruning. Do not tune on held-out or
 browser inputs, and do not reopen the failed n-gram/layout screens.
 
+C20 is split into dependency-ordered commits:
+
+1. `feat(infer): define diagnostic layer masks`: checked interior IDs, original
+   chronological execution order, empty-mask behavior and CPU tests.
+2. `feat(infer): apply masks to full-model forward`: model-local setup before
+   KV allocation, all full-model forward paths, active-index scratch routing,
+   and CUDA parity/skip tests. Depends on the mask contract.
+3. `test(quality): evaluate masked layer variants`: candidate-only CLI masks,
+   transform/memory identity, and matched forced-prefix step timing. Depends
+   on forward wiring and C19's frozen evaluation runner.
+4. `docs(perf): record layer-mask tradeoffs`: fixed one/two/three interior
+   layer diagnostics against the unchanged reference, with quality, loss,
+   logit drift and scoped timing/memory. Depends on verified implementation.
+   No ranking or compact export in C20; those remain C24/C25.
+
 C19 was split into dependency-ordered commits:
 
 1. `d1294fc`, `test(quality): freeze pruning evaluation splits`: immutable authored V1
