@@ -120,8 +120,9 @@ full forward/prefill and allocation ownership regressions. Explicitly invoking
 the observer hardware test with `CUDA_VISIBLE_DEVICES=''` fails with a context
 creation error, as required; GPU-less CI does not establish observer parity.
 
-Real-model capture evidence and complete FFN timing still remain. No performance
-improvement follows from these contracts or correctness tests.
+Real-model capture and warm complete-FFN baselines are now recorded in the
+[investigation checkpoint](maxwell_q8_execution.md). Neither establishes a
+candidate performance improvement by itself.
 
 ## Complete FFN Baseline
 
@@ -183,3 +184,42 @@ separate runtime acceptance requirements.
 M02 delivery is split into the tested benchmark extension, then a clean-release
 measurement/evidence commit. Do not promote a kernel or change runtime defaults
 from this baseline alone.
+
+## Bounded FP32 FFN Screen
+
+Add `--ffn-f32-ablation` to the complete-FFN command to measure all five M03
+variants. Preserve the frozen capture environment exactly:
+
+```bash
+source scripts/dev-env.sh
+while IFS=$'\t' read -r key value; do
+  export "$key=$value"
+done < <(head -n1 docs/experiments/2026-10-25-maxwell-ffn-capture.jsonl |
+  jq -r '.execution_configuration.environment|to_entries[]|[.key,.value]|@tsv')
+MODEL="$HOME/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d"
+cargo run --release --features cuda --example q8_execution_bench -- \
+  --model "$MODEL" --output new-ffn-f32-screen.jsonl \
+  --ffn-inputs target/research-fixtures/m02-ffn-inputs.json \
+  --ffn-capture-report docs/experiments/2026-10-25-maxwell-ffn-capture.jsonl \
+  --ffn-f32-ablation --rows 1,4 --trials 5 --iterations 10
+```
+
+The same pipeline allocations serve both arms. For each layer/shape, native
+and all candidates undergo numerical validation before timing. Initial
+256-thread fused variants additionally match the fused row-control bits;
+single-row variants match native complete output bits. The 128-thread variant
+retains CPU/capture tolerance rather than claiming unchanged arithmetic order.
+Each variant gets bounded 1000 ms native and 100 ms candidate GPU warmup,
+followed by at least five contemporaneous pairs. Arm order and stage order
+alternate. Record all three stages, stream dependencies, enqueue counters,
+clock/process samples, scratch capacity and zero activation-quantization cost.
+No allocations or host transfers occur inside timed enqueue.
+
+The initial complete-FFN screen needs at least 5% one-row throughput gain and
+a positive lower paired-bootstrap confidence bound. Reports retain all raw
+pairs, 10,000 resamples with seed zero, numerical results and failed variants.
+This is not the E2E promotion gate or authorization to enable a runtime path.
+Four-row fused results include an algorithm/fusion change versus the native
+two-projection/SwiGLU implementation, so report them independently rather than
+attributing that entire gain to load/reduction changes. Prepared down and
+vocabulary remain fixed; whole-model logits/512-token equality remain pending.

@@ -1,6 +1,6 @@
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
-    cuda::{CudaContext, CudaEvent, CudaStream, DeviceBuffer},
+    cuda::{CudaContext, CudaEvent, CudaStream, DeviceBuffer, Q8FfnFp32Variant},
     evaluation::ffn_capture::FfnLayerSamples,
     infer::LoadedModel,
     profile,
@@ -88,6 +88,7 @@ pub(super) struct FfnPipeline<'a> {
     pub isolated_output: GuardedF32,
     start: CudaEvent,
     stop: CudaEvent,
+    pub variant: Option<Q8FfnFp32Variant>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -135,12 +136,20 @@ impl<'a> FfnPipeline<'a> {
             )?,
             start: ctx.create_event()?,
             stop: ctx.create_event()?,
+            variant: None,
         })
     }
 
     pub fn drain(&self) -> Result<()> {
         self.model.cuda.synchronize_stream(CudaStream::Decode)?;
         self.model.cuda.synchronize_stream(CudaStream::Prefill)
+    }
+
+    /// Reuse the same scratch only after its previous producer has finished.
+    pub fn select_variant(&mut self, variant: Option<Q8FfnFp32Variant>) -> Result<()> {
+        self.drain()?;
+        self.variant = variant;
+        Ok(())
     }
 
     fn projection_stream(&self) -> CudaStream {
@@ -191,7 +200,28 @@ impl<'a> FfnPipeline<'a> {
     }
 
     fn enqueue_gate_up_swiglu(&self) -> Result<()> {
-        if self.rows == 1 {
+        if let Some(variant) = self.variant {
+            if self.rows > 1 {
+                // Previous down work on prefill may still consume hidden.
+                self.model.cuda.stream_wait_for_stream(
+                    CudaStream::Decode,
+                    CudaStream::Prefill,
+                    "ffn_bench_fused_hidden_reuse",
+                )?;
+            }
+            unsafe {
+                self.model.cuda.ffn_q8_f32_ablation_async(
+                    self.input.pointer(),
+                    self.gate_weight,
+                    self.up_weight,
+                    self.hidden.pointer(),
+                    self.rows as i32,
+                    self.hidden_dim as i32,
+                    self.d_model as i32,
+                    variant,
+                )?;
+            }
+        } else if self.rows == 1 {
             let fused = unsafe {
                 self.model
                     .try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
@@ -267,11 +297,15 @@ impl<'a> FfnPipeline<'a> {
     pub fn time(&self, stage: Stage, iterations: usize) -> Result<Value> {
         ensure!(iterations > 0, "FFN timing needs at least one iteration");
         self.drain()?;
-        let start_stream = self.projection_stream();
+        let start_stream = if self.variant.is_some() && !matches!(stage, Stage::IsolatedDown) {
+            CudaStream::Decode
+        } else {
+            self.projection_stream()
+        };
         let stop_stream = if matches!(stage, Stage::GateUpSwiglu) {
             CudaStream::Decode
         } else {
-            start_stream
+            self.projection_stream()
         };
         let before = profile::snapshot();
         let started_unix_us = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();

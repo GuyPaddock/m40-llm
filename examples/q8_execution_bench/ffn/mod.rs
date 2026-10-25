@@ -1,3 +1,4 @@
+mod ablation;
 mod fixture;
 mod pipeline;
 mod validation;
@@ -42,7 +43,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let setup_ms = began.elapsed().as_secs_f64() * 1000.0;
     write_record(
         &mut output,
-        json!({"kind":"ffn_baseline_manifest","schema_version":1,
+        json!({"kind":if args.ffn_f32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
         "model":args.model,"model_sha256":inputs.artifact.plan.model_sha256,
         "fixture":args.ffn_inputs,"fixture_sha256":inputs.artifact_sha256,"capture_report":args.ffn_capture_report,
         "capture_report_sha256":inputs.report_sha256,"capture_revision":inputs.manifest["revision"],
@@ -53,7 +54,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "rustc":command_output("rustc", &["--version"])?,"nvcc":command_output("nvcc", &["--version"])?,
         "host_compiler":command_output("g++", &["--version"])?,"cuda_flags":["-O3","sm_52","compute_52","no fast math"],
         "gpu_before":gpu,"prepared_weights":model.q8_execution_stats(),"setup_ms":setup_ms,
+        "memory":{"original_weights":model.weights_len,"prepared_weights":model.q8_execution_stats().resident_bytes,
+            "resident_kv":0,"tracked_device_bytes":CudaContext::total_device_bytes()},
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,
+        "is_fp32_ablation":args.ffn_f32_ablation,
+        "fp32_variants":if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
         "activation_quantization":{"is_enabled":false,"gpu_ms":0.0},
         "control":"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed",
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
@@ -61,7 +66,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     )?;
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
-            let pipeline = FfnPipeline::new(&model, layer, rows)?;
+            let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
+            if args.ffn_f32_ablation {
+                ablation::benchmark_case(&mut output, &mut pipeline, layer, args)?;
+                continue;
+            }
             let checks = validation::validate(&pipeline, layer)?;
             write_record(
                 &mut output,
@@ -116,7 +125,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     );
     write_record(
         &mut output,
-        json!({"kind":"ffn_baseline_complete","is_complete":true,"cases":6,
+        json!({"kind":if args.ffn_f32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
         "device_bytes_before":initial_device_bytes,"device_bytes_after":CudaContext::total_device_bytes(),
         "gpu_after_release":inspect_gpu()?,"scope":"Rust-tracked payload cleanup, not driver context RSS"}),
     )

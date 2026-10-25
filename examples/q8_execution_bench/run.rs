@@ -76,6 +76,9 @@ struct Args {
     ffn_inputs: Option<PathBuf>,
     #[arg(long, requires = "ffn_inputs")]
     ffn_capture_report: Option<PathBuf>,
+    /// Pair the five fixed M03 FP32 kernels against fresh native FFN controls.
+    #[arg(long, requires = "ffn_inputs")]
+    ffn_f32_ablation: bool,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -554,6 +557,13 @@ mod argument_tests {
             "capture.jsonl",
         ];
         assert_eq!(parse(&flags).unwrap().rows, [1, 4]);
+        assert!(!parse(&flags).unwrap().ffn_f32_ablation);
+        assert!(
+            parse(&[flags.as_slice(), &["--ffn-f32-ablation"]].concat())
+                .unwrap()
+                .ffn_f32_ablation
+        );
+        assert!(parse(&["--ffn-f32-ablation"]).is_err());
         assert!(parse(&["--ffn-inputs", "inputs.json"]).is_err());
         assert!(parse(&["--ffn-capture-report", "capture.jsonl"]).is_err());
         for extra in [

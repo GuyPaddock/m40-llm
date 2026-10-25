@@ -115,8 +115,12 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
         &captured.iter().copied().map(f64::from).collect::<Vec<_>>(),
     )?;
     ensure!(
-        rows != 1 || capture_error.bitwise_equal,
-        "single-row native FFN no longer reproduces frozen captured SwiGLU bits"
+        rows != 1
+            || pipeline
+                .variant
+                .is_some_and(|variant| variant.threads() == 128)
+            || capture_error.bitwise_equal,
+        "single-row native/256-thread FFN no longer reproduces frozen captured SwiGLU bits"
     );
     let down = source_bytes(pipeline.model, &layer.source.down)?;
     let down_cpu = project(&hidden, down, &layer.source.down, rows)?;
@@ -131,6 +135,7 @@ pub(super) fn validate(pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> R
         json!({"gate_vs_cpu":gate,"up_vs_cpu":up,"swiglu_vs_cpu":hidden_error,"swiglu_vs_frozen_capture":capture_error,
         "complete_down_vs_cpu_on_actual_swiglu":output,"isolated_down_vs_cpu_on_frozen_swiglu":isolated,
         "guards_and_immutable_inputs":true,"cpu_reference":"scalar Q8_0 dequantization and FP64 accumulation for all output entries; FP64 SiLU/up multiplication",
-        "tolerance":"absolute < 1e-3 + 2e-5 * abs(reference); M=1 captured SwiGLU additionally bit-identical"}),
+        "variant":pipeline.variant,
+        "tolerance":"absolute < 1e-3 + 2e-5 * abs(reference); native/256-thread M=1 captured SwiGLU additionally bit-identical"}),
     )
 }

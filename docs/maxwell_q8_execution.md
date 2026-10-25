@@ -70,7 +70,11 @@ barrier-site counts are not dynamic counts: native uses a loop, whereas the
 new fixed-size scalar/shared reduction is unrolled. Debug resource reports
 are not performance evidence. Occupancy and DRAM traffic were not measured.
 
-Next extend the existing complete-FFN benchmark with paired native controls.
+The existing complete-FFN benchmark now accepts `--ffn-f32-ablation` for
+[paired native controls](ffn_benchmark_inputs.md#bounded-fp32-ffn-screen).
+Release M40 tests verify all five variants through reusable pipeline scratch,
+cross-stream four-row work, full CPU-reference outputs and enqueue counters.
+The real-input five-pair matrix remains to be measured.
 Keep prepared down/vocabulary fixed. The four-row experimental fused kernel
 is a row-batched algorithm extension, not the production four-row two-GEMM
 plus SwiGLU path; report that distinction rather than attributing all M4

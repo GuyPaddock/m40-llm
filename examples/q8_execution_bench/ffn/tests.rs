@@ -5,7 +5,7 @@ use super::{
 };
 use anyhow::Result;
 use m40_llm::{
-    cuda::{CudaContext, CudaStream, DeviceBuffer},
+    cuda::{CudaContext, CudaStream, DeviceBuffer, Q8FfnFp32Variant},
     evaluation::{
         corpus::Corpus,
         ffn_capture::{
@@ -163,6 +163,38 @@ fn test_ffn_numerical_gate_rejects_full_output_drift() -> Result<()> {
     assert!(validation::compare(&[1.0, f32::NAN], &[1.0, 2.0]).is_err());
     assert!(validation::compare(&[1.0], &[1.0, 2.0]).is_err());
     assert!(validation::compare(&[], &[]).is_err());
+    Ok(())
+}
+
+/// Complete-FFN screening needs a reproducible positive paired interval and
+/// at least 5% gain. Bad, tied or regressing timing samples cannot qualify.
+#[test]
+fn test_ffn_screen_requires_reproducible_complete_gain() -> Result<()> {
+    let pairs: Vec<_> = (1..=5).map(|i| (i as f64, i as f64 / 1.1)).collect();
+    let first = super::ablation::summarize(&pairs)?;
+    assert_eq!(first, super::ablation::summarize(&pairs)?);
+    assert_eq!(first["passes_micro_screen"], true);
+    assert!(first["bootstrap_gain_ci95"][0].as_f64().unwrap() > 0.0);
+    for bound in first["bootstrap_gain_ci95"].as_array().unwrap() {
+        assert!((bound.as_f64().unwrap() - 0.1).abs() < 1e-12);
+    }
+    for pairs in [
+        vec![(1.0, 1.0); 5],
+        vec![(1.0, 1.1); 5],
+        vec![(1.0, 0.97); 5],
+    ] {
+        assert_eq!(
+            super::ablation::summarize(&pairs)?["passes_micro_screen"],
+            false
+        );
+    }
+    for pairs in [
+        vec![(1.0, 0.9); 4],
+        vec![(1.0, 0.0); 5],
+        vec![(f64::NAN, 1.0); 5],
+    ] {
+        assert!(super::ablation::summarize(&pairs).is_err());
+    }
     Ok(())
 }
 
@@ -387,6 +419,87 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
                     rows,
                 )?;
                 validation::compare(&pipeline.output.read(&model.cuda)?, &expected_down)?;
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// All five explicit variants reuse one allocation set across native/candidate
+/// switches. Repeated row-batched complete work waits before hidden reuse and
+/// returns CPU-matching outputs without timed allocation, copying or sync.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build(0);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layer = sample_layer(&model)?;
+        for rows in [1, 4] {
+            let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
+            let capacity = pipeline.scratch_bytes();
+            let resident = CudaContext::total_device_bytes();
+            validation::validate(&pipeline, &layer)?;
+            let native_hidden = pipeline.hidden.read(&model.cuda)?;
+            for variant in Q8FfnFp32Variant::ALL {
+                pipeline.select_variant(Some(variant))?;
+                let checks = validation::validate(&pipeline, &layer)?;
+                assert_eq!(checks["guards_and_immutable_inputs"], true);
+                if rows == 1 && variant.threads() == 256 {
+                    assert_eq!(pipeline.hidden.read(&model.cuda)?, native_hidden);
+                }
+                for stage in [
+                    Stage::Complete,
+                    Stage::GateUpSwiglu,
+                    Stage::IsolatedDown,
+                    Stage::Complete,
+                ] {
+                    let timing = pipeline.time(stage, 32)?;
+                    let counters = &timing["enqueue_counters"];
+                    assert_eq!(
+                        counters["launches"],
+                        if matches!(stage, Stage::Complete) {
+                            64
+                        } else {
+                            32
+                        }
+                    );
+                    for key in [
+                        "device_allocs",
+                        "device_frees",
+                        "h2d_copies",
+                        "d2h_copies",
+                        "stream_syncs",
+                        "cublas_calls",
+                    ] {
+                        assert_eq!(counters[key], 0, "{key}");
+                    }
+                }
+                let hidden = pipeline.hidden.read(&model.cuda)?;
+                let expected = validation::project(
+                    &hidden,
+                    super::fixture::source_bytes(&model, &layer.source.down)?,
+                    &layer.source.down,
+                    rows,
+                )?;
+                validation::compare(&pipeline.output.read(&model.cuda)?, &expected)?;
+                pipeline.verify_guards_and_inputs(&layer)?;
+                assert_eq!(pipeline.scratch_bytes(), capacity);
+                assert_eq!(CudaContext::total_device_bytes(), resident);
+                pipeline.select_variant(None)?;
+                pipeline.enqueue(Stage::Complete)?;
+                pipeline.drain()?;
+                assert_eq!(pipeline.hidden.read(&model.cuda)?, native_hidden);
             }
         }
     }
