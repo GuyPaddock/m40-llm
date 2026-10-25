@@ -86,15 +86,18 @@ pub(super) fn benchmark_case(
     let is_followup = args.ffn_f32_factored_scales
         || args.ffn_f32_coalesced_pairs
         || args.ffn_f32_split_planes
-        || args.ffn_f32_split_two_columns;
-    let control = if args.ffn_f32_split_two_columns {
+        || args.ffn_f32_split_two_columns
+        || args.ffn_f32_joint;
+    let control = if args.ffn_f32_split_two_columns || args.ffn_f32_joint {
         FfnKernel::SplitF32x4
     } else if is_followup {
         FfnKernel::Fp32(Q8FfnFp32Variant::PackedWarp128)
     } else {
         FfnKernel::Native
     };
-    let candidates: Vec<_> = if args.ffn_f32_split_two_columns {
+    let candidates: Vec<_> = if args.ffn_f32_joint {
+        vec![FfnKernel::JointF32x4]
+    } else if args.ffn_f32_split_two_columns {
         vec![FfnKernel::SplitF32x4TwoColumns]
     } else if args.ffn_f32_split_planes {
         vec![FfnKernel::SplitF32x4]
@@ -154,10 +157,10 @@ pub(super) fn benchmark_case(
             .iter()
             .zip(&control_output)
             .all(|(a, b)| a.to_bits() == b.to_bits());
-        if args.ffn_f32_split_two_columns {
+        if args.ffn_f32_split_two_columns || args.ffn_f32_joint {
             ensure!(
                 has_control_hidden_bits && has_control_output_bits,
-                "two-column split FFN changed one-column control arithmetic"
+                "split follow-up FFN changed one-column control arithmetic"
             );
         }
         let compare = if variant.has_quantization() {
@@ -257,12 +260,13 @@ pub(super) fn benchmark_case(
                 "gpu_before":gpu_before,"gpu_after":inspect_gpu()?,"activation_quantization_ms":quantization_ms,
                 "is_numerical_track":variant.has_quantization(),
                 "scratch_capacity_bytes":pipeline.scratch_bytes(),"threads":variant.threads(),
-                "additional_prepared_bytes":pipeline.prepared.as_ref().map_or(0,|p|p.bytes),
+                "additional_prepared_bytes":pipeline.prepared.as_ref().map_or(0,|p|p.bytes)+pipeline.joint.as_ref().map_or(0,|p|p.bytes),
+                "joint_prepared_bytes":pipeline.joint.as_ref().map_or(0,|p|p.bytes),
                 "tracked_device_bytes":m40_llm::cuda::CudaContext::total_device_bytes(),
                 "quantization_payload_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()),
                 "quantization_scratch_capacity_bytes":pipeline.quantized.as_ref().map_or(0,|q|q.shape.bytes()+32),
                 "has_packed_loads":variant.has_packed_loads(),"has_warp_reduction":variant.has_warp_reduction(),
-                "scope":if args.ffn_f32_split_two_columns {"fixed two-column split FP32/four-value/128 versus qualified one-column split; identical prepared gate/up and down; no extra allocation or quantization"} else if args.ffn_f32_split_planes {"existing split-plane Q8 weights with four-value FP32 loads versus qualified packed/warp128; same fused geometry and immutable prepared down; added preparation resident for both arms"} else if args.ffn_f32_coalesced_pairs {"adjacent-pair FP32 loads versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if args.ffn_f32_factored_scales {"FP32 scale factoring versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
+                "scope":if args.ffn_f32_joint {"one-column paired gate/up records versus qualified one-column split; both pairs resident in both arms; original FP32 arithmetic and immutable down; no activation quantization"} else if args.ffn_f32_split_two_columns {"fixed two-column split FP32/four-value/128 versus qualified one-column split; identical prepared gate/up and down; no extra allocation or quantization"} else if args.ffn_f32_split_planes {"existing split-plane Q8 weights with four-value FP32 loads versus qualified packed/warp128; same fused geometry and immutable prepared down; added preparation resident for both arms"} else if args.ffn_f32_coalesced_pairs {"adjacent-pair FP32 loads versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if args.ffn_f32_factored_scales {"FP32 scale factoring versus qualified packed/warp128; same fused geometry and immutable prepared down"} else if variant.has_quantization() {"Q8_1 quantization included in candidate gate/up and complete FFN; numerical track, prepared FP32-activation down unchanged"} else if rows==1 {"native one-row split4 load/reduction ablation"} else {"genuine fused rows4 versus production two-projection/SwiGLU path; not a pure load/reduction ablation"}}),
             )?;
         }
         pipeline.verify_guards_and_inputs(layer)?;

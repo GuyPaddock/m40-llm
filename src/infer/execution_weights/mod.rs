@@ -6,7 +6,11 @@ use serde::Serialize;
 
 use crate::gguf::{GgmlDType, GgufTensor};
 
+mod ffn_pair;
 mod runtime;
+#[cfg(feature = "cuda")]
+pub use ffn_pair::DeviceQ8FfnPair;
+pub use ffn_pair::{HostQ8FfnPair, Q8FfnPairKey};
 pub use runtime::{
     Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode, Q8ExecutionStats,
     Q8PreparedTensorStats, Q8ProjectionGroup,

@@ -22,6 +22,7 @@ pub(super) enum FfnKernel {
     Q81(Q8FfnQ81Launch),
     SplitF32x4,
     SplitF32x4TwoColumns,
+    JointF32x4,
 }
 
 impl Serialize for FfnKernel {
@@ -32,6 +33,7 @@ impl Serialize for FfnKernel {
             Self::Q81(launch) => launch.serialize(serializer),
             Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
             Self::SplitF32x4TwoColumns => serializer.serialize_str("split-f32x4-cols2-128"),
+            Self::JointF32x4 => serializer.serialize_str("joint-f32x4-128"),
         }
     }
 }
@@ -46,7 +48,10 @@ impl FfnKernel {
     }
 
     pub fn has_split_weights(self) -> bool {
-        matches!(self, Self::SplitF32x4 | Self::SplitF32x4TwoColumns)
+        matches!(
+            self,
+            Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4
+        )
     }
 
     pub fn threads(self) -> u32 {
@@ -54,7 +59,7 @@ impl FfnKernel {
             Self::Native => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::SplitF32x4 | Self::SplitF32x4TwoColumns => 128,
+            Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => 128,
         }
     }
 
@@ -62,7 +67,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns => true,
+            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => true,
         }
     }
 
@@ -70,7 +75,7 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns => true,
+            Self::Q81(_) | Self::SplitF32x4 | Self::SplitF32x4TwoColumns | Self::JointF32x4 => true,
         }
     }
 }
@@ -192,6 +197,7 @@ pub(super) struct FfnPipeline<'a> {
     pub kernel: FfnKernel,
     pub quantized: Option<GuardedQ8Activation>,
     pub prepared: Option<super::prepared::PreparedFfnWeights>,
+    pub joint: Option<super::joint::JointFfnWeights>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -242,6 +248,7 @@ impl<'a> FfnPipeline<'a> {
             kernel: FfnKernel::Native,
             quantized: None,
             prepared: None,
+            joint: None,
         })
     }
 
@@ -252,6 +259,10 @@ impl<'a> FfnPipeline<'a> {
 
     /// Reuse the same scratch only after its previous producer has finished.
     pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
+        ensure!(
+            kernel != FfnKernel::JointF32x4 || self.joint.is_some(),
+            "prepare joint FFN weights before selecting the candidate"
+        );
         ensure!(
             !kernel.has_split_weights() || self.prepared.is_some(),
             "prepare split FFN weights before selecting the candidate"
@@ -296,6 +307,22 @@ impl<'a> FfnPipeline<'a> {
                 CudaStream::Prefill,
                 "ffn_bench_split_hidden_reuse",
             )?;
+        }
+        if self.kernel == FfnKernel::JointF32x4 {
+            let joint = self.joint.as_ref().context("missing joint FFN weights")?;
+            ensure!(
+                joint.device.key().gate.shape().input_dim() == self.d_model
+                    && joint.device.key().gate.shape().output_dim() == self.hidden_dim,
+                "joint FFN prepared shape mismatch"
+            );
+            return unsafe {
+                joint.device.enqueue_async(
+                    self.input.pointer(),
+                    self.hidden.pointer(),
+                    self.rows as i32,
+                    has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+                )
+            };
         }
         let prepared = self
             .prepared
@@ -617,6 +644,9 @@ impl<'a> FfnPipeline<'a> {
         self.drain()?;
         if let Some(prepared) = &self.prepared {
             prepared.verify()?;
+        }
+        if let Some(joint) = &self.joint {
+            joint.verify()?;
         }
         if let Some(quantized) = &self.quantized {
             quantized.read(&self.model.cuda)?;

@@ -217,6 +217,29 @@ The [completed screen](experiments/2026-10-25-maxwell-split-cols2-screen.md)
 regresses 5.85-6.01% at one row despite bitwise parity. It remains
 benchmark-only; do not widen the column search or enable it in generation.
 
+### Bounded Joint Gate/Up Packing Follow-Up
+
+The [instruction audit](experiments/2026-10-25-maxwell-joint-ffn-audit.md)
+motivates `--ffn-f32-joint` in the same shared FFN benchmark. It compares one
+fixed one-column/four-value/128-thread consumer of paired gate/up payloads
+and scales against the qualified separate-plane one-column control. Both
+retain original FP32 activation and per-weight arithmetic. No generation
+configuration or runtime default selects this benchmark candidate.
+
+`HostQ8FfnPair::pack` preserves both source identities and every stored bit;
+`DeviceQ8FfnPair` owns two RAII buffers. Payload records are eight bytes,
+gate's four signed bytes followed by up's four; scale records are four
+bytes containing the original two FP16 encodings. The unsafe enqueue API
+requires 16-byte-aligned FP32 input, eight-byte-aligned paired payloads,
+four-byte-aligned scales/outputs, ordered producers and live spans through
+decode completion. It allocates, copies and synchronizes nothing per call.
+
+Benchmark setup retains both the control and joint layouts for both arms.
+Report the joint pair and combined preparation bytes separately; each Qwen
+pair is 47,906,816 bytes, so combined preparation is 95,813,632 bytes. Reject
+combined preparation above 128 MiB before packing the joint pair. CPU/bitwise,
+guard, cleanup and complete-FFN timing gates precede any runtime work.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,

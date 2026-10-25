@@ -521,7 +521,8 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
 
 /// Original and follow-up variants, including prepared split planes, reuse
 /// one allocation set across kernel switches, including the two-column
-/// split consumer with identical one-column results. Repeated row-batched complete work waits before hidden reuse and
+/// split and joint-record consumers with identical one-column results.
+/// Repeated row-batched complete work waits before hidden reuse and
 /// returns CPU-matching outputs without timed allocation, copying or sync.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
@@ -545,10 +546,17 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
             assert!(pipeline
                 .select_kernel(FfnKernel::SplitF32x4TwoColumns)
                 .is_err());
+            assert!(pipeline.select_kernel(FfnKernel::JointF32x4).is_err());
             let qualified = serde_json::to_value(model.q8_execution_stats())?;
             pipeline.prepare_split_weights(&layer)?;
             assert!(pipeline.prepare_split_weights(&layer).is_err());
             assert!(pipeline.prepared.as_ref().unwrap().bytes > 0);
+            pipeline.joint = Some(super::joint::JointFfnWeights::new(
+                &model,
+                &layer,
+                pipeline.prepared.as_ref().unwrap().bytes,
+            )?);
+            assert!(pipeline.joint.as_ref().unwrap().bytes > 0);
             let capacity = pipeline.scratch_bytes();
             let resident = CudaContext::total_device_bytes();
             validation::validate(&pipeline, &layer)?;
@@ -562,7 +570,11 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                     Q8FfnFp32Variant::PackedWarp128CoalescedPairs,
                 ])
                 .map(FfnKernel::Fp32)
-                .chain([FfnKernel::SplitF32x4, FfnKernel::SplitF32x4TwoColumns])
+                .chain([
+                    FfnKernel::SplitF32x4,
+                    FfnKernel::SplitF32x4TwoColumns,
+                    FfnKernel::JointF32x4,
+                ])
             {
                 pipeline.select_kernel(kernel)?;
                 let checks = validation::validate(&pipeline, &layer)?;
@@ -573,7 +585,10 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
                 if kernel == FfnKernel::SplitF32x4 {
                     split_hidden = Some(pipeline.hidden.read(&model.cuda)?);
                     split_output = Some(pipeline.output.read(&model.cuda)?);
-                } else if kernel == FfnKernel::SplitF32x4TwoColumns {
+                } else if matches!(
+                    kernel,
+                    FfnKernel::SplitF32x4TwoColumns | FfnKernel::JointF32x4
+                ) {
                     assert_eq!(
                         pipeline.hidden.read(&model.cuda)?,
                         *split_hidden.as_ref().unwrap()
@@ -636,7 +651,7 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
     Ok(())
 }
 
-/// Split-plane dispatch has a distinct report identity while legacy native
+/// Split-plane and joint dispatch have distinct report identities while legacy native
 /// and packed variants retain their existing JSON values.
 #[test]
 fn test_split_ffn_reports_do_not_alias_native_or_packed_controls() -> Result<()> {
@@ -652,6 +667,10 @@ fn test_split_ffn_reports_do_not_alias_native_or_packed_controls() -> Result<()>
     assert_eq!(
         serde_json::to_value(FfnKernel::SplitF32x4TwoColumns)?,
         "split-f32x4-cols2-128"
+    );
+    assert_eq!(
+        serde_json::to_value(FfnKernel::JointF32x4)?,
+        "joint-f32x4-128"
     );
     Ok(())
 }

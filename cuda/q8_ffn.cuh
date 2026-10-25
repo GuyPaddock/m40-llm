@@ -130,6 +130,49 @@ __global__ void gate_up_split_f32x4_two_columns(
     }
 }
 
+// Lossless joint gate/up records: same one-column task assignment and math,
+// but one paired payload and one paired scale address per task.
+__global__ void gate_up_joint_f32x4(
+    const float* __restrict__ input, const uint32_t* __restrict__ scales,
+    const uint2* __restrict__ payload, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output, int hidden, int k) {
+    const int column = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int tasks = k / 4;
+    const size_t value_base = static_cast<size_t>(column) * tasks;
+    const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    float gate_acc = 0.0f, up_acc = 0.0f;
+    for (int task = tid; task < tasks; task += 128) {
+        const float4 a = activation[task];
+        const uint2 q = payload[value_base + task];
+        const uint32_t s = scales[scale_base + task / 8];
+        const float gs = __half2float(__ushort_as_half(static_cast<unsigned short>(s)));
+        const float us = __half2float(__ushort_as_half(static_cast<unsigned short>(s >> 16)));
+        const float values[4] = {a.x, a.y, a.z, a.w};
+        #pragma unroll
+        for (int index = 0; index < 4; ++index) {
+            gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(q.x >> (index * 8))) * gs);
+            up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(q.y >> (index * 8))) * us);
+        }
+    }
+    extern __shared__ float published[];
+    published[tid] = gate_acc;
+    published[tid + 128] = up_acc;
+    __syncthreads();
+    if (tid < 32) {
+        const float g = reduce_published<128>(published, tid);
+        const float u = reduce_published<128>(published + 128, tid);
+        if (tid == 0) {
+            const size_t index = static_cast<size_t>(row) * hidden + column;
+            output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (gate_output) gate_output[index] = g;
+            if (up_output) up_output[index] = u;
+        }
+    }
+}
+
 template<int Columns>
 int launch_split_f32(
     M40llmCudaContext* ctx, const void* input, const void* const* scales,
@@ -167,6 +210,25 @@ extern "C" int m40llm_ffn_q8_split_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<1>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_joint_f32_async(
+    M40llmCudaContext* ctx, const void* input, const void* scales,
+    const void* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    if (!ctx || !input || !scales || !values || !output || input == output) return -1;
+    if ((rows != 1 && rows != 4) || hidden <= 0 || k <= 0 || k % 32 ||
+        reinterpret_cast<uintptr_t>(input) % 16 || reinterpret_cast<uintptr_t>(output) % 4 ||
+        reinterpret_cast<uintptr_t>(scales) % 4 || reinterpret_cast<uintptr_t>(values) % 8) return -2;
+    if (gate_output || up_output) {
+        if (!gate_output || !up_output || gate_output == up_output || gate_output == output ||
+            up_output == output || gate_output == input || up_output == input ||
+            reinterpret_cast<uintptr_t>(gate_output) % 4 || reinterpret_cast<uintptr_t>(up_output) % 4) return -3;
+    }
+    m40llm_q8_ffn::gate_up_joint_f32x4<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+        static_cast<const float*>(input),static_cast<const uint32_t*>(scales),static_cast<const uint2*>(values),
+        static_cast<float*>(output),static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    return cudaGetLastError() == cudaSuccess ? 0 : -4;
 }
 
 extern "C" int m40llm_ffn_q8_split_f32_two_columns_async(

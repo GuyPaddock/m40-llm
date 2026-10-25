@@ -104,6 +104,80 @@ impl Q8FfnFp32Variant {
 }
 
 impl CudaContext {
+    /// Enqueue the fixed one-column joint gate/up layout on decode.
+    /// No allocation, transfer or synchronization occurs.
+    ///
+    /// # Safety
+    /// All buffers belong to this context and survive decode completion, with
+    /// producers ordered before decode. Input holds rows*K f32 at 16-byte
+    /// alignment; outputs hold rows*hidden f32 at four-byte alignment. Scales
+    /// hold hidden*(K/32) paired original u16 records at four-byte alignment;
+    /// values hold hidden*(K/4) paired u32 records at eight-byte alignment.
+    /// Every input, weight and output span is disjoint from output spans.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_joint_f32_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        ensure!(
+            matches!(rows, 1 | 4) && hidden > 0 && k > 0 && k % 32 == 0,
+            "joint FP32 FFN requires rows 1/4 and complete Q8 blocks"
+        );
+        ensure!(
+            !input.is_null()
+                && !output.is_null()
+                && input != output.cast_const()
+                && (input as usize).is_multiple_of(16)
+                && (output as usize).is_multiple_of(4),
+            "joint FP32 FFN requires disjoint input/output and 16-byte input alignment"
+        );
+        ensure!(
+            !scales.is_null()
+                && !values.is_null()
+                && (scales as usize).is_multiple_of(4)
+                && (values as usize).is_multiple_of(8),
+            "joint FP32 FFN requires aligned paired scale/payload records"
+        );
+        let (g, u) = intermediates.unwrap_or((std::ptr::null_mut(), std::ptr::null_mut()));
+        if intermediates.is_some() {
+            ensure!(
+                !g.is_null()
+                    && !u.is_null()
+                    && g != u
+                    && g != output
+                    && u != output
+                    && g.cast_const() != input
+                    && u.cast_const() != input
+                    && (g as usize).is_multiple_of(4)
+                    && (u as usize).is_multiple_of(4),
+                "invalid joint FP32 FFN intermediate outputs"
+            );
+        }
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_ffn_q8_joint_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            g,
+            u,
+            rows,
+            hidden,
+            k,
+        );
+        ensure!(rc == 0, "m40llm_ffn_q8_joint_f32_async failed: {rc}");
+        record_async_kernel("ffn_q8_joint_f32x4_128");
+        Ok(())
+    }
+
     /// Fixed 128-thread/four-value FP32 experiment on existing separate planes.
     /// Optional intermediates use the same kernel; no setup or sync occurs here.
     ///
