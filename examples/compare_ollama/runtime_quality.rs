@@ -6,6 +6,18 @@ use std::{collections::BTreeSet, path::Path};
 pub(super) struct QualityEvidence {
     pub record: Value,
     pub passes_exact_gate: bool,
+    pub expected_output: String,
+    expected_token_ids: Vec<u32>,
+}
+
+impl QualityEvidence {
+    pub fn verify_generation(&self, token_ids: &[u32], output: &str) -> Result<()> {
+        ensure!(
+            self.expected_output == output && self.expected_token_ids == token_ids,
+            "actual runtime generation differs from completed quality evidence; rerun quality"
+        );
+        Ok(())
+    }
 }
 
 fn only_record<'a>(rows: &'a [Value], kind: &str) -> Result<&'a Value> {
@@ -148,8 +160,19 @@ pub(super) fn load(
         .collect::<Result<Vec<Value>, _>>()?;
     let corpus = std::fs::read("data/research_quality/v1.json")?;
     let passes_exact_gate = validate(&rows, config, model_sha, &corpus, prompt_ids)?;
+    let candidate = rows
+        .iter()
+        .find(|row| row["kind"] == "q8_runtime_browser_generation" && row["label"] == "candidate")
+        .context("candidate quality generation")?;
     Ok(QualityEvidence {
         passes_exact_gate,
+        expected_output: candidate["generation"]["output"]
+            .as_str()
+            .context("quality output")?
+            .to_owned(),
+        expected_token_ids: serde_json::from_value(
+            candidate["generation"]["generated_token_ids"].clone(),
+        )?,
         record: json!({"kind":"q8_runtime_quality_evidence",
         "path":std::fs::canonicalize(path)?,"sha256":sha256_file(path)?,"candidate_config":config,
         "manifest":only_record(&rows,"q8_runtime_manifest")?,"summary":only_record(&rows,"q8_runtime_summary")?,
@@ -160,6 +183,23 @@ pub(super) fn load(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A valid report cannot qualify a later runtime with changed actual IDs
+    /// or output, even when its model/configuration names still match.
+    #[test]
+    fn test_completed_quality_requires_actual_generation_match() -> Result<()> {
+        let evidence = QualityEvidence {
+            record: json!({}),
+            passes_exact_gate: true,
+            expected_output: "ready".into(),
+            expected_token_ids: vec![3, 4, 5],
+        };
+        evidence.verify_generation(&[3, 4, 5], "ready")?;
+        assert!(evidence.verify_generation(&[3, 7, 5], "ready").is_err());
+        assert!(evidence.verify_generation(&[3, 4], "ready").is_err());
+        assert!(evidence.verify_generation(&[3, 4, 5], "changed").is_err());
+        Ok(())
+    }
 
     /// Missing or duplicate completion evidence must not qualify a timing run;
     /// a report from another model or another candidate must fail preflight.

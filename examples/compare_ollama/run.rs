@@ -76,6 +76,9 @@ struct Args {
     /// Completed model_quality report for this exact candidate/source/corpus.
     #[arg(long, requires = "q8_runtime_candidate")]
     q8_runtime_quality_report: Option<PathBuf>,
+    /// Time the selected qualified runtime against Ollama, not native FFN.
+    #[arg(long = "time-ollama", requires = "q8_runtime_candidate")]
+    should_time_ollama: bool,
 }
 
 impl Args {
@@ -83,6 +86,16 @@ impl Args {
         self.q8_runtime_candidate.map(|ffn| RuntimeConfig {
             ffn,
             prefill: self.q8_runtime_prefill.unwrap_or_default(),
+        })
+    }
+
+    fn primary_runtime_config(&self) -> Option<RuntimeConfig> {
+        self.candidate_runtime_config().map(|candidate| {
+            if self.should_time_ollama {
+                candidate
+            } else {
+                RuntimeConfig::default()
+            }
         })
     }
 
@@ -231,6 +244,7 @@ struct ComparisonRun {
     gpu_uuid: String,
     runner_url: String,
     report: Report,
+    selected_quality: Option<runtime_quality::QualityEvidence>,
 }
 
 fn checked_command(program: &str, args: &[&str]) -> Result<String> {
@@ -480,7 +494,16 @@ impl ComparisonRun {
             metrics.generated_tokens,
             stop,
             self.prompt_ids.len(),
-        );
+        )
+        .and_then(|()| {
+            if let Some(evidence) = &self.selected_quality {
+                ensure!(
+                    evidence.expected_output == response.output,
+                    "timed runtime output differs from completed quality evidence"
+                );
+            }
+            Ok(())
+        });
         let tps = metrics.generated_tokens as f64 * 1000.0 / wall_ms;
         let execution = server.state.model.q8_execution_stats();
         let (activation_bytes, temporary_weight_bytes) = server
@@ -521,6 +544,7 @@ impl ComparisonRun {
             "head128_threads": std::env::var("M40LLM_ATTN_HEAD128_THREADS").ok(),
             "head128_workspace_bytes": server.state.model.kv_cache.as_ref().map(|kv| kv.head128_attention_workspace_bytes()),
             "is_fixed_workload": validation.is_ok(), "invalid_reason": validation.as_ref().err().map(|e| e.to_string()),
+            "matches_completed_quality_output":self.selected_quality.as_ref().map(|e|e.expected_output==response.output),
             "cache": {"reused_prompt_tokens": 0, "evaluated_prompt_tokens": metrics.prompt_tokens, "reset": "generate_text reset_kv_cache=true"},
             "gpu_before": before, "gpu_after": gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?,
             "output": response.output, "output_sha256": sha256_bytes(response.output.as_bytes())?,
@@ -578,6 +602,7 @@ impl ComparisonRun {
         phase: &str,
         start: usize,
         end: usize,
+        expected_outputs: &(String, String),
         pairs: &mut Vec<Pair>,
     ) -> Result<(String, String)> {
         let mut last_outputs = (String::new(), String::new());
@@ -594,6 +619,10 @@ impl ComparisonRun {
             ensure!(
                 m40.is_fixed_workload && ollama.is_fixed_workload,
                 "invalid pair {pair}; raw rows retained, no fixed-workload claim permitted"
+            );
+            ensure!(
+                m40.output == expected_outputs.0 && ollama.output == expected_outputs.1,
+                "engine output changed after warmup; raw rows retained"
             );
             eprintln!(
                 "[{phase} pair {pair}] m40={:.3} ollama={:.3} HTTP E2E tok/s",
@@ -671,8 +700,8 @@ impl ComparisonRun {
         Ok(generated.token_ids[generated.prompt_token_len..].to_vec())
     }
 
-    async fn capture_traces(&mut self, last_outputs: &(String, String)) -> Result<()> {
-        self.capture_m40_trace(&last_outputs.0).await?;
+    async fn capture_traces(&mut self, last_outputs: &(String, String)) -> Result<Vec<u32>> {
+        let m40_ids = self.capture_m40_trace(&last_outputs.0).await?;
         let response: Value = self
             .client
             .post(format!("{}/completion", self.runner_url))
@@ -707,7 +736,7 @@ impl ComparisonRun {
             "trace_source": "same Ollama native runner /completion return_tokens=true",
             "generation_settings": response["generation_settings"],
         }))?;
-        Ok(())
+        Ok(m40_ids)
     }
 
     async fn run_attention_pairs(
@@ -905,6 +934,7 @@ pub async fn compare() -> Result<()> {
     let args = Args::parse();
     let candidate_q8_config = args.candidate_q8_config()?;
     let candidate_runtime = args.candidate_runtime_config();
+    let primary_runtime = args.primary_runtime_config();
     ensure!(
         Path::new(&format!("/proc/{}", args.ollama_pid)).exists(),
         "Ollama PID is not live"
@@ -1018,6 +1048,21 @@ pub async fn compare() -> Result<()> {
     let replacement_ids =
         tokenizer.encode_with_specials(protocol::REPLACEMENT_PROMPT, false, false)?;
     protocol::validate_replacement_ids(&prompt_ids, &replacement_ids)?;
+    let selected_quality = if args.should_time_ollama {
+        let evidence = runtime_quality::load(
+            args.q8_runtime_quality_report
+                .as_deref()
+                .context("selected quality report")?,
+            candidate_runtime.context("selected runtime")?,
+            &model_sha256,
+            &prompt_ids,
+        )?;
+        ensure!(evidence.passes_exact_gate,
+            "selected-runtime Ollama qualification requires a passing exact quality report; use candidate-pair mode for numerical/failed-gate diagnostics");
+        Some(evidence)
+    } else {
+        None
+    };
     let load_start = Instant::now();
     let bytes = std::fs::read(&args.model)?;
     let control_execution = if candidate_runtime.is_some() {
@@ -1027,8 +1072,18 @@ pub async fn compare() -> Result<()> {
     } else {
         Q8ExecutionConfig::from_env()?
     };
-    let mut model =
-        LoadedModel::from_gguf_with_q8_execution(gguf_model, bytes, -1, control_execution)?;
+    let mut model = if let Some(config) = primary_runtime {
+        LoadedModel::from_gguf_with_q8_backends(
+            gguf_model,
+            bytes,
+            -1,
+            control_execution,
+            config.ffn_config()?,
+            config.prefill_backend(),
+        )?
+    } else {
+        LoadedModel::from_gguf_with_q8_execution(gguf_model, bytes, -1, control_execution)?
+    };
     let props = model.cuda.current_device_props()?;
     ensure!(
         props.major == 5 && props.minor == 2,
@@ -1050,7 +1105,7 @@ pub async fn compare() -> Result<()> {
         ],
     )?;
     let gpu = gpu_snapshot(args.ollama_pid, &gpu_uuid)?;
-    report.record(json!({
+    let mut manifest = json!({
         "kind": "manifest", "created_unix_s": SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
         "model_path": args.model, "model_sha256": model_sha256, "ollama_model_path": ollama_model_path,
         "ollama_model": args.ollama_model, "ollama_version": ollama_version,
@@ -1067,12 +1122,18 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
-        "comparison_kind": if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "comparison_kind": if args.should_time_ollama { "selected-runtime-vs-ollama" } else if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
         "candidate_runtime_config":candidate_runtime,
         "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
-    }))?;
+    });
+    manifest["primary_runtime_config"] = serde_json::to_value(primary_runtime)?;
+    manifest["prefill_execution_contract"] = json!(super::q8_runtime::PREFILL_EXECUTION_CONTRACT);
+    report.record(manifest)?;
+    if let Some(evidence) = &selected_quality {
+        report.record(evidence.record.clone())?;
+    }
     let (oracle, _) = post_ollama(&client, &args, &prompt, 1).await?;
     let startup_log = std::fs::read_to_string(&args.ollama_log)?;
     let runner_url = protocol::discover_runner_url(&startup_log)?;
@@ -1106,8 +1167,8 @@ pub async fn compare() -> Result<()> {
         .collect();
     report.record(json!({"kind": "ollama_backend_verification", "runner_lines": offload_lines, "gpu": gpu_snapshot(args.ollama_pid, &gpu_uuid)?}))?;
     report.record(json!({"kind": "tokenizer_oracle", "prompt_token_ids": oracle_prompt_ids, "replacement_token_ids": oracle_replacement_ids, "is_equal": true, "cold_ollama_load_ms": oracle.load_duration as f64 / 1e6, "source": runner_url}))?;
-    let server = if candidate_runtime.is_some() {
-        start_server_with_prefill(model, PromptPrefill::Sequential).await?
+    let server = if let Some(config) = primary_runtime {
+        start_server_with_prefill(model, config.prompt_prefill()).await?
     } else {
         start_server(model).await?
     };
@@ -1122,8 +1183,11 @@ pub async fn compare() -> Result<()> {
         gpu_uuid,
         runner_url,
         report,
+        selected_quality,
     };
-    if run.args.q8_execution_mode.is_some() || run.args.q8_runtime_candidate.is_some() {
+    if run.args.q8_execution_mode.is_some()
+        || (run.args.q8_runtime_candidate.is_some() && !run.args.should_time_ollama)
+    {
         return run.compare_q8_execution().await;
     }
     if run.args.should_compare_stage_profile {
@@ -1132,22 +1196,29 @@ pub async fn compare() -> Result<()> {
     if run.args.should_compare_head128 {
         return run.compare_head128_attention().await;
     }
+    let m40_warmup = run.measure_m40("warmup", 0).await?;
     ensure!(
-        run.measure_m40("warmup", 0).await?.is_fixed_workload,
+        m40_warmup.is_fixed_workload,
         "m40 warmup did not match the fixed workload; inspect retained row before timing"
     );
+    let ollama_warmup = run.measure_ollama("warmup", 0).await?;
     ensure!(
-        run.measure_ollama("warmup", 0).await?.is_fixed_workload,
+        ollama_warmup.is_fixed_workload,
         "Ollama warmup did not verify the workload/cache reset; inspect retained row before timing"
     );
+    let expected_outputs = (m40_warmup.output, ollama_warmup.output);
     let mut pairs = Vec::new();
-    let mut last_outputs = run.run_pairs("screen", 0, 5, &mut pairs).await?;
+    let mut last_outputs = run
+        .run_pairs("screen", 0, 5, &expected_outputs, &mut pairs)
+        .await?;
     let mut comparison = protocol::compare_pairs(&pairs)?;
     run.report
         .record(json!({"kind": "summary", "phase": "screen5", "comparison": comparison}))?;
     let mut next = protocol::next_trial_count(&comparison, false)?;
     if next == Some(10) {
-        last_outputs = run.run_pairs("screen", 5, 10, &mut pairs).await?;
+        last_outputs = run
+            .run_pairs("screen", 5, 10, &expected_outputs, &mut pairs)
+            .await?;
         comparison = protocol::compare_pairs(&pairs)?;
         run.report
             .record(json!({"kind": "summary", "phase": "screen10", "comparison": comparison}))?;
@@ -1157,7 +1228,7 @@ pub async fn compare() -> Result<()> {
         eprintln!("Borderline screen; collecting exactly twenty fresh confirmation pairs.");
         let mut confirmation = Vec::new();
         last_outputs = run
-            .run_pairs("confirmation", 0, 20, &mut confirmation)
+            .run_pairs("confirmation", 0, 20, &expected_outputs, &mut confirmation)
             .await?;
         comparison = protocol::compare_pairs(&confirmation)?;
         protocol::next_trial_count(&comparison, true)?;
@@ -1165,7 +1236,16 @@ pub async fn compare() -> Result<()> {
             json!({"kind": "summary", "phase": "confirmation20", "comparison": comparison}),
         )?;
     }
-    run.capture_traces(&last_outputs).await?;
+    let m40_ids = run.capture_traces(&last_outputs).await?;
+    if let Some(evidence) = &run.selected_quality {
+        evidence.verify_generation(&m40_ids, &last_outputs.0)?;
+        run.report.record(json!({"kind":"selected_runtime_ollama_qualification",
+            "runtime_config":candidate_runtime,"passes_completed_exact_quality":true,
+            "actual_ids_match_completed_quality":true,"actual_generated_tokens":m40_ids.len(),
+            "reaches_original_target":comparison.reaches_original_target,
+            "required_absolute_http_tps":53.06,"required_relative_http_tps":1.30*comparison.control.median,
+            "changes_runtime_defaults":false}))?;
+    }
     eprintln!("{}", serde_json::to_string_pretty(&comparison)?);
     eprintln!("Raw evidence: {}", run.args.output.display());
     if comparison.reaches_original_target {

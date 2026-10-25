@@ -364,4 +364,32 @@ mod tests {
         }
         Ok(())
     }
+
+    /// Ordinary candidate pairs keep native control, while explicit Ollama
+    /// timing loads the selected FFN/prefill only with matching quality input.
+    #[test]
+    fn test_ollama_timing_selects_primary_runtime_explicitly() -> Result<()> {
+        let values = [
+            "--compare-q8-runtime",
+            "packed-f32-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+        ];
+        let paired = parse_args(&values)?;
+        assert_eq!(paired.primary_runtime_config(), Some(Default::default()));
+        let selected = parse_args(&[values.as_slice(), &["--time-ollama"]].concat())?;
+        assert_eq!(
+            selected.primary_runtime_config(),
+            selected.candidate_runtime_config()
+        );
+        let config = selected.primary_runtime_config().unwrap();
+        assert_eq!(config.ffn_config()?.threads(), Some(128));
+        assert!(!config.prefill_backend().is_native());
+        assert!(parse_args(&["--time-ollama"]).is_err());
+        assert!(parse_args(&["--time-ollama", "--compare-q8-runtime", "native"]).is_err());
+        assert!(parse_args(&[]).unwrap().primary_runtime_config().is_none());
+        Ok(())
+    }
 }

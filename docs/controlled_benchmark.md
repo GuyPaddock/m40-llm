@@ -93,6 +93,23 @@ temporary-weight capacity. No extra full-logit readback enters timed requests.
 Ollama supplies the untimed tokenizer/oracle check in candidate-pair mode;
 those pairs alone do not establish the fresh 1.30x-Ollama goal.
 
+For a fresh M09 comparison against Ollama, add `--time-ollama` to the same
+explicit runtime/evidence arguments. This loads the selected FFN/prefill
+configuration as the only M40 model and uses the ordinary alternating
+Ollama/M40 HTTP protocol. It requires a passing exact quality report with
+the corrected prefix-completion contract; numerical or failed-quality
+reports are rejected before loading the runtime. Candidate-pair mode remains
+available for those diagnostics.
+
+Every timed M40 output must match the completed quality output. Both engines
+must keep their own warmup output throughout the pairs. Untimed actual M40
+IDs must also match the quality report before the final
+`selected_runtime_ollama_qualification` record is emitted. Neither identical
+text across engines nor identical cross-engine arithmetic is assumed.
+The final record reports both the fixed 53.06 HTTP tok/s requirement and
+1.30x that run's fresh Ollama median. A summary without the final verified
+record is not completed qualification. Runtime defaults remain unchanged.
+
 ### Baseline Command
 
 Build and execute through the project environment with hardware access:
