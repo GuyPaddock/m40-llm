@@ -40,8 +40,11 @@ preserve bits and confirm three total loads per task instead of five, but
 complete one-row gains are only **4.66-4.74%**, below the unchanged 5% gate.
 Keep `8881763` benchmark-only, without runtime integration or more packing/
 geometry tuning. Both arms retained 95,813,632 bytes of control plus joint
-preparation. Next require an independent remaining-bottleneck hypothesis,
-not another variant to rescue this near miss. Prepared down/head and
+preparation. An independent
+[fixed-width address/loop hypothesis](experiments/2026-10-25-maxwell-fixed-k-ffn-hypothesis.md)
+now identifies 21 static prologue XMAD sites and runtime loop control despite
+Qwen gate/up always using K=2048. Test one compile-time-width specialization
+on the original separate planes, not a joint-layout rescue. Prepared down/head and
 original micro/quality/HTTP gates remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
