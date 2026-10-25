@@ -1,0 +1,11 @@
+d31ea0ea21d01b148573508c9ebe9b76c1d00ba314ff03ed774f0a391dddd039  docs/experiments/2026-10-25-maxwell-split-http-audit.jq
+84206fb72f338d31f0a479560dc8d02157ce03891c874bd7f6ad4a47a7b52734  docs/experiments/2026-10-25-maxwell-split-incremental-http.md
+c9822d2ccb3ebbd08d59810125b5f04a03d01e5e9dc7210149570e1fd6785f6d  docs/experiments/2026-10-25-maxwell-split-incremental-http.jsonl
+fc76047c7c3dfba85c020812d97a2a51c62e03fcb1d3e5b1b5b61d7d4364fcf7  docs/experiments/2026-10-25-maxwell-split-incremental-http-audit.json
+038bcdd131c7c93391cd605af882368df8a84d7c414404445fe0a177435ed778  docs/experiments/2026-10-25-maxwell-split-incremental-http.log.gz
+ff8158cb116df1f052ff041d2f22103379320af6faa198224ac3c04bfa3f8fb7  docs/experiments/2026-10-25-maxwell-split-ollama-http.md
+8a45a0a35c9c724b07686c1cc11a9ee58bb25916271908c0a8b0f9058c09840d  docs/experiments/2026-10-25-maxwell-split-ollama-http.jsonl
+3a615e6bd77f6b1389d6904f400829f9784c37bb3dfcd71c6a33eb1f4289fab3  docs/experiments/2026-10-25-maxwell-split-ollama-http-audit.json
+a62f8c99f7ccfcaebb09d709784cfb406276f0fe556904a67da86a1edbbdb023  docs/experiments/2026-10-25-maxwell-split-ollama-http.log.gz
+dc0c466d71823b2debaf3e10b5d966dd0905ac8deedeb0d1804410452afccfb7  docs/experiments/2026-10-25-maxwell-split-ollama.log.gz
+b1dc325b00383f61fb64aaa66a5ad4c0ef8bfbde1d4a0fd71c79009d62e190f4  docs/experiments/2026-10-25-maxwell-split-ollama-preflight-failed.log.gz

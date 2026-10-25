@@ -2,6 +2,28 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Split-Plane FFN Passes HTTP Qualification
+
+Release Qwen2.5-3B Q8_0, dense context 1024, canonical 65 prompt IDs and
+512 actual generated tokens. The fixed FP32 split-plane FFN retains the
+qualified prepared down/vocabulary and dequant-SGEMM prefix.
+
+| Five alternating pairs | Control HTTP tok/s | Candidate HTTP tok/s | Gain | Paired 95% gain interval |
+| --- | ---: | ---: | ---: | ---: |
+| [Incremental vs packed128/SGEMM](experiments/2026-10-25-maxwell-split-incremental-http.md) | 41.204821 | 44.971790 | +9.142060% | +9.080723% to +9.295892% |
+| [Fresh official Ollama 0.40.11](experiments/2026-10-25-maxwell-split-ollama-http.md) | 43.119374 | 45.075177 | +4.535786% | +4.360502% to +4.637279% |
+
+All actual M40 IDs and timed outputs bind passing quality; both comparisons
+pass the fixed timing gate without trial extension. Every primary boundary
+records 1113/3004 MHz clocks, and every prompt cache reset is verified.
+Inference is serial; the owned Ollama server is stopped and the GPU ends empty.
+
+The measured Ollama gap is closed for this workload, but both original goals
+remain unmet: **53.06 tok/s** and **56.055187 tok/s** for 1.30x the fresh
+median. Retain the explicit experimental configuration, with no default change.
+Re-profile it before choosing another bounded exact-kernel experiment. The
+extra **1,724,645,376-byte** gate/up cache remains part of the memory cost.
+
 ## 2026-10-25: Split-Plane Runtime Passes Exact Quality
 
 The opt-in split-plane/four-value FP32 FFN runtime now preserves **all 512

@@ -18,16 +18,23 @@ active execution order. Their negative conditional gates remain recorded.
 ## Current Phase: Maxwell Q8 Execution
 
 **Latest selected-runtime gap checkpoint:** the
-[fresh Ollama comparison](experiments/2026-10-25-maxwell-selected-ollama-http.md)
-measures typed FP32/128 plus SGEMM at **41.331 vs 42.946 HTTP tok/s**,
-**3.761% slower**, with verified actual IDs, quality and cache resets.
-Both original targets remain unmet: **53.06** and **55.829 tok/s** for
+[fresh split-plane/Ollama comparison](experiments/2026-10-25-maxwell-split-ollama-http.md)
+measures FP32 split-f32x4-128 plus SGEMM at **45.075 vs 43.119 HTTP tok/s**,
+**4.536% faster**, with verified actual IDs, quality and cache resets.
+Both original targets remain unmet: **53.06** and **56.055 tok/s** for
 1.30x this fresh Ollama median. The selected exact combination is retained
-experimentally; no global defaults change. Its stage profile and bounded
-FP32 scale-factoring follow-up are complete below. Do not replace
-the exact-engine objective with numerical, pruning or scheduling results.
+experimentally; no global defaults change. The independent
+[incremental comparison](experiments/2026-10-25-maxwell-split-incremental-http.md)
+passes at **44.972 vs 41.205 tok/s, +9.142%** against current packed128/SGEMM.
+Both use five alternating pairs with positive intervals and no extension.
+Next re-profile this newly selected runtime before a further bounded exact
+kernel hypothesis; old stage shares are not its measured attribution. Do not
+replace the exact-engine objective with numerical, pruning or scheduling results.
 
-The [selected-runtime stage profile](experiments/2026-10-25-maxwell-selected-stage-profile.md)
+Earlier checkpoints below record their historical next steps, not a second
+active execution order.
+
+The [previous packed128/SGEMM stage profile](experiments/2026-10-25-maxwell-selected-stage-profile.md)
 now preserves actual IDs off/on and locates middle-token GPU stage time at
 **42.94% gate/up/SwiGLU, 20.32% down, 3.34% attention**. Instrumentation
 lowers HTTP throughput by 3.79%, so it is diagnostic, not a new speed claim.
@@ -75,9 +82,10 @@ retain 252 prefix conversions/SGEMMs, identical enqueue counts, no quantized
 activation storage and complete tracked cleanup. Missing preparation,
 budget, foreign-pointer and ownership checks pass. New tooling `f6078fe`
 binds control/candidate quality and pins down/vocabulary identities while
-allowing only the gate/up delta. Next run incremental controlled HTTP pairs,
-then fresh Ollama if they qualify. No new HTTP speed claim or default change;
-both original unmet objectives remain intact.
+allowing only the gate/up delta. Incremental and fresh Ollama HTTP gates are
+now complete above. Loader correction `f93bb89` ensures selected-runtime
+Ollama/profile modes prepare gate/up too; the failed preflight collected no
+timing samples. No default change; both original unmet objectives remain intact.
 
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
