@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Fixed-Width FFN Misses Micro Gate
+
+One fixed K=2048 specialization removes 21 static pre-load address-product
+sites and the runtime loop from the qualified separate-plane kernel, with
+unchanged math, storage and 32-register usage. It preserves hidden/completed
+down bits but improves complete one-row FFN throughput only **1.24-1.32%**,
+far below the unchanged 5% gate. Four-row point gains are 0.73-1.12%.
+See [pairs, instructions, numerical/ownership evidence and decision](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md).
+
+Keep `deef80b` benchmark-only, with no runtime, width/unroll/geometry rescue
+or extra trials for this clear below-gate result. This is not an E2E gain.
+The last qualified runtime remains 45.075 HTTP tok/s and both original
+throughput goals remain unmet. The measured result argues against assuming
+static address/loop overhead explains most remaining FFN latency.
+
 ## 2026-10-25: Joint Gate/Up Packing Misses Micro Gate
 
 One fixed lossless joint layout removes two global load instructions per

@@ -42,9 +42,14 @@ Keep `8881763` benchmark-only, without runtime integration or more packing/
 geometry tuning. Both arms retained 95,813,632 bytes of control plus joint
 preparation. An independent
 [fixed-width address/loop hypothesis](experiments/2026-10-25-maxwell-fixed-k-ffn-hypothesis.md)
-now identifies 21 static prologue XMAD sites and runtime loop control despite
-Qwen gate/up always using K=2048. Test one compile-time-width specialization
-on the original separate planes, not a joint-layout rescue. Prepared down/head and
+identified 21 static prologue XMAD sites and runtime loop control despite
+Qwen gate/up always using K=2048. The
+[completed fixed-width screen](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md)
+removes those sites and preserves bits, but complete one-row gains are only
+**1.24-1.32%**, clearly below 5%. Keep `deef80b` benchmark-only without a
+width/unroll/geometry rescue. Next independently inspect native fused QKV's
+nine-barrier reduction against the measured 11.72% stage share, not another
+FFN variant or a revival of failed prepared-QKV layouts. Prepared down/head and
 original micro/quality/HTTP gates remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 

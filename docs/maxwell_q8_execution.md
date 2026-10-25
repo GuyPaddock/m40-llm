@@ -257,6 +257,9 @@ combine the below-gate joint layout or select a new generation runtime.
 alignment, lifetime and optional capture contract as the dynamic split API,
 with K exactly 2048. Both arms reuse the same prepared pair and immutable
 down/vocabulary. Existing numerical, micro, quality and HTTP gates apply.
+The [completed screen](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md)
+preserves bits but gains only 1.24-1.32% complete one-row throughput, below
+5%. Keep it benchmark-only without another unroll/width/geometry search.
 
 ### M03 Primitive Checkpoint
 
