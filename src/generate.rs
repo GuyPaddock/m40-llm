@@ -827,14 +827,14 @@ pub fn generate_text(model: &LoadedModel, options: GenerateOptions) -> Result<Ge
                             let row_bytes = blocks * Q8_0_BLOCK_BYTES;
                             let off = tok.byte_offset as usize + tok_id * row_bytes;
                             let row = &model.host_weights[off..off + row_bytes];
-                            for i in 0..d_model {
+                            for (i, value) in hidden.iter_mut().enumerate() {
                                 let block = i / Q8_0_BLOCK;
                                 let idx = i % Q8_0_BLOCK;
                                 let base = block * Q8_0_BLOCK_BYTES;
                                 let d_bits = u16::from_le_bytes([row[base], row[base + 1]]);
                                 let d = f16::from_bits(d_bits).to_f32();
                                 let q = row[base + 2 + idx] as i8 as f32;
-                                hidden[i] = d * q;
+                                *value = d * q;
                             }
                         }
                         _ => anyhow::bail!("unsupported embeddings dtype for host path"),
