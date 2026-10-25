@@ -12,6 +12,7 @@ mod load;
 mod logits;
 mod mapping;
 mod meta;
+pub mod sparse_weights;
 mod tensor_views;
 mod types;
 #[cfg(feature = "cuda")]

@@ -54,6 +54,27 @@ calibrate model pruning until that format/kernel has a positive speed gate.
 Layer influence ranking remains C24, compact export C25. Do not tune on
 held-out/browser inputs or reopen the failed n-gram/layout screens.
 
+C21 will use these dependency-ordered commits:
+
+1. `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
+   packing, matched-zero reconstruction, explicit tail/alignment accounting
+   and CPU tests. Reuse C08 source identity, without adding a runtime policy.
+2. `perf(cuda): add sparse Q8 projection probe`: owned device storage,
+   conventional Maxwell projection and CUDA parity against the same pruned
+   dense matrix. Depends on the format contract.
+3. `test(bench): compare matched sparse Q8 work`: bounded release paired
+   microbenchmarks at real FFN shapes, packing cost and memory accounting.
+   Depends on numerical parity; no model calibration or default changes.
+4. `docs(perf): record sparse Q8 screening`: record measured go/no-go for C22.
+   Preserve any losing code in a commit before a separate removal.
+
+The initial block is 24 bytes: mask at byte 0, original FP16 scale at 4,
+two zero alignment bytes at 6, and sixteen signed values at 8 in ascending
+mask-bit order. The ideal representation is 22 bytes. Exactly 16 physical
+positions are retained even in a partial final block; out-of-range payloads
+are zero, so logical-tail sparsity is reported separately. This experiment
+does not select weights for a model or promise an end-to-end speedup.
+
 C20 was split into dependency-ordered commits:
 
 1. `9674452`, `feat(infer): define diagnostic layer masks`: checked interior IDs, original
