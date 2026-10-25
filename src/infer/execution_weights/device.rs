@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 
 use super::{
     prepare_buffers, HostQ8ExecutionWeight, Q8AllocationPlan, Q8ExecutionKey, Q8ExecutionLayout,
+    Q8SeparateLaunch,
 };
 use crate::cuda::{CudaContext, DeviceBuffer};
 
@@ -84,6 +85,64 @@ impl DeviceQ8ExecutionWeight {
                 tiles: &self.buffers[0],
             },
         }
+    }
+
+    /// Enqueue this experiment on the owning context's decode stream.
+    ///
+    /// # Safety
+    /// Input/output must belong to the owning context. Complete their producers
+    /// before calling, and retain all buffers/this weight until stream drain.
+    pub unsafe fn project_separate_async(
+        &self,
+        input: &DeviceBuffer,
+        output: &DeviceBuffer,
+        rows: usize,
+        config: Q8SeparateLaunch,
+    ) -> Result<()> {
+        let DeviceQ8ExecutionView::SeparateScalesValues {
+            key,
+            scales,
+            values,
+        } = self.view()
+        else {
+            anyhow::bail!("separate Q8 projection requires SeparateScalesValues weights");
+        };
+        ensure!(
+            (1..=65535).contains(&rows),
+            "Q8 projection rows must be in 1..=65535"
+        );
+        let shape = key.source.shape();
+        let k = i32::try_from(shape.input_dim())?;
+        let n = i32::try_from(shape.output_dim())?;
+        ensure!(
+            k <= i32::MAX - 31,
+            "Q8 input dimension exceeds kernel indexing"
+        );
+        for (buffer, dimension) in [(input, shape.input_dim()), (output, shape.output_dim())] {
+            let bytes = rows
+                .checked_mul(dimension)
+                .and_then(|v| v.checked_mul(4))
+                .context("Q8 projection buffer size overflow")?;
+            ensure!(
+                buffer.bytes() >= bytes,
+                "Q8 projection buffer too small: need {bytes}"
+            );
+        }
+        ensure!(
+            input.as_ptr() != output.as_ptr(),
+            "Q8 projection input/output must not alias"
+        );
+        self.ctx.gemm_f32xq8_separate_f32_async(
+            input.as_ptr(),
+            scales.as_ptr(),
+            values.as_ptr(),
+            output.as_mut_ptr(),
+            rows as i32,
+            n,
+            k,
+            config.columns() as i32,
+            config.threads() as i32,
+        )
     }
 
     /// Diagnostic/setup readback using the owning context, not a hot projection

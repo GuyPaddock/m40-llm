@@ -1,0 +1,393 @@
+use std::{
+    fs::{File, OpenOptions},
+    io::{Read, Seek, SeekFrom, Write},
+    path::PathBuf,
+    process::Command,
+    time::Instant,
+};
+
+use anyhow::{ensure, Context, Result};
+use clap::Parser;
+use half::f16;
+use m40_llm::{
+    cuda::{CudaContext, CudaStream, DeviceBuffer},
+    gguf::{load_gguf, GgufTensor},
+    infer::execution_weights::{
+        DeviceQ8ExecutionView, DeviceQ8ExecutionWeight, HostQ8ExecutionWeight, Q8SeparateLaunch,
+        Q8SourceIdentity, Q8SourceView,
+    },
+};
+use serde_json::{json, Value};
+
+#[derive(Parser)]
+struct Args {
+    #[arg(long)]
+    model: PathBuf,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "blk.0.attn_q.weight,blk.0.attn_k.weight,blk.0.attn_v.weight,blk.0.attn_output.weight,blk.0.ffn_gate.weight,blk.0.ffn_up.weight,blk.0.ffn_down.weight,token_embd.weight"
+    )]
+    tensors: Vec<String>,
+    #[arg(long, value_delimiter = ',', default_value = "1,4")]
+    rows: Vec<usize>,
+    #[arg(long, default_value_t = 5)]
+    trials: usize,
+    #[arg(long, default_value_t = 10)]
+    iterations: usize,
+}
+
+fn command_output(program: &str, args: &[&str]) -> Result<String> {
+    let output = Command::new(program).args(args).output()?;
+    ensure!(
+        output.status.success(),
+        "{program}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
+fn inspect_gpu() -> Result<Value> {
+    let processes = command_output(
+        "nvidia-smi",
+        &[
+            "--query-compute-apps=pid,process_name,used_gpu_memory",
+            "--format=csv,noheader",
+        ],
+    )?;
+    for line in processes.lines() {
+        let pid: u32 = line
+            .split(',')
+            .next()
+            .context("missing GPU PID")?
+            .trim()
+            .parse()?;
+        ensure!(
+            pid == std::process::id(),
+            "another GPU process invalidates isolated timing: {line}"
+        );
+    }
+    Ok(json!({
+        "processes": processes,
+        "device": command_output("nvidia-smi", &["--query-gpu=uuid,name,driver_version,pstate,temperature.gpu,clocks.sm,clocks.mem,memory.used,utilization.gpu", "--format=csv,noheader"])?
+    }))
+}
+
+fn write_record(file: &mut File, record: Value) -> Result<()> {
+    serde_json::to_writer(&mut *file, &record)?;
+    writeln!(file)?;
+    file.flush()?;
+    Ok(())
+}
+
+fn read_output(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<f32>> {
+    let mut output = vec![0.0; buffer.bytes() / 4];
+    unsafe {
+        ctx.memcpy_d2h(output.as_mut_ptr().cast(), buffer.as_ptr(), buffer.bytes())?;
+    }
+    Ok(output)
+}
+
+struct Projection<'a> {
+    ctx: CudaContext,
+    original: &'a DeviceQ8ExecutionWeight,
+    separate: &'a DeviceQ8ExecutionWeight,
+    input: DeviceBuffer,
+    output: DeviceBuffer,
+    reference: DeviceBuffer,
+    rows: usize,
+}
+
+impl Projection<'_> {
+    unsafe fn enqueue(&self, config: Option<Q8SeparateLaunch>) -> Result<()> {
+        if let Some(config) = config {
+            self.separate
+                .project_separate_async(&self.input, &self.output, self.rows, config)
+        } else {
+            let DeviceQ8ExecutionView::ColumnBlocks { key, blocks } = self.original.view() else {
+                unreachable!()
+            };
+            let shape = key.source.shape();
+            self.ctx.gemm_f32xq8_0_gguf_f32_async(
+                self.input.as_ptr(),
+                blocks.as_ptr(),
+                self.reference.as_mut_ptr(),
+                self.rows as i32,
+                shape.output_dim() as i32,
+                shape.input_dim() as i32,
+            )
+        }
+    }
+
+    fn stream(&self, config: Option<Q8SeparateLaunch>) -> CudaStream {
+        if config.is_some() || self.rows == 1 {
+            CudaStream::Decode
+        } else {
+            CudaStream::Prefill
+        }
+    }
+
+    fn time(&self, config: Option<Q8SeparateLaunch>, iterations: usize) -> Result<Value> {
+        let start = self.ctx.create_event()?;
+        let stop = self.ctx.create_event()?;
+        let began = Instant::now();
+        start.record(self.stream(config))?;
+        for _ in 0..iterations {
+            unsafe {
+                self.enqueue(config)?;
+            }
+        }
+        stop.record(self.stream(config))?;
+        let gpu_ms =
+            f64::from(start.elapsed_sync(&stop, "q8_execution_bench")?) / iterations as f64;
+        Ok(
+            json!({"gpu_ms":gpu_ms,"wall_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64}),
+        )
+    }
+
+    fn check(&self, blocks: &[u8], input: &[f32], config: Q8SeparateLaunch) -> Result<Value> {
+        unsafe {
+            self.enqueue(None)?;
+        }
+        self.ctx.synchronize_stream(self.stream(None))?;
+        unsafe {
+            self.enqueue(Some(config))?;
+        }
+        self.ctx.synchronize_stream(CudaStream::Decode)?;
+        let actual = read_output(&self.ctx, &self.output)?;
+        let expected = read_output(&self.ctx, &self.reference)?;
+        let shape = self.original.key().source.shape();
+        let (k, n) = (shape.input_dim(), shape.output_dim());
+        let mut maximum = 0.0_f64;
+        let mut total = 0.0;
+        for (&a, &b) in actual.iter().zip(&expected) {
+            ensure!(
+                a.is_finite() && b.is_finite(),
+                "non-finite projection result"
+            );
+            let difference = (f64::from(a) - f64::from(b)).abs();
+            maximum = maximum.max(difference);
+            total += difference;
+            ensure!(
+                difference < 1e-3 + f64::from(b.abs()) * 2e-5,
+                "separate projection drift {difference}"
+            );
+        }
+        let mut cpu_max = 0.0_f64;
+        for row in [0, self.rows - 1] {
+            for sample in 0..8 {
+                let column = sample * (n - 1) / 7;
+                let cpu: f64 = (0..k)
+                    .map(|index| {
+                        let base = (column * k.div_ceil(32) + index / 32) * 34;
+                        let scale =
+                            f16::from_bits(u16::from_le_bytes([blocks[base], blocks[base + 1]]))
+                                .to_f64();
+                        f64::from(input[row * k + index])
+                            * scale
+                            * f64::from(blocks[base + 2 + index % 32] as i8)
+                    })
+                    .sum();
+                let difference = (f64::from(actual[row * n + column]) - cpu).abs();
+                cpu_max = cpu_max.max(difference);
+                ensure!(
+                    difference < 1e-3 + cpu.abs() * 2e-5,
+                    "CPU sample drift {difference}"
+                );
+            }
+        }
+        Ok(
+            json!({"max_abs_diff":maximum,"mean_abs_diff":total/actual.len() as f64,"cpu_sample_max_abs_diff":cpu_max}),
+        )
+    }
+}
+
+fn run_tensor(
+    ctx: &CudaContext,
+    file: &mut File,
+    source_file: &mut File,
+    data_offset: u64,
+    tensor: &GgufTensor,
+    digest: [u8; 32],
+    args: &Args,
+) -> Result<()> {
+    let identity = Q8SourceIdentity::from_gguf_tensor(digest, tensor)?;
+    let shape = identity.shape();
+    let mut bytes = vec![0; shape.source_bytes()?];
+    source_file.seek(SeekFrom::Start(
+        data_offset
+            .checked_add(tensor.offset)
+            .context("file offset overflow")?,
+    ))?;
+    source_file.read_exact(&mut bytes)?;
+    let source = Q8SourceView::from_tensor_bytes(&identity, &bytes)?;
+    let start = Instant::now();
+    let original = HostQ8ExecutionWeight::copy_column_blocks(source)?;
+    let original_copy_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let start = Instant::now();
+    let separate = HostQ8ExecutionWeight::separate_scales_values(source)?;
+    let repack_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let start = Instant::now();
+    let original_device = DeviceQ8ExecutionWeight::upload(ctx, &original)?;
+    let original_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let start = Instant::now();
+    let separate_device = DeviceQ8ExecutionWeight::upload(ctx, &separate)?;
+    let separate_upload_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let resident_bytes = separate.plan().resident_bytes();
+    write_record(
+        file,
+        json!({"kind":"preparation","tensor":tensor,"source_bytes":bytes.len(),
+        "resident_execution_bytes":resident_bytes,"extra_resident_bytes":resident_bytes as i64 - bytes.len() as i64,
+        "benchmark_weight_device_bytes":resident_bytes+bytes.len(),
+        "host_peak_payload_bytes":bytes.len()+original.plan().resident_bytes()+resident_bytes,
+        "original_copy_ms":original_copy_ms,"repack_ms":repack_ms,
+        "original_upload_ms":original_upload_ms,"separate_upload_ms":separate_upload_ms}),
+    )?;
+    drop(original);
+    drop(separate);
+    for &rows in &args.rows {
+        let input: Vec<f32> = (0..rows * shape.input_dim())
+            .map(|i| ((i * 13 % 127) as f32 - 63.0) * 0.0078125)
+            .collect();
+        let projection = Projection {
+            ctx: ctx.clone(),
+            original: &original_device,
+            separate: &separate_device,
+            input: DeviceBuffer::new_tagged(ctx, input.len() * 4, "q8_bench:input")?,
+            output: DeviceBuffer::new_tagged(
+                ctx,
+                rows * shape.output_dim() * 4,
+                "q8_bench:output",
+            )?,
+            reference: DeviceBuffer::new_tagged(
+                ctx,
+                rows * shape.output_dim() * 4,
+                "q8_bench:reference",
+            )?,
+            rows,
+        };
+        unsafe {
+            ctx.memcpy_h2d(
+                projection.input.as_mut_ptr(),
+                input.as_ptr().cast(),
+                input.len() * 4,
+            )?;
+        }
+        let iterations = args.iterations.div_ceil(rows).max(2);
+        for columns in [1, 4] {
+            for threads in [128, 256] {
+                let config = Q8SeparateLaunch::new(columns, threads)?;
+                let errors = projection.check(&bytes, &input, config)?;
+                for _ in 0..3 {
+                    unsafe {
+                        projection.enqueue(None)?;
+                    }
+                    ctx.synchronize_stream(projection.stream(None))?;
+                    unsafe {
+                        projection.enqueue(Some(config))?;
+                    }
+                    ctx.synchronize_stream(CudaStream::Decode)?;
+                }
+                for trial in 0..args.trials {
+                    let gpu_before = inspect_gpu()?;
+                    let (baseline, candidate) = if trial % 2 == 0 {
+                        (
+                            projection.time(None, iterations)?,
+                            projection.time(Some(config), iterations)?,
+                        )
+                    } else {
+                        let candidate = projection.time(Some(config), iterations)?;
+                        (projection.time(None, iterations)?, candidate)
+                    };
+                    write_record(
+                        file,
+                        json!({"kind":"timing","tensor":tensor.name,"shape":shape,"rows":rows,
+                        "config":config,"trial":trial,"iterations":iterations,"baseline":baseline,"candidate":candidate,
+                        "errors":errors,"resident_execution_bytes":resident_bytes,
+                        "source_bytes":bytes.len(),"gpu_before":gpu_before,"gpu_after":inspect_gpu()?}),
+                    )?;
+                }
+                eprintln!(
+                    "[q8_execution_bench] tensor={} rows={rows} config={config:?} parity={errors}",
+                    tensor.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn benchmark() -> Result<()> {
+    let args = Args::parse();
+    ensure!(
+        args.trials >= 5
+            && args.iterations > 0
+            && !args.rows.is_empty()
+            && args.rows.iter().all(|&rows| (1..=64).contains(&rows)),
+        "require >=5 trials, >0 iterations and rows in 1..=64"
+    );
+    let mut output = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&args.output)?;
+    let gpu = inspect_gpu()?;
+    let sha = command_output(
+        "sha256sum",
+        &[args.model.to_str().context("non-UTF8 model path")?],
+    )?;
+    let digest_text = sha.split_whitespace().next().context("missing digest")?;
+    ensure!(digest_text.len() == 64, "invalid SHA256");
+    let mut digest = [0; 32];
+    for (i, byte) in digest.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&digest_text[i * 2..i * 2 + 2], 16)?;
+    }
+    // Fix only the original projection control in this isolated process.
+    for (key, value) in [
+        ("M40LLM_Q8_DECODE_STREAM", "decode"),
+        ("M40LLM_Q8_DECODE_SPLIT_QBLOCK", "4"),
+        ("M40LLM_Q8_DECODE_COL_TILE", "4"),
+        ("M40LLM_Q8_DECODE_TILED_COLS", "1"),
+        ("M40LLM_Q8_DECODE_EVENT_LOG", "0"),
+    ] {
+        std::env::set_var(key, value);
+    }
+    let ctx = CudaContext::new(-1)?;
+    let props = ctx.current_device_props()?;
+    ensure!(
+        props.major == 5 && props.minor == 2,
+        "Q8 execution benchmark requires M40"
+    );
+    write_record(
+        &mut output,
+        json!({"kind":"manifest","model":args.model,"model_sha256":digest_text,
+        "revision":command_output("git", &["rev-parse","HEAD"])?,
+        "worktree":command_output("git", &["status","--short"])?,
+        "build_profile":if cfg!(debug_assertions) {"dev"} else {"release"},
+        "cuda_flags":["-O3","sm_52","compute_52"],"nvcc":command_output("nvcc", &["--version"])?,
+        "gpu":gpu,"trials":args.trials,"rows":args.rows,"requested_iterations":args.iterations,
+        "control":"GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
+        "timing":"CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
+        "interpretation":"isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic"}),
+    )?;
+    let model = load_gguf(&args.model)?;
+    let mut source_file = File::open(&args.model)?;
+    for name in &args.tensors {
+        let tensor = model
+            .tensors
+            .iter()
+            .find(|t| &t.name == name)
+            .with_context(|| format!("missing tensor {name}"))?;
+        run_tensor(
+            &ctx,
+            &mut output,
+            &mut source_file,
+            model.data_offset,
+            tensor,
+            digest,
+            &args,
+        )?;
+    }
+    Ok(())
+}

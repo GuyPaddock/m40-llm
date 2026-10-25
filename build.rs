@@ -130,6 +130,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=M40LLM_ENABLE_CUBLAS");
     println!("cargo:rerun-if-env-changed=M40LLM_SYSROOT");
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
+    println!("cargo:rerun-if-changed=cuda/q8_execution.cuh");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

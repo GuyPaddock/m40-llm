@@ -1,0 +1,250 @@
+{
+  "manifest": {
+    "build_profile": "release",
+    "control": "GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
+    "cuda_flags": [
+      "-O3",
+      "sm_52",
+      "compute_52"
+    ],
+    "gpu": {
+      "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P8, 33, 324 MHz, 405 MHz, 0 MiB, 0 %",
+      "processes": ""
+    },
+    "interpretation": "isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic",
+    "kind": "manifest",
+    "model": "/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Fri_Feb_21_20:23:50_PST_2025\nCuda compilation tools, release 12.8, V12.8.93\nBuild cuda_12.8.r12.8/compiler.35583870_0",
+    "requested_iterations": 100,
+    "revision": "33891e8816a46110717f96dd6b12d101130d7370",
+    "rows": [
+      1
+    ],
+    "timing": "CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
+    "trials": 10,
+    "worktree": "M build.rs\n M cuda/kernels.cu\n M cuda/stub.c\n M src/cuda.rs\n M src/infer/execution_weights/device.rs\n M src/infer/execution_weights/mod.rs\n M src/infer/execution_weights/tests.rs\n?? cuda/q8_execution.cuh\n?? docs/experiments/2026-10-24-q8-separate-summary.jq\n?? examples/q8_execution_bench/\n?? tests/common/q8_projection.rs\n?? tests/q8_separate_projection.rs"
+  },
+  "preparation": [
+    {
+      "benchmark_weight_device_bytes": 1114112,
+      "extra_resident_bytes": 0,
+      "host_peak_payload_bytes": 1671168,
+      "kind": "preparation",
+      "original_copy_ms": 0.303858,
+      "original_upload_ms": 0.156575,
+      "repack_ms": 0.371646,
+      "resident_execution_bytes": 557056,
+      "separate_upload_ms": 0.290288,
+      "source_bytes": 557056,
+      "tensor": {
+        "dtype": "Q8_0",
+        "name": "blk.0.attn_k.weight",
+        "offset": 402490368,
+        "shape": [
+          2048,
+          256
+        ]
+      }
+    },
+    {
+      "benchmark_weight_device_bytes": 1114112,
+      "extra_resident_bytes": 0,
+      "host_peak_payload_bytes": 1671168,
+      "kind": "preparation",
+      "original_copy_ms": 0.357733,
+      "original_upload_ms": 0.076987,
+      "repack_ms": 0.37202999999999997,
+      "resident_execution_bytes": 557056,
+      "separate_upload_ms": 0.222025,
+      "source_bytes": 557056,
+      "tensor": {
+        "dtype": "Q8_0",
+        "name": "blk.0.attn_v.weight",
+        "offset": 411969536,
+        "shape": [
+          2048,
+          256
+        ]
+      }
+    }
+  ],
+  "results": [
+    {
+      "tensor": "blk.0.attn_k.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 128
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.011151840090751649,
+      "candidate_gpu_ms": 0.009751839935779572,
+      "baseline_mad_ratio": 0.004878115786355003,
+      "candidate_mad_ratio": 0.011895178573147605,
+      "speedup": 1.1435626675777837,
+      "paired_speedup_median": 1.137602857324502,
+      "max_abs_diff": 2.384185791015625E-7,
+      "mean_abs_diff": 2.60770320892334E-8,
+      "cpu_sample_max_abs_diff": 1.4901161193847656E-7
+    },
+    {
+      "tensor": "blk.0.attn_k.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 256
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.01096560001373291,
+      "candidate_gpu_ms": 0.011568640470504762,
+      "baseline_mad_ratio": 0.006668125582424827,
+      "candidate_mad_ratio": 0.00544923637837752,
+      "speedup": 0.9478728327404283,
+      "paired_speedup_median": 0.9453526633574376,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 1.4901161193847656E-7
+    },
+    {
+      "tensor": "blk.0.attn_k.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 128
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.010999839901924133,
+      "candidate_gpu_ms": 0.010874239802360535,
+      "baseline_mad_ratio": 0.00504739478123393,
+      "candidate_mad_ratio": 0.005429362407158927,
+      "speedup": 1.0115502418418558,
+      "paired_speedup_median": 1.013271849207424,
+      "max_abs_diff": 2.384185791015625E-7,
+      "mean_abs_diff": 2.60770320892334E-8,
+      "cpu_sample_max_abs_diff": 1.4901161193847656E-7
+    },
+    {
+      "tensor": "blk.0.attn_k.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 256
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.01098464012145996,
+      "candidate_gpu_ms": 0.010002239942550659,
+      "baseline_mad_ratio": 0.0065982902755023715,
+      "candidate_mad_ratio": 0.007854252083341551,
+      "speedup": 1.0982180176192395,
+      "paired_speedup_median": 1.097850040566779,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 1.4901161193847656E-7
+    },
+    {
+      "tensor": "blk.0.attn_v.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 128
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.010988320112228393,
+      "candidate_gpu_ms": 0.009628159999847412,
+      "baseline_mad_ratio": 0.009566462070516594,
+      "candidate_mad_ratio": 0.007893522169860305,
+      "speedup": 1.1412689561040257,
+      "paired_speedup_median": 1.1419774031168586,
+      "max_abs_diff": 5.960464477539063E-8,
+      "mean_abs_diff": 9.167706593871117E-9,
+      "cpu_sample_max_abs_diff": 4.0978193283081055E-8
+    },
+    {
+      "tensor": "blk.0.attn_v.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 256
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.011031840443611145,
+      "candidate_gpu_ms": 0.011565439701080323,
+      "baseline_mad_ratio": 0.007715811835702148,
+      "candidate_mad_ratio": 0.004897341666912374,
+      "speedup": 0.9538626052047694,
+      "paired_speedup_median": 0.950974988132482,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 4.0978193283081055E-8
+    },
+    {
+      "tensor": "blk.0.attn_v.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 128
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.010935199856758119,
+      "candidate_gpu_ms": 0.010900319814682008,
+      "baseline_mad_ratio": 0.006013609015175408,
+      "candidate_mad_ratio": 0.005401662822371072,
+      "speedup": 1.0031999099722864,
+      "paired_speedup_median": 1.0045837256590417,
+      "max_abs_diff": 5.960464477539063E-8,
+      "mean_abs_diff": 9.167706593871117E-9,
+      "cpu_sample_max_abs_diff": 4.0978193283081055E-8
+    },
+    {
+      "tensor": "blk.0.attn_v.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 256
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 256
+      },
+      "pairs": 10,
+      "baseline_gpu_ms": 0.010951200127601623,
+      "candidate_gpu_ms": 0.00992271989583969,
+      "baseline_mad_ratio": 0.0068960731374977675,
+      "candidate_mad_ratio": 0.00717543527320814,
+      "speedup": 1.1036490239126013,
+      "paired_speedup_median": 1.1016656289579136,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 4.0978193283081055E-8
+    }
+  ]
+}

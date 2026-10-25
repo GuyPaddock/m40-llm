@@ -2,6 +2,34 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-24: Separate-Plane Q8 Projection Experiment
+
+C09's lossless separate-scale/value layout passes parity on real Qwen Q8_0
+tensors and synthetic tails. Four fixed configurations compare isolated
+projections, not full generation. Five-pair release medians with the best
+4-column/128-thread candidate are gate **0.139 vs 0.229 ms**, down
+**0.143 vs 0.191 ms**, and vocabulary **1.624 vs 2.584 ms**. A bounded 64-row
+check also improves Q/gate/down versus existing GGUF multi-row dispatch.
+
+Tiny K/V decode rows needed a longer ten-pair confirmation after the initial
+screen was noisy. Confirmed gains are around 14%, not the initial larger
+ratios. Raw negative/neutral configurations are retained. GPU event brackets
+may include host submission gaps, and boundary SM clocks differ from the
+sustained HTTP run. No inference or GPU tests overlap these microbenchmarks.
+
+Execution payload matches Q8_0 source bytes, but keeping both representations
+doubles tensor device payload; production cache integration must budget that
+duplication. A gate/down tensor takes about 15 ms to repack / 4 ms to upload;
+vocabulary about 206/51 ms, single setup observations. Compiler resources are
+28/45 registers, zero local/stack bytes, up to 4 KiB dynamic shared memory.
+
+Keep this as a candidate, with no runtime/default changes or E2E speed claim.
+Existing fused QKV/gate-up/argmax paths are not the isolated control. See the
+[experiment and raw records](experiments/2026-10-24-q8-separate-projections.md).
+Next: independent C10 input-tiled layout, then conditional C10A integration
+and HTTP gates. The 31.852 tok/s C07 checkpoint is still the selected HTTP
+result; neither unchanged-model target has been achieved.
+
 ## 2026-10-24: Exact Parallel Head128 Attention
 
 C07's opt-in warp-parallel attention preserves full dense attention and compares

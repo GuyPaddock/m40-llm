@@ -135,6 +135,15 @@ pub struct Q8SourceView<'a> {
 }
 
 impl<'a> Q8SourceView<'a> {
+    /// An already sliced tensor keeps its original offset only as identity.
+    pub fn from_tensor_bytes(identity: &'a Q8SourceIdentity, blocks: &'a [u8]) -> Result<Self> {
+        ensure!(
+            blocks.len() == identity.shape.source_bytes()?,
+            "Q8 tensor byte length mismatch"
+        );
+        Ok(Self { identity, blocks })
+    }
+
     pub fn new(identity: &'a Q8SourceIdentity, weights_blob: &'a [u8]) -> Result<Self> {
         ensure!(
             identity.dtype == GgmlDType::Q8_0,
@@ -165,6 +174,33 @@ pub enum Q8ExecutionLayout {
     InputTiled {
         columns: usize,
     },
+}
+
+/// Four fixed configurations for the independent separate-plane experiment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Q8SeparateLaunch {
+    columns: u32,
+    threads: u32,
+}
+
+impl Q8SeparateLaunch {
+    pub fn new(columns: u32, threads: u32) -> Result<Self> {
+        ensure!(
+            matches!(columns, 1 | 4),
+            "Q8 separate columns must be 1 or 4"
+        );
+        ensure!(
+            matches!(threads, 128 | 256),
+            "Q8 separate threads must be 128 or 256"
+        );
+        Ok(Self { columns, threads })
+    }
+    pub fn columns(self) -> u32 {
+        self.columns
+    }
+    pub fn threads(self) -> u32 {
+        self.threads
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -294,6 +330,25 @@ pub struct HostQ8ExecutionWeight {
 }
 
 impl HostQ8ExecutionWeight {
+    /// Copy scale bit patterns and all signed bytes, including inactive tails.
+    /// No floating-point conversion or re-quantization occurs during packing.
+    pub fn separate_scales_values(source: Q8SourceView<'_>) -> Result<Self> {
+        let blocks = source.identity().shape().block_count()?;
+        let mut scales = Vec::with_capacity(blocks * 2);
+        let mut values = Vec::with_capacity(blocks * Q8_BLOCK_ELEMENTS);
+        for block in source.blocks().chunks_exact(Q8_BLOCK_BYTES) {
+            scales.extend_from_slice(&block[..2]);
+            values.extend_from_slice(&block[2..]);
+        }
+        Self::new(
+            Q8ExecutionKey {
+                source: source.identity().clone(),
+                layout: Q8ExecutionLayout::SeparateScalesValues,
+            },
+            vec![scales, values],
+        )
+    }
+
     pub fn new(key: Q8ExecutionKey, planes: Vec<Vec<u8>>) -> Result<Self> {
         ensure!(
             key.source.dtype == GgmlDType::Q8_0,

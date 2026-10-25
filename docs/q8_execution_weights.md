@@ -5,10 +5,11 @@ representations. It is separate from `DeviceTensorView`, uploaded GGUF weights,
 and the model's FP32 materialization cache. Ordinary generation does not call
 this API, and no runtime/default layout selection or model cache is added.
 
-C09 will test separate scale/value planes. C10 will independently test
-input-tiled storage. Their descriptors and buffers are available now; their
-lossless packers and CUDA consumers are not part of C08. Do not interpret a
-declared layout or successful byte upload as a kernel speed or quality result.
+C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
+and real-tensor release microbenchmark. See the
+[measured results](experiments/2026-10-24-q8-separate-projections.md).
+C10 will independently test input-tiled storage; its descriptor alone is not
+a kernel speed or quality result.
 
 ## Source and Identity
 
@@ -38,8 +39,8 @@ again when invoking a projection.
 ## Layout and Memory Contracts
 
 Each Q8_0 block has the original two FP16 scale bytes and 32 signed-value
-bytes. C08 copies existing column blocks verbatim. The other descriptors
-define storage for the independent upcoming experiments:
+bytes. C08 copies existing column blocks verbatim. C09 implements the separate
+planes; input-tiled storage is still a descriptor for the independent experiment:
 
 | Layout | Owned Planes | Ordering |
 | --- | --- | --- |
@@ -64,7 +65,10 @@ granularity, CUDA context overhead, or total process VRAM.
 
 `HostQ8ExecutionWeight::new` verifies plane counts/sizes against its key before
 GPU allocation. It does not validate a plane's encoded values; C09/C10 packers
-must prove lossless scale/value mappings. `DeviceQ8ExecutionWeight::upload`
+must prove lossless scale/value mappings. C09's `separate_scales_values` copies
+all scale/payload bytes unchanged, and `from_tensor_bytes` accepts an already
+sliced tensor while preserving its original source offset as identity.
+`DeviceQ8ExecutionWeight::upload`
 synchronously uploads planes into immediately RAII-owned `DeviceBuffer`s.
 Partial allocation or upload failures release both prior and uncommitted
 buffers. The device owner outlives the source/host planes, and its borrowed
@@ -122,9 +126,9 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   -- --nocapture --test-threads=1
 ```
 
-Next: C09 and C10 use these owners independently for lossless repacking,
-projection parity, and real-shape isolated measurements. Neither experiment
-depends on the other winning. Only measured winners proceed to C10A loader/
+Next: C10 uses these owners independently for input-tiled lossless repacking,
+projection parity, and real-shape isolated measurements. It does not depend
+on C09 winning. Only measured winners proceed to C10A loader/
 model-cache integration and repeated HTTP gates. The selected exact-attention
 benchmark configuration remains split8/256 from C07; global runtime/KV defaults
 are unchanged, and neither unchanged-model throughput target has been reached.

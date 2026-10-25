@@ -82,6 +82,49 @@ fn test_source_view_bounds_and_lossless_column_copy() {
     assert!(Q8SourceView::new(&beyond, &blob).is_err());
 }
 
+/// Repacking must preserve all scale bit patterns and signed-value bytes, even
+/// zero/negative scales, NaNs, and nonzero inactive K tails. Encoding is not math.
+#[test]
+fn test_separate_planes_preserve_every_source_byte() {
+    let shape = Q8MatrixShape::new(35, 3).unwrap();
+    let identity =
+        Q8SourceIdentity::from_column_blocks([1; 32], "split".into(), 103, shape).unwrap();
+    let scale_bits = [0_u16, 0x8000, 0x3c00, 0xbc00, 0x7c00, 0x7e31];
+    let mut bytes = Vec::new();
+    for (block, bits) in scale_bits.into_iter().enumerate() {
+        bytes.extend_from_slice(&bits.to_le_bytes());
+        bytes.extend((0..32).map(|lane| (block * 51 + lane * 7) as u8));
+    }
+    let view = Q8SourceView::from_tensor_bytes(&identity, &bytes).unwrap();
+    let split = HostQ8ExecutionWeight::separate_scales_values(view).unwrap();
+    assert_eq!(split.key().source, identity);
+    let mut restored = Vec::new();
+    for block in 0..6 {
+        restored.extend_from_slice(&split.planes()[0][block * 2..block * 2 + 2]);
+        restored.extend_from_slice(&split.planes()[1][block * 32..block * 32 + 32]);
+    }
+    assert_eq!(restored, bytes);
+    assert_eq!(split.plan().resident_bytes(), bytes.len());
+    assert!(Q8SourceView::from_tensor_bytes(&identity, &bytes[..203]).is_err());
+    assert!(Q8SourceView::from_tensor_bytes(&identity, &[bytes, vec![0]].concat()).is_err());
+}
+
+/// Launch choices are bounded before enqueue rather than silently rounded or
+/// expanded into an unbounded parameter search.
+#[test]
+fn test_separate_launch_accepts_only_fixed_experiment_configs() {
+    for columns in [1, 4] {
+        for threads in [128, 256] {
+            let launch = Q8SeparateLaunch::new(columns, threads).unwrap();
+            assert_eq!(launch.columns(), columns);
+            assert_eq!(launch.threads(), threads);
+        }
+    }
+    for (columns, threads) in [(0, 128), (2, 128), (8, 256), (1, 0), (1, 64), (4, 512)] {
+        assert!(Q8SeparateLaunch::new(columns, threads).is_err());
+    }
+}
+
 /// Real GGUF sources must be rank-two Q8 with complete rows; synthetic ragged
 /// rows require the explicit padded-column constructor, never implicit sizing.
 #[test]

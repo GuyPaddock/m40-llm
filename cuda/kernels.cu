@@ -39,6 +39,8 @@ struct M40llmCudaContext {
 #endif
 };
 
+#include "q8_execution.cuh"
+
 static void CUDART_CB destroy_wait_event_host_func(void* user_data) {
     cudaEvent_t event = reinterpret_cast<cudaEvent_t>(user_data);
     if (event) {

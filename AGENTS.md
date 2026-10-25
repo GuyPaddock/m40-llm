@@ -113,9 +113,20 @@ below is historical context, not the current research execution order.
   fakes plus a real second-plane CUDA allocation failure verify cleanup; device
   roundtrip and tail-shaped projection tests pass. Production GGUF views,
   materialized weights, loader/cache, dispatch, and defaults are unchanged.
-  See `docs/q8_execution_weights.md`; split/tiled kernels are not implemented yet.
-- Next: independent C09/C10 Q8 layout experiments; neither layout depends on
-  the other succeeding. Use the selected
+  See `docs/q8_execution_weights.md` for ownership contracts.
+- C09 now copies original Q8 scale/value bytes into separate planes and tests
+  four bounded Maxwell configurations with a benchmark-only async consumer.
+  Real Qwen release projection medians improve gate 0.229->0.139 ms, down
+  0.191->0.143 ms, vocabulary 2.584->1.624 ms; this is not an HTTP speedup.
+  K/V needed a longer ten-pair check and confirms only about 14% improvement.
+  Tail/CPU/GPU parity, invalid-call rejection, CUDA grid/wrappers, non-CUDA
+  warning-as-error tests, and Clippy pass. Repacking is lossless; retaining
+  original plus execution buffers doubles tensor device payload. Defaults,
+  fused generation kernels, and model loader/cache remain unchanged. See
+  `docs/experiments/2026-10-24-q8-separate-projections.md` for raw trials,
+  memory/setup costs, clock/measurement limitations, and negative configs.
+- Next: independent C10 input-tiled experiment, then conditional C10A useful
+  per-family integration. C10 does not depend on C09 succeeding. Use the selected
   C07 benchmark config for subsequent controls, require parity and repeated
   HTTP E2E gates, and bound experiments before C11/C11A. Missing counters or
   the original speed target do not block the later n-gram feasibility decision
