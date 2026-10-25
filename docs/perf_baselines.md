@@ -2,6 +2,24 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Modified-Model Tradeoff Checkpoint
+
+C26 compares the completed frozen-corpus studies without another fit or sweep.
+No model-changing path is promoted. Ranked `[8]` preserves dense-valid task
+passes but raises held-out PPL 3.46%, for +2.484% matched-step rate and, after
+export, 78.119 MiB weight / 1 MiB context-1024 KV savings. Activation targets
+50/60% give +4.325/+6.684% matched-step rate, but PPL rises 8.35/17.38% and
+requested device storage grows 862,411,332 bytes. Neither is HTTP throughput
+or unchanged-model quality. Compact-versus-masked timing is neutral.
+
+Sparse Q8 fails its decode gate; sparse pruning/Q4 and n-gram speculation
+remain postponed. No combined model or additive gain is inferred. The report
+retains ordinary generation times/counts, preparation boundaries and all
+13 source-report hashes. See [the full comparison](experiments/2026-10-25-modified-model-tradeoffs.md).
+The original exact objectives remain unmet at the latest qualified 31.937
+HTTP tok/s versus 43.163 Ollama. Another optimization round needs a new
+research decision, not a promotion of these approximate-model results.
+
 ## 2026-10-25: Compact Model Live Equivalence and Memory
 
 C25 is complete on clean `0dfff93`, release Qwen2.5-3B Q8_0, dense KV/context

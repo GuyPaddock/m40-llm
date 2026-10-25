@@ -18,8 +18,9 @@ separately evaluated model-changing research. It is not replaced by the
 C18's [unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
 is complete. C01-C11, conditional C10A, and C11A are verified checkpoints.
 C12-C17 are **postponed**, not implemented, under the negative n-gram gate.
-The full research plan remains active; C21-C27 remain subject to their own
-quality/performance gates. Neither exact-engine speed objective is achieved.
+The bounded research units are recorded through C26 below; C22/C27 remain
+postponed under the negative sparse gate. Neither exact-engine speed objective
+is achieved. Another implementation round needs an explicit research decision.
 
 Validation follow-up: the local NVCC/no-device CI reproduction exposed 25
 hardware-dependent assertions across 14 targets, including prior kernel/cache
@@ -191,11 +192,21 @@ timing is neutral at +0.060% held out; do not double-count C24's 35-versus-36
 layer gain. Held-out PPL still costs 3.46% versus the unchanged model.
 See [the live report and raw release evidence](experiments/2026-10-25-compact-layer8-live.md).
 
-Next is C26's held-out comparison of measured model-changing quality, speed,
-allocation and preparation costs. Combinations require independently useful
-components and their own evaluation; do not extrapolate additive gains.
-The negative sparse/ngram gates, default runtime and unmet exact objectives
-remain unchanged.
+**C26 is complete.** The [modified-model comparison](experiments/2026-10-25-modified-model-tradeoffs.md)
+reconciles 13 completed raw reports, including held-out quality, paired-step
+speed, actual generation counts/stops, allocation and preparation boundaries.
+It promotes no mask, threshold or combined model. Sparse decode and n-gram
+gates remain negative; no independently useful static sparse kernel exists
+for a combination, and layer/activation variants have neither a controlled
+generated-E2E win nor an approved general-use quality budget. Do not infer
+additive gains or reuse source-bound activation metadata on a compact model.
+
+The plan's bounded experiments and conditional decisions are exhausted, not
+its original exact speed objective. Latest qualified unchanged HTTP rate is
+31.937130 tok/s versus Ollama 43.162711; both 53.06 and fresh 1.30x-Ollama
+56.1115 targets remain unmet. Runtime defaults are unchanged. The next task
+requires a new research choice rather than extending a failed screen or
+automatically promoting a modified model.
 
 C21 used these dependency-ordered commits:
 
