@@ -2,6 +2,15 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Selected-Runtime Stage Profile
+
+The qualified FP32/128-plus-SGEMM runtime remains FFN dominated. Median
+middle-token event spans across 36 layers are **10.044 ms gate/up/SwiGLU
+(42.94%)**, **4.751 ms down (20.32%)** and **0.781 ms attention (3.34%)**.
+Five off/on profiling pairs preserve actual 512 IDs but lower measured
+throughput **3.79%**, so do not use instrumented rates as optimization gains.
+See [sampling, overhead, raw events and the bounded next experiment](experiments/2026-10-25-maxwell-selected-stage-profile.md).
+
 ## 2026-10-25: Selected Runtime vs Fresh Ollama
 
 Five alternating release pairs measure the qualified FP32/128 plus SGEMM

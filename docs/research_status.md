@@ -28,6 +28,13 @@ costs without timing contamination, then test one bounded FP32-only
 scale-factored gate/up hypothesis if the profile supports it. Do not replace
 the exact-engine objective with numerical, pruning or scheduling results.
 
+The [selected-runtime stage profile](experiments/2026-10-25-maxwell-selected-stage-profile.md)
+now preserves actual IDs off/on and locates middle-token GPU stage time at
+**42.94% gate/up/SwiGLU, 20.32% down, 3.34% attention**. Instrumentation
+lowers HTTP throughput by 3.79%, so it is diagnostic, not a new speed claim.
+This supports one fixed 128-thread FP32 scale-factored gate/up experiment,
+with current packed FP32/128 as timing control and all original gates intact.
+
 **Current checkpoint: sequential prefill ownership repaired.** The
 [real-model attribution](experiments/2026-10-25-maxwell-prefill-drift.md)
 shows that draining each no-logits prefix forward or running a greedy head
