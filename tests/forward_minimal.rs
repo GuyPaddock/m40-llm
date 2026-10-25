@@ -77,6 +77,8 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
         #[cfg(feature = "cuda")]
         activation_research: None,
+        #[cfg(feature = "cuda")]
+        layer_influence: None,
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

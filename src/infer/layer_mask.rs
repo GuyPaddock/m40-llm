@@ -79,6 +79,11 @@ impl super::LoadedModel {
         );
         #[cfg(feature = "cuda")]
         ensure!(
+            self.layer_influence.is_none(),
+            "finish influence capture before configuring a diagnostic mask"
+        );
+        #[cfg(feature = "cuda")]
+        ensure!(
             self.forward_workspace
                 .lock()
                 .map_err(|_| anyhow::anyhow!("poisoned forward workspace"))?

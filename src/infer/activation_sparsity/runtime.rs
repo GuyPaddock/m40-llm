@@ -83,6 +83,7 @@ impl LoadedModel {
     fn activation_sources(&self) -> Result<(Vec<CalibrationLayer>, HashMap<usize, usize>)> {
         ensure!(
             self.activation_research.is_none()
+                && self.layer_influence.is_none()
                 && self.kv_cache.is_none()
                 && self
                     .forward_workspace

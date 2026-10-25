@@ -48,3 +48,27 @@ original tensor/KV IDs remain intact through the existing
 No runtime or threshold is promoted by this study. Compact export is C25 and
 requires an explicitly quality-evaluated candidate. C22/C27 sparse-weight
 research remains subject to its separate negative kernel gate.
+
+## Read-Only Model Capture
+
+`LoadedModel::begin_layer_influence_capture(plan, host_budget_bytes)` configures
+model-local host state before KV/workspace/session creation, without a layer
+mask or activation transform. Begin/finish each frozen passage explicitly,
+then export with `finish_layer_influence_capture`. Incomplete finish is an
+error and retains capture state. The host budget includes two reusable FP32
+hidden vectors and the per-token FP64 scalar observations. No GPU buffer is
+allocated by the observer.
+
+Ordinary full-layer sequential forward drains both producer streams before
+reading the layer's unchanged input/output buffers. This is diagnostic capture,
+not a performance path. Without capture, there are no readbacks or new waits.
+Only dense KV, logical `sequence_id=0` and non-graph sequential execution are
+supported; packed/batched/graph paths fail before launches. Finish capture
+before applying a diagnostic mask. This state is never process-global.
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+  cargo test --features cuda --test layer_influence_cuda \
+  -- --include-ignored --test-threads=1
+```

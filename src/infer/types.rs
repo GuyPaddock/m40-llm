@@ -272,6 +272,8 @@ pub struct LoadedModel {
     pub q8_execution: super::execution_weights::Q8ExecutionCache,
     #[cfg(feature = "cuda")]
     pub activation_research: Option<super::activation_sparsity::ActivationResearch>,
+    #[cfg(feature = "cuda")]
+    pub layer_influence: Option<super::LayerInfluenceCapture>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]

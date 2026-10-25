@@ -117,6 +117,8 @@ impl LoadedModel {
             q8_execution: super::execution_weights::Q8ExecutionCache::disabled(),
             #[cfg(feature = "cuda")]
             activation_research: None,
+            #[cfg(feature = "cuda")]
+            layer_influence: None,
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]

@@ -883,8 +883,8 @@ impl LoadedModel {
             anyhow::bail!("forward_one_token_minimal_graph_params: invalid dims");
         }
         anyhow::ensure!(
-            self.activation_research.is_none(),
-            "activation research does not support CUDA Graphs"
+            self.activation_research.is_none() && self.layer_influence.is_none(),
+            "model calibration does not support CUDA Graphs"
         );
         if d_position.is_null() || d_seq_len.is_null() {
             anyhow::bail!("forward_one_token_minimal_graph_params: null device parameter");
@@ -1924,6 +1924,10 @@ impl LoadedModel {
 
         #[cfg(feature = "cuda")]
         {
+            anyhow::ensure!(
+                self.layer_influence.is_none() || (sequence_id == 0 && !kv.is_compressed()),
+                "layer influence capture requires sequence 0 and explicit dense KV"
+            );
             if layer_count == 1 {
                 self.forward_one_token_with_layer(d_x_f32, 0, sequence_id, seq_len, d_out_f32)?;
                 return Ok(1);
@@ -1948,6 +1952,7 @@ impl LoadedModel {
                         ws.scratch_b
                     };
                     self.forward_one_token_with_layer(current, layer, sequence_id, seq_len, next)?;
+                    self.observe_layer_influence(layer, seq_len.saturating_sub(1), current, next)?;
                     current = next as *const c_void;
                 }
                 self.active_layer_count()
@@ -1977,8 +1982,8 @@ impl LoadedModel {
         items: &[ForwardBatchItem],
     ) -> Result<usize> {
         anyhow::ensure!(
-            self.activation_research.is_none(),
-            "activation research requires single-row sequential forward, not batching"
+            self.activation_research.is_none() && self.layer_influence.is_none(),
+            "model calibration requires single-row sequential forward, not batching"
         );
         if items.is_empty() {
             anyhow::bail!("batched forward requires at least one item");
@@ -2438,8 +2443,8 @@ impl LoadedModel {
         kv: &KVCache,
     ) -> Result<usize> {
         anyhow::ensure!(
-            self.activation_research.is_none(),
-            "activation research requires sequential prefill, not packed prefill"
+            self.activation_research.is_none() && self.layer_influence.is_none(),
+            "model calibration requires sequential prefill, not packed prefill"
         );
         if items.is_empty() {
             anyhow::bail!("batched prefill requires at least one item");

@@ -121,6 +121,15 @@ using the existing C20 runner. Protect first/last layers and original IDs.
 Export remains conditional C25; C26 compares measured quality/speed/memory.
 Do not reopen rejected sparse-weight, n-gram or dense-layout screens.
 
+**C24 is in progress.** `7eea030` defines bounded teacher-forced calibration
+block influence and complete iterative loss-ranking stages. Five CPU tests
+protect deterministic ranking, original IDs, population identity and first/last
+layers. Read-only model-local capture also passes M40 full-logit/launch parity
+and an independent explicit-layer hidden-transition oracle. Unsupported
+batch/packed/graph/compressed paths reject capture before launches. See
+[the contracts and atomic sequence](layer_ranking.md). Real-model influence,
+all-interior calibration-loss ranking and frozen-mask quality/timing remain.
+
 C21 used these dependency-ordered commits:
 
 1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
