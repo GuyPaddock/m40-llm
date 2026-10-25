@@ -46,15 +46,23 @@ worsens from 39.61 to 47.66/52.72/53.78, with task regressions at two/three
 layers. Keep all masks diagnostic; no source-model or runtime default changes.
 See [the measured tradeoffs and raw artifacts](experiments/2026-10-25-layer-mask-sensitivity.md).
 
-Next is **C21**, fixed 16-of-32 sparse-Q8 packing and a Maxwell projection
-experiment at exactly 50% weight sparsity. Compare the sparse kernel against
-native dense Q8 containing the same zeroed weights, including actual aligned
-bytes, tails, decode/prefill shapes, packing cost and matched timing. Do not
-calibrate model pruning until that format/kernel has a positive speed gate.
-Layer influence ranking remains C24, compact export C25. Do not tune on
-held-out/browser inputs or reopen the failed n-gram/layout screens.
+**C21 is complete with a negative decode gate.** Fixed 16-of-32 packing passes
+scalar/matched-zero parity and saves 29.41% of requested weight bytes, but
+the best single-row sparse kernels take 2.29/2.31/2.66x native gate/up/down
+latency. The complete release matrix has 240 pairs across real FFN shapes,
+rows 1/4/16/64 and four geometries. Some multi-row gate/up wins are insufficient
+for a decode pruning backend. C22 and C27 are postponed under this negative
+gate. See [the screen, raw data and limitations](experiments/2026-10-25-sparse-q8-screen.md).
 
-C21 will use these dependency-ordered commits:
+Before more performance claims, audit pageable H2D/default-stream completion
+against nonblocking consumers. C21 reproduced a stale-input native control;
+setup readback fixes the probe, not every existing runtime site. Do not change
+numeric tolerances or blame quantization for that ordering issue. Then assess
+C23's retained input-layout prerequisite separately; it must not consume the
+rejected sparse kernel. Layer ranking remains C24, compact export C25. Do not
+tune on held-out/browser inputs or reopen failed n-gram/dense-layout screens.
+
+C21 used these dependency-ordered commits:
 
 1. `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
    packing, matched-zero reconstruction, explicit tail/alignment accounting
@@ -88,6 +96,13 @@ matched-zero native control, full/scalar-sample parity, alternating serial
 pairs, setup/storage/hash metadata and GPU isolation checks. CUDA/server
 all-targets Clippy and the deterministic input test pass. No benchmark result
 or calibrated model is claimed until the release run completes.
+
+The measurement tool is committed in `f2c5063`; `6d02feb` adds a setup-only
+input readback fence and expanded large-K multi-row tests after the initial
+unfenced control failure. Qualified results at clean `6d02feb` pass all parity
+checks but fail the speed gate above. Preserve this tested implementation and
+the measured result before separately removing active CUDA/benchmark code.
+The checked CPU format/reconstruction remains useful as a reference contract.
 
 C20 was split into dependency-ordered commits:
 

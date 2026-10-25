@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Fixed Sparse-Q8 Decode Screen
+
+C21's fixed 16-of-32 format passes scalar/matched-zero parity and reduces
+requested weight-buffer storage by 29.41%, from 34 to 24 bytes/block. It fails
+the decode speed gate: every tested single-row sparse configuration regresses.
+
+| Projection | Matched Dense ms | Best Sparse ms | Sparse/Dense Latency |
+| --- | ---: | ---: | ---: |
+| FFN gate | 0.227844 | 0.522788 | 2.29x |
+| FFN up | 0.201090 | 0.465030 | 2.31x |
+| FFN down | 0.173776 | 0.461760 | 2.66x |
+
+Release M40, actual layer-0 Qwen2.5-3B Q8_0 tensors, deterministic synthetic
+masks, same zeroed weights in the native control, five alternating serial
+pairs per geometry. Rows 1/4/16/64 and four sparse geometries are measured.
+Some multi-row gate/up gains do not offset down/decode regressions. There is
+no calibrated model, quality claim, E2E gain or changed default. C22 pruning
+and C27 sparse-Q4 remain gated off on this backend.
+
+The initial unfenced H2D setup caused an intermittent native-control mismatch;
+the final clean run fences/validates setup input and passes all 240 pairs.
+Aborted evidence is separate, never pooled. See the [full report and raw data](experiments/2026-10-25-sparse-q8-screen.md),
+including actual mask/scale/alignment bytes, packing cost and limitations.
+Working code is preserved in `6d02feb` before separate active-code removal.
+General runtime pageable-upload ordering still needs its own audit.
+
 ## 2026-10-25: Diagnostic Layer-Mask Tradeoffs
 
 C20 adds opt-in model-local interior-layer skipping, preserving original tensor/
