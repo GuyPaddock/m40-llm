@@ -1,8 +1,11 @@
 # Sparse Q8 Projection Experiment
 
-C21 tests conventional Maxwell sparse projection, not a pruned runtime model.
-Nothing here changes generation, KV policy, or loaded-model weights. C22
-calibration is gated on a positive matched-work kernel result.
+C21's conventional Maxwell sparse projection failed the decode speed gate.
+See [the measured screen](experiments/2026-10-25-sparse-q8-screen.md).
+The tested CUDA probe/tool is preserved in `6d02feb`, with results committed
+in `51fa76b`, before separate removal of active code. Only the checked CPU
+format/reconstruction remains. Nothing changes generation, KV policy or
+loaded-model weights. C22 calibration and C27 sparse-Q4 are postponed.
 
 ## Format
 
@@ -31,7 +34,11 @@ padding and tails. Scalar reconstruction and native GGUF reconstruction both
 represent the same pruned matrix. Kernels must compare against those matched
 zeroed dense blocks, never the original nonzero matrix.
 
-## CUDA Probe
+## Archived CUDA Probe
+
+This section describes the preservation revision `6d02feb`. The device API,
+test target and benchmark below are not available after active-code removal;
+reproduction requires an independent checkout of that revision.
 
 `DeviceSparseQ8Weight` owns its allocation through `DeviceBuffer`. It is not
 part of the runtime execution-weight cache. Its explicit unsafe enqueue API
@@ -52,10 +59,10 @@ M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
   --include-ignored --test-threads=1
 ```
 
-GPU-less CI does not run this explicit hardware test. The CPU format tests
-run with `cargo test --no-default-features --lib sparse_weights`.
+GPU-less CI did not run this explicit hardware test. The retained CPU format
+tests run with `cargo test --no-default-features --lib sparse_weights`.
 
-## Matched-Work Release Measurement
+## Archived Release Measurement
 
 ```bash
 source scripts/dev-env.sh

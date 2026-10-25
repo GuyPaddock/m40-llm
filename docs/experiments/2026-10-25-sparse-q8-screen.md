@@ -123,6 +123,17 @@ This does not audit or fix every pre-existing runtime H2D site; inspect those
 producer/consumer contracts before attributing any similar mismatch to
 quantization or model behavior.
 
+## Active-Code Removal
+
+Results are committed in `51fa76b` after the complete tested code in `6d02feb`.
+A separate follow-up removes the failed CUDA kernel, FFI/device interface,
+hardware target and benchmark. The CPU format and all raw artifacts remain.
+Production CUDA/build/FFI files match the pre-C21 tree after that cleanup.
+Post-removal attention/projection/MLP checks pass with cuBLAS on/off, along
+with the forward suite, warning-as-error non-CUDA and NVCC/no-device CI lanes,
+both all-targets Clippy configurations and formatting. No performance rerun
+is claimed after removal; there is no sparse execution path to promote.
+
 ## Validation and Reproduction
 
 At the preservation revision, use the commands in [the probe guide](../sparse_q8.md).

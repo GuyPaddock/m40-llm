@@ -116,12 +116,6 @@ int m40llm_gemm_f32xf16_gguf_f32(M40llmCudaContext* ctx, const void* d_A_f32, co
     (void)ctx; (void)d_A_f32; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
 }
 
-int m40llm_gemm_f32xq8_sparse_f32_async(M40llmCudaContext* ctx, const void* input, const void* weights, void* output, int M, int N, int K, int columns, int threads) {
-    (void)ctx; (void)input; (void)weights; (void)output;
-    (void)M; (void)N; (void)K; (void)columns; (void)threads;
-    return -1;
-}
-
 int m40llm_gemm_f32xq8_separate_f32_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int M, int N, int K, int columns, int threads, uint32_t stream_kind) {
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)M; (void)N; (void)K; (void)columns; (void)threads; (void)stream_kind;

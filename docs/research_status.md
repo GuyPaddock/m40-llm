@@ -64,17 +64,21 @@ tune on held-out/browser inputs or reopen failed n-gram/dense-layout screens.
 
 C21 used these dependency-ordered commits:
 
-1. `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
+1. `df9de8a`, `feat(infer): define fixed sparse Q8 blocks`: checked 16-of-32 host
    packing, matched-zero reconstruction, explicit tail/alignment accounting
    and CPU tests. Reuse C08 source identity, without adding a runtime policy.
-2. `perf(cuda): add sparse Q8 projection probe`: owned device storage,
+2. `ba57428`, `perf(cuda): add sparse Q8 projection probe`: owned device storage,
    conventional Maxwell projection and CUDA parity against the same pruned
    dense matrix. Depends on the format contract.
-3. `test(bench): compare matched sparse Q8 work`: bounded release paired
+3. `f2c5063`, `test(bench): compare matched sparse Q8 work`: bounded release paired
    microbenchmarks at real FFN shapes, packing cost and memory accounting.
    Depends on numerical parity; no model calibration or default changes.
-4. `docs(perf): record sparse Q8 screening`: record measured go/no-go for C22.
-   Preserve any losing code in a commit before a separate removal.
+4. `6d02feb`, `fix(bench): finish sparse probe input upload`: setup-only input
+   readback fence, scalar failure values and expanded large-K coverage.
+5. `51fa76b`, `docs(perf): record sparse Q8 screening`: measured negative C22
+   gate and preserved raw evidence before separate removal.
+6. `refactor(cuda): remove failed sparse Q8 probe`: remove the losing device
+   code/tool, preserving CPU reconstruction and historical reproduction.
 
 The initial block is 24 bytes: mask at byte 0, original FP16 scale at 4,
 two zero alignment bytes at 6, and sixteen signed values at 8 in ascending
@@ -83,26 +87,21 @@ positions are retained even in a partial final block; out-of-range payloads
 are zero, so logical-tail sparsity is reported separately. This experiment
 does not select weights for a model or promise an end-to-end speedup.
 
-The host contract is committed in `df9de8a`; its three CPU tests and non-CUDA
-Clippy pass. The standalone CUDA probe now passes matched-zero dense and
-scalar parity on M40, with all four bounded launch variants, ragged K/N,
-signed/zero scales, distinct activation rows, and invalid-call rejection.
-See [the sparse format and kernel contract](sparse_q8.md). Release timing and
-the C22 gate remain pending; runtime model/default behavior is unchanged.
+The retained CPU contract has three passing format tests. The archived CUDA
+probe passed all four geometries, ragged K/N, signed/zero scales, distinct
+rows and invalid-call rejection; the release matrix passed full matched-zero
+and scalar-sample checks. Results are preserved in `51fa76b`, after clean
+implementation `6d02feb`. The active sparse CUDA kernel, FFI/device API,
+hardware target and tool are removed separately. Reproduction commands in
+[the format/probe guide](sparse_q8.md) refer to `6d02feb`, not the post-removal
+tree. Runtime defaults are unchanged. Broader upload ordering is next.
 
-The kernel is committed in `ba57428`. The release measurement tool now
-compares actual layer-0 FFN tensors with synthetic fixed-popcount masks,
-matched-zero native control, full/scalar-sample parity, alternating serial
-pairs, setup/storage/hash metadata and GPU isolation checks. CUDA/server
-all-targets Clippy and the deterministic input test pass. No benchmark result
-or calibrated model is claimed until the release run completes.
-
-The measurement tool is committed in `f2c5063`; `6d02feb` adds a setup-only
-input readback fence and expanded large-K multi-row tests after the initial
-unfenced control failure. Qualified results at clean `6d02feb` pass all parity
-checks but fail the speed gate above. Preserve this tested implementation and
-the measured result before separately removing active CUDA/benchmark code.
-The checked CPU format/reconstruction remains useful as a reference contract.
+Post-removal validation passes: attention grid and projection/MLP wrappers
+with cuBLAS on/off, the CUDA forward suite, full warning-as-error non-CUDA
+and NVCC/no-device lanes, both all-targets Clippy configurations, and fmt.
+Production CUDA/build/FFI files match the pre-C21 tree; only the standalone
+CPU format is retained as new code. No GPU benchmark runs alongside tests or
+builds, and the benchmark process releases all GPU use on exit.
 
 C20 was split into dependency-ordered commits:
 

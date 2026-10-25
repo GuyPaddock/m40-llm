@@ -7,12 +7,8 @@ use serde::Serialize;
 
 use super::execution_weights::{Q8SourceIdentity, Q8SourceView, Q8_BLOCK_BYTES};
 
-#[cfg(feature = "cuda")]
-mod device;
 #[cfg(test)]
 mod tests;
-#[cfg(feature = "cuda")]
-pub use device::{DeviceSparseQ8Weight, SparseQ8Launch};
 
 pub const SPARSE_Q8_RETAINED: usize = 16;
 pub const SPARSE_Q8_IDEAL_BYTES: usize = 22;
