@@ -71,6 +71,12 @@ control, with zero dense-valid regressions. Maximum sampled logit drift is
 the fresh selected-runtime Ollama comparison. Single diagnostic prompt and
 decode intervals are not substituted for those controlled measurements.
 
+Combined [corrected-control HTTP qualification](experiments/2026-10-25-maxwell-completed-combined-http.md)
+passes at **41.360 vs 35.467 tok/s, +16.616%**, with a paired 95% interval
+of **[16.439%, 16.708%]** and all actual 512 IDs equal. Five alternating
+pairs meet the unchanged timing gate without extension. This retains the
+explicit typed combination, not a global default or an Ollama target claim.
+
 M01's [source and runtime dispatch checkpoint](experiments/2026-10-25-maxwell-q8-dispatch.md)
 is complete. The SDK-only observer in `723a456` traces the official binary,
 not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,

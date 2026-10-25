@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Combined Corrected-Control Runtime Gain
+
+Five alternating release pairs qualify packed FP32/128 FFN plus SGEMM
+prefill at **41.360 vs 35.467 HTTP tok/s, +16.616%**, paired 95% interval
+**[16.439%, 16.708%]**. All actual 512 IDs and dense-valid quality match.
+Median prompt is **509 vs 1611 ms**, decode **11828 vs 12779 ms**, and
+HTTP **12379 vs 14436 ms**. This is measured combination performance,
+not multiplication of the independent gains. See [configuration, memory,
+raw evidence and audit](experiments/2026-10-25-maxwell-completed-combined-http.md).
+
+Runtime defaults remain unchanged. This candidate-pair result does not
+establish either original Ollama throughput target.
+
 ## 2026-10-25: Corrected-Control Independent HTTP Gains
 
 Five alternating release pairs per case qualify FP32/128 at **38.382 vs
