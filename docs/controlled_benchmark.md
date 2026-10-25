@@ -110,6 +110,16 @@ The final record reports both the fixed 53.06 HTTP tok/s requirement and
 1.30x that run's fresh Ollama median. A summary without the final verified
 record is not completed qualification. Runtime defaults remain unchanged.
 
+Use `--profile-q8-runtime` instead of `--time-ollama` for a separate
+selected-runtime stage diagnostic. It requires the same completed exact
+quality report, selects the same immutable FFN/prefill configuration, and
+reuses five alternating profiling-off/on pairs. Set
+`M40LLM_STAGE_PROFILE_REPORT` to a new path; existing stage reports are
+rejected. `M40LLM_STAGE_PROFILE_TOKENS` defaults to `0,255,511`. Both actual
+off/on token traces must match each other and the completed quality IDs.
+Ollama supplies only an untimed oracle. These samples locate bottlenecks
+and measure profiling perturbation, not an optimization or target gain.
+
 ### Baseline Command
 
 Build and execute through the project environment with hardware access:

@@ -392,4 +392,42 @@ mod tests {
         assert!(parse_args(&[]).unwrap().primary_runtime_config().is_none());
         Ok(())
     }
+
+    /// Profiling must use the selected FFN/prefill, require quality evidence
+    /// and remain separate from authoritative Ollama and legacy profile modes.
+    #[test]
+    fn test_runtime_profile_is_explicit_and_excludes_timing() -> Result<()> {
+        let values = [
+            "--compare-q8-runtime",
+            "packed-f32-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+            "--profile-q8-runtime",
+        ];
+        let args = parse_args(&values)?;
+        assert!(args.should_profile_runtime);
+        assert!(!args.should_time_ollama);
+        assert_eq!(
+            args.primary_runtime_config(),
+            args.candidate_runtime_config()
+        );
+        assert_eq!(
+            args.primary_runtime_config()
+                .unwrap()
+                .ffn_config()?
+                .threads(),
+            Some(128)
+        );
+        assert!(parse_args(&["--profile-q8-runtime"]).is_err());
+        for extra in [
+            "--time-ollama",
+            "--compare-stage-profile",
+            "--compare-head128-attention",
+        ] {
+            assert!(parse_args(&[values.as_slice(), &[extra]].concat()).is_err());
+        }
+        Ok(())
+    }
 }

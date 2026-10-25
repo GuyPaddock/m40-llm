@@ -79,6 +79,13 @@ struct Args {
     /// Time the selected qualified runtime against Ollama, not native FFN.
     #[arg(long = "time-ollama", requires = "q8_runtime_candidate")]
     should_time_ollama: bool,
+    /// Compare profiling off/on on the selected qualified runtime only.
+    #[arg(
+        long = "profile-q8-runtime",
+        requires = "q8_runtime_candidate",
+        conflicts_with = "should_time_ollama"
+    )]
+    should_profile_runtime: bool,
 }
 
 impl Args {
@@ -91,7 +98,7 @@ impl Args {
 
     fn primary_runtime_config(&self) -> Option<RuntimeConfig> {
         self.candidate_runtime_config().map(|candidate| {
-            if self.should_time_ollama {
+            if self.should_time_ollama || self.should_profile_runtime {
                 candidate
             } else {
                 RuntimeConfig::default()
@@ -684,6 +691,12 @@ impl ComparisonRun {
             generated.token_ids.len() - generated.prompt_token_len == MAX_TOKENS,
             "untimed m40 trace omitted fixed-workload generated IDs"
         );
+        if let Some(evidence) = &self.selected_quality {
+            evidence.verify_generation(
+                &generated.token_ids[generated.prompt_token_len..],
+                &generated.output,
+            )?;
+        }
         self.report.record(json!({
             "kind": "token_trace", "runtime": "m40-llm", "is_timed": false,
             "model_variant": variant.as_str(),
@@ -853,6 +866,14 @@ impl ComparisonRun {
             std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").is_some(),
             "set M40LLM_STAGE_PROFILE_REPORT for the profile comparison"
         );
+        if self.args.should_profile_runtime {
+            let path =
+                std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").context("stage profile path")?;
+            ensure!(
+                !Path::new(&path).exists(),
+                "selected-runtime stage report already exists; choose a new path"
+            );
+        }
         let switch = StageProfileSwitch::new();
         switch.set(false);
         ensure!(
@@ -908,6 +929,7 @@ impl ComparisonRun {
             "profile_off": ordinary, "profile_on": profiled,
             "throughput_change": profiled.median / ordinary.median - 1.0,
             "report_path": std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").map(PathBuf::from),
+            "selected_runtime_config":self.args.primary_runtime_config(),
             "is_optimization_claim": false,
         }))?;
         switch.set(false);
@@ -918,6 +940,11 @@ impl ComparisonRun {
             plain_ids == profiled_ids,
             "stage profiling changed actual generated token IDs"
         );
+        self.report
+            .record(json!({"kind":"profile_token_comparison",
+            "actual_ids_equal":true,"actual_generated_tokens":plain_ids.len(),
+            "matches_completed_quality":self.selected_quality.as_ref().map(|_|true),
+            "is_optimization_claim":false}))?;
         eprintln!(
             "Stage-profile comparison and token-ID parity complete: {}",
             self.args.output.display()
@@ -1048,7 +1075,7 @@ pub async fn compare() -> Result<()> {
     let replacement_ids =
         tokenizer.encode_with_specials(protocol::REPLACEMENT_PROMPT, false, false)?;
     protocol::validate_replacement_ids(&prompt_ids, &replacement_ids)?;
-    let selected_quality = if args.should_time_ollama {
+    let selected_quality = if args.should_time_ollama || args.should_profile_runtime {
         let evidence = runtime_quality::load(
             args.q8_runtime_quality_report
                 .as_deref()
@@ -1058,7 +1085,7 @@ pub async fn compare() -> Result<()> {
             &prompt_ids,
         )?;
         ensure!(evidence.passes_exact_gate,
-            "selected-runtime Ollama qualification requires a passing exact quality report; use candidate-pair mode for numerical/failed-gate diagnostics");
+            "selected-runtime timing/profiling requires a passing exact quality report; use candidate-pair mode for numerical/failed-gate diagnostics");
         Some(evidence)
     } else {
         None
@@ -1122,7 +1149,7 @@ pub async fn compare() -> Result<()> {
         "replacement_prompt": protocol::REPLACEMENT_PROMPT, "replacement_token_ids": replacement_ids,
         "m40_stop_token_ids": tokenizer.stop_ids(), "kv_mode": "off", "context_tokens": CONTEXT_TOKENS,
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
-        "comparison_kind": if args.should_time_ollama { "selected-runtime-vs-ollama" } else if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
+        "comparison_kind": if args.should_profile_runtime { "selected-runtime-stage-profile" } else if args.should_time_ollama { "selected-runtime-vs-ollama" } else if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
         "candidate_runtime_config":candidate_runtime,
         "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
@@ -1185,6 +1212,9 @@ pub async fn compare() -> Result<()> {
         report,
         selected_quality,
     };
+    if run.args.should_profile_runtime {
+        return run.compare_stage_profile().await;
+    }
     if run.args.q8_execution_mode.is_some()
         || (run.args.q8_runtime_candidate.is_some() && !run.args.should_time_ollama)
     {
