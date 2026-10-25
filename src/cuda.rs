@@ -26,6 +26,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
+mod q8_output;
+#[cfg(feature = "cuda")]
 mod q8_prefill;
 #[cfg(feature = "cuda")]
 mod q8_qkv;
@@ -417,6 +419,15 @@ mod ffi {
             biases: *const *const c_void,
             outputs: *const *mut c_void,
             widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weight: *const c_void,
+            output: *mut c_void,
+            n: i32,
             k: i32,
             stream_kind: u32,
         ) -> i32;

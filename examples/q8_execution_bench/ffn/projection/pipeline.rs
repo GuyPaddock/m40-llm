@@ -13,39 +13,68 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-pub(super) struct QkvProbe<'a> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProjectionKind {
+    Qkv,
+    Output,
+}
+
+impl ProjectionKind {
+    pub fn operation(self, is_warp: bool) -> &'static str {
+        match (self, is_warp) {
+            (Self::Qkv, false) => "qkv_f32xq8_0_gguf_decode",
+            (Self::Qkv, true) => "qkv_f32xq8_0_gguf_warp",
+            (Self::Output, false) => "gemm_f32xq8_0_gguf_f32_decode",
+            (Self::Output, true) => "gemm_f32xq8_0_gguf_coltile4_warp",
+        }
+    }
+}
+
+pub(super) struct ProjectionProbe<'a> {
     model: &'a LoadedModel,
+    kind: ProjectionKind,
     pub rows: usize,
     k: usize,
-    widths: [usize; 3],
-    weights: [DeviceTensorView; 3],
-    biases: [Option<DeviceTensorView>; 3],
-    pub sources: [FfnTensorSource; 3],
+    widths: Vec<usize>,
+    weights: Vec<DeviceTensorView>,
+    biases: Vec<Option<DeviceTensorView>>,
+    pub sources: Vec<FfnTensorSource>,
     input: GuardedF32,
-    outputs: [GuardedF32; 3],
+    outputs: Vec<GuardedF32>,
     original_input: Vec<f32>,
     start: CudaEvent,
     stop: CudaEvent,
 }
 
-impl<'a> QkvProbe<'a> {
-    pub fn new(model: &'a LoadedModel, layer: usize, rows: usize, input: &[f32]) -> Result<Self> {
+impl<'a> ProjectionProbe<'a> {
+    pub fn new(
+        model: &'a LoadedModel,
+        layer: usize,
+        rows: usize,
+        input: &[f32],
+        kind: ProjectionKind,
+    ) -> Result<Self> {
         let mapped = model.map_standard_layer(layer)?;
         let k = mapped.d_model;
         ensure!(
             matches!(rows, 1 | 4) && input.len() == rows * k,
-            "QKV probe requires distinct 1/4 input rows"
+            "projection probe requires distinct 1/4 input rows"
         );
-        let weights = [mapped.wq, mapped.wk, mapped.wv];
-        let biases = [mapped.bq, mapped.bk, mapped.bv];
+        let (weights, biases) = match kind {
+            ProjectionKind::Qkv => (
+                vec![mapped.wq, mapped.wk, mapped.wv],
+                vec![mapped.bq, mapped.bk, mapped.bv],
+            ),
+            ProjectionKind::Output => (vec![mapped.wo], vec![None]),
+        };
         ensure!(
             k <= i32::MAX as usize
                 && weights
                     .iter()
                     .all(|w| w.shape.len() == 2 && w.shape[1] > 0 && w.shape[1] <= i32::MAX as u64),
-            "QKV probe dimensions exceed CUDA interface"
+            "projection probe dimensions exceed CUDA interface"
         );
-        let widths = std::array::from_fn(|i| weights[i].shape[1] as usize);
+        let widths: Vec<_> = weights.iter().map(|w| w.shape[1] as usize).collect();
         let sources = weights
             .iter()
             .map(|view| -> Result<FfnTensorSource> {
@@ -53,14 +82,14 @@ impl<'a> QkvProbe<'a> {
                     view.dtype == GgmlDType::Q8_0
                         && view.shape.len() == 2
                         && view.shape[0] == k as u64,
-                    "QKV probe requires raw Q8_0 [K,N] weights"
+                    "projection probe requires raw Q8_0 [K,N] weights"
                 );
                 let tensor = model
                     .gguf
                     .tensors
                     .iter()
                     .find(|t| t.offset == view.byte_offset && t.shape == view.shape)
-                    .context("missing QKV source tensor")?;
+                    .context("missing projection source tensor")?;
                 let mut source = FfnTensorSource {
                     name: tensor.name.clone(),
                     byte_offset: view.byte_offset,
@@ -71,32 +100,29 @@ impl<'a> QkvProbe<'a> {
                 source.source_sha256 = sha256(source_bytes(model, &source)?)?;
                 Ok(source)
             })
-            .collect::<Result<Vec<_>>>()?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("missing QKV source"))?;
+            .collect::<Result<Vec<_>>>()?;
         for (i, bias) in biases.iter().enumerate() {
             if let Some(bias) = bias {
                 ensure!(
                     bias.dtype == GgmlDType::F32 && bias.nbytes == widths[i] * 4,
-                    "QKV probe requires FP32 bias vectors"
+                    "projection probe requires FP32 bias vectors"
                 );
             }
         }
         let outputs = widths
-            .map(|n| GuardedF32::new(&model.cuda, &vec![0.0; rows * n], "qkv_probe:output"))
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("missing QKV output"))?;
+            .iter()
+            .map(|n| GuardedF32::new(&model.cuda, &vec![0.0; rows * n], "projection_probe:output"))
+            .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             model,
+            kind,
             rows,
             k,
             widths,
             weights,
             biases,
             sources,
-            input: GuardedF32::new(&model.cuda, input, "qkv_probe:input")?,
+            input: GuardedF32::new(&model.cuda, input, "projection_probe:input")?,
             outputs,
             original_input: input.to_vec(),
             start: model.cuda.create_event()?,
@@ -109,14 +135,40 @@ impl<'a> QkvProbe<'a> {
     }
 
     pub fn enqueue(&self, is_warp: bool) -> Result<()> {
-        let weights = self.weights.each_ref().map(|v| v.dptr.cast_const());
-        let biases = self
-            .biases
-            .each_ref()
-            .map(|v| v.as_ref().map(|v| v.dptr.cast_const()));
         for row in 0..self.rows {
             unsafe {
                 let input = self.input.pointer().cast::<f32>().add(row * self.k).cast();
+                if self.kind == ProjectionKind::Output {
+                    let output = self.outputs[0]
+                        .pointer()
+                        .cast::<f32>()
+                        .add(row * self.widths[0])
+                        .cast();
+                    let weight = self.weights[0].dptr.cast_const();
+                    if is_warp {
+                        self.model.cuda.gemm_f32xq8_0_gguf_coltile4_warp_async(
+                            input,
+                            weight,
+                            output,
+                            self.widths[0] as i32,
+                            self.k as i32,
+                            CudaStream::Decode,
+                        )?;
+                    } else {
+                        self.model.cuda.gemm_f32xq8_0_gguf_f32_decode_async(
+                            input,
+                            weight,
+                            output,
+                            1,
+                            self.widths[0] as i32,
+                            self.k as i32,
+                        )?;
+                    }
+                    continue;
+                }
+                let weights = std::array::from_fn(|i| self.weights[i].dptr.cast_const());
+                let biases =
+                    std::array::from_fn(|i| self.biases[i].as_ref().map(|v| v.dptr.cast_const()));
                 let outputs = std::array::from_fn(|i| {
                     self.outputs[i]
                         .pointer()
@@ -130,7 +182,7 @@ impl<'a> QkvProbe<'a> {
                         weights,
                         biases,
                         outputs,
-                        self.widths.map(|n| n as i32),
+                        std::array::from_fn(|i| self.widths[i] as i32),
                         self.k as i32,
                         CudaStream::Decode,
                     )?;
@@ -157,15 +209,12 @@ impl<'a> QkvProbe<'a> {
         Ok(())
     }
 
-    fn read(&self) -> Result<[Vec<f32>; 3]> {
+    fn read(&self) -> Result<Vec<Vec<f32>>> {
         self.model.cuda.synchronize_stream(CudaStream::Decode)?;
         self.outputs
-            .each_ref()
+            .iter()
             .map(|b| b.read(&self.model.cuda))
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("missing QKV results"))
+            .collect()
     }
 
     pub fn verify(&self) -> Result<()> {
@@ -176,12 +225,12 @@ impl<'a> QkvProbe<'a> {
                 .iter()
                 .zip(&self.original_input)
                 .all(|(a, b)| a.to_bits() == b.to_bits()),
-            "QKV probe changed input"
+            "projection probe changed input"
         );
         for buffer in &self.outputs {
             buffer.read(&self.model.cuda)?;
         }
-        for i in 0..3 {
+        for i in 0..self.weights.len() {
             let source = source_bytes(self.model, &self.sources[i])?;
             self.verify_span(self.weights[i].dptr, source)?;
             if let Some(bias) = &self.biases[i] {
@@ -202,7 +251,10 @@ impl<'a> QkvProbe<'a> {
                 .cuda
                 .memcpy_d2h(bytes.as_mut_ptr().cast(), ptr, bytes.len())?;
         }
-        ensure!(bytes == expected, "QKV probe changed a weight/bias span");
+        ensure!(
+            bytes == expected,
+            "projection probe changed a weight/bias span"
+        );
         Ok(())
     }
 
@@ -212,13 +264,13 @@ impl<'a> QkvProbe<'a> {
         self.enqueue(true)?;
         let candidate = self.read()?;
         let mut errors = Vec::new();
-        for i in 0..3 {
+        for i in 0..self.weights.len() {
             ensure!(
                 candidate[i]
                     .iter()
                     .zip(&control[i])
                     .all(|(a, b)| a.to_bits() == b.to_bits()),
-                "QKV warp changed original reduction bits"
+                "projection warp changed original reduction bits"
             );
             let mut cpu = validation::project(
                 &self.original_input,
@@ -245,17 +297,17 @@ impl<'a> QkvProbe<'a> {
         self.verify()?;
         Ok(
             json!({"control_bits_equal":true,"guards_and_immutable_read_spans":true,"outputs":errors,
-            "biases":self.biases.each_ref().map(|b|b.as_ref().map(|b|json!({"offset":b.byte_offset,"bytes":b.nbytes}))),
+            "biases":self.biases.iter().map(|b|b.as_ref().map(|b|json!({"offset":b.byte_offset,"bytes":b.nbytes}))).collect::<Vec<_>>(),
             "cpu_reference":"existing independent scalar Q8_0/FP64 projection plus original FP32 bias"}),
         )
     }
 
     pub fn time(&self, is_warp: bool, iterations: usize) -> Result<Value> {
-        ensure!(iterations > 0, "QKV timing requires iterations");
+        ensure!(iterations > 0, "projection timing requires iterations");
         let expected_launches = u64::try_from(
             iterations
                 .checked_mul(self.rows)
-                .context("QKV launch count overflow")?,
+                .context("projection launch count overflow")?,
         )?;
         self.model.cuda.synchronize_stream(CudaStream::Decode)?;
         let before = profile::snapshot();
@@ -277,21 +329,19 @@ impl<'a> QkvProbe<'a> {
                 && counters.stream_syncs == 0
                 && counters.stream_waits == 0
                 && counters.cublas_calls == 0,
-            "unexpected QKV timed work"
+            "unexpected projection timed work"
         );
-        let op = if is_warp {
-            "qkv_f32xq8_0_gguf_warp"
-        } else {
-            "qkv_f32xq8_0_gguf_decode"
-        };
+        let op = self.kind.operation(is_warp);
         let launches = after.by_op.get(op).map_or(0, |v| v.launches)
             - before.by_op.get(op).map_or(0, |v| v.launches);
         ensure!(
             launches == expected_launches,
-            "QKV timing dispatched wrong operation"
+            "projection timing dispatched wrong operation"
         );
-        let gpu_ms =
-            f64::from(self.start.elapsed_sync(&self.stop, "qkv_probe_timing")?) / iterations as f64;
+        let gpu_ms = f64::from(
+            self.start
+                .elapsed_sync(&self.stop, "projection_probe_timing")?,
+        ) / iterations as f64;
         Ok(
             json!({"is_warp":is_warp,"gpu_ms":gpu_ms,"gpu_ms_per_request":gpu_ms/self.rows as f64,
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
@@ -305,20 +355,20 @@ impl<'a> QkvProbe<'a> {
         for batch in 1..=256 {
             elapsed += self.time(is_warp, 128)?["gpu_ms"]
                 .as_f64()
-                .context("missing QKV warmup")?
+                .context("missing projection warmup")?
                 * 128.0;
             if elapsed >= minimum_ms {
                 return Ok(json!({"gpu_ms":elapsed,"batches":batch,"iterations_per_batch":128}));
             }
         }
-        anyhow::bail!("QKV bounded warmup exhausted")
+        anyhow::bail!("projection bounded warmup exhausted")
     }
 }
 
-impl Drop for QkvProbe<'_> {
+impl Drop for ProjectionProbe<'_> {
     fn drop(&mut self) {
         if let Err(error) = self.model.cuda.synchronize_stream(CudaStream::Decode) {
-            eprintln!("[qkv_probe] drain failed: {error:#}");
+            eprintln!("[projection_probe] drain failed: {error:#}");
         }
     }
 }

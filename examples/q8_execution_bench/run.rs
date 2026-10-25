@@ -103,6 +103,11 @@ struct Args {
     /// Complete native QKV warp reduction using frozen normalized input vectors.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k"])]
     qkv_f32_warp: bool,
+    /// Fixed four-column output reduction, with the prespecified QKV peer.
+    #[arg(long, requires_all=["ffn_inputs","qkv_warp_report"], conflicts_with_all=["qkv_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k"])]
+    output_f32_warp: bool,
+    #[arg(long, requires = "output_f32_warp")]
+    qkv_warp_report: Option<PathBuf>,
     #[arg(
         long,
         default_value = "data/research_quality/v1.json",
@@ -560,7 +565,8 @@ mod argument_tests {
 
     /// FFN modes require provenance, exclude conflicting arithmetic experiments,
     /// and leave the original projection CLI valid. Two-column split work
-    /// cannot silently combine with old controls or another ablation.
+    /// cannot silently combine with old controls or another ablation. Output
+    /// reduction additionally requires its immutable QKV peer evidence.
     #[test]
     fn test_ffn_arguments_preserve_explicit_modes() {
         let parse = |extra: &[&str]| {
@@ -596,6 +602,16 @@ mod argument_tests {
                 .qkv_f32_warp
         );
         assert!(parse(&["--qkv-f32-warp"]).is_err());
+        let output_flags = ["--output-f32-warp", "--qkv-warp-report", "qkv.jsonl"];
+        assert!(
+            parse(&[flags.as_slice(), &output_flags].concat())
+                .unwrap()
+                .output_f32_warp
+        );
+        assert!(parse(&[flags.as_slice(), &["--output-f32-warp"]].concat()).is_err());
+        assert!(parse(&[flags.as_slice(), &["--qkv-warp-report", "qkv.jsonl"]].concat()).is_err());
+        assert!(parse(&output_flags).is_err());
+        assert!(parse(&[flags.as_slice(), &output_flags, &["--qkv-f32-warp"]].concat()).is_err());
         for other in [
             "--ffn-f32-ablation",
             "--ffn-q81",
@@ -607,6 +623,7 @@ mod argument_tests {
             "--ffn-f32-fixed-k",
         ] {
             assert!(parse(&[flags.as_slice(), &["--qkv-f32-warp", other]].concat()).is_err());
+            assert!(parse(&[flags.as_slice(), &output_flags, &[other]].concat()).is_err());
         }
         assert!(
             parse(&[flags.as_slice(), &["--ffn-f32-fixed-k"]].concat())
