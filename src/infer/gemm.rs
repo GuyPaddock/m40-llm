@@ -412,6 +412,17 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                let stream = if m == 1 && q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self
+                    .q8_execution
+                    .try_project(d_b_f16, d_a_f32, d_c_f32, m, n, k, stream)?
+                {
+                    return self.cuda.synchronize_stream(stream);
+                }
                 return self
                     .cuda
                     .gemm_f32xq8_0_gguf_f32(d_a_f32, d_b_f16, d_c_f32, m, n, k);
@@ -476,6 +487,17 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         {
             if self.gguf_weight_dtype(d_b_f16) == GgmlDType::Q8_0 {
+                let stream = if m == 1 && q8_decode_kernel_decode_stream_enabled() {
+                    CudaStream::Decode
+                } else {
+                    CudaStream::Prefill
+                };
+                if self
+                    .q8_execution
+                    .try_project(d_b_f16, d_a_f32, d_c_f32, m, n, k, stream)?
+                {
+                    return Ok(());
+                }
                 return self
                     .cuda
                     .gemm_f32xq8_0_gguf_f32_async(d_a_f32, d_b_f16, d_c_f32, m, n, k);

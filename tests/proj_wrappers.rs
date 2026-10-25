@@ -47,6 +47,8 @@ fn cpu_rowmajor_gemm_f32(a: &[f32], b: &[f32], m: usize, n: usize, k: usize) -> 
     c
 }
 
+/// Native F16 Q/K/V projections match independent CPU matrix products with
+/// explicit source weights rather than a prepared Q8 cache.
 #[test]
 fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -133,6 +135,8 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
         materialized_weights: std::sync::Mutex::new(HashMap::new()),
+        #[cfg(feature = "cuda")]
+        q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]
@@ -219,6 +223,8 @@ fn qkv_project_f32xf16_f32_smoke() -> Result<()> {
     Ok(())
 }
 
+/// The native F16 output projection preserves row-major layout and numerical
+/// parity without opt-in Q8 execution storage.
 #[test]
 fn out_proj_f32xf16_f32_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -278,6 +284,8 @@ fn out_proj_f32xf16_f32_smoke() -> Result<()> {
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
         materialized_weights: std::sync::Mutex::new(HashMap::new()),
+        #[cfg(feature = "cuda")]
+        q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

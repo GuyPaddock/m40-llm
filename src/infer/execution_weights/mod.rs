@@ -1,10 +1,24 @@
-//! Benchmark-owned Q8 execution representations, separate from GGUF tensor
-//! views and the model's FP32 materialization cache. No runtime dispatch here.
+//! Lossless Q8 execution representations with typed ownership, separate from
+//! GGUF tensor views and FP32 materialization. Runtime preparation is opt-in.
 
 use anyhow::{ensure, Context, Result};
 use serde::Serialize;
 
 use crate::gguf::{GgmlDType, GgufTensor};
+
+mod runtime;
+pub use runtime::{Q8ExecutionConfig, Q8ExecutionMode, Q8ExecutionStats, Q8PreparedTensorStats};
+#[cfg(feature = "cuda")]
+mod cache;
+#[cfg(feature = "cuda")]
+pub use cache::Q8ExecutionCache;
+
+#[cfg(feature = "cuda")]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Q8ProjectionLaunch {
+    Separate(Q8SeparateLaunch),
+    Tiled(Q8TiledLaunch),
+}
 
 #[cfg(feature = "cuda")]
 mod device;

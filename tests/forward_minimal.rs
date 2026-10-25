@@ -26,6 +26,8 @@ fn f32s_to_halves_bytes(vals: &[f32]) -> Vec<u8> {
     out
 }
 
+/// A minimal one-token forward produces finite hidden values with explicit
+/// native F16 weight storage and no opt-in execution cache.
 #[test]
 fn forward_one_token_minimal_smoke() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {
@@ -68,6 +70,8 @@ fn forward_one_token_minimal_smoke() -> Result<()> {
         forward_workspace: std::sync::Mutex::new(None),
         #[cfg(feature = "cuda")]
         materialized_weights: std::sync::Mutex::new(HashMap::new()),
+        #[cfg(feature = "cuda")]
+        q8_execution: m40_llm::infer::execution_weights::Q8ExecutionCache::disabled(),
         device_tensors: HashMap::new(),
         weights_len: 0,
         #[cfg(feature = "cuda")]

@@ -15,13 +15,28 @@ separately evaluated model-changing research. It is not replaced by the
 
 ## Work in Progress: 2026-10-24
 
-C01-C10 are committed. The uploaded-weight accounting prerequisite is committed
-as `81948df`. C10A load-time Q8 cache/configuration and standard projection
-dispatch are in the worktree, not yet a completed or benchmarked checkpoint.
-This documentation reorganization does not validate or commit that runtime work.
+C01-C10 and the uploaded-weight accounting prerequisite `81948df` are complete.
+C10A.1 adds opt-in model-owned Q8 preparation and standard projection dispatch;
+prepared fused consumers and HTTP validation are still pending. Runtime/KV
+defaults and the selected C07 benchmark configuration are unchanged.
+The real split-cache Qwen Q8 arithmetic canary returns `4`; cache/stream/failure
+tests, existing CUDA regressions with cuBLAS on/off, non-CUDA warning-as-error
+tests, and both Clippy lanes pass. See [ownership and validation details](q8_execution_weights.md).
+This is correctness evidence, not a generation speedup.
 
-Continue C10A as focused units: model-owned preparation and standard dispatch,
-then prepared fused consumers, then model parity and paired HTTP E2E validation.
+The dependency-ordered C10A units are:
+
+1. `feat(infer): prepare model-owned Q8 layouts`: loader/cache configuration,
+   semantic identity, budgets, stream-aware standard dispatch, and ownership/
+   numerical tests. Depends on C08-C10 and the allocation prerequisites.
+2. `perf(cuda): reuse Q8 layouts in fused decode`: prepared fused QKV and
+   gate/up/SwiGLU consumers plus greedy vocabulary integration, preserving
+   useful fusion and producer streams. Depends on C10A.1 and parity tests.
+3. `test(bench): validate prepared Q8 HTTP gains`: immutable native/prepared
+   model controls, serial paired HTTP measurements, actual token traces,
+   setup/resident-memory reporting, and the promotion decision. Depends on
+   C10A.2 and model parity; no microbenchmark-only promotion.
+
 Preserve useful fusion and account for duplicate source/prepared weights.
 Do not reopen the completed layout tuning rounds or claim a runtime speedup
 from their projection microbenchmarks.

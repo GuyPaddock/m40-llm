@@ -264,6 +264,8 @@ pub struct LoadedModel {
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]
     pub materialized_weights: Mutex<HashMap<MaterializedWeightKey, MaterializedWeight>>,
+    #[cfg(feature = "cuda")]
+    pub q8_execution: super::execution_weights::Q8ExecutionCache,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]

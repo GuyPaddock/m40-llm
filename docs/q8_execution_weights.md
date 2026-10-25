@@ -1,9 +1,10 @@
 # Q8 Execution-Weight Experiments
 
-The C08 API in `infer::execution_weights` owns **benchmark-only** execution
-representations. It is separate from `DeviceTensorView`, uploaded GGUF weights,
-and the model's FP32 materialization cache. Ordinary generation does not call
-this API, and no runtime/default layout selection or model cache is added.
+The API in `infer::execution_weights` owns lossless execution representations,
+separate from `DeviceTensorView`, uploaded GGUF weights, and the model's FP32
+materialization cache. C08-C10 established ownership and isolated measurements;
+C10A.1 adds opt-in model-owned preparation and standard projection dispatch.
+Preparation remains disabled by default. No generation speedup is claimed yet.
 
 C09 now adds a lossless separate-scale/value repacker, bounded CUDA consumer,
 and real-tensor release microbenchmark. See the
@@ -11,7 +12,63 @@ and real-tensor release microbenchmark. See the
 C10 independently implements lossless input-tiled storage and two bounded
 CUDA mappings. See the [tiled experiment](experiments/2026-10-24-q8-input-tiled.md).
 Its vector mapping is a per-family candidate; the coalesced-lane mapping was
-slower. Neither microbenchmark changes production dispatch or model loading.
+slower. Those microbenchmarks alone do not qualify a runtime configuration.
+
+## Opt-In Runtime Preparation
+
+Set these before loading a model, not during generation:
+
+```bash
+M40LLM_Q8_EXECUTION_WEIGHTS=split
+M40LLM_Q8_EXECUTION_BUDGET_MB=6144
+```
+
+`off` is the default and skips hashing, packing, and prepared allocations.
+`split` prepares separate original FP16 scales and signed Q8 values for each
+recognized Q/K/V/O, gate/up/down, and vocabulary projection. Tied output
+embeddings are prepared once under their chosen tensor identity. The measured
+single-token launch uses four columns/128 threads, except K/V use one column.
+`mixed` adds width16 input-tiled Q/O/down copies for rows >=64; smaller rows
+still use split planes. It does not globally replace the layout for every role.
+
+`LoadedModel::from_gguf` reads this configuration once;
+`from_gguf_with_q8_execution` accepts an explicit `Q8ExecutionConfig` so two
+models can use different immutable caches in the same process. There is no
+mutable global prepared-weight registry or on-demand decode repack.
+
+Preparation currently requires an sm_52 CUDA device, uploaded source weights,
+and at least one recognized rank-two Q8_0 projection with K divisible by 32.
+Invalid modes, malformed eligible tensors, aliased source offsets, insufficient
+budget, skipped upload, and allocation/upload errors fail clearly rather than
+silently bypassing the requested cache. Non-Q8/unprepared projections retain
+their existing implementation. The cache budget limits extra prepared payload,
+not total process VRAM; the default 6144 MiB does not reserve that amount.
+
+The cache remains separate from native GGUF storage. `split` adds another copy
+of each prepared tensor's payload; `mixed` adds selected tiled copies too.
+Model SHA-256 is calculated over the supplied original GGUF bytes with `ring`.
+Keys retain that hash, tensor name, source offset, dtype, logical shape, and
+execution layout. A model-local native-pointer lookup finds those immutable
+owners; pointers are not used as cross-model cache identities.
+
+`q8_execution_stats()` exposes estimated/actual prepared bytes, budget,
+source uploaded bytes, total source+prepared device payload, per-tensor/layout
+keys and bytes, and hash/preparation milliseconds. `peak_setup_host_payload_bytes`
+estimates the original file + retained tensor-data blob + largest temporary
+packed tensor. These payload estimates exclude allocator/page overhead,
+metadata, CUDA contexts, workspace, and KV. Source upload remains part of cold
+model loading, outside the separately reported preparation/hash time.
+
+Standard sync/async projection APIs consume the cache without per-call
+allocation, upload, or packing. Enqueue explicitly uses the existing producer
+stream policy: multi-row work uses prefill; single-row uses decode only when
+`M40LLM_Q8_DECODE_STREAM=decode`, otherwise prefill. The sync API waits on that
+actual producer; the async API does not synchronize.
+
+C10A.1 does not replace fused QKV, fused gate/up/SwiGLU, or the specialized
+greedy vocabulary path. Those consumers remain native until C10A.2 preserves
+their fusion and stream contracts. Use of the cache is experimental, not a
+claim that the current selected fused HTTP benchmark is faster.
 
 ## Source and Identity
 
@@ -104,11 +161,29 @@ match device.view() {
 }
 ```
 
-There is no process-global prepared-weight registry, on-demand decode repack,
-loader hook, or automatic FP32 cache reuse. Preparation time, peak/resident
-memory, and projection timings belong in the later experiment reports.
+The standalone owner API above is also used by the opt-in runtime cache.
+It does not reuse FP32 materialization buffers. Preparation time and duplicate
+resident payload must be included in any later runtime report.
 
 ## Validation and Next Work
+
+C10A.1 runtime tests cover all eight projection roles at rows 1/4/64 against
+native GPU and CPU references, per-family split/tiled selection, both producer
+streams, sync/async behavior, distinct model hashes/lifetimes, unmodified source
+bytes, and budget/unsupported/skipped-upload failures. A later-tensor allocation
+failure releases prior prepared planes while preserving uploaded source data.
+Invalid aliased/out-of-bounds/shape plans never reach the upload boundary.
+The `81948df` prerequisite corrects native-weight accounting on final context
+drop; the native buffer was already physically freed before that correction.
+
+The real Qwen2.5-3B Q8_0 split-cache canary answers `4`, captures finite prompt
+logits, and records 5,313 prepared projection launches. It prepares 253 tensor
+layouts: 3,278,553,088 extra bytes alongside 3,279,519,744 source-weight bytes,
+for 6,558,072,832 weight payload bytes before KV/workspace. Hash plus preparation
+takes 30.512 s in this **debug** correctness run, not a release performance
+claim. See the [raw canary log](experiments/2026-10-24-q8-prepared-split-canary.txt).
+CUDA layout/attention/forward/projection/MLP checks pass, including cuBLAS-off
+grid/wrappers; non-CUDA warning-as-error tests and both Clippy feature lanes pass.
 
 C08 validation passes eight CPU tests for semantic identities, source bounds,
 real/synthetic shapes, plan overflow/alignment, byte copies, and failing
@@ -134,11 +209,13 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --lib \
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
   --test q8_execution_weights --test cuda_allocation_errors \
   -- --nocapture --test-threads=1
+M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda \
+  --test q8_runtime_weights -- --nocapture --test-threads=1
 ```
 
-Next: only measured per-family winners proceed to C10A loader/model-cache
-integration and repeated HTTP gates. C09/C10 isolated results do not prove
-whole-model wins or justify replacing useful fused operations. Keep setup,
+Next: finish prepared fused consumers, model-level parity, and repeated HTTP
+gates. C09/C10 isolated results do not prove whole-model wins or justify
+replacing useful fused operations. Keep setup,
 duplicate resident weights, and peak payload accounting explicit.
 The selected exact-attention
 benchmark configuration remains split8/256 from C07; global runtime/KV defaults

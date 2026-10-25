@@ -1,3 +1,4 @@
+use super::execution_weights::{Q8ExecutionConfig, Q8ExecutionMode};
 use super::meta::dtype_size_bytes;
 use super::tensor_views::build_device_tensor_views;
 use super::{LoadedModel, ModelConfig};
@@ -9,6 +10,36 @@ use std::ffi::c_void;
 
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
+        Self::from_gguf_with_q8_execution(
+            gguf,
+            gguf_bytes,
+            device_id,
+            Q8ExecutionConfig::from_env()?,
+        )
+    }
+
+    pub fn from_gguf_with_q8_execution(
+        gguf: GgufModel,
+        gguf_bytes: Vec<u8>,
+        device_id: i32,
+        execution: Q8ExecutionConfig,
+    ) -> Result<Self> {
+        #[cfg(not(feature = "cuda"))]
+        anyhow::ensure!(
+            execution.mode == Q8ExecutionMode::Off,
+            "prepared Q8 weights require CUDA; use M40LLM_Q8_EXECUTION_WEIGHTS=off"
+        );
+        #[cfg(feature = "cuda")]
+        let source_sha256: Option<([u8; 32], f64)> = if execution.mode == Q8ExecutionMode::Off {
+            None
+        } else {
+            let started = std::time::Instant::now();
+            let hash = ring::digest::digest(&ring::digest::SHA256, &gguf_bytes)
+                .as_ref()
+                .try_into()
+                .context("SHA256 digest length mismatch")?;
+            Some((hash, started.elapsed().as_secs_f64() * 1000.0))
+        };
         let cuda = CudaContext::new(device_id)?;
         let data_off = gguf.data_offset as usize;
         if data_off > gguf_bytes.len() {
@@ -71,7 +102,9 @@ impl LoadedModel {
         let device_tensors =
             build_device_tensor_views(&gguf.tensors, std::ptr::null_mut(), weights_len)?;
 
-        Ok(Self {
+        #[cfg(feature = "cuda")]
+        let original_file_bytes = gguf_bytes.len();
+        let model = Self {
             gguf,
             cuda,
             kv_cache: None,
@@ -79,6 +112,8 @@ impl LoadedModel {
             forward_workspace: std::sync::Mutex::new(None),
             #[cfg(feature = "cuda")]
             materialized_weights: std::sync::Mutex::new(std::collections::HashMap::new()),
+            #[cfg(feature = "cuda")]
+            q8_execution: super::execution_weights::Q8ExecutionCache::disabled(),
             device_tensors,
             weights_len,
             #[cfg(feature = "cuda")]
@@ -87,6 +122,29 @@ impl LoadedModel {
             model_config,
             #[cfg(feature = "gguf_ext")]
             typed_config: typed_cfg,
-        })
+        };
+        #[cfg(feature = "cuda")]
+        let mut model = model;
+        #[cfg(feature = "cuda")]
+        if let Some((sha256, hash_ms)) = source_sha256 {
+            let props = model.cuda.current_device_props()?;
+            anyhow::ensure!(
+                props.major == 5 && props.minor == 2,
+                "prepared Q8 layouts are only validated on sm_52; use M40LLM_Q8_EXECUTION_WEIGHTS=off"
+            );
+            let (lm_head_name, _, _, _, _) = model.map_lm_head()?;
+            model.q8_execution = super::execution_weights::Q8ExecutionCache::prepare(
+                &model.cuda,
+                &model.gguf.tensors,
+                &model.host_weights,
+                model.d_weights_base,
+                &lm_head_name,
+                sha256,
+                original_file_bytes,
+                execution,
+                hash_ms,
+            )?;
+        }
+        Ok(model)
     }
 }

@@ -245,11 +245,15 @@ fn q8_projection_launches() -> u64 {
     profile::snapshot()
         .by_op
         .iter()
-        .filter(|(op, _)| op.contains("q8_0"))
+        .filter(|(op, _)| {
+            op.contains("q8_0") || op.contains("q8_separate") || op.contains("q8_tiled")
+        })
         .map(|(_, counters)| counters.launches)
         .sum()
 }
 
+/// A supplied supported Q8 model must produce a finite arithmetic answer while
+/// executing Q8 projections, whether native or opt-in prepared layouts are used.
 #[test]
 fn q8_0_real_model_generation_canary() -> Result<()> {
     let ctx = match cuda_env::ctx_m40_or_skip() {

@@ -29,6 +29,7 @@ bytes = "1"
 reqwest = { version = "0.11", default-features = false, features = ["json", "stream", "rustls-tls"] }
 tokio-stream = "0.1"
 half = "2"
+ring = { version = "=0.17.14", optional = true }
 tiktoken = "3"
 
 # For filesystem paths & dirs
@@ -46,7 +47,7 @@ gguf-rs-lib = { version = "0.2", optional = true }
 logging = ["chrono"]
 nvcc = []
 server = ["dep:axum", "dep:tower-http"]
-cuda = []  # Enable CUDA compilation support
+cuda = ["dep:ring"]  # Enable CUDA compilation support
 # Enable extended GGUF integration via external crates
 # Off by default to keep minimal deps for non-integration builds
 gguf_ext = ["dep:gguf-llms", "dep:gguf-rs-lib"]

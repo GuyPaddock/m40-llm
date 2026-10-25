@@ -394,6 +394,7 @@ mod ffi {
             columns: i32,
             threads: i32,
             access: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_separate_f32_async(
             ctx: *mut M40llmCudaContext,
@@ -406,6 +407,7 @@ mod ffi {
             k: i32,
             columns: i32,
             threads: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32(
             ctx: *mut M40llmCudaContext,
@@ -3403,6 +3405,7 @@ impl CudaContext {
         columns: i32,
         threads: i32,
         access: i32,
+        stream: CudaStream,
     ) -> Result<()> {
         let _guard = self.inner.lock.lock().unwrap();
         let rc = ffi::m40llm_gemm_f32xq8_tiled_f32_async(
@@ -3416,6 +3419,7 @@ impl CudaContext {
             columns,
             threads,
             access,
+            stream.ffi_kind(),
         );
         if rc != 0 {
             return Err(anyhow!("m40llm_gemm_f32xq8_tiled_f32_async failed: {rc}"));
@@ -3441,6 +3445,7 @@ impl CudaContext {
         k: i32,
         columns: i32,
         threads: i32,
+        stream: CudaStream,
     ) -> Result<()> {
         let _guard = self.inner.lock.lock().unwrap();
         let rc = ffi::m40llm_gemm_f32xq8_separate_f32_async(
@@ -3454,6 +3459,7 @@ impl CudaContext {
             k,
             columns,
             threads,
+            stream.ffi_kind(),
         );
         if rc != 0 {
             return Err(anyhow!(

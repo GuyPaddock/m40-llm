@@ -64,18 +64,19 @@ __global__ void q8_separate_projection_kernel(
 
 extern "C" int m40llm_gemm_f32xq8_separate_f32_async(
     M40llmCudaContext* ctx, const void* input, const void* scales,
-    const void* values, void* output, int M, int N, int K, int columns, int threads) {
+    const void* values, void* output, int M, int N, int K, int columns, int threads, uint32_t stream_kind) {
     if (!ctx || !input || !scales || !values || !output) return -1;
     if (M <= 0 || M > 65535 || N <= 0 || K <= 0 || K > INT32_MAX - 31 ||
-        (columns != 1 && columns != 4) || (threads != 128 && threads != 256)) return -4;
+        (columns != 1 && columns != 4) || (threads != 128 && threads != 256) || stream_kind > 1) return -4;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
     const dim3 grid((static_cast<unsigned>(N) + columns - 1) / columns, M);
     const size_t shared = columns * threads * sizeof(float);
     if (columns == 1) {
-        q8_separate_projection_kernel<1><<<grid, threads, shared, ctx->decode_stream>>>(
+        q8_separate_projection_kernel<1><<<grid, threads, shared, stream>>>(
             static_cast<const float*>(input), static_cast<const __half*>(scales),
             static_cast<const int8_t*>(values), static_cast<float*>(output), N, K);
     } else {
-        q8_separate_projection_kernel<4><<<grid, threads, shared, ctx->decode_stream>>>(
+        q8_separate_projection_kernel<4><<<grid, threads, shared, stream>>>(
             static_cast<const float*>(input), static_cast<const __half*>(scales),
             static_cast<const int8_t*>(values), static_cast<float*>(output), N, K);
     }
@@ -177,16 +178,16 @@ __global__ void q8_input_tiled_lanes_kernel(
 
 template<int Columns>
 static void launch_q8_input_tiled(
-    M40llmCudaContext* ctx, const void* input, const void* tiles, void* output,
-    int M, int N, int K, int threads, int access) {
+    const void* input, const void* tiles, void* output,
+    int M, int N, int K, int threads, int access, cudaStream_t stream) {
     const dim3 grid((static_cast<unsigned>(N) + Columns - 1) / Columns, M);
     const size_t shared = (threads / 32) * Columns * sizeof(float);
     if (access == 0) {
-        q8_input_tiled_projection_kernel<Columns><<<grid, threads, shared, ctx->decode_stream>>>(
+        q8_input_tiled_projection_kernel<Columns><<<grid, threads, shared, stream>>>(
             static_cast<const float*>(input), static_cast<const unsigned char*>(tiles),
             static_cast<float*>(output), N, K);
     } else {
-        q8_input_tiled_lanes_kernel<Columns><<<grid, threads, shared, ctx->decode_stream>>>(
+        q8_input_tiled_lanes_kernel<Columns><<<grid, threads, shared, stream>>>(
             static_cast<const float*>(input), static_cast<const unsigned char*>(tiles),
             static_cast<float*>(output), N, K);
     }
@@ -194,17 +195,18 @@ static void launch_q8_input_tiled(
 
 extern "C" int m40llm_gemm_f32xq8_tiled_f32_async(
     M40llmCudaContext* ctx, const void* input, const void* tiles, void* output,
-    int M, int N, int K, int columns, int threads, int access) {
+    int M, int N, int K, int columns, int threads, int access, uint32_t stream_kind) {
     if (!ctx || !input || !tiles || !output) return -1;
     if (M <= 0 || M > 65535 || N <= 0 || K <= 0 || K > INT32_MAX - 31 ||
         (columns != 4 && columns != 8 && columns != 16) ||
-        (threads != 128 && threads != 256) || (access != 0 && access != 1)) return -4;
+        (threads != 128 && threads != 256) || (access != 0 && access != 1) || stream_kind > 1) return -4;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
     if (columns == 4) {
-        launch_q8_input_tiled<4>(ctx,input,tiles,output,M,N,K,threads,access);
+        launch_q8_input_tiled<4>(input,tiles,output,M,N,K,threads,access,stream);
     } else if (columns == 8) {
-        launch_q8_input_tiled<8>(ctx,input,tiles,output,M,N,K,threads,access);
+        launch_q8_input_tiled<8>(input,tiles,output,M,N,K,threads,access,stream);
     } else {
-        launch_q8_input_tiled<16>(ctx,input,tiles,output,M,N,K,threads,access);
+        launch_q8_input_tiled<16>(input,tiles,output,M,N,K,threads,access,stream);
     }
     return cudaGetLastError() == cudaSuccess ? 0 : -2;
 }

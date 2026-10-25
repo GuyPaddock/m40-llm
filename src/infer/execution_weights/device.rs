@@ -2,9 +2,9 @@ use anyhow::{ensure, Context, Result};
 
 use super::{
     prepare_buffers, HostQ8ExecutionWeight, Q8AllocationPlan, Q8ExecutionKey, Q8ExecutionLayout,
-    Q8SeparateLaunch, Q8TiledAccess, Q8TiledLaunch,
+    Q8ProjectionLaunch, Q8SeparateLaunch, Q8TiledAccess, Q8TiledLaunch,
 };
-use crate::cuda::{CudaContext, DeviceBuffer};
+use crate::cuda::{CudaContext, CudaStream, DeviceBuffer};
 
 #[derive(Debug)]
 pub struct DeviceQ8ExecutionWeight {
@@ -99,20 +99,15 @@ impl DeviceQ8ExecutionWeight {
         rows: usize,
         config: Q8SeparateLaunch,
     ) -> Result<()> {
-        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.view() else {
-            anyhow::bail!("separate Q8 projection requires SeparateScalesValues weights");
-        };
         let (m, n, k) = self.validate_projection_buffers(input, output, rows)?;
-        self.ctx.gemm_f32xq8_separate_f32_async(
+        self.enqueue_projection_async(
             input.as_ptr(),
-            scales.as_ptr(),
-            values.as_ptr(),
             output.as_mut_ptr(),
             m,
             n,
             k,
-            config.columns() as i32,
-            config.threads() as i32,
+            CudaStream::Decode,
+            Q8ProjectionLaunch::Separate(config),
         )
     }
 
@@ -126,31 +121,89 @@ impl DeviceQ8ExecutionWeight {
         rows: usize,
         config: Q8TiledLaunch,
     ) -> Result<()> {
-        let DeviceQ8ExecutionView::InputTiled { key, tiles } = self.view() else {
-            anyhow::bail!("tiled Q8 projection requires InputTiled weights");
-        };
-        ensure!(
-            key.layout
-                == Q8ExecutionLayout::InputTiled {
-                    columns: config.columns() as usize
-                },
-            "Q8 launch tile width must match execution layout"
-        );
         let (m, n, k) = self.validate_projection_buffers(input, output, rows)?;
-        self.ctx.gemm_f32xq8_tiled_f32_async(
+        self.enqueue_projection_async(
             input.as_ptr(),
-            tiles.as_ptr(),
             output.as_mut_ptr(),
             m,
             n,
             k,
-            config.columns() as i32,
-            config.threads() as i32,
-            match config.access() {
-                Q8TiledAccess::Vector => 0,
-                Q8TiledAccess::CoalescedLanes => 1,
-            },
+            CudaStream::Decode,
+            Q8ProjectionLaunch::Tiled(config),
         )
+    }
+
+    /// # Safety
+    /// Runtime buffers have externally checked spans on this context and must
+    /// outlive completion. No ownership is fabricated from the raw pointers.
+    pub(crate) unsafe fn enqueue_projection_async(
+        &self,
+        input: *const std::ffi::c_void,
+        output: *mut std::ffi::c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+        launch: Q8ProjectionLaunch,
+    ) -> Result<()> {
+        ensure!(
+            (1..=65535).contains(&m) && n > 0 && k > 0 && k <= i32::MAX - 31,
+            "invalid prepared Q8 projection dimensions"
+        );
+        ensure!(
+            !input.is_null() && !output.is_null() && input != output.cast_const(),
+            "invalid/aliased prepared Q8 projection pointers"
+        );
+        let shape = self.key.source.shape();
+        ensure!(
+            shape.input_dim() == k as usize && shape.output_dim() == n as usize,
+            "prepared Q8 projection shape mismatch"
+        );
+        match (self.view(), launch) {
+            (
+                DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. },
+                Q8ProjectionLaunch::Separate(config),
+            ) => self.ctx.gemm_f32xq8_separate_f32_async(
+                input,
+                scales.as_ptr(),
+                values.as_ptr(),
+                output,
+                m,
+                n,
+                k,
+                config.columns() as i32,
+                config.threads() as i32,
+                stream,
+            ),
+            (
+                DeviceQ8ExecutionView::InputTiled { tiles, .. },
+                Q8ProjectionLaunch::Tiled(config),
+            ) => {
+                ensure!(
+                    self.key.layout
+                        == Q8ExecutionLayout::InputTiled {
+                            columns: config.columns() as usize
+                        },
+                    "Q8 launch tile width must match execution layout"
+                );
+                self.ctx.gemm_f32xq8_tiled_f32_async(
+                    input,
+                    tiles.as_ptr(),
+                    output,
+                    m,
+                    n,
+                    k,
+                    config.columns() as i32,
+                    config.threads() as i32,
+                    match config.access() {
+                        Q8TiledAccess::Vector => 0,
+                        Q8TiledAccess::CoalescedLanes => 1,
+                    },
+                    stream,
+                )
+            }
+            _ => anyhow::bail!("prepared Q8 projection launch/layout mismatch"),
+        }
     }
 
     fn validate_projection_buffers(
