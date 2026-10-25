@@ -18,6 +18,14 @@ int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* 
     return -99;
 }
 
+int m40llm_ffn_q8_1_async(M40llmCudaContext* ctx, const void* input, const void* gate,
+    const void* up, void* output, void* gate_output, void* up_output, int rows,
+    int hidden, int columns, int padded_columns, int threads) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output; (void)gate_output;
+    (void)up_output; (void)rows; (void)hidden; (void)columns; (void)padded_columns; (void)threads;
+    return -99;
+}
+
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
     if (name_buf && buf_len) {
         const char* name = "stub";

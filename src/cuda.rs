@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
-pub use q8_ffn::Q8FfnFp32Variant;
+pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
 
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
 pub const ROPE_LAYOUT_NEOX: u32 = 1;
@@ -318,6 +318,20 @@ mod ffi {
             rows: i32,
             columns: i32,
             padded_columns: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_1_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            columns: i32,
+            padded_columns: i32,
+            threads: i32,
         ) -> i32;
         pub fn m40llm_qkv_f32xq8_separate_async(
             ctx: *mut M40llmCudaContext,

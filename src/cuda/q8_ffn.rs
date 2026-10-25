@@ -2,6 +2,23 @@ use super::{ffi, record_async_kernel, CudaContext};
 use anyhow::{ensure, Result};
 use std::ffi::c_void;
 
+/// The only two geometries in M04's independent numerical experiment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
+#[repr(i32)]
+pub enum Q8FfnQ81Launch {
+    Threads128 = 128,
+    Threads256 = 256,
+}
+
+impl Q8FfnQ81Launch {
+    pub const ALL: [Self; 2] = [Self::Threads128, Self::Threads256];
+
+    pub fn threads(self) -> i32 {
+        self as i32
+    }
+}
+
 /// M03's entire bounded geometry set. These do not select a runtime policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -57,6 +74,88 @@ impl Q8FfnFp32Variant {
 }
 
 impl CudaContext {
+    /// Enqueue packed Q8_0 weights x previously encoded Q8_1 activations,
+    /// reusing the same quantized input for gate/up. Optional intermediate
+    /// outputs are diagnostic; timed calls omit them.
+    ///
+    /// # Safety
+    /// All spans are disjoint on this context and survive decode completion.
+    /// Input holds shape.bytes() encoded bytes at four-byte alignment. Each
+    /// two-byte-aligned weight span holds hidden*(columns/32)*34 bytes; output
+    /// and any intermediates hold rows*hidden f32 values at four-byte alignment.
+    /// Quantization/other-stream producers must precede this decode operation.
+    pub unsafe fn ffn_q8_1_async(
+        &self,
+        input: *const c_void,
+        gate: *const c_void,
+        up: *const c_void,
+        output: *mut c_void,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+        hidden: i32,
+        shape: crate::infer::q8_activation::Q8ActivationShape,
+        launch: Q8FfnQ81Launch,
+    ) -> Result<()> {
+        ensure!(
+            hidden > 0 && shape.columns().is_multiple_of(32),
+            "Q8_1 FFN requires positive hidden and complete Q8_0 input blocks"
+        );
+        ensure!(
+            !input.is_null()
+                && !gate.is_null()
+                && !up.is_null()
+                && !output.is_null()
+                && input != output.cast_const(),
+            "invalid/aliased Q8_1 FFN buffers"
+        );
+        ensure!(
+            (input as usize).is_multiple_of(4)
+                && (output as usize).is_multiple_of(4)
+                && (gate as usize).is_multiple_of(2)
+                && (up as usize).is_multiple_of(2),
+            "Q8_1 FFN buffer alignment mismatch"
+        );
+        let (gate_output, up_output) =
+            intermediates.unwrap_or((std::ptr::null_mut(), std::ptr::null_mut()));
+        if intermediates.is_some() {
+            ensure!(
+                !gate_output.is_null()
+                    && !up_output.is_null()
+                    && gate_output != up_output
+                    && gate_output != output
+                    && up_output != output
+                    && (gate_output as usize).is_multiple_of(4)
+                    && (up_output as usize).is_multiple_of(4),
+                "invalid Q8_1 diagnostic outputs"
+            );
+        }
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = unsafe {
+            ffi::m40llm_ffn_q8_1_async(
+                self.inner.raw.as_ptr(),
+                input,
+                gate,
+                up,
+                output,
+                gate_output,
+                up_output,
+                shape.rows() as i32,
+                hidden,
+                shape.columns() as i32,
+                shape.padded_columns() as i32,
+                launch.threads(),
+            )
+        };
+        ensure!(
+            rc == 0,
+            "m40llm_ffn_q8_1_async failed: {rc}, launch={launch:?}, hidden={hidden}"
+        );
+        record_async_kernel(match launch {
+            Q8FfnQ81Launch::Threads128 => "ffn_q8_1_threads128",
+            Q8FfnQ81Launch::Threads256 => "ffn_q8_1_threads256",
+        });
+        Ok(())
+    }
+
     /// Enqueue the pinned Q8_1 activation contract into reusable caller storage.
     ///
     /// # Safety

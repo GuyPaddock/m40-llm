@@ -60,6 +60,18 @@ No runtime choice/default changed; whole-model 512-token parity and E2E
 qualification remain pending. Next is independent M04 Q8_1, then M05 screening
 before conditional M06 integration. M07 prefill SGEMM remains independent.
 Do not add capture infrastructure or expand the bounded geometry search.
+
+M04 now has a [pinned Q8_1 encoding and packed-dot contract](q8_activation.md).
+The encoder preserves FP32-before-FP16 rounding and original-input XOR sums;
+release M40 tests match every CPU byte. Both fixed 128/256-thread consumers
+pass full gate/up/SwiGLU CPU-reference tests using reconstructed activation
+bytes, including two-byte weight bases and genuine distinct rows 1/4.
+Optional intermediate capture matches the timed kernel's SwiGLU bits.
+Release code uses 17 quantizer / 32 consumer registers, no stack/local bytes
+and no DP4A/Tensor instructions. MIT provenance and the full upstream notice
+are included. No runtime integration, real-input latency, logit/512-token
+parity or quality conclusion follows yet. Next extend the existing FFN runner
+to include quantization cost and numerical drift before the M05 decision.
 Use layer 0/17/35 tensors and read-only frozen-calibration activation samples
 for complete FFN baselines at genuine rows 1/4. Preserve
 the qualified prepared down/vocabulary control. FP32 changes require exact

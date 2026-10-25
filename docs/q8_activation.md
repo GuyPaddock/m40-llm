@@ -50,12 +50,44 @@ sum semantics, row padding, serialization and invalid inputs. Two explicit
 M40 tests compare every output byte to the CPU contract, protect input/output
 guards, reuse allocations and reject invalid buffers before device activity.
 Release M40 tests pass for rows 1/4, short/tail inputs, K=2048 and K=11008.
-This does not establish projection parity, model quality or a speedup.
+This establishes the encoding contract, not model quality or a speedup.
 
-Next add the two fixed 128/256-thread packed integer-dot FFN consumers and
-numerical tests, then measure quantization-inclusive complete FFN costs using
-the existing real-input benchmark. Do not enable a runtime path from encoder
-correctness alone or treat Q8_1 as satisfying exact-output acceptance.
+## Packed FFN Consumer
+
+`CudaContext::ffn_q8_1_async` consumes an already encoded row with native
+34-byte Q8_0 gate/up weights. `Q8FfnQ81Launch` has exactly two geometries,
+128 and 256 threads. Each thread handles an eight-value contribution using
+two packed words, a signed scalar-integer dot and FP32 block-scale products.
+Gate/up share the same quantized activation and then use the tested shared
+publication/final-warp reduction and FP32 SwiGLU. No DP4A, Tensor Core,
+half-arithmetic projection, per-call allocation or synchronization is used.
+
+The packed weight-word access and signed dot are adapted from the same pinned
+`vecdotq.cuh::get_int_b2` / `vec_dot_q8_0_q8_1_impl` and
+`common.cuh::ggml_cuda_dp4a` pre-sm_61 fallback, under the MIT notice above.
+Weight loads require only two-byte alignment; activation words require four.
+FP16 stored activation scales are widened to FP32 before multiplication.
+The stored original-input sum is not needed for Q8_0 dot products.
+
+Optional diagnostic gate/up output spans use separately instantiated kernels;
+timed calls omit them. Release M40 tests compare every gate/up/SwiGLU output
+to independent scalar CPU projections of reconstructed activation bytes.
+Diagnostic output and timed-kernel SwiGLU bits agree. Tests cover distinct
+rows 1/4, padding, zero scales, signed weight values, K=32/96/2048/11008,
+hidden tails, two-byte-offset weights, guards, immutable inputs, repeated
+scratch use, enqueue counters, invalid arguments and tracked allocation cleanup.
+
+NVCC 12.8.93 release sm_52 reports 17 quantizer registers and 32 registers for
+both FFN geometries, including diagnostic variants, with zero stack/local
+bytes. Dynamic FFN shared storage is 1024/2048 bytes at 128/256 threads.
+The inspected 128-thread consumer has 64 XMAD, ten shuffle and one barrier
+instruction sites, with no DP4A or Tensor Core instructions. Static counts
+are not latency, measured occupancy or DRAM traffic.
+
+Next measure quantization-inclusive complete FFN costs using the existing
+real-input benchmark, including activation reconstruction and projection
+drift versus the FP32 control. Do not enable a runtime path from these
+numerical tests or treat Q8_1 as satisfying exact-output acceptance.
 
 ## Atomic Delivery
 
