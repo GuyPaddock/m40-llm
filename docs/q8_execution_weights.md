@@ -216,9 +216,12 @@ and uses packed QKV/output only for single-row decode. The qualified
 is unchanged. Both explicit variants require uploaded sm_52 raw Q8_0
 QKV/output weights and validated model-local spans, reject conflicting
 prepared families, and allocate no extra weight/scratch storage. Packed
-inputs additionally require sixteen-byte alignment. This opt-in runtime
-path still requires full-model quality and HTTP qualification; primitive
-microbenchmarks do not promote it or change defaults.
+inputs additionally require sixteen-byte alignment. The
+[full-model quality](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md),
+[incremental HTTP](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md)
+and [fresh official comparison](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
+now qualify this opt-in combination without changing defaults. Primitive
+microbenchmarks alone do not establish a runtime improvement.
 
 The quality and HTTP tools select this candidate with
 `--q8-runtime-attention packed-warp-256` and require the explicit control

@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Packed Runtime Beats Fresh Ollama By 14.01%
+
+Five alternating release pairs measure **49.146449 versus 43.105570
+buffered HTTP tok/s**, **+14.014148%**, paired 95% interval
+**[13.974351%, 14.370487%]**. Actual 512 IDs, selected packed dispatch,
+all 109 prepared identities and verified prompt-cache resets pass. See
+[setup, timings, memory, raw evidence and audit](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md).
+
+M40 prompt/decode medians are 498.880 / 9,870.478 ms; official Ollama's
+are 229.589 / 11,643.652 ms with differing timing boundaries. This keeps
+the exact packed QKV/output combination opt-in without new defaults.
+Both original goals remain unmet: **53.06** and **56.037 HTTP tok/s** for
+1.30x this fresh official median. Next re-profile the selected runtime
+before choosing another independent bounded exact optimization.
+
 ## 2026-10-25: Packed Projections Confirm 4.02% HTTP Gain
 
 Twenty fresh alternating pairs measure **49.082435 versus 47.186286 HTTP

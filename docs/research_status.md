@@ -17,15 +17,25 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest selected-runtime gap checkpoint:** the
+[fresh packed-runtime/Ollama comparison](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
+measures **49.146 versus 43.106 buffered HTTP tok/s, +14.014%**, paired
+95% interval **[13.974%, 14.370%]**. Actual 512 IDs, intended packed
+dispatch, fixed preparation and prompt-cache resets pass. Both original
+goals remain unmet: **53.06** and **56.037 tok/s** for 1.30x this fresh
+official median. Defaults remain unchanged. Next re-profile this selected
+runtime with the existing stage diagnostic before choosing another bounded
+exact hypothesis; do not revive below-gate FFN candidates.
+
 **Latest incremental qualification:** [packed QKV/output](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md)
 passes twenty fresh confirmation pairs at **49.082 versus 47.186 HTTP
 tok/s, +4.018%**, paired interval **[3.802%, 4.144%]**. Actual 512 IDs,
 quality, all 109 prepared identities and dispatch match. The five-pair
 screen triggered the prescribed fresh confirmation; it is not pooled.
-Next run fresh official Ollama timing for this selected opt-in combination.
-Both original goals and defaults remain unchanged.
+The fresh official comparison above completes its cross-engine gate;
+both original goals and defaults remain unchanged.
 
-**Latest selected-runtime gap checkpoint:** the
+**Earlier selected-runtime gap checkpoint:** the
 [corrected fresh projection/Ollama comparison](experiments/2026-10-25-maxwell-projection-ollama-http.md)
 measures **47.379 versus 43.097 buffered HTTP tok/s, +9.937%**, with a
 positive paired interval, verified actual 512 IDs and intended warp dispatch.
@@ -64,17 +74,16 @@ U8 weight and FP32 activation loads remain in qualified QKV/output kernels.
 The resulting [packed projection screens](experiments/2026-10-25-maxwell-packed-projection-screen.md)
 now pass: one-request **QKV throughput +46.87-51.97%**, **output +40.02-46.78%**,
 positive paired intervals, exact control bits, unchanged 32/40 registers and
-no extra weight preparation. Primitive/runner implementation `8b7b20c` is
-benchmark-only. Both independent gates and the combined optimistic **5.23-5.33%**
-scope pass. Next add an explicit model-local packed QKV/output choice,
-preserving split-f32x4-128 FFN, SGEMM prefix, dense reference KV and all 109
-prepared identities. Runtime integration `c264c89` and qualification tooling
+no extra weight preparation. Both independent gates and the combined
+optimistic **5.23-5.33%** scope passed before runtime integration, preserving
+split-f32x4-128 FFN, SGEMM prefix, dense KV and all 109 prepared identities.
+Runtime integration `c264c89` and qualification tooling
 `43ea00a` now pass the [actual-model quality gate](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md):
 512 actual IDs and twelve frozen outputs match, all seven sampled full-vocabulary
 logit differences are zero, and all 109 prepared identities remain fixed.
-The incremental HTTP gate above now passes; fresh Ollama is next. No defaults or
-HTTP claims change from surrogate-input microbenchmarks or unpaired quality
-timing; do not combine rejected FFN candidates.
+Both incremental HTTP and fresh Ollama gates above now pass. Their claims
+come from paired HTTP timing, not surrogate-input microbenchmarks or
+unpaired quality timing. Do not combine rejected FFN candidates.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

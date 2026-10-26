@@ -356,9 +356,18 @@ The [packed QKV/output load screens](experiments/2026-10-25-maxwell-packed-proje
 now pass against qualified scalar-load warp controls: +46.87-51.97% QKV and
 +40.02-46.78% output throughput, unchanged bits and 32/40 registers. Both
 independent stage gates and 5.23-5.33% combined optimistic scope pass.
-Implementation `8b7b20c` remains benchmark-only pending explicit model-local
-integration, actual-512/frozen-quality and measured HTTP qualification.
-No prepared weight delta, runtime default change or E2E speed claim follows.
+Runtime integration `c264c89` and shared-tool support `43ea00a` now expose
+the explicit model-local `packed-warp-256` backend. Its
+[actual-model quality gate](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md)
+preserves 512 actual IDs, twelve frozen outputs, sampled full logits and all
+109 prepared identities. The [incremental HTTP gate](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md)
+passes twenty fresh confirmation pairs at 49.082 versus 47.186 tok/s,
++4.018%. The [fresh official comparison](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
+then measures 49.146 versus 43.106 HTTP tok/s, +14.014%. No prepared weight
+delta or runtime default change is introduced. Both original goals remain
+unmet: 53.06 and 56.037 for 1.30x that fresh official median. Next re-profile
+the selected configuration rather than infer remaining stage shares from
+the older scalar-load runtime.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and
