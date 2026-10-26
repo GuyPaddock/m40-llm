@@ -111,6 +111,54 @@ impl DeviceQ8ExecutionWeight {
         )
     }
 
+    /// Benchmark-only original-tree warp finish on the same owned split planes.
+    /// This does not change runtime dispatch or allocate temporary storage.
+    ///
+    /// # Safety
+    /// Input/output contain `rows * K/N` FP32 values on this context, with no
+    /// overlapping storage. Retain every owner and order producers until the
+    /// supplied stream drains. Dimensions come from this weight's identity.
+    pub unsafe fn enqueue_separate_warp_async(
+        &self,
+        input: *const std::ffi::c_void,
+        output: *mut std::ffi::c_void,
+        rows: usize,
+        config: Q8SeparateLaunch,
+        stream: CudaStream,
+    ) -> Result<()> {
+        ensure!((1..=65535).contains(&rows), "invalid warp projection rows");
+        ensure!(
+            config.columns() == 4,
+            "warp projection requires four columns"
+        );
+        ensure!(
+            !input.is_null()
+                && !output.is_null()
+                && input != output.cast_const()
+                && (input as usize).is_multiple_of(4)
+                && (output as usize).is_multiple_of(4),
+            "invalid warp projection pointers"
+        );
+        let shape = self.key.source.shape();
+        let k = i32::try_from(shape.input_dim())?;
+        let n = i32::try_from(shape.output_dim())?;
+        ensure!(k <= i32::MAX - 31, "warp projection K exceeds indexing");
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.view() else {
+            anyhow::bail!("warp projection requires separate scale/value planes");
+        };
+        self.ctx.gemm_f32xq8_separate_warp_async(
+            input,
+            scales.as_ptr(),
+            values.as_ptr(),
+            output,
+            rows as i32,
+            n,
+            k,
+            config.threads() as i32,
+            stream,
+        )
+    }
+
     /// # Safety
     /// Same context, producer completion, and lifetime rules as separate planes.
     /// Enqueues on decode; the supplied tile width must match the stored layout.

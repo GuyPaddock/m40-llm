@@ -167,6 +167,22 @@ specifically to `split`, families `down,vocabulary`, native-order down and
 the documented C11 flags. It does not qualify all-family preparation, another
 model/workload or a frozen model-quality baseline.
 
+## Prepared Projection Reduction Probe
+
+`DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only
+alternative on existing `SeparateScalesValues` planes. It keeps four columns
+and the control's 128/256-thread task assignment, FP32 accumulation and
+reduction tree, replacing repeated block barriers with a shared publication
+and final-warp finish. Callers explicitly supply the stream and retain all
+input/output/weight spans until completion. No allocation, packing, copy or
+synchronization occurs inside enqueue. Wrong layout, column count or pointer
+metadata fails rather than selecting another implementation. Runtime
+projection dispatch and all generation defaults remain unchanged.
+
+The [qualified runtime profile](experiments/2026-10-25-maxwell-projection-stage-profile.md)
+defines the bounded experiment and promotion gates. Primitive parity alone
+does not qualify it for model generation or establish an E2E speedup.
+
 ## Source and Identity
 
 `Q8SourceIdentity` includes the caller-supplied 32-byte model SHA-256, tensor

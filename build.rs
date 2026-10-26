@@ -132,6 +132,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/q8_execution.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_ffn.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_separate_warp.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_output.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_activation.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_prefill.cuh");
