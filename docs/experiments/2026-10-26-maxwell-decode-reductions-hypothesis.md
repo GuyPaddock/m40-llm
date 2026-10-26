@@ -94,3 +94,36 @@ or model-changing technique substitutes for those exact-output goals.
 
 Keep losing code committed before any later removal. No runtime default
 changes follow from primitive correctness or isolated timing.
+
+## Shared Benchmark Contract
+
+`examples/q8_execution_bench --decode-reductions` requires the frozen M02
+`--ffn-inputs` and `--ffn-capture-report`, release, a clean worktree and rows
+`1,4`. It excludes all other experiment switches and cache experiments.
+Actual layer 0/17/35 attention/FFN norm weights retain their source names,
+offsets, dtype, shape, byte hashes and model epsilon. Frozen normalized FFN
+vectors are **norm-input surrogates**, not captured pre-norm hidden states.
+
+Argmax uses labeled synthetic `random`, `ascending` and `late-tie` finite
+logits at Qwen's 151936-entry vocabulary. Seed, distribution, input hashes
+and CPU indices are recorded. Four requests use distinct inputs and reuse
+one 384-byte partial workspace serially, not concurrently. Norm rows4 is
+one four-block kernel; argmax requests4 is four independent operations.
+There are twelve norm cases and six argmax cases, each with five alternating
+pairs by default. Complete argmax timing includes both candidate kernels.
+
+The common warmup sampler accepts a finite caller-selected budget. Reduction
+warmup uses 4096 iterations per batch, at most 256 batches, retaining the same
+1000-ms control / 100-ms candidate targets. Existing projections retain their
+256-iteration budget. Primary measurements remain ten iterations. Warmup
+samples are excluded, and exhaustion is an error rather than a warm result.
+
+Each interval checks actual operation counters and forbids device allocation,
+free, H2D/D2H, stream sync/wait and cuBLAS calls inside enqueue. Guards and
+immutable input/weight bytes are checked outside timing. Prepared model keys
+and residency are revalidated, and all allocations must return to the initial
+count. Timing excludes setup, upload, validation, readback and the pre-drain.
+
+The combined optimistic scope uses only stages passing all three one-request
+cases, taking the minimum observed gain per stage. It is not E2E evidence.
+Even a passing scope gate does not itself permit runtime promotion.

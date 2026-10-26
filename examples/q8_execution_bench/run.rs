@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Independent exact weighted-norm and two-launch vocabulary argmax screen.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    decode_reductions: bool,
     /// Existing split QKV planes versus qualified packed raw-GGUF projections.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     qkv_f32_split: bool,
@@ -702,6 +705,7 @@ mod argument_tests {
     /// Cache-policy, byte-conversion and packed-projection work require
     /// provenance and are exclusive. Packed output is independent of QKV peers.
     /// Prepared activation loads are mutually exclusive with reduction probes.
+    /// Decode reductions require captured provenance and exclude all other probes.
     #[test]
     fn test_ffn_arguments_preserve_explicit_modes() {
         let parse = |extra: &[&str]| {
@@ -723,6 +727,38 @@ mod argument_tests {
             "capture.jsonl",
         ];
         assert_eq!(parse(&flags).unwrap().rows, [1, 4]);
+        let reductions = "--decode-reductions";
+        assert!(parse(&[reductions]).is_err());
+        assert!(
+            parse(&[flags.as_slice(), &[reductions]].concat())
+                .unwrap()
+                .decode_reductions
+        );
+        for other in [
+            "--qkv-f32-split",
+            "--output-f32-split",
+            "--ffn-f32-persistent-tiles",
+            "--ffn-f32-virtual-warp",
+            "--prepared-f32-packed-activation",
+            "--prepared-f32-warp",
+            "--qkv-f32-packed",
+            "--output-f32-packed",
+            "--qkv-f32-warp",
+            "--output-f32-warp",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-split-two-columns",
+            "--ffn-f32-joint",
+            "--ffn-f32-fixed-k",
+            "--ffn-f32-unfused",
+            "--ffn-f32-weight-cg",
+            "--ffn-f32-byte-permute",
+        ] {
+            assert!(parse(&[flags.as_slice(), &[reductions, other]].concat()).is_err());
+        }
         let activation = "--prepared-f32-packed-activation";
         assert!(
             parse(&[flags.as_slice(), &[activation]].concat())

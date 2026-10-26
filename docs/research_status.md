@@ -26,8 +26,13 @@ selector or default change is added. The independent two-stage argmax now
 also matches old indices on finite inputs, ties, partition tails, full Qwen
 vocabulary size and legacy nonfinite/sentinel cases. It reuses caller-owned
 scratch, at most 384 bytes, without internal copies, allocation or sync.
-Both primitives pass cuBLAS on/off checks. Next extend the existing benchmark
-and inspect compiled sm_52 instructions before paired timing. Independent >=5%
+Both primitives pass cuBLAS on/off checks. The shared `q8_execution_bench`
+now exposes exclusive `--decode-reductions` with the original capture identity,
+actual norm weights, explicitly labeled norm-input surrogates and synthetic
+finite argmax distributions. It checks complete-operation dispatch, guards,
+CPU results, reusable scratch and unchanged prepared-cache identities. The
+untimed warmup budget is shared without changing projection warmup behavior.
+Next inspect compiled sm_52 instructions before paired timing. Independent >=5%
 stage gates and >=3% profile-weighted scope precede any runtime/actual-512/
 HTTP work. There is no performance result for this round yet.
 
