@@ -326,8 +326,12 @@ timing rules intact. The subsequent
 [corrected fresh official comparison](experiments/2026-10-25-maxwell-projection-ollama-http.md)
 measures 47.379 versus 43.097 tok/s, +9.937%, with actual IDs and warp
 dispatch verified. Both original goals remain unmet: 53.06 and 56.026
-HTTP tok/s for 1.30x the fresh official median. Defaults remain unchanged;
-re-profile this combination before another bounded kernel hypothesis.
+HTTP tok/s for 1.30x the fresh official median. Defaults remain unchanged.
+The subsequent [selected-runtime profile](experiments/2026-10-25-maxwell-projection-stage-profile.md)
+preserves actual IDs with 1.01% instrumentation overhead and locates 39.43%
+gate/up, 23.33% prepared down and 3.80% attention. Its next bounded hypothesis
+tests the existing prepared projection's reduction only, retaining qualified
+controls, original math/layout/geometry and all promotion gates.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and

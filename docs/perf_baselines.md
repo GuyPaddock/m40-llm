@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Qualified Projection Runtime Remains FFN Dominated
+
+Five profiling-off/on pairs preserve actual 512 IDs and measure **1.0095%
+instrumentation overhead**. Middle-token stage shares are **39.43% gate/up,
+23.33% prepared down, 7.68% vocabulary and 3.80% attention**. QKV/output
+now account for 9.24% / 6.64%. See [events, coverage audit and bounded next hypothesis](experiments/2026-10-25-maxwell-projection-stage-profile.md).
+
+The next probe is an original-tree warp finish for existing prepared
+projections, with fixed layout, math and geometry and unchanged qualified
+controls. No new candidate or speed claim follows from profiling. The
+authoritative selected result stays **47.379 HTTP tok/s** versus **43.097**
+official Ollama; both original goals and runtime defaults remain unchanged.
+
 ## 2026-10-25: Projection Runtime Beats Fresh Ollama By 9.94%
 
 The corrected five-pair release comparison measures **47.378948 versus

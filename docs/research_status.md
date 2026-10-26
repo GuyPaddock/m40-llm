@@ -24,8 +24,13 @@ positive paired interval, verified actual 512 IDs and intended warp dispatch.
 Both original goals remain unmet: **53.06** and **56.026 tok/s** for 1.30x
 this fresh official median. The initial wrong-dispatch primary-loader run
 is rejected and preserved separately; shared typed loading and dispatch
-guards are fixed. Defaults remain unchanged. Next re-profile this selected
-combination before choosing another bounded Maxwell kernel hypothesis.
+guards are fixed. Defaults remain unchanged. The
+[new selected-runtime profile](experiments/2026-10-25-maxwell-projection-stage-profile.md)
+preserves actual IDs with 1.01% instrumentation overhead. Middle-stage
+shares are 39.43% gate/up, 23.33% down and 3.80% attention. Next inspect
+the prepared projection instructions and test one original-tree warp finish
+with fixed math/layout/geometry, retaining the qualified down/head controls
+and all original micro/quality/HTTP gates. No revival of failed FFN variants.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)
