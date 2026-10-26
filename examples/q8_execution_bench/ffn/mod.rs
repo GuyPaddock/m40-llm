@@ -9,6 +9,7 @@ mod projection;
 mod reductions;
 mod validation;
 mod warmup;
+mod weight_read;
 
 use super::{command_output, inspect_gpu, write_record, Args};
 use anyhow::{ensure, Result};
@@ -81,9 +82,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     )?;
     inputs.validate_model(&model)?;
     let setup_ms = began.elapsed().as_secs_f64() * 1000.0;
-    write_record(
-        &mut output,
-        json!({"kind":if args.ffn_q81 {"ffn_q81_manifest"} else if is_fp32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
+    let mut manifest = json!({"kind":if args.ffn_weight_read {"ffn_read_manifest"} else if args.ffn_q81 {"ffn_q81_manifest"} else if is_fp32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
         "model":args.model,"model_sha256":inputs.artifact.plan.model_sha256,
         "fixture":args.ffn_inputs,"fixture_sha256":inputs.artifact_sha256,"capture_report":args.ffn_capture_report,
         "capture_report_sha256":inputs.report_sha256,"capture_revision":inputs.manifest["revision"],
@@ -108,12 +107,21 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "activation_quantization":{"is_enabled":args.ffn_q81,"control_gpu_ms":0.0,"candidate_gpu_ms":if args.ffn_q81 {json!("measured separately and included in gate/up and complete totals")} else {json!(0.0)}},
         "control":if args.ffn_f32_eight_values {"qualified split-f32x4-128 versus eight-value tasks on the same planes; changed FP32 summation ownership, unchanged prepared down/vocabulary, no activation quantization or KV"} else if args.ffn_f32_cohorts {"qualified one-output 128-thread CTA versus two physical 128-thread output cohorts in a 256-thread CTA; original per-output arithmetic/tree, planes and prepared down/vocabulary; no KV or attention"} else if args.ffn_f32_persistent_tiles {"qualified one-CTA-per-column split FP32/four-value/128 versus a fixed 192-CTA-per-row reusable grid; identical per-column math, split planes and prepared down/vocabulary; no KV or attention"} else if args.ffn_f32_virtual_warp {"qualified one-column split FP32/four-value/128 versus four independent output warps emulating the same virtual partials/tree; identical planes, arithmetic and prepared down/vocabulary; no KV or attention"} else if args.ffn_f32_unfused {"qualified one-column split FP32/four-value/128 versus separate fixed four-column projections and control-order SwiGLU; same planes, existing gate/up scratch and immutable down/vocabulary; all three launches included"} else if args.ffn_f32_joint {"qualified one-column split-plane FP32/four-value/128; both arms retain control and joint pairs with immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_split_two_columns || args.ffn_f32_fixed_k || args.ffn_f32_weight_cg || args.ffn_f32_byte_permute {"qualified one-column split-plane FP32/four-value/128 gate/up/SwiGLU; same prepared gate/up pair and immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs || args.ffn_f32_split_planes {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
-        "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"}),
-    )?;
+        "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"});
+    manifest["is_weight_read_diagnostic"] = json!(args.ffn_weight_read);
+    if args.ffn_weight_read {
+        manifest["control"] =
+            json!("qualified split-f32x4-128 with original prepared down/vocabulary");
+        manifest["weight_read_contract"] = json!({
+            "diagnostic":"four-value/128-thread modular u32 weight checksums; no activations or inference output",
+            "has_measured_dram_traffic":false,"runtime_integration_allowed":false});
+    }
+    write_record(&mut output, manifest)?;
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
-            if args.ffn_f32_eight_values
+            if args.ffn_weight_read
+                || args.ffn_f32_eight_values
                 || args.ffn_f32_cohorts
                 || args.ffn_f32_persistent_tiles
                 || args.ffn_f32_virtual_warp
@@ -147,6 +155,10 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
             }
             if args.ffn_q81 {
                 pipeline.reserve_quantized_scratch()?;
+            }
+            if args.ffn_weight_read {
+                weight_read::benchmark_case(&mut output, &mut pipeline, layer, args)?;
+                continue;
             }
             if is_fp32_ablation || args.ffn_q81 {
                 ablation::benchmark_case(&mut output, &mut pipeline, layer, args)?;
@@ -206,7 +218,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     );
     write_record(
         &mut output,
-        json!({"kind":if args.ffn_q81 {"ffn_q81_complete"} else if is_fp32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
+        json!({"kind":if args.ffn_weight_read {"ffn_read_complete"} else if args.ffn_q81 {"ffn_q81_complete"} else if is_fp32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
         "device_bytes_before":initial_device_bytes,"device_bytes_after":CudaContext::total_device_bytes(),
         "gpu_after_release":inspect_gpu()?,"scope":"Rust-tracked payload cleanup, not driver context RSS"}),
     )

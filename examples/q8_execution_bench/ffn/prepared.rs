@@ -30,6 +30,22 @@ fn split_planes(weight: &DeviceQ8ExecutionWeight) -> Result<(&DeviceBuffer, &Dev
 }
 
 impl PreparedFfnWeights {
+    /// # Safety
+    /// Output is a live, disjoint rows*hidden*2 u32 span until decode drains.
+    pub unsafe fn enqueue_checksum(&self, output: *mut c_void, rows: usize) -> Result<()> {
+        let (gs, gv) = split_planes(&self.device[0])?;
+        let (us, uv) = split_planes(&self.device[1])?;
+        let shape = self.device[0].key().source.shape();
+        self.ctx.ffn_q8_weight_checksum_async(
+            [gs.as_ptr(), us.as_ptr()],
+            [gv.as_ptr(), uv.as_ptr()],
+            output,
+            i32::try_from(rows)?,
+            i32::try_from(shape.output_dim())?,
+            i32::try_from(shape.input_dim())?,
+        )
+    }
+
     pub fn new(model: &LoadedModel, layer: &FfnLayerSamples) -> Result<Self> {
         let expected_bytes = layer
             .source
