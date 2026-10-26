@@ -14,6 +14,10 @@ use crate::cuda::KVCache;
 use crate::gguf::GgmlDType;
 #[cfg(feature = "cuda")]
 use crate::gpu_profile::{self, GpuStageSpan};
+
+#[cfg(all(test, feature = "cuda"))]
+#[path = "forward_diagnostic_cost.rs"]
+mod diagnostic_cost;
 #[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
 #[cfg(feature = "cuda")]
