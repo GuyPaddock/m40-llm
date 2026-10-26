@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Prepared Reads Retain Most Projection Cost
+
+Checksum-only original-mapping reads take **89.08-89.55%** of real one-row
+down time and **89.36%** of vocabulary time: approximately **0.117/0.131 ms**
+and **1.397/1.563 ms**. Real complete FFN stays near **0.352 ms**. See
+[all eight cases, compiled loads, memory and audit](experiments/2026-10-26-maxwell-prepared-read-screen.md).
+
+This is a surrogate, not DRAM timing, an inference lower bound or an
+optimization. Checksum uses 32 versus control's 40 registers; original
+control words remain unchanged. Keep `375c488` diagnostic-only. Next inspect
+lossless cross-column packet access before another arithmetic-only probe.
+Qualified status remains **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Gate/Up Read Cost Is Close To Real Work
 
 A checksum-only read of the actual gate/up planes takes **0.208 ms** versus

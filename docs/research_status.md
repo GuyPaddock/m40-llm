@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest cost diagnostic:** [prepared down/vocabulary reads](experiments/2026-10-26-maxwell-prepared-read-screen.md)
+retain **89.08-89.55%** of real one-row down time and **89.36%** of
+vocabulary time. Source-derived checksums, original real-operation bounds,
+immutable planes/cache and cleanup pass all eight cases; prepared control
+words are unchanged. Keep `375c488` diagnostic-only: its 32 versus 40
+registers and changed arithmetic prevent DRAM/lower-bound/speedup claims.
+Next inspect a lossless per-warp cross-column packet and sector footprint
+that preserves original task/arithmetic/reduction order, distinct from
+closed scalar interleaved layouts or activation/warp probes. No integration
+is authorized from read timing; both exact targets and defaults unchanged.
+
 **Latest cost diagnostic:** [actual gate/up plane reads](experiments/2026-10-26-maxwell-ffn-read-screen.md)
 take **93.94-94.00%** of real one-row gate/up/SwiGLU latency, about
 **0.208 versus 0.221 ms**. All original-block CPU checksums and real FFN

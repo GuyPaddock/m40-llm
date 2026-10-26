@@ -1,0 +1,17 @@
+e9de8cdf4c78bbcbd4986276f9bb37994cf9b73abb2bd9a60b62dcd0f76e99a4  2026-10-26-maxwell-prepared-read-audit.jq
+41a1a04c2fc6b92679252949e1794207df6502d9fa3427d3639dc8c1167c8838  2026-10-26-maxwell-prepared-read-audit.json
+53859430f4f046e0c3ac9b5f0e2462950568cfe5769a4faf4e0e1beccf863fd5  2026-10-26-maxwell-prepared-read-build.log.gz
+53d70c9c18e2e528b6fa18387694e5f4ff1afef22023a2126f85e68d2bc11777  2026-10-26-maxwell-prepared-read-checksum.sass.gz
+739ee1fcd0bfd2110391c8e982fda6cbc761c9bea27d80b9f79a7c625d357fb1  2026-10-26-maxwell-prepared-read-clippy.log.gz
+f51cb99fba7312b58b5a549e9c903e8ba724caf3fb8abcdc5a1eb048e462146f  2026-10-26-maxwell-prepared-read-control.sass.gz
+7743a3a43bf70c04a67dd764491c9fdab62a49648b00e6d6ed5eaa862f863853  2026-10-26-maxwell-prepared-read-control.words.gz
+ea516e26adfe148cf9c2596a08e88b93a5d8811e087d72a92f54a01fbd4d3c49  2026-10-26-maxwell-prepared-read-cpu.log.gz
+ea7e489224ea8df1dcd82f0091793d8266533e1013ae341155847e3bac9d954d  2026-10-26-maxwell-prepared-read-hypothesis.md
+8766e37bf652b12e615b79e76dd07f50c33ec527f4593394eacd539480ae7af0  2026-10-26-maxwell-prepared-read-noncuda.log.gz
+3511fb25162c162edb172a81b260d5706b11a5117756ed9a300985283824f2b1  2026-10-26-maxwell-prepared-read-primitive-off.log.gz
+e6f848c7ad458eb735450adfb5554b18948851ca42628e71a469f073615a6916  2026-10-26-maxwell-prepared-read-primitive-on.log.gz
+debc70c5ea90714dd5fc8b6027ec60645dc79fa2f989e0f34a4b503f17b7e5a3  2026-10-26-maxwell-prepared-read-regressions.log.gz
+d8df0cd65aefb1f40120364bdcfc620ac017b9ca366d7358c89292dddc2d0b52  2026-10-26-maxwell-prepared-read-resources.txt.gz
+57a1f522d231cbcc434bb644abf8101e566580a4db3aa1a7ad5f62ccff087a51  2026-10-26-maxwell-prepared-read-screen.jsonl
+f32fc3b04b97bff4f429ca6f96f1f1954150429137340ce2419149af1b782137  2026-10-26-maxwell-prepared-read-screen.log.gz
+ce70236ed027ec93a5c5d6752ab6abf450abfa8b81d9a9d057a94d2c1be50bc2  2026-10-26-maxwell-prepared-read-screen.md
