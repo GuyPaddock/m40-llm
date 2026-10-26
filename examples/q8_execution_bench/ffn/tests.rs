@@ -310,12 +310,7 @@ fn test_prepared_down_warp_keeps_complete_ffn_bits_and_cache() -> Result<()> {
     Ok(())
 }
 
-/// The unfused experiment must retain gate/up, hidden and complete output
-/// bits using existing scratch and immutable prepared down. Repeated timing
-/// must count all three gate/up launches and the fourth down launch.
-#[test]
-#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
-fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
     let _lock = cuda_test_scope::lock_cuda();
     let _env = configure();
     let _hardware = CudaContext::new_m40()?;
@@ -350,7 +345,7 @@ fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
             let expected = read()?;
             let capacity = pipeline.scratch_bytes();
             let resident = CudaContext::total_device_bytes();
-            pipeline.select_kernel(FfnKernel::SplitF32x4Unfused)?;
+            pipeline.select_kernel(kernel)?;
             validation::validate(&pipeline, &layer)?;
             let mut actual = Vec::new();
             for buffer in [
@@ -363,9 +358,23 @@ fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
             }
             assert_eq!(actual, expected);
             let timing = pipeline.time(Stage::Complete, 7)?;
-            assert_eq!(timing["enqueue_counters"]["launches"], 28);
-            assert_eq!(timing["unfused_dispatch"]["projection_launches"], 14);
-            assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
+            if kernel == FfnKernel::SplitF32x4Unfused {
+                assert_eq!(timing["enqueue_counters"]["launches"], 28);
+                assert_eq!(timing["unfused_dispatch"]["projection_launches"], 14);
+                assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
+            } else {
+                assert_eq!(timing["enqueue_counters"]["launches"], 14);
+                assert_eq!(timing["weight_cg_dispatch"]["fused_launches"], 7);
+            }
+            for counter in [
+                "device_allocs",
+                "device_frees",
+                "h2d_copies",
+                "d2h_copies",
+                "stream_syncs",
+            ] {
+                assert_eq!(timing["enqueue_counters"][counter], 0);
+            }
             assert_eq!(pipeline.scratch_bytes(), capacity);
             assert_eq!(CudaContext::total_device_bytes(), resident);
             pipeline.verify_guards_and_inputs(&layer)?;
@@ -374,6 +383,23 @@ fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
+}
+
+/// The unfused experiment must retain all complete-FFN bits with existing
+/// scratch and immutable down, counting three gate/up launches plus down.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4Unfused)
+}
+
+/// Changing only weight-cache policy must retain gate/up, hidden and complete
+/// output bits with the same scratch/cache. Seven iterations enqueue fourteen
+/// kernels without allocation, transfer or synchronization inside enqueue.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_weight_cg_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4WeightCg)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

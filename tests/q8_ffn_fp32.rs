@@ -28,6 +28,7 @@ enum SplitKernel {
     TwoColumns,
     FixedK2048,
     Unfused,
+    WeightCg,
 }
 
 fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
@@ -181,6 +182,7 @@ fn compare_case(
             (None, SplitKernel::TwoColumns),
             (None, SplitKernel::FixedK2048),
             (None, SplitKernel::Unfused),
+            (None, SplitKernel::WeightCg),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
@@ -189,6 +191,7 @@ fn compare_case(
             SplitKernel::TwoColumns => CudaContext::ffn_q8_split_f32_two_columns_async,
             SplitKernel::FixedK2048 => CudaContext::ffn_q8_split_f32_k2048_async,
             SplitKernel::Unfused => CudaContext::ffn_q8_split_unfused_f32_async,
+            SplitKernel::WeightCg => CudaContext::ffn_q8_split_weight_cg_f32_async,
         };
         unsafe {
             for buffer in [&output, &unfused_gate, &unfused_up] {
@@ -390,6 +393,7 @@ fn compare_case(
 /// width; other widths remain covered by the unchanged dynamic kernels.
 /// The fixed unfused decomposition must preserve the same intermediate and
 /// completed bits while counting three launches and reusing guarded scratch.
+/// L2-only weight loads must preserve all qualified fused bits as well.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -429,6 +433,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_f32_two_columns_async,
                 CudaContext::ffn_q8_split_f32_k2048_async,
                 CudaContext::ffn_q8_split_unfused_f32_async,
+                CudaContext::ffn_q8_split_weight_cg_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),

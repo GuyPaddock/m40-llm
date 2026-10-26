@@ -180,6 +180,16 @@ traffic are included; complete FFN includes the unchanged fourth down launch.
 gate/up buffers and does not select a generation policy. See the
 [bounded hypothesis](experiments/2026-10-25-maxwell-unfused-ffn-hypothesis.md).
 
+The independent `q8_execution_bench --ffn-f32-weight-cg` comparison changes
+only weight/scale load hints in the qualified fused split-plane kernel.
+It keeps read-only activations, original FP32 association, one-column /
+four-value / 128-thread geometry and the same prepared down/vocabulary.
+`CudaContext::ffn_q8_split_weight_cg_f32_async` uses the same buffer contract
+as the qualified split API, including optional gate/up capture. This is a
+benchmark-only cache experiment, not a runtime or default selector. Require
+distinct sm_52 instructions and the original complete-FFN / quality / E2E
+gates described in its [bounded hypothesis](experiments/2026-10-25-maxwell-cache-ffn-hypothesis.md).
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only

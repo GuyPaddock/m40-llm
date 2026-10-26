@@ -24,6 +24,7 @@ pub(super) enum FfnKernel {
     SplitF32x4TwoColumns,
     SplitF32x4K2048,
     SplitF32x4Unfused,
+    SplitF32x4WeightCg,
     JointF32x4,
 }
 
@@ -37,6 +38,7 @@ impl Serialize for FfnKernel {
             Self::SplitF32x4TwoColumns => serializer.serialize_str("split-f32x4-cols2-128"),
             Self::SplitF32x4K2048 => serializer.serialize_str("split-f32x4-k2048-128"),
             Self::SplitF32x4Unfused => serializer.serialize_str("split-f32x4-unfused-128"),
+            Self::SplitF32x4WeightCg => serializer.serialize_str("split-f32x4-weight-cg-128"),
             Self::JointF32x4 => serializer.serialize_str("joint-f32x4-128"),
         }
     }
@@ -58,6 +60,7 @@ impl FfnKernel {
                 | Self::SplitF32x4TwoColumns
                 | Self::SplitF32x4K2048
                 | Self::SplitF32x4Unfused
+                | Self::SplitF32x4WeightCg
                 | Self::JointF32x4
         )
     }
@@ -71,6 +74,7 @@ impl FfnKernel {
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
             | Self::SplitF32x4Unfused
+            | Self::SplitF32x4WeightCg
             | Self::JointF32x4 => 128,
         }
     }
@@ -84,6 +88,7 @@ impl FfnKernel {
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
             | Self::SplitF32x4Unfused
+            | Self::SplitF32x4WeightCg
             | Self::JointF32x4 => true,
         }
     }
@@ -97,6 +102,7 @@ impl FfnKernel {
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
             | Self::SplitF32x4Unfused
+            | Self::SplitF32x4WeightCg
             | Self::JointF32x4 => true,
         }
     }
@@ -653,6 +659,22 @@ impl<'a> FfnPipeline<'a> {
         self.stop.record(stop_stream)?;
         let after = profile::snapshot();
         let enqueued = profile::counter_delta(&before, &after);
+        let weight_cg_dispatch = if self.kernel == FfnKernel::SplitF32x4WeightCg {
+            let expected = if matches!(stage, Stage::IsolatedDown) {
+                0
+            } else {
+                iterations as u64
+            };
+            let operation = "ffn_q8_split_f32x4_weight_cg_128";
+            let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
+                - before.by_op.get(operation).map_or(0, |v| v.launches);
+            ensure!(launches == expected, "wrong weight-cache FFN dispatch");
+            Some(
+                json!({"fused_launches":launches,"weight_cache_policy":"cg","activation_cache_policy":"nc"}),
+            )
+        } else {
+            None
+        };
         let unfused_dispatch = if self.kernel == FfnKernel::SplitF32x4Unfused {
             let expected = if matches!(stage, Stage::IsolatedDown) {
                 0
@@ -687,7 +709,7 @@ impl<'a> FfnPipeline<'a> {
         Ok(
             json!({"stage":stage,"gpu_ms":gpu_ms,"host_enqueue_and_completion_ms":wall_ms,"iterations":iterations,
             "started_unix_us":started_unix_us,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
-            "enqueue_counters":enqueued,"unfused_dispatch":unfused_dispatch,
+            "enqueue_counters":enqueued,"unfused_dispatch":unfused_dispatch,"weight_cg_dispatch":weight_cg_dispatch,
             "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }

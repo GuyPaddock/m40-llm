@@ -109,6 +109,7 @@ enum SplitFfnKernel {
     TwoColumns,
     FixedK2048,
     Unfused,
+    WeightCg,
 }
 
 impl CudaContext {
@@ -314,6 +315,37 @@ impl CudaContext {
         )
     }
 
+    /// Fixed fused split-plane experiment with L2-only weight/scale loads.
+    /// Activation loads, FP32 arithmetic, geometry and scratch are unchanged.
+    ///
+    /// # Safety
+    /// The buffer ownership, sizes, alignment, lifetime and stream dependency
+    /// requirements of `ffn_q8_split_f32_async` apply without modification.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_weight_cg_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::WeightCg,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     unsafe fn enqueue_split_f32(
         &self,
@@ -375,6 +407,7 @@ impl CudaContext {
             SplitFfnKernel::TwoColumns => ffi::m40llm_ffn_q8_split_f32_two_columns_async,
             SplitFfnKernel::FixedK2048 => ffi::m40llm_ffn_q8_split_f32_k2048_async,
             SplitFfnKernel::Unfused => ffi::m40llm_ffn_q8_split_unfused_f32_async,
+            SplitFfnKernel::WeightCg => ffi::m40llm_ffn_q8_split_weight_cg_f32_async,
         };
         let rc = enqueue(
             self.inner.raw.as_ptr(),
@@ -399,6 +432,7 @@ impl CudaContext {
             SplitFfnKernel::Dynamic => "ffn_q8_split_f32x4_128",
             SplitFfnKernel::TwoColumns => "ffn_q8_split_f32x4_cols2_128",
             SplitFfnKernel::FixedK2048 => "ffn_q8_split_f32x4_k2048_128",
+            SplitFfnKernel::WeightCg => "ffn_q8_split_f32x4_weight_cg_128",
             SplitFfnKernel::Unfused => unreachable!("three launches recorded above"),
         });
         Ok(())

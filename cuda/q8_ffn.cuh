@@ -72,6 +72,50 @@ __global__ void gate_up_split_f32x4(
     }
 }
 
+// Cache-policy-only experiment. Preserve the qualified task order, arithmetic
+// and read-only activation loads; bypass L1 for streaming weights and scales.
+__global__ void gate_up_split_f32x4_weight_cg(
+    const float* __restrict__ input, const __half* __restrict__ gate_scales,
+    const uint32_t* __restrict__ gate_values, const __half* __restrict__ up_scales,
+    const uint32_t* __restrict__ up_values, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output, int hidden, int k) {
+    const int column = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int tasks = k / 4;
+    const size_t value_base = static_cast<size_t>(column) * tasks;
+    const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    float gate_acc = 0.0f, up_acc = 0.0f;
+    for (int task = tid; task < tasks; task += 128) {
+        const float4 a = activation[task];
+        const uint32_t gate_q = __ldcg(gate_values + value_base + task);
+        const uint32_t up_q = __ldcg(up_values + value_base + task);
+        const float gs = __half2float(__ldcg(gate_scales + scale_base + task / 8));
+        const float us = __half2float(__ldcg(up_scales + scale_base + task / 8));
+        const float values[4] = {a.x, a.y, a.z, a.w};
+        #pragma unroll
+        for (int index = 0; index < 4; ++index) {
+            gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(gate_q >> (index * 8))) * gs);
+            up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(up_q >> (index * 8))) * us);
+        }
+    }
+    extern __shared__ float published[];
+    published[tid] = gate_acc;
+    published[tid + 128] = up_acc;
+    __syncthreads();
+    if (tid < 32) {
+        const float g = reduce_published<128>(published, tid);
+        const float u = reduce_published<128>(published + 128, tid);
+        if (tid == 0) {
+            const size_t index = static_cast<size_t>(row) * hidden + column;
+            output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (gate_output) gate_output[index] = g;
+            if (up_output) up_output[index] = u;
+        }
+    }
+}
+
 // Keep each column's task assignment and FP32 tree, sharing only activation
 // loads and block setup. An odd final column participates in the barrier.
 __global__ void gate_up_split_f32x4_two_columns(
@@ -248,6 +292,11 @@ int launch_split_f32(
             static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
             static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
             static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    } else if constexpr (Variant == 4) {
+        gate_up_split_f32x4_weight_cg<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+            static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
+            static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
+            static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
     } else {
         gate_up_split_f32x4_k2048<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
             static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
@@ -263,6 +312,13 @@ extern "C" int m40llm_ffn_q8_split_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<1>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_split_weight_cg_f32_async(
+    M40llmCudaContext* ctx, const void* input, const void* const* scales,
+    const void* const* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    return m40llm_q8_ffn::launch_split_f32<4>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
 }
 
 extern "C" int m40llm_ffn_q8_joint_f32_async(
