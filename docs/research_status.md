@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest selected-runtime profile:** [packed Q8 event/HTTP diagnostic](experiments/2026-10-26-maxwell-packed-stage-profile.md)
+preserves actual IDs with 1.0864% perturbation. Middle-stage shares are
+41.11% gate/up, 24.37% prepared down and 7.98% vocabulary. Source/current
+SASS shows scalar activation loads remain in the prepared projection while
+weights already use packed 64-bit reads. Next implement the [bounded
+activation-load-only probe](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md),
+keeping original reduction, planes/math/geometry and all existing gates.
+No combining rejected reduction/FFN candidates. No runtime/default change
+or new throughput claim follows from this diagnostic.
+
 **Requested KV-stack side diagnostic:** [five resident-generation rounds](experiments/2026-10-26-maxwell-packed-kv-stack.md)
 measure 49.104 tok/s dense, 19.694 compressed defaults, 20.217
 window128/top8 and 22.765 window128/top4 with the optimized Q8 path fixed.
@@ -31,9 +41,8 @@ measures **49.146 versus 43.106 buffered HTTP tok/s, +14.014%**, paired
 95% interval **[13.974%, 14.370%]**. Actual 512 IDs, intended packed
 dispatch, fixed preparation and prompt-cache resets pass. Both original
 goals remain unmet: **53.06** and **56.037 tok/s** for 1.30x this fresh
-official median. Defaults remain unchanged. Next re-profile this selected
-runtime with the existing stage diagnostic before choosing another bounded
-exact hypothesis; do not revive below-gate FFN candidates.
+official median. Defaults remain unchanged. The profile above now completes
+its follow-up; do not revive below-gate FFN candidates.
 
 **Latest incremental qualification:** [packed QKV/output](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md)
 passes twenty fresh confirmation pairs at **49.082 versus 47.186 HTTP

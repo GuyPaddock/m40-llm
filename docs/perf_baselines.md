@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Packed Runtime Remains FFN Dominated
+
+Five profiling-off/on pairs preserve actual 512 IDs and show **1.0864%
+instrumentation overhead**. Middle-token event shares are **41.11% gate/up,
+24.37% down, 7.98% vocabulary, 7.09% QKV, 5.16% output and 3.98% attention**.
+See [events, complete coverage and source/instruction evidence](experiments/2026-10-26-maxwell-packed-stage-profile.md).
+
+Prepared projection SASS still contains eight scalar bounds-checked
+activation loads but already-packed weight loads. A [fixed activation-load
+probe](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md) will
+retain its original reduction, planes, FP32 math and geometry; this does
+not revive the below-gate reduction candidate. No optimization follows
+from profiling alone. Exact status stays **49.146 HTTP tok/s** versus
+**43.106 official Ollama**; both original targets and defaults are unchanged.
+
 ## 2026-10-26: Compressed KV Does Not Stack As A Short-Context Speedup
 
 Five release resident-generation rounds with the optimized packed Q8
