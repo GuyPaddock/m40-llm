@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Physical Gate/Up Roles Regress
+
+Separating gate and up into two physical 128-thread roles preserves original
+bits but regresses complete one-row FFN throughput **14.53-14.66%**, with
+negative paired intervals at all three layers. Four-row regressions are
+**10.88-14.29%**. Registers rise 32 to 40 despite one accumulator per thread;
+this is not a measured occupancy or traffic explanation. See
+[pairs, parity, compiler evidence and audited decision](experiments/2026-10-26-maxwell-role-parallel-ffn-screen.md).
+
+Keep `0d99dc8` benchmark-only without runtime integration or geometry,
+cache, register-cap or unroll rescue. Original control/prepared words and
+allocations remain unchanged. Exact status remains **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both targets remain unmet and defaults
+unchanged.
+
 ## 2026-10-26: Indexed Lossless Byte Coding Misses Feasibility
 
 Actual gate/up payload entropy is **7.65-7.68 bits/byte**. A CPU-only

@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest fixed role screen:** [physical gate/up ownership](experiments/2026-10-26-maxwell-role-parallel-ffn-screen.md)
+preserves gate/up, SwiGLU and complete-down bits but regresses complete
+one-row FFN **14.53-14.66%**, all paired intervals negative. Four-row work
+also regresses. Registers rise 32 to 40 despite fewer accumulators; no
+measured occupancy/traffic attribution follows. Keep `0d99dc8` benchmark-only
+without runtime selection or geometry/cache/register/unroll rescue. Audits,
+CUDA on/off, pipeline ownership, regressions, non-CUDA warning checks,
+Clippy and formatting pass. Next work needs independent execution-cost
+evidence, not another tensor-role mapping. Qualified runtime/defaults are
+unchanged; both original targets remain unmet.
+
 **Latest offline feasibility:** [indexed lossless byte coding](experiments/2026-10-26-maxwell-ffn-entropy-study.md)
 finds gate/up payload entropy **7.65-7.68 bits/byte**. The largest fixed
 1024-symbol aligned/indexed Huffman model saves only **2.37-2.69%**, before
