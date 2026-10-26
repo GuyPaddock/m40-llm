@@ -433,7 +433,7 @@ impl<'a> ProjectionProbe<'a> {
     }
 
     pub fn warm(&self, is_candidate: bool, minimum_ms: f64) -> Result<Value> {
-        super::warmup::measure(minimum_ms, |iterations| {
+        super::super::warmup::measure(minimum_ms, |iterations| {
             self.time(is_candidate, iterations)?["gpu_ms"]
                 .as_f64()
                 .context("missing projection warmup")

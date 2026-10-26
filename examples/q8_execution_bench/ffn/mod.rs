@@ -7,6 +7,7 @@ mod prepared;
 mod prepared_projection;
 mod projection;
 mod validation;
+mod warmup;
 
 use super::{command_output, inspect_gpu, write_record, Args};
 use anyhow::{ensure, Result};

@@ -4,7 +4,6 @@ mod pipeline;
 mod prepared;
 #[cfg(test)]
 mod tests;
-mod warmup;
 use super::super::{command_output, inspect_gpu, write_record, Args};
 use super::{ablation::summarize, fixture::FfnInputs};
 use anyhow::{ensure, Result};
