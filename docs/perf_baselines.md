@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Disabled Forward Diagnostics CPU Scope
+
+Five CPU-only release pairs measure **246.311 ms per nominal 512-token
+replay**, **481.08 us per nominal token**, for the existing disabled forward
+logging wrapper around 396 layer operations. The observed cost is **2.3643%**
+of the qualified HTTP interval, not an inference bound or E2E speedup.
+See [scope, raw CPU pairs and audit](experiments/2026-10-26-maxwell-disabled-diagnostics-cost.md).
+
+Keep `a592deb` test-only: it misses the prespecified 3% standalone-cost
+threshold before accounting for CPU/GPU overlap. No runtime fast path or
+environment cache follows. Coverage, checksums, zero device/counter changes
+and ten corruption controls pass. Qualified exact status remains
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both original
+targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Shared FFN Scales Help Below The Gate
 
 Staging original FP16 scales once per CTA in shared FP32 preserves gate/up,

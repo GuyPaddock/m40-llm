@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent wrapper-cost screen:** [disabled diagnostics](experiments/2026-10-26-maxwell-disabled-diagnostics-cost.md)
+cost **246.311 ms per nominal512 replay**, about **481.08 us/token**, in five
+CPU-only release pairs on core 0. This is 2.3643% of qualified HTTP before
+CPU/GPU overlap, not an inference bound or predicted speedup. It misses the
+prespecified 3% standalone cost threshold. Keep `a592deb` test-only without
+runtime logging/environment caching or combining closed kernels. Coverage,
+work counts, zero counter/device changes and ten corruption controls pass.
+Next needs independent dominant execution-cost scope. Qualified runtime,
+defaults and both original unmet HTTP targets remain unchanged.
+
 **Latest independent scale-reuse screen:** [shared FP32 scales](experiments/2026-10-26-maxwell-shared-scales-ffn-screen.md)
 preserve original gate/up, SwiGLU and complete-down bits and improve complete
 one-row FFN **1.99-2.19%**. All paired lower bounds are positive but upper
