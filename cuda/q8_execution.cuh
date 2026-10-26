@@ -85,6 +85,69 @@ __global__ void q8_separate_projection_kernel(
     }
 }
 
+// Lossless full-warp packets; original tasks, activation loads and FP32 tree.
+__global__ void q8_warp_packet_projection_kernel(
+    const float* __restrict__ input, const uint2* __restrict__ packed_scales,
+    const uint4* __restrict__ packets, float* __restrict__ output, int N, int K) {
+    const int col0 = blockIdx.x * 4;
+    const int row = blockIdx.y;
+    const int blocks_per_col = K / 32;
+    const int warp_tiles = K / 256;
+    float acc[4] = {};
+    for (int task = threadIdx.x; task < blocks_per_col * 4; task += blockDim.x) {
+        const int k0 = task * 8;
+        float activation[8];
+        #pragma unroll
+        for (int i = 0; i < 8; ++i) {
+            activation[i] = k0 + i < K ? input[static_cast<size_t>(row) * K + k0 + i] : 0.0f;
+        }
+        const uint2 bits = packed_scales[static_cast<size_t>(blockIdx.x) * blocks_per_col + task / 4];
+        const float scales[4] = {
+            __half2float(__ushort_as_half(static_cast<unsigned short>(bits.x))),
+            __half2float(__ushort_as_half(static_cast<unsigned short>(bits.x >> 16))),
+            __half2float(__ushort_as_half(static_cast<unsigned short>(bits.y))),
+            __half2float(__ushort_as_half(static_cast<unsigned short>(bits.y >> 16)))};
+        const size_t base = (static_cast<size_t>(blockIdx.x) * warp_tiles + task / 32) * 64 + task % 32;
+        #pragma unroll
+        for (int half = 0; half < 2; ++half) {
+            const uint4 packet = packets[base + half * 32];
+            const uint32_t words[4] = {packet.x, packet.y, packet.z, packet.w};
+            #pragma unroll
+            for (int c = 0; c < 4; ++c) {
+                if (col0 + c < N) {
+                    #pragma unroll
+                    for (int i = 0; i < 4; ++i) {
+                        acc[c] += activation[half * 4 + i]
+                            * (static_cast<float>(static_cast<int8_t>(words[c] >> (i * 8))) * scales[c]);
+                    }
+                }
+            }
+        }
+    }
+    q8_separate_reduce<4>(acc);
+    if (threadIdx.x == 0) {
+        #pragma unroll
+        for (int c = 0; c < 4; ++c) {
+            if (col0 + c < N) output[static_cast<size_t>(row) * N + col0 + c] = acc[c];
+        }
+    }
+}
+
+extern "C" int m40llm_gemm_f32xq8_warp_packet_async(
+    M40llmCudaContext* ctx, const void* input, const void* scales,
+    const void* packets, void* output, int rows, int n, int k, int threads, uint32_t stream_kind) {
+    if (!ctx || !input || !scales || !packets || !output) return -1;
+    if ((rows != 1 && rows != 4) || n <= 0 || n % 4 || k <= 0 || k % 256 || k > INT32_MAX - 31
+        || (threads != 128 && threads != 256) || stream_kind > 1) return -2;
+    if (reinterpret_cast<uintptr_t>(input) % 4 || reinterpret_cast<uintptr_t>(scales) % 8
+        || reinterpret_cast<uintptr_t>(packets) % 16 || reinterpret_cast<uintptr_t>(output) % 4) return -3;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
+    q8_warp_packet_projection_kernel<<<dim3(n/4,rows),threads,4*threads*sizeof(float),stream>>>(
+        static_cast<const float*>(input), static_cast<const uint2*>(scales),
+        static_cast<const uint4*>(packets), static_cast<float*>(output), n, k);
+    return static_cast<int>(cudaPeekAtLastError());
+}
+
 __global__ void q8_separate_qkv_kernel(
     const float* input,
     const __half* sq, const int8_t* vq, const __half* sk, const int8_t* vk,

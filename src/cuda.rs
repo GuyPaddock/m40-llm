@@ -36,6 +36,8 @@ mod q8_qkv;
 #[cfg(feature = "cuda")]
 mod q8_split_projection;
 #[cfg(feature = "cuda")]
+mod q8_warp_packet;
+#[cfg(feature = "cuda")]
 mod q8_weight_read;
 #[cfg(feature = "cuda")]
 pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
@@ -740,6 +742,18 @@ mod ffi {
             ctx: *mut M40llmCudaContext,
             scales: *const c_void,
             values: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_warp_packet_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            packets: *const c_void,
             output: *mut c_void,
             rows: i32,
             n: i32,

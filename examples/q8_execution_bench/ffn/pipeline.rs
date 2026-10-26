@@ -20,6 +20,7 @@ pub(super) enum DownProjection {
     Control,
     WarpFinish,
     PackedActivation,
+    WarpPacket,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,6 +271,7 @@ pub(super) struct FfnPipeline<'a> {
     pub prepared: Option<super::prepared::PreparedFfnWeights>,
     pub joint: Option<super::joint::JointFfnWeights>,
     down_projection: DownProjection,
+    pub warp_packet: Option<super::packet::PreparedWarpPacket>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -322,6 +324,7 @@ impl<'a> FfnPipeline<'a> {
             prepared: None,
             joint: None,
             down_projection: DownProjection::Control,
+            warp_packet: None,
         })
     }
 
@@ -378,6 +381,10 @@ impl<'a> FfnPipeline<'a> {
     }
 
     pub fn select_down_projection(&mut self, projection: DownProjection) -> Result<()> {
+        ensure!(
+            projection != DownProjection::WarpPacket || self.warp_packet.is_some(),
+            "prepare warp packet before selecting candidate"
+        );
         self.drain()?;
         self.down_projection = projection;
         Ok(())
@@ -653,6 +660,18 @@ impl<'a> FfnPipeline<'a> {
                             launch,
                             self.projection_stream(),
                         ),
+                    DownProjection::WarpPacket => self
+                        .warp_packet
+                        .as_ref()
+                        .context("missing down warp packet")?
+                        .device
+                        .enqueue_async(
+                            input.pointer(),
+                            output.pointer(),
+                            self.rows,
+                            launch,
+                            self.projection_stream(),
+                        ),
                     DownProjection::Control => unreachable!(),
                 }
             };
@@ -885,6 +904,9 @@ impl<'a> FfnPipeline<'a> {
         }
         if let Some(joint) = &self.joint {
             joint.verify()?;
+        }
+        if let Some(packet) = &self.warp_packet {
+            packet.verify()?;
         }
         if let Some(quantized) = &self.quantized {
             quantized.read(&self.model.cuda)?;

@@ -50,7 +50,9 @@ fn operation_count(
 }
 
 fn select_candidate(args: &Args) -> DownProjection {
-    if args.prepared_f32_packed_activation {
+    if args.prepared_warp_packet {
+        DownProjection::WarpPacket
+    } else if args.prepared_f32_packed_activation {
         DownProjection::PackedActivation
     } else {
         DownProjection::WarpFinish
@@ -62,6 +64,7 @@ fn projection_operation(projection: DownProjection) -> &'static str {
         DownProjection::Control => "gemm_f32xq8_separate_f32",
         DownProjection::WarpFinish => "gemm_f32xq8_separate_warp",
         DownProjection::PackedActivation => "gemm_f32xq8_separate_packed_activation",
+        DownProjection::WarpPacket => "gemm_f32xq8_warp_packet",
     }
 }
 
@@ -87,6 +90,14 @@ fn benchmark_down(
     p.enqueue(Stage::IsolatedDown)?;
     p.drain()?;
     let control_down = p.isolated_output.read(&model.cuda)?;
+    if args.prepared_warp_packet {
+        let pair_bytes = p.prepared.as_ref().unwrap().bytes;
+        p.warp_packet = Some(super::packet::PreparedWarpPacket::new(
+            model,
+            down_view.dptr.cast_const(),
+            128 * 1024 * 1024 - pair_bytes,
+        )?);
+    }
     p.select_down_projection(select_candidate(args))?;
     let candidate_checks = validation::validate(&p, layer)?;
     require_identical(&p.hidden.read(&model.cuda)?, &control_hidden)?;
@@ -100,7 +111,8 @@ fn benchmark_down(
         "layer_id":layer.source.layer_id,"rows":rows,"source":layer.source.down,
         "row_positions":layer.rows[..rows],"control_checks":control_checks,"candidate_checks":candidate_checks,
         "control_hidden_bits_equal":true,"control_complete_output_bits_equal":true,"control_down_bits_equal":true,
-        "gate_up_preparation":p.prepared.as_ref().unwrap().report,"scratch_bytes":p.scratch_bytes()}),
+        "gate_up_preparation":p.prepared.as_ref().unwrap().report,"scratch_bytes":p.scratch_bytes(),
+        "packet_preparation":p.warp_packet.as_ref().map(|v|&v.report)}),
     )?;
     p.select_down_projection(DownProjection::Control)?;
     let control_warm = p.warm_up(1000.0, 256)?;
@@ -195,7 +207,7 @@ fn benchmark_down(
             file,
             json!({"kind":"prepared_projection_pair","family":"down","layer_id":layer.source.layer_id,
             "rows":rows,"trial":trial,"measurements":measurements,"gpu_before":gpu_before,"gpu_after":inspect_gpu()?,
-            "resident_bytes":resident,"scratch_bytes":p.scratch_bytes()}),
+            "resident_bytes":resident,"scratch_bytes":p.scratch_bytes(),"packet_preparation":p.warp_packet.as_ref().map(|v|&v.report)}),
         )?;
     }
     p.verify_guards_and_inputs(layer)?;
@@ -238,6 +250,15 @@ fn benchmark_vocabulary(
         CudaStream::Prefill
     };
     let config = m40_llm::infer::execution_weights::Q8SeparateLaunch::new(4, 128)?;
+    let packet = if args.prepared_warp_packet {
+        Some(super::packet::PreparedWarpPacket::new(
+            model,
+            view.dptr.cast_const(),
+            512 * 1024 * 1024,
+        )?)
+    } else {
+        None
+    };
     let enqueue = |is_candidate| -> Result<()> {
         unsafe {
             if is_candidate {
@@ -257,6 +278,11 @@ fn benchmark_vocabulary(
                             config,
                             stream,
                         ),
+                    DownProjection::WarpPacket => packet
+                        .as_ref()
+                        .context("missing vocabulary warp packet")?
+                        .device
+                        .enqueue_async(input.pointer(), output.pointer(), rows, config, stream),
                     DownProjection::Control => unreachable!(),
                 }
             } else {
@@ -313,7 +339,7 @@ fn benchmark_vocabulary(
         json!({"kind":"prepared_projection_validation","family":"vocabulary","rows":rows,
         "tensor":name,"key":weight.key(),"control_bits_equal":true,"cpu_sample_max_abs_diff":cpu_max,
         "input_scope":"distinct frozen normalized FFN layer-0 input surrogates, not captured output-norm hidden vectors",
-        "scratch_bytes":input.bytes()+output.bytes()}),
+        "scratch_bytes":input.bytes()+output.bytes(),"packet_preparation":packet.as_ref().map(|v|&v.report)}),
     )?;
     let original_planes = unsafe { weight.read_planes()? };
     let start = model.cuda.create_event()?;
@@ -402,6 +428,9 @@ fn benchmark_vocabulary(
     }
     require_identical(&output.read(&model.cuda)?, &expected)?;
     require_identical(&input.read(&model.cuda)?, input_values)?;
+    if let Some(packet) = &packet {
+        packet.verify()?;
+    }
     ensure!(
         unsafe { weight.read_planes()? } == original_planes,
         "vocabulary planes changed"
@@ -454,6 +483,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "control":"qualified split-f32x4-128 gate/up; original prepared four-column down/vocabulary shared tree",
         "candidate":if args.prepared_weight_read {
             "checksum-only four-column/eight-value weight read; original shared tree/threads; no inference activations or measured DRAM traffic"
+        } else if args.prepared_warp_packet {
+            "lossless per-warp cross-column packet; original scalar activations, eight-value tasks, FP32 order, shared tree and threads"
         } else if args.prepared_f32_packed_activation {
             "two float4 activation loads; original weight loads/shared tree/tasks/FP32 association; down M1=256 else128, vocabulary128"
         } else { "same prepared planes and FP32 task order; original-tree warp finish, down M1=256 else128; vocabulary128" },
