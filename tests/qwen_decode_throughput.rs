@@ -1,6 +1,8 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/q8_kv_stack.rs"]
+mod q8_kv_stack;
 
 use anyhow::{Context, Result};
 use m40_llm::generate::{generate_text, GenerateOptions, PromptFormat};

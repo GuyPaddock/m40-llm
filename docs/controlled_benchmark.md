@@ -65,6 +65,26 @@ that the full prompt was processed.
 
 ## Run the Comparison
 
+### Stacked Compressed-KV Diagnostic
+
+The ignored `q8_kv_stack::test_preferred_q8_runtime_with_compressed_kv` probe
+in `qwen_decode_throughput` compares dense, compressed defaults, and a
+128-token recent window with top8/top4. It requires explicit
+`M40LLM_QWEN_THROUGHPUT_MODEL` and a new
+`M40LLM_QWEN_THROUGHPUT_REPORT` JSONL path, plus the qualified packed QKV,
+split FFN, gate-up/down/vocabulary preparation and dequant-SGEMM settings.
+Use a release CUDA build and `--include-ignored --test-threads=1` with the
+exact test filter. Other KV diagnostics/policies are rejected.
+
+One model remains resident; fresh KV allocation is measured separately and
+excluded from generation wall time. Each case warms once, then five rounds
+alternate forward/reverse order. Rows contain actual IDs/output, dispatch,
+memory, GPU boundaries and natural stop reasons. These are **resident
+generation**, not buffered HTTP measurements or fresh Ollama qualification.
+The default 1024-token recent window contains the entire short workload;
+only the smaller window exercises old-block selection. Output divergence
+is evidence to report, not an error to hide or an exact-output promotion.
+
 ### Maxwell Runtime Candidates
 
 M08 reuses this comparison tool with explicit FFN and prefill settings. First
