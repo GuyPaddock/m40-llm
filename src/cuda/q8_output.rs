@@ -20,6 +20,38 @@ impl CudaContext {
         k: i32,
         stream: CudaStream,
     ) -> Result<()> {
+        self.enqueue_output_warp(input, weight, output, n, k, stream, false)
+    }
+
+    /// Fixed raw-Q8 packed-load probe with four columns and 256 threads.
+    ///
+    /// # Safety
+    /// The requirements of `gemm_f32xq8_0_gguf_coltile4_warp_async` apply,
+    /// except input must be sixteen-byte aligned. Weights remain two-byte
+    /// aligned; all disjoint spans survive the selected stream's completion.
+    pub unsafe fn gemm_f32xq8_0_gguf_coltile4_packed_warp_async(
+        &self,
+        input: *const c_void,
+        weight: *const c_void,
+        output: *mut c_void,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        self.enqueue_output_warp(input, weight, output, n, k, stream, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn enqueue_output_warp(
+        &self,
+        input: *const c_void,
+        weight: *const c_void,
+        output: *mut c_void,
+        n: i32,
+        k: i32,
+        stream: CudaStream,
+        has_packed_loads: bool,
+    ) -> Result<()> {
         ensure!(
             n > 0 && k > 0 && k % 32 == 0,
             "output warp requires positive N and complete Q8 blocks"
@@ -38,8 +70,17 @@ impl CudaContext {
                 && (output as usize).is_multiple_of(4),
             "output warp span alignment mismatch"
         );
+        ensure!(
+            !has_packed_loads || (input as usize).is_multiple_of(16),
+            "packed output projection requires sixteen-byte activation alignment"
+        );
         let _guard = self.inner.lock.lock().unwrap();
-        let rc = ffi::m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async(
+        let enqueue = if has_packed_loads {
+            ffi::m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async
+        } else {
+            ffi::m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async
+        };
+        let rc = enqueue(
             self.inner.raw.as_ptr(),
             input,
             weight,
@@ -52,7 +93,11 @@ impl CudaContext {
             rc == 0,
             "m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async failed: {rc}"
         );
-        record_async_kernel("gemm_f32xq8_0_gguf_coltile4_warp");
+        record_async_kernel(if has_packed_loads {
+            "gemm_f32xq8_0_gguf_coltile4_packed_warp"
+        } else {
+            "gemm_f32xq8_0_gguf_coltile4_warp"
+        });
         Ok(())
     }
 }

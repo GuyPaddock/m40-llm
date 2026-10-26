@@ -135,6 +135,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/q8_unfused.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_separate_warp.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_output.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_projection_packed.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_activation.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_prefill.cuh");
     println!("cargo:rerun-if-changed=cuda/activation_sparsity.cuh");

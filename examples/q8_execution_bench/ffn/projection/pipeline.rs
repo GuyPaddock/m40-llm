@@ -1,7 +1,7 @@
 use super::super::{fixture::source_bytes, pipeline::GuardedF32, validation};
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
-    cuda::{CudaEvent, CudaStream},
+    cuda::{CudaContext, CudaEvent, CudaStream},
     evaluation::{ffn_capture::FfnTensorSource, identity::sha256},
     gguf::GgmlDType,
     infer::{DeviceTensorView, LoadedModel},
@@ -19,6 +19,12 @@ pub(super) enum ProjectionKind {
     Output,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ProjectionComparison {
+    WarpReduction,
+    PackedLoads,
+}
+
 impl ProjectionKind {
     pub fn operation(self, is_warp: bool) -> &'static str {
         match (self, is_warp) {
@@ -33,6 +39,7 @@ impl ProjectionKind {
 pub(super) struct ProjectionProbe<'a> {
     model: &'a LoadedModel,
     kind: ProjectionKind,
+    comparison: ProjectionComparison,
     pub rows: usize,
     k: usize,
     widths: Vec<usize>,
@@ -53,6 +60,7 @@ impl<'a> ProjectionProbe<'a> {
         rows: usize,
         input: &[f32],
         kind: ProjectionKind,
+        comparison: ProjectionComparison,
     ) -> Result<Self> {
         let mapped = model.map_standard_layer(layer)?;
         let k = mapped.d_model;
@@ -116,6 +124,7 @@ impl<'a> ProjectionProbe<'a> {
         Ok(Self {
             model,
             kind,
+            comparison,
             rows,
             k,
             widths,
@@ -134,7 +143,22 @@ impl<'a> ProjectionProbe<'a> {
         self.input.bytes() + self.outputs.iter().map(GuardedF32::bytes).sum::<usize>()
     }
 
-    pub fn enqueue(&self, is_warp: bool) -> Result<()> {
+    pub fn operation(&self, is_candidate: bool) -> &'static str {
+        if self.comparison == ProjectionComparison::PackedLoads && is_candidate {
+            match self.kind {
+                ProjectionKind::Qkv => "qkv_f32xq8_0_gguf_packed_warp",
+                ProjectionKind::Output => "gemm_f32xq8_0_gguf_coltile4_packed_warp",
+            }
+        } else {
+            self.kind
+                .operation(is_candidate || self.comparison == ProjectionComparison::PackedLoads)
+        }
+    }
+
+    pub fn enqueue(&self, is_candidate: bool) -> Result<()> {
+        let has_packed_loads = self.comparison == ProjectionComparison::PackedLoads && is_candidate;
+        let has_warp_reduction =
+            is_candidate || self.comparison == ProjectionComparison::PackedLoads;
         for row in 0..self.rows {
             unsafe {
                 let input = self.input.pointer().cast::<f32>().add(row * self.k).cast();
@@ -145,8 +169,14 @@ impl<'a> ProjectionProbe<'a> {
                         .add(row * self.widths[0])
                         .cast();
                     let weight = self.weights[0].dptr.cast_const();
-                    if is_warp {
-                        self.model.cuda.gemm_f32xq8_0_gguf_coltile4_warp_async(
+                    if has_warp_reduction {
+                        let enqueue = if has_packed_loads {
+                            CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async
+                        } else {
+                            CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async
+                        };
+                        enqueue(
+                            &self.model.cuda,
                             input,
                             weight,
                             output,
@@ -176,8 +206,14 @@ impl<'a> ProjectionProbe<'a> {
                         .add(row * self.widths[i])
                         .cast()
                 });
-                if is_warp {
-                    self.model.cuda.qkv_f32xq8_0_gguf_warp_async(
+                if has_warp_reduction {
+                    let enqueue = if has_packed_loads {
+                        CudaContext::qkv_f32xq8_0_gguf_packed_warp_async
+                    } else {
+                        CudaContext::qkv_f32xq8_0_gguf_warp_async
+                    };
+                    enqueue(
+                        &self.model.cuda,
                         input,
                         weights,
                         biases,
@@ -270,7 +306,7 @@ impl<'a> ProjectionProbe<'a> {
                     .iter()
                     .zip(&control[i])
                     .all(|(a, b)| a.to_bits() == b.to_bits()),
-                "projection warp changed original reduction bits"
+                "projection candidate changed timing-control bits"
             );
             let mut cpu = validation::project(
                 &self.original_input,
@@ -302,7 +338,7 @@ impl<'a> ProjectionProbe<'a> {
         )
     }
 
-    pub fn time(&self, is_warp: bool, iterations: usize) -> Result<Value> {
+    pub fn time(&self, is_candidate: bool, iterations: usize) -> Result<Value> {
         ensure!(iterations > 0, "projection timing requires iterations");
         let expected_launches = u64::try_from(
             iterations
@@ -315,7 +351,7 @@ impl<'a> ProjectionProbe<'a> {
         let began = Instant::now();
         self.start.record(CudaStream::Decode)?;
         for _ in 0..iterations {
-            self.enqueue(is_warp)?;
+            self.enqueue(is_candidate)?;
         }
         self.stop.record(CudaStream::Decode)?;
         let after = profile::snapshot();
@@ -331,7 +367,7 @@ impl<'a> ProjectionProbe<'a> {
                 && counters.cublas_calls == 0,
             "unexpected projection timed work"
         );
-        let op = self.kind.operation(is_warp);
+        let op = self.operation(is_candidate);
         let launches = after.by_op.get(op).map_or(0, |v| v.launches)
             - before.by_op.get(op).map_or(0, |v| v.launches);
         ensure!(
@@ -342,18 +378,19 @@ impl<'a> ProjectionProbe<'a> {
             self.start
                 .elapsed_sync(&self.stop, "projection_probe_timing")?,
         ) / iterations as f64;
-        Ok(
-            json!({"is_warp":is_warp,"gpu_ms":gpu_ms,"gpu_ms_per_request":gpu_ms/self.rows as f64,
+        Ok(json!({"is_candidate":is_candidate,
+            "is_warp":is_candidate || self.comparison==ProjectionComparison::PackedLoads,
+            "has_packed_loads":is_candidate && self.comparison==ProjectionComparison::PackedLoads,
+            "gpu_ms":gpu_ms,"gpu_ms_per_request":gpu_ms/self.rows as f64,
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
             "iterations":iterations,"enqueue_counters":counters,"operation":op,"operation_launches":launches,
-            "started_unix_us":started,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros()}),
-        )
+            "started_unix_us":started,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros()}))
     }
 
-    pub fn warm(&self, is_warp: bool, minimum_ms: f64) -> Result<Value> {
+    pub fn warm(&self, is_candidate: bool, minimum_ms: f64) -> Result<Value> {
         let mut elapsed = 0.0;
         for batch in 1..=256 {
-            elapsed += self.time(is_warp, 128)?["gpu_ms"]
+            elapsed += self.time(is_candidate, 128)?["gpu_ms"]
                 .as_f64()
                 .context("missing projection warmup")?
                 * 128.0;

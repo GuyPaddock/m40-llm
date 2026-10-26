@@ -12,7 +12,7 @@ use m40_llm::{
     gguf::load_gguf,
     infer::{execution_weights::Q8ExecutionConfig, LoadedModel},
 };
-use pipeline::{ProjectionKind, ProjectionProbe};
+use pipeline::{ProjectionComparison, ProjectionKind, ProjectionProbe};
 use serde_json::json;
 use std::{
     fs::{self, OpenOptions},
@@ -20,15 +20,21 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
-    let kind = if args.output_f32_warp {
+    let kind = if args.output_f32_warp || args.output_f32_packed {
         ProjectionKind::Output
     } else {
         ProjectionKind::Qkv
     };
-    let prefix = if args.output_f32_warp {
-        "output_warp"
+    let comparison = if args.qkv_f32_packed || args.output_f32_packed {
+        ProjectionComparison::PackedLoads
     } else {
-        "qkv_warp"
+        ProjectionComparison::WarpReduction
+    };
+    let prefix = match (kind, comparison) {
+        (ProjectionKind::Qkv, ProjectionComparison::WarpReduction) => "qkv_warp",
+        (ProjectionKind::Output, ProjectionComparison::WarpReduction) => "output_warp",
+        (ProjectionKind::Qkv, ProjectionComparison::PackedLoads) => "qkv_packed",
+        (ProjectionKind::Output, ProjectionComparison::PackedLoads) => "output_packed",
     };
     ensure!(
         !cfg!(debug_assertions) && args.rows == [1, 4],
@@ -65,8 +71,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "capture_report_sha256":inputs.report_sha256,"execution_configuration":inputs.manifest["execution_configuration"],
         "prepared_weights":model.q8_execution_stats(),"setup_ms":began.elapsed().as_secs_f64()*1000.0,
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,"gpu_before":gpu,
-        "control":if kind==ProjectionKind::Qkv {"original raw GGUF Q8_0 split4 fused QKV, 256 threads, shared reduction"} else {"original raw GGUF Q8_0 coltile4 split4 output, 256 threads, shared reduction"},
-        "candidate":"same raw weights, task assignment and original-tree warp finish, 256 threads",
+        "control":if comparison==ProjectionComparison::PackedLoads {"qualified raw GGUF Q8_0 scalar loads and original-tree warp finish; unchanged geometry"} else if kind==ProjectionKind::Qkv {"original raw GGUF Q8_0 split4 fused QKV, 256 threads, shared reduction"} else {"original raw GGUF Q8_0 coltile4 split4 output, 256 threads, shared reduction"},
+        "candidate":if comparison==ProjectionComparison::PackedLoads {"four U16 weights and two float4 activations per eight-value task; qualified warp tree and original FP32 association"} else {"same raw weights, task assignment and original-tree warp finish, 256 threads"},
+        "comparison":if comparison==ProjectionComparison::PackedLoads {"packed-loads"} else {"warp-reduction"},
+        "profile_source":if comparison==ProjectionComparison::PackedLoads {json!({
+            "path":"docs/experiments/2026-10-25-maxwell-projection-stage-audit.json",
+            "sha256":"9445906c521ae61700935e0b934d8744d98eb0db247f7abeee667e2cc9e3066d",
+            "generated_step":255,"scope":"optimistic GPU-stage fractions, not measured HTTP gains"})} else {serde_json::Value::Null},
         "input_scope":"frozen actual normalized FFN inputs used as projection surrogates; not captured attention-norm or attention-output inputs",
         "rows_scope":"one or four distinct independent single-token requests, one launch per row, not batched GEMM",
         "qkv_peer":peer.as_ref().map(|p|&p.binding),
@@ -83,6 +94,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 rows,
                 &layer.normalized_inputs[..rows * inputs.artifact.plan.d_model],
                 kind,
+                comparison,
             )?;
             let resident = CudaContext::total_device_bytes();
             write_record(
@@ -107,11 +119,14 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                     [true, false]
                 };
                 let mut times = Vec::new();
-                for is_warp in order {
-                    times.push(probe.time(is_warp, args.iterations)?);
+                for is_candidate in order {
+                    times.push(probe.time(is_candidate, args.iterations)?);
                 }
-                let ms = |is_warp| {
-                    times.iter().find(|v| v["is_warp"] == is_warp).unwrap()["gpu_ms"]
+                let ms = |is_candidate| {
+                    times
+                        .iter()
+                        .find(|v| v["is_candidate"] == is_candidate)
+                        .unwrap()["gpu_ms"]
                         .as_f64()
                         .unwrap()
                 };
@@ -136,7 +151,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 .unwrap();
             result["interpretation"]=json!("complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification");
             let gain = result["throughput_gain"].as_f64().unwrap();
-            let fraction = if kind == ProjectionKind::Qkv {
+            let fraction = if comparison == ProjectionComparison::PackedLoads {
+                if kind == ProjectionKind::Qkv {
+                    0.09239512146033983
+                } else {
+                    0.06640904254002505
+                }
+            } else if kind == ProjectionKind::Qkv {
                 0.1172
             } else {
                 0.0825
@@ -151,6 +172,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 json!({"kind":format!("{prefix}_screen"),"layer_id":layer.source.layer_id,"rows":rows,
                 "result":result,"optimistic_profile_weighted_e2e_gain":ceiling,
                 "optimistic_combined_e2e_gain":combined,
+                "profile_fraction":fraction,
                 "runtime_integration_allowed":rows==1 && result["passes_micro_screen"]==true && combined.unwrap_or(ceiling)>=0.03,
                 "qualification_scope":"case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required"}),
             )?;

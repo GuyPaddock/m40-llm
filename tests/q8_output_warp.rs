@@ -84,7 +84,7 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize) -> Result<()> {
             },
         );
         let mut control = Vec::new();
-        for is_warp in [false, true] {
+        for (is_native, has_packed_loads) in [(true, false), (false, false), (false, true)] {
             unsafe {
                 ctx.memcpy_h2d(x.pointer(), input.as_ptr().cast(), k * 4)?;
                 ctx.residual_add_f32_async(x.pointer(), x.pointer(), x.pointer(), k)?;
@@ -98,8 +98,14 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize) -> Result<()> {
             }
             let before = profile::snapshot();
             unsafe {
-                if is_warp {
-                    ctx.gemm_f32xq8_0_gguf_coltile4_warp_async(
+                if !is_native {
+                    let enqueue = if has_packed_loads {
+                        CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async
+                    } else {
+                        CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async
+                    };
+                    enqueue(
+                        ctx,
                         x.pointer(),
                         weight_ptr,
                         y.pointer(),
@@ -134,7 +140,7 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize) -> Result<()> {
             );
             ctx.synchronize_stream(stream)?;
             let actual = y.read(ctx)?;
-            if is_warp {
+            if !is_native {
                 assert_eq!(
                     actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                     control
@@ -163,6 +169,8 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize) -> Result<()> {
 /// Four-column warp reduction preserves original FP32 bits and CPU tolerance
 /// for all column tails, zero scales and signed extremes, on both streams
 /// after an asynchronous producer. Guarded spans and RAII cleanup are intact.
+/// Packed input/payload loads must preserve these results with two-byte-only
+/// weight bases, all column tails, and the same stream/dependency contract.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_native_output_warp_preserves_tree_tails_and_streams() -> Result<()> {
@@ -203,9 +211,13 @@ fn test_native_output_warp_rejects_invalid_spans() -> Result<()> {
         let y = DeviceBuffer::new_tagged(&ctx, 512, "output_warp:invalid")?;
         let before = profile::snapshot();
         unsafe {
-            for (n, k) in [(0, 32), (1, 0), (1, 33), (-1, 32), (1, -32)] {
-                assert!(ctx
-                    .gemm_f32xq8_0_gguf_coltile4_warp_async(
+            for enqueue in [
+                CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async,
+                CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async,
+            ] {
+                for (n, k) in [(0, 32), (1, 0), (1, 33), (-1, 32), (1, -32)] {
+                    assert!(enqueue(
+                        &ctx,
                         x.as_ptr(),
                         w.as_ptr(),
                         y.as_mut_ptr(),
@@ -214,34 +226,40 @@ fn test_native_output_warp_rejects_invalid_spans() -> Result<()> {
                         CudaStream::Decode
                     )
                     .is_err());
+                }
+                for (input, weight, output) in [
+                    (std::ptr::null(), w.as_ptr(), y.as_mut_ptr()),
+                    (x.as_ptr(), std::ptr::null(), y.as_mut_ptr()),
+                    (x.as_ptr(), w.as_ptr(), std::ptr::null_mut()),
+                    (x.as_ptr(), w.as_ptr(), x.as_mut_ptr()),
+                    (x.as_ptr(), w.as_ptr(), w.as_mut_ptr()),
+                    (
+                        x.as_ptr().cast::<u8>().add(2).cast(),
+                        w.as_ptr(),
+                        y.as_mut_ptr(),
+                    ),
+                    (
+                        x.as_ptr(),
+                        w.as_ptr().cast::<u8>().add(1).cast(),
+                        y.as_mut_ptr(),
+                    ),
+                    (
+                        x.as_ptr(),
+                        w.as_ptr(),
+                        y.as_mut_ptr().cast::<u8>().add(2).cast(),
+                    ),
+                ] {
+                    assert!(
+                        enqueue(&ctx, input, weight, output, 1, 32, CudaStream::Decode).is_err()
+                    );
+                }
             }
-            for (input, weight, output) in [
-                (std::ptr::null(), w.as_ptr(), y.as_mut_ptr()),
-                (x.as_ptr(), std::ptr::null(), y.as_mut_ptr()),
-                (x.as_ptr(), w.as_ptr(), std::ptr::null_mut()),
-                (x.as_ptr(), w.as_ptr(), x.as_mut_ptr()),
-                (x.as_ptr(), w.as_ptr(), w.as_mut_ptr()),
-                (
-                    x.as_ptr().cast::<u8>().add(2).cast(),
-                    w.as_ptr(),
-                    y.as_mut_ptr(),
-                ),
-                (
-                    x.as_ptr(),
-                    w.as_ptr().cast::<u8>().add(1).cast(),
-                    y.as_mut_ptr(),
-                ),
-                (
-                    x.as_ptr(),
-                    w.as_ptr(),
-                    y.as_mut_ptr().cast::<u8>().add(2).cast(),
-                ),
-            ] {
+            for offset in [4, 8, 12] {
                 assert!(ctx
-                    .gemm_f32xq8_0_gguf_coltile4_warp_async(
-                        input,
-                        weight,
-                        output,
+                    .gemm_f32xq8_0_gguf_coltile4_packed_warp_async(
+                        x.as_ptr().cast::<u8>().add(offset).cast(),
+                        w.as_ptr(),
+                        y.as_mut_ptr(),
                         1,
                         32,
                         CudaStream::Decode

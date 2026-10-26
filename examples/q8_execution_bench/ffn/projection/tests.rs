@@ -1,4 +1,4 @@
-use super::pipeline::{ProjectionKind, ProjectionProbe};
+use super::pipeline::{ProjectionComparison, ProjectionKind, ProjectionProbe};
 use anyhow::Result;
 use m40_llm::{
     cuda::CudaContext,
@@ -16,6 +16,8 @@ mod fixture;
 /// The shared-runner QKV/output adapters preserve CPU/control results with distinct
 /// rows and reuses its guarded buffers without timed allocation or copies.
 /// Dispatch counters identify the actual arm and all allocations are released.
+/// Packed-load comparisons use the qualified warp control, not the original
+/// shared reduction, and preserve both variants without growing scratch/cache.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()> {
@@ -40,40 +42,50 @@ fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()
             .into_iter()
             .flat_map(|kind| [1, 4].map(|rows| (kind, rows)))
         {
-            {
-                let input = fixture::projection::make_input(rows, 64);
-                let probe = ProjectionProbe::new(&model, 0, rows, &input, kind)?;
-                assert_eq!(CudaContext::total_device_bytes(), resident + probe.bytes());
-                let checked = probe.validate()?;
-                assert_eq!(checked["control_bits_equal"], true);
-                assert_eq!(checked["guards_and_immutable_read_spans"], true);
-                let before = profile::snapshot();
-                assert!(probe.time(true, 0).is_err());
-                assert_eq!(
-                    profile::counter_delta(&before, &profile::snapshot()),
-                    profile::counter_delta(&before, &before)
-                );
-                for is_warp in [false, true, false, true] {
-                    let timing = probe.time(is_warp, 8)?;
-                    assert_eq!(timing["operation_launches"], rows * 8);
-                    assert_eq!(timing["operation"], kind.operation(is_warp));
-                    for key in [
-                        "device_allocs",
-                        "device_frees",
-                        "h2d_copies",
-                        "d2h_copies",
-                        "stream_syncs",
-                        "stream_waits",
-                        "cublas_calls",
-                    ] {
-                        assert_eq!(timing["enqueue_counters"][key], 0);
+            for comparison in [
+                ProjectionComparison::WarpReduction,
+                ProjectionComparison::PackedLoads,
+            ] {
+                {
+                    let input = fixture::projection::make_input(rows, 64);
+                    let probe = ProjectionProbe::new(&model, 0, rows, &input, kind, comparison)?;
+                    assert_eq!(CudaContext::total_device_bytes(), resident + probe.bytes());
+                    let checked = probe.validate()?;
+                    assert_eq!(checked["control_bits_equal"], true);
+                    assert_eq!(checked["guards_and_immutable_read_spans"], true);
+                    let before = profile::snapshot();
+                    assert!(probe.time(true, 0).is_err());
+                    assert_eq!(
+                        profile::counter_delta(&before, &profile::snapshot()),
+                        profile::counter_delta(&before, &before)
+                    );
+                    for is_candidate in [false, true, false, true] {
+                        let timing = probe.time(is_candidate, 8)?;
+                        assert_eq!(timing["operation_launches"], rows * 8);
+                        assert_eq!(timing["operation"], probe.operation(is_candidate));
+                        assert_eq!(timing["is_candidate"], is_candidate);
+                        assert_eq!(
+                            timing["has_packed_loads"],
+                            is_candidate && comparison == ProjectionComparison::PackedLoads
+                        );
+                        for key in [
+                            "device_allocs",
+                            "device_frees",
+                            "h2d_copies",
+                            "d2h_copies",
+                            "stream_syncs",
+                            "stream_waits",
+                            "cublas_calls",
+                        ] {
+                            assert_eq!(timing["enqueue_counters"][key], 0);
+                        }
                     }
+                    probe.validate()?;
+                    probe.verify()?;
+                    assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
                 }
-                probe.validate()?;
-                probe.verify()?;
-                assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
+                assert_eq!(CudaContext::total_device_bytes(), resident);
             }
-            assert_eq!(CudaContext::total_device_bytes(), resident);
         }
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);

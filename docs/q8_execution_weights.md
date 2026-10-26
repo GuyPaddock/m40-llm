@@ -199,6 +199,16 @@ contract as the qualified split path and is benchmark-only. No activation
 quantization or runtime selector is added. See the [conversion proof and
 fixed gates](experiments/2026-10-25-maxwell-byte-ffn-hypothesis.md).
 
+Independent raw-projection screens use `q8_execution_bench
+--qkv-f32-packed` or `--output-f32-packed` with frozen FFN inputs/report.
+The control is the qualified scalar-load warp kernel; the candidate uses
+four uint16 weight loads and two float4 activations per eight-value task,
+with the original signed conversion, FP32 association, reduction and bias.
+Geometry and raw Q8_0 storage stay fixed; no additional preparation is
+retained. The explicit CUDA APIs require sixteen-byte activation alignment
+but only two-byte weight alignment. They do not select runtime behavior.
+See the [fixed stage/quality/HTTP gates](experiments/2026-10-25-maxwell-packed-projection-hypothesis.md).
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only

@@ -23,6 +23,41 @@ impl CudaContext {
         k: i32,
         stream: CudaStream,
     ) -> Result<()> {
+        self.enqueue_qkv_warp(input, weights, biases, outputs, widths, k, stream, false)
+    }
+
+    /// Fixed packed-load QKV probe with the qualified warp reduction.
+    /// No allocation, transfer, synchronization or runtime selection occurs.
+    ///
+    /// # Safety
+    /// The requirements of `qkv_f32xq8_0_gguf_warp_async` apply, with input
+    /// aligned to sixteen bytes for float4 loads. Weight alignment stays two.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn qkv_f32xq8_0_gguf_packed_warp_async(
+        &self,
+        input: *const c_void,
+        weights: [*const c_void; 3],
+        biases: [Option<*const c_void>; 3],
+        outputs: [*mut c_void; 3],
+        widths: [i32; 3],
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        self.enqueue_qkv_warp(input, weights, biases, outputs, widths, k, stream, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn enqueue_qkv_warp(
+        &self,
+        input: *const c_void,
+        weights: [*const c_void; 3],
+        biases: [Option<*const c_void>; 3],
+        outputs: [*mut c_void; 3],
+        widths: [i32; 3],
+        k: i32,
+        stream: CudaStream,
+        has_packed_loads: bool,
+    ) -> Result<()> {
         ensure!(
             k > 0 && k % 32 == 0 && widths.iter().all(|&n| n > 0),
             "QKV warp requires positive widths and complete Q8 blocks"
@@ -34,6 +69,10 @@ impl CudaContext {
         ensure!(
             !input.is_null() && (input as usize).is_multiple_of(4),
             "QKV input requires aligned FP32 storage"
+        );
+        ensure!(
+            !has_packed_loads || (input as usize).is_multiple_of(16),
+            "packed QKV requires sixteen-byte activation alignment"
         );
         for i in 0..3 {
             ensure!(
@@ -56,7 +95,12 @@ impl CudaContext {
         }
         let biases = biases.map(|p| p.unwrap_or(std::ptr::null()));
         let _guard = self.inner.lock.lock().unwrap();
-        let rc = ffi::m40llm_qkv_f32xq8_0_gguf_warp_async(
+        let enqueue = if has_packed_loads {
+            ffi::m40llm_qkv_f32xq8_0_gguf_packed_warp_async
+        } else {
+            ffi::m40llm_qkv_f32xq8_0_gguf_warp_async
+        };
+        let rc = enqueue(
             self.inner.raw.as_ptr(),
             input,
             weights.as_ptr(),
@@ -67,7 +111,11 @@ impl CudaContext {
             stream.ffi_kind(),
         );
         ensure!(rc == 0, "m40llm_qkv_f32xq8_0_gguf_warp_async failed: {rc}");
-        record_async_kernel("qkv_f32xq8_0_gguf_warp");
+        record_async_kernel(if has_packed_loads {
+            "qkv_f32xq8_0_gguf_packed_warp"
+        } else {
+            "qkv_f32xq8_0_gguf_warp"
+        });
         Ok(())
     }
 }

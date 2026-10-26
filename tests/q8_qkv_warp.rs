@@ -135,50 +135,56 @@ fn compare_case(ctx: &CudaContext, k: usize, widths: [usize; 3]) -> Result<()> {
                 .iter()
                 .map(|o| o.read(ctx))
                 .collect::<Result<Vec<_>>>()?;
-            let before = profile::snapshot();
-            unsafe {
-                ctx.qkv_f32xq8_0_gguf_warp_async(
-                    x.ptr(),
-                    weight_ptrs,
-                    b,
-                    out,
-                    widths.map(|n| n as i32),
-                    k as i32,
-                    stream,
-                )?;
-            }
-            let delta = profile::counter_delta(&before, &profile::snapshot());
-            assert_eq!(delta.launches, 1);
-            assert_eq!(
-                (
-                    delta.device_allocs,
-                    delta.device_frees,
-                    delta.h2d_copies,
-                    delta.d2h_copies,
-                    delta.stream_syncs,
-                    delta.stream_waits
-                ),
-                (0, 0, 0, 0, 0, 0)
-            );
-            ctx.synchronize_stream(stream)?;
-            let doubled: Vec<f32> = input.iter().map(|v| v + v).collect();
-            for i in 0..3 {
-                let actual = outputs[i].read(ctx)?;
-                assert_eq!(
-                    actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-                    expected[i].iter().map(|v| v.to_bits()).collect::<Vec<_>>()
-                );
-                for (col, &observed) in actual.iter().enumerate() {
-                    let cpu = fixture::project_cpu(&doubled, &sources[i], 0, col, k)
-                        + if has_bias[i] {
-                            f64::from(biases[i][col])
-                        } else {
-                            0.0
-                        };
-                    assert!((f64::from(observed) - cpu).abs() < 1e-3 + 2e-5 * cpu.abs());
+            for enqueue in [
+                CudaContext::qkv_f32xq8_0_gguf_warp_async,
+                CudaContext::qkv_f32xq8_0_gguf_packed_warp_async,
+            ] {
+                let before = profile::snapshot();
+                unsafe {
+                    enqueue(
+                        ctx,
+                        x.ptr(),
+                        weight_ptrs,
+                        b,
+                        out,
+                        widths.map(|n| n as i32),
+                        k as i32,
+                        stream,
+                    )?;
                 }
+                let delta = profile::counter_delta(&before, &profile::snapshot());
+                assert_eq!(delta.launches, 1);
+                assert_eq!(
+                    (
+                        delta.device_allocs,
+                        delta.device_frees,
+                        delta.h2d_copies,
+                        delta.d2h_copies,
+                        delta.stream_syncs,
+                        delta.stream_waits
+                    ),
+                    (0, 0, 0, 0, 0, 0)
+                );
+                ctx.synchronize_stream(stream)?;
+                let doubled: Vec<f32> = input.iter().map(|v| v + v).collect();
+                for i in 0..3 {
+                    let actual = outputs[i].read(ctx)?;
+                    assert_eq!(
+                        actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                        expected[i].iter().map(|v| v.to_bits()).collect::<Vec<_>>()
+                    );
+                    for (col, &observed) in actual.iter().enumerate() {
+                        let cpu = fixture::project_cpu(&doubled, &sources[i], 0, col, k)
+                            + if has_bias[i] {
+                                f64::from(biases[i][col])
+                            } else {
+                                0.0
+                            };
+                        assert!((f64::from(observed) - cpu).abs() < 1e-3 + 2e-5 * cpu.abs());
+                    }
+                }
+                assert_eq!(x.read(ctx)?, doubled);
             }
-            assert_eq!(x.read(ctx)?, doubled);
         }
     }
     for ((device, original), bias) in weights.iter().zip(&bias_buffers) {
@@ -195,6 +201,8 @@ fn compare_case(ctx: &CudaContext, k: usize, widths: [usize; 3]) -> Result<()> {
 /// A one-barrier finish preserves the original raw-QKV tree bitwise with
 /// unequal/tail widths, zero scales, signed extremes and optional biases.
 /// Ordered producers on both streams, guards and allocation cleanup hold.
+/// The packed-load variant must preserve these bits with weight bases aligned
+/// to only two bytes and unchanged task/reduction/bias order.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_native_qkv_warp_preserves_tree_biases_and_streams() -> Result<()> {
@@ -232,14 +240,18 @@ fn test_native_qkv_warp_rejects_invalid_spans() -> Result<()> {
         let outputs = [y.as_mut_ptr(), z.as_mut_ptr(), t.as_mut_ptr()];
         let before = profile::snapshot();
         unsafe {
-            for (k, widths) in [
-                (0, [1; 3]),
-                (33, [1; 3]),
-                (32, [0, 1, 1]),
-                (32, [i32::MAX; 3]),
+            for enqueue in [
+                CudaContext::qkv_f32xq8_0_gguf_warp_async,
+                CudaContext::qkv_f32xq8_0_gguf_packed_warp_async,
             ] {
-                assert!(ctx
-                    .qkv_f32xq8_0_gguf_warp_async(
+                for (k, widths) in [
+                    (0, [1; 3]),
+                    (33, [1; 3]),
+                    (32, [0, 1, 1]),
+                    (32, [i32::MAX; 3]),
+                ] {
+                    assert!(enqueue(
+                        &ctx,
                         x.as_ptr(),
                         [w.as_ptr(); 3],
                         [None; 3],
@@ -249,9 +261,9 @@ fn test_native_qkv_warp_rejects_invalid_spans() -> Result<()> {
                         CudaStream::Decode
                     )
                     .is_err());
-            }
-            assert!(ctx
-                .qkv_f32xq8_0_gguf_warp_async(
+                }
+                assert!(enqueue(
+                    &ctx,
                     x.as_ptr().cast::<u8>().add(2).cast(),
                     [w.as_ptr(); 3],
                     [None; 3],
@@ -261,8 +273,8 @@ fn test_native_qkv_warp_rejects_invalid_spans() -> Result<()> {
                     CudaStream::Decode
                 )
                 .is_err());
-            assert!(ctx
-                .qkv_f32xq8_0_gguf_warp_async(
+                assert!(enqueue(
+                    &ctx,
                     x.as_ptr(),
                     [w.as_ptr(); 3],
                     [None; 3],
@@ -272,8 +284,8 @@ fn test_native_qkv_warp_rejects_invalid_spans() -> Result<()> {
                     CudaStream::Decode
                 )
                 .is_err());
-            assert!(ctx
-                .qkv_f32xq8_0_gguf_warp_async(
+                assert!(enqueue(
+                    &ctx,
                     x.as_ptr(),
                     [w.as_ptr(); 3],
                     [Some(std::ptr::null()); 3],
@@ -283,6 +295,20 @@ fn test_native_qkv_warp_rejects_invalid_spans() -> Result<()> {
                     CudaStream::Decode
                 )
                 .is_err());
+            }
+            for offset in [4, 8, 12] {
+                assert!(ctx
+                    .qkv_f32xq8_0_gguf_packed_warp_async(
+                        x.as_ptr().cast::<u8>().add(offset).cast(),
+                        [w.as_ptr(); 3],
+                        [None; 3],
+                        outputs,
+                        [1; 3],
+                        32,
+                        CudaStream::Decode
+                    )
+                    .is_err());
+            }
         }
         assert_eq!(
             profile::counter_delta(&before, &profile::snapshot()),
