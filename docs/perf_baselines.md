@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Projection Runtime Beats Fresh Ollama By 9.94%
+
+The corrected five-pair release comparison measures **47.378948 versus
+43.096583 buffered HTTP tok/s**, **+9.936669%**, with paired 95% interval
+**[9.878961%, 10.665805%]**. Actual 512 IDs, intended warp dispatch, all
+109 existing prepared identities and prompt-cache reset evidence pass.
+See [configuration, timing, memory, rejected attempt and audit](experiments/2026-10-25-maxwell-projection-ollama-http.md).
+
+M40 prompt/decode medians are 494.506 / 10,263.248 ms; official Ollama's
+are 229.761 / 11,644.989 ms, with differing phase boundaries. Only HTTP
+supports the cross-engine percentage. Both original goals remain unmet:
+**53.06** and **56.025558 tok/s** for 1.30x this fresh official median.
+Defaults remain unchanged. The benchmark primary-loader omission is fixed
+and its wrong-dispatch run preserved, not counted as candidate evidence.
+Next re-profile the qualified combined runtime before another bounded kernel
+hypothesis. This result uses explicit dense KV, not compressed top8.
+
 ## 2026-10-25: Combined Projection Runtime Passes HTTP Gate
 
 Five alternating release HTTP pairs measure **47.322695 versus 44.949943

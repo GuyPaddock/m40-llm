@@ -322,7 +322,12 @@ logits against current split-FFN/SGEMM. All 109 existing prepared tensors
 are identical. The subsequent
 [incremental HTTP gate](experiments/2026-10-25-maxwell-projection-incremental-http.md)
 passes at 47.323 versus 44.950 tok/s, +5.279%, with original quality and
-timing rules intact. Fresh official Ollama qualification remains pending.
+timing rules intact. The subsequent
+[corrected fresh official comparison](experiments/2026-10-25-maxwell-projection-ollama-http.md)
+measures 47.379 versus 43.097 tok/s, +9.937%, with actual IDs and warp
+dispatch verified. Both original goals remain unmet: 53.06 and 56.026
+HTTP tok/s for 1.30x the fresh official median. Defaults remain unchanged;
+re-profile this combination before another bounded kernel hypothesis.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and

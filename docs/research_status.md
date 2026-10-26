@@ -17,15 +17,25 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Latest incremental qualification:** the
+**Latest selected-runtime gap checkpoint:** the
+[corrected fresh projection/Ollama comparison](experiments/2026-10-25-maxwell-projection-ollama-http.md)
+measures **47.379 versus 43.097 buffered HTTP tok/s, +9.937%**, with a
+positive paired interval, verified actual 512 IDs and intended warp dispatch.
+Both original goals remain unmet: **53.06** and **56.026 tok/s** for 1.30x
+this fresh official median. The initial wrong-dispatch primary-loader run
+is rejected and preserved separately; shared typed loading and dispatch
+guards are fixed. Defaults remain unchanged. Next re-profile this selected
+combination before choosing another bounded Maxwell kernel hypothesis.
+
+The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)
 passes at **47.323 versus 44.950 tok/s, +5.279%**, with a positive paired
 interval, unchanged actual IDs and all 109 existing prepared tensor identities.
 Five pairs are sufficient under the original rules; no extension is needed.
-Next time this selected combination against fresh official Ollama. It is
-not yet a new cross-engine claim or either original goal; defaults remain.
+The fresh comparison above completes the subsequent cross-engine check;
+neither result satisfies either original goal.
 
-**Latest selected-runtime gap checkpoint:** the
+The earlier
 [fresh split-plane/Ollama comparison](experiments/2026-10-25-maxwell-split-ollama-http.md)
 measures FP32 split-f32x4-128 plus SGEMM at **45.075 vs 43.119 HTTP tok/s**,
 **4.536% faster**, with verified actual IDs, quality and cache resets.
@@ -72,8 +82,8 @@ explicit-control/evidence tooling `1349613`, which pass the
 across seven dense-valid tasks and **zero sampled full-vocabulary logit
 differences**. All 109 gate/up/down/head cache identities are unchanged;
 QKV/output each dispatch 18,432 candidate launches. The incremental HTTP
-gate is now passed above; fresh official Ollama remains next. No default
-promotion follows from single diagnostic generation times. Do not rescue geometry or revive failed
+and fresh official Ollama gates are now passed above. No default promotion
+follows from single diagnostic generation times. Do not rescue geometry or revive failed
 prepared layouts. Prepared down/head and original micro/quality/HTTP gates
 remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
