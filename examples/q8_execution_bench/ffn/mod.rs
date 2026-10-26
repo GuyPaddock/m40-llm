@@ -9,6 +9,7 @@ mod prepared_projection;
 mod prepared_read;
 mod projection;
 mod reductions;
+mod task_pair;
 mod validation;
 mod warmup;
 mod weight_read;
@@ -49,7 +50,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     {
         return projection::benchmark(args);
     }
-    let is_fp32_ablation = args.ffn_f32_eight_values
+    let is_fp32_ablation = args.ffn_f32_task_pairs
+        || args.ffn_f32_eight_values
         || args.ffn_f32_cohorts
         || args.ffn_f32_persistent_tiles
         || args.ffn_f32_virtual_warp
@@ -115,6 +117,12 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"});
     manifest["is_weight_read_diagnostic"] = json!(args.ffn_weight_read);
+    if args.ffn_f32_task_pairs {
+        manifest["control"]=json!("qualified split-f32x4-128 and immutable prepared down/vocabulary; candidate changes only payload layout for two original tasks per thread");
+        manifest["fp32_variants"] = json!([FfnKernel::TaskPairPacket]);
+        manifest["task_pair_contract"] = json!({"tasks_per_packet":2,"original_values_per_task":4,"has_changed_summation_ownership":false,
+            "has_activation_quantization":false,"scales":"unchanged separate gate/up planes","k_multiple":1024});
+    }
     if args.ffn_weight_read {
         manifest["control"] =
             json!("qualified split-f32x4-128 with original prepared down/vocabulary");
@@ -126,7 +134,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
-            if args.ffn_weight_read
+            if args.ffn_f32_task_pairs
+                || args.ffn_weight_read
                 || args.ffn_f32_eight_values
                 || args.ffn_f32_cohorts
                 || args.ffn_f32_persistent_tiles
@@ -157,6 +166,18 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                     &mut output,
                     json!({"kind":"ffn_joint_preparation","layer_id":layer.source.layer_id,
                     "rows":rows,"preparation":pipeline.joint.as_ref().unwrap().report}),
+                )?;
+            }
+            if args.ffn_f32_task_pairs {
+                pipeline.task_pair = Some(task_pair::PreparedFfnTaskPair::new(
+                    &model,
+                    layer,
+                    pipeline.prepared.as_ref().unwrap().bytes,
+                )?);
+                write_record(
+                    &mut output,
+                    json!({"kind":"ffn_task_pair_preparation","layer_id":layer.source.layer_id,"rows":rows,
+                    "preparation":pipeline.task_pair.as_ref().unwrap().report}),
                 )?;
             }
             if args.ffn_q81 {

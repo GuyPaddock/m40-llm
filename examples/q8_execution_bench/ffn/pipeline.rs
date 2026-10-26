@@ -25,6 +25,7 @@ pub(super) enum DownProjection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
+    TaskPairPacket,
     Native,
     Fp32(Q8FfnFp32Variant),
     Q81(Q8FfnQ81Launch),
@@ -44,6 +45,7 @@ pub(super) enum FfnKernel {
 impl Serialize for FfnKernel {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         match self {
+            Self::TaskPairPacket => serializer.serialize_str("task-pair-packet-f32x4-128"),
             Self::Native => serializer.serialize_none(),
             Self::Fp32(variant) => variant.serialize(serializer),
             Self::Q81(launch) => launch.serialize(serializer),
@@ -76,7 +78,8 @@ impl FfnKernel {
     pub fn has_split_weights(self) -> bool {
         matches!(
             self,
-            Self::SplitF32x4
+            Self::TaskPairPacket
+                | Self::SplitF32x4
                 | Self::SplitF32x8
                 | Self::SplitF32x4Cohorts
                 | Self::SplitF32x4VirtualWarp
@@ -96,7 +99,8 @@ impl FfnKernel {
             Self::SplitF32x4Cohorts => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::SplitF32x4
+            Self::TaskPairPacket
+            | Self::SplitF32x4
             | Self::SplitF32x8
             | Self::SplitF32x4VirtualWarp
             | Self::SplitF32x4PersistentTiles
@@ -113,7 +117,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::Q81(_)
+            Self::TaskPairPacket
+            | Self::Q81(_)
             | Self::SplitF32x4
             | Self::SplitF32x8
             | Self::SplitF32x4Cohorts
@@ -132,7 +137,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::Q81(_)
+            Self::TaskPairPacket
+            | Self::Q81(_)
             | Self::SplitF32x4
             | Self::SplitF32x8
             | Self::SplitF32x4Cohorts
@@ -272,6 +278,7 @@ pub(super) struct FfnPipeline<'a> {
     pub joint: Option<super::joint::JointFfnWeights>,
     down_projection: DownProjection,
     pub warp_packet: Option<super::packet::PreparedWarpPacket>,
+    pub task_pair: Option<super::task_pair::PreparedFfnTaskPair>,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -325,6 +332,7 @@ impl<'a> FfnPipeline<'a> {
             joint: None,
             down_projection: DownProjection::Control,
             warp_packet: None,
+            task_pair: None,
         })
     }
 
@@ -335,6 +343,10 @@ impl<'a> FfnPipeline<'a> {
 
     /// Reuse the same scratch only after its previous producer has finished.
     pub fn select_kernel(&mut self, kernel: FfnKernel) -> Result<()> {
+        ensure!(
+            kernel != FfnKernel::TaskPairPacket || self.task_pair.is_some(),
+            "prepare task-pair packet before selecting candidate"
+        );
         ensure!(
             kernel != FfnKernel::SplitF32x4K2048 || self.d_model == 2048,
             "fixed-width FFN benchmark requires K=2048"
@@ -397,6 +409,20 @@ impl<'a> FfnPipeline<'a> {
                 CudaStream::Prefill,
                 "ffn_bench_split_hidden_reuse",
             )?;
+        }
+        if self.kernel == FfnKernel::TaskPairPacket {
+            return unsafe {
+                self.task_pair
+                    .as_ref()
+                    .context("missing task-pair packet")?
+                    .device
+                    .enqueue_async(
+                        self.input.pointer(),
+                        self.hidden.pointer(),
+                        self.rows as i32,
+                        has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+                    )
+            };
         }
         if self.kernel == FfnKernel::JointF32x4 {
             let joint = self.joint.as_ref().context("missing joint FFN weights")?;
@@ -729,6 +755,27 @@ impl<'a> FfnPipeline<'a> {
         self.stop.record(stop_stream)?;
         let after = profile::snapshot();
         let enqueued = profile::counter_delta(&before, &after);
+        let task_pair_dispatch = if self.kernel == FfnKernel::TaskPairPacket {
+            let operation = "ffn_q8_task_pair_packet_128";
+            let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
+                - before.by_op.get(operation).map_or(0, |v| v.launches);
+            ensure!(
+                launches
+                    == if matches!(stage, Stage::IsolatedDown) {
+                        0
+                    } else {
+                        iterations as u64
+                    },
+                "wrong task-pair packet dispatch"
+            );
+            Some(
+                json!({"operation":operation,"fused_launches":launches,"threads":128,"blocks_per_row":self.hidden_dim,
+                "shared_bytes":1024,"original_values_per_task":4,"tasks_per_packet":2,"payload_load_bytes":16,
+                "has_changed_summation_ownership":false}),
+            )
+        } else {
+            None
+        };
         let eight_value_dispatch = if self.kernel == FfnKernel::SplitF32x8 {
             let operation = "ffn_q8_split_f32x8_128";
             let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
@@ -864,7 +911,7 @@ impl<'a> FfnPipeline<'a> {
             "virtual_warp_dispatch":virtual_warp_dispatch,
             "persistent_tiles_dispatch":persistent_tiles_dispatch,
             "cohorts_dispatch":cohorts_dispatch,
-            "eight_value_dispatch":eight_value_dispatch,
+            "eight_value_dispatch":eight_value_dispatch,"task_pair_dispatch":task_pair_dispatch,
             "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }
@@ -906,6 +953,9 @@ impl<'a> FfnPipeline<'a> {
             joint.verify()?;
         }
         if let Some(packet) = &self.warp_packet {
+            packet.verify()?;
+        }
+        if let Some(packet) = &self.task_pair {
             packet.verify()?;
         }
         if let Some(quantized) = &self.quantized {

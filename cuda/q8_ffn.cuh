@@ -113,6 +113,53 @@ __global__ void gate_up_split_f32x4(
     }
 }
 
+// Two tasks already owned by each original thread, in one payload record.
+__global__ void gate_up_task_pair_packet(
+    const float* __restrict__ input, const __half* __restrict__ gate_scales,
+    const __half* __restrict__ up_scales, const uint4* __restrict__ packets,
+    float* __restrict__ output, float* __restrict__ gate_output,
+    float* __restrict__ up_output, int hidden, int k) {
+    const int column = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int bundles = k / 1024;
+    const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    float gate_acc = 0.0f, up_acc = 0.0f;
+    for (int bundle = 0; bundle < bundles; ++bundle) {
+        const uint4 record = packets[(static_cast<size_t>(column) * bundles + bundle) * 128 + tid];
+        #pragma unroll
+        for (int half = 0; half < 2; ++half) {
+            const int task = bundle * 256 + tid + half * 128;
+            const float4 a = activation[task];
+            const uint32_t gate_q = half == 0 ? record.x : record.z;
+            const uint32_t up_q = half == 0 ? record.y : record.w;
+            const float gs = __half2float(gate_scales[scale_base + task / 8]);
+            const float us = __half2float(up_scales[scale_base + task / 8]);
+            const float values[4] = {a.x,a.y,a.z,a.w};
+            #pragma unroll
+            for (int index = 0; index < 4; ++index) {
+                gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(gate_q >> (index * 8))) * gs);
+                up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(up_q >> (index * 8))) * us);
+            }
+        }
+    }
+    extern __shared__ float task_pair_partials[];
+    task_pair_partials[tid] = gate_acc;
+    task_pair_partials[tid+128] = up_acc;
+    __syncthreads();
+    if (tid < 32) {
+        const float g = reduce_published<128>(task_pair_partials,tid);
+        const float u = reduce_published<128>(task_pair_partials+128,tid);
+        if (tid == 0) {
+            const size_t index = static_cast<size_t>(row) * hidden + column;
+            output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (gate_output) gate_output[index] = g;
+            if (up_output) up_output[index] = u;
+        }
+    }
+}
+
 // Wider memory tasks, retaining FP32 activations and per-weight scale/FMA.
 // Summation ownership differs from the four-value control.
 __global__ void gate_up_split_f32x8(
@@ -621,6 +668,24 @@ extern "C" int m40llm_ffn_q8_split_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<1>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_task_pair_packet_async(
+    M40llmCudaContext* ctx, const void* input, const void* gate_scales,
+    const void* up_scales, const void* packets, void* output,
+    void* gate_output, void* up_output, int rows, int hidden, int k) {
+    if (!ctx || !input || !gate_scales || !up_scales || !packets || !output) return -1;
+    if ((rows != 1 && rows != 4) || hidden <= 0 || k <= 0 || k % 1024 || k > INT32_MAX - 31) return -2;
+    if (reinterpret_cast<uintptr_t>(input) % 16 || reinterpret_cast<uintptr_t>(gate_scales) % 2
+        || reinterpret_cast<uintptr_t>(up_scales) % 2 || reinterpret_cast<uintptr_t>(packets) % 16
+        || reinterpret_cast<uintptr_t>(output) % 4) return -3;
+    if ((gate_output || up_output) && (!gate_output || !up_output
+        || reinterpret_cast<uintptr_t>(gate_output) % 4 || reinterpret_cast<uintptr_t>(up_output) % 4)) return -3;
+    m40llm_q8_ffn::gate_up_task_pair_packet<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+        static_cast<const float*>(input),static_cast<const __half*>(gate_scales),static_cast<const __half*>(up_scales),
+        static_cast<const uint4*>(packets),static_cast<float*>(output),
+        static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    return static_cast<int>(cudaPeekAtLastError());
 }
 
 extern "C" int m40llm_ffn_q8_weight_checksum_async(

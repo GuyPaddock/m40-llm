@@ -103,6 +103,10 @@ int m40llm_gemm_f32xq8_warp_packet_async(M40llmCudaContext* ctx, const void* inp
     (void)ctx; (void)input; (void)scales; (void)packets; (void)output;
     (void)rows; (void)n; (void)k; (void)threads; (void)stream_kind; return -1;
 }
+int m40llm_ffn_q8_task_pair_packet_async(M40llmCudaContext* ctx, const void* input, const void* gate_scales, const void* up_scales, const void* packets, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)gate_scales; (void)up_scales; (void)packets; (void)output; (void)gate_output; (void)up_output;
+    (void)rows; (void)hidden; (void)k; return -1;
+}
 int m40llm_ffn_q8_split_cohorts_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;

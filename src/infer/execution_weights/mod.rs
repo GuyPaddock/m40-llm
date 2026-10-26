@@ -7,6 +7,10 @@ use serde::Serialize;
 use crate::gguf::{GgmlDType, GgufTensor};
 
 mod ffn_pair;
+mod ffn_task_pair;
+#[cfg(feature = "cuda")]
+pub use ffn_task_pair::DeviceQ8FfnTaskPair;
+pub use ffn_task_pair::{HostQ8FfnTaskPair, Q8FfnTaskPairKey};
 mod warp_packet;
 #[cfg(feature = "cuda")]
 pub use warp_packet::DeviceQ8WarpPacket;
