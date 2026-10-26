@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent scale-reuse screen:** [shared FP32 scales](experiments/2026-10-26-maxwell-shared-scales-ffn-screen.md)
+preserve original gate/up, SwiGLU and complete-down bits and improve complete
+one-row FFN **1.99-2.19%**. All paired lower bounds are positive but upper
+bounds remain below 2.34%, missing the unchanged 5% gate. Four-row results
+also miss it. Registers remain 32 with no spills; dynamic shared grows to
+1536 bytes and barriers to two. Original control words/cache/global memory
+are unchanged. Keep `78716e1` benchmark-only without runtime or staging,
+geometry/cache/register rescue. Audit and twelve corruptions pass, along
+with CUDA on/off and regressions. Next needs independent dominant-cost
+evidence; qualified runtime, defaults and both unmet targets stay unchanged.
+
 **Latest dominant-read screen:** [fixed column visitation](experiments/2026-10-26-maxwell-column-order-screen.md)
 regresses one-row checksum throughput **3.33-3.36% versus same-kernel
 sequential**, **2.44-2.50% versus original**, all paired intervals negative.

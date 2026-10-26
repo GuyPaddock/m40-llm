@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Shared FFN Scales Help Below The Gate
+
+Staging original FP16 scales once per CTA in shared FP32 preserves gate/up,
+SwiGLU and complete-down bits and improves complete one-row FFN throughput
+**1.99-2.19%**. All paired lower bounds are positive, but every upper bound
+is below **2.34%**, short of the unchanged 5% gate. Four-row gains are
+0.53-2.47% and cannot bypass the one-row decision. See
+[raw pairs, compiler evidence and independent audit](experiments/2026-10-26-maxwell-shared-scales-ffn-screen.md).
+
+Keep `78716e1` benchmark-only without runtime selection, staging/geometry,
+register or cache tuning. Registers remain 32 with no spills; shared storage
+grows 1024 to 1536 bytes and barriers one to two at K=2048. Original control
+instructions, prepared identities and global allocation are unchanged.
+Twelve corruption controls and relevant regressions pass. Qualified exact
+status remains **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Fixed Column Visitation Transpose Regresses
 
 One fixed checksum-only transpose of CTA-to-column ownership regresses
