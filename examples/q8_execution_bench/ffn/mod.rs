@@ -25,7 +25,7 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
-    if args.prepared_f32_warp {
+    if args.prepared_f32_warp || args.prepared_f32_packed_activation {
         return prepared_projection::benchmark(args);
     }
     if args.qkv_f32_warp || args.output_f32_warp || args.qkv_f32_packed || args.output_f32_packed {

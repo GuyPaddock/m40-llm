@@ -643,6 +643,18 @@ mod ffi {
             threads: i32,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_packed_activation_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -4065,6 +4077,47 @@ impl CudaContext {
             ));
         }
         record_async_kernel("gemm_f32xq8_separate_warp");
+        Ok(())
+    }
+
+    /// Benchmark-only packed activation loads; no allocation, copy or sync.
+    ///
+    /// # Safety
+    /// Live, ordered spans belong to this context. Input is 16-byte aligned,
+    /// planes retain their native alignment, K is complete Q8 blocks, and
+    /// input/output do not overlap until the supplied stream drains.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_separate_packed_activation_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        threads: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_separate_packed_activation_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            m,
+            n,
+            k,
+            threads,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_gemm_f32xq8_separate_packed_activation_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("gemm_f32xq8_separate_packed_activation");
         Ok(())
     }
 

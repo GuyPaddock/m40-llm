@@ -249,6 +249,29 @@ The [qualified runtime profile](experiments/2026-10-25-maxwell-projection-stage-
 defines the bounded experiment and promotion gates. Primitive parity alone
 does not qualify it for model generation or establish an E2E speedup.
 
+## Prepared Projection Activation-Load Probe
+
+The independent `DeviceQ8ExecutionWeight::enqueue_separate_packed_activation_async`
+probe replaces eight scalar activation reads with two `float4` loads. It
+retains the existing separate scale/value planes, packed 64-bit weight
+loads, per-thread FP32 association, four-column geometry and **original
+shared reduction**. It does not combine the earlier warp-finish candidate.
+
+The unsafe API requires complete Q8 blocks, 16-byte input alignment, valid
+nonoverlapping spans, ordered producers and live owners through completion
+on the supplied stream. Misalignment, partial K, wrong layout or non-four
+column launch requests fail without fallback. Enqueue allocates, copies
+and synchronizes nothing. Runtime dispatch/defaults remain unchanged.
+
+The shared benchmark selects this probe with
+`--prepared-f32-packed-activation`, mutually exclusive with
+`--prepared-f32-warp` and other experiments. Both prepared-projection
+screens now emit `prepared_projection_*` schema-2 records with an explicit
+candidate identity and `is_candidate` arms; prior recorded schema-1 artifacts
+remain unchanged. Down timing includes unchanged gate/up, isolated down
+and complete FFN; vocabulary remains a separate complete-projection screen.
+See the [compiled finding and fixed acceptance gates](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md).
+
 Use `q8_execution_bench --prepared-f32-warp` with the existing explicit
 model, frozen `--ffn-inputs` / `--ffn-capture-report`, release build and
 `--rows 1,4`. It compares complete FFN plus isolated down on layers 0/17/35,

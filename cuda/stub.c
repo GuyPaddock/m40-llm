@@ -195,6 +195,12 @@ int m40llm_gemm_f32xq8_separate_warp_async(M40llmCudaContext* ctx, const void* i
     return -1;
 }
 
+int m40llm_gemm_f32xq8_separate_packed_activation_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int M, int N, int K, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)M; (void)N; (void)K; (void)threads; (void)stream_kind;
+    return -1;
+}
+
 int m40llm_select_sparse_inputs_f32_async(M40llmCudaContext* ctx, const void* input, void* indices, void* values, void* count, int K, float threshold, void* totals) {
     (void)ctx; (void)input; (void)indices; (void)values; (void)count;
     (void)K; (void)threshold; (void)totals; return -1;

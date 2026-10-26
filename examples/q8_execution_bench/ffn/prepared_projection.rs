@@ -1,8 +1,8 @@
-//! Fixed prepared-projection reduction screen, with no runtime policy changes.
+//! Fixed prepared-projection screens, with no runtime policy changes.
 use super::{
     ablation::summarize,
     fixture::FfnInputs,
-    pipeline::{FfnKernel, FfnPipeline, GuardedF32, Stage},
+    pipeline::{DownProjection, FfnKernel, FfnPipeline, GuardedF32, Stage},
     validation,
 };
 use crate::run::{command_output, inspect_gpu, write_record, Args};
@@ -28,7 +28,7 @@ fn require_identical(actual: &[f32], expected: &[f32]) -> Result<()> {
                 .iter()
                 .zip(expected)
                 .all(|(a, b)| a.is_finite() && a.to_bits() == b.to_bits()),
-        "prepared warp projection changed control bits"
+        "prepared projection changed control bits"
     );
     Ok(())
 }
@@ -49,11 +49,19 @@ fn operation_count(
     after.by_op.get(op).map_or(0, |v| v.launches) - before.by_op.get(op).map_or(0, |v| v.launches)
 }
 
-fn projection_operation(is_warp: bool) -> &'static str {
-    if is_warp {
-        "gemm_f32xq8_separate_warp"
+fn select_candidate(args: &Args) -> DownProjection {
+    if args.prepared_f32_packed_activation {
+        DownProjection::PackedActivation
     } else {
-        "gemm_f32xq8_separate_f32"
+        DownProjection::WarpFinish
+    }
+}
+
+fn projection_operation(projection: DownProjection) -> &'static str {
+    match projection {
+        DownProjection::Control => "gemm_f32xq8_separate_f32",
+        DownProjection::WarpFinish => "gemm_f32xq8_separate_warp",
+        DownProjection::PackedActivation => "gemm_f32xq8_separate_packed_activation",
     }
 }
 
@@ -79,7 +87,7 @@ fn benchmark_down(
     p.enqueue(Stage::IsolatedDown)?;
     p.drain()?;
     let control_down = p.isolated_output.read(&model.cuda)?;
-    p.select_warp_down(true)?;
+    p.select_down_projection(select_candidate(args))?;
     let candidate_checks = validation::validate(&p, layer)?;
     require_identical(&p.hidden.read(&model.cuda)?, &control_hidden)?;
     require_identical(&p.output.read(&model.cuda)?, &control_output)?;
@@ -88,19 +96,19 @@ fn benchmark_down(
     require_identical(&p.isolated_output.read(&model.cuda)?, &control_down)?;
     write_record(
         file,
-        json!({"kind":"prepared_warp_validation","family":"down",
+        json!({"kind":"prepared_projection_validation","family":"down",
         "layer_id":layer.source.layer_id,"rows":rows,"source":layer.source.down,
         "row_positions":layer.rows[..rows],"control_checks":control_checks,"candidate_checks":candidate_checks,
         "control_hidden_bits_equal":true,"control_complete_output_bits_equal":true,"control_down_bits_equal":true,
         "gate_up_preparation":p.prepared.as_ref().unwrap().report,"scratch_bytes":p.scratch_bytes()}),
     )?;
-    p.select_warp_down(false)?;
+    p.select_down_projection(DownProjection::Control)?;
     let control_warm = p.warm_up(1000.0, 256)?;
-    p.select_warp_down(true)?;
+    p.select_down_projection(select_candidate(args))?;
     let candidate_warm = p.warm_up(100.0, 256)?;
     write_record(
         file,
-        json!({"kind":"prepared_warp_warmup","family":"down",
+        json!({"kind":"prepared_projection_warmup","family":"down",
         "layer_id":layer.source.layer_id,"rows":rows,"control":control_warm,"candidate":candidate_warm}),
     )?;
     let resident = CudaContext::total_device_bytes();
@@ -109,39 +117,65 @@ fn benchmark_down(
     for trial in 0..args.trials {
         let gpu_before = inspect_gpu()?;
         let mut measurements = Vec::new();
-        for is_warp in if trial % 2 == 0 {
+        for is_candidate in if trial % 2 == 0 {
             [false, true]
         } else {
             [true, false]
         } {
-            p.select_warp_down(is_warp)?;
-            let stages = if trial % 2 == 0 {
-                [Stage::IsolatedDown, Stage::Complete]
+            p.select_down_projection(if is_candidate {
+                select_candidate(args)
             } else {
-                [Stage::Complete, Stage::IsolatedDown]
+                DownProjection::Control
+            })?;
+            let stages = if trial % 2 == 0 {
+                [Stage::IsolatedDown, Stage::GateUpSwiglu, Stage::Complete]
+            } else {
+                [Stage::Complete, Stage::GateUpSwiglu, Stage::IsolatedDown]
             };
             let timings = stages
                 .into_iter()
                 .map(|stage| -> Result<Value> {
                     let before = profile::snapshot();
                     let mut t = p.time(stage, args.iterations)?;
-                    let op = projection_operation(is_warp);
+                    let op = projection_operation(if is_candidate {
+                        select_candidate(args)
+                    } else {
+                        DownProjection::Control
+                    });
                     let count = operation_count(&before, &profile::snapshot(), op);
                     ensure!(
-                        count == args.iterations as u64,
+                        count
+                            == if matches!(stage, Stage::GateUpSwiglu) {
+                                0
+                            } else {
+                                args.iterations as u64
+                            },
                         "wrong prepared down dispatch"
+                    );
+                    let gate_op = "ffn_q8_split_f32x4_128";
+                    let gate_count = operation_count(&before, &profile::snapshot(), gate_op);
+                    ensure!(
+                        gate_count
+                            == if matches!(stage, Stage::IsolatedDown) {
+                                0
+                            } else {
+                                args.iterations as u64
+                            },
+                        "qualified gate/up dispatch changed"
                     );
                     t["projection_operation"] = json!(op);
                     t["projection_launches"] = json!(count);
+                    t["gate_up_operation"] = json!(gate_op);
+                    t["gate_up_launches"] = json!(gate_count);
                     Ok(t)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            measurements.push(json!({"is_warp":is_warp,"timings":timings}));
+            measurements.push(json!({"is_candidate":is_candidate,"timings":timings}));
         }
         let timing = |warp, stage| -> Result<f64> {
             let t = measurements
                 .iter()
-                .find(|m| m["is_warp"] == warp)
+                .find(|m| m["is_candidate"] == warp)
                 .context("missing paired arm")?;
             stage_ms(
                 t["timings"].as_array().context("missing stage array")?,
@@ -159,7 +193,7 @@ fn benchmark_down(
         );
         write_record(
             file,
-            json!({"kind":"prepared_warp_pair","family":"down","layer_id":layer.source.layer_id,
+            json!({"kind":"prepared_projection_pair","family":"down","layer_id":layer.source.layer_id,
             "rows":rows,"trial":trial,"measurements":measurements,"gpu_before":gpu_before,"gpu_after":inspect_gpu()?,
             "resident_bytes":resident,"scratch_bytes":p.scratch_bytes()}),
         )?;
@@ -171,13 +205,13 @@ fn benchmark_down(
     );
     write_record(
         file,
-        json!({"kind":"prepared_warp_screen","family":"down","layer_id":layer.source.layer_id,
+        json!({"kind":"prepared_projection_screen","family":"down","layer_id":layer.source.layer_id,
         "rows":rows,"complete_ffn":summarize(&complete_pairs)?,"isolated_projection":summarize(&down_pairs)?,
         "gate":"complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
         "runtime_integration_allowed":false}),
     )?;
     eprintln!(
-        "[prepared_warp] down layer={} rows={rows}: {} pairs",
+        "[prepared_projection] down layer={} rows={rows}: {} pairs",
         layer.source.layer_id, args.trials
     );
     Ok(())
@@ -204,16 +238,27 @@ fn benchmark_vocabulary(
         CudaStream::Prefill
     };
     let config = m40_llm::infer::execution_weights::Q8SeparateLaunch::new(4, 128)?;
-    let enqueue = |is_warp| -> Result<()> {
+    let enqueue = |is_candidate| -> Result<()> {
         unsafe {
-            if is_warp {
-                weight.enqueue_separate_warp_async(
-                    input.pointer(),
-                    output.pointer(),
-                    rows,
-                    config,
-                    stream,
-                )
+            if is_candidate {
+                match select_candidate(args) {
+                    DownProjection::WarpFinish => weight.enqueue_separate_warp_async(
+                        input.pointer(),
+                        output.pointer(),
+                        rows,
+                        config,
+                        stream,
+                    ),
+                    DownProjection::PackedActivation => weight
+                        .enqueue_separate_packed_activation_async(
+                            input.pointer(),
+                            output.pointer(),
+                            rows,
+                            config,
+                            stream,
+                        ),
+                    DownProjection::Control => unreachable!(),
+                }
             } else {
                 model.matmul_f32xf16_gguf_f32_async(
                     input.pointer(),
@@ -265,7 +310,7 @@ fn benchmark_vocabulary(
     }
     write_record(
         file,
-        json!({"kind":"prepared_warp_validation","family":"vocabulary","rows":rows,
+        json!({"kind":"prepared_projection_validation","family":"vocabulary","rows":rows,
         "tensor":name,"key":weight.key(),"control_bits_equal":true,"cpu_sample_max_abs_diff":cpu_max,
         "input_scope":"distinct frozen normalized FFN layer-0 input surrogates, not captured output-norm hidden vectors",
         "scratch_bytes":input.bytes()+output.bytes()}),
@@ -273,19 +318,23 @@ fn benchmark_vocabulary(
     let original_planes = unsafe { weight.read_planes()? };
     let start = model.cuda.create_event()?;
     let stop = model.cuda.create_event()?;
-    let time = |is_warp, iterations| -> Result<Value> {
+    let time = |is_candidate, iterations| -> Result<Value> {
         model.cuda.synchronize_stream(stream)?;
         let before = profile::snapshot();
         let started = SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros();
         let began = Instant::now();
         start.record(stream)?;
         for _ in 0..iterations {
-            enqueue(is_warp)?;
+            enqueue(is_candidate)?;
         }
         stop.record(stream)?;
         let after = profile::snapshot();
         let counters = profile::counter_delta(&before, &after);
-        let op = projection_operation(is_warp);
+        let op = projection_operation(if is_candidate {
+            select_candidate(args)
+        } else {
+            DownProjection::Control
+        });
         let launches = operation_count(&before, &after, op);
         ensure!(
             counters.device_allocs == 0
@@ -301,17 +350,17 @@ fn benchmark_vocabulary(
         let gpu_ms =
             f64::from(start.elapsed_sync(&stop, "prepared-head:completion")?) / iterations as f64;
         Ok(
-            json!({"is_warp":is_warp,"iterations":iterations,"gpu_ms":gpu_ms,
+            json!({"is_candidate":is_candidate,"iterations":iterations,"gpu_ms":gpu_ms,
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
             "started_unix_us":started,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
             "enqueue_counters":counters,"projection_operation":op,"projection_launches":launches}),
         )
     };
-    for is_warp in [false, true] {
-        let bound = if is_warp { 100.0 } else { 1000.0 };
+    for is_candidate in [false, true] {
+        let bound = if is_candidate { 100.0 } else { 1000.0 };
         let mut total = 0.0;
         for batch in 0..256 {
-            let t = time(is_warp, 32)?;
+            let t = time(is_candidate, 32)?;
             total += t["gpu_ms"].as_f64().context("warmup latency")? * 32.0;
             if total >= bound {
                 break;
@@ -320,7 +369,7 @@ fn benchmark_vocabulary(
         }
         write_record(
             file,
-            json!({"kind":"prepared_warp_warmup","family":"vocabulary","rows":rows,"is_warp":is_warp,"elapsed_gpu_ms":total}),
+            json!({"kind":"prepared_projection_warmup","family":"vocabulary","rows":rows,"is_candidate":is_candidate,"elapsed_gpu_ms":total}),
         )?;
     }
     let resident = CudaContext::total_device_bytes();
@@ -328,15 +377,15 @@ fn benchmark_vocabulary(
     for trial in 0..args.trials {
         let gpu_before = inspect_gpu()?;
         let mut timings = Vec::new();
-        for is_warp in if trial % 2 == 0 {
+        for is_candidate in if trial % 2 == 0 {
             [false, true]
         } else {
             [true, false]
         } {
-            timings.push(time(is_warp, args.iterations)?);
+            timings.push(time(is_candidate, args.iterations)?);
         }
         let ms = |warp| {
-            timings.iter().find(|t| t["is_warp"] == warp).unwrap()["gpu_ms"]
+            timings.iter().find(|t| t["is_candidate"] == warp).unwrap()["gpu_ms"]
                 .as_f64()
                 .unwrap()
         };
@@ -347,7 +396,7 @@ fn benchmark_vocabulary(
         );
         write_record(
             file,
-            json!({"kind":"prepared_warp_pair","family":"vocabulary","rows":rows,"trial":trial,
+            json!({"kind":"prepared_projection_pair","family":"vocabulary","rows":rows,"trial":trial,
             "measurements":timings,"gpu_before":gpu_before,"gpu_after":inspect_gpu()?,"resident_bytes":resident}),
         )?;
     }
@@ -362,11 +411,11 @@ fn benchmark_vocabulary(
         json!("complete vocabulary projection micro screen; not FFN or E2E throughput");
     write_record(
         file,
-        json!({"kind":"prepared_warp_screen","family":"vocabulary","rows":rows,
+        json!({"kind":"prepared_projection_screen","family":"vocabulary","rows":rows,
         "result":result,"runtime_integration_allowed":false}),
     )?;
     eprintln!(
-        "[prepared_warp] vocabulary rows={rows}: {} pairs",
+        "[prepared_projection] vocabulary rows={rows}: {} pairs",
         args.trials
     );
     Ok(())
@@ -375,7 +424,7 @@ fn benchmark_vocabulary(
 pub(super) fn benchmark(args: &Args) -> Result<()> {
     ensure!(
         !cfg!(debug_assertions) && args.rows == [1, 4],
-        "prepared warp screen requires release and --rows 1,4"
+        "prepared projection screen requires release and --rows 1,4"
     );
     let inputs = FfnInputs::load(args)?;
     inputs.validate_environment()?;
@@ -395,7 +444,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let stats = model.q8_execution_stats();
     write_record(
         &mut file,
-        json!({"kind":"prepared_warp_manifest","schema_version":1,
+        json!({"kind":"prepared_projection_manifest","schema_version":2,
         "revision":command_output("git",&["rev-parse","HEAD"])?,"worktree":command_output("git",&["status","--short"])?,
         "executable_sha256":file_sha256(&std::env::current_exe()?)?,"build_profile":"release",
         "model_sha256":inputs.artifact.plan.model_sha256,"fixture_sha256":inputs.artifact_sha256,
@@ -403,7 +452,10 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "cuda_flags":["-O3","sm_52","compute_52","no fast math"],"nvcc":command_output("nvcc",&["--version"])?,
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,"prepared_weights":stats,"gpu_before":gpu,
         "control":"qualified split-f32x4-128 gate/up; original prepared four-column down/vocabulary shared tree",
-        "candidate":"same prepared planes and FP32 task order; original-tree warp finish, down M1=256 else128; vocabulary128",
+        "candidate":if args.prepared_f32_packed_activation {
+            "two float4 activation loads; original weight loads/shared tree/tasks/FP32 association; down M1=256 else128, vocabulary128"
+        } else { "same prepared planes and FP32 task order; original-tree warp finish, down M1=256 else128; vocabulary128" },
+        "candidate_kernel":format!("{:?}",select_candidate(args)),
         "memory_scope":"source plus full qualified down/vocabulary cache; one split gate/up pair per FFN case; both arms share all allocations; no KV",
         "runtime_defaults_changed":false,"is_e2e_claim":false}),
     )?;
@@ -422,11 +474,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     drop(model);
     ensure!(
         CudaContext::total_device_bytes() == initial,
-        "prepared warp screen leaked device payloads"
+        "prepared projection screen leaked device payloads"
     );
     write_record(
         &mut file,
-        json!({"kind":"prepared_warp_complete","is_complete":true,"cases":8,
+        json!({"kind":"prepared_projection_complete","is_complete":true,"cases":8,
         "device_bytes_before":initial,"device_bytes_after":CudaContext::total_device_bytes(),"gpu_after_release":inspect_gpu()?,
         "runtime_defaults_changed":false,"is_e2e_claim":false}),
     )

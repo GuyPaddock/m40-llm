@@ -1,6 +1,6 @@
 use super::{
     fixture::FfnInputs,
-    pipeline::{FfnKernel, FfnPipeline, GuardedF32, Stage},
+    pipeline::{DownProjection, FfnKernel, FfnPipeline, GuardedF32, Stage},
     validation,
 };
 use anyhow::Result;
@@ -257,12 +257,12 @@ fn test_q81_pipeline_accounts_for_quantization_and_keeps_down() -> Result<()> {
     Ok(())
 }
 
-/// The prepared-down screen changes only reduction dispatch: both genuine
+/// The prepared-down screens change only the selected primitive: both genuine
 /// row counts retain split gate/up bits, complete output, owned cache bytes
 /// and allocation-free timing across the existing cross-stream schedule.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
-fn test_prepared_down_warp_keeps_complete_ffn_bits_and_cache() -> Result<()> {
+fn test_prepared_down_candidates_keep_complete_ffn_bits_and_cache() -> Result<()> {
     let _lock = cuda_test_scope::lock_cuda();
     let _env = configure();
     let _hardware = CudaContext::new_m40()?;
@@ -289,20 +289,22 @@ fn test_prepared_down_warp_keeps_complete_ffn_bits_and_cache() -> Result<()> {
             let hidden = p.hidden.read(&model.cuda)?;
             let output = p.output.read(&model.cuda)?;
             let resident = CudaContext::total_device_bytes();
-            p.select_warp_down(true)?;
-            validation::validate(&p, &layer)?;
-            assert_eq!(p.hidden.read(&model.cuda)?, hidden);
-            assert!(p
-                .output
-                .read(&model.cuda)?
-                .iter()
-                .zip(&output)
-                .all(|(a, b)| a.to_bits() == b.to_bits()));
-            let timing = p.time(Stage::Complete, 7)?;
-            assert_eq!(timing["enqueue_counters"]["launches"], 14);
-            assert_eq!(timing["enqueue_counters"]["device_allocs"], 0);
-            assert_eq!(CudaContext::total_device_bytes(), resident);
-            p.verify_guards_and_inputs(&layer)?;
+            for projection in [DownProjection::WarpFinish, DownProjection::PackedActivation] {
+                p.select_down_projection(projection)?;
+                validation::validate(&p, &layer)?;
+                assert_eq!(p.hidden.read(&model.cuda)?, hidden);
+                assert!(p
+                    .output
+                    .read(&model.cuda)?
+                    .iter()
+                    .zip(&output)
+                    .all(|(a, b)| a.to_bits() == b.to_bits()));
+                let timing = p.time(Stage::Complete, 7)?;
+                assert_eq!(timing["enqueue_counters"]["launches"], 14);
+                assert_eq!(timing["enqueue_counters"]["device_allocs"], 0);
+                assert_eq!(CudaContext::total_device_bytes(), resident);
+                p.verify_guards_and_inputs(&layer)?;
+            }
         }
         assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
     }

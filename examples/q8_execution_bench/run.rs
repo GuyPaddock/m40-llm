@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Fixed vector activation loads, original prepared shared reduction.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    prepared_f32_packed_activation: bool,
     /// Fixed packed loads versus qualified scalar-load QKV warp reduction.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["output_f32_packed","prepared_f32_warp","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     qkv_f32_packed: bool,
@@ -587,6 +590,7 @@ mod argument_tests {
     /// reduction additionally requires its immutable QKV peer evidence.
     /// Cache-policy, byte-conversion and packed-projection work require
     /// provenance and are exclusive. Packed output is independent of QKV peers.
+    /// Prepared activation loads are mutually exclusive with reduction probes.
     #[test]
     fn test_ffn_arguments_preserve_explicit_modes() {
         let parse = |extra: &[&str]| {
@@ -608,6 +612,33 @@ mod argument_tests {
             "capture.jsonl",
         ];
         assert_eq!(parse(&flags).unwrap().rows, [1, 4]);
+        let activation = "--prepared-f32-packed-activation";
+        assert!(
+            parse(&[flags.as_slice(), &[activation]].concat())
+                .unwrap()
+                .prepared_f32_packed_activation
+        );
+        assert!(parse(&[activation]).is_err());
+        for other in [
+            "--prepared-f32-warp",
+            "--qkv-f32-packed",
+            "--output-f32-packed",
+            "--qkv-f32-warp",
+            "--output-f32-warp",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-split-two-columns",
+            "--ffn-f32-joint",
+            "--ffn-f32-fixed-k",
+            "--ffn-f32-unfused",
+            "--ffn-f32-weight-cg",
+            "--ffn-f32-byte-permute",
+        ] {
+            assert!(parse(&[flags.as_slice(), &[activation, other]].concat()).is_err());
+        }
         assert!(!parse(&flags).unwrap().qkv_f32_packed);
         assert!(!parse(&flags).unwrap().output_f32_packed);
         for packed in ["--qkv-f32-packed", "--output-f32-packed"] {

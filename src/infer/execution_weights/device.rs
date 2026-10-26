@@ -159,6 +159,60 @@ impl DeviceQ8ExecutionWeight {
         )
     }
 
+    /// Benchmark-only vector activation loads with unchanged packed planes,
+    /// FP32 association and shared reduction. Does not select runtime dispatch.
+    ///
+    /// # Safety
+    /// Input/output contain rows * K/N FP32 values on this context with no
+    /// overlap. Input is 16-byte aligned. Retain owners and order producers
+    /// through completion on `stream`; dimensions come from this weight.
+    pub unsafe fn enqueue_separate_packed_activation_async(
+        &self,
+        input: *const std::ffi::c_void,
+        output: *mut std::ffi::c_void,
+        rows: usize,
+        config: Q8SeparateLaunch,
+        stream: CudaStream,
+    ) -> Result<()> {
+        ensure!(
+            (1..=65535).contains(&rows),
+            "invalid packed activation rows"
+        );
+        ensure!(
+            config.columns() == 4,
+            "packed activation projection requires four columns"
+        );
+        ensure!(
+            !input.is_null()
+                && !output.is_null()
+                && input != output.cast_const()
+                && (input as usize).is_multiple_of(16)
+                && (output as usize).is_multiple_of(4),
+            "invalid packed activation projection pointers"
+        );
+        let shape = self.key.source.shape();
+        let k = i32::try_from(shape.input_dim())?;
+        let n = i32::try_from(shape.output_dim())?;
+        ensure!(
+            k <= i32::MAX - 31 && k % 32 == 0,
+            "packed activation projection requires complete Q8 blocks"
+        );
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = self.view() else {
+            anyhow::bail!("packed activation projection requires separate scale/value planes");
+        };
+        self.ctx.gemm_f32xq8_separate_packed_activation_async(
+            input,
+            scales.as_ptr(),
+            values.as_ptr(),
+            output,
+            rows as i32,
+            n,
+            k,
+            config.threads() as i32,
+            stream,
+        )
+    }
+
     /// # Safety
     /// Same context, producer completion, and lifetime rules as separate planes.
     /// Enqueues on decode; the supplied tile width must match the stored layout.

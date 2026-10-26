@@ -16,6 +16,13 @@ const GUARD_VALUES: usize = 8;
 const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DownProjection {
+    Control,
+    WarpFinish,
+    PackedActivation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
     Native,
     Fp32(Q8FfnFp32Variant),
@@ -236,7 +243,7 @@ pub(super) struct FfnPipeline<'a> {
     pub quantized: Option<GuardedQ8Activation>,
     pub prepared: Option<super::prepared::PreparedFfnWeights>,
     pub joint: Option<super::joint::JointFfnWeights>,
-    should_use_warp_down: bool,
+    down_projection: DownProjection,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -288,7 +295,7 @@ impl<'a> FfnPipeline<'a> {
             quantized: None,
             prepared: None,
             joint: None,
-            should_use_warp_down: false,
+            down_projection: DownProjection::Control,
         })
     }
 
@@ -344,9 +351,9 @@ impl<'a> FfnPipeline<'a> {
         Ok(())
     }
 
-    pub fn select_warp_down(&mut self, is_enabled: bool) -> Result<()> {
+    pub fn select_down_projection(&mut self, projection: DownProjection) -> Result<()> {
         self.drain()?;
-        self.should_use_warp_down = is_enabled;
+        self.down_projection = projection;
         Ok(())
     }
 
@@ -593,23 +600,35 @@ impl<'a> FfnPipeline<'a> {
         } else {
             (&self.hidden, &self.output)
         };
-        if self.should_use_warp_down {
+        if self.down_projection != DownProjection::Control {
             let weight = self
                 .model
                 .q8_execution
                 .get_separate_weight(self.down_weight)
                 .context("missing qualified prepared down weight")?;
             return unsafe {
-                weight.enqueue_separate_warp_async(
-                    input.pointer(),
-                    output.pointer(),
-                    self.rows,
-                    m40_llm::infer::execution_weights::Q8SeparateLaunch::new(
-                        4,
-                        if self.rows == 1 { 256 } else { 128 },
-                    )?,
-                    self.projection_stream(),
-                )
+                let launch = m40_llm::infer::execution_weights::Q8SeparateLaunch::new(
+                    4,
+                    if self.rows == 1 { 256 } else { 128 },
+                )?;
+                match self.down_projection {
+                    DownProjection::WarpFinish => weight.enqueue_separate_warp_async(
+                        input.pointer(),
+                        output.pointer(),
+                        self.rows,
+                        launch,
+                        self.projection_stream(),
+                    ),
+                    DownProjection::PackedActivation => weight
+                        .enqueue_separate_packed_activation_async(
+                            input.pointer(),
+                            output.pointer(),
+                            self.rows,
+                            launch,
+                            self.projection_stream(),
+                        ),
+                    DownProjection::Control => unreachable!(),
+                }
             };
         }
         unsafe {
