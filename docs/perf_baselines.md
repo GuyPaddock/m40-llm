@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Reusing FFN Blocks Regresses
+
+One fixed 192-block-per-row grid preserves qualified FP32 control bits,
+but reduces one-row complete-FFN throughput **9.79-9.85%** and four-row
+throughput **5.61-7.58%**, with all paired intervals negative. Gate/up
+alone grows from about **0.222 ms to 0.259-0.260 ms** at one row. Registers
+rise 32 to 48, and a second block barrier protects shared partial reuse.
+See [pairs, compiled instructions, memory and audit](experiments/2026-10-26-maxwell-persistent-tiles-screen.md).
+
+Keep `2c8f753` benchmark-only, with no block-cap/thread/register rescue or
+runtime integration. There is no new E2E claim or default change. Qualified
+status remains **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet.
+
 ## 2026-10-26: Packed Prefill Projection Attribution
 
 Five release profiling-off/on pairs preserve actual 512 IDs and ordinary

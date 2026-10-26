@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest fixed screen:** [reusable FFN blocks](experiments/2026-10-26-maxwell-persistent-tiles-screen.md)
+preserve control bits but regress one-row complete FFN **9.79-9.85%** and
+four-row **5.61-7.58%**, with all intervals negative. The fixed 192-block
+grid increases registers 32 to 48 and adds a block-local reuse barrier;
+those observations are not measured occupancy attribution. Keep `2c8f753`
+benchmark-only, without cap/thread/unroll/register rescue or runtime
+integration. All six gates fail. Both original targets remain unmet and
+defaults unchanged; next work needs independent measured/source evidence,
+not recombining closed FFN candidates.
+
 **Latest attribution:** [packed-prefix projection costs](experiments/2026-10-26-maxwell-prefill-attribution.md)
 preserve actual 512 IDs/counters with **1.3825%** off/on instrumentation
 overhead. Conversion is **88.787 ms**, SGEMM **91.566 ms**, and bias
@@ -28,7 +38,7 @@ measurement infrastructure, not an optimized backend. The next candidate
 needs a larger demonstrated scope without reopening closed probes. Both
 original targets and defaults remain unchanged.
 
-**Latest fixed screen:** [register-owned virtual FFN warps](experiments/2026-10-26-maxwell-virtual-warp-screen.md)
+**Previous fixed screen:** [register-owned virtual FFN warps](experiments/2026-10-26-maxwell-virtual-warp-screen.md)
 preserve the control tree and bits but regress one-row complete FFN
 **5.36-5.40%**, with negative paired intervals; four-row results also lose.
 Removing shared publication/barrier raises registers 32 to 56 with zero
