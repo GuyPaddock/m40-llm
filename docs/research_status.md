@@ -17,24 +17,18 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Active bounded round:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-hypothesis.md)
-target the existing shared reduction barriers and one-block vocabulary scan,
-not closed FFN/projection mappings. The benchmark-only weighted RMSNorm
-warp finish preserves old bits for FP16/FP32 weights, ragged dimensions,
-zeros, distinct rows and both streams with cuBLAS on/off. No generation
-selector or default change is added. The independent two-stage argmax now
-also matches old indices on finite inputs, ties, partition tails, full Qwen
-vocabulary size and legacy nonfinite/sentinel cases. It reuses caller-owned
-scratch, at most 384 bytes, without internal copies, allocation or sync.
-Both primitives pass cuBLAS on/off checks. The shared `q8_execution_bench`
-now exposes exclusive `--decode-reductions` with the original capture identity,
-actual norm weights, explicitly labeled norm-input surrogates and synthetic
-finite argmax distributions. It checks complete-operation dispatch, guards,
-CPU results, reusable scratch and unchanged prepared-cache identities. The
-untimed warmup budget is shared without changing projection warmup behavior.
-Next inspect compiled sm_52 instructions before paired timing. Independent >=5%
-stage gates and >=3% profile-weighted scope precede any runtime/actual-512/
-HTTP work. There is no performance result for this round yet.
+**Latest fixed screen:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-screen.md)
+preserve control bits/indices, guards and model preparation. Complete argmax
+is **15.43-16.28x faster** in ten fresh pairs, but contributes only **1.2533%
+optimistic E2E scope**, below 3%. Norm point gains are **10.84-22.44%**;
+four of six one-row intervals cross zero, so neither norm stage qualifies.
+Initial five-pair and fresh ten-pair reports are not pooled. Keep primitives
+`f8c00bf` / `125d3a3`, shared warmup `91fd4ea` and benchmark `61a48d9`
+as reference without runtime wiring, geometry/fusion/register rescue or
+default changes. All 540 primary intervals are serial and both runs clean
+up allocations. Next seek independent evidence of enough removable cost in
+the qualified runtime, rather than combining closed probes. Both exact
+targets remain unmet; there is no new HTTP throughput claim.
 
 **Latest fixed screen:** [split-plane QKV/output storage](experiments/2026-10-26-maxwell-split-projection-screen.md)
 preserves qualified packed control bits, but QKV regresses **0.78-2.12%**

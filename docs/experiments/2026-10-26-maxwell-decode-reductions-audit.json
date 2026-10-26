@@ -1,0 +1,2487 @@
+{
+  "passes_audit": true,
+  "initial": {
+    "trials": 5,
+    "pairs": 90,
+    "primary_intervals": 180,
+    "gpu_boundary_samples": 180,
+    "screens": [
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 330612736,
+            "dtype": "F32",
+            "name": "blk.0.attn_norm.weight",
+            "sha256": "65e1511f92949a6e10c8879f0bf73d19382312ba60c0f1a31ce3f7aa1b9cb07d",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.050833329937886695,
+            0.533664647924414
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.00719040036201477,
+          "control_median_ms": 0.008816000074148178,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008876799792051315,
+              0.00719040036201477
+            ],
+            [
+              0.008102399855852127,
+              0.0076672002673149105
+            ],
+            [
+              0.010860799998044967,
+              0.007081600278615952
+            ],
+            [
+              0.0080704003572464,
+              0.007680000364780426
+            ],
+            [
+              0.008816000074148178,
+              0.0071552000939846035
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.22607916531617311
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 330612736,
+            "dtype": "F32",
+            "name": "blk.0.attn_norm.weight",
+            "sha256": "65e1511f92949a6e10c8879f0bf73d19382312ba60c0f1a31ce3f7aa1b9cb07d",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.11529413201051109,
+            0.3681085018434398
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007545600086450577,
+          "control_median_ms": 0.00883840024471283,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.01032319962978363,
+              0.007545600086450577
+            ],
+            [
+              0.008422400057315826,
+              0.009520000219345093
+            ],
+            [
+              0.009494400024414063,
+              0.007433599978685379
+            ],
+            [
+              0.008246400207281113,
+              0.007939200103282928
+            ],
+            [
+              0.00883840024471283,
+              0.007376000285148621
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.1713316559916418
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 402481152,
+            "dtype": "F32",
+            "name": "blk.0.ffn_norm.weight",
+            "sha256": "179c0d1d050accf47b3fb5a40c726138be40652329485705cf7cae6645bcc67b",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.020023076861009015,
+            0.6506879871888371
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007260800153017044,
+          "control_median_ms": 0.008873599767684936,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008873599767684936,
+              0.007225599884986877
+            ],
+            [
+              0.008060800284147263,
+              0.007791999727487564
+            ],
+            [
+              0.009849599748849868,
+              0.007260800153017044
+            ],
+            [
+              0.008144000172615051,
+              0.008310399949550629
+            ],
+            [
+              0.011900799721479416,
+              0.007209599763154983
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.22212422607413784
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 402481152,
+            "dtype": "F32",
+            "name": "blk.0.ffn_norm.weight",
+            "sha256": "179c0d1d050accf47b3fb5a40c726138be40652329485705cf7cae6645bcc67b",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.040874169309999875,
+            0.21340929067764214
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007894399762153625,
+          "control_median_ms": 0.00886079967021942,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009071999788284301,
+              0.007980799674987793
+            ],
+            [
+              0.00823040008544922,
+              0.00790719985961914
+            ],
+            [
+              0.00886079967021942,
+              0.007302399724721909
+            ],
+            [
+              0.008975999802350998,
+              0.007894399762153625
+            ],
+            [
+              0.008697599917650223,
+              0.007280000299215317
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.12241588178733909
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 1067837440,
+            "dtype": "F32",
+            "name": "blk.17.attn_norm.weight",
+            "sha256": "11961ab5038d42e1bdf4b27358c871bcd48227dfd070af67148e78d43c902e48",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.5286426962310193,
+            0.5840743085499198
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007708799839019775,
+          "control_median_ms": 0.008873599767684936,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008873599767684936,
+              0.0071712002158164975
+            ],
+            [
+              0.00801599994301796,
+              0.007708799839019775
+            ],
+            [
+              0.009200000017881394,
+              0.007420799881219864
+            ],
+            [
+              0.008767999708652496,
+              0.01860159933567047
+            ],
+            [
+              0.012540799379348756,
+              0.007916799932718276
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.15110003541268147
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 1067837440,
+            "dtype": "F32",
+            "name": "blk.17.attn_norm.weight",
+            "sha256": "11961ab5038d42e1bdf4b27358c871bcd48227dfd070af67148e78d43c902e48",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.028696724678832553,
+            0.2481368444046128
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007327999919652939,
+          "control_median_ms": 0.008723200112581254,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009110400080680847,
+              0.00729919970035553
+            ],
+            [
+              0.008220800012350083,
+              0.007926400005817413
+            ],
+            [
+              0.008739200234413148,
+              0.007280000299215317
+            ],
+            [
+              0.008259200304746629,
+              0.008028800040483475
+            ],
+            [
+              0.008723200112581254,
+              0.007327999919652939
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.19039304151553438
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 1139705856,
+            "dtype": "F32",
+            "name": "blk.17.ffn_norm.weight",
+            "sha256": "e4ae0dd2582bd6fb16cbc9746d97e166f61a52094ba36f3965f78e9f9ef1793c",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.041839300366095955,
+            0.3071837538599451
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007260800153017044,
+          "control_median_ms": 0.008604799956083297,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009491200000047684,
+              0.007260800153017044
+            ],
+            [
+              0.008048000186681748,
+              0.007724799960851669
+            ],
+            [
+              0.008620800077915191,
+              0.007116799801588058
+            ],
+            [
+              0.008105599880218506,
+              0.007702399790287018
+            ],
+            [
+              0.008604799956083297,
+              0.007129599899053573
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.1851035388307427
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 1139705856,
+            "dtype": "F32",
+            "name": "blk.17.ffn_norm.weight",
+            "sha256": "e4ae0dd2582bd6fb16cbc9746d97e166f61a52094ba36f3965f78e9f9ef1793c",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.014212412879239356,
+            0.2003514760500551
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007807999849319458,
+          "control_median_ms": 0.008742400258779526,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009696000069379807,
+              0.008169600367546081
+            ],
+            [
+              0.008217599987983704,
+              0.007807999849319458
+            ],
+            [
+              0.008742400258779526,
+              0.007283200323581695
+            ],
+            [
+              0.008220800012350083,
+              0.008105599880218506
+            ],
+            [
+              0.00875839963555336,
+              0.0073472000658512115
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.1196721858980967
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 3197597696,
+            "dtype": "F32",
+            "name": "blk.35.attn_norm.weight",
+            "sha256": "f0d1341cef1a7eb17ecaab5be5e5c6d0247ad009b7240da09bb58d55bd771d11",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.04564321205432864,
+            0.24466193258143965
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007193599641323089,
+          "control_median_ms": 0.008579199761152267,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008953599631786347,
+              0.007193599641323089
+            ],
+            [
+              0.008064000308513642,
+              0.007711999863386154
+            ],
+            [
+              0.008579199761152267,
+              0.007116799801588058
+            ],
+            [
+              0.008111999928951263,
+              0.007673600316047668
+            ],
+            [
+              0.008614400029182434,
+              0.007100799679756164
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.19261568462466316
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 3197597696,
+            "dtype": "F32",
+            "name": "blk.35.attn_norm.weight",
+            "sha256": "f0d1341cef1a7eb17ecaab5be5e5c6d0247ad009b7240da09bb58d55bd771d11",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.2310617057054678,
+            0.19834349218560887
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007843200117349625,
+          "control_median_ms": 0.008774399757385254,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009276799857616425,
+              0.00817599967122078
+            ],
+            [
+              0.00841279998421669,
+              0.010940799862146378
+            ],
+            [
+              0.008796799927949905,
+              0.007340800017118454
+            ],
+            [
+              0.008531200140714646,
+              0.007843200117349625
+            ],
+            [
+              0.008774399757385254,
+              0.007519999891519547
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.1187270025121201
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 3269466112,
+            "dtype": "F32",
+            "name": "blk.35.ffn_norm.weight",
+            "sha256": "d493b46552958119e27e7808a82231fb541c655820e1c1babe2e1adbb3419bad",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.1947483187283472,
+            0.32025263333887133
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007836800068616867,
+          "control_median_ms": 0.009091199934482574,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008892799913883209,
+              0.007177600264549255
+            ],
+            [
+              0.008243200182914735,
+              0.010236799716949463
+            ],
+            [
+              0.009091199934482574,
+              0.008393599838018417
+            ],
+            [
+              0.010063999891281128,
+              0.007836800068616867
+            ],
+            [
+              0.00936639979481697,
+              0.007094399631023407
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.16006531427145343
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 3269466112,
+            "dtype": "F32",
+            "name": "blk.35.ffn_norm.weight",
+            "sha256": "d493b46552958119e27e7808a82231fb541c655820e1c1babe2e1adbb3419bad",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.2646239529025777,
+            0.3498928929221381
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007916799932718276,
+          "control_median_ms": 0.008921600133180618,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.010681600123643876,
+              0.008345600217580795
+            ],
+            [
+              0.008448000252246856,
+              0.011488000303506852
+            ],
+            [
+              0.010086400061845779,
+              0.007472000271081925
+            ],
+            [
+              0.00825600028038025,
+              0.007916799932718276
+            ],
+            [
+              0.008921600133180618,
+              0.00732479989528656
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.12691999406347731
+        }
+      },
+      {
+        "case": {
+          "distribution": "random",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            13.873693218778605,
+            15.61559681934827
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.010787200182676315,
+          "control_median_ms": 0.17336640357971192,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.17386560440063475,
+              0.010463999956846238
+            ],
+            [
+              0.1729632019996643,
+              0.011628799885511399
+            ],
+            [
+              0.1736191987991333,
+              0.010787200182676315
+            ],
+            [
+              0.1729472041130066,
+              0.011049599945545196
+            ],
+            [
+              0.17336640357971192,
+              0.010460799932479859
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.07149219851592
+        }
+      },
+      {
+        "case": {
+          "distribution": "random",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            15.128054247575534,
+            15.909311614093877
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.04131839871406555,
+          "control_median_ms": 0.6909279823303223,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6911263942718506,
+              0.040880000591278075
+            ],
+            [
+              0.6906559944152832,
+              0.04131839871406555
+            ],
+            [
+              0.693129587173462,
+              0.041945600509643556
+            ],
+            [
+              0.6907968044281005,
+              0.04283199906349182
+            ],
+            [
+              0.6909279823303223,
+              0.04086079895496368
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.722041604558058
+        }
+      },
+      {
+        "case": {
+          "distribution": "ascending",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            13.643668760861573,
+            15.837480711001103
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.010835199803113937,
+          "control_median_ms": 0.1731935977935791,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.17537920475006102,
+              0.010416000336408614
+            ],
+            [
+              0.17266240119934081,
+              0.011027199774980545
+            ],
+            [
+              0.1731935977935791,
+              0.011827199906110763
+            ],
+            [
+              0.17252479791641234,
+              0.010835199803113937
+            ],
+            [
+              0.17320640087127687,
+              0.010367999970912933
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 14.984347399279601
+        }
+      },
+      {
+        "case": {
+          "distribution": "ascending",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            14.477425706765255,
+            15.851238976306167
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.04187839925289154,
+          "control_median_ms": 0.6916287899017334,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6916287899017334,
+              0.041043201088905336
+            ],
+            [
+              0.6908224105834961,
+              0.04187839925289154
+            ],
+            [
+              0.6924255847930908,
+              0.04177600145339966
+            ],
+            [
+              0.6901919841766357,
+              0.04325439929962158
+            ],
+            [
+              0.6932896137237549,
+              0.04479359984397888
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.515167777191941
+        }
+      },
+      {
+        "case": {
+          "distribution": "late-tie",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            12.318158703866706,
+            15.739358662894265
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.010924799740314484,
+          "control_median_ms": 0.1736608028411865,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.17475520372390746,
+              0.011247999966144562
+            ],
+            [
+              0.17319999933242797,
+              0.0130048006772995
+            ],
+            [
+              0.17373759746551515,
+              0.01045759990811348
+            ],
+            [
+              0.17308160066604614,
+              0.010924799740314484
+            ],
+            [
+              0.1736608028411865,
+              0.01037440001964569
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 14.8960170409666
+        }
+      },
+      {
+        "case": {
+          "distribution": "late-tie",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            14.951832127450837,
+            15.890346729278548
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.04126720130443573,
+          "control_median_ms": 0.6909567832946777,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6920447826385498,
+              0.04097279906272888
+            ],
+            [
+              0.6909567832946777,
+              0.043315199017524716
+            ],
+            [
+              0.6916128158569336,
+              0.04097920060157776
+            ],
+            [
+              0.6905856132507324,
+              0.041433599591255185
+            ],
+            [
+              0.6909503936767578,
+              0.04126720130443573
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.743485418295332
+        }
+      }
+    ],
+    "profile_scope": {
+      "interpretation": "passing-stage surrogate feasibility only; fresh borderline confirmation, real logits, actual-512 output, frozen tasks and HTTP gates remain required",
+      "optimistic_profile_weighted_gain": 0.012559262336980348,
+      "passes_profile_scope_gate": false,
+      "runtime_integration_allowed": false,
+      "stages": [
+        {
+          "eligible_saved_fraction": 0.0,
+          "minimum_throughput_gain": 0.15110003541268147,
+          "passes_all_stage_cases": false,
+          "profile_fraction": 0.01985673198945407,
+          "stage": "attn_norm"
+        },
+        {
+          "eligible_saved_fraction": 0.0,
+          "minimum_throughput_gain": 0.16006531427145343,
+          "passes_all_stage_cases": false,
+          "profile_fraction": 0.020655872424523068,
+          "stage": "ffn_norm"
+        },
+        {
+          "eligible_saved_fraction": 0.012403483730911383,
+          "minimum_throughput_gain": 14.8960170409666,
+          "passes_all_stage_cases": true,
+          "profile_fraction": 0.013236154887019735,
+          "stage": "argmax"
+        }
+      ]
+    },
+    "max_norm_cpu_error": 0.000015969822129591194
+  },
+  "fresh": {
+    "trials": 10,
+    "pairs": 180,
+    "primary_intervals": 360,
+    "gpu_boundary_samples": 360,
+    "screens": [
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 330612736,
+            "dtype": "F32",
+            "name": "blk.0.attn_norm.weight",
+            "sha256": "65e1511f92949a6e10c8879f0bf73d19382312ba60c0f1a31ce3f7aa1b9cb07d",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.0076264596090800385,
+            0.4367588237645943
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.00798880010843277,
+          "control_median_ms": 0.009196799993515015,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.00883840024471283,
+              0.008771199733018875
+            ],
+            [
+              0.0080704003572464,
+              0.008259200304746629
+            ],
+            [
+              0.008643200248479843,
+              0.0071263998746871945
+            ],
+            [
+              0.0095551997423172,
+              0.007612799853086471
+            ],
+            [
+              0.010716799646615982,
+              0.0071552000939846035
+            ],
+            [
+              0.00806720033288002,
+              0.007718399912118912
+            ],
+            [
+              0.011878400295972823,
+              0.008432000130414962
+            ],
+            [
+              0.01022080034017563,
+              0.008479999750852585
+            ],
+            [
+              0.011097600311040878,
+              0.007286400347948074
+            ],
+            [
+              0.008233600109815598,
+              0.012057600170373916
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.15121167993765572
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 330612736,
+            "dtype": "F32",
+            "name": "blk.0.attn_norm.weight",
+            "sha256": "65e1511f92949a6e10c8879f0bf73d19382312ba60c0f1a31ce3f7aa1b9cb07d",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.038600735621233895,
+            0.212451016366058
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007787200063467026,
+          "control_median_ms": 0.008839999884366989,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.01053439974784851,
+              0.007708799839019775
+            ],
+            [
+              0.008339200168848038,
+              0.007974400371313094
+            ],
+            [
+              0.008879999816417693,
+              0.0073472000658512115
+            ],
+            [
+              0.008246400207281113,
+              0.007865600287914276
+            ],
+            [
+              0.009625600278377533,
+              0.007440000027418137
+            ],
+            [
+              0.008265600353479386,
+              0.008051200211048127
+            ],
+            [
+              0.008912000060081481,
+              0.007337599992752075
+            ],
+            [
+              0.008265600353479386,
+              0.008051200211048127
+            ],
+            [
+              0.008799999952316284,
+              0.00735040009021759
+            ],
+            [
+              0.008988799899816513,
+              0.007903999835252761
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.1351961953358669
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 402481152,
+            "dtype": "F32",
+            "name": "blk.0.ffn_norm.weight",
+            "sha256": "179c0d1d050accf47b3fb5a40c726138be40652329485705cf7cae6645bcc67b",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.037838881017315584,
+            0.2808250316962311
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007548800110816956,
+          "control_median_ms": 0.008449599891901017,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008867199718952178,
+              0.007366400212049484
+            ],
+            [
+              0.008105599880218506,
+              0.007731200009584427
+            ],
+            [
+              0.008691199868917466,
+              0.007100799679756164
+            ],
+            [
+              0.008105599880218506,
+              0.007823999971151352
+            ],
+            [
+              0.009340800344944,
+              0.007292799651622772
+            ],
+            [
+              0.008179199695587159,
+              0.01055999994277954
+            ],
+            [
+              0.009769599884748459,
+              0.007289600372314453
+            ],
+            [
+              0.00817599967122078,
+              0.008499199897050858
+            ],
+            [
+              0.010700800269842149,
+              0.007334399968385696
+            ],
+            [
+              0.008207999914884568,
+              0.008636800199747085
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.11933019391959676
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 0,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 402481152,
+            "dtype": "F32",
+            "name": "blk.0.ffn_norm.weight",
+            "sha256": "179c0d1d050accf47b3fb5a40c726138be40652329485705cf7cae6645bcc67b",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.04416537051630032,
+            0.37516089511848216
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.0076848000288009645,
+          "control_median_ms": 0.008694400265812873,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.013769599795341491,
+              0.007344000041484833
+            ],
+            [
+              0.008246400207281113,
+              0.00790719985961914
+            ],
+            [
+              0.008854400366544724,
+              0.007382400333881378
+            ],
+            [
+              0.008233600109815598,
+              0.007875200361013412
+            ],
+            [
+              0.009603200107812881,
+              0.007388799637556076
+            ],
+            [
+              0.008390399813652038,
+              0.009097599983215332
+            ],
+            [
+              0.010275200009346008,
+              0.007494399696588517
+            ],
+            [
+              0.00825600028038025,
+              0.008089599758386612
+            ],
+            [
+              0.010239999741315842,
+              0.007423999905586243
+            ],
+            [
+              0.008534400165081025,
+              0.007887999713420867
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.1313762535431171
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 1067837440,
+            "dtype": "F32",
+            "name": "blk.17.attn_norm.weight",
+            "sha256": "11961ab5038d42e1bdf4b27358c871bcd48227dfd070af67148e78d43c902e48",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.02395565126918986,
+            0.23770314253484748
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007644800096750259,
+          "control_median_ms": 0.0084927998483181,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008710400015115739,
+              0.007193599641323089
+            ],
+            [
+              0.008038400113582611,
+              0.007657600194215774
+            ],
+            [
+              0.008947200328111648,
+              0.007184000313282013
+            ],
+            [
+              0.00820159986615181,
+              0.009116800129413604
+            ],
+            [
+              0.009548799693584442,
+              0.007209599763154983
+            ],
+            [
+              0.008275199681520462,
+              0.008367999643087386
+            ],
+            [
+              0.008848000317811966,
+              0.007193599641323089
+            ],
+            [
+              0.008035200089216233,
+              0.007878399640321731
+            ],
+            [
+              0.009452799707651139,
+              0.007795199751853943
+            ],
+            [
+              0.008083199709653854,
+              0.007631999999284744
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.11092503935169207
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 1067837440,
+            "dtype": "F32",
+            "name": "blk.17.attn_norm.weight",
+            "sha256": "11961ab5038d42e1bdf4b27358c871bcd48227dfd070af67148e78d43c902e48",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.008461513318584357,
+            0.20710843533509116
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.00782719999551773,
+          "control_median_ms": 0.008772800117731095,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.010742399841547012,
+              0.007619199901819229
+            ],
+            [
+              0.008326400071382523,
+              0.008320000022649765
+            ],
+            [
+              0.008803199976682663,
+              0.007292799651622772
+            ],
+            [
+              0.008601599931716919,
+              0.008486399799585343
+            ],
+            [
+              0.00883520022034645,
+              0.007283200323581695
+            ],
+            [
+              0.008390399813652038,
+              0.008636800199747085
+            ],
+            [
+              0.008924800157546996,
+              0.007568000257015229
+            ],
+            [
+              0.008284799754619598,
+              0.008035200089216233
+            ],
+            [
+              0.008742400258779526,
+              0.007286400347948074
+            ],
+            [
+              0.008803199976682663,
+              0.009382399916648864
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.12080950055637585
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 1139705856,
+            "dtype": "F32",
+            "name": "blk.17.ffn_norm.weight",
+            "sha256": "e4ae0dd2582bd6fb16cbc9746d97e166f61a52094ba36f3965f78e9f9ef1793c",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.0031310937212591927,
+            0.15129315345426364
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007737599685788155,
+          "control_median_ms": 0.008576000109314919,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008790399879217148,
+              0.0075935997068881985
+            ],
+            [
+              0.00809599980711937,
+              0.007791999727487564
+            ],
+            [
+              0.008736000210046769,
+              0.007254400104284286
+            ],
+            [
+              0.0080704003572464,
+              0.008364800363779068
+            ],
+            [
+              0.00854720026254654,
+              0.007132799923419952
+            ],
+            [
+              0.008150400221347808,
+              0.010092800110578537
+            ],
+            [
+              0.008659200370311737,
+              0.008540800213813782
+            ],
+            [
+              0.00811839997768402,
+              0.007811199873685837
+            ],
+            [
+              0.008617600053548813,
+              0.0075935997068881985
+            ],
+            [
+              0.008604799956083297,
+              0.007683199644088745
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.10835407071610015
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 17,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 1139705856,
+            "dtype": "F32",
+            "name": "blk.17.ffn_norm.weight",
+            "sha256": "e4ae0dd2582bd6fb16cbc9746d97e166f61a52094ba36f3965f78e9f9ef1793c",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.016916144344494732,
+            0.20113438909637438
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007628799974918365,
+          "control_median_ms": 0.008567999675869941,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009020800143480301,
+              0.007331199944019318
+            ],
+            [
+              0.008240000158548356,
+              0.007865600287914276
+            ],
+            [
+              0.008767999708652496,
+              0.007276800274848938
+            ],
+            [
+              0.008220800012350083,
+              0.007817599922418594
+            ],
+            [
+              0.00880960002541542,
+              0.007334399968385696
+            ],
+            [
+              0.008367999643087386,
+              0.008684799820184708
+            ],
+            [
+              0.008799999952316284,
+              0.00732479989528656
+            ],
+            [
+              0.008310399949550629,
+              0.008591999858617782
+            ],
+            [
+              0.010073599964380264,
+              0.007440000027418137
+            ],
+            [
+              0.008320000022649765,
+              0.007999999821186066
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.12311237731221625
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 3197597696,
+            "dtype": "F32",
+            "name": "blk.35.attn_norm.weight",
+            "sha256": "f0d1341cef1a7eb17ecaab5be5e5c6d0247ad009b7240da09bb58d55bd771d11",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            -0.033664076047667746,
+            0.4894829822933411
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007523199915885926,
+          "control_median_ms": 0.00921119973063469,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.010876800119876861,
+              0.007302399724721909
+            ],
+            [
+              0.011164800077676774,
+              0.009046400338411332
+            ],
+            [
+              0.009647999703884125,
+              0.007292799651622772
+            ],
+            [
+              0.008726400136947633,
+              0.009030400216579438
+            ],
+            [
+              0.012966400384902954,
+              0.007209599763154983
+            ],
+            [
+              0.008236800134181977,
+              0.008511999994516373
+            ],
+            [
+              0.008774399757385254,
+              0.007203199714422226
+            ],
+            [
+              0.008044800162315369,
+              0.007744000107049942
+            ],
+            [
+              0.010239999741315842,
+              0.007264000177383423
+            ],
+            [
+              0.008108799904584884,
+              0.009491200000047684
+            ]
+          ],
+          "passes_micro_screen": false,
+          "throughput_gain": 0.224372585285737
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "attn_norm",
+          "weight": {
+            "byte_offset": 3197597696,
+            "dtype": "F32",
+            "name": "blk.35.attn_norm.weight",
+            "sha256": "f0d1341cef1a7eb17ecaab5be5e5c6d0247ad009b7240da09bb58d55bd771d11",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.033075877703272694,
+            0.21209483505466098
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.00758879967033863,
+          "control_median_ms": 0.008580799773335457,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008995199948549271,
+              0.007337599992752075
+            ],
+            [
+              0.008371199667453765,
+              0.008012799918651581
+            ],
+            [
+              0.00891520008444786,
+              0.007398399710655213
+            ],
+            [
+              0.008214399963617326,
+              0.007779199630022049
+            ],
+            [
+              0.008790399879217148,
+              0.007353600114583969
+            ],
+            [
+              0.00830719992518425,
+              0.009590400010347366
+            ],
+            [
+              0.009132800251245498,
+              0.007356800138950348
+            ],
+            [
+              0.008345600217580795,
+              0.008342400193214417
+            ],
+            [
+              0.008822400122880936,
+              0.007334399968385696
+            ],
+            [
+              0.00823040008544922,
+              0.007814399898052216
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.13071897349908057
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 1,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 3269466112,
+            "dtype": "F32",
+            "name": "blk.35.ffn_norm.weight",
+            "sha256": "d493b46552958119e27e7808a82231fb541c655820e1c1babe2e1adbb3419bad",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.033320086338512356,
+            0.35289117355059707
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007792000100016594,
+          "control_median_ms": 0.008926400169730186,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.009145600348711013,
+              0.007132799923419952
+            ],
+            [
+              0.008191999793052674,
+              0.00806720033288002
+            ],
+            [
+              0.010182400047779084,
+              0.007334399968385696
+            ],
+            [
+              0.008336000144481659,
+              0.008550400286912918
+            ],
+            [
+              0.010252799838781357,
+              0.007180800288915634
+            ],
+            [
+              0.008108799904584884,
+              0.007865600287914276
+            ],
+            [
+              0.009465599805116654,
+              0.008607999980449676
+            ],
+            [
+              0.010886400192975997,
+              0.007887999713420867
+            ],
+            [
+              0.00870719999074936,
+              0.007225599884986877
+            ],
+            [
+              0.008188799768686295,
+              0.007718399912118912
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.1455852226838621
+        }
+      },
+      {
+        "case": {
+          "eps": 9.999999974752427E-7,
+          "layer_id": 35,
+          "row_positions": [
+            {
+              "absolute_position": 86,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 87,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 88,
+              "task_id": "cal-chat-reminder"
+            },
+            {
+              "absolute_position": 89,
+              "task_id": "cal-chat-reminder"
+            }
+          ],
+          "rows": 4,
+          "stage": "ffn_norm",
+          "weight": {
+            "byte_offset": 3269466112,
+            "dtype": "F32",
+            "name": "blk.35.ffn_norm.weight",
+            "sha256": "d493b46552958119e27e7808a82231fb541c655820e1c1babe2e1adbb3419bad",
+            "shape": [
+              2048
+            ]
+          }
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            0.03593604118075433,
+            0.19816672544175318
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.007825599983334541,
+          "control_median_ms": 0.008593599870800972,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.008991999924182892,
+              0.007305599749088287
+            ],
+            [
+              0.008275199681520462,
+              0.007814399898052216
+            ],
+            [
+              0.008787199854850769,
+              0.00727040022611618
+            ],
+            [
+              0.00820479989051819,
+              0.007872000336647034
+            ],
+            [
+              0.008780799806118011,
+              0.007356800138950348
+            ],
+            [
+              0.00830719992518425,
+              0.007884799689054488
+            ],
+            [
+              0.009702400118112565,
+              0.009123200178146362
+            ],
+            [
+              0.008406399935483932,
+              0.009257599711418152
+            ],
+            [
+              0.00883840024471283,
+              0.007391999661922455
+            ],
+            [
+              0.008240000158548356,
+              0.007836800068616867
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 0.09813942561617872
+        }
+      },
+      {
+        "case": {
+          "distribution": "random",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            13.693443978460737,
+            15.544112799111577
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.011271999776363372,
+          "control_median_ms": 0.1738976001739502,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.17393920421600342,
+              0.01045759990811348
+            ],
+            [
+              0.17346880435943604,
+              0.011811199784278869
+            ],
+            [
+              0.1739423990249634,
+              0.012822400033473968
+            ],
+            [
+              0.17332160472869873,
+              0.011206399649381638
+            ],
+            [
+              0.17450560331344606,
+              0.01162559986114502
+            ],
+            [
+              0.1740928053855896,
+              0.011977600306272507
+            ],
+            [
+              0.17385599613189698,
+              0.010396800190210342
+            ],
+            [
+              0.1734976053237915,
+              0.011337599903345107
+            ],
+            [
+              0.17491519451141357,
+              0.010518400371074677
+            ],
+            [
+              0.1735967993736267,
+              0.011145599931478501
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 14.427395637338622
+        }
+      },
+      {
+        "case": {
+          "distribution": "random",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            15.405687865157908,
+            15.69146627482812
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.04173440039157868,
+          "control_median_ms": 0.692625617980957,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6928160190582275,
+              0.04202559888362885
+            ],
+            [
+              0.6924543857574463,
+              0.04175040125846863
+            ],
+            [
+              0.6935520172119141,
+              0.04171839952468872
+            ],
+            [
+              0.6918240070343018,
+              0.042447999119758606
+            ],
+            [
+              0.6933760166168212,
+              0.04146240055561066
+            ],
+            [
+              0.6922016143798828,
+              0.041555199027061465
+            ],
+            [
+              0.6926112174987793,
+              0.04102399945259094
+            ],
+            [
+              0.6926400184631347,
+              0.04150719940662384
+            ],
+            [
+              0.6931168079376221,
+              0.04195199906826019
+            ],
+            [
+              0.6923200130462647,
+              0.0436928004026413
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.596036159194888
+        }
+      },
+      {
+        "case": {
+          "distribution": "ascending",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            14.89240726031609,
+            15.61776436448271
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.010662400349974632,
+          "control_median_ms": 0.17354560494422913,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.17408640384674073,
+              0.010460799932479859
+            ],
+            [
+              0.1732800006866455,
+              0.01090560033917427
+            ],
+            [
+              0.17346880435943604,
+              0.010476800054311753
+            ],
+            [
+              0.17309119701385497,
+              0.010809600353240967
+            ],
+            [
+              0.17380479574203492,
+              0.010419200360774993
+            ],
+            [
+              0.173088002204895,
+              0.010828799754381179
+            ],
+            [
+              0.17362240552902222,
+              0.010364799946546554
+            ],
+            [
+              0.17382400035858153,
+              0.01249919980764389
+            ],
+            [
+              0.17516160011291504,
+              0.010515200346708298
+            ],
+            [
+              0.17315839529037474,
+              0.010924799740314484
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.276410493687948
+        }
+      },
+      {
+        "case": {
+          "distribution": "ascending",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            15.269375766510354,
+            15.872798519053518
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.0419743999838829,
+          "control_median_ms": 0.6926000118255615,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6928671836853028,
+              0.04199039936065674
+            ],
+            [
+              0.6917600154876709,
+              0.042124798893928526
+            ],
+            [
+              0.6936192035675048,
+              0.04104000031948089
+            ],
+            [
+              0.6925600051879883,
+              0.043612799048423766
+            ],
+            [
+              0.6933248043060303,
+              0.04174720048904419
+            ],
+            [
+              0.6919040203094482,
+              0.04252800047397613
+            ],
+            [
+              0.6926400184631347,
+              0.040956801176071166
+            ],
+            [
+              0.6918655872344971,
+              0.04294080138206482
+            ],
+            [
+              0.6931615829467773,
+              0.04108160138130188
+            ],
+            [
+              0.6923552036285401,
+              0.04195840060710907
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.500533946679457
+        }
+      },
+      {
+        "case": {
+          "distribution": "late-tie",
+          "rows": 1,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            13.558286116282867,
+            15.346813219768539
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.011019200086593628,
+          "control_median_ms": 0.1736800014972687,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.1742527961730957,
+              0.01098880022764206
+            ],
+            [
+              0.17337919473648072,
+              0.011049599945545196
+            ],
+            [
+              0.17396800518035888,
+              0.011392000317573547
+            ],
+            [
+              0.17343039512634278,
+              0.011929599940776825
+            ],
+            [
+              0.1739967942237854,
+              0.010435199737548828
+            ],
+            [
+              0.1734048008918762,
+              0.012595200538635254
+            ],
+            [
+              0.1738976001739502,
+              0.010784000158309937
+            ],
+            [
+              0.17345279455184937,
+              0.011913599818944931
+            ],
+            [
+              0.17402559518814087,
+              0.010416000336408614
+            ],
+            [
+              0.17346240282058717,
+              0.01085119992494583
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 14.761579800023261
+        }
+      },
+      {
+        "case": {
+          "distribution": "late-tie",
+          "rows": 4,
+          "stage": "argmax"
+        },
+        "result": {
+          "bootstrap_gain_ci95": [
+            15.05451711835444,
+            15.764702037660918
+          ],
+          "bootstrap_resamples": 10000,
+          "bootstrap_seed": 0,
+          "candidate_median_ms": 0.04256000071763992,
+          "control_median_ms": 0.6931120157241821,
+          "interpretation": "complete reduction operation; both argmax kernels included, not model logits, actual token or HTTP qualification",
+          "pairs": [
+            [
+              0.6936575889587402,
+              0.04134399890899658
+            ],
+            [
+              0.6926080226898194,
+              0.04314239919185638
+            ],
+            [
+              0.6933728218078613,
+              0.04099839925765991
+            ],
+            [
+              0.6932960033416748,
+              0.041356799006462094
+            ],
+            [
+              0.6932000160217285,
+              0.04241600036621094
+            ],
+            [
+              0.6926559925079345,
+              0.0432096004486084
+            ],
+            [
+              0.694380807876587,
+              0.04164479970932007
+            ],
+            [
+              0.6926591873168946,
+              0.04270400106906891
+            ],
+            [
+              0.6930240154266357,
+              0.04293439984321594
+            ],
+            [
+              0.692630386352539,
+              0.04342719912528992
+            ]
+          ],
+          "passes_micro_screen": true,
+          "throughput_gain": 15.285526410644696
+        }
+      }
+    ],
+    "profile_scope": {
+      "interpretation": "passing-stage surrogate feasibility only; fresh borderline confirmation, real logits, actual-512 output, frozen tasks and HTTP gates remain required",
+      "optimistic_profile_weighted_gain": 0.012533330528640807,
+      "passes_profile_scope_gate": false,
+      "runtime_integration_allowed": false,
+      "stages": [
+        {
+          "eligible_saved_fraction": 0.0,
+          "minimum_throughput_gain": 0.11092503935169207,
+          "passes_all_stage_cases": false,
+          "profile_fraction": 0.01985673198945407,
+          "stage": "attn_norm"
+        },
+        {
+          "eligible_saved_fraction": 0.0,
+          "minimum_throughput_gain": 0.10835407071610015,
+          "passes_all_stage_cases": false,
+          "profile_fraction": 0.020655872424523068,
+          "stage": "ffn_norm"
+        },
+        {
+          "eligible_saved_fraction": 0.012378190574820175,
+          "minimum_throughput_gain": 14.427395637338622,
+          "passes_all_stage_cases": true,
+          "profile_fraction": 0.013236154887019735,
+          "stage": "argmax"
+        }
+      ]
+    },
+    "max_norm_cpu_error": 0.000015969822129591194
+  },
+  "primary_intervals": 540,
+  "tracked_device_bytes_after": 0,
+  "control_bits_equal": true,
+  "qualified_prepared_cache_unchanged": true,
+  "bootstrap_scope": "raw medians/gates and resampling bounds independently checked; benchmark records seeded 10000-resample intervals",
+  "runs_pooled": false,
+  "measured_http_gain": null,
+  "runtime_defaults_changed": false
+}

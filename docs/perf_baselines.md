@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Exact Reduction Gains Have Limited Runtime Scope
+
+Partitioned argmax improves complete one-request latency from about 174 us
+to 10.7-11.3 us, **15.43-16.28x**, in ten fresh alternating pairs. Norm
+point gains are **10.84-22.44%**, but four of six one-row intervals cross
+zero. The initial five-pair run is separate, not pooled. See [raw pairs,
+SASS, scratch, validation and audit](experiments/2026-10-26-maxwell-decode-reductions-screen.md).
+
+Only argmax independently qualifies, yielding **1.2533% optimistic
+profile-weighted E2E scope**, below the fixed 3% gate. Keep `f8c00bf` /
+`125d3a3` and benchmark `61a48d9` experimental, without runtime integration,
+geometry rescue or default changes. Qualified status remains **49.146 HTTP
+tok/s** versus **43.106 official Ollama**, with both original targets unmet.
+
 ## 2026-10-26: Split Attention Projection Storage Does Not Qualify
 
 The existing split representation preserves current packed QKV/output bits,
