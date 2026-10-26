@@ -17,17 +17,15 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Active bounded round:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-hypothesis.md)
-tests two independent 128-thread output groups in one 256-thread CTA, keeping
-two accumulators per thread and the original FP32 tree. This differs from
-the closed per-thread multi-column, virtual-partial and looping-CTA probes.
-One fixed configuration, no geometry/register rescue or combination with
-closed candidates. Primitive correctness, compiled resources and the existing
-complete-FFN/actual-model/HTTP gates precede any runtime change.
-Primitive and complete-FFN adapter parity now pass with cuBLAS on/off,
-including inactive odd tails, ordered producers, guards, rejected arguments
-and unchanged scratch/cache. The shared runner exposes exclusive
-`--ffn-f32-cohorts`; compiled sm_52 inspection and paired timing are next.
+**Latest fixed screen:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md)
+preserve control bits but regress complete one-row FFN throughput **0.49-0.52%**
+with all intervals negative; four-row results also miss 5%. Registers rise
+32 to 40 despite two accumulators per thread. Control and prepared projection
+instruction words remain unchanged. Keep `ac505bf` benchmark-only, without
+cohort/block/register rescue or runtime integration. Next inspect qualified
+four-value task/load granularity for an independent hypothesis, not a
+combination of rejected mappings. Both original targets remain unmet and
+defaults unchanged.
 
 **Latest fixed screen:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-screen.md)
 preserve control bits/indices, guards and model preparation. Complete argmax

@@ -2,6 +2,18 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Physical FFN Cohorts Do Not Qualify
+
+Two independent physical 128-thread output groups per 256-thread CTA preserve
+control bits but regress complete one-row FFN throughput **0.49-0.52%**, with
+all paired intervals negative. Four-row results also miss 5%. See [pairs,
+unchanged control words, resources and audit](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md).
+
+Registers rise 32 to 40; halving CTA count does not produce a measured gain.
+Keep `ac505bf` benchmark-only, without cohort/block/register rescue or runtime
+changes. Qualified status remains **49.146 HTTP tok/s** versus **43.106
+official Ollama**; both original targets remain unmet.
+
 ## 2026-10-26: Exact Reduction Gains Have Limited Runtime Scope
 
 Partitioned argmax improves complete one-request latency from about 174 us
