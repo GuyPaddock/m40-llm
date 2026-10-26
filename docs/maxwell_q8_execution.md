@@ -336,6 +336,10 @@ The resulting [prepared projection screen](experiments/2026-10-25-maxwell-prepar
 preserves bits but misses the 5% complete-FFN gate at 2.44-2.60%. Vocabulary
 gains 6.54%, with only 0.474% optimistic standalone E2E scope. Keep both
 benchmark-only; no runtime integration or geometry expansion follows.
+The independent [unfused FFN screen](experiments/2026-10-25-maxwell-unfused-ffn-screen.md)
+also preserves bits but regresses complete one-row throughput 14.14-14.27%.
+Keep `286cb9a` benchmark-only, without a column/thread rescue. The pinned
+Ollama unfused dispatch does not qualify unfusion of our different arithmetic.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and

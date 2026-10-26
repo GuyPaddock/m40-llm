@@ -35,11 +35,14 @@ Keep `8d1c15d` / `5218f41` benchmark-only without integration or a geometry
 rescue. Next inspect the qualified gate/up load/conversion dependency chain
 before proposing an independent bounded exact hypothesis; do not revive
 failed layouts or replace either original goal with numerical/model changes.
-The [next instruction finding and bounded hypothesis](experiments/2026-10-25-maxwell-unfused-ffn-hypothesis.md)
-rejects generic prefetch as unproven because the compiler already overlaps
-some loads. It tests one fixed unfused gate/up/SwiGLU decomposition on existing
-planes, preserving per-output FP32 bits and counting every launch/temporary
-read/write. This is not a fused-column/layout rescue or a runtime change.
+The subsequent [fixed unfused decomposition](experiments/2026-10-25-maxwell-unfused-ffn-screen.md)
+preserves control bits but regresses complete FFN **14.14-14.27%** at one
+row and 12.18-12.76% at four. Keep `286cb9a` benchmark-only with no geometry
+rescue or runtime wiring. Source inspection confirms existing load overlap
+and read-only PTX loads, so generic prefetch or adding `__ldg` is not an
+established missing optimization. Next examine an explicitly different
+weight-cache policy with emitted-code evidence before timing, retaining
+all original gates and the current fused control.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

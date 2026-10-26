@@ -1,0 +1,10 @@
+5a8765c53b998e577f94d04ca3670f615ae9800624ab3f013b55e5eeb951e4bc  docs/experiments/2026-10-25-maxwell-unfused-ffn-screen.md
+30905c9069880814f30a85d7ed869e1f2a2a721a778dcb61a929146dc6d898b8  docs/experiments/2026-10-25-maxwell-unfused-ffn-screen.jsonl
+c46ef35ee63e03fd48ba9ddf830d0c7769f27d0a6ba6163a621c0a022ec57751  docs/experiments/2026-10-25-maxwell-unfused-ffn-audit.jq
+227075908c54beee6199754c8a1ddea2f30f4360f719b767463464d003423566  docs/experiments/2026-10-25-maxwell-unfused-ffn-audit.json
+f0641e8dc5c1fd398b619539f6611c780876f19ce739a78daa6ce13fd2e84405  docs/experiments/2026-10-25-maxwell-unfused-ffn-screen.log.gz
+14ba212cc797799b09e1240c3888493220291b34b6aae070351b85cdce9e51d7  docs/experiments/2026-10-25-maxwell-unfused-ffn-control.sass.gz
+902c32a1b457b52f8665ac90906228c3bec2b5a32ee78c6c1331fcc4130855c2  docs/experiments/2026-10-25-maxwell-unfused-ffn-candidate.sass.gz
+dd4bbec039007ca0de46f0bc20c08e7890acb348b843e12152659c509ff33848  docs/experiments/2026-10-25-maxwell-unfused-ffn-resources.txt
+83d81610ac89409b2b6ee54df2b13b642abfcd4dfcc72e0a96d287f4cd166505  docs/experiments/2026-10-25-maxwell-unfused-ffn-control.ptx.gz
+d9e55963e5872bbc48cfb3a1f7ac217429974d0a48237aabaaab207f5fc95801  docs/experiments/2026-10-25-maxwell-ffn-capture.jsonl

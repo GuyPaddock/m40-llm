@@ -2,6 +2,18 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Fixed Unfused FFN Regresses
+
+One fixed separate gate/up/SwiGLU strategy preserves control bits but
+reduces complete one-row FFN throughput **14.14-14.27%**; four rows regress
+12.18-12.76%. All paired intervals are negative. Stop `286cb9a` benchmark-only
+without column/thread tuning or runtime wiring. See [configuration, all-launch timing, resources and audit](experiments/2026-10-25-maxwell-unfused-ffn-screen.md).
+
+The control retains 32 registers; the candidate projection uses 48 plus a
+17-register separate epilogue, with no reported spills. This does not
+quantify occupancy or explain Ollama's different Q8_1 pipeline. The current
+qualified **47.379 HTTP tok/s**, both unmet targets and defaults are unchanged.
+
 ## 2026-10-25: Prepared Warp Finish Misses Runtime Gates
 
 The fixed prepared-down warp finish preserves control bits but gains only
