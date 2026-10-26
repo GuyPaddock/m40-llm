@@ -25,6 +25,7 @@ pub(super) enum DownProjection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
+    SharedScales,
     RoleParallel,
     NativeWarp,
     TaskPairPacket,
@@ -47,6 +48,7 @@ pub(super) enum FfnKernel {
 impl Serialize for FfnKernel {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         match self {
+            Self::SharedScales => serializer.serialize_str("split-f32x4-shared-scales-128"),
             Self::RoleParallel => serializer.serialize_str("split-f32x4-role-parallel-256"),
             Self::NativeWarp => serializer.serialize_str("split-f32x4-native-warp-128"),
             Self::TaskPairPacket => serializer.serialize_str("task-pair-packet-f32x4-128"),
@@ -82,7 +84,8 @@ impl FfnKernel {
     pub fn has_split_weights(self) -> bool {
         matches!(
             self,
-            Self::RoleParallel
+            Self::SharedScales
+                | Self::RoleParallel
                 | Self::NativeWarp
                 | Self::TaskPairPacket
                 | Self::SplitF32x4
@@ -105,7 +108,8 @@ impl FfnKernel {
             Self::SplitF32x4Cohorts | Self::RoleParallel => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::NativeWarp
+            Self::SharedScales
+            | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::SplitF32x4
             | Self::SplitF32x8
@@ -124,7 +128,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::RoleParallel
+            Self::SharedScales
+            | Self::RoleParallel
             | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::Q81(_)
@@ -146,7 +151,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::RoleParallel
+            Self::SharedScales
+            | Self::RoleParallel
             | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::Q81(_)
@@ -787,6 +793,29 @@ impl<'a> FfnPipeline<'a> {
         } else {
             None
         };
+        let shared_scales_dispatch = if self.kernel == FfnKernel::SharedScales {
+            let operation = "ffn_q8_split_f32x4_shared_scales_128";
+            let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
+                - before.by_op.get(operation).map_or(0, |v| v.launches);
+            ensure!(
+                launches
+                    == if matches!(stage, Stage::IsolatedDown) {
+                        0
+                    } else {
+                        iterations as u64
+                    },
+                "wrong shared-scale dispatch"
+            );
+            Some(
+                json!({"operation":operation,"fused_launches":launches,"threads":128,
+                "blocks_per_row":self.hidden_dim,"shared_bytes":1024+(self.d_model/32)*8,
+                "block_barriers":2,"scale_loads_and_conversions_per_cta":2*(self.d_model/32),
+                "has_changed_summation_ownership":false,"has_activation_quantization":false,
+                "scale_count_scope":"source operations, not measured DRAM transactions"}),
+            )
+        } else {
+            None
+        };
         let role_parallel_dispatch = if self.kernel == FfnKernel::RoleParallel {
             let operation = "ffn_q8_split_f32x4_role_parallel_256";
             let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
@@ -965,7 +994,7 @@ impl<'a> FfnPipeline<'a> {
             "persistent_tiles_dispatch":persistent_tiles_dispatch,
             "cohorts_dispatch":cohorts_dispatch,
             "eight_value_dispatch":eight_value_dispatch,"task_pair_dispatch":task_pair_dispatch,"native_warp_dispatch":native_warp_dispatch,
-            "role_parallel_dispatch":role_parallel_dispatch,
+            "role_parallel_dispatch":role_parallel_dispatch,"shared_scales_dispatch":shared_scales_dispatch,
             "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }

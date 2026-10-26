@@ -196,6 +196,57 @@ __global__ void gate_up_split_f32x4(
     }
 }
 
+// Publish each original FP16 scale once; retain task/FMA and reduction order.
+__global__ void gate_up_split_f32x4_shared_scales(
+    const float* __restrict__ input, const __half* __restrict__ gate_scales,
+    const uint32_t* __restrict__ gate_values, const __half* __restrict__ up_scales,
+    const uint32_t* __restrict__ up_values, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output, int hidden, int k) {
+    const int column = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int tasks = k / 4;
+    const int scale_count = k / 32;
+    const size_t value_base = static_cast<size_t>(column) * tasks;
+    const size_t scale_base = static_cast<size_t>(column) * scale_count;
+    extern __shared__ float published[];
+    float* cached_gate_scales = published + 256;
+    float* cached_up_scales = cached_gate_scales + scale_count;
+    if (tid < scale_count) {
+        cached_gate_scales[tid] = __half2float(gate_scales[scale_base + tid]);
+        cached_up_scales[tid] = __half2float(up_scales[scale_base + tid]);
+    }
+    __syncthreads();
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    float gate_acc = 0.0f, up_acc = 0.0f;
+    for (int task = tid; task < tasks; task += 128) {
+        const float4 a = activation[task];
+        const uint32_t gate_q = gate_values[value_base + task];
+        const uint32_t up_q = up_values[value_base + task];
+        const float gs = cached_gate_scales[task / 8];
+        const float us = cached_up_scales[task / 8];
+        const float values[4] = {a.x, a.y, a.z, a.w};
+        #pragma unroll
+        for (int index = 0; index < 4; ++index) {
+            gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(gate_q >> (index * 8))) * gs);
+            up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(up_q >> (index * 8))) * us);
+        }
+    }
+    published[tid] = gate_acc;
+    published[tid + 128] = up_acc;
+    __syncthreads();
+    if (tid < 32) {
+        const float g = reduce_published<128>(published, tid);
+        const float u = reduce_published<128>(published + 128, tid);
+        if (tid == 0) {
+            const size_t index = static_cast<size_t>(row) * hidden + column;
+            output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (gate_output) gate_output[index] = g;
+            if (up_output) up_output[index] = u;
+        }
+    }
+}
+
 // Two tasks already owned by each original thread, in one payload record.
 __global__ void gate_up_task_pair_packet(
     const float* __restrict__ input, const __half* __restrict__ gate_scales,
@@ -769,6 +820,7 @@ int launch_split_f32(
     if ((rows != 1 && rows != 4) || hidden <= 0 || k <= 0 || k % 32 ||
         reinterpret_cast<uintptr_t>(input) % 16 || reinterpret_cast<uintptr_t>(output) % 4) return -2;
     if constexpr (Variant == 3) { if (k != 2048) return -2; }
+    if constexpr (Variant == 12) { if (k > 4096) return -2; }
     for (int i = 0; i < 2; ++i) {
         if (!scales[i] || !values[i] || reinterpret_cast<uintptr_t>(scales[i]) % 2 ||
             reinterpret_cast<uintptr_t>(values[i]) % 4) return -2;
@@ -781,6 +833,11 @@ int launch_split_f32(
     }
     if constexpr (Variant == 1) {
         gate_up_split_f32x4<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+            static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
+            static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
+            static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    } else if constexpr (Variant == 12) {
+        gate_up_split_f32x4_shared_scales<<<dim3(hidden,rows),128,1024+(k/32)*8,ctx->decode_stream>>>(
             static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
             static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
             static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
@@ -845,6 +902,13 @@ extern "C" int m40llm_ffn_q8_split_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<1>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_split_shared_scales_f32_async(
+    M40llmCudaContext* ctx, const void* input, const void* const* scales,
+    const void* const* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    return m40llm_q8_ffn::launch_split_f32<12>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
 }
 
 extern "C" int m40llm_ffn_q8_task_pair_packet_async(

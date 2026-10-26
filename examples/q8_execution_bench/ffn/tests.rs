@@ -383,7 +383,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::RoleParallel {
+                let dispatch = if kernel == FfnKernel::SharedScales {
+                    "shared_scales_dispatch"
+                } else if kernel == FfnKernel::RoleParallel {
                     "role_parallel_dispatch"
                 } else if kernel == FfnKernel::SplitF32x8 {
                     "eight_value_dispatch"
@@ -399,6 +401,21 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
+                if kernel == FfnKernel::SharedScales {
+                    assert_eq!(timing[dispatch]["threads"], 128);
+                    assert_eq!(timing[dispatch]["blocks_per_row"], pipeline.hidden_dim);
+                    assert_eq!(
+                        timing[dispatch]["shared_bytes"],
+                        1024 + (pipeline.d_model / 32) * 8
+                    );
+                    assert_eq!(timing[dispatch]["block_barriers"], 2);
+                    assert_eq!(
+                        timing[dispatch]["scale_loads_and_conversions_per_cta"],
+                        2 * (pipeline.d_model / 32)
+                    );
+                    assert_eq!(timing[dispatch]["has_changed_summation_ownership"], false);
+                    assert_eq!(timing[dispatch]["has_activation_quantization"], false);
+                }
                 if kernel == FfnKernel::RoleParallel {
                     assert_eq!(timing[dispatch]["roles"], 2);
                     assert_eq!(timing[dispatch]["partials_per_role"], 128);
@@ -502,6 +519,14 @@ fn test_persistent_tiles_ffn_preserves_complete_bits_and_reuses_scratch() -> Res
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_role_parallel_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::RoleParallel)
+}
+
+/// Shared-scale promotion preserves gate/up, hidden and complete down bits,
+/// typed scratch/cache ownership and allocation-free producer ordering.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_shared_scales_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SharedScales)
 }
 
 /// Two physical output cohorts preserve the captured projections, hidden and

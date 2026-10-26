@@ -26,7 +26,7 @@ DRAM saving, occupancy gain or explanation of Ollama performance is assumed.
   There are two block barriers instead of one.
 - Preserve precise SiLU, prepared down/vocabulary, stream ownership, typed
   buffers and all runtime/KV defaults. No new global allocation, weight
-  layout, launch, transfer or host synchronization in the attention path.
+  layout, launch, transfer or host synchronization in the FFN path.
 - One fixed candidate only. No tile, geometry, staging-depth, register,
   cache-hint or unroll rescue; do not combine rejected experiments.
 

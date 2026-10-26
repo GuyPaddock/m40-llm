@@ -422,6 +422,18 @@ mod ffi {
             hidden: i32,
             k: i32,
         ) -> i32;
+        pub fn m40llm_ffn_q8_split_shared_scales_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
         pub fn m40llm_ffn_q8_split_role_parallel_f32_async(
             ctx: *mut M40llmCudaContext,
             input: *const c_void,

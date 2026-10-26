@@ -105,6 +105,7 @@ impl Q8FfnFp32Variant {
 
 #[derive(Clone, Copy)]
 enum SplitFfnKernel {
+    SharedScales,
     RoleParallel,
     NativeWarp,
     EightValues,
@@ -120,6 +121,37 @@ enum SplitFfnKernel {
 }
 
 impl CudaContext {
+    /// Reuse each scale through shared FP32 storage without changing arithmetic.
+    /// K must be at most 4096; no allocation or host synchronization occurs.
+    ///
+    /// # Safety
+    /// Same spans, alignment and stream lifetime as `ffn_q8_split_f32_async`.
+    /// No output/capture span may overlap input, weights or another output.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_shared_scales_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::SharedScales,
+        )
+    }
+
     /// Separate physical gate/up roles with original 128-partial FP32 trees.
     ///
     /// # Safety
@@ -589,6 +621,10 @@ impl CudaContext {
         ensure!(!matches!(kernel,SplitFfnKernel::FixedK2048) || k==2048,
             "fixed-width split FP32 FFN requires K=2048; use the dynamic split API for other widths");
         ensure!(
+            !matches!(kernel, SplitFfnKernel::SharedScales) || k <= 4096,
+            "shared-scale FP32 FFN requires K<=4096"
+        );
+        ensure!(
             !matches!(kernel, SplitFfnKernel::Unfused) || intermediates.is_some(),
             "unfused split FFN requires caller-owned gate/up scratch"
         );
@@ -630,7 +666,9 @@ impl CudaContext {
         }
         if matches!(
             kernel,
-            SplitFfnKernel::NativeWarp | SplitFfnKernel::RoleParallel
+            SplitFfnKernel::NativeWarp
+                | SplitFfnKernel::RoleParallel
+                | SplitFfnKernel::SharedScales
         ) {
             ensure!(k <= i32::MAX - 31, "native warp K exceeds safe indexing");
             let weights = (hidden as usize)
@@ -675,6 +713,7 @@ impl CudaContext {
         }
         let _guard = self.inner.lock.lock().unwrap();
         let enqueue = match kernel {
+            SplitFfnKernel::SharedScales => ffi::m40llm_ffn_q8_split_shared_scales_f32_async,
             SplitFfnKernel::RoleParallel => ffi::m40llm_ffn_q8_split_role_parallel_f32_async,
             SplitFfnKernel::NativeWarp => ffi::m40llm_ffn_q8_split_native_warp_f32_async,
             SplitFfnKernel::EightValues => ffi::m40llm_ffn_q8_split_f32x8_async,
@@ -708,6 +747,7 @@ impl CudaContext {
             return Ok(());
         }
         record_async_kernel(match kernel {
+            SplitFfnKernel::SharedScales => "ffn_q8_split_f32x4_shared_scales_128",
             SplitFfnKernel::RoleParallel => "ffn_q8_split_f32x4_role_parallel_256",
             SplitFfnKernel::NativeWarp => "ffn_q8_split_f32x4_native_warp_128",
             SplitFfnKernel::EightValues => "ffn_q8_split_f32x8_128",

@@ -25,6 +25,7 @@ const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    SharedScales,
     RoleParallel,
     NativeWarp,
     EightValues,
@@ -218,10 +219,12 @@ fn compare_case(
             (None, SplitKernel::EightValues),
             (None, SplitKernel::NativeWarp),
             (None, SplitKernel::RoleParallel),
+            (None, SplitKernel::SharedScales),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::SharedScales => CudaContext::ffn_q8_split_shared_scales_f32_async,
             SplitKernel::RoleParallel => CudaContext::ffn_q8_split_role_parallel_f32_async,
             SplitKernel::NativeWarp => CudaContext::ffn_q8_split_native_warp_f32_async,
             SplitKernel::EightValues => CudaContext::ffn_q8_split_f32x8_async,
@@ -246,7 +249,8 @@ fn compare_case(
         }
         if matches!(
             split_kernel,
-            SplitKernel::RoleParallel
+            SplitKernel::SharedScales
+                | SplitKernel::RoleParallel
                 | SplitKernel::NativeWarp
                 | SplitKernel::Cohorts
                 | SplitKernel::EightValues
@@ -311,14 +315,17 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         if matches!(
             split_kernel,
-            SplitKernel::RoleParallel
+            SplitKernel::SharedScales
+                | SplitKernel::RoleParallel
                 | SplitKernel::NativeWarp
                 | SplitKernel::Cohorts
                 | SplitKernel::EightValues
         ) {
             assert_eq!(delta.stream_waits, 0);
             let after = profile::snapshot();
-            let op = if split_kernel == SplitKernel::RoleParallel {
+            let op = if split_kernel == SplitKernel::SharedScales {
+                "ffn_q8_split_f32x4_shared_scales_128"
+            } else if split_kernel == SplitKernel::RoleParallel {
                 "ffn_q8_split_f32x4_role_parallel_256"
             } else if split_kernel == SplitKernel::NativeWarp {
                 "ffn_q8_split_f32x4_native_warp_128"
@@ -504,6 +511,8 @@ fn compare_case(
 /// than claiming bit equality with the original 128-partial association.
 /// Physical gate/up roles preserve the original bits, producer ordering and
 /// one-launch allocation-free behavior with separate 128-thread groups.
+/// Shared-scale promotion preserves the same bits with a bounded scale array
+/// across K=32/96/2048/4096 and an ordered producer on the other stream.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -561,6 +570,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 )
                 .is_err());
             for enqueue in [
+                CudaContext::ffn_q8_split_shared_scales_f32_async,
                 CudaContext::ffn_q8_split_role_parallel_f32_async,
                 CudaContext::ffn_q8_split_native_warp_f32_async,
                 CudaContext::ffn_q8_split_f32_async,
@@ -619,6 +629,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 .is_err());
             }
             for enqueue in [
+                CudaContext::ffn_q8_split_shared_scales_f32_async,
                 CudaContext::ffn_q8_split_native_warp_f32_async,
                 CudaContext::ffn_q8_split_role_parallel_f32_async,
             ] {
@@ -668,6 +679,19 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 )
                 .is_err());
             }
+            let error = ctx
+                .ffn_q8_split_shared_scales_f32_async(
+                    input.as_ptr(),
+                    [weight.as_ptr(); 2],
+                    [weight.as_ptr(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    1,
+                    4128,
+                    None,
+                )
+                .unwrap_err();
+            assert!(error.to_string().contains("K<=4096"));
             for k in [32, 96, 4096] {
                 let error = ctx
                     .ffn_q8_split_f32_k2048_async(
