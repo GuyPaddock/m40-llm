@@ -482,6 +482,12 @@ impl DecodeSession {
             .as_mut_ptr();
         let prefix_len = ids.len() - 1;
         let prefill_start = std::time::Instant::now();
+        let prefill_profile = self
+            .gpu_profiler
+            .as_mut()
+            .map(|profiler| profiler.begin_prefill(prefix_len))
+            .transpose()?
+            .flatten();
         let sync_diag = PrefillSyncDiag::start(
             &self.model().cuda,
             format!("{}.packed_prefill.ids_len_{}", self.log_prefix, ids.len()),
@@ -496,6 +502,12 @@ impl DecodeSession {
                 },
             ])
         }?;
+        if let Some(scope) = prefill_profile {
+            self.gpu_profiler
+                .as_mut()
+                .expect("active prefill profiler")
+                .finish_prefill(scope, prefix_len)?;
+        }
         if let Some(sync_diag) = sync_diag {
             self.last_prefill_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
         }

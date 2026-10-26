@@ -183,11 +183,20 @@ impl super::LoadedModel {
             "invalid/aliased Q8 prefill projection buffers"
         );
         unsafe {
+            let conversion = crate::gpu_profile::GpuStageSpan::begin(
+                "q8_prefill_dequantize",
+                crate::cuda::CudaStream::Prefill,
+            )?;
             self.cuda.dequantize_q8_0_to_f32_colmajor_async(
                 weight,
                 scratch.pointer,
                 scratch.bytes,
                 shape,
+            )?;
+            conversion.finish()?;
+            let sgemm = crate::gpu_profile::GpuStageSpan::begin(
+                "q8_prefill_sgemm",
+                crate::cuda::CudaStream::Prefill,
             )?;
             self.cuda.gemm_f32xf32_f32_stream_async(
                 input,
@@ -197,7 +206,8 @@ impl super::LoadedModel {
                 output_dim,
                 input_dim,
                 crate::cuda::CudaStream::Prefill,
-            )
+            )?;
+            sgemm.finish()
         }
     }
 }

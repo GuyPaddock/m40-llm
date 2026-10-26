@@ -2623,6 +2623,7 @@ impl LoadedModel {
                     })
                     .transpose()?;
 
+                gpu_profile::set_layer(Some(layer_id));
                 let label = format!("forward.prefill.layer.{layer}.rows.{rows}");
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
@@ -2931,6 +2932,7 @@ impl LoadedModel {
                 }
             }
 
+            gpu_profile::set_layer(None);
             if std::env::var("M40LLM_SERVER_BATCH_PREFILL_LOG")
                 .ok()
                 .as_deref()

@@ -36,6 +36,45 @@ code is copied. Static resources are not measured occupancy or latency.
 
 ## Verification
 
+### Optional Projection Attribution
+
+Set `M40LLM_STAGE_PROFILE=1` and `M40LLM_STAGE_PROFILE_PREFILL=1` to
+extend the existing session-owned event collector to packed-prefix work.
+`M40LLM_STAGE_PROFILE_REPORT` receives one `packed_prefill_gpu_profile`
+JSONL row before the ordinary sampled decode rows. The prefix row contains
+`prefix_tokens`, `prefill_wall_ms`, event-pool setup/reuse, counters and
+per-layer spans; it has no generated-token index. Decode keeps its existing
+format and reuses the same event pool. The extra switch does nothing when
+stage profiling is disabled. No runtime backend or default changes.
+
+`q8_prefill_dequantize` spans the current transposing conversion and
+`q8_prefill_sgemm` spans its following cuBLAS call. Each projection contributes
+one of each, on prefill. Shared Q/K/V bias instrumentation may also appear.
+There are seven projection pairs per active layer. These spans do not cover
+embedding, all norms/attention/residuals, workspace setup or all host work.
+Their union must not be reported as the entire GPU prefill cost, and wall
+minus union is unattributed time, not a measured CPU-only interval.
+
+Events are resolved after the packed forward's existing two-stream drain;
+the profiler adds no stream wait or synchronization. Disabled profiling
+creates no collector or report. Validate actual generated IDs and ordinary
+launch/copy/allocation/sync counters, then measure instrumentation overhead
+with alternating profiling-off/on requests before drawing conclusions.
+Do not subtract that overhead to manufacture an optimization claim.
+
+The current backend uses N-leading FP32 temporary weights with
+`cublasSgemm(N,N)`. The pinned llama.cpp F32 path uses source-layout
+conversion with `cublasSgemm(T,N)`. That source difference is a hypothesis
+for a future bounded comparison, not proof of a missing speedup. Attribute
+current conversion/SGEMM costs first. Any alternative must retain the
+128 MiB workspace cap, decode control, numerical/cache-state checks and
+actual-output/E2E gates. No alternative layout is implemented here.
+
+Library callers constructing `GpuProfileConfig` initialize
+`should_profile_prefill` explicitly. The owned event scope is now named
+`GpuProfileScope`, reflecting its token and prefix use; there is no legacy
+scope-name alias.
+
 `tests/q8_prefill_dequant.rs` has a CPU bounds test and explicit hardware
 checks. Release M40 results with cuBLAS enabled pass all four tests:
 

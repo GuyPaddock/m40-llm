@@ -589,6 +589,7 @@ impl ComparisonRun {
             }).collect::<BTreeMap<_,_>>(),
             "client_elapsed_ms": wall_ms, "e2e_tps": tps, "metrics": metrics,
             "stage_profile_enabled": is_stage_profile_enabled,
+            "prefill_stage_profile_requested": std::env::var("M40LLM_STAGE_PROFILE_PREFILL").ok().as_deref() == Some("1"),
             "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
             "head128_partitions": std::env::var("M40LLM_ATTN_HEAD128_PARTITIONS").ok(),
             "head128_threads": std::env::var("M40LLM_ATTN_HEAD128_THREADS").ok(),
@@ -751,6 +752,7 @@ impl ComparisonRun {
             "q8_prefill_temporary_weight_bytes":generated.q8_prefill_temporary_weight_bytes,
             "q8_ffn":server.state.model.q8_ffn,"q8_prefill_backend":server.state.model.q8_prefill,
             "stage_profile_enabled": std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1"),
+            "prefill_stage_profile_requested": std::env::var("M40LLM_STAGE_PROFILE_PREFILL").ok().as_deref() == Some("1"),
             "head128_kernel": std::env::var("M40LLM_ATTN_HEAD128_KERNEL").ok(),
         }))?;
         Ok(generated.token_ids[generated.prompt_token_len..].to_vec())
@@ -973,6 +975,7 @@ impl ComparisonRun {
             "throughput_change": profiled.median / ordinary.median - 1.0,
             "report_path": std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").map(PathBuf::from),
             "selected_runtime_config":self.args.primary_runtime_config(),
+            "prefill_stage_profile_requested":std::env::var("M40LLM_STAGE_PROFILE_PREFILL").ok().as_deref()==Some("1"),
             "is_optimization_claim": false,
         }))?;
         switch.set(false);

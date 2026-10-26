@@ -92,6 +92,7 @@ fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Resu
         GpuProfileConfig {
             generated_steps: vec![0, 1],
             report_path: None,
+            should_profile_prefill: false,
         },
     )?;
     let a = DeviceBuffer::new_tagged(&ctx, 16, "stage_test:a")?;

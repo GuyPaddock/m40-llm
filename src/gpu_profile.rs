@@ -31,6 +31,7 @@ static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 pub struct GpuProfileConfig {
     pub generated_steps: Vec<usize>,
     pub report_path: Option<PathBuf>,
+    pub should_profile_prefill: bool,
 }
 
 impl GpuProfileConfig {
@@ -57,6 +58,10 @@ impl GpuProfileConfig {
         Ok(Some(Self {
             generated_steps,
             report_path: std::env::var_os("M40LLM_STAGE_PROFILE_REPORT").map(PathBuf::from),
+            should_profile_prefill: std::env::var("M40LLM_STAGE_PROFILE_PREFILL")
+                .ok()
+                .as_deref()
+                == Some("1"),
         }))
     }
 }
@@ -99,6 +104,27 @@ pub struct TokenGpuProfile {
     pub host_timings: Vec<HostTiming>,
 }
 
+/// A packed-prefix scope is not a generated token. Its spans currently cover
+/// Q8 conversion/SGEMM and shared bias operations, not all prefill GPU work.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct PrefillGpuProfile {
+    pub kind: String,
+    pub process_id: u32,
+    pub session_id: u64,
+    pub prefix_tokens: usize,
+    pub prefill_wall_ms: f64,
+    pub gpu_stage_sum_ms: f64,
+    pub gpu_stage_union_ms: f64,
+    pub gpu_timeline_span_ms: f64,
+    pub wall_minus_gpu_union_ms: f64,
+    pub event_pool_capacity: usize,
+    pub event_pool_setup_ms: f64,
+    pub event_pool_reused: bool,
+    pub counters: OpCounters,
+    pub stages: Vec<GpuStageTiming>,
+    pub host_timings: Vec<HostTiming>,
+}
+
 struct EventPair {
     start: CudaEvent,
     stop: CudaEvent,
@@ -119,7 +145,7 @@ struct Collector {
     host_timings: Vec<HostTiming>,
     layer_id: Option<u32>,
     is_active: bool,
-    completed_tokens: usize,
+    completed_scopes: usize,
 }
 
 pub struct DecodeGpuProfiler {
@@ -177,7 +203,7 @@ impl DecodeGpuProfiler {
                 host_timings: Vec::with_capacity(16),
                 layer_id: None,
                 is_active: false,
-                completed_tokens: 0,
+                completed_scopes: 0,
             })),
             session_id: NEXT_SESSION.fetch_add(1, Ordering::Relaxed),
             prompt_len: None,
@@ -194,7 +220,7 @@ impl DecodeGpuProfiler {
         &mut self,
         ids_len: usize,
         token_idx: usize,
-    ) -> Result<Option<ProfileTokenScope>> {
+    ) -> Result<Option<GpuProfileScope>> {
         let prompt_len = *self.prompt_len.get_or_insert(ids_len);
         if token_idx + 1 < prompt_len {
             return Ok(None);
@@ -210,15 +236,15 @@ impl DecodeGpuProfiler {
         &mut self,
         generated_step: usize,
         absolute_position: usize,
-    ) -> Result<ProfileTokenScope> {
+    ) -> Result<GpuProfileScope> {
         ensure!(
             ACTIVE.with(|active| active.borrow().is_none()),
-            "nested GPU token profiling is unsupported"
+            "nested GPU scope profiling is unsupported"
         );
         let mut collector = self.collector.lock().unwrap();
         ensure!(
             !collector.is_active,
-            "previous GPU token profile did not complete"
+            "previous GPU profile scope did not complete"
         );
         collector.pending.clear();
         collector.host_timings.clear();
@@ -227,11 +253,12 @@ impl DecodeGpuProfiler {
         collector.is_active = true;
         drop(collector);
         ACTIVE.with(|active| *active.borrow_mut() = Some(self.collector.clone()));
-        Ok(ProfileTokenScope {
+        Ok(GpuProfileScope {
             collector: self.collector.clone(),
             session_id: self.session_id,
             generated_step,
             absolute_position,
+            prefix_tokens: None,
             started_at: Instant::now(),
             before: profile::snapshot(),
             setup_ms: self.setup_ms,
@@ -239,36 +266,98 @@ impl DecodeGpuProfiler {
         })
     }
 
-    pub fn finish_token(&mut self, scope: ProfileTokenScope) -> Result<TokenGpuProfile> {
+    pub fn begin_prefill(&mut self, prefix_tokens: usize) -> Result<Option<GpuProfileScope>> {
+        if !self.config.should_profile_prefill {
+            return Ok(None);
+        }
+        ensure!(
+            prefix_tokens > 0,
+            "prefill profile needs a non-empty prefix"
+        );
+        // Reuse the same event collector before generated step zero. The
+        // prefill writer below deliberately emits no generated-token fields.
+        let mut scope = self.begin_token(0, prefix_tokens - 1)?;
+        scope.prefix_tokens = Some(prefix_tokens);
+        Ok(Some(scope))
+    }
+
+    /// Resolve only after the packed forward's existing two-stream drain.
+    /// Timestamp queries add no stream waits or synchronization.
+    pub fn finish_prefill(
+        &mut self,
+        scope: GpuProfileScope,
+        prefix_tokens: usize,
+    ) -> Result<PrefillGpuProfile> {
+        ensure!(
+            Arc::ptr_eq(&self.collector, &scope.collector),
+            "prefill profile belongs to a different decode session"
+        );
+        ensure!(
+            prefix_tokens > 0 && scope.prefix_tokens == Some(prefix_tokens),
+            "prefill profile prefix length mismatch"
+        );
+        let collected = scope.finish()?;
+        let report = PrefillGpuProfile {
+            kind: "packed_prefill_gpu_profile".to_owned(),
+            process_id: collected.process_id,
+            session_id: collected.session_id,
+            prefix_tokens,
+            prefill_wall_ms: collected.token_wall_ms,
+            gpu_stage_sum_ms: collected.gpu_stage_sum_ms,
+            gpu_stage_union_ms: collected.gpu_stage_union_ms,
+            gpu_timeline_span_ms: collected.gpu_timeline_span_ms,
+            wall_minus_gpu_union_ms: collected.wall_minus_gpu_union_ms,
+            event_pool_capacity: collected.event_pool_capacity,
+            event_pool_setup_ms: collected.event_pool_setup_ms,
+            event_pool_reused: collected.event_pool_reused,
+            counters: collected.counters,
+            stages: collected.stages,
+            host_timings: collected.host_timings,
+        };
+        self.write_report(&report)?;
+        Ok(report)
+    }
+
+    pub fn finish_token(&mut self, scope: GpuProfileScope) -> Result<TokenGpuProfile> {
+        ensure!(
+            scope.prefix_tokens.is_none(),
+            "prefill scope must use finish_prefill"
+        );
         ensure!(
             Arc::ptr_eq(&self.collector, &scope.collector),
             "token profile belongs to a different decode session"
         );
         let report = scope.finish()?;
+        self.write_report(&report)?;
+        Ok(report)
+    }
+
+    fn write_report(&mut self, report: &impl serde::Serialize) -> Result<()> {
         if let Some(output) = self.output.as_mut() {
-            serde_json::to_writer(&mut *output, &report)?;
+            serde_json::to_writer(&mut *output, report)?;
             output.write_all(b"\n")?;
             output.flush()?;
         } else {
-            eprintln!("[gpu-stage-profile] {}", serde_json::to_string(&report)?);
+            eprintln!("[gpu-stage-profile] {}", serde_json::to_string(report)?);
         }
-        Ok(report)
+        Ok(())
     }
 }
 
-pub struct ProfileTokenScope {
+pub struct GpuProfileScope {
     collector: Arc<Mutex<Collector>>,
     session_id: u64,
     generated_step: usize,
     absolute_position: usize,
+    prefix_tokens: Option<usize>,
     started_at: Instant,
     before: ProfileSnapshot,
     setup_ms: f64,
     _same_thread: PhantomData<Rc<()>>,
 }
 
-impl ProfileTokenScope {
-    /// Called only after the caller's existing logits/argmax completion boundary.
+impl GpuProfileScope {
+    /// Called only after the existing logits/argmax or packed-forward drain.
     pub fn finish(self) -> Result<TokenGpuProfile> {
         let wall_ms = self.started_at.elapsed().as_secs_f64() * 1000.0;
         let after = profile::snapshot();
@@ -335,18 +424,18 @@ impl ProfileTokenScope {
             wall_minus_gpu_union_ms: (wall_ms - union_ms).max(0.0),
             event_pool_capacity: collector.pool.len(),
             event_pool_setup_ms: self.setup_ms,
-            event_pool_reused: collector.completed_tokens > 0,
+            event_pool_reused: collector.completed_scopes > 0,
             counters: profile::counter_delta(&self.before, &after),
             stages,
             host_timings: collector.host_timings.clone(),
         };
-        collector.completed_tokens += 1;
+        collector.completed_scopes += 1;
         collector.is_active = false;
         Ok(report)
     }
 }
 
-impl Drop for ProfileTokenScope {
+impl Drop for GpuProfileScope {
     fn drop(&mut self) {
         ACTIVE.with(|active| {
             let mut active = active.borrow_mut();

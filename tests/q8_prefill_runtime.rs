@@ -410,6 +410,156 @@ mod hardware {
         Ok(())
     }
 
+    /// Packed-prefix profiling preserves sampled IDs/logits and device effects,
+    /// resolves after the existing drain, and labels conversion/SGEMM per layer.
+    /// Prefix rows must not masquerade as generated tokens; decode reuses events.
+    #[test]
+    #[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
+    fn test_q8_prefill_profile_preserves_generation_and_orders_projection_spans() -> Result<()> {
+        let _lock = crate::cuda_test_scope::lock_cuda();
+        let _env = configure();
+        let _hardware = CudaContext::new_m40()?;
+        let initial = CudaContext::total_device_bytes();
+        let directory = std::env::temp_dir().join(format!(
+            "m40-prefill-profile-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory)?;
+        for is_qwen in [false, true] {
+            let path = directory.join(format!("prefill-{is_qwen}.jsonl"));
+            let _profile = [
+                EnvRestore::set("M40LLM_STAGE_PROFILE", "0"),
+                EnvRestore::set("M40LLM_STAGE_PROFILE_PREFILL", "1"),
+                EnvRestore::set("M40LLM_STAGE_PROFILE_TOKENS", "0"),
+                EnvRestore::set("M40LLM_STAGE_PROFILE_REPORT", path.to_str().unwrap()),
+                EnvRestore::set("M40LLM_PREFILL_CHUNK_SIZE", "8"),
+                EnvRestore::set("M40LLM_CUDA_GREEDY_ARGMAX", "1"),
+            ];
+            let model = model(is_qwen, Q8PrefillBackend::DequantSgemm)?;
+            // The Qwen-shaped math fixture has no real Qwen vocabulary. Feed
+            // valid IDs directly rather than fabricate tokenizer semantics.
+            let run = || -> Result<(Vec<u32>, Vec<Vec<f32>>)> {
+                model.reset_kv_cache()?;
+                let mut decode = session(&model)?;
+                let mut ids = vec![2, 3, 4];
+                decode.prefill_packed_prefix_ids(&ids)?;
+                let mut sampled = Vec::new();
+                let mut logits_by_step = Vec::new();
+                for _ in 0..2 {
+                    let logits = decode.logits_for_ids(&ids, |_| {})?;
+                    let token = logits
+                        .iter()
+                        .enumerate()
+                        .max_by(|a, b| a.1.total_cmp(b.1))
+                        .unwrap()
+                        .0 as u32;
+                    ids.push(token);
+                    sampled.push(token);
+                    logits_by_step.push(logits);
+                }
+                Ok((sampled, logits_by_step))
+            };
+            run()?;
+            let before = profile::snapshot();
+            let control = run()?;
+            let control_counts = profile::counter_delta(&before, &profile::snapshot());
+            assert!(!path.exists());
+            let _enabled = EnvRestore::set("M40LLM_STAGE_PROFILE", "1");
+            {
+                let _prefix_disabled = EnvRestore::set("M40LLM_STAGE_PROFILE_PREFILL", "0");
+                let before = profile::snapshot();
+                assert_eq!(run()?.0, control.0);
+                assert_eq!(
+                    profile::counter_delta(&before, &profile::snapshot()),
+                    control_counts
+                );
+                let ordinary: Vec<serde_json::Value> = std::fs::read_to_string(&path)?
+                    .lines()
+                    .map(serde_json::from_str)
+                    .collect::<Result<_, _>>()?;
+                assert_eq!(ordinary.len(), 1);
+                assert!(ordinary[0].get("kind").is_none());
+                assert_eq!(ordinary[0]["event_pool_reused"], false);
+                std::fs::remove_file(&path)?;
+            }
+            let before = profile::snapshot();
+            let measured = run()?;
+            assert_eq!(
+                profile::counter_delta(&before, &profile::snapshot()),
+                control_counts
+            );
+            assert_eq!(measured.0, control.0);
+            for (actual, expected) in measured.1.iter().zip(&control.1) {
+                assert_eq!(
+                    actual.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+                    expected.iter().map(|x| x.to_bits()).collect::<Vec<_>>()
+                );
+            }
+            let reports = std::fs::read_to_string(&path)?
+                .lines()
+                .map(serde_json::from_str::<serde_json::Value>)
+                .collect::<Result<Vec<_>, _>>()?;
+            let prefix_rows: Vec<_> = reports
+                .iter()
+                .filter(|r| r["kind"] == "packed_prefill_gpu_profile")
+                .collect();
+            assert_eq!(prefix_rows.len(), 1);
+            assert!(prefix_rows[0].get("generated_step").is_none());
+            let report: m40_llm::gpu_profile::PrefillGpuProfile =
+                serde_json::from_value((*prefix_rows[0]).clone())?;
+            assert_eq!(report.prefix_tokens, 2);
+            assert!(!report.event_pool_reused);
+            assert!(report.prefill_wall_ms > 0.0);
+            assert!(report.gpu_stage_union_ms <= report.gpu_stage_sum_ms + 0.001);
+            for layer in 0..2 {
+                for stage in ["q8_prefill_dequantize", "q8_prefill_sgemm"] {
+                    let spans: Vec<_> = report
+                        .stages
+                        .iter()
+                        .filter(|s| s.layer_id == Some(layer) && s.stage == stage)
+                        .collect();
+                    assert_eq!(spans.len(), 7);
+                    for span in spans {
+                        assert_eq!(span.stream, "prefill");
+                        assert!(span.gpu_elapsed_ms >= 0.0);
+                        assert_eq!(span.counters.device_allocs + span.counters.device_frees, 0);
+                        assert_eq!(span.counters.h2d_copies + span.counters.d2h_copies, 0);
+                        assert_eq!(span.counters.stream_syncs, 0);
+                        assert_eq!(
+                            span.counters.launches,
+                            u64::from(stage == "q8_prefill_dequantize")
+                        );
+                        assert_eq!(
+                            span.counters.cublas_calls,
+                            u64::from(stage == "q8_prefill_sgemm")
+                        );
+                    }
+                }
+            }
+            let projection_spans: Vec<_> = report
+                .stages
+                .iter()
+                .filter(|s| s.stage.starts_with("q8_prefill_"))
+                .collect();
+            for pair in projection_spans.chunks_exact(2) {
+                assert_eq!(pair[0].stage, "q8_prefill_dequantize");
+                assert_eq!(pair[1].stage, "q8_prefill_sgemm");
+                assert!(pair[0].gpu_end_ms <= pair[1].gpu_start_ms + 0.001);
+            }
+            let decode: Vec<_> = reports.iter().filter(|r| r.get("kind").is_none()).collect();
+            assert_eq!(decode.len(), 1);
+            assert_eq!(decode[0]["generated_step"], 0);
+            assert_eq!(decode[0]["event_pool_reused"], true);
+            assert_eq!(decode[0]["session_id"], report.session_id);
+        }
+        std::fs::remove_dir_all(directory)?;
+        assert_eq!(CudaContext::total_device_bytes(), initial);
+        Ok(())
+    }
+
     /// Load-time selection is model-local and unsupported model, runtime-disable,
     /// graph and multi-request prefill configurations fail without device work.
     #[test]
