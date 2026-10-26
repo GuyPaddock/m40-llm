@@ -1,0 +1,310 @@
+[
+  {
+    "symbol": "_Z10cpy_scalarIXadL_ZN36_INTERNAL_3446f298_6_cpy_cu_bfba63e212cpy_1_scalarIffEEvPKcPcEEEvS3_S4_lllllllllllllll",
+    "count": 108,
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z10k_set_rowsIfl6__halfEvPKT_PKT0_PT1_llllllllllllll5uint3S9_S9_S9_S9_",
+    "count": 216,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z11k_bin_bcastIXadL_ZN42_INTERNAL_f6a4f1f9_11_binbcast_cu_6840010b6op_addEffEEfffJPKfEEvPKT0_PKT1_PT2_jjj5uint3SB_SB_SB_SB_jjjjjjjjjjjDpT3_",
+    "count": 1080,
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z12rms_norm_f32ILi512ELi1ELb1ELb1ELb0ELb0EEvPKfPfiiilllfS1_lll5uint3S3_S3_S3_S1_lllS3_S3_S3_S3_f",
+    "count": 438,
+    "blocks": [
+      [
+        512,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      128
+    ]
+  },
+  {
+    "symbol": "_Z12soft_max_f32ILb1ELi256ELi256EfEvPKfPKT2_S1_Pf15soft_max_params",
+    "count": 216,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      1152
+    ]
+  },
+  {
+    "symbol": "_Z13convert_unaryI6__halffEvPKvPT0_lll5uint3lll",
+    "count": 36,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_fI6__halffLi1ELi128ELb0ELb0EEvPKT_PKfPKi31ggml_cuda_mm_fusion_args_devicePfi5uint3iiiSA_iiiSA_iiii",
+    "count": 108,
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      128
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_fI6__halffLi1ELi64ELb0ELb0EEvPKT_PKfPKi31ggml_cuda_mm_fusion_args_devicePfi5uint3iiiSA_iiiSA_iiii",
+    "count": 108,
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      128
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_fI6__halffLi2ELi128ELb0ELb0EEvPKT_PKfPKi31ggml_cuda_mm_fusion_args_devicePfi5uint3iiiSA_iiiSA_iiii",
+    "count": 72,
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      128
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_fI6__halffLi2ELi64ELb0ELb0EEvPKT_PKfPKi31ggml_cuda_mm_fusion_args_devicePfi5uint3iiiSA_iiiSA_iiii",
+    "count": 72,
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      128
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_qIL9ggml_type8ELi1ELb0ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+    "count": 771,
+    "blocks": [
+      [
+        32,
+        4,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z13mul_mat_vec_qIL9ggml_type8ELi2ELb0ELb0ELb0EEvPKvS2_PKi31ggml_cuda_mm_fusion_args_devicePfj5uint3jjjS7_jjjS7_jjjj",
+    "count": 498,
+    "blocks": [
+      [
+        32,
+        4,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z13quantize_q8_1PKfPvlllllj5uint3",
+    "count": 1269,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z16dequantize_blockILi32ELi1EXadL_ZN41_INTERNAL_a1126166_10_convert_cu_ecf1720215dequantize_q8_0EPKvliR6float2EEfEvS2_PT2_lll5uint3lll",
+    "count": 249,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z16k_get_rows_floatIffEvPKT_PKiPT0_ll5uint3mmmmmmmmm",
+    "count": 12,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z21unary_gated_op_kernelIXadL_ZN38_INTERNAL_055303e5_8_unary_cu_eb6d53667op_siluEfEEfEvPKT0_S3_PS1_llll",
+    "count": 216,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z22k_compute_batched_ptrsPKvS0_PcPS0_PPvlllmmmmmmll",
+    "count": 72,
+    "blocks": [
+      [
+        16,
+        16,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z23convert_unary_cont_vec4I6__halffEvPKvPT0_l",
+    "count": 36,
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z9rope_neoxILb1ELb0Ef6__halfEvPKT1_PT2_iiiiiiiiiiiPKifff14rope_corr_dimsfPKfPKlib",
+    "count": 216,
+    "blocks": [
+      [
+        1,
+        256,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "_Z9rope_neoxILb1ELb0EffEvPKT1_PT2_iiiiiiiiiiiPKifff14rope_corr_dimsfPKfPKlib",
+    "count": 216,
+    "blocks": [
+      [
+        1,
+        256,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "maxwell_sgemm_128x64_tn",
+    "count": 179,
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  },
+  {
+    "symbol": "sgemm_32x32x32_NT_vec",
+    "count": 142,
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ],
+    "shared": [
+      0
+    ]
+  }
+]

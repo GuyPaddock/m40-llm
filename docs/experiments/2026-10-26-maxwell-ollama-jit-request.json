@@ -1,0 +1,20 @@
+{
+  "model": "qwen2.5:3b-instruct-q8_0",
+  "prompt": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible<|im_end|>\n<|im_start|>assistant\n",
+  "raw": true,
+  "stream": false,
+  "keep_alive": "30m",
+  "options": {
+    "num_ctx": 1024,
+    "num_predict": 4,
+    "num_gpu": 99,
+    "temperature": 0,
+    "top_k": 1,
+    "top_p": 1,
+    "min_p": 0,
+    "repeat_penalty": 1,
+    "presence_penalty": 0,
+    "frequency_penalty": 0,
+    "seed": 0
+  }
+}

@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Actual Official MMVQ JIT Confirms Offline Evidence
+
+An isolated four-token official Ollama diagnostic captures actual loaded
+sm_52 code. The selected one-token Q8 MMVQ **matches M01 offline words exactly**:
+48 registers, 384 static shared bytes, no stack/local storage, one barrier
+and five shuffle sites. Exact canonical 65-ID prompt/cache checks pass;
+6330 matched driver/runtime pairs and 16 module images complete cleanly.
+See [actual JIT code, raw request and scope](experiments/2026-10-26-maxwell-ollama-jit-inspection.md).
+
+This resolves the selected M01 compiled-code caveat, not a performance gap
+or new baseline. Counts include startup/warmup; four output tokens and
+observer-perturbed durations cannot support TPS or per-stage claims. No
+runtime promotion follows. Qualified exact status stays **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both original targets remain unmet and
+defaults unchanged.
+
 ## 2026-10-26: Driver JIT Matches Native Projection Code
 
 Untimed loaded-module capture finds **identical gate/up and prepared

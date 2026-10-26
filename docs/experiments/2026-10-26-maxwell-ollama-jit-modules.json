@@ -1,0 +1,146 @@
+[
+  {
+    "kind": "cuda_module",
+    "module_id": 19,
+    "image_index": 0,
+    "cubin_bytes": 272816,
+    "path": "/tmp/ollama-jit-official.3470246.module-0.cubin",
+    "sha256": "523a20e13f5a5e371d93b1b09ef38af8b07bf2449d07535f22d3fcc9ab5e74ec",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-0.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 20,
+    "image_index": 1,
+    "cubin_bytes": 97224,
+    "path": "/tmp/ollama-jit-official.3470246.module-1.cubin",
+    "sha256": "558de8bac091ba17555c23e60465daf8f99f2255b10a22869449985bd2441e6e",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-1.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 21,
+    "image_index": 2,
+    "cubin_bytes": 4847688,
+    "path": "/tmp/ollama-jit-official.3470246.module-2.cubin",
+    "sha256": "2f84eb83bc0ad4f951d53768044965aeb138f4cf5125ed09e9cf3de7b60d8687",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-2.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 22,
+    "image_index": 3,
+    "cubin_bytes": 1374440,
+    "path": "/tmp/ollama-jit-official.3470246.module-3.cubin",
+    "sha256": "a646708a0267e4aa3c0bd11644ea293f18c3e194a57c8fa6132a71bb5c6e4cda",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-3.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 23,
+    "image_index": 4,
+    "cubin_bytes": 329072,
+    "path": "/tmp/ollama-jit-official.3470246.module-4.cubin",
+    "sha256": "0a56462204e8cd93e1cd1784af4777d9b9e7f08bf99f57a1deeb2ebb0de56a1e",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-4.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 24,
+    "image_index": 5,
+    "cubin_bytes": 187720,
+    "path": "/tmp/ollama-jit-official.3470246.module-5.cubin",
+    "sha256": "d87692ace8fcfae535e2c40aefa32d0257f7c3866ad14e89fd4632f5485bf359",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-5.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 25,
+    "image_index": 6,
+    "cubin_bytes": 2796080,
+    "path": "/tmp/ollama-jit-official.3470246.module-6.cubin",
+    "sha256": "50b273d4977a3a3f3e944b00b84bc268ee5b24efd0b8a0c84040594ada946ffa",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-6.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 26,
+    "image_index": 7,
+    "cubin_bytes": 188368,
+    "path": "/tmp/ollama-jit-official.3470246.module-7.cubin",
+    "sha256": "e0fcf90ed137562a189b5d0162fa8a1b946bd801de3317ff9424645f545bc6be",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-7.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 27,
+    "image_index": 8,
+    "cubin_bytes": 477512,
+    "path": "/tmp/ollama-jit-official.3470246.module-8.cubin",
+    "sha256": "e915241fe16ae052560714d167b08f8c57de036b61c91fac0ea2c8b7cf0b379a",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-8.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 28,
+    "image_index": 9,
+    "cubin_bytes": 998216,
+    "path": "/tmp/ollama-jit-official.3470246.module-9.cubin",
+    "sha256": "154a2aef0ea99efc5efdc480f0d3173a5450132046b5323d1c475368abf38270",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-9.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 29,
+    "image_index": 10,
+    "cubin_bytes": 732584,
+    "path": "/tmp/ollama-jit-official.3470246.module-10.cubin",
+    "sha256": "9f2676a7e99c21c7aeb359cf5b1b379fe7b352ed63894a0b5b225e418a9fb086",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-10.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 30,
+    "image_index": 11,
+    "cubin_bytes": 6736,
+    "path": "/tmp/ollama-jit-official.3470246.module-11.cubin",
+    "sha256": "46943ccf2ded0e08becbedb9ecf8141d5aa878f6259dee1ef704c3467293350a",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-11.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 31,
+    "image_index": 12,
+    "cubin_bytes": 331248,
+    "path": "/tmp/ollama-jit-official.3470246.module-12.cubin",
+    "sha256": "ce370c865d1954189f106b8bb4e70215e09bc5308e8192395bf826bf4321b395",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-12.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 32,
+    "image_index": 13,
+    "cubin_bytes": 1094544,
+    "path": "/tmp/ollama-jit-official.3470246.module-13.cubin",
+    "sha256": "dad7f3d6cfd7e0d9573ecc1191b4a23d709d1aa26f9c2955ebd3087eeaaf0740",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-13.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 33,
+    "image_index": 14,
+    "cubin_bytes": 187616,
+    "path": "/tmp/ollama-jit-official.3470246.module-14.cubin",
+    "sha256": "a5e3e256289bc9405968c9607b950e914b8e91c7bd8aec57f23b7be0379784b7",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-14.cubin"
+  },
+  {
+    "kind": "cuda_module",
+    "module_id": 34,
+    "image_index": 15,
+    "cubin_bytes": 34984,
+    "path": "/tmp/ollama-jit-official.3470246.module-15.cubin",
+    "sha256": "e078a476c42df6c7170e85664b470c9bfd4f49a706ffe38d474502ca98ea1a11",
+    "retained_path": "target/research-tools/ollama-jit-inspection/ollama-jit-official.3470246.module-15.cubin"
+  }
+]

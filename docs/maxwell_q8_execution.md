@@ -36,7 +36,7 @@ enables weight preparation.
 
 | Unit | Current State |
 | --- | --- |
-| M01 | Source pin and official-backend launch dispatch verified; [report and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md) |
+| M01 | Source pin and official-backend launch dispatch verified; [original report](experiments/2026-10-25-maxwell-q8-dispatch.md) and [actual selected driver-JIT code](experiments/2026-10-26-maxwell-ollama-jit-inspection.md) |
 | M02 | Complete: [warm real-input FFN baseline](experiments/2026-10-25-maxwell-ffn-baseline-warm.md), genuine rows 1/4, all numerical/ownership checks pass; one-row complete about 0.457 ms/layer |
 | M03 | Complete: [real-input five-pair screen](experiments/2026-10-25-maxwell-fp32-ffn-screen.md); packed/warp256 gains 7.75-8.27% complete FFN with native bits on the sampled one-row inputs; 128 gains 12.18-12.63% with small arithmetic drift |
 | M04 | Complete: [quantization-inclusive real-input screen](experiments/2026-10-25-maxwell-q81-ffn-screen.md), 21.50-27.41% one-row FFN gain; separate numerical track, later quality and historical timing evidence retained |
@@ -58,6 +58,11 @@ The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its
 callback support is distinct from the unavailable legacy traffic counters.
 The official binary was not rebuilt for the diagnostic.
+
+Its later opt-in module capture now verifies the actual official runner's
+selected sm_52 MMVQ image against M01's offline assembly. The matching code
+and whole-process counts close that evidence gap without a new timing or
+runtime claim. No global forced-JIT setting is recommended.
 
 ## Experimental Runtime Selection
 

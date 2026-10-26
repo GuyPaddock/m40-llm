@@ -1,5 +1,10 @@
 # Pinned Ollama Maxwell Q8 Dispatch
 
+2026-10-26 follow-up: [actual official-runner JIT capture](2026-10-26-maxwell-ollama-jit-inspection.md)
+now confirms the selected one-token MMVQ words/resources match the offline
+assembly below. Historical data and limitations remain labeled as originally
+observed; this follow-up is not a new throughput result.
+
 ## M01 Finding and Limits
 
 The **official shipped** Ollama 0.40.11 CUDA 12 backend executes Q8_1

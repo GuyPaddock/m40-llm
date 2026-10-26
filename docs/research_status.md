@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest official-backend inspection:** [actual pinned runner JIT](experiments/2026-10-26-maxwell-ollama-jit-inspection.md)
+confirms one-token Q8 MMVQ's 480 encoded words match M01 offline assembly.
+Actual resources are 48 registers, 384 static shared bytes, no stack/local
+storage, one barrier and five shuffle sites. Canonical 65 prompt IDs, zero
+cache reuse, four completed greedy tokens and complete 6330 domain pairs /
+16 module images are verified. Only owned processes were stopped; GPU is
+empty. Ten corruption controls protect the artifact audit. This closes the
+selected compiled-code caveat, not a speed/quality promotion or kernel-cost
+attribution. Keep Q8_1 numerical-only; current exact runtime, defaults and
+both unmet original HTTP targets are unchanged.
+
 **Latest compiler-path inspection:** [actual loaded driver-JIT modules](experiments/2026-10-26-maxwell-driver-jit-inspection.md)
 have identical qualified gate/up and prepared down/head words to embedded
 sm_52. All 100,400 project words across 135 disassembled entries and resource
@@ -519,7 +530,10 @@ not a rebuilt surrogate. Its completed M40 runner trace observes Q8_1,
 unfused 128-thread Q8 MMVQ, Q8-to-FP32 dequantization and Maxwell SGEMM,
 with zero dropped records, unknown symbols or launch errors. The bounded
 65-prompt/4-generated request is diagnostic, not a throughput trial. sm_52
-PTX is shipped; offline ptxas resource checks are not the actual driver JIT.
+PTX is shipped; that original report's ptxas checks were offline. The
+[actual-JIT follow-up](experiments/2026-10-26-maxwell-ollama-jit-inspection.md)
+now verifies the selected one-token MMVQ words/resources against that
+assembly; other entries are not retrospectively covered by this equality.
 The source pin, compatibility scope, licenses, raw data and limitations are
 recorded. No kernel, runtime default or acceptance gate changes.
 
