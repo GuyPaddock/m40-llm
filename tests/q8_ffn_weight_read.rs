@@ -136,7 +136,13 @@ fn download(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn check_case(ctx: &CudaContext, k: usize, hidden: usize, rows: usize) -> Result<()> {
+fn check_case(
+    ctx: &CudaContext,
+    k: usize,
+    hidden: usize,
+    rows: usize,
+    gap: Option<usize>,
+) -> Result<()> {
     let mut hosts = Vec::new();
     let mut expected = Vec::new();
     for seed in [0usize, 3] {
@@ -165,6 +171,7 @@ fn check_case(ctx: &CudaContext, k: usize, hidden: usize, rows: usize) -> Result
                     sum = sum.wrapping_add(payload).wrapping_add(u32::from(scale));
                 }
             }
+            values.extend(std::iter::repeat_n(0xa5, gap.unwrap_or(0)));
             sums.push(sum);
         }
         hosts.push((scales, values));
@@ -207,14 +214,26 @@ fn check_case(ctx: &CudaContext, k: usize, hidden: usize, rows: usize) -> Result
         let resident = CudaContext::total_device_bytes();
         let before = profile::snapshot();
         unsafe {
-            ctx.ffn_q8_weight_checksum_async(
-                scales,
-                values,
-                out,
-                rows as i32,
-                hidden as i32,
-                k as i32,
-            )?;
+            if let Some(gap) = gap {
+                ctx.ffn_q8_weight_checksum_pitched_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    gap as i32,
+                )?;
+            } else {
+                ctx.ffn_q8_weight_checksum_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                )?;
+            }
         }
         let after = profile::snapshot();
         let delta = profile::counter_delta(&before, &after);
@@ -272,8 +291,86 @@ fn test_weight_reads_preserve_checksums_guards_and_ownership() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for (k, hidden) in [(32, 1), (160, 7), (2048, 17)] {
         for rows in [1, 4] {
-            check_case(&ctx, k, hidden, rows)?;
+            check_case(&ctx, k, hidden, rows, None)?;
         }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Both pitches and the original kernel preserve identical modular sums,
+/// padding/guards, ordered producers, reuse and allocation ownership.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_pitched_weight_reads_ignore_gaps_and_preserve_ownership() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, n) in [(128, 1), (640, 7), (2048, 17)] {
+        for rows in [1, 4] {
+            for gap in [None, Some(0), Some(128)] {
+                check_case(&ctx, k, n, rows, gap)?;
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Unsupported gaps, alignment/overflow errors and output aliasing in the
+/// padding itself fail before any work or mutation of live device storage.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_pitched_weight_reads_reject_invalid_full_spans() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let plane = upload(&ctx, &[0x23; 512])?;
+        let output = upload(&ctx, &[0x45; 128])?;
+        let s = [plane.as_ptr(); 2];
+        let v = s;
+        let o = output.as_mut_ptr();
+        let before = profile::snapshot();
+        unsafe {
+            for gap in [-1, 32, 64, 256, i32::MAX] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, o, 1, 1, 128, gap)
+                    .is_err());
+            }
+            for k in [0, 32, 160, i32::MAX] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, o, 1, 1, k, 128)
+                    .is_err());
+            }
+            for bad in [
+                std::ptr::null(),
+                plane.as_ptr().cast::<u8>().add(4).cast(),
+                (usize::MAX - 127) as *const c_void,
+            ] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, [bad; 2], o, 1, 1, 128, 128)
+                    .is_err());
+            }
+            for out in [
+                std::ptr::null_mut(),
+                o.cast::<u8>().add(2).cast(),
+                plane.as_mut_ptr().cast::<u8>().add(128).cast(),
+            ] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, out, 1, 1, 128, 128)
+                    .is_err());
+            }
+            assert!(ctx
+                .ffn_q8_weight_checksum_pitched_async(s, v, o, 2, 1, 128, 128)
+                .is_err());
+        }
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()),
+            Default::default()
+        );
+        assert_eq!(download(&ctx, &plane)?, vec![0x23; 512]);
+        assert_eq!(download(&ctx, &output)?, vec![0x45; 128]);
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())

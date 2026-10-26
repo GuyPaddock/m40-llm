@@ -1,5 +1,6 @@
 mod ablation;
 mod access;
+mod column_gap;
 mod fixture;
 mod joint;
 mod packet;
@@ -129,6 +130,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         manifest["weight_read_contract"] = json!({
             "diagnostic":"four-value/128-thread modular u32 weight checksums; no activations or inference output",
             "has_measured_dram_traffic":false,"runtime_integration_allowed":false});
+        manifest["weight_read_column_gap_bytes"] = if args.ffn_weight_read_gap {
+            json!([0, 128])
+        } else {
+            serde_json::Value::Null
+        };
     }
     write_record(&mut output, manifest)?;
     for layer in &inputs.artifact.layers {

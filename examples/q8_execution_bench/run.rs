@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Add one fixed 128-byte payload column-gap read diagnostic.
+    #[arg(long, requires = "ffn_weight_read")]
+    ffn_weight_read_gap: bool,
     /// Two original per-thread FFN tasks in one payload; scale planes unchanged.
     #[arg(long,requires="ffn_inputs",conflicts_with_all=["prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     ffn_f32_task_pairs: bool,
@@ -616,6 +619,26 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// A column-gap diagnostic requires the explicit read experiment and
+    /// captured provenance; ordinary inference/other experiments cannot select it.
+    #[test]
+    fn test_column_gap_requires_the_read_diagnostic() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_weight_read_gap);
+        assert!(parse(&["--ffn-weight-read-gap"]).is_err());
+        let valid = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-weight-read",
+            "--ffn-weight-read-gap",
+        ];
+        assert!(parse(&valid).unwrap().ffn_weight_read_gap);
+        assert!(parse(&[valid.as_slice(), &["--ffn-f32-task-pairs"]].concat()).is_err());
+    }
 
     /// Original-thread task packets require captured inputs and cannot
     /// silently combine with a different arithmetic or storage experiment.

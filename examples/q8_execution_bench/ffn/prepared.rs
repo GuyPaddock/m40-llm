@@ -30,6 +30,33 @@ fn split_planes(weight: &DeviceQ8ExecutionWeight) -> Result<(&DeviceBuffer, &Dev
 }
 
 impl PreparedFfnWeights {
+    pub fn prepare_column_gap(&self) -> Result<super::column_gap::GappedPayloads> {
+        super::column_gap::GappedPayloads::new(&self.ctx, &self.host, self.bytes)
+    }
+
+    /// # Safety
+    /// Alternate payloads use 128-byte column gaps and remain live through
+    /// decode completion; output is a disjoint rows*hidden*2 u32 span.
+    pub unsafe fn enqueue_checksum_pitched(
+        &self,
+        alternate: Option<[*const c_void; 2]>,
+        output: *mut c_void,
+        rows: usize,
+    ) -> Result<()> {
+        let (gs, gv) = split_planes(&self.device[0])?;
+        let (us, uv) = split_planes(&self.device[1])?;
+        let shape = self.device[0].key().source.shape();
+        self.ctx.ffn_q8_weight_checksum_pitched_async(
+            [gs.as_ptr(), us.as_ptr()],
+            alternate.unwrap_or([gv.as_ptr(), uv.as_ptr()]),
+            output,
+            i32::try_from(rows)?,
+            i32::try_from(shape.output_dim())?,
+            i32::try_from(shape.input_dim())?,
+            if alternate.is_some() { 128 } else { 0 },
+        )
+    }
+
     /// # Safety
     /// Output is a live, disjoint rows*hidden*2 u32 span until decode drains.
     pub unsafe fn enqueue_checksum(&self, output: *mut c_void, rows: usize) -> Result<()> {

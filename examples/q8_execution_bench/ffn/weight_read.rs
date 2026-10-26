@@ -59,6 +59,13 @@ struct ReadProbe {
     stop: CudaEvent,
 }
 
+#[derive(Clone, Copy)]
+enum ReadLayout<'a> {
+    Original,
+    Pitched,
+    ColumnGap(&'a super::column_gap::GappedPayloads),
+}
+
 fn time_control(pipeline: &FfnPipeline<'_>, stage: Stage, iterations: usize) -> Result<Value> {
     let before = profile::snapshot();
     let mut measurement = pipeline.time(stage, iterations)?;
@@ -93,17 +100,31 @@ impl ReadProbe {
         })
     }
 
-    fn enqueue(&self, pipeline: &FfnPipeline<'_>) -> Result<()> {
+    fn enqueue(&self, pipeline: &FfnPipeline<'_>, layout: ReadLayout<'_>) -> Result<()> {
         unsafe {
-            pipeline
-                .prepared
-                .as_ref()
-                .context("missing read planes")?
-                .enqueue_checksum(self.output.pointer(), pipeline.rows)
+            let prepared = pipeline.prepared.as_ref().context("missing read planes")?;
+            match layout {
+                ReadLayout::Original => {
+                    prepared.enqueue_checksum(self.output.pointer(), pipeline.rows)
+                }
+                ReadLayout::Pitched => {
+                    prepared.enqueue_checksum_pitched(None, self.output.pointer(), pipeline.rows)
+                }
+                ReadLayout::ColumnGap(payloads) => prepared.enqueue_checksum_pitched(
+                    Some(payloads.pointers()),
+                    self.output.pointer(),
+                    pipeline.rows,
+                ),
+            }
         }
     }
 
-    fn time(&self, pipeline: &FfnPipeline<'_>, iterations: usize) -> Result<Value> {
+    fn time(
+        &self,
+        pipeline: &FfnPipeline<'_>,
+        iterations: usize,
+        layout: ReadLayout<'_>,
+    ) -> Result<Value> {
         ensure!(iterations > 0, "read timing needs iterations");
         pipeline.drain()?;
         let before = profile::snapshot();
@@ -111,12 +132,16 @@ impl ReadProbe {
         let began = Instant::now();
         self.start.record(CudaStream::Decode)?;
         for _ in 0..iterations {
-            self.enqueue(pipeline)?;
+            self.enqueue(pipeline, layout)?;
         }
         self.stop.record(CudaStream::Decode)?;
         let after = profile::snapshot();
         let counters = profile::counter_delta(&before, &after);
-        let op = "ffn_q8_weight_checksum_128";
+        let op = if matches!(layout, ReadLayout::Original) {
+            "ffn_q8_weight_checksum_128"
+        } else {
+            "ffn_q8_weight_checksum_pitched_128"
+        };
         let launches = after.by_op.get(op).map_or(0, |v| v.launches)
             - before.by_op.get(op).map_or(0, |v| v.launches);
         ensure!(
@@ -134,7 +159,8 @@ impl ReadProbe {
         let gpu_ms = f64::from(self.start.elapsed_sync(&self.stop, "ffn_read_benchmark")?)
             / iterations as f64;
         Ok(
-            json!({"stage":"weight_read_checksum","gpu_ms":gpu_ms,"iterations":iterations,
+            json!({"stage":match layout {ReadLayout::Original=>"weight_read_checksum",ReadLayout::Pitched=>"pitched_read_zero_gap",ReadLayout::ColumnGap(_)=>"pitched_read_column_gap"},"gpu_ms":gpu_ms,"iterations":iterations,
+            "column_gap_bytes":if matches!(layout,ReadLayout::ColumnGap(_)) {128} else {0},
             "started_unix_us":started_unix_us,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
             "enqueue_counters":counters,"operation":op,"blocks_per_row":pipeline.hidden_dim,"threads":128,"shared_bytes":1024,
@@ -187,40 +213,98 @@ pub(super) fn benchmark_case(
 ) -> Result<()> {
     pipeline.select_kernel(FfnKernel::SplitF32x4)?;
     let probe = ReadProbe::new(pipeline)?;
+    let gap = if args.ffn_weight_read_gap {
+        Some(
+            pipeline
+                .prepared
+                .as_ref()
+                .context("missing gap control")?
+                .prepare_column_gap()?,
+        )
+    } else {
+        None
+    };
     let resident = CudaContext::total_device_bytes();
     let prepared_before = serde_json::to_value(pipeline.model.q8_execution_stats())?;
-    probe.enqueue(pipeline)?;
+    probe.enqueue(pipeline, ReadLayout::Original)?;
     let checks = probe.verify(pipeline, layer)?;
+    if let Some(gap) = &gap {
+        for layout in [ReadLayout::Pitched, ReadLayout::ColumnGap(gap)] {
+            probe.enqueue(pipeline, layout)?;
+            ensure!(
+                probe.verify(pipeline, layer)? == checks,
+                "pitched checksum differs from original/CPU"
+            );
+        }
+        gap.verify()?;
+    }
     write_record(
         output,
         json!({"kind":"ffn_read_validation","layer_id":layer.source.layer_id,"rows":pipeline.rows,
         "checks":checks,"real_ffn_checks":validation::validate(pipeline, layer)?,
         "preparation":pipeline.prepared.as_ref().unwrap().report,"real_scratch_bytes":pipeline.scratch_bytes(),
+        "column_gap_preparation":gap.as_ref().map(|g|&g.report),
         "tracked_device_bytes":resident,"runtime_integration_allowed":false}),
     )?;
     let control_warmup = pipeline.warm_up(1000.0, 256)?;
     let read_warmup = warmup::measure(100.0, |count| {
-        Ok(probe.time(pipeline, count)?["gpu_ms"].as_f64().unwrap())
+        Ok(probe.time(pipeline, count, ReadLayout::Original)?["gpu_ms"]
+            .as_f64()
+            .unwrap())
     })?;
+    let mut gap_warmups = Vec::new();
+    if let Some(gap) = &gap {
+        for layout in [ReadLayout::Pitched, ReadLayout::ColumnGap(gap)] {
+            gap_warmups.push(warmup::measure(100.0, |count| {
+                Ok(probe.time(pipeline, count, layout)?["gpu_ms"]
+                    .as_f64()
+                    .unwrap())
+            })?);
+        }
+    }
     write_record(
         output,
         json!({"kind":"ffn_read_warmup","layer_id":layer.source.layer_id,"rows":pipeline.rows,
-        "real_ffn":control_warmup,"read_checksum":read_warmup,"gpu_after":inspect_gpu()?}),
+        "real_ffn":control_warmup,"read_checksum":read_warmup,"pitched_read_warmups":gap_warmups,"gpu_after":inspect_gpu()?}),
     )?;
+    let mut gap_pairs = Vec::new();
     for trial in 0..args.trials {
         let gpu_before = inspect_gpu()?;
         let mut measurements = Vec::new();
-        for arm in if trial % 2 == 0 {
-            [0, 1, 2, 3]
+        let mut arms = if gap.is_some() {
+            vec![0, 4, 5, 1, 2, 3]
         } else {
-            [3, 2, 1, 0]
-        } {
+            vec![0, 1, 2, 3]
+        };
+        if trial % 2 == 1 {
+            arms.reverse();
+        }
+        for arm in arms {
             measurements.push(match arm {
-                0 => probe.time(pipeline, args.iterations)?,
+                0 => probe.time(pipeline, args.iterations, ReadLayout::Original)?,
                 1 => time_control(pipeline, Stage::GateUpSwiglu, args.iterations)?,
                 2 => time_control(pipeline, Stage::IsolatedDown, args.iterations)?,
+                4 => probe.time(pipeline, args.iterations, ReadLayout::Pitched)?,
+                5 => probe.time(
+                    pipeline,
+                    args.iterations,
+                    ReadLayout::ColumnGap(gap.as_ref().unwrap()),
+                )?,
                 _ => time_control(pipeline, Stage::Complete, args.iterations)?,
             });
+        }
+        if gap.is_some() {
+            let get = |stage| -> Result<f64> {
+                measurements
+                    .iter()
+                    .find(|m| m["stage"] == stage)
+                    .and_then(|m| m["gpu_ms"].as_f64())
+                    .context("missing pitched read timing")
+            };
+            gap_pairs.push((
+                get("pitched_read_zero_gap")?,
+                get("pitched_read_column_gap")?,
+            ));
         }
         ensure!(
             CudaContext::total_device_bytes() == resident,
@@ -233,11 +317,28 @@ pub(super) fn benchmark_case(
             "interpretation":"standalone read/checksum versus real gate/up, down and complete FFN; never inference speedup or measured bandwidth"}),
         )?;
     }
+    if gap.is_some() {
+        let mut result = super::ablation::summarize(&gap_pairs)?;
+        result["control_median_ms"] = result
+            .as_object_mut()
+            .unwrap()
+            .remove("native_median_ms")
+            .unwrap();
+        result["interpretation"] = json!("read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration");
+        write_record(
+            output,
+            json!({"kind":"ffn_read_gap_screen","layer_id":layer.source.layer_id,"rows":pipeline.rows,
+            "result":result,"runtime_integration_allowed":false}),
+        )?;
+    }
     ensure!(
         probe.verify(pipeline, layer)? == checks,
         "read checksum changed after scratch reuse"
     );
     pipeline.verify_guards_and_inputs(layer)?;
+    if let Some(gap) = &gap {
+        gap.verify()?;
+    }
     ensure!(
         serde_json::to_value(pipeline.model.q8_execution_stats())? == prepared_before,
         "read diagnostic changed the qualified down/vocabulary cache"
