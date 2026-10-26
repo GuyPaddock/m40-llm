@@ -134,6 +134,9 @@ impl PreparedFfnWeights {
             super::pipeline::FfnKernel::SplitF32x4K2048 => {
                 CudaContext::ffn_q8_split_f32_k2048_async
             }
+            super::pipeline::FfnKernel::SplitF32x4Unfused => {
+                CudaContext::ffn_q8_split_unfused_f32_async
+            }
             _ => anyhow::bail!("split FFN consumer requires a separate-plane kernel"),
         };
         enqueue(

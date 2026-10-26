@@ -23,6 +23,7 @@ pub(super) enum FfnKernel {
     SplitF32x4,
     SplitF32x4TwoColumns,
     SplitF32x4K2048,
+    SplitF32x4Unfused,
     JointF32x4,
 }
 
@@ -35,6 +36,7 @@ impl Serialize for FfnKernel {
             Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
             Self::SplitF32x4TwoColumns => serializer.serialize_str("split-f32x4-cols2-128"),
             Self::SplitF32x4K2048 => serializer.serialize_str("split-f32x4-k2048-128"),
+            Self::SplitF32x4Unfused => serializer.serialize_str("split-f32x4-unfused-128"),
             Self::JointF32x4 => serializer.serialize_str("joint-f32x4-128"),
         }
     }
@@ -55,6 +57,7 @@ impl FfnKernel {
             Self::SplitF32x4
                 | Self::SplitF32x4TwoColumns
                 | Self::SplitF32x4K2048
+                | Self::SplitF32x4Unfused
                 | Self::JointF32x4
         )
     }
@@ -67,6 +70,7 @@ impl FfnKernel {
             Self::SplitF32x4
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
+            | Self::SplitF32x4Unfused
             | Self::JointF32x4 => 128,
         }
     }
@@ -79,6 +83,7 @@ impl FfnKernel {
             | Self::SplitF32x4
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
+            | Self::SplitF32x4Unfused
             | Self::JointF32x4 => true,
         }
     }
@@ -91,6 +96,7 @@ impl FfnKernel {
             | Self::SplitF32x4
             | Self::SplitF32x4TwoColumns
             | Self::SplitF32x4K2048
+            | Self::SplitF32x4Unfused
             | Self::JointF32x4 => true,
         }
     }
@@ -367,7 +373,8 @@ impl<'a> FfnPipeline<'a> {
                 self.rows as i32,
                 self.hidden_dim as i32,
                 self.d_model as i32,
-                has_intermediates.then_some((self.gate.pointer(), self.up.pointer())),
+                (has_intermediates || self.kernel == FfnKernel::SplitF32x4Unfused)
+                    .then_some((self.gate.pointer(), self.up.pointer())),
                 self.kernel,
             )
         }
@@ -644,7 +651,28 @@ impl<'a> FfnPipeline<'a> {
             self.enqueue(stage)?;
         }
         self.stop.record(stop_stream)?;
-        let enqueued = profile::counter_delta(&before, &profile::snapshot());
+        let after = profile::snapshot();
+        let enqueued = profile::counter_delta(&before, &after);
+        let unfused_dispatch = if self.kernel == FfnKernel::SplitF32x4Unfused {
+            let expected = if matches!(stage, Stage::IsolatedDown) {
+                0
+            } else {
+                iterations as u64
+            };
+            let launches = |op| {
+                after.by_op.get(op).map_or(0, |v| v.launches)
+                    - before.by_op.get(op).map_or(0, |v| v.launches)
+            };
+            let projections = launches("ffn_q8_split_unfused_projection");
+            let swiglu = launches("ffn_q8_split_unfused_swiglu");
+            ensure!(
+                projections == 2 * expected && swiglu == expected,
+                "wrong unfused FFN dispatch"
+            );
+            Some(json!({"projection_launches":projections,"swiglu_launches":swiglu}))
+        } else {
+            None
+        };
         ensure!(
             enqueued.device_allocs == 0
                 && enqueued.device_frees == 0
@@ -659,7 +687,8 @@ impl<'a> FfnPipeline<'a> {
         Ok(
             json!({"stage":stage,"gpu_ms":gpu_ms,"host_enqueue_and_completion_ms":wall_ms,"iterations":iterations,
             "started_unix_us":started_unix_us,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
-            "enqueue_counters":enqueued,"completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
+            "enqueue_counters":enqueued,"unfused_dispatch":unfused_dispatch,
+            "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }
 

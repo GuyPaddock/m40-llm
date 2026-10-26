@@ -167,6 +167,19 @@ specifically to `split`, families `down,vocabulary`, native-order down and
 the documented C11 flags. It does not qualify all-family preparation, another
 model/workload or a frozen model-quality baseline.
 
+## Unfused Gate/Up Probe
+
+The independent fixed unfused gate/up experiment uses
+`q8_execution_bench --ffn-f32-unfused` with the same frozen FFN inputs.
+It keeps the qualified one-column split control and prepared down/head,
+uses two fixed four-column/128-thread projections on the existing planes,
+then applies the control-order SwiGLU expression. Gate/up scratch is reused,
+not allocated during enqueue. All three candidate launches and intermediate
+traffic are included; complete FFN includes the unchanged fourth down launch.
+`CudaContext::ffn_q8_split_unfused_f32_async` requires explicit caller-owned
+gate/up buffers and does not select a generation policy. See the
+[bounded hypothesis](experiments/2026-10-25-maxwell-unfused-ffn-hypothesis.md).
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only

@@ -27,6 +27,7 @@ enum SplitKernel {
     Dynamic,
     TwoColumns,
     FixedK2048,
+    Unfused,
 }
 
 fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
@@ -166,6 +167,8 @@ fn compare_case(
     }
     let mut split_output: Option<Vec<f32>> = None;
     let mut split_projections: Option<[Vec<f32>; 2]> = None;
+    let unfused_gate = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:unfused-gate")?;
+    let unfused_up = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:unfused-up")?;
     for (variant, split_kernel) in Q8FfnFp32Variant::ALL
         .into_iter()
         .chain([
@@ -177,6 +180,7 @@ fn compare_case(
             (None, SplitKernel::Dynamic),
             (None, SplitKernel::TwoColumns),
             (None, SplitKernel::FixedK2048),
+            (None, SplitKernel::Unfused),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
@@ -184,13 +188,16 @@ fn compare_case(
             SplitKernel::Dynamic => CudaContext::ffn_q8_split_f32_async,
             SplitKernel::TwoColumns => CudaContext::ffn_q8_split_f32_two_columns_async,
             SplitKernel::FixedK2048 => CudaContext::ffn_q8_split_f32_k2048_async,
+            SplitKernel::Unfused => CudaContext::ffn_q8_split_unfused_f32_async,
         };
         unsafe {
-            ctx.memcpy_h2d(
-                output.as_mut_ptr(),
-                output_values.as_ptr().cast(),
-                output.bytes(),
-            )?;
+            for buffer in [&output, &unfused_gate, &unfused_up] {
+                ctx.memcpy_h2d(
+                    buffer.as_mut_ptr(),
+                    output_values.as_ptr().cast(),
+                    buffer.bytes(),
+                )?;
+            }
         }
         let before = profile::snapshot();
         unsafe {
@@ -215,12 +222,22 @@ fn compare_case(
                     rows as i32,
                     hidden as i32,
                     k as i32,
-                    None,
+                    (split_kernel == SplitKernel::Unfused).then_some((
+                        unfused_gate.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                        unfused_up.as_mut_ptr().cast::<f32>().add(GUARD).cast(),
+                    )),
                 )?;
             }
         }
         let delta = profile::counter_delta(&before, &profile::snapshot());
-        assert_eq!(delta.launches, 1);
+        assert_eq!(
+            delta.launches,
+            if split_kernel == SplitKernel::Unfused && variant.is_none() {
+                3
+            } else {
+                1
+            }
+        );
         assert_eq!(delta.device_allocs, 0);
         assert_eq!(delta.device_frees, 0);
         assert_eq!(delta.h2d_copies, 0);
@@ -228,6 +245,10 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
+        if split_kernel == SplitKernel::Unfused {
+            read(ctx, &unfused_gate)?;
+            read(ctx, &unfused_up)?;
+        }
         if variant.is_none() {
             if split_kernel != SplitKernel::Dynamic {
                 assert_eq!(
@@ -367,6 +388,8 @@ fn compare_case(
 /// experiment must keep one-column gate/up/SwiGLU bits, including odd tails.
 /// The K=2048 address specialization must preserve those bits on its supported
 /// width; other widths remain covered by the unchanged dynamic kernels.
+/// The fixed unfused decomposition must preserve the same intermediate and
+/// completed bits while counting three launches and reusing guarded scratch.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -405,6 +428,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_f32_async,
                 CudaContext::ffn_q8_split_f32_two_columns_async,
                 CudaContext::ffn_q8_split_f32_k2048_async,
+                CudaContext::ffn_q8_split_unfused_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),
@@ -481,6 +505,18 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 (output.as_mut_ptr(), output.as_mut_ptr()),
                 (std::ptr::null_mut(), output.as_mut_ptr()),
             ] {
+                assert!(ctx
+                    .ffn_q8_split_unfused_f32_async(
+                        input.as_ptr(),
+                        [weight.as_ptr(); 2],
+                        [weight.as_ptr(); 2],
+                        output.as_mut_ptr(),
+                        1,
+                        1,
+                        32,
+                        Some((g, u)),
+                    )
+                    .is_err());
                 assert!(ctx
                     .ffn_q8_f32_capture_async(
                         input.as_ptr(),

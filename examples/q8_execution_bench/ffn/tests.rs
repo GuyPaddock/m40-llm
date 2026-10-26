@@ -310,6 +310,72 @@ fn test_prepared_down_warp_keeps_complete_ffn_bits_and_cache() -> Result<()> {
     Ok(())
 }
 
+/// The unfused experiment must retain gate/up, hidden and complete output
+/// bits using existing scratch and immutable prepared down. Repeated timing
+/// must count all three gate/up launches and the fourth down launch.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build(0);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layer = sample_layer(&model)?;
+        let cache = serde_json::to_value(model.q8_execution_stats())?;
+        for rows in [1, 4] {
+            let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
+            pipeline.prepare_split_weights(&layer)?;
+            pipeline.select_kernel(FfnKernel::SplitF32x4)?;
+            validation::validate(&pipeline, &layer)?;
+            let read = || -> Result<Vec<u32>> {
+                let mut bits = Vec::new();
+                for buffer in [
+                    &pipeline.gate,
+                    &pipeline.up,
+                    &pipeline.hidden,
+                    &pipeline.output,
+                ] {
+                    bits.extend(buffer.read(&model.cuda)?.into_iter().map(f32::to_bits));
+                }
+                Ok(bits)
+            };
+            let expected = read()?;
+            let capacity = pipeline.scratch_bytes();
+            let resident = CudaContext::total_device_bytes();
+            pipeline.select_kernel(FfnKernel::SplitF32x4Unfused)?;
+            validation::validate(&pipeline, &layer)?;
+            let mut actual = Vec::new();
+            for buffer in [
+                &pipeline.gate,
+                &pipeline.up,
+                &pipeline.hidden,
+                &pipeline.output,
+            ] {
+                actual.extend(buffer.read(&model.cuda)?.into_iter().map(f32::to_bits));
+            }
+            assert_eq!(actual, expected);
+            let timing = pipeline.time(Stage::Complete, 7)?;
+            assert_eq!(timing["enqueue_counters"]["launches"], 28);
+            assert_eq!(timing["unfused_dispatch"]["projection_launches"], 14);
+            assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
+            assert_eq!(pipeline.scratch_bytes(), capacity);
+            assert_eq!(CudaContext::total_device_bytes(), resident);
+            pipeline.verify_guards_and_inputs(&layer)?;
+        }
+        assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
 /// Complete-FFN screening needs a reproducible positive paired interval and
 /// at least 5% gain. Bad, tied or regressing timing samples cannot qualify.
 #[test]

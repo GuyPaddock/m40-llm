@@ -108,6 +108,7 @@ enum SplitFfnKernel {
     Dynamic,
     TwoColumns,
     FixedK2048,
+    Unfused,
 }
 
 impl CudaContext {
@@ -281,6 +282,38 @@ impl CudaContext {
         )
     }
 
+    /// One fixed three-launch decomposition on existing split planes.
+    /// No allocation, copy, synchronization or runtime selection is added.
+    ///
+    /// # Safety
+    /// Same spans and producer/lifetime contract as `ffn_q8_split_f32_async`.
+    /// Both intermediate buffers are required, hold rows*hidden FP32 values,
+    /// and remain disjoint from output/input/weights through decode completion.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_unfused_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::Unfused,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     unsafe fn enqueue_split_f32(
         &self,
@@ -296,6 +329,10 @@ impl CudaContext {
     ) -> Result<()> {
         ensure!(!matches!(kernel,SplitFfnKernel::FixedK2048) || k==2048,
             "fixed-width split FP32 FFN requires K=2048; use the dynamic split API for other widths");
+        ensure!(
+            !matches!(kernel, SplitFfnKernel::Unfused) || intermediates.is_some(),
+            "unfused split FFN requires caller-owned gate/up scratch"
+        );
         ensure!(
             matches!(rows, 1 | 4) && hidden > 0 && k > 0 && k % 32 == 0,
             "split FP32 FFN requires rows 1/4 and complete Q8 blocks"
@@ -337,6 +374,7 @@ impl CudaContext {
             SplitFfnKernel::Dynamic => ffi::m40llm_ffn_q8_split_f32_async,
             SplitFfnKernel::TwoColumns => ffi::m40llm_ffn_q8_split_f32_two_columns_async,
             SplitFfnKernel::FixedK2048 => ffi::m40llm_ffn_q8_split_f32_k2048_async,
+            SplitFfnKernel::Unfused => ffi::m40llm_ffn_q8_split_unfused_f32_async,
         };
         let rc = enqueue(
             self.inner.raw.as_ptr(),
@@ -351,10 +389,17 @@ impl CudaContext {
             k,
         );
         ensure!(rc == 0, "m40llm_ffn_q8_split_f32_async failed: {rc}");
+        if matches!(kernel, SplitFfnKernel::Unfused) {
+            record_async_kernel("ffn_q8_split_unfused_projection");
+            record_async_kernel("ffn_q8_split_unfused_projection");
+            record_async_kernel("ffn_q8_split_unfused_swiglu");
+            return Ok(());
+        }
         record_async_kernel(match kernel {
             SplitFfnKernel::Dynamic => "ffn_q8_split_f32x4_128",
             SplitFfnKernel::TwoColumns => "ffn_q8_split_f32x4_cols2_128",
             SplitFfnKernel::FixedK2048 => "ffn_q8_split_f32x4_k2048_128",
+            SplitFfnKernel::Unfused => unreachable!("three launches recorded above"),
         });
         Ok(())
     }
