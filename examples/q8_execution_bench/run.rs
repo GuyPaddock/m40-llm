@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// One exact signed-byte conversion comparison on the qualified split FFN.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["prepared_f32_warp","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg"])]
+    ffn_f32_byte_permute: bool,
     /// One fused split-plane cache-policy comparison with L2-only weight loads.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["prepared_f32_warp","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused"])]
     ffn_f32_weight_cg: bool,
@@ -576,7 +579,7 @@ mod argument_tests {
     /// and leave the original projection CLI valid. Two-column split work
     /// cannot silently combine with old controls or another ablation. Output
     /// reduction additionally requires its immutable QKV peer evidence.
-    /// Cache-policy work requires the same provenance and is exclusive.
+    /// Cache-policy and byte-conversion work require provenance and are exclusive.
     #[test]
     fn test_ffn_arguments_preserve_explicit_modes() {
         let parse = |extra: &[&str]| {
@@ -609,6 +612,32 @@ mod argument_tests {
         assert!(!parse(&flags).unwrap().prepared_f32_warp);
         assert!(!parse(&flags).unwrap().ffn_f32_unfused);
         assert!(!parse(&flags).unwrap().ffn_f32_weight_cg);
+        assert!(!parse(&flags).unwrap().ffn_f32_byte_permute);
+        assert!(
+            parse(&[flags.as_slice(), &["--ffn-f32-byte-permute"]].concat())
+                .unwrap()
+                .ffn_f32_byte_permute
+        );
+        assert!(parse(&["--ffn-f32-byte-permute"]).is_err());
+        for other in [
+            "--prepared-f32-warp",
+            "--qkv-f32-warp",
+            "--output-f32-warp",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-split-two-columns",
+            "--ffn-f32-joint",
+            "--ffn-f32-fixed-k",
+            "--ffn-f32-unfused",
+            "--ffn-f32-weight-cg",
+        ] {
+            assert!(
+                parse(&[flags.as_slice(), &["--ffn-f32-byte-permute", other]].concat()).is_err()
+            );
+        }
         assert!(
             parse(&[flags.as_slice(), &["--ffn-f32-weight-cg"]].concat())
                 .unwrap()

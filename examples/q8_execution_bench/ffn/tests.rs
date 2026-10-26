@@ -364,7 +364,12 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                assert_eq!(timing["weight_cg_dispatch"]["fused_launches"], 7);
+                let dispatch = if kernel == FfnKernel::SplitF32x4WeightCg {
+                    "weight_cg_dispatch"
+                } else {
+                    "byte_permute_dispatch"
+                };
+                assert_eq!(timing[dispatch]["fused_launches"], 7);
             }
             for counter in [
                 "device_allocs",
@@ -400,6 +405,14 @@ fn test_unfused_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_weight_cg_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4WeightCg)
+}
+
+/// Exact byte-permute conversion must preserve all captured projection, hidden
+/// and completed down bits with unchanged storage and actual fused dispatch.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_byte_permute_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4BytePermute)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

@@ -39,7 +39,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         || args.ffn_f32_joint
         || args.ffn_f32_fixed_k
         || args.ffn_f32_unfused
-        || args.ffn_f32_weight_cg;
+        || args.ffn_f32_weight_cg
+        || args.ffn_f32_byte_permute;
     ensure!(
         !cfg!(debug_assertions) && args.rows == [1, 4],
         "FFN baseline requires release and --rows 1,4"
@@ -85,10 +86,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "request_pattern_hypothesis":if args.ffn_f32_coalesced_pairs {Some(access::describe_requests(inputs.artifact.plan.d_model))} else {None},
         "is_q81_numerical_track":args.ffn_q81,
         "q81_variants":if args.ffn_q81 {json!(m40_llm::cuda::Q8FfnQ81Launch::ALL)} else {serde_json::Value::Null},
-        "fp32_variants":if args.ffn_f32_weight_cg {json!([FfnKernel::SplitF32x4WeightCg])} else if args.ffn_f32_unfused {json!([FfnKernel::SplitF32x4Unfused])} else if args.ffn_f32_fixed_k {json!([FfnKernel::SplitF32x4K2048])} else if args.ffn_f32_joint {json!([FfnKernel::JointF32x4])} else if args.ffn_f32_split_two_columns {json!([FfnKernel::SplitF32x4TwoColumns])} else if args.ffn_f32_split_planes {json!([FfnKernel::SplitF32x4])} else if args.ffn_f32_coalesced_pairs {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128CoalescedPairs])} else if args.ffn_f32_factored_scales {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128FactoredScales])} else if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
+        "fp32_variants":if args.ffn_f32_byte_permute {json!([FfnKernel::SplitF32x4BytePermute])} else if args.ffn_f32_weight_cg {json!([FfnKernel::SplitF32x4WeightCg])} else if args.ffn_f32_unfused {json!([FfnKernel::SplitF32x4Unfused])} else if args.ffn_f32_fixed_k {json!([FfnKernel::SplitF32x4K2048])} else if args.ffn_f32_joint {json!([FfnKernel::JointF32x4])} else if args.ffn_f32_split_two_columns {json!([FfnKernel::SplitF32x4TwoColumns])} else if args.ffn_f32_split_planes {json!([FfnKernel::SplitF32x4])} else if args.ffn_f32_coalesced_pairs {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128CoalescedPairs])} else if args.ffn_f32_factored_scales {json!([m40_llm::cuda::Q8FfnFp32Variant::PackedWarp128FactoredScales])} else if args.ffn_f32_ablation {json!(m40_llm::cuda::Q8FfnFp32Variant::ALL)} else {serde_json::Value::Null},
+        "byte_conversion":if args.ffn_f32_byte_permute {json!({"control":"signed-integer-to-float","candidate":"exact-byte-permute-bias","geometry":"one-column/four-value/128","prepared_down":"unchanged"})} else {serde_json::Value::Null},
         "cache_policy":if args.ffn_f32_weight_cg {json!({"control_weights":"nc","candidate_weights":"cg","activations":"nc","scope":"fixed fused geometry, planes, FP32 association and prepared down"})} else {serde_json::Value::Null},
         "activation_quantization":{"is_enabled":args.ffn_q81,"control_gpu_ms":0.0,"candidate_gpu_ms":if args.ffn_q81 {json!("measured separately and included in gate/up and complete totals")} else {json!(0.0)}},
-        "control":if args.ffn_f32_unfused {"qualified one-column split FP32/four-value/128 versus separate fixed four-column projections and control-order SwiGLU; same planes, existing gate/up scratch and immutable down/vocabulary; all three launches included"} else if args.ffn_f32_joint {"qualified one-column split-plane FP32/four-value/128; both arms retain control and joint pairs with immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_split_two_columns || args.ffn_f32_fixed_k || args.ffn_f32_weight_cg {"qualified one-column split-plane FP32/four-value/128 gate/up/SwiGLU; same prepared gate/up pair and immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs || args.ffn_f32_split_planes {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
+        "control":if args.ffn_f32_unfused {"qualified one-column split FP32/four-value/128 versus separate fixed four-column projections and control-order SwiGLU; same planes, existing gate/up scratch and immutable down/vocabulary; all three launches included"} else if args.ffn_f32_joint {"qualified one-column split-plane FP32/four-value/128; both arms retain control and joint pairs with immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_split_two_columns || args.ffn_f32_fixed_k || args.ffn_f32_weight_cg || args.ffn_f32_byte_permute {"qualified one-column split-plane FP32/four-value/128 gate/up/SwiGLU; same prepared gate/up pair and immutable down/vocabulary; no KV or attention"} else if args.ffn_f32_factored_scales || args.ffn_f32_coalesced_pairs || args.ffn_f32_split_planes {"qualified packed FP32/128 gate/up/SwiGLU; immutable prepared down/vocabulary; no KV or attention"} else {"native FP32-activation gate/up/SwiGLU; immutable prepared down/vocabulary; no KV allocated or attention executed"},
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"}),
     )?;
@@ -101,6 +103,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 || args.ffn_f32_fixed_k
                 || args.ffn_f32_unfused
                 || args.ffn_f32_weight_cg
+                || args.ffn_f32_byte_permute
             {
                 pipeline.prepare_split_weights(layer)?;
                 write_record(

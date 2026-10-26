@@ -29,6 +29,7 @@ enum SplitKernel {
     FixedK2048,
     Unfused,
     WeightCg,
+    BytePermute,
 }
 
 fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
@@ -38,8 +39,11 @@ fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
             block[..2].copy_from_slice(&0u16.to_le_bytes());
         }
         for (lane, value) in block[2..].iter_mut().enumerate() {
-            *value = [0x80, 0x7f, 0xff, 0x00, 0x01, 0x40, 0xc0, 0x08]
-                [(lane + index + seed as usize) % 8];
+            *value = if index % 2 == 0 {
+                [0x80, 0x7f, 0xff, 0x00, 0x01, 0x40, 0xc0, 0x08][(lane + index + seed as usize) % 8]
+            } else {
+                (lane + (index / 2) * 17 + seed as usize) as u8
+            };
         }
     }
     bytes
@@ -85,6 +89,20 @@ fn compare_case(
     }
     let gate = weights(k, hidden, 0);
     let up = weights(k, hidden, 3);
+    if k >= 2048 {
+        for weight in [&gate, &up] {
+            let mut coverage = [[false; 256]; 4];
+            for block in weight.chunks_exact(34) {
+                if block[..2] == [0, 0] {
+                    continue;
+                }
+                for (index, &byte) in block[2..].iter().enumerate() {
+                    coverage[index % 4][byte as usize] = true;
+                }
+            }
+            assert!(coverage.into_iter().flatten().all(|has_byte| has_byte));
+        }
+    }
     let guard_weights = |payload: &[u8]| {
         let mut values = vec![0x5au8; payload.len() + offset + 16];
         values[offset..offset + payload.len()].copy_from_slice(payload);
@@ -183,6 +201,7 @@ fn compare_case(
             (None, SplitKernel::FixedK2048),
             (None, SplitKernel::Unfused),
             (None, SplitKernel::WeightCg),
+            (None, SplitKernel::BytePermute),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
@@ -192,6 +211,7 @@ fn compare_case(
             SplitKernel::FixedK2048 => CudaContext::ffn_q8_split_f32_k2048_async,
             SplitKernel::Unfused => CudaContext::ffn_q8_split_unfused_f32_async,
             SplitKernel::WeightCg => CudaContext::ffn_q8_split_weight_cg_f32_async,
+            SplitKernel::BytePermute => CudaContext::ffn_q8_split_byte_permute_f32_async,
         };
         unsafe {
             for buffer in [&output, &unfused_gate, &unfused_up] {
@@ -394,6 +414,8 @@ fn compare_case(
 /// The fixed unfused decomposition must preserve the same intermediate and
 /// completed bits while counting three launches and reusing guarded scratch.
 /// L2-only weight loads must preserve all qualified fused bits as well.
+/// Byte permutation must retain those bits with every byte value in every
+/// packed position, not only signed extremes or one repeated word.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -434,6 +456,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_f32_k2048_async,
                 CudaContext::ffn_q8_split_unfused_f32_async,
                 CudaContext::ffn_q8_split_weight_cg_f32_async,
+                CudaContext::ffn_q8_split_byte_permute_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),

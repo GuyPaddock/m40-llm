@@ -190,6 +190,15 @@ benchmark-only cache experiment, not a runtime or default selector. Require
 distinct sm_52 instructions and the original complete-FFN / quality / E2E
 gates described in its [bounded hypothesis](experiments/2026-10-25-maxwell-cache-ffn-hypothesis.md).
 
+`q8_execution_bench --ffn-f32-byte-permute` independently tests an exact
+signed-byte conversion using byte permutation and representable FP32 bias
+subtraction. It retains read-only loads, all scale/FMA association and the
+qualified fused geometry, planes and down/vocabulary. The explicit
+`CudaContext::ffn_q8_split_byte_permute_f32_async` API has the same buffer
+contract as the qualified split path and is benchmark-only. No activation
+quantization or runtime selector is added. See the [conversion proof and
+fixed gates](experiments/2026-10-25-maxwell-byte-ffn-hypothesis.md).
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only
