@@ -1,6 +1,8 @@
 #![cfg(all(feature = "cuda", nvcc))]
 
 mod cuda_env;
+#[path = "common/greedy_adapter_cost.rs"]
+mod greedy_adapter_cost;
 #[path = "common/q8_kv_stack.rs"]
 mod q8_kv_stack;
 
