@@ -54,6 +54,9 @@ pub enum AttentionProjectionChoice {
     #[value(name = "warp-256")]
     #[serde(rename = "warp-256")]
     Warp256,
+    #[value(name = "packed-warp-256")]
+    #[serde(rename = "packed-warp-256")]
+    PackedWarp256,
 }
 
 impl AttentionProjectionChoice {
@@ -61,6 +64,7 @@ impl AttentionProjectionChoice {
         match self {
             Self::Native => Q8AttentionProjectionBackend::Native,
             Self::Warp256 => Q8AttentionProjectionBackend::Warp256,
+            Self::PackedWarp256 => Q8AttentionProjectionBackend::PackedWarp256,
         }
     }
 }
@@ -73,6 +77,7 @@ pub enum ControlChoice {
     NativeSequential,
     QualifiedPacked128Sgemm,
     QualifiedSplitSgemm,
+    QualifiedWarpSgemm,
 }
 
 impl ControlChoice {
@@ -89,6 +94,11 @@ impl ControlChoice {
                 prefill: PrefillChoice::DequantSgemm,
                 attention_projection: AttentionProjectionChoice::Native,
             },
+            Self::QualifiedWarpSgemm => RuntimeConfig {
+                ffn: FfnChoice::SplitF32x4,
+                prefill: PrefillChoice::DequantSgemm,
+                attention_projection: AttentionProjectionChoice::Warp256,
+            },
         }
     }
 }
@@ -104,9 +114,12 @@ pub struct RuntimeConfig {
 impl RuntimeConfig {
     pub fn validate_comparison(self, control: Self) -> Result<()> {
         anyhow::ensure!(
-            self.attention_projection == AttentionProjectionChoice::Native
-                || control == ControlChoice::QualifiedSplitSgemm.config(),
-            "warp projection comparison requires qualified-split-sgemm as the explicit control"
+            match self.attention_projection {
+                AttentionProjectionChoice::Native => true,
+                AttentionProjectionChoice::Warp256 => control == ControlChoice::QualifiedSplitSgemm.config(),
+                AttentionProjectionChoice::PackedWarp256 => control == ControlChoice::QualifiedWarpSgemm.config(),
+            },
+            "projection comparison requires qualified-split-sgemm for warp-256 or qualified-warp-sgemm for packed-warp-256 as the explicit control"
         );
         Ok(())
     }
@@ -347,6 +360,23 @@ mod tests {
         ] {
             assert!(config.execution_config().is_err());
         }
+        let warp_control = ControlChoice::QualifiedWarpSgemm.config();
+        assert_eq!(warp_control, candidate);
+        let packed = RuntimeConfig {
+            attention_projection: AttentionProjectionChoice::PackedWarp256,
+            ..warp_control
+        };
+        packed.validate_comparison(warp_control)?;
+        assert!(packed.validate_comparison(control).is_err());
+        assert!(!packed.is_numerical());
+        assert_eq!(
+            serde_json::to_value(packed.execution_config()?)?,
+            serde_json::to_value(warp_control.execution_config()?)?
+        );
+        assert_eq!(
+            packed.attention_projection.backend(),
+            Q8AttentionProjectionBackend::PackedWarp256
+        );
         Ok(())
     }
 

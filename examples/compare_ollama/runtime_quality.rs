@@ -120,7 +120,7 @@ fn validate(
         .iter()
         .find(|row| row["label"] == "candidate")
         .context("candidate generation")?;
-    if config.attention_projection == super::super::q8_runtime::AttentionProjectionChoice::Warp256 {
+    if !config.attention_projection.backend().is_native() {
         let layers = manifest["candidate"]["layers"]
             .as_u64()
             .context("projection quality layer count")?;
@@ -130,19 +130,40 @@ fn validate(
         ensure!(
             layers > 0
                 && manifest["candidate"]["active_layer_count"] == layers
-                && control["actual_attention_projection_backend"] == "native"
-                && candidate["actual_attention_projection_backend"] == "warp-256",
+                && control["actual_attention_projection_backend"]
+                    == control_config.attention_projection.backend().as_str()
+                && candidate["actual_attention_projection_backend"]
+                    == config.attention_projection.backend().as_str(),
             "projection quality requires actual model backends and all source layers"
         );
-        for op in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
-            ensure!(
-                candidate["dispatch"]["operations"][op]["launches"] == launches
-                    && control["dispatch"]["operations"][op]["launches"]
-                        .as_u64()
-                        .unwrap_or(0)
-                        == 0,
-                "projection quality dispatch does not match all actual generated steps"
-            );
+        for (generation, choice) in [
+            (control, control_config.attention_projection),
+            (candidate, config.attention_projection),
+        ] {
+            if let Some(operations) = choice.backend().get_operations() {
+                for op in operations {
+                    ensure!(
+                        generation["dispatch"]["operations"][op]["launches"] == launches,
+                        "projection quality dispatch does not match all actual generated steps"
+                    );
+                }
+            }
+            for other in [
+                m40_llm::infer::Q8AttentionProjectionBackend::Warp256,
+                m40_llm::infer::Q8AttentionProjectionBackend::PackedWarp256,
+            ] {
+                if other != choice.backend() {
+                    for op in other.get_operations().unwrap() {
+                        ensure!(
+                            generation["dispatch"]["operations"][op]["launches"]
+                                .as_u64()
+                                .unwrap_or(0)
+                                == 0,
+                            "projection quality used a different backend's dispatch"
+                        );
+                    }
+                }
+            }
         }
     }
     let fixed = generations.iter().all(|row| {
@@ -358,6 +379,60 @@ mod tests {
             &projection,
             projection_candidate,
             projection_control,
+            "model",
+            corpus,
+            &[1, 2]
+        )
+        .is_err());
+        let packed_control =
+            super::super::super::q8_runtime::ControlChoice::QualifiedWarpSgemm.config();
+        let packed_config = RuntimeConfig {
+            attention_projection:
+                super::super::super::q8_runtime::AttentionProjectionChoice::PackedWarp256,
+            ..packed_control
+        };
+        let mut packed = projection.clone();
+        packed[0]["control_config"] = serde_json::to_value(packed_control)?;
+        packed[0]["candidate_config"] = serde_json::to_value(packed_config)?;
+        packed[3]["actual_attention_projection_backend"] = json!("warp-256");
+        packed[3]["dispatch"] = json!({"operations":{
+            "qkv_f32xq8_0_gguf_warp":{"launches":18432},
+            "gemm_f32xq8_0_gguf_coltile4_warp":{"launches":18432}}});
+        packed[4]["actual_attention_projection_backend"] = json!("packed-warp-256");
+        packed[4]["dispatch"] = json!({"operations":{
+            "qkv_f32xq8_0_gguf_packed_warp":{"launches":18432},
+            "gemm_f32xq8_0_gguf_coltile4_packed_warp":{"launches":18432}}});
+        assert!(validate(
+            &packed,
+            packed_config,
+            packed_control,
+            "model",
+            corpus,
+            &[1, 2]
+        )?);
+        for has_wrong_backend in [false, true] {
+            let mut invalid = packed.clone();
+            if has_wrong_backend {
+                invalid[4]["actual_attention_projection_backend"] = json!("warp-256");
+            } else {
+                invalid[4]["dispatch"]["operations"]["qkv_f32xq8_0_gguf_packed_warp"]["launches"] =
+                    json!(0);
+            }
+            assert!(validate(
+                &invalid,
+                packed_config,
+                packed_control,
+                "model",
+                corpus,
+                &[1, 2]
+            )
+            .is_err());
+        }
+        packed[4]["dispatch"]["operations"]["qkv_f32xq8_0_gguf_warp"] = json!({"launches":1});
+        assert!(validate(
+            &packed,
+            packed_config,
+            packed_control,
             "model",
             corpus,
             &[1, 2]

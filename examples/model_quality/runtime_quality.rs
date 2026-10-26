@@ -74,8 +74,8 @@ fn record_generation(
     } else {
         generated.metrics.generated_tokens
     };
-    if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
-        for operation in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
+    if let Some(operations) = config.attention_projection.backend().get_operations() {
+        for operation in operations {
             ensure!(
                 counters["operations"][operation]["launches"].as_u64()
                     == Some(forwarded_tokens as u64 * u64::from(model.model_config.block_count)),
@@ -443,6 +443,10 @@ mod tests {
                 attention_projection: q8_runtime::AttentionProjectionChoice::Warp256,
                 ..q8_runtime::ControlChoice::QualifiedSplitSgemm.config()
             },
+            RuntimeConfig {
+                attention_projection: q8_runtime::AttentionProjectionChoice::PackedWarp256,
+                ..q8_runtime::ControlChoice::QualifiedWarpSgemm.config()
+            },
         ] {
             let load = |config: RuntimeConfig| -> Result<LoadedModel> {
                 let (mut gguf, bytes) = crate::q8_fixture::build_prefill_fixture(false);
@@ -451,14 +455,18 @@ mod tests {
                 model.allocate_kv_cache_for_layers(16)?;
                 Ok(model)
             };
-            let control =
-                if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
-                    q8_runtime::ControlChoice::QualifiedSplitSgemm.config()
-                } else if config.ffn == FfnChoice::SplitF32x4 {
-                    q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config()
-                } else {
-                    RuntimeConfig::default()
-                };
+            let control = if config.attention_projection
+                == q8_runtime::AttentionProjectionChoice::PackedWarp256
+            {
+                q8_runtime::ControlChoice::QualifiedWarpSgemm.config()
+            } else if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256
+            {
+                q8_runtime::ControlChoice::QualifiedSplitSgemm.config()
+            } else if config.ffn == FfnChoice::SplitF32x4 {
+                q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config()
+            } else {
+                RuntimeConfig::default()
+            };
             let mut reference = load(control)?;
             let mut candidate = load(config)?;
             let a_stats = reference.q8_execution_stats();
@@ -492,7 +500,7 @@ mod tests {
                 )
                 .is_err());
             }
-            if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
+            if !config.attention_projection.backend().is_native() {
                 let mut changed = b_stats.clone();
                 let gate = changed
                     .tensors

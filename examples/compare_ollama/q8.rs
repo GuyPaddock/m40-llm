@@ -489,6 +489,44 @@ mod tests {
         Ok(())
     }
 
+    /// Packed projection pairs use the current warp control, while selected
+    /// primary/Ollama loading carries the same candidate through the factory.
+    #[test]
+    fn test_packed_projection_control_and_primary_selection_are_explicit() -> Result<()> {
+        use super::super::super::q8_runtime::{AttentionProjectionChoice, ControlChoice};
+        let values = [
+            "--compare-q8-runtime",
+            "split-f32x4-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-control",
+            "qualified-warp-sgemm",
+            "--q8-runtime-attention",
+            "packed-warp-256",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+        ];
+        let args = parse_args(&values)?;
+        let control = ControlChoice::QualifiedWarpSgemm.config();
+        let candidate = args.candidate_runtime_config().unwrap();
+        candidate.validate_comparison(control)?;
+        assert_eq!(args.primary_runtime_config(), Some(control));
+        assert_eq!(
+            candidate.attention_projection,
+            AttentionProjectionChoice::PackedWarp256
+        );
+        assert_eq!(
+            serde_json::to_value(candidate.execution_config()?)?,
+            serde_json::to_value(control.execution_config()?)?
+        );
+        let selected = parse_args(&[values.as_slice(), &["--time-ollama"]].concat())?;
+        assert_eq!(selected.primary_runtime_config(), Some(candidate));
+        let profiled = parse_args(&[values.as_slice(), &["--profile-q8-runtime"]].concat())?;
+        assert_eq!(profiled.primary_runtime_config(), Some(candidate));
+        assert!(parse_args(&["--q8-runtime-attention", "packed-warp-256"]).is_err());
+        Ok(())
+    }
+
     /// Profiling must use the selected FFN/prefill, require quality evidence
     /// and remain separate from authoritative Ollama and legacy profile modes.
     #[test]

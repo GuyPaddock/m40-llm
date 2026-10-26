@@ -220,6 +220,16 @@ inputs additionally require sixteen-byte alignment. This opt-in runtime
 path still requires full-model quality and HTTP qualification; primitive
 microbenchmarks do not promote it or change defaults.
 
+The quality and HTTP tools select this candidate with
+`--q8-runtime-attention packed-warp-256` and require the explicit control
+`--q8-runtime-control qualified-warp-sgemm`. Both use
+`--q8-runtime-prefill dequant-sgemm` and split-f32x4-128 FFN, with identical
+prepared weights. The shared typed loader verifies the actual model backend;
+quality and timed runs also require one selected QKV/output launch per
+forwarded token and layer. A backend label without those dispatch counts
+does not qualify a comparison. The earlier `warp-256` experiment retains
+its own `qualified-split-sgemm` control.
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only

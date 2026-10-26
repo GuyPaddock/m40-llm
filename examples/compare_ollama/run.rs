@@ -531,12 +531,12 @@ impl ComparisonRun {
             self.prompt_ids.len(),
         )
         .and_then(|()| {
-            if requested_runtime.is_some_and(|config| {
-                config.attention_projection == AttentionProjectionChoice::Warp256
-            }) {
+            if let Some(operations) = requested_runtime
+                .and_then(|config| config.attention_projection.backend().get_operations())
+            {
                 let layers = u64::from(server.state.model.model_config.block_count);
                 let forwards = metrics.generated_tokens as u64;
-                for op in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
+                for op in operations {
                     let launches = counters_after.by_op.get(op).map_or(0, |v| v.launches)
                         - counters_before.by_op.get(op).map_or(0, |v| v.launches);
                     ensure!(

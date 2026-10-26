@@ -246,6 +246,25 @@ mod argument_tests {
             projections.q8_runtime_attention,
             Some(q8_runtime::AttentionProjectionChoice::Warp256)
         );
+        let packed = parse(&[
+            "--q8-runtime-candidate",
+            "split-f32x4-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-control",
+            "qualified-warp-sgemm",
+            "--q8-runtime-attention",
+            "packed-warp-256",
+        ])
+        .unwrap();
+        assert_eq!(
+            packed.q8_runtime_attention,
+            Some(q8_runtime::AttentionProjectionChoice::PackedWarp256)
+        );
+        assert_eq!(
+            packed.q8_runtime_control,
+            Some(q8_runtime::ControlChoice::QualifiedWarpSgemm)
+        );
         for extra in [
             vec!["--skip-layers", "1"],
             vec!["--capture-ffn-inputs", "new.json"],
