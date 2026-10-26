@@ -83,9 +83,11 @@ odd N, dynamic K through 8192, arbitrary scale bits, wrapping, guards,
 ordered producers, reuse, alias/alignment/offset/workspace rejection and
 cleanup. Shared benchmark CPU tests pass **36**, with 16 hardware checks
 ignored, not counted as passes; the cross-stream pipeline test also passes.
-Attention **11**, forward **20** with four optional checks ignored,
-projection **2**, MLP **1**, warning-as-error non-CUDA **217**, Clippy and
-formatting pass. The independent audit rejects twelve corrupted reports.
+Attention **11**, projection **2**, MLP **1**, warning-as-error non-CUDA
+**217**, Clippy and formatting pass. The forward runner reports 20 successes
+and four ignored graph checks; its real-Qwen diagnostic lacks an explicit
+model path and is not counted as real-model coverage. The independent audit
+rejects twelve corrupted reports.
 
 Session **91782**, PID **3559220**, terminates successfully. All sixty measured
 GPU boundaries show only that PID, P0, 1113 MHz SM and 3004 MHz memory.
@@ -114,3 +116,20 @@ losing diagnostic. Qualified exact runtime remains **49.146 HTTP tok/s**
 versus **43.106 official Ollama**; **53.06** and **56.037 HTTP tok/s** remain
 unmet. Preserve defaults and pursue independently supported exact FFN work,
 not further tuning of this library reference or closed candidates.
+
+## Cleanup Checkpoint
+
+After result commit `f058d4a`, remove the adapter, CUB compilation, scratch
+API and benchmark selector. All affected build/CUDA/Rust/test files return
+exactly to their pre-experiment state at `f2fe7f6`. Historical source and
+artifacts remain; no current CUB dependency or compatibility alias remains.
+
+[Post-removal validation](2026-10-26-maxwell-cub-read-cleanup-validation.log.gz)
+passes seven CUDA checksum tests, attention 11, projection 2, MLP 1,
+benchmark CPU 34 with 16 ignored, non-CUDA 217 and Clippy/formatting. The
+forward runner reports 24 successes after explicitly including graph checks;
+the same unavailable real-Qwen diagnostic remains excluded from coverage.
+The release rebuild has exactly the original 100,400 words and aggregate
+SHA-256 above. The removed flag exits 2 before model loading or output-file
+creation. The independent historical audit still passes. None is a new
+throughput measurement or full-model quality qualification.

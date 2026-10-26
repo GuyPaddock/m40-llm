@@ -380,22 +380,6 @@ mod ffi {
             hidden: i32,
             k: i32,
         ) -> i32;
-        pub fn m40llm_q8_cub_checksum_version() -> u32;
-        pub fn m40llm_ffn_q8_cub_checksum_scratch_bytes(
-            ctx: *mut M40llmCudaContext,
-            bytes: *mut usize,
-        ) -> i32;
-        pub fn m40llm_ffn_q8_cub_checksum_async(
-            ctx: *mut M40llmCudaContext,
-            scales: *const *const c_void,
-            values: *const *const c_void,
-            output: *mut c_void,
-            scratch: *mut c_void,
-            bytes: usize,
-            rows: i32,
-            hidden: i32,
-            k: i32,
-        ) -> i32;
         pub fn m40llm_ffn_q8_weight_checksum_async(
             ctx: *mut M40llmCudaContext,
             scales: *const *const c_void,

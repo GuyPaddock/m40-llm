@@ -3,6 +3,7 @@
 6192f5f285be0790950ddd6e150ff6071df206d1f18669555bc2176f2f64e626  docs/experiments/2026-10-26-maxwell-cub-read-audit.sh
 52f2007d61528da2079cd29862fecf52b2e4dc0ba4786bcf572b89234aeedcbe  docs/experiments/2026-10-26-maxwell-cub-read-build.log.gz
 288207bc33b02f0828489f3866063ce8c6cfcb57be2c353cb7e4d46424ecc69b  docs/experiments/2026-10-26-maxwell-cub-read-candidate.sass.gz
+8f149bbca0fd9641dc8726dc93905c7ad1f3c62f83da000f01709329536b0bc6  docs/experiments/2026-10-26-maxwell-cub-read-cleanup-validation.log.gz
 caf18f6f75e416901b202307386710b302035e674949a2ecba12252f1a3973ef  docs/experiments/2026-10-26-maxwell-cub-read-clippy.log.gz
 ab8233b9906c497f468c9d36a3688e54dc1cbd88d5bebbdb8c7bd0e1b51def3b  docs/experiments/2026-10-26-maxwell-cub-read-code-comparison.json
 0c4c8c2bf3035f9844a83753765625efc466e92923de549e5e33f4d842e45fa2  docs/experiments/2026-10-26-maxwell-cub-read-cuda-off.log.gz
@@ -16,7 +17,7 @@ c10ee0262be4a58687a1c32c6138c9580e7cd610b50b68a240337aa2c98bb389  docs/experimen
 f07993974d525b3b1502619432ab90f2d2e4cc42e6a192e119c9758b991108f4  docs/experiments/2026-10-26-maxwell-cub-read-resources.txt.gz
 34bfb27f4bd7341258ffe7eb6d44cbaa175bbb200dcaea4058fcab2d3601b711  docs/experiments/2026-10-26-maxwell-cub-read-screen.jsonl
 b64d820b6e8ea27cd78643a7bb74f63c324345b09a29c37ac4c90aee055f28be  docs/experiments/2026-10-26-maxwell-cub-read-screen.log.gz
-8ce3e45740eccf5252bdef36bb1918685562290996b751f4c76dc31f9effa8d8  docs/experiments/2026-10-26-maxwell-cub-read-screen.md
+9d1ee63892500543fa62001e0956f9ca5f70d0f0ef5186218b744f43d194dd07  docs/experiments/2026-10-26-maxwell-cub-read-screen.md
 71f09dec390ec22cc21c20de0f453796a3dac4577127e0db32eb33c64775507f  docs/experiments/2026-10-26-maxwell-cub-read-sdk-headers.sha256
 4f02facf3eda26a88eb49363279f301a616467ee348d7a0c74f2bc69d82d362e  docs/experiments/2026-10-26-maxwell-cub-read-unisolated-code-comparison.json
 72aa5d7131e5f76d98ca71ec9f1903c236f8af75ce3993a5cb176c5413952305  docs/third_party/cub-LICENSE.txt

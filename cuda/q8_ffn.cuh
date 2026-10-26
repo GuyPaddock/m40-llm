@@ -1,7 +1,6 @@
 // Bounded FP32-activation ablations of the native split4 Q8_0 fused FFN.
 // Included after the CUDA context definition, outside the C ABI linkage block.
 #pragma once
-#include "q8_cub_read.cuh"
 
 namespace m40llm_q8_ffn {
 

@@ -136,8 +136,6 @@ fn download(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Verify each row/column against source-derived modular sums, including
-/// async producers, guards, repeated scratch use and immutable source planes.
 fn check_case(
     ctx: &CudaContext,
     k: usize,
@@ -145,7 +143,6 @@ fn check_case(
     rows: usize,
     gap: Option<usize>,
     order: Option<bool>,
-    should_use_cub: bool,
 ) -> Result<()> {
     let mut hosts = Vec::new();
     let mut expected = Vec::new();
@@ -193,15 +190,6 @@ fn check_case(
         .collect();
     let output = upload(ctx, &guard_bytes)?;
     let out = unsafe { output.as_mut_ptr().cast::<u32>().add(8).cast() };
-    let cub_scratch = if should_use_cub {
-        Some(DeviceBuffer::new_tagged(
-            ctx,
-            ctx.ffn_q8_cub_checksum_scratch_bytes()?,
-            "cub-read:test-scratch",
-        )?)
-    } else {
-        None
-    };
     for repeat in 0..3 {
         // Exercise a real asynchronous producer and explicit dependency before
         // the measured enqueue, without relying on a synchronous upload.
@@ -227,17 +215,7 @@ fn check_case(
         let resident = CudaContext::total_device_bytes();
         let before = profile::snapshot();
         unsafe {
-            if let Some(scratch) = &cub_scratch {
-                ctx.ffn_q8_cub_checksum_async(
-                    scales,
-                    values,
-                    out,
-                    scratch,
-                    rows as i32,
-                    hidden as i32,
-                    k as i32,
-                )?;
-            } else if let Some(is_transposed) = order {
+            if let Some(is_transposed) = order {
                 ctx.ffn_q8_weight_checksum_ordered_async(
                     scales,
                     values,
@@ -339,7 +317,7 @@ fn test_weight_reads_preserve_checksums_guards_and_ownership() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for (k, hidden) in [(32, 1), (160, 7), (2048, 17)] {
         for rows in [1, 4] {
-            check_case(&ctx, k, hidden, rows, None, None, false)?;
+            check_case(&ctx, k, hidden, rows, None, None)?;
         }
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
@@ -357,108 +335,9 @@ fn test_pitched_weight_reads_ignore_gaps_and_preserve_ownership() -> Result<()> 
     for (k, n) in [(128, 1), (640, 7), (2048, 17)] {
         for rows in [1, 4] {
             for gap in [None, Some(0), Some(128)] {
-                check_case(&ctx, k, n, rows, gap, None, false)?;
+                check_case(&ctx, k, n, rows, gap, None)?;
             }
         }
-    }
-    assert_eq!(CudaContext::total_device_bytes(), initial);
-    Ok(())
-}
-
-/// Public-library reduction preserves every source-derived column checksum,
-/// guards and ownership across dynamic K, odd N, rows and ordered producers.
-#[test]
-#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
-fn test_cub_reads_preserve_column_checksums_and_ownership() -> Result<()> {
-    let _lock = cuda_test_scope::lock_cuda();
-    let ctx = CudaContext::new_m40()?;
-    let initial = CudaContext::total_device_bytes();
-    for (k, n) in [(32, 1), (160, 7), (2048, 17), (8192, 3)] {
-        for rows in [1, 4] {
-            check_case(&ctx, k, n, rows, None, None, true)?;
-        }
-    }
-    assert_eq!(CudaContext::total_device_bytes(), initial);
-    Ok(())
-}
-
-/// Invalid library spans must fail before launch, including signed offset
-/// overflow, unaligned output and aliasing the reusable scratch allocation.
-#[test]
-#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
-fn test_cub_reads_reject_invalid_spans_without_enqueue() -> Result<()> {
-    let _lock = cuda_test_scope::lock_cuda();
-    let ctx = CudaContext::new_m40()?;
-    let initial = CudaContext::total_device_bytes();
-    {
-        let data = DeviceBuffer::new_tagged(&ctx, 4096, "cub-read:invalid-data")?;
-        let scratch = DeviceBuffer::new_tagged(
-            &ctx,
-            ctx.ffn_q8_cub_checksum_scratch_bytes()?,
-            "cub-read:invalid-scratch",
-        )?;
-        let p = data.as_ptr();
-        let scales = [p; 2];
-        let values = [unsafe { p.byte_add(256) }; 2];
-        let output = unsafe { data.as_mut_ptr().byte_add(1024) };
-        let oversized =
-            DeviceBuffer::new_tagged(&ctx, 1024 * 1024 + 1, "cub-read:oversized-scratch")?;
-        let before = profile::snapshot();
-        unsafe {
-            assert!(ctx
-                .ffn_q8_cub_checksum_async(scales, values, output, &oversized, 1, 1, 32)
-                .is_err());
-            for (rows, n, k) in [
-                (0, 1, 32),
-                (2, 1, 32),
-                (1, 0, 32),
-                (1, 1, 31),
-                (4, i32::MAX, 32),
-                (4, 32, i32::MAX - 31),
-            ] {
-                assert!(ctx
-                    .ffn_q8_cub_checksum_async(scales, values, output, &scratch, rows, n, k)
-                    .is_err());
-            }
-            for bad_output in [
-                std::ptr::null_mut(),
-                output.byte_add(4),
-                data.as_mut_ptr(),
-                scratch.as_mut_ptr(),
-            ] {
-                assert!(ctx
-                    .ffn_q8_cub_checksum_async(scales, values, bad_output, &scratch, 1, 1, 32)
-                    .is_err());
-            }
-            for bad in [
-                std::ptr::null(),
-                p.byte_add(1),
-                (usize::MAX - 1) as *const c_void,
-            ] {
-                assert!(ctx
-                    .ffn_q8_cub_checksum_async([bad; 2], values, output, &scratch, 1, 1, 32)
-                    .is_err());
-                assert!(ctx
-                    .ffn_q8_cub_checksum_async(scales, [bad; 2], output, &scratch, 1, 1, 32)
-                    .is_err());
-            }
-            assert!(ctx
-                .ffn_q8_cub_checksum_async(scales, values, output, &data, 1, 1, 32)
-                .is_err());
-            assert!(ctx
-                .ffn_q8_cub_checksum_async(
-                    [scratch.as_ptr(); 2],
-                    values,
-                    output,
-                    &scratch,
-                    1,
-                    1,
-                    32
-                )
-                .is_err());
-        }
-        let after = profile::snapshot();
-        assert_eq!(profile::counter_delta(&before, &after), Default::default());
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
@@ -475,7 +354,7 @@ fn test_ordered_reads_preserve_tagged_checksums_and_ownership() -> Result<()> {
     for (k, n) in [(32, 32), (160, 64), (2048, 96), (4096, 128)] {
         for rows in [1, 4] {
             for order in [false, true] {
-                check_case(&ctx, k, n, rows, None, Some(order), false)?;
+                check_case(&ctx, k, n, rows, None, Some(order))?;
             }
         }
     }

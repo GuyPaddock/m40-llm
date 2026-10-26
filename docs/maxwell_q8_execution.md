@@ -68,26 +68,19 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ### Diagnostic Library Read Reference
 
-The shared `q8_execution_bench` accepts `--ffn-weight-read
---ffn-weight-read-cub` with frozen M02 inputs. It compares the original
-per-column modular checksums with public CUB segmented reduction over the
-same split planes. It is not an inference implementation or measured DRAM
-bandwidth. The fixed [contract](experiments/2026-10-26-maxwell-cub-read-hypothesis.md)
-requires a 10% one-row read improvement before further investigation.
-Original real FFN/down controls and all inference gates remain separate.
+The [fixed public-CUB reference](experiments/2026-10-26-maxwell-cub-read-screen.md)
+is closed: identical modular column checksums regress one-row throughput
+22.87-23.01%, missing its 10% read-cost gate. Implementation `4c1680b` and
+isolated-header fix `dfb6451` remain in history; results were committed in
+`f058d4a` before removing the adapter, scratch API, test selectors and CUB
+compilation from the active build. There is no current `--ffn-weight-read-cub`
+flag or inference consumer. Reproduce at the documented historical commit,
+not by passing the removed flag to a current build.
 
-One queried, caller-owned workspace is capped at 1 MiB and reused without
-enqueue allocations, transfers or explicit synchronization. Invalid spans,
-overlap, alignment and signed segment-offset overflow fail before work.
-The adapter uses CUDA 12.8's bundled CUB 2.7.0 with its default sm_52 policy;
-there is no custom policy search or runtime configuration switch. The
-[CUB license notice](third_party/cub-LICENSE.txt) accompanies binary/header use.
-Only the isolated CUB translation unit exposes the C99/POSIX declarations
-required by its headers while continuing to hide GNU/C23 math extensions.
-Inference kernels keep their original flags and headers. A CUB-local
-libstdc++ classification-name bridge re-exports existing standard overloads;
-it adds no math implementation. Whole original-kernel word equivalence is
-required before this reference can be timed.
+The [CUB license notice](third_party/cub-LICENSE.txt) remains with the archived
+assembly. All 135 original kernel entries were verified unchanged before
+measurement; global header flags that altered six RoPE entries were never
+timed. No policy/geometry rescue or measured DRAM/occupancy claim follows.
 
 ### Explicit Runtime Qualification
 

@@ -151,12 +151,6 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
             "has_activation_quantization":false,"scales":"unchanged separate gate/up planes","k_multiple":1024});
     }
     if args.ffn_weight_read {
-        if args.ffn_weight_read_cub {
-            manifest["cub_read_contract"] = json!({"library":"bundled CUB public segmented reduction",
-                "compiled_cub_version":CudaContext::q8_cub_checksum_version(),
-                "has_same_modular_column_outputs":true,"has_measured_dram_traffic":false,
-                "one_row_read_gain_gate_percent":10,"runtime_integration_allowed":false});
-        }
         manifest["control"] =
             json!("qualified split-f32x4-128 with original prepared down/vocabulary");
         manifest["weight_read_contract"] = json!({

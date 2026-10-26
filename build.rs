@@ -132,8 +132,6 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/q8_execution.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_ffn.cuh");
-    println!("cargo:rerun-if-changed=cuda/q8_cub_read.cuh");
-    println!("cargo:rerun-if-changed=cuda/q8_cub_read.cu");
     println!("cargo:rerun-if-changed=cuda/decode_reductions.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_unfused.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_separate_warp.cuh");
@@ -173,6 +171,7 @@ fn main() {
         build
             .cuda(true)
             .include("cuda")
+            .file("cuda/kernels.cu")
             .flag("-std=c++17")
             .flag("-Xcompiler")
             .flag("-std=c++17")
@@ -248,16 +247,7 @@ fn main() {
             println!("cargo:rustc-cfg=have_cublas");
         }
 
-        // CUB needs extra host declarations. Keep them out of the inference
-        // translation unit so math overload selection and emitted code stay fixed.
-        let mut cub = build.clone();
-        cub.file("cuda/q8_cub_read.cu")
-            .flag("-Xcompiler")
-            .flag("-D_ISOC99_SOURCE")
-            .flag("-Xcompiler")
-            .flag("-D_POSIX_C_SOURCE=200809L");
-        build.file("cuda/kernels.cu").compile("m40llm_native");
-        cub.compile("m40llm_cub_read");
+        build.compile("m40llm_native");
 
         println!("cargo:rustc-link-search=native={}", out_dir.display());
         println!("cargo:rustc-link-lib=static=m40llm_native");

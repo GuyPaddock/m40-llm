@@ -8,6 +8,8 @@ Public-library segmented checksums over the original gate/up planes
 regress one-row throughput **22.87-23.01%** and four-row **29.28-29.31%**,
 with negative paired intervals. All exact source-derived sums and guards
 pass. See [fixed library scope, raw pairs and audit](experiments/2026-10-26-maxwell-cub-read-screen.md).
+The implementation and result commits remain available; the rejected
+adapter is removed from the active build after measurements were committed.
 
 The compiled-code check caught six RoPE changes from global host feature
 flags before timing. Isolating CUB restores all **100,400 original words /

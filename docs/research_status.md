@@ -22,6 +22,8 @@ preserves original per-column checksums but regresses one-row throughput
 **22.87-23.01%**, with all paired intervals negative; four rows also regress.
 It misses the 10% diagnostic gate. Keep implementation `4c1680b` and isolation
 fix `dfb6451` in history, with no policy/geometry rescue or inference consumer.
+Results are preserved in `f058d4a`; the rejected adapter, scratch API and CLI
+selector are removed from the active build, leaving no CUB dependency.
 Global header flags initially changed six RoPE entries before timing;
 isolated CUB compilation restores all 100,400 original words across 135
 entries. An untimed trace confirms one 256-thread CUB launch per call.

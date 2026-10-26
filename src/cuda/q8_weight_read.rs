@@ -1,5 +1,5 @@
 //! Checksum-only diagnostics, deliberately separate from inference kernels.
-use super::{ffi, record_async_kernel, CudaContext, CudaStream, DeviceBuffer};
+use super::{ffi, record_async_kernel, CudaContext, CudaStream};
 use anyhow::{ensure, Context, Result};
 use std::ffi::c_void;
 
@@ -58,92 +58,6 @@ fn validate_checksum_spans(
 }
 
 impl CudaContext {
-    /// Report the compiled public-library version, or zero for a stub build.
-    pub fn q8_cub_checksum_version() -> u32 {
-        unsafe { ffi::m40llm_q8_cub_checksum_version() }
-    }
-
-    /// Query bounded CUB scratch without enqueueing a reduction.
-    pub fn ffn_q8_cub_checksum_scratch_bytes(&self) -> Result<usize> {
-        let _guard = self.inner.lock.lock().unwrap();
-        let mut bytes = 0;
-        let rc = unsafe {
-            ffi::m40llm_ffn_q8_cub_checksum_scratch_bytes(self.inner.raw.as_ptr(), &mut bytes)
-        };
-        ensure!(rc == 0, "CUB checksum workspace query failed: {rc}");
-        ensure!(
-            (1..=1024 * 1024).contains(&bytes),
-            "CUB checksum workspace exceeds its 1 MiB bound"
-        );
-        Ok(bytes)
-    }
-
-    /// Compute source-equivalent modular checksums with public CUB segmented reduction.
-    /// This diagnostic has no inference output or implicit allocation.
-    ///
-    /// # Safety
-    /// Plane/output spans follow `ffn_q8_weight_checksum_async`, with output
-    /// aligned to eight bytes. Scratch belongs to this context, is disjoint
-    /// from every span and survives decode completion with all producers ordered.
-    #[allow(clippy::too_many_arguments)]
-    pub unsafe fn ffn_q8_cub_checksum_async(
-        &self,
-        scales: [*const c_void; 2],
-        values: [*const c_void; 2],
-        output: *mut c_void,
-        scratch: &DeviceBuffer,
-        rows: i32,
-        hidden: i32,
-        k: i32,
-    ) -> Result<()> {
-        validate_checksum_spans(&scales, &values, output, rows, hidden, k, 2, 4, 0)?;
-        ensure!(
-            i64::from(rows) * i64::from(hidden) * i64::from(k / 4) <= i64::from(i32::MAX),
-            "CUB checksum segment offsets exceed signed 32-bit range"
-        );
-        ensure!((output as usize).is_multiple_of(8), "unaligned CUB output");
-        let start = scratch.as_ptr() as usize;
-        let end = start
-            .checked_add(scratch.bytes())
-            .context("CUB scratch overflow")?;
-        ensure!(
-            start != 0 && start.is_multiple_of(256) && (1..=1024 * 1024).contains(&scratch.bytes()),
-            "invalid CUB scratch span"
-        );
-        let payload_bytes = hidden as usize * k as usize;
-        for (pointer, bytes) in [
-            (scales[0], payload_bytes / 16),
-            (scales[1], payload_bytes / 16),
-            (values[0], payload_bytes),
-            (values[1], payload_bytes),
-            (output.cast_const(), rows as usize * hidden as usize * 8),
-        ] {
-            let other_start = pointer as usize;
-            let other_end = other_start
-                .checked_add(bytes)
-                .context("CUB span overflow")?;
-            ensure!(
-                end <= other_start || other_end <= start,
-                "CUB scratch overlaps data"
-            );
-        }
-        let _guard = self.inner.lock.lock().unwrap();
-        let rc = ffi::m40llm_ffn_q8_cub_checksum_async(
-            self.inner.raw.as_ptr(),
-            scales.as_ptr(),
-            values.as_ptr(),
-            output,
-            scratch.as_mut_ptr(),
-            scratch.bytes(),
-            rows,
-            hidden,
-            k,
-        );
-        ensure!(rc == 0, "m40llm_ffn_q8_cub_checksum_async failed: {rc}");
-        record_async_kernel("ffn_q8_cub_checksum");
-        Ok(())
-    }
-
     /// Checksum original planes in sequential or fixed transposed column order.
     /// Each modular output additionally contains its physical CTA index.
     ///
