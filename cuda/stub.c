@@ -55,6 +55,9 @@ int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_de
 int m40llm_memcpy_d2d_async(M40llmCudaContext* ctx, void* dst_device, const void* src_device, size_t bytes, uint32_t stream_kind) {
     (void)ctx; (void)dst_device; (void)src_device; (void)bytes; (void)stream_kind; return -1;
 }
+int m40llm_argmax_f32_partitioned_async(M40llmCudaContext* ctx, const void* values, uint32_t len, void* scratch, size_t scratch_bytes, void* output, uint32_t stream_kind) {
+    (void)ctx; (void)values; (void)len; (void)scratch; (void)scratch_bytes; (void)output; (void)stream_kind; return -1;
+}
 int m40llm_argmax_f32_async(M40llmCudaContext* ctx, const void* d_values_f32, uint32_t len, void* d_out_u32, uint32_t stream_kind) {
     (void)ctx; (void)d_values_f32; (void)len; (void)d_out_u32; (void)stream_kind; return -1;
 }

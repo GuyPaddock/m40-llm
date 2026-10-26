@@ -22,8 +22,12 @@ target the existing shared reduction barriers and one-block vocabulary scan,
 not closed FFN/projection mappings. The benchmark-only weighted RMSNorm
 warp finish preserves old bits for FP16/FP32 weights, ragged dimensions,
 zeros, distinct rows and both streams with cuBLAS on/off. No generation
-selector or default change is added. Next implement the independent fixed
-partitioned argmax, then extend the existing benchmark. Independent >=5%
+selector or default change is added. The independent two-stage argmax now
+also matches old indices on finite inputs, ties, partition tails, full Qwen
+vocabulary size and legacy nonfinite/sentinel cases. It reuses caller-owned
+scratch, at most 384 bytes, without internal copies, allocation or sync.
+Both primitives pass cuBLAS on/off checks. Next extend the existing benchmark
+and inspect compiled sm_52 instructions before paired timing. Independent >=5%
 stage gates and >=3% profile-weighted scope precede any runtime/actual-512/
 HTTP work. There is no performance result for this round yet.
 

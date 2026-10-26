@@ -134,6 +134,15 @@ mod ffi {
             bytes: usize,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_argmax_f32_partitioned_async(
+            ctx: *mut M40llmCudaContext,
+            values: *const c_void,
+            len: u32,
+            scratch: *mut c_void,
+            scratch_bytes: usize,
+            output: *mut c_void,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_argmax_f32_async(
             ctx: *mut M40llmCudaContext,
             d_values_f32: *const c_void,
