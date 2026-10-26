@@ -1,4 +1,5 @@
 use super::super::{fixture::source_bytes, pipeline::GuardedF32, validation};
+use super::prepared::PreparedProjectionWeights;
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
     cuda::{CudaContext, CudaEvent, CudaStream},
@@ -23,6 +24,7 @@ pub(super) enum ProjectionKind {
 pub(super) enum ProjectionComparison {
     WarpReduction,
     PackedLoads,
+    SplitPlanes,
 }
 
 impl ProjectionKind {
@@ -51,6 +53,7 @@ pub(super) struct ProjectionProbe<'a> {
     original_input: Vec<f32>,
     start: CudaEvent,
     stop: CudaEvent,
+    prepared: Option<PreparedProjectionWeights>,
 }
 
 impl<'a> ProjectionProbe<'a> {
@@ -121,6 +124,10 @@ impl<'a> ProjectionProbe<'a> {
             .iter()
             .map(|n| GuardedF32::new(&model.cuda, &vec![0.0; rows * n], "projection_probe:output"))
             .collect::<Result<Vec<_>>>()?;
+        let input_buffer = GuardedF32::new(&model.cuda, input, "projection_probe:input")?;
+        let prepared = (comparison == ProjectionComparison::SplitPlanes)
+            .then(|| PreparedProjectionWeights::new(model, &sources))
+            .transpose()?;
         Ok(Self {
             model,
             kind,
@@ -131,20 +138,39 @@ impl<'a> ProjectionProbe<'a> {
             weights,
             biases,
             sources,
-            input: GuardedF32::new(&model.cuda, input, "projection_probe:input")?,
+            input: input_buffer,
             outputs,
             original_input: input.to_vec(),
             start: model.cuda.create_event()?,
             stop: model.cuda.create_event()?,
+            prepared,
         })
     }
 
     pub fn bytes(&self) -> usize {
+        self.scratch_bytes() + self.prepared.as_ref().map_or(0, |p| p.bytes)
+    }
+
+    pub fn scratch_bytes(&self) -> usize {
         self.input.bytes() + self.outputs.iter().map(GuardedF32::bytes).sum::<usize>()
     }
 
+    pub fn preparation(&self) -> Option<&Value> {
+        self.prepared.as_ref().map(|p| &p.report)
+    }
+
+    fn has_packed_loads(&self, is_candidate: bool) -> bool {
+        self.comparison == ProjectionComparison::SplitPlanes
+            || (self.comparison == ProjectionComparison::PackedLoads && is_candidate)
+    }
+
     pub fn operation(&self, is_candidate: bool) -> &'static str {
-        if self.comparison == ProjectionComparison::PackedLoads && is_candidate {
+        if self.comparison == ProjectionComparison::SplitPlanes && is_candidate {
+            match self.kind {
+                ProjectionKind::Qkv => "qkv_f32xq8_separate_packed_warp",
+                ProjectionKind::Output => "gemm_f32xq8_separate_coltile4_packed_warp",
+            }
+        } else if self.has_packed_loads(is_candidate) {
             match self.kind {
                 ProjectionKind::Qkv => "qkv_f32xq8_0_gguf_packed_warp",
                 ProjectionKind::Output => "gemm_f32xq8_0_gguf_coltile4_packed_warp",
@@ -156,9 +182,9 @@ impl<'a> ProjectionProbe<'a> {
     }
 
     pub fn enqueue(&self, is_candidate: bool) -> Result<()> {
-        let has_packed_loads = self.comparison == ProjectionComparison::PackedLoads && is_candidate;
+        let has_packed_loads = self.has_packed_loads(is_candidate);
         let has_warp_reduction =
-            is_candidate || self.comparison == ProjectionComparison::PackedLoads;
+            is_candidate || self.comparison != ProjectionComparison::WarpReduction;
         for row in 0..self.rows {
             unsafe {
                 let input = self.input.pointer().cast::<f32>().add(row * self.k).cast();
@@ -169,7 +195,12 @@ impl<'a> ProjectionProbe<'a> {
                         .add(row * self.widths[0])
                         .cast();
                     let weight = self.weights[0].dptr.cast_const();
-                    if has_warp_reduction {
+                    if self.comparison == ProjectionComparison::SplitPlanes && is_candidate {
+                        self.prepared
+                            .as_ref()
+                            .context("missing split projection owner")?
+                            .enqueue_output(input, output, CudaStream::Decode)?;
+                    } else if has_warp_reduction {
                         let enqueue = if has_packed_loads {
                             CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async
                         } else {
@@ -206,7 +237,12 @@ impl<'a> ProjectionProbe<'a> {
                         .add(row * self.widths[i])
                         .cast()
                 });
-                if has_warp_reduction {
+                if self.comparison == ProjectionComparison::SplitPlanes && is_candidate {
+                    self.prepared
+                        .as_ref()
+                        .context("missing split projection owner")?
+                        .enqueue_qkv(input, biases, outputs, CudaStream::Decode)?;
+                } else if has_warp_reduction {
                     let enqueue = if has_packed_loads {
                         CudaContext::qkv_f32xq8_0_gguf_packed_warp_async
                     } else {
@@ -255,6 +291,9 @@ impl<'a> ProjectionProbe<'a> {
 
     pub fn verify(&self) -> Result<()> {
         self.model.cuda.synchronize_stream(CudaStream::Decode)?;
+        if let Some(prepared) = &self.prepared {
+            prepared.verify()?;
+        }
         ensure!(
             self.input
                 .read(&self.model.cuda)?
@@ -379,8 +418,14 @@ impl<'a> ProjectionProbe<'a> {
                 .elapsed_sync(&self.stop, "projection_probe_timing")?,
         ) / iterations as f64;
         Ok(json!({"is_candidate":is_candidate,
-            "is_warp":is_candidate || self.comparison==ProjectionComparison::PackedLoads,
-            "has_packed_loads":is_candidate && self.comparison==ProjectionComparison::PackedLoads,
+            "is_warp":is_candidate || self.comparison!=ProjectionComparison::WarpReduction,
+            "has_packed_loads":self.has_packed_loads(is_candidate),
+            "split_projection_dispatch":if self.comparison==ProjectionComparison::SplitPlanes && is_candidate {
+                json!({"operation":op,"launches":launches,"threads":256,
+                    "columns":if self.kind==ProjectionKind::Qkv {1} else {4},
+                    "shared_bytes":if self.kind==ProjectionKind::Qkv {1024} else {4096},
+                    "payload_load_bytes":8,"additional_prepared_bytes":self.prepared.as_ref().unwrap().bytes})
+            } else { Value::Null },
             "gpu_ms":gpu_ms,"gpu_ms_per_request":gpu_ms/self.rows as f64,
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
             "iterations":iterations,"enqueue_counters":counters,"operation":op,"operation_launches":launches,

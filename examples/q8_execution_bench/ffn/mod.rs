@@ -28,7 +28,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     if args.prepared_f32_warp || args.prepared_f32_packed_activation {
         return prepared_projection::benchmark(args);
     }
-    if args.qkv_f32_warp || args.output_f32_warp || args.qkv_f32_packed || args.output_f32_packed {
+    if args.qkv_f32_warp
+        || args.output_f32_warp
+        || args.qkv_f32_packed
+        || args.output_f32_packed
+        || args.qkv_f32_split
+        || args.output_f32_split
+    {
         return projection::benchmark(args);
     }
     let is_fp32_ablation = args.ffn_f32_persistent_tiles

@@ -71,6 +71,12 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Existing split QKV planes versus qualified packed raw-GGUF projections.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    qkv_f32_split: bool,
+    /// Existing split output planes versus qualified packed coltile4 projection.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["qkv_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    output_f32_split: bool,
     /// Reuse 192 CTAs per row with the qualified per-column FP32 tree.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     ffn_f32_persistent_tiles: bool,
@@ -589,6 +595,55 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Split storage has its own captured-input comparison and cannot combine
+    /// with an older control, arithmetic experiment or another projection.
+    #[test]
+    fn test_split_projection_modes_require_exclusive_captured_inputs() {
+        let base = ["bench", "--model", "model.gguf", "--output", "new.jsonl"];
+        let capture = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+        ];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().qkv_f32_split);
+        assert!(!parse(&[]).unwrap().output_f32_split);
+        for mode in ["--qkv-f32-split", "--output-f32-split"] {
+            assert!(parse(&[mode]).is_err());
+            let args = parse(&[capture.as_slice(), &[mode]].concat()).unwrap();
+            assert_eq!(args.qkv_f32_split, mode == "--qkv-f32-split");
+            assert_eq!(args.output_f32_split, mode == "--output-f32-split");
+            for other in [
+                "--qkv-f32-split",
+                "--output-f32-split",
+                "--ffn-f32-persistent-tiles",
+                "--ffn-f32-virtual-warp",
+                "--prepared-f32-packed-activation",
+                "--prepared-f32-warp",
+                "--qkv-f32-packed",
+                "--output-f32-packed",
+                "--qkv-f32-warp",
+                "--output-f32-warp",
+                "--ffn-f32-ablation",
+                "--ffn-q81",
+                "--ffn-f32-factored-scales",
+                "--ffn-f32-coalesced-pairs",
+                "--ffn-f32-split-planes",
+                "--ffn-f32-split-two-columns",
+                "--ffn-f32-joint",
+                "--ffn-f32-fixed-k",
+                "--ffn-f32-unfused",
+                "--ffn-f32-weight-cg",
+                "--ffn-f32-byte-permute",
+            ] {
+                if other != mode {
+                    assert!(parse(&[capture.as_slice(), &[mode, other]].concat()).is_err());
+                }
+            }
+        }
+    }
 
     /// Work ownership is opt-in, requires captured-input provenance, and
     /// cannot accidentally combine with a closed experiment or peer screen.

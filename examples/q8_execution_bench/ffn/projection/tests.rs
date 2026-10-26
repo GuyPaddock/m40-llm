@@ -18,6 +18,8 @@ mod fixture;
 /// Dispatch counters identify the actual arm and all allocations are released.
 /// Packed-load comparisons use the qualified warp control, not the original
 /// shared reduction, and preserve both variants without growing scratch/cache.
+/// Split-plane comparisons use the qualified packed control and account for
+/// their extra immutable preparation separately from reusable scratch.
 #[test]
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()> {
@@ -45,12 +47,28 @@ fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()
             for comparison in [
                 ProjectionComparison::WarpReduction,
                 ProjectionComparison::PackedLoads,
+                ProjectionComparison::SplitPlanes,
             ] {
                 {
                     let input = fixture::projection::make_input(rows, 64);
                     let probe = ProjectionProbe::new(&model, 0, rows, &input, kind, comparison)?;
                     assert_eq!(CudaContext::total_device_bytes(), resident + probe.bytes());
                     let checked = probe.validate()?;
+                    if comparison == ProjectionComparison::SplitPlanes {
+                        let expected_bytes = if kind == ProjectionKind::Qkv {
+                            13056
+                        } else {
+                            4352
+                        };
+                        assert_eq!(
+                            probe.preparation().unwrap()["additional_prepared_bytes"],
+                            expected_bytes
+                        );
+                        assert_eq!(probe.bytes() - probe.scratch_bytes(), expected_bytes);
+                    } else {
+                        assert!(probe.preparation().is_none());
+                        assert_eq!(probe.bytes(), probe.scratch_bytes());
+                    }
                     assert_eq!(checked["control_bits_equal"], true);
                     assert_eq!(checked["guards_and_immutable_read_spans"], true);
                     let before = profile::snapshot();
@@ -66,8 +84,24 @@ fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()
                         assert_eq!(timing["is_candidate"], is_candidate);
                         assert_eq!(
                             timing["has_packed_loads"],
-                            is_candidate && comparison == ProjectionComparison::PackedLoads
+                            comparison == ProjectionComparison::SplitPlanes
+                                || (is_candidate
+                                    && comparison == ProjectionComparison::PackedLoads)
                         );
+                        if comparison == ProjectionComparison::SplitPlanes && is_candidate {
+                            assert_eq!(timing["split_projection_dispatch"]["launches"], rows * 8);
+                            assert_eq!(timing["split_projection_dispatch"]["threads"], 256);
+                            assert_eq!(
+                                timing["split_projection_dispatch"]["columns"],
+                                if kind == ProjectionKind::Qkv { 1 } else { 4 }
+                            );
+                            assert_eq!(
+                                timing["split_projection_dispatch"]["additional_prepared_bytes"],
+                                probe.bytes() - probe.scratch_bytes()
+                            );
+                        } else {
+                            assert!(timing["split_projection_dispatch"].is_null());
+                        }
                         for key in [
                             "device_allocs",
                             "device_frees",

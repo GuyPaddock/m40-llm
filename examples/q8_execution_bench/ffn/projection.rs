@@ -1,6 +1,7 @@
 //! Native projection screens using frozen normalized FFN input surrogates.
 mod evidence;
 mod pipeline;
+mod prepared;
 #[cfg(test)]
 mod tests;
 use super::super::{command_output, inspect_gpu, write_record, Args};
@@ -20,12 +21,14 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
-    let kind = if args.output_f32_warp || args.output_f32_packed {
+    let kind = if args.output_f32_warp || args.output_f32_packed || args.output_f32_split {
         ProjectionKind::Output
     } else {
         ProjectionKind::Qkv
     };
-    let comparison = if args.qkv_f32_packed || args.output_f32_packed {
+    let comparison = if args.qkv_f32_split || args.output_f32_split {
+        ProjectionComparison::SplitPlanes
+    } else if args.qkv_f32_packed || args.output_f32_packed {
         ProjectionComparison::PackedLoads
     } else {
         ProjectionComparison::WarpReduction
@@ -35,6 +38,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         (ProjectionKind::Output, ProjectionComparison::WarpReduction) => "output_warp",
         (ProjectionKind::Qkv, ProjectionComparison::PackedLoads) => "qkv_packed",
         (ProjectionKind::Output, ProjectionComparison::PackedLoads) => "output_packed",
+        (ProjectionKind::Qkv, ProjectionComparison::SplitPlanes) => "qkv_split",
+        (ProjectionKind::Output, ProjectionComparison::SplitPlanes) => "output_split",
     };
     ensure!(
         !cfg!(debug_assertions) && args.rows == [1, 4],
@@ -71,10 +76,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "capture_report_sha256":inputs.report_sha256,"execution_configuration":inputs.manifest["execution_configuration"],
         "prepared_weights":model.q8_execution_stats(),"setup_ms":began.elapsed().as_secs_f64()*1000.0,
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,"gpu_before":gpu,
-        "control":if comparison==ProjectionComparison::PackedLoads {"qualified raw GGUF Q8_0 scalar loads and original-tree warp finish; unchanged geometry"} else if kind==ProjectionKind::Qkv {"original raw GGUF Q8_0 split4 fused QKV, 256 threads, shared reduction"} else {"original raw GGUF Q8_0 coltile4 split4 output, 256 threads, shared reduction"},
-        "candidate":if comparison==ProjectionComparison::PackedLoads {"four U16 weights and two float4 activations per eight-value task; qualified warp tree and original FP32 association"} else {"same raw weights, task assignment and original-tree warp finish, 256 threads"},
-        "comparison":if comparison==ProjectionComparison::PackedLoads {"packed-loads"} else {"warp-reduction"},
-        "profile_source":if comparison==ProjectionComparison::PackedLoads {json!({
+        "control":if comparison==ProjectionComparison::SplitPlanes {"qualified packed raw GGUF Q8_0 loads and original-tree warp finish, unchanged geometry"} else if comparison==ProjectionComparison::PackedLoads {"qualified raw GGUF Q8_0 scalar loads and original-tree warp finish; unchanged geometry"} else if kind==ProjectionKind::Qkv {"original raw GGUF Q8_0 split4 fused QKV, 256 threads, shared reduction"} else {"original raw GGUF Q8_0 coltile4 split4 output, 256 threads, shared reduction"},
+        "candidate":if comparison==ProjectionComparison::SplitPlanes {"existing lossless split planes with one uint2 payload read per eight weights; qualified activation loads, geometry and FP32 tree"} else if comparison==ProjectionComparison::PackedLoads {"four U16 weights and two float4 activations per eight-value task; qualified warp tree and original FP32 association"} else {"same raw weights, task assignment and original-tree warp finish, 256 threads"},
+        "comparison":if comparison==ProjectionComparison::SplitPlanes {"split-planes"} else if comparison==ProjectionComparison::PackedLoads {"packed-loads"} else {"warp-reduction"},
+        "profile_source":if comparison==ProjectionComparison::SplitPlanes {json!({
+            "path":"docs/experiments/2026-10-26-maxwell-packed-stage-audit.json",
+            "sha256":"3ff95bf79269368145bf3044bb4d351ec826f11444b87cadafbfe7868e29177e",
+            "generated_step":255,"scope":"optimistic GPU-stage fractions, not measured HTTP gains"})} else if comparison==ProjectionComparison::PackedLoads {json!({
             "path":"docs/experiments/2026-10-25-maxwell-projection-stage-audit.json",
             "sha256":"9445906c521ae61700935e0b934d8744d98eb0db247f7abeee667e2cc9e3066d",
             "generated_step":255,"scope":"optimistic GPU-stage fractions, not measured HTTP gains"})} else {serde_json::Value::Null},
@@ -101,7 +109,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 &mut output,
                 json!({"kind":format!("{prefix}_validation"),"layer_id":layer.source.layer_id,
                 "rows":rows,"row_positions":layer.rows[..rows],"checks":probe.validate()?,"sources":probe.sources,
-                "scratch_bytes":probe.bytes(),"tracked_device_bytes":resident}),
+                "scratch_bytes":probe.scratch_bytes(),"tracked_device_bytes":resident,
+                "preparation":probe.preparation()}),
             )?;
             let control_warm = probe.warm(false, 1000.0)?;
             let candidate_warm = probe.warm(true, 100.0)?;
@@ -139,7 +148,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                     &mut output,
                     json!({"kind":format!("{prefix}_pair"),"layer_id":layer.source.layer_id,"rows":rows,
                     "trial":trial,"measurements":times,"gpu_before":gpu_before,"gpu_after":inspect_gpu()?,
-                    "scratch_bytes":probe.bytes(),"tracked_device_bytes":resident}),
+                    "scratch_bytes":probe.scratch_bytes(),"tracked_device_bytes":resident,
+                    "additional_prepared_bytes":probe.bytes()-probe.scratch_bytes()}),
                 )?;
             }
             probe.verify()?;
@@ -151,7 +161,13 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 .unwrap();
             result["interpretation"]=json!("complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification");
             let gain = result["throughput_gain"].as_f64().unwrap();
-            let fraction = if comparison == ProjectionComparison::PackedLoads {
+            let fraction = if comparison == ProjectionComparison::SplitPlanes {
+                if kind == ProjectionKind::Qkv {
+                    0.070945564817451
+                } else {
+                    0.05158930127407999
+                }
+            } else if comparison == ProjectionComparison::PackedLoads {
                 if kind == ProjectionKind::Qkv {
                     0.09239512146033983
                 } else {
@@ -173,8 +189,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 "result":result,"optimistic_profile_weighted_e2e_gain":ceiling,
                 "optimistic_combined_e2e_gain":combined,
                 "profile_fraction":fraction,
-                "runtime_integration_allowed":rows==1 && result["passes_micro_screen"]==true && combined.unwrap_or(ceiling)>=0.03,
-                "qualification_scope":"case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required"}),
+                "runtime_integration_allowed":comparison!=ProjectionComparison::SplitPlanes && rows==1 && result["passes_micro_screen"]==true && combined.unwrap_or(ceiling)>=0.03,
+                "qualification_scope":if comparison==ProjectionComparison::SplitPlanes {"independent stage screen only; both projection reports must pass all three one-request cases and clear combined profile scope before actual-512 quality and HTTP qualification"} else {"case-level feasibility only; all three one-request cases, actual-512 quality and measured HTTP gates remain required"}}),
             )?;
             eprintln!(
                 "[projection_probe] layer={} rows={rows}: {} complete projection pairs",
