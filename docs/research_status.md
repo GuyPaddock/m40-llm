@@ -24,6 +24,10 @@ the closed per-thread multi-column, virtual-partial and looping-CTA probes.
 One fixed configuration, no geometry/register rescue or combination with
 closed candidates. Primitive correctness, compiled resources and the existing
 complete-FFN/actual-model/HTTP gates precede any runtime change.
+Primitive and complete-FFN adapter parity now pass with cuBLAS on/off,
+including inactive odd tails, ordered producers, guards, rejected arguments
+and unchanged scratch/cache. The shared runner exposes exclusive
+`--ffn-f32-cohorts`; compiled sm_52 inspection and paired timing are next.
 
 **Latest fixed screen:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-screen.md)
 preserve control bits/indices, guards and model preparation. Complete argmax

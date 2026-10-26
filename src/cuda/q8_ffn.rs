@@ -105,6 +105,7 @@ impl Q8FfnFp32Variant {
 
 #[derive(Clone, Copy)]
 enum SplitFfnKernel {
+    Cohorts,
     PersistentTiles,
     VirtualWarp,
     Dynamic,
@@ -411,6 +412,37 @@ impl CudaContext {
         )
     }
 
+    /// Two independent physical 128-thread output groups in one 256-thread CTA.
+    /// Benchmark-only; preserves the original per-output FP32 association.
+    ///
+    /// # Safety
+    /// The ownership, alignment, span and stream requirements of
+    /// `ffn_q8_split_f32_async` apply without modification.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_cohorts_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::Cohorts,
+        )
+    }
+
     /// Reuse at most 192 CTAs per row, with the original per-column FP32 tree.
     /// The mapping is benchmark-only and adds no device-wide synchronization.
     ///
@@ -499,6 +531,7 @@ impl CudaContext {
         }
         let _guard = self.inner.lock.lock().unwrap();
         let enqueue = match kernel {
+            SplitFfnKernel::Cohorts => ffi::m40llm_ffn_q8_split_cohorts_f32_async,
             SplitFfnKernel::PersistentTiles => ffi::m40llm_ffn_q8_split_persistent_tiles_f32_async,
             SplitFfnKernel::VirtualWarp => ffi::m40llm_ffn_q8_split_virtual_warp_f32_async,
             SplitFfnKernel::Dynamic => ffi::m40llm_ffn_q8_split_f32_async,
@@ -528,6 +561,7 @@ impl CudaContext {
             return Ok(());
         }
         record_async_kernel(match kernel {
+            SplitFfnKernel::Cohorts => "ffn_q8_split_f32x4_cohorts_256",
             SplitFfnKernel::PersistentTiles => "ffn_q8_split_f32x4_persistent_tiles_128",
             SplitFfnKernel::VirtualWarp => "ffn_q8_split_f32x4_virtual_warp_128",
             SplitFfnKernel::Dynamic => "ffn_q8_split_f32x4_128",

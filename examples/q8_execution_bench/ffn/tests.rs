@@ -366,7 +366,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SplitF32x4PersistentTiles {
+                let dispatch = if kernel == FfnKernel::SplitF32x4Cohorts {
+                    "cohorts_dispatch"
+                } else if kernel == FfnKernel::SplitF32x4PersistentTiles {
                     "persistent_tiles_dispatch"
                 } else if kernel == FfnKernel::SplitF32x4VirtualWarp {
                     "virtual_warp_dispatch"
@@ -376,6 +378,16 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
+                if kernel == FfnKernel::SplitF32x4Cohorts {
+                    assert_eq!(timing[dispatch]["threads_per_output"], 128);
+                    assert_eq!(timing[dispatch]["cohorts_per_block"], 2);
+                    assert_eq!(timing[dispatch]["threads"], 256);
+                    assert_eq!(
+                        timing[dispatch]["blocks_per_row"],
+                        pipeline.hidden_dim.div_ceil(2)
+                    );
+                    assert_eq!(timing[dispatch]["shared_bytes"], 2048);
+                }
                 if kernel == FfnKernel::SplitF32x4PersistentTiles {
                     assert_eq!(timing[dispatch]["block_cap_per_row"], 192);
                     assert_eq!(
@@ -444,6 +456,14 @@ fn test_virtual_warp_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_persistent_tiles_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4PersistentTiles)
+}
+
+/// Two physical output cohorts preserve the captured projections, hidden and
+/// completed down bits with actual two-cohort dispatch and unchanged scratch.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_physical_cohorts_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4Cohorts)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

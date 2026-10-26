@@ -24,6 +24,7 @@ const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    Cohorts,
     PersistentTiles,
     VirtualWarp,
     Dynamic,
@@ -190,6 +191,8 @@ fn compare_case(
     let mut split_projections: Option<[Vec<f32>; 2]> = None;
     let unfused_gate = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:unfused-gate")?;
     let unfused_up = DeviceBuffer::new_tagged(ctx, output.bytes(), "ffn-fp32:unfused-up")?;
+    let producer_bytes: Vec<_> = input.iter().flat_map(|v| v.to_le_bytes()).collect();
+    let producer = upload(ctx, &producer_bytes, "ffn-fp32:producer")?;
     for (variant, split_kernel) in Q8FfnFp32Variant::ALL
         .into_iter()
         .chain([
@@ -206,10 +209,12 @@ fn compare_case(
             (None, SplitKernel::BytePermute),
             (None, SplitKernel::VirtualWarp),
             (None, SplitKernel::PersistentTiles),
+            (None, SplitKernel::Cohorts),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::Cohorts => CudaContext::ffn_q8_split_cohorts_f32_async,
             SplitKernel::PersistentTiles => CudaContext::ffn_q8_split_persistent_tiles_f32_async,
             SplitKernel::VirtualWarp => CudaContext::ffn_q8_split_virtual_warp_f32_async,
             SplitKernel::Dynamic => CudaContext::ffn_q8_split_f32_async,
@@ -227,6 +232,21 @@ fn compare_case(
                     buffer.bytes(),
                 )?;
             }
+        }
+        if split_kernel == SplitKernel::Cohorts {
+            unsafe {
+                ctx.memcpy_d2d_async(
+                    x.cast_mut().cast(),
+                    producer.as_ptr(),
+                    producer_bytes.len(),
+                    CudaStream::Prefill,
+                )?;
+            }
+            ctx.stream_wait_for_stream(
+                CudaStream::Decode,
+                CudaStream::Prefill,
+                "ffn_cohorts_input_producer",
+            )?;
         }
         let before = profile::snapshot();
         unsafe {
@@ -272,6 +292,16 @@ fn compare_case(
         assert_eq!(delta.h2d_copies, 0);
         assert_eq!(delta.d2h_copies, 0);
         assert_eq!(delta.stream_syncs, 0);
+        if split_kernel == SplitKernel::Cohorts {
+            assert_eq!(delta.stream_waits, 0);
+            let after = profile::snapshot();
+            let op = "ffn_q8_split_f32x4_cohorts_256";
+            assert_eq!(
+                after.by_op.get(op).map_or(0, |s| s.launches)
+                    - before.by_op.get(op).map_or(0, |s| s.launches),
+                1
+            );
+        }
         ctx.synchronize_stream(CudaStream::Decode)?;
         let actual = read(ctx, &output)?;
         if split_kernel == SplitKernel::Unfused {
@@ -426,6 +456,8 @@ fn compare_case(
 /// bits even when only one of the four output warps has a valid column.
 /// Reused CTAs must reset accumulators and protect shared storage across every
 /// iteration, including output widths straddling the fixed 192-block cap.
+/// Physical cohorts preserve the original 128-thread output tree inside a
+/// 256-thread block, including inactive odd tails and an ordered producer.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -439,6 +471,7 @@ fn test_fp32_ffn_variants_preserve_native_math_and_guards() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for (k, hidden, offset) in [
         (32, 1, 0),
+        (32, 2, 0),
         (96, 37, 2),
         (2048, 257, 0),
         (4096, 37, 2),
@@ -478,6 +511,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_byte_permute_f32_async,
                 CudaContext::ffn_q8_split_virtual_warp_f32_async,
                 CudaContext::ffn_q8_split_persistent_tiles_f32_async,
+                CudaContext::ffn_q8_split_cohorts_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),

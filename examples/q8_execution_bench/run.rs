@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Two independent physical 128-thread output cohorts per 256-thread CTA.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_f32_cohorts: bool,
     /// Independent exact weighted-norm and two-launch vocabulary argmax screen.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     decode_reductions: bool,
@@ -650,6 +653,7 @@ mod argument_tests {
 
     /// Work ownership is opt-in, requires captured-input provenance, and
     /// cannot accidentally combine with a closed experiment or peer screen.
+    /// Physical cohorts keep the same exclusive capture boundary.
     #[test]
     fn test_work_ownership_screens_require_an_exclusive_capture() {
         let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
@@ -662,15 +666,25 @@ mod argument_tests {
         let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
         assert!(!parse(&[]).unwrap().ffn_f32_virtual_warp);
         assert!(!parse(&[]).unwrap().ffn_f32_persistent_tiles);
-        for mode in ["--ffn-f32-virtual-warp", "--ffn-f32-persistent-tiles"] {
+        assert!(!parse(&[]).unwrap().ffn_f32_cohorts);
+        for mode in [
+            "--ffn-f32-virtual-warp",
+            "--ffn-f32-persistent-tiles",
+            "--ffn-f32-cohorts",
+        ] {
             assert!(parse(&[mode]).is_err());
             let args = parse(&[capture.as_slice(), &[mode]].concat()).unwrap();
             assert_eq!(args.ffn_f32_virtual_warp, mode == "--ffn-f32-virtual-warp");
+            assert_eq!(args.ffn_f32_cohorts, mode == "--ffn-f32-cohorts");
             assert_eq!(
                 args.ffn_f32_persistent_tiles,
                 mode == "--ffn-f32-persistent-tiles"
             );
             for other in [
+                "--ffn-f32-cohorts",
+                "--decode-reductions",
+                "--qkv-f32-split",
+                "--output-f32-split",
                 "--ffn-f32-virtual-warp",
                 "--ffn-f32-persistent-tiles",
                 "--prepared-f32-packed-activation",

@@ -87,6 +87,10 @@ int m40llm_ffn_q8_split_persistent_tiles_f32_async(M40llmCudaContext* ctx, const
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
 }
+int m40llm_ffn_q8_split_cohorts_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
 int m40llm_ffn_q8_split_virtual_warp_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
