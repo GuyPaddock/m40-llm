@@ -17,12 +17,22 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Latest fixed screen:** [prepared activation vector loads](experiments/2026-10-26-maxwell-prepared-activation-screen.md)
+**Latest fixed screen:** [register-owned virtual FFN warps](experiments/2026-10-26-maxwell-virtual-warp-screen.md)
+preserve the control tree and bits but regress one-row complete FFN
+**5.36-5.40%**, with negative paired intervals; four-row results also lose.
+Removing shared publication/barrier raises registers 32 to 56 with zero
+reported stack/local bytes. Keep `21ca349` benchmark-only, without geometry
+or register-cap rescue. The pinned generic Maxwell MMVQ mapping uses four
+physical warps per output; its MoE warp mapping is not dense Qwen evidence.
+The next step needs a new independent source/measurement-backed hypothesis,
+not retuning a closed probe. Exact targets and defaults remain unchanged.
+
+**Previous fixed screen:** [prepared activation vector loads](experiments/2026-10-26-maxwell-prepared-activation-screen.md)
 preserve bits and the qualified shared tree, but regress one-row complete
 FFN **0.665-0.875%** and vocabulary **2.608-2.651%**. Registers rise 40 to
 46 without reported spills. Keep `5579ea2` benchmark-only; no runtime or
-geometry/register-cap rescue. Next inspect fused gate/up work distribution
-and pinned warp output ownership before an independent bounded hypothesis.
+geometry/register-cap rescue. The subsequent gate/up work-ownership audit
+and virtual-thread experiment are recorded above.
 Both original targets and defaults remain unchanged.
 
 **Latest selected-runtime profile:** [packed Q8 event/HTTP diagnostic](experiments/2026-10-26-maxwell-packed-stage-profile.md)

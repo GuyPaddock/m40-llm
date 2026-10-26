@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Register-Owned FFN Warps Regress
+
+One fixed virtual-thread mapping removes shared publication and the block
+barrier while retaining the qualified FP32 tree and control bits. Complete
+one-row FFN throughput regresses **5.36-5.40%**, with negative paired
+intervals; four-row results regress **4.27-5.43%**. Registers rise 32 to 56
+without reported stack/local storage. See [raw pairs, compiled evidence,
+memory and audit](experiments/2026-10-26-maxwell-virtual-warp-screen.md).
+
+Keep `21ca349` benchmark-only. No geometry/register-cap rescue, runtime
+integration or default change follows. The pinned Maxwell MMVQ source
+uses four physical warps per output, not the unrelated independent-warp
+MoE mapping. Exact status stays **49.146 HTTP tok/s** versus **43.106
+official Ollama**, both original targets unmet.
+
 ## 2026-10-26: Prepared Activation Loads Regress
 
 Two vector activation loads replace eight scalar sites and preserve control
