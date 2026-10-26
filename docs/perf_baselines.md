@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Exact Byte Conversion Is Near Neutral
+
+Exact byte permutation removes signed byte-to-float instructions while
+retaining qualified fused bits and 32 registers, but complete one-row FFN
+gains only **0.138-0.295%**. All intervals span zero, far below the 5% gate;
+four-row results are also neutral. Keep `d5a3350` benchmark-only with no
+conversion or geometry rescue. See [pairs, exhaustive byte coverage,
+instructions and audit](experiments/2026-10-25-maxwell-byte-ffn-screen.md).
+
+The independent compiled-code follow-up finds scalar weight/activation
+loads still present in qualified QKV/output kernels, motivating a bounded
+alignment-safe load-vectorization comparison there. Qualified **47.379
+HTTP tok/s**, both original unmet targets and defaults are unchanged.
+
 ## 2026-10-25: L2-Only FFN Weight Loads Miss The Gate
 
 One fixed cache-policy candidate preserves qualified fused bits but gains

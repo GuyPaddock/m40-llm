@@ -344,6 +344,13 @@ The subsequent [L2-only weight-cache screen](experiments/2026-10-25-maxwell-cach
 also preserves bits with distinct compiled loads but gains only 0.095-0.184%
 complete one-row throughput. Keep `0cff8ab` benchmark-only without a cache
 operator or geometry rescue. No defaults or authoritative HTTP claims change.
+The [exact byte-conversion screen](experiments/2026-10-25-maxwell-byte-ffn-screen.md)
+also misses the 5% gate at 0.138-0.295% complete one-row throughput gain,
+despite bit equality and unchanged 32-register usage. Keep `d5a3350`
+benchmark-only without conversion tuning. Actual compiled QKV/output
+kernels still have scalar weight/activation loads, an independent bounded
+load-vectorization opportunity rather than a reason to revive failed FFN
+experiments.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and

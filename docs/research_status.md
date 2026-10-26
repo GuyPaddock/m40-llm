@@ -46,10 +46,16 @@ now confirms distinct compiled weight instructions and preserved bits, but
 only **0.095-0.184% complete one-row gains**, below 5%. Keep `0cff8ab`
 benchmark-only and close cache-operator tuning without runtime integration.
 The compiler raises registers from 32 to 40; no cache-hit, bandwidth or
-occupancy conclusion follows. Next inspect the qualified signed-byte
-conversion/FP32 dependency chain for an independent exact-arithmetic
-hypothesis, preserving every original gate and avoiding rejected geometry
-or layout rescues.
+occupancy conclusion follows. The subsequent
+[exact byte-permute conversion screen](experiments/2026-10-25-maxwell-byte-ffn-screen.md)
+removes I2F instructions with unchanged 32-register use and control bits,
+but gains only **0.138-0.295% complete one-row throughput**, with all
+intervals spanning zero. Keep `d5a3350` benchmark-only; no conversion or
+geometry rescue follows. The independent source/SASS finding shows scalar
+U8 weight and FP32 activation loads remain in qualified QKV/output kernels.
+Next bound alignment-safe U16/float4 load vectorization there, retaining
+current geometry, original signed conversion, FP32 association/bias and
+every quality/E2E gate. Do not combine rejected FFN candidates.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)
