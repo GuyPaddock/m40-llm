@@ -82,9 +82,12 @@ overlap, alignment and signed segment-offset overflow fail before work.
 The adapter uses CUDA 12.8's bundled CUB 2.7.0 with its default sm_52 policy;
 there is no custom policy search or runtime configuration switch. The
 [CUB license notice](third_party/cub-LICENSE.txt) accompanies binary/header use.
-The build exposes C99/POSIX declarations required by these headers while
-continuing to hide GNU/C23 math extensions. A libstdc++ classification-name
-bridge re-exports existing standard overloads; it adds no math implementation.
+Only the isolated CUB translation unit exposes the C99/POSIX declarations
+required by its headers while continuing to hide GNU/C23 math extensions.
+Inference kernels keep their original flags and headers. A CUB-local
+libstdc++ classification-name bridge re-exports existing standard overloads;
+it adds no math implementation. Whole original-kernel word equivalence is
+required before this reference can be timed.
 
 ### Explicit Runtime Qualification
 
