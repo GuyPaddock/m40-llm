@@ -340,6 +340,10 @@ The independent [unfused FFN screen](experiments/2026-10-25-maxwell-unfused-ffn-
 also preserves bits but regresses complete one-row throughput 14.14-14.27%.
 Keep `286cb9a` benchmark-only, without a column/thread rescue. The pinned
 Ollama unfused dispatch does not qualify unfusion of our different arithmetic.
+The subsequent [L2-only weight-cache screen](experiments/2026-10-25-maxwell-cache-ffn-screen.md)
+also preserves bits with distinct compiled loads but gains only 0.095-0.184%
+complete one-row throughput. Keep `0cff8ab` benchmark-only without a cache
+operator or geometry rescue. No defaults or authoritative HTTP claims change.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and

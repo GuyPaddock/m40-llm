@@ -40,9 +40,16 @@ preserves control bits but regresses complete FFN **14.14-14.27%** at one
 row and 12.18-12.76% at four. Keep `286cb9a` benchmark-only with no geometry
 rescue or runtime wiring. Source inspection confirms existing load overlap
 and read-only PTX loads, so generic prefetch or adding `__ldg` is not an
-established missing optimization. Next examine an explicitly different
-weight-cache policy with emitted-code evidence before timing, retaining
-all original gates and the current fused control.
+established missing optimization. The independent
+[L2-only weight-cache screen](experiments/2026-10-25-maxwell-cache-ffn-screen.md)
+now confirms distinct compiled weight instructions and preserved bits, but
+only **0.095-0.184% complete one-row gains**, below 5%. Keep `0cff8ab`
+benchmark-only and close cache-operator tuning without runtime integration.
+The compiler raises registers from 32 to 40; no cache-hit, bandwidth or
+occupancy conclusion follows. Next inspect the qualified signed-byte
+conversion/FP32 dependency chain for an independent exact-arithmetic
+hypothesis, preserving every original gate and avoiding rejected geometry
+or layout rescues.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

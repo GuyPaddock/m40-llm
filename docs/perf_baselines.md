@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: L2-Only FFN Weight Loads Miss The Gate
+
+One fixed cache-policy candidate preserves qualified fused bits but gains
+only **0.095-0.184% complete one-row FFN throughput**, well below 5%.
+Four-row gains are 1.40-4.68%, with a wide zero-spanning interval on layer 0;
+they do not qualify the single-token path. See [configuration, all paired
+results, emitted instructions and audit](experiments/2026-10-25-maxwell-cache-ffn-screen.md).
+
+Weight loads change from read-only to L2-only; activations remain read-only.
+The compiler raises registers from 32 to 40 with no reported spills. No
+cache-hit or bandwidth attribution follows. Keep `0cff8ab` benchmark-only
+without more cache-operator/geometry tuning. Qualified **47.379 HTTP tok/s**,
+both original unmet targets and runtime defaults are unchanged.
+
 ## 2026-10-25: Fixed Unfused FFN Regresses
 
 One fixed separate gate/up/SwiGLU strategy preserves control bits but
