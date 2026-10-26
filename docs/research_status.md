@@ -17,15 +17,23 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest fixed screen:** [prepared activation vector loads](experiments/2026-10-26-maxwell-prepared-activation-screen.md)
+preserve bits and the qualified shared tree, but regress one-row complete
+FFN **0.665-0.875%** and vocabulary **2.608-2.651%**. Registers rise 40 to
+46 without reported spills. Keep `5579ea2` benchmark-only; no runtime or
+geometry/register-cap rescue. Next inspect fused gate/up work distribution
+and pinned warp output ownership before an independent bounded hypothesis.
+Both original targets and defaults remain unchanged.
+
 **Latest selected-runtime profile:** [packed Q8 event/HTTP diagnostic](experiments/2026-10-26-maxwell-packed-stage-profile.md)
 preserves actual IDs with 1.0864% perturbation. Middle-stage shares are
 41.11% gate/up, 24.37% prepared down and 7.98% vocabulary. Source/current
 SASS shows scalar activation loads remain in the prepared projection while
-weights already use packed 64-bit reads. Next implement the [bounded
-activation-load-only probe](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md),
-keeping original reduction, planes/math/geometry and all existing gates.
-No combining rejected reduction/FFN candidates. No runtime/default change
-or new throughput claim follows from this diagnostic.
+weights already use packed 64-bit reads. The [bounded activation-load-only
+probe](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md)
+is now implemented and measured above, retaining original reduction,
+planes/math/geometry and all existing gates. No combining rejected
+reduction/FFN candidates or new throughput claim follows.
 
 **Requested KV-stack side diagnostic:** [five resident-generation rounds](experiments/2026-10-26-maxwell-packed-kv-stack.md)
 measure 49.104 tok/s dense, 19.694 compressed defaults, 20.217

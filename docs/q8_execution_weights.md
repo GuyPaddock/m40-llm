@@ -271,6 +271,9 @@ candidate identity and `is_candidate` arms; prior recorded schema-1 artifacts
 remain unchanged. Down timing includes unchanged gate/up, isolated down
 and complete FFN; vocabulary remains a separate complete-projection screen.
 See the [compiled finding and fixed acceptance gates](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md).
+The [completed screen](experiments/2026-10-26-maxwell-prepared-activation-screen.md)
+regresses one-row complete FFN and vocabulary. Keep it benchmark-only;
+no runtime selection or geometry/register-cap rescue follows.
 
 Use `q8_execution_bench --prepared-f32-warp` with the existing explicit
 model, frozen `--ffn-inputs` / `--ffn-capture-report`, release build and

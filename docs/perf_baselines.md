@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Prepared Activation Loads Regress
+
+Two vector activation loads replace eight scalar sites and preserve control
+bits, but one-row complete FFN regresses **0.665-0.875%** with negative paired
+intervals. Vocabulary regresses **2.608% / 2.651%** at rows 1/4. None passes
+the 5% micro gate. See [all pairs, compiled evidence, memory and audit](experiments/2026-10-26-maxwell-prepared-activation-screen.md).
+
+Registers rise 40 to 46 without reported spills; no measured occupancy
+attribution follows. Keep `5579ea2` benchmark-only, without geometry or
+register-cap rescue, runtime integration or combining the earlier reduction
+candidate. Exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and defaults unchanged.
+
 ## 2026-10-26: Packed Runtime Remains FFN Dominated
 
 Five profiling-off/on pairs preserve actual 512 IDs and show **1.0864%
