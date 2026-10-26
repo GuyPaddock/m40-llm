@@ -1,5 +1,10 @@
 # Maxwell Runtime Quality Qualification
 
+Historical checkpoint before the sequential-prefix ownership repair.
+Use the [corrected Q8_1 follow-up](2026-10-26-maxwell-q81-corrected-quality.md)
+for current numerical results and completed-prefix reports for exact-path
+qualification. Raw records below remain unchanged; step 42 is historical.
+
 M08 extends the existing `model_quality` runner rather than adding another
 evaluation framework. This checkpoint qualifies candidates for controlled
 HTTP timing. It does not establish an E2E improvement or change defaults.

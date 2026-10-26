@@ -48,10 +48,11 @@ enables weight preparation.
 
 The [plan-evidence audit](experiments/2026-10-26-maxwell-plan-evidence-audit.md)
 distinguishes completed exact-path qualification from historical numerical
-evidence. Q8_1 quality reports predate the sequential-prefix ownership repair;
-they cannot qualify the repaired runtime. The next bounded follow-up refreshes
-both existing Q8_1 geometries against the corrected explicit native/sequential
-control. It does not substitute numerical results for the exact-output goal.
+evidence. The [refreshed Q8_1 reports](experiments/2026-10-26-maxwell-q81-corrected-quality.md)
+now use completed sequential prefill for both geometries: zero dense-valid
+task regressions, changed continuations at step 60 for 128 threads and step
+10 for 256 threads, and worse held-out PPL. They remain numerical-only and
+cannot qualify the exact-output goal. Earlier Q8_1 reports are historical.
 
 The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its

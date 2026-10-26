@@ -9,6 +9,11 @@ objective complete. The current exact runtime is qualified at **49.146449
 HTTP tok/s**, versus fresh official Ollama **43.105570**. Both required
 thresholds, **53.06** and **56.037241 HTTP tok/s**, remain unmet.
 
+The bounded numerical follow-up below subsequently completed at source
+`3383947`; its [repaired-prefix quality evidence](2026-10-26-maxwell-q81-corrected-quality.md)
+now supersedes historical Q8_1 generation conclusions. Both candidates
+remain numerical-only. This closes a validation gap, not either speed target.
+
 The execution guide still called the historical 35.724705 down/head-only
 configuration current. Correct that guide without rewriting dated reports.
 The 41.331 M09 checkpoint is historical too. Current evidence pins the
@@ -31,7 +36,7 @@ dequant-SGEMM prefix, dense KV and all 109 prepared identities.
 | Bounded reusable dequantization storage, all per-prompt conversions included | Prefill quality/HTTP dispatch and memory records | 90,177,536-byte capacity, below 128 MiB; no all-model FP32 cache |
 | Immutable model choices, typed ownership, no silent fallback or per-token workspace allocation | [Runtime contract](2026-10-25-maxwell-ffn-runtime.md), affected owner/forward tests and current runtime config code | Verified by linked implementation/test checkpoints; diagnostics remain explicit |
 | FP32 actual512 equality, frozen tasks and reference-prefix full logits | [Current packed-projection quality](2026-10-25-maxwell-packed-projection-runtime-quality.md) | Verified: actual512 IDs and all twelve outputs match; seven dense-valid rows, five inconclusive; sampled logits have zero difference |
-| Q8_1 reconstruction, full-model drift, divergence, task quality and held-out loss/PPL | [Historical M08 numerical report](2026-10-25-maxwell-runtime-quality.md) | Primitive evidence remains valid; full-generation/control conclusions predate the prefix-completion repair and need refreshing |
+| Q8_1 reconstruction, full-model drift, divergence, task quality and held-out loss/PPL | M04 primitive measures plus [corrected M08 numerical reports](2026-10-26-maxwell-q81-corrected-quality.md) | Refreshed after the audit: both task sets retain seven dense-valid passes, continuations diverge at 60/128 and 10/256, held-out PPL worsens; no exact-goal eligibility |
 | Independent decode/prefill qualification before combined timing | Corrected independent reports, [combined quality](2026-10-25-maxwell-completed-combined-quality.md), subsequent incremental reports | Verified for the retained exact path |
 | Actual model/prompt IDs, greedy natural stopping, fresh KV, release HTTP timing | [Fresh official comparison](2026-10-25-maxwell-packed-projection-ollama-http.md), raw records and audit | Verified for the qualified checkpoint, not rerun by this audit |
 | Five pairs, fixed gain/variation/CI gates and fresh borderline confirmation | Fresh official comparison and separate twenty-pair packed-projection confirmation linked there | Verified; no pooling or microbenchmark-only promotion |

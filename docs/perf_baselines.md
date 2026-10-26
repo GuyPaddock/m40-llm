@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Corrected Q8_1 Quality Remains Numerical-Only
+
+The plan audit found historical Q8_1 quality reports predated the sequential
+prefix ownership repair. Fresh release runs of the two unchanged geometries
+now preserve the corrected control's seven dense-valid task passes, but
+change the actual 512-token continuation at **step 60 for 128 threads** and
+**step 10 for 256 threads**, not historical step 42. Held-out PPL remains
+**39.612157 reference / 40.670991 / 40.776474**. See
+[raw outputs, reference-prefix logits, loss and independent audits](experiments/2026-10-26-maxwell-q81-corrected-quality.md).
+
+This is a quality evidence repair, not a paired timing or promotion result.
+Both cases use the corrected explicit native/sequential M08 control, not
+the current best runtime. Q8_1 stays numerical research only; defaults,
+qualified **49.146 HTTP tok/s** versus **43.106 official Ollama**, and both
+unmet exact-output targets remain unchanged.
+
 ## 2026-10-26: Physical Gate/Up Roles Regress
 
 Separating gate and up into two physical 128-thread roles preserves original

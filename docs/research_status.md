@@ -17,6 +17,19 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest plan-evidence repair:** the [audit](experiments/2026-10-26-maxwell-plan-evidence-audit.md)
+identified Q8_1 quality predating the prefix-completion fix. The
+[two corrected-control release evaluations](experiments/2026-10-26-maxwell-q81-corrected-quality.md)
+now complete: reference actual512 IDs match the repaired control, both
+geometries retain seven dense-valid task passes with five inconclusive,
+but continuation divergence is **60/128 threads** and **10/256 threads**.
+Held-out PPL remains worse, 40.670991/40.776474 versus 39.612157. Both
+audits and 24 corruption controls pass; tracked cleanup is zero. Keep
+Q8_1 numerical-only. The execution guide now names the qualified 49.146
+runtime instead of historical 35.725. This closes stale evidence, not
+either unmet speed target. Next work remains independently supported
+exact execution optimization, not Q8_1 or closed-geometry promotion.
+
 **Latest fixed role screen:** [physical gate/up ownership](experiments/2026-10-26-maxwell-role-parallel-ffn-screen.md)
 preserves gate/up, SwiGLU and complete-down bits but regresses complete
 one-row FFN **14.53-14.66%**, all paired intervals negative. Four-row work
