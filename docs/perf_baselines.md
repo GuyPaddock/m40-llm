@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Packed Prefill Projection Attribution
+
+Five release profiling-off/on pairs preserve actual 512 IDs and ordinary
+counters, measuring **49.390 / 48.707 HTTP tok/s**, a **1.3825%** diagnostic
+overhead. Prefix spans total **88.787 ms conversion**, **91.566 ms SGEMM**
+and **43.749 ms Q/K/V bias**, with **139.894 ms unattributed wall time**.
+They do not cover all prefill GPU work. See [coverage, timing boundaries,
+source comparison and raw evidence](experiments/2026-10-26-maxwell-prefill-attribution.md).
+
+Even eliminating the profiled conversion/SGEMM scope gives only a **1.771%**
+optimistic E2E estimate. Do not implement a new transpose/layout path on
+that evidence alone. The new profiler is opt-in; no backend or default
+changes. Qualified status stays **49.146 HTTP tok/s** versus **43.106
+official Ollama**; both original targets remain unmet.
+
 ## 2026-10-26: Register-Owned FFN Warps Regress
 
 One fixed virtual-thread mapping removes shared publication and the block

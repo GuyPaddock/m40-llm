@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest attribution:** [packed-prefix projection costs](experiments/2026-10-26-maxwell-prefill-attribution.md)
+preserve actual 512 IDs/counters with **1.3825%** off/on instrumentation
+overhead. Conversion is **88.787 ms**, SGEMM **91.566 ms**, and bias
+**43.749 ms** across the prefix; spans omit other GPU/host work. Eliminating
+conversion plus SGEMM gives only a **1.771% optimistic E2E estimate**, below
+3%. The current N-leading/NN versus pinned source-layout/TN difference
+does not justify implementation by itself. Keep `c44ab95` as opt-in
+measurement infrastructure, not an optimized backend. The next candidate
+needs a larger demonstrated scope without reopening closed probes. Both
+original targets and defaults remain unchanged.
+
 **Latest fixed screen:** [register-owned virtual FFN warps](experiments/2026-10-26-maxwell-virtual-warp-screen.md)
 preserve the control tree and bits but regress one-row complete FFN
 **5.36-5.40%**, with negative paired intervals; four-row results also lose.

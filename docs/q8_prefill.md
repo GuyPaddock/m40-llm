@@ -75,6 +75,11 @@ Library callers constructing `GpuProfileConfig` initialize
 `GpuProfileScope`, reflecting its token and prefix use; there is no legacy
 scope-name alias.
 
+The [first real-model attribution](experiments/2026-10-26-maxwell-prefill-attribution.md)
+preserves actual 512 IDs with 1.3825% instrumentation overhead. Conversion
+and SGEMM together have too little measured scope for a standalone 3% E2E
+promotion proposal; no alternative layout is implemented from that finding.
+
 `tests/q8_prefill_dequant.rs` has a CPU bounds test and explicit hardware
 checks. Release M40 results with cuBLAS enabled pass all four tests:
 
