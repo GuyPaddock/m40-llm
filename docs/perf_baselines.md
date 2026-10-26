@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Combined QKV/Output Runtime Preserves Quality
+
+The opt-in projection warp combination now preserves **512 actual generated
+IDs and all twelve frozen task outputs** against the current split-FFN/
+SGEMM control. Seven dense-valid tasks have zero regressions; five reference
+failures remain inconclusive. All seven sampled full-vocabulary logit
+comparisons have **zero max/mean difference** and top-10 overlap ten.
+See [actual dispatch, memory, tests and audit](experiments/2026-10-25-maxwell-projection-runtime-quality.md).
+
+All 109 prepared gate/up/down/vocabulary identities and capacities stay
+unchanged, with no added device weights or activation quantization. Each
+projection candidate executes 18,432 launches in the canonical run.
+The runtime is now eligible for paired HTTP timing, not yet an E2E claim.
+Defaults and the last qualified **45.075 HTTP tok/s** remain unchanged;
+both original throughput goals are still unmet.
+
 ## 2026-10-25: Output Warp Finish Clears Combined Feasibility
 
 The fixed raw-Q8 four-column output kernel preserves original FP32 bits and

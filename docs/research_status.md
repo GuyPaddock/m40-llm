@@ -56,13 +56,19 @@ positive benchmark candidate, not a runtime win. The independent
 [native output reduction screen](experiments/2026-10-25-maxwell-output-warp-screen.md)
 now also passes at **30.42-31.57%** one-request throughput gain, preserving
 bits, storage and 40-register usage. Both stage gates and the combined
-optimistic **4.68-4.72%** ceiling pass. Implementation `12191f5` remains
-benchmark-only. Next add one immutable combined QKV/output runtime choice
-with current split-FFN/SGEMM as explicit control and identical gate/up/down/
-head preparation; require actual-512/frozen quality before original HTTP
-qualification. Do not rescue geometry or revive failed prepared layouts.
-Prepared down/head and
-original micro/quality/HTTP gates remain fixed. Do not
+optimistic **4.68-4.72%** ceiling pass. Primitive implementation `12191f5`
+is now followed by the combined model-local runtime `b7edf08` and
+explicit-control/evidence tooling `1349613` now pass the
+[actual-model quality gate](experiments/2026-10-25-maxwell-projection-runtime-quality.md):
+**512 actual IDs and all twelve task outputs match**, with zero regressions
+across seven dense-valid tasks and **zero sampled full-vocabulary logit
+differences**. All 109 gate/up/down/head cache identities are unchanged;
+QKV/output each dispatch 18,432 candidate launches. Next run paired HTTP
+against current split-FFN/SGEMM, then fresh official Ollama only if the
+original E2E gate passes. No throughput/default promotion follows from
+single diagnostic generation times. Do not rescue geometry or revive failed
+prepared layouts. Prepared down/head and original micro/quality/HTTP gates
+remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.
 
 Earlier checkpoints below record their historical next steps, not a second

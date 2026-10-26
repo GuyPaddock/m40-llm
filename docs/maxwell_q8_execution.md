@@ -316,7 +316,10 @@ builds fail explicitly rather than falling back. Use `native` to disable.
 Model-local state has no per-token environment lookup, new device allocation
 or activation quantization. In-memory reference fixtures initialize native
 state and must not replace a model's state during workspace/session use.
-Runtime quality and HTTP qualification are still pending for this combination.
+The [actual-model quality checkpoint](experiments/2026-10-25-maxwell-projection-runtime-quality.md)
+now preserves all 512 actual IDs, all twelve task outputs and sampled full
+logits against current split-FFN/SGEMM. All 109 existing prepared tensors
+are identical. Controlled HTTP qualification remains pending.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and
