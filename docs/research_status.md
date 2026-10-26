@@ -17,6 +17,18 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent read reference:** [public CUB segmented reduction](experiments/2026-10-26-maxwell-cub-read-screen.md)
+preserves original per-column checksums but regresses one-row throughput
+**22.87-23.01%**, with all paired intervals negative; four rows also regress.
+It misses the 10% diagnostic gate. Keep implementation `4c1680b` and isolation
+fix `dfb6451` in history, with no policy/geometry rescue or inference consumer.
+Global header flags initially changed six RoPE entries before timing;
+isolated CUB compilation restores all 100,400 original words across 135
+entries. An untimed trace confirms one 256-thread CUB launch per call.
+Audit and twelve corruption controls pass. No measured traffic/occupancy or
+new generation claim follows. Next needs independent dominant-cost evidence;
+qualified runtime/defaults and both original unmet targets stay unchanged.
+
 **Latest independent capability check:** [legacy PC sampling](experiments/2026-10-26-maxwell-pc-sampling-capability.md)
 returns **27 / CUPTI_ERROR_NOT_SUPPORTED** during fixed-MID configuration
 on the M40 with CUPTI API 26 and driver 580.159.04. The SDK-only tool

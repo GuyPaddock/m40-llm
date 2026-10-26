@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: CUB Read Reference Misses The Diagnostic Gate
+
+Public-library segmented checksums over the original gate/up planes
+regress one-row throughput **22.87-23.01%** and four-row **29.28-29.31%**,
+with negative paired intervals. All exact source-derived sums and guards
+pass. See [fixed library scope, raw pairs and audit](experiments/2026-10-26-maxwell-cub-read-screen.md).
+
+The compiled-code check caught six RoPE changes from global host feature
+flags before timing. Isolating CUB restores all **100,400 original words /
+135 entries**. No inference, policy search or runtime promotion follows;
+this does not establish DRAM saturation or a measured stall mechanism.
+Qualified exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and defaults unchanged.
+
 ## 2026-10-26: Legacy PC-Sampling Setup Is Unsupported
 
 A standalone fixed-MID capability check returns **27 /
