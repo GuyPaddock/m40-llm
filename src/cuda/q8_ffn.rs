@@ -105,6 +105,7 @@ impl Q8FfnFp32Variant {
 
 #[derive(Clone, Copy)]
 enum SplitFfnKernel {
+    EightValues,
     Cohorts,
     PersistentTiles,
     VirtualWarp,
@@ -412,6 +413,41 @@ impl CudaContext {
         )
     }
 
+    /// Eight-value FP32 tasks on the existing lossless planes, one output/CTA.
+    /// Summation ownership changes; no activation quantization occurs.
+    ///
+    /// # Safety
+    /// Same spans and stream lifetime as `ffn_q8_split_f32_async`, but both
+    /// packed value pointers require eight-byte rather than four-byte alignment.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_f32x8_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        ensure!(
+            values.iter().all(|p| (*p as usize).is_multiple_of(8)),
+            "eight-value FFN requires eight-byte payload alignment"
+        );
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::EightValues,
+        )
+    }
+
     /// Two independent physical 128-thread output groups in one 256-thread CTA.
     /// Benchmark-only; preserves the original per-output FP32 association.
     ///
@@ -531,6 +567,7 @@ impl CudaContext {
         }
         let _guard = self.inner.lock.lock().unwrap();
         let enqueue = match kernel {
+            SplitFfnKernel::EightValues => ffi::m40llm_ffn_q8_split_f32x8_async,
             SplitFfnKernel::Cohorts => ffi::m40llm_ffn_q8_split_cohorts_f32_async,
             SplitFfnKernel::PersistentTiles => ffi::m40llm_ffn_q8_split_persistent_tiles_f32_async,
             SplitFfnKernel::VirtualWarp => ffi::m40llm_ffn_q8_split_virtual_warp_f32_async,
@@ -561,6 +598,7 @@ impl CudaContext {
             return Ok(());
         }
         record_async_kernel(match kernel {
+            SplitFfnKernel::EightValues => "ffn_q8_split_f32x8_128",
             SplitFfnKernel::Cohorts => "ffn_q8_split_f32x4_cohorts_256",
             SplitFfnKernel::PersistentTiles => "ffn_q8_split_f32x4_persistent_tiles_128",
             SplitFfnKernel::VirtualWarp => "ffn_q8_split_f32x4_virtual_warp_128",

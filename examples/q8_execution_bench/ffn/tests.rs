@@ -312,6 +312,8 @@ fn test_prepared_down_candidates_keep_complete_ffn_bits_and_cache() -> Result<()
     Ok(())
 }
 
+/// Protect exact-control variants' bits and the eight-value variant's unchanged
+/// numerical bounds, then verify actual complete-FFN dispatch and ownership.
 fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
     let _lock = cuda_test_scope::lock_cuda();
     let _env = configure();
@@ -358,7 +360,22 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
             ] {
                 actual.extend(buffer.read(&model.cuda)?.into_iter().map(f32::to_bits));
             }
-            assert_eq!(actual, expected);
+            if kernel == FfnKernel::SplitF32x8 {
+                validation::compare(
+                    &actual
+                        .iter()
+                        .copied()
+                        .map(f32::from_bits)
+                        .collect::<Vec<_>>(),
+                    &expected
+                        .iter()
+                        .copied()
+                        .map(|v| f64::from(f32::from_bits(v)))
+                        .collect::<Vec<_>>(),
+                )?;
+            } else {
+                assert_eq!(actual, expected);
+            }
             let timing = pipeline.time(Stage::Complete, 7)?;
             if kernel == FfnKernel::SplitF32x4Unfused {
                 assert_eq!(timing["enqueue_counters"]["launches"], 28);
@@ -366,7 +383,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SplitF32x4Cohorts {
+                let dispatch = if kernel == FfnKernel::SplitF32x8 {
+                    "eight_value_dispatch"
+                } else if kernel == FfnKernel::SplitF32x4Cohorts {
                     "cohorts_dispatch"
                 } else if kernel == FfnKernel::SplitF32x4PersistentTiles {
                     "persistent_tiles_dispatch"
@@ -378,6 +397,14 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
+                if kernel == FfnKernel::SplitF32x8 {
+                    assert_eq!(timing[dispatch]["values_per_task"], 8);
+                    assert_eq!(timing[dispatch]["payload_load_bytes"], 8);
+                    assert_eq!(timing[dispatch]["threads"], 128);
+                    assert_eq!(timing[dispatch]["blocks_per_row"], pipeline.hidden_dim);
+                    assert_eq!(timing[dispatch]["shared_bytes"], 1024);
+                    assert_eq!(timing[dispatch]["has_activation_quantization"], false);
+                }
                 if kernel == FfnKernel::SplitF32x4Cohorts {
                     assert_eq!(timing[dispatch]["threads_per_output"], 128);
                     assert_eq!(timing[dispatch]["cohorts_per_block"], 2);
@@ -464,6 +491,14 @@ fn test_persistent_tiles_ffn_preserves_complete_bits_and_reuses_scratch() -> Res
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_physical_cohorts_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4Cohorts)
+}
+
+/// Eight-value ownership keeps existing CPU/control tolerances, no quantized
+/// activations or new scratch, and dispatches the real wider-task kernel.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_eight_value_ffn_preserves_cpu_bounds_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x8)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

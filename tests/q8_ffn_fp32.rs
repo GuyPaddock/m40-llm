@@ -24,6 +24,7 @@ const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    EightValues,
     Cohorts,
     PersistentTiles,
     VirtualWarp,
@@ -210,10 +211,12 @@ fn compare_case(
             (None, SplitKernel::VirtualWarp),
             (None, SplitKernel::PersistentTiles),
             (None, SplitKernel::Cohorts),
+            (None, SplitKernel::EightValues),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::EightValues => CudaContext::ffn_q8_split_f32x8_async,
             SplitKernel::Cohorts => CudaContext::ffn_q8_split_cohorts_f32_async,
             SplitKernel::PersistentTiles => CudaContext::ffn_q8_split_persistent_tiles_f32_async,
             SplitKernel::VirtualWarp => CudaContext::ffn_q8_split_virtual_warp_f32_async,
@@ -233,7 +236,10 @@ fn compare_case(
                 )?;
             }
         }
-        if split_kernel == SplitKernel::Cohorts {
+        if matches!(
+            split_kernel,
+            SplitKernel::Cohorts | SplitKernel::EightValues
+        ) {
             unsafe {
                 ctx.memcpy_d2d_async(
                     x.cast_mut().cast(),
@@ -292,10 +298,17 @@ fn compare_case(
         assert_eq!(delta.h2d_copies, 0);
         assert_eq!(delta.d2h_copies, 0);
         assert_eq!(delta.stream_syncs, 0);
-        if split_kernel == SplitKernel::Cohorts {
+        if matches!(
+            split_kernel,
+            SplitKernel::Cohorts | SplitKernel::EightValues
+        ) {
             assert_eq!(delta.stream_waits, 0);
             let after = profile::snapshot();
-            let op = "ffn_q8_split_f32x4_cohorts_256";
+            let op = if split_kernel == SplitKernel::EightValues {
+                "ffn_q8_split_f32x8_128"
+            } else {
+                "ffn_q8_split_f32x4_cohorts_256"
+            };
             assert_eq!(
                 after.by_op.get(op).map_or(0, |s| s.launches)
                     - before.by_op.get(op).map_or(0, |s| s.launches),
@@ -309,7 +322,10 @@ fn compare_case(
             read(ctx, &unfused_up)?;
         }
         if variant.is_none() {
-            if split_kernel != SplitKernel::Dynamic {
+            if !matches!(
+                split_kernel,
+                SplitKernel::Dynamic | SplitKernel::EightValues
+            ) {
                 assert_eq!(
                     actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                     split_output
@@ -320,7 +336,7 @@ fn compare_case(
                         .collect::<Vec<_>>(),
                     "split follow-up changed qualified one-column SwiGLU bits"
                 );
-            } else {
+            } else if split_kernel == SplitKernel::Dynamic {
                 split_output = Some(actual.clone());
             }
         }
@@ -370,20 +386,26 @@ fn compare_case(
             }
             ctx.synchronize_stream(CudaStream::Decode)?;
             assert_eq!(
-                read(ctx, &captured)?,
-                actual,
+                read(ctx, &captured)?
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                 "capture changed FFN arithmetic"
             );
             let projections = [read(ctx, &gate_out)?, read(ctx, &up_out)?];
             if variant.is_none() {
-                if split_kernel != SplitKernel::Dynamic {
+                if !matches!(
+                    split_kernel,
+                    SplitKernel::Dynamic | SplitKernel::EightValues
+                ) {
                     for (a, b) in projections.iter().zip(split_projections.as_ref().unwrap()) {
                         assert_eq!(
                             a.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                             b.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
                         );
                     }
-                } else {
+                } else if split_kernel == SplitKernel::Dynamic {
                     split_projections = Some(projections.clone());
                 }
             }
@@ -458,6 +480,8 @@ fn compare_case(
 /// iteration, including output widths straddling the fixed 192-block cap.
 /// Physical cohorts preserve the original 128-thread output tree inside a
 /// 256-thread block, including inactive odd tails and an ordered producer.
+/// Eight-value tasks change ownership but retain the unchanged CPU tolerances;
+/// their capture and ordinary output bits still agree, with no weaker old checks.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -502,6 +526,18 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
         let output = DeviceBuffer::new_tagged(&ctx, 512, "ffn-fp32:invalid-output")?;
         let before = profile::snapshot();
         unsafe {
+            assert!(ctx
+                .ffn_q8_split_f32x8_async(
+                    input.as_ptr(),
+                    [weight.as_ptr(); 2],
+                    [weight.as_ptr().cast::<u8>().add(4).cast(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    1,
+                    32,
+                    None
+                )
+                .is_err());
             for enqueue in [
                 CudaContext::ffn_q8_split_f32_async,
                 CudaContext::ffn_q8_split_f32_two_columns_async,
@@ -512,6 +548,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_virtual_warp_f32_async,
                 CudaContext::ffn_q8_split_persistent_tiles_f32_async,
                 CudaContext::ffn_q8_split_cohorts_f32_async,
+                CudaContext::ffn_q8_split_f32x8_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),

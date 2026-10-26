@@ -24,7 +24,11 @@ Summation ownership changes, so use unchanged CPU tolerances and explicit
 control-drift reporting rather than claiming bit equality. Actual-512/frozen
 quality and HTTP gates remain mandatory; no closed mapping is combined and
 no task-width/geometry rescue is allowed. Defaults and prepared down/head stay
-fixed. Next implement the benchmark-only entry and behavioral checks.
+fixed. The benchmark-only API and exclusive `--ffn-f32-eight-values` mode
+now pass primitive and complete-FFN adapter checks with cuBLAS on/off,
+including stricter payload alignment, guarded ownership and explicit
+four-value-control drift. Next inspect compiled release instructions/resources
+and run paired timing before any runtime integration.
 
 **Latest fixed screen:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md)
 preserve control bits but regress complete one-row FFN throughput **0.49-0.52%**

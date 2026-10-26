@@ -28,6 +28,7 @@ pub(super) enum FfnKernel {
     Fp32(Q8FfnFp32Variant),
     Q81(Q8FfnQ81Launch),
     SplitF32x4,
+    SplitF32x8,
     SplitF32x4Cohorts,
     SplitF32x4VirtualWarp,
     SplitF32x4PersistentTiles,
@@ -46,6 +47,7 @@ impl Serialize for FfnKernel {
             Self::Fp32(variant) => variant.serialize(serializer),
             Self::Q81(launch) => launch.serialize(serializer),
             Self::SplitF32x4 => serializer.serialize_str("split-f32x4-128"),
+            Self::SplitF32x8 => serializer.serialize_str("split-f32x8-128"),
             Self::SplitF32x4Cohorts => serializer.serialize_str("split-f32x4-cohorts-256"),
             Self::SplitF32x4VirtualWarp => serializer.serialize_str("split-f32x4-virtual-warp-128"),
             Self::SplitF32x4PersistentTiles => {
@@ -74,6 +76,7 @@ impl FfnKernel {
         matches!(
             self,
             Self::SplitF32x4
+                | Self::SplitF32x8
                 | Self::SplitF32x4Cohorts
                 | Self::SplitF32x4VirtualWarp
                 | Self::SplitF32x4PersistentTiles
@@ -93,6 +96,7 @@ impl FfnKernel {
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
             Self::SplitF32x4
+            | Self::SplitF32x8
             | Self::SplitF32x4VirtualWarp
             | Self::SplitF32x4PersistentTiles
             | Self::SplitF32x4TwoColumns
@@ -110,6 +114,7 @@ impl FfnKernel {
             Self::Fp32(variant) => variant.has_packed_loads(),
             Self::Q81(_)
             | Self::SplitF32x4
+            | Self::SplitF32x8
             | Self::SplitF32x4Cohorts
             | Self::SplitF32x4VirtualWarp
             | Self::SplitF32x4PersistentTiles
@@ -128,6 +133,7 @@ impl FfnKernel {
             Self::Fp32(variant) => variant.has_warp_reduction(),
             Self::Q81(_)
             | Self::SplitF32x4
+            | Self::SplitF32x8
             | Self::SplitF32x4Cohorts
             | Self::SplitF32x4VirtualWarp
             | Self::SplitF32x4PersistentTiles
@@ -704,6 +710,24 @@ impl<'a> FfnPipeline<'a> {
         self.stop.record(stop_stream)?;
         let after = profile::snapshot();
         let enqueued = profile::counter_delta(&before, &after);
+        let eight_value_dispatch = if self.kernel == FfnKernel::SplitF32x8 {
+            let operation = "ffn_q8_split_f32x8_128";
+            let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
+                - before.by_op.get(operation).map_or(0, |v| v.launches);
+            let expected = if matches!(stage, Stage::IsolatedDown) {
+                0
+            } else {
+                iterations as u64
+            };
+            ensure!(launches == expected, "wrong eight-value FFN dispatch");
+            Some(
+                json!({"operation":operation,"fused_launches":launches,"values_per_task":8,
+                "payload_load_bytes":8,"threads":128,"blocks_per_row":self.hidden_dim,"shared_bytes":1024,
+                "has_changed_summation_ownership":true,"has_activation_quantization":false}),
+            )
+        } else {
+            None
+        };
         let cohorts_dispatch = if self.kernel == FfnKernel::SplitF32x4Cohorts {
             let operation = "ffn_q8_split_f32x4_cohorts_256";
             let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
@@ -821,6 +845,7 @@ impl<'a> FfnPipeline<'a> {
             "virtual_warp_dispatch":virtual_warp_dispatch,
             "persistent_tiles_dispatch":persistent_tiles_dispatch,
             "cohorts_dispatch":cohorts_dispatch,
+            "eight_value_dispatch":eight_value_dispatch,
             "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }

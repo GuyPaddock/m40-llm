@@ -72,6 +72,54 @@ __global__ void gate_up_split_f32x4(
     }
 }
 
+// Wider memory tasks, retaining FP32 activations and per-weight scale/FMA.
+// Summation ownership differs from the four-value control.
+__global__ void gate_up_split_f32x8(
+    const float* __restrict__ input, const __half* __restrict__ gate_scales,
+    const uint2* __restrict__ gate_values, const __half* __restrict__ up_scales,
+    const uint2* __restrict__ up_values, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output, int hidden, int k) {
+    const int column = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int tasks = k / 8;
+    const size_t value_base = static_cast<size_t>(column) * tasks;
+    const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    float gate_acc = 0.0f, up_acc = 0.0f;
+    for (int task = tid; task < tasks; task += 128) {
+        const float4 a = activation[task * 2];
+        const float4 b = activation[task * 2 + 1];
+        const uint2 gate_q = gate_values[value_base + task];
+        const uint2 up_q = up_values[value_base + task];
+        const float gs = __half2float(gate_scales[scale_base + task / 4]);
+        const float us = __half2float(up_scales[scale_base + task / 4]);
+        const float values[8] = {a.x,a.y,a.z,a.w,b.x,b.y,b.z,b.w};
+        #pragma unroll
+        for (int index = 0; index < 8; ++index) {
+            const uint32_t g = index < 4 ? gate_q.x : gate_q.y;
+            const uint32_t u = index < 4 ? up_q.x : up_q.y;
+            const int shift = (index % 4) * 8;
+            gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(g >> shift)) * gs);
+            up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(u >> shift)) * us);
+        }
+    }
+    extern __shared__ float published[];
+    published[tid] = gate_acc;
+    published[tid + 128] = up_acc;
+    __syncthreads();
+    if (tid < 32) {
+        const float g = reduce_published<128>(published, tid);
+        const float u = reduce_published<128>(published + 128, tid);
+        if (tid == 0) {
+            const size_t index = static_cast<size_t>(row) * hidden + column;
+            output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+            if (gate_output) gate_output[index] = g;
+            if (up_output) up_output[index] = u;
+        }
+    }
+}
+
 // Two independent physical 128-thread groups; no per-thread extra output or
 // virtual partials. Odd-width inactive groups must join the publication barrier.
 __global__ void gate_up_split_f32x4_cohorts(
@@ -469,6 +517,7 @@ int launch_split_f32(
     for (int i = 0; i < 2; ++i) {
         if (!scales[i] || !values[i] || reinterpret_cast<uintptr_t>(scales[i]) % 2 ||
             reinterpret_cast<uintptr_t>(values[i]) % 4) return -2;
+        if constexpr (Variant == 9) { if (reinterpret_cast<uintptr_t>(values[i]) % 8) return -2; }
     }
     if (gate_output || up_output) {
         if (!gate_output || !up_output || gate_output == up_output || gate_output == output ||
@@ -479,6 +528,11 @@ int launch_split_f32(
         gate_up_split_f32x4<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
             static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
             static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
+            static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    } else if constexpr (Variant == 9) {
+        gate_up_split_f32x8<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+            static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint2*>(values[0]),
+            static_cast<const __half*>(scales[1]),static_cast<const uint2*>(values[1]),static_cast<float*>(output),
             static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
     } else if constexpr (Variant == 8) {
         gate_up_split_f32x4_cohorts<<<dim3(hidden/2+hidden%2,rows),256,2048,ctx->decode_stream>>>(
@@ -533,6 +587,13 @@ extern "C" int m40llm_ffn_q8_split_virtual_warp_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<6>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_split_f32x8_async(
+    M40llmCudaContext* ctx, const void* input, const void* const* scales,
+    const void* const* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    return m40llm_q8_ffn::launch_split_f32<9>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
 }
 
 extern "C" int m40llm_ffn_q8_split_cohorts_f32_async(
