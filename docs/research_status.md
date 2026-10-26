@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest association screen:** [native 32-partial FP32 output warps](experiments/2026-10-26-maxwell-native-warp-ffn-screen.md)
+regress complete one-row FFN throughput **4.72-4.77%**, with negative
+paired intervals at all three layers. Existing CPU bounds and capture parity
+pass; control drift is reported. Shared publication/block-wide barriers are
+removed, but registers remain 40 versus qualified 32 and closed emulation's
+56. Control/prepared/emulation words are unchanged. Keep `dd78a1a`
+benchmark-only without geometry/register/cache rescue or runtime integration.
+Next work requires independent cost evidence, not another output-warp
+mapping. Both original exact targets and qualified runtime/defaults unchanged.
+
 **Latest placement diagnostic:** [fixed 128-byte FFN payload gaps](experiments/2026-10-26-maxwell-ffn-column-gap-screen.md)
 regress one-row checksum throughput **2.25-2.34%**, with negative paired
 intervals at all three layers, and four-row throughput **2.32-2.35%**.

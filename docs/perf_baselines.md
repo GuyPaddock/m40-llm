@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Native Warp FFN Association Regresses
+
+A native 32-partial FP32 output-warp mapping regresses complete one-row
+FFN throughput **4.72-4.77%**, with negative paired intervals at every
+layer. It removes shared publication/block-wide barriers, but needs **40
+registers**, versus 32 control and 56 closed 128-partial emulation. See
+[numerical drift, raw pairs, compiled resources and audit](experiments/2026-10-26-maxwell-native-warp-ffn-screen.md).
+
+Existing CPU bounds and capture parity pass; changed association is reported
+rather than claimed bit-identical. Keep `dd78a1a` benchmark-only, with no
+geometry/register rescue or runtime integration. Qualified status stays
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both original
+targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Fixed FFN Column Gap Regresses Reads
 
 A single 128-byte gap after payload columns regresses one-row read
