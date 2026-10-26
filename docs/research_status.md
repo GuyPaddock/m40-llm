@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent host-cost screen:** [synthetic greedy logits](experiments/2026-10-26-maxwell-greedy-adapter-scope.md)
+cost **6.072 ms per actual512 trace**, about **11.86 us/token**, in five
+CPU-only release pairs. This observed cost is 0.0583% of qualified HTTP,
+not an inference bound or new speedup. No model/context is constructed;
+GPUs are hidden and tracked bytes stay zero. Audits and nine corruptions
+pass. Keep `a2b8458` diagnostic-only without runtime changes or combining
+closed kernels. The pinned float matvec dispatch supports F32/F16/BF16
+weights, not an unused Q8/FP32 shortcut. Next needs independent dominant
+execution-cost scope; qualified runtime and both unmet targets unchanged.
+
 **Latest plan-evidence repair:** the [audit](experiments/2026-10-26-maxwell-plan-evidence-audit.md)
 identified Q8_1 quality predating the prefix-completion fix. The
 [two corrected-control release evaluations](experiments/2026-10-26-maxwell-q81-corrected-quality.md)

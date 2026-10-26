@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Synthetic Greedy Adapter Has Tiny CPU Cost
+
+Five paired CPU-only release replays of qualified actual512 IDs measure
+**6.072 ms/trace**, about **11.86 us/token**, for synthetic logits plus CPU
+greedy sampling after GPU token selection. The observed cost is about
+**0.0583%** of the qualified HTTP interval, not an E2E speedup forecast or
+rigorous bound. See [raw CPU pairs, scope and audit](experiments/2026-10-26-maxwell-greedy-adapter-scope.md).
+
+Keep `a2b8458` diagnostic-only; no runtime adapter change or GPU kernel is
+justified by this cost study. Actual IDs, zero device tracking, serial fixed
+pairs and all nine corruption controls pass. Exact status stays
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets remain
+unmet and runtime defaults unchanged.
+
 ## 2026-10-26: Corrected Q8_1 Quality Remains Numerical-Only
 
 The plan audit found historical Q8_1 quality reports predated the sequential
