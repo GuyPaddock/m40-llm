@@ -62,8 +62,18 @@ struct ReadProbe {
 #[derive(Clone, Copy)]
 enum ReadLayout<'a> {
     Original,
+    Ordered(bool),
     Pitched,
     ColumnGap(&'a super::column_gap::GappedPayloads),
+}
+
+fn calculate_dispatch_owner(column: usize, hidden: usize, is_transposed: bool) -> usize {
+    if is_transposed {
+        let width = hidden / 32;
+        (column % width) * 32 + column / width
+    } else {
+        column
+    }
 }
 
 fn time_control(pipeline: &FfnPipeline<'_>, stage: Stage, iterations: usize) -> Result<Value> {
@@ -104,6 +114,11 @@ impl ReadProbe {
         unsafe {
             let prepared = pipeline.prepared.as_ref().context("missing read planes")?;
             match layout {
+                ReadLayout::Ordered(is_transposed) => prepared.enqueue_checksum_ordered(
+                    self.output.pointer(),
+                    pipeline.rows,
+                    is_transposed,
+                ),
                 ReadLayout::Original => {
                     prepared.enqueue_checksum(self.output.pointer(), pipeline.rows)
                 }
@@ -137,10 +152,10 @@ impl ReadProbe {
         self.stop.record(CudaStream::Decode)?;
         let after = profile::snapshot();
         let counters = profile::counter_delta(&before, &after);
-        let op = if matches!(layout, ReadLayout::Original) {
-            "ffn_q8_weight_checksum_128"
-        } else {
-            "ffn_q8_weight_checksum_pitched_128"
+        let op = match layout {
+            ReadLayout::Original => "ffn_q8_weight_checksum_128",
+            ReadLayout::Ordered(_) => "ffn_q8_weight_checksum_ordered_128",
+            _ => "ffn_q8_weight_checksum_pitched_128",
         };
         let launches = after.by_op.get(op).map_or(0, |v| v.launches)
             - before.by_op.get(op).map_or(0, |v| v.launches);
@@ -159,7 +174,8 @@ impl ReadProbe {
         let gpu_ms = f64::from(self.start.elapsed_sync(&self.stop, "ffn_read_benchmark")?)
             / iterations as f64;
         Ok(
-            json!({"stage":match layout {ReadLayout::Original=>"weight_read_checksum",ReadLayout::Pitched=>"pitched_read_zero_gap",ReadLayout::ColumnGap(_)=>"pitched_read_column_gap"},"gpu_ms":gpu_ms,"iterations":iterations,
+            json!({"stage":match layout {ReadLayout::Original=>"weight_read_checksum",ReadLayout::Ordered(false)=>"ordered_read_sequential",ReadLayout::Ordered(true)=>"ordered_read_transpose32",ReadLayout::Pitched=>"pitched_read_zero_gap",ReadLayout::ColumnGap(_)=>"pitched_read_column_gap"},"gpu_ms":gpu_ms,"iterations":iterations,
+            "has_cta_index_tag":matches!(layout, ReadLayout::Ordered(_)),
             "column_gap_bytes":if matches!(layout,ReadLayout::ColumnGap(_)) {128} else {0},
             "started_unix_us":started_unix_us,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
@@ -169,7 +185,12 @@ impl ReadProbe {
         )
     }
 
-    fn verify(&self, pipeline: &FfnPipeline<'_>, layer: &FfnLayerSamples) -> Result<Value> {
+    fn verify(
+        &self,
+        pipeline: &FfnPipeline<'_>,
+        layer: &FfnLayerSamples,
+        layout: ReadLayout<'_>,
+    ) -> Result<Value> {
         pipeline.drain()?;
         let gate = checksum_columns(
             source_bytes(pipeline.model, &layer.source.gate)?,
@@ -186,12 +207,19 @@ impl ReadProbe {
         let expected: Vec<_> = (0..pipeline.rows)
             .flat_map(|_| gate.iter().zip(&up).flat_map(|(&g, &u)| [g, u]))
             .collect();
-        let actual: Vec<_> = self
+        let mut actual: Vec<_> = self
             .output
             .read(&pipeline.model.cuda)?
             .into_iter()
             .map(f32::to_bits)
             .collect();
+        if let ReadLayout::Ordered(is_transposed) = layout {
+            for (index, word) in actual.iter_mut().enumerate() {
+                let column = (index / 2) % pipeline.hidden_dim;
+                let owner = calculate_dispatch_owner(column, pipeline.hidden_dim, is_transposed);
+                *word = word.wrapping_sub(owner as u32);
+            }
+        }
         ensure!(
             actual == expected,
             "GPU weight checksums differ from original GGUF blocks"
@@ -227,16 +255,25 @@ pub(super) fn benchmark_case(
     let resident = CudaContext::total_device_bytes();
     let prepared_before = serde_json::to_value(pipeline.model.q8_execution_stats())?;
     probe.enqueue(pipeline, ReadLayout::Original)?;
-    let checks = probe.verify(pipeline, layer)?;
+    let checks = probe.verify(pipeline, layer, ReadLayout::Original)?;
     if let Some(gap) = &gap {
         for layout in [ReadLayout::Pitched, ReadLayout::ColumnGap(gap)] {
             probe.enqueue(pipeline, layout)?;
             ensure!(
-                probe.verify(pipeline, layer)? == checks,
+                probe.verify(pipeline, layer, layout)? == checks,
                 "pitched checksum differs from original/CPU"
             );
         }
         gap.verify()?;
+    }
+    if args.ffn_weight_read_column_order {
+        for layout in [ReadLayout::Ordered(false), ReadLayout::Ordered(true)] {
+            probe.enqueue(pipeline, layout)?;
+            ensure!(
+                probe.verify(pipeline, layer, layout)? == checks,
+                "ordered checksum/tag differs from original/CPU"
+            );
+        }
     }
     write_record(
         output,
@@ -244,6 +281,7 @@ pub(super) fn benchmark_case(
         "checks":checks,"real_ffn_checks":validation::validate(pipeline, layer)?,
         "preparation":pipeline.prepared.as_ref().unwrap().report,"real_scratch_bytes":pipeline.scratch_bytes(),
         "column_gap_preparation":gap.as_ref().map(|g|&g.report),
+        "has_verified_dispatch_owner_tags":args.ffn_weight_read_column_order,
         "tracked_device_bytes":resident,"runtime_integration_allowed":false}),
     )?;
     let control_warmup = pipeline.warm_up(1000.0, 256)?;
@@ -253,6 +291,16 @@ pub(super) fn benchmark_case(
             .unwrap())
     })?;
     let mut gap_warmups = Vec::new();
+    let mut order_warmups = Vec::new();
+    if args.ffn_weight_read_column_order {
+        for layout in [ReadLayout::Ordered(false), ReadLayout::Ordered(true)] {
+            order_warmups.push(warmup::measure(100.0, |count| {
+                Ok(probe.time(pipeline, count, layout)?["gpu_ms"]
+                    .as_f64()
+                    .unwrap())
+            })?);
+        }
+    }
     if let Some(gap) = &gap {
         for layout in [ReadLayout::Pitched, ReadLayout::ColumnGap(gap)] {
             gap_warmups.push(warmup::measure(100.0, |count| {
@@ -265,14 +313,18 @@ pub(super) fn benchmark_case(
     write_record(
         output,
         json!({"kind":"ffn_read_warmup","layer_id":layer.source.layer_id,"rows":pipeline.rows,
-        "real_ffn":control_warmup,"read_checksum":read_warmup,"pitched_read_warmups":gap_warmups,"gpu_after":inspect_gpu()?}),
+        "real_ffn":control_warmup,"read_checksum":read_warmup,"pitched_read_warmups":gap_warmups,"ordered_read_warmups":order_warmups,"gpu_after":inspect_gpu()?}),
     )?;
     let mut gap_pairs = Vec::new();
+    let mut order_pairs = Vec::new();
+    let mut original_order_pairs = Vec::new();
     for trial in 0..args.trials {
         let gpu_before = inspect_gpu()?;
         let mut measurements = Vec::new();
         let mut arms = if gap.is_some() {
             vec![0, 4, 5, 1, 2, 3]
+        } else if args.ffn_weight_read_column_order {
+            vec![0, 6, 7, 1, 2, 3]
         } else {
             vec![0, 1, 2, 3]
         };
@@ -284,6 +336,8 @@ pub(super) fn benchmark_case(
                 0 => probe.time(pipeline, args.iterations, ReadLayout::Original)?,
                 1 => time_control(pipeline, Stage::GateUpSwiglu, args.iterations)?,
                 2 => time_control(pipeline, Stage::IsolatedDown, args.iterations)?,
+                6 => probe.time(pipeline, args.iterations, ReadLayout::Ordered(false))?,
+                7 => probe.time(pipeline, args.iterations, ReadLayout::Ordered(true))?,
                 4 => probe.time(pipeline, args.iterations, ReadLayout::Pitched)?,
                 5 => probe.time(
                     pipeline,
@@ -292,6 +346,23 @@ pub(super) fn benchmark_case(
                 )?,
                 _ => time_control(pipeline, Stage::Complete, args.iterations)?,
             });
+        }
+        if args.ffn_weight_read_column_order {
+            let get = |stage| -> Result<f64> {
+                measurements
+                    .iter()
+                    .find(|m| m["stage"] == stage)
+                    .and_then(|m| m["gpu_ms"].as_f64())
+                    .context("missing ordered read timing")
+            };
+            order_pairs.push((
+                get("ordered_read_sequential")?,
+                get("ordered_read_transpose32")?,
+            ));
+            original_order_pairs.push((
+                get("weight_read_checksum")?,
+                get("ordered_read_transpose32")?,
+            ));
         }
         if gap.is_some() {
             let get = |stage| -> Result<f64> {
@@ -331,8 +402,36 @@ pub(super) fn benchmark_case(
             "result":result,"runtime_integration_allowed":false}),
         )?;
     }
+    if args.ffn_weight_read_column_order {
+        let mut comparisons = Vec::new();
+        for (control, pairs) in [
+            ("same_kernel_sequential", &order_pairs),
+            ("original_reader", &original_order_pairs),
+        ] {
+            let mut result = super::ablation::summarize(pairs)?;
+            result["control_median_ms"] = result
+                .as_object_mut()
+                .unwrap()
+                .remove("native_median_ms")
+                .unwrap();
+            comparisons.push(json!({"control":control,"result":result}));
+        }
+        write_record(
+            output,
+            json!({"kind":"ffn_read_order_screen","layer_id":layer.source.layer_id,"rows":pipeline.rows,
+            "comparisons":comparisons,"runtime_integration_allowed":false}),
+        )?;
+        for layout in [ReadLayout::Ordered(false), ReadLayout::Ordered(true)] {
+            probe.enqueue(pipeline, layout)?;
+            ensure!(
+                probe.verify(pipeline, layer, layout)? == checks,
+                "ordered checksum/tag changed after timed scratch reuse"
+            );
+        }
+        probe.enqueue(pipeline, ReadLayout::Original)?;
+    }
     ensure!(
-        probe.verify(pipeline, layer)? == checks,
+        probe.verify(pipeline, layer, ReadLayout::Original)? == checks,
         "read checksum changed after scratch reuse"
     );
     pipeline.verify_guards_and_inputs(layer)?;
@@ -358,6 +457,25 @@ pub(super) fn benchmark_case(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The diagnostic transpose covers every column once, and inverse tags
+    /// distinguish it from an ignored selector for nontrivial output widths.
+    #[test]
+    fn test_column_order_inverse_covers_each_physical_owner() {
+        for hidden in [32, 64, 96, 11008] {
+            let columns: Vec<_> = (0..hidden)
+                .map(|b| (b % 32) * (hidden / 32) + b / 32)
+                .collect();
+            let mut sorted = columns.clone();
+            sorted.sort_unstable();
+            assert_eq!(sorted, (0..hidden).collect::<Vec<_>>());
+            for (b, &column) in columns.iter().enumerate() {
+                assert_eq!(calculate_dispatch_owner(column, hidden, true), b);
+                assert_eq!(calculate_dispatch_owner(column, hidden, false), column);
+            }
+            assert_eq!(columns != sorted, hidden != 32);
+        }
+    }
 
     /// Every original word and scale bit contributes with defined wrapping;
     /// malformed spans cannot silently truncate the checksum reference.

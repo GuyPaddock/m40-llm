@@ -58,6 +58,47 @@ fn validate_checksum_spans(
 }
 
 impl CudaContext {
+    /// Checksum original planes in sequential or fixed transposed column order.
+    /// Each modular output additionally contains its physical CTA index.
+    ///
+    /// # Safety
+    /// Same live, ordered, disjoint spans as `ffn_q8_weight_checksum_async`.
+    /// Hidden is positive and divisible by 32; outputs remain rows*hidden*2 u32.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_weight_checksum_ordered_async(
+        &self,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        is_transposed: bool,
+    ) -> Result<()> {
+        ensure!(
+            hidden > 0 && hidden % 32 == 0,
+            "ordered checksum requires N divisible by 32"
+        );
+        validate_checksum_spans(&scales, &values, output, rows, hidden, k, 2, 4, 0)?;
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_ffn_q8_weight_checksum_ordered_async(
+            self.inner.raw.as_ptr(),
+            scales.as_ptr(),
+            values.as_ptr(),
+            output,
+            rows,
+            hidden,
+            k,
+            i32::from(is_transposed),
+        );
+        ensure!(
+            rc == 0,
+            "m40llm_ffn_q8_weight_checksum_ordered_async failed: {rc}"
+        );
+        record_async_kernel("ffn_q8_weight_checksum_ordered_128");
+        Ok(())
+    }
+
     /// Checksum all gate/up scale and payload bits on the decode stream.
     /// This benchmark diagnostic does not compute inference activations.
     ///

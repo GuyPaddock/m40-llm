@@ -103,6 +103,10 @@ int m40llm_ffn_q8_weight_checksum_async(M40llmCudaContext* ctx, const void* cons
     (void)ctx; (void)scales; (void)values; (void)output;
     (void)rows; (void)hidden; (void)k; return -1;
 }
+int m40llm_ffn_q8_weight_checksum_ordered_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k, int is_transposed) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)hidden; (void)k; (void)is_transposed; return -1;
+}
 int m40llm_ffn_q8_weight_checksum_pitched_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k, int column_gap) {
     (void)ctx; (void)scales; (void)values; (void)output;
     (void)rows; (void)hidden; (void)k; (void)column_gap; return -1;

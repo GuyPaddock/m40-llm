@@ -389,6 +389,16 @@ mod ffi {
             hidden: i32,
             k: i32,
         ) -> i32;
+        pub fn m40llm_ffn_q8_weight_checksum_ordered_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+            is_transposed: i32,
+        ) -> i32;
         pub fn m40llm_ffn_q8_weight_checksum_pitched_async(
             ctx: *mut M40llmCudaContext,
             scales: *const *const c_void,

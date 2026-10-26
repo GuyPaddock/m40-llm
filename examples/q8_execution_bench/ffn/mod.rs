@@ -153,6 +153,11 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         } else {
             serde_json::Value::Null
         };
+        if args.ffn_weight_read_column_order {
+            manifest["column_order_contract"] = json!({"tile_columns":32,"modes":["sequential","transpose32"],
+                "has_cta_index_tag":true,"has_new_weight_storage":false,
+                "gate":">=5% one-row read gain with positive paired intervals versus original and same-kernel controls; no inference claim"});
+        }
     }
     write_record(&mut output, manifest)?;
     for layer in &inputs.artifact.layers {

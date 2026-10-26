@@ -142,6 +142,7 @@ fn check_case(
     hidden: usize,
     rows: usize,
     gap: Option<usize>,
+    order: Option<bool>,
 ) -> Result<()> {
     let mut hosts = Vec::new();
     let mut expected = Vec::new();
@@ -214,7 +215,17 @@ fn check_case(
         let resident = CudaContext::total_device_bytes();
         let before = profile::snapshot();
         unsafe {
-            if let Some(gap) = gap {
+            if let Some(is_transposed) = order {
+                ctx.ffn_q8_weight_checksum_ordered_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    is_transposed,
+                )?;
+            } else if let Some(gap) = gap {
                 ctx.ffn_q8_weight_checksum_pitched_async(
                     scales,
                     values,
@@ -238,6 +249,14 @@ fn check_case(
         let after = profile::snapshot();
         let delta = profile::counter_delta(&before, &after);
         assert_eq!(delta.launches, 1);
+        if order.is_some() {
+            let operation = "ffn_q8_weight_checksum_ordered_128";
+            assert_eq!(
+                after.by_op.get(operation).map_or(0, |v| v.launches)
+                    - before.by_op.get(operation).map_or(0, |v| v.launches),
+                1
+            );
+        }
         assert_eq!(
             delta.device_allocs
                 + delta.device_frees
@@ -261,14 +280,21 @@ fn check_case(
             .all(|&v| v == GUARD));
         for row in 0..rows {
             for col in 0..hidden {
+                let owner = order.map_or(0, |is_transposed| {
+                    if is_transposed {
+                        (col % (hidden / 32)) * 32 + col / (hidden / 32)
+                    } else {
+                        col
+                    }
+                }) as u32;
                 assert_eq!(
                     words[8 + (row * hidden + col) * 2],
-                    expected[0][col],
+                    expected[0][col].wrapping_add(owner),
                     "gate repeat {repeat}"
                 );
                 assert_eq!(
                     words[9 + (row * hidden + col) * 2],
-                    expected[1][col],
+                    expected[1][col].wrapping_add(owner),
                     "up repeat {repeat}"
                 );
             }
@@ -291,7 +317,7 @@ fn test_weight_reads_preserve_checksums_guards_and_ownership() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for (k, hidden) in [(32, 1), (160, 7), (2048, 17)] {
         for rows in [1, 4] {
-            check_case(&ctx, k, hidden, rows, None)?;
+            check_case(&ctx, k, hidden, rows, None, None)?;
         }
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
@@ -309,9 +335,102 @@ fn test_pitched_weight_reads_ignore_gaps_and_preserve_ownership() -> Result<()> 
     for (k, n) in [(128, 1), (640, 7), (2048, 17)] {
         for rows in [1, 4] {
             for gap in [None, Some(0), Some(128)] {
-                check_case(&ctx, k, n, rows, gap)?;
+                check_case(&ctx, k, n, rows, gap, None)?;
             }
         }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Logical transpose changes the physical CTA tag but not source checksums.
+/// Dynamic widths, wrapping, guards, ordered producers and reuse must hold.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_ordered_reads_preserve_tagged_checksums_and_ownership() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, n) in [(32, 32), (160, 64), (2048, 96), (4096, 128)] {
+        for rows in [1, 4] {
+            for order in [false, true] {
+                check_case(&ctx, k, n, rows, None, Some(order))?;
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Unsupported shapes and bad spans fail before enqueue, preserving live
+/// output data and allocation ownership for both logical column modes.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_ordered_reads_reject_invalid_spans_before_enqueue() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let plane = upload(&ctx, &[0x23; 512])?;
+        let output = upload(&ctx, &[0x45; 128])?;
+        let s = [plane.as_ptr(); 2];
+        let v = s;
+        let o = output.as_mut_ptr();
+        let before = profile::snapshot();
+        unsafe {
+            for order in [false, true] {
+                for (rows, n, k) in [
+                    (0, 32, 32),
+                    (2, 32, 32),
+                    (1, 0, 32),
+                    (1, 31, 32),
+                    (1, 33, 32),
+                    (1, 32, 0),
+                    (1, 32, 33),
+                    (1, 32, i32::MAX),
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, v, o, rows, n, k, order)
+                        .is_err());
+                }
+                for bad in [
+                    std::ptr::null(),
+                    plane.as_ptr().cast::<u8>().add(1).cast(),
+                    (usize::MAX - 3) as *const c_void,
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, [bad; 2], o, 1, 32, 32, order)
+                        .is_err());
+                }
+                assert!(ctx
+                    .ffn_q8_weight_checksum_ordered_async(
+                        [plane.as_ptr().cast::<u8>().add(1).cast(); 2],
+                        v,
+                        o,
+                        1,
+                        32,
+                        32,
+                        order
+                    )
+                    .is_err());
+                for out in [
+                    std::ptr::null_mut(),
+                    o.cast::<u8>().add(2).cast(),
+                    plane.as_mut_ptr().cast::<u8>().add(4).cast(),
+                    (usize::MAX - 3) as *mut c_void,
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, v, out, 1, 32, 32, order)
+                        .is_err());
+                }
+            }
+        }
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()),
+            Default::default()
+        );
+        assert_eq!(download(&ctx, &plane)?, vec![0x23; 512]);
+        assert_eq!(download(&ctx, &output)?, vec![0x45; 128]);
     }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())

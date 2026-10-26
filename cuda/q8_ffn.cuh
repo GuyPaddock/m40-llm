@@ -45,6 +45,48 @@ __global__ void checksum_split_weights(
     }
 }
 
+// Tag checksum outputs with physical CTA ownership to verify visitation.
+__global__ void checksum_split_weights_ordered(
+    const uint16_t* __restrict__ gate_scales,
+    const uint32_t* __restrict__ gate_values,
+    const uint16_t* __restrict__ up_scales,
+    const uint32_t* __restrict__ up_values,
+    uint32_t* __restrict__ output, int hidden, int k, int is_transposed) {
+    const int b = blockIdx.x;
+    const int column = is_transposed ? (b % 32) * (hidden / 32) + b / 32 : b;
+    const int tid = threadIdx.x;
+    const int tasks = k / 4;
+    const size_t value_base = static_cast<size_t>(column) * tasks;
+    const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+    uint32_t gate_sum = 0, up_sum = 0;
+    for (int task = tid; task < tasks; task += 128) {
+        gate_sum += gate_values[value_base + task]
+            + static_cast<uint32_t>(gate_scales[scale_base + task / 8]);
+        up_sum += up_values[value_base + task]
+            + static_cast<uint32_t>(up_scales[scale_base + task / 8]);
+    }
+    extern __shared__ uint32_t checksums[];
+    checksums[tid] = gate_sum;
+    checksums[tid + 128] = up_sum;
+    __syncthreads();
+    if (tid < 32) {
+        gate_sum = (checksums[tid] + checksums[tid + 64])
+            + (checksums[tid + 32] + checksums[tid + 96]);
+        up_sum = (checksums[tid + 128] + checksums[tid + 192])
+            + (checksums[tid + 160] + checksums[tid + 224]);
+        #pragma unroll
+        for (int stride = 16; stride > 0; stride >>= 1) {
+            gate_sum += __shfl_down_sync(0xffffffffu, gate_sum, stride);
+            up_sum += __shfl_down_sync(0xffffffffu, up_sum, stride);
+        }
+        if (tid == 0) {
+            const size_t index = (static_cast<size_t>(blockIdx.y) * hidden + column) * 2;
+            output[index] = gate_sum + static_cast<uint32_t>(blockIdx.x);
+            output[index + 1] = up_sum + static_cast<uint32_t>(blockIdx.x);
+        }
+    }
+}
+
 // Both diagnostic arms execute this same kernel; only payload pitch differs.
 __global__ void checksum_split_weights_pitched(
     const uint16_t* __restrict__ gate_scales,
@@ -840,6 +882,27 @@ extern "C" int m40llm_ffn_q8_weight_checksum_async(
         static_cast<const uint16_t*>(scales[0]), static_cast<const uint32_t*>(values[0]),
         static_cast<const uint16_t*>(scales[1]), static_cast<const uint32_t*>(values[1]),
         static_cast<uint32_t*>(output), hidden, k);
+    return static_cast<int>(cudaPeekAtLastError());
+}
+
+extern "C" int m40llm_ffn_q8_weight_checksum_ordered_async(
+    M40llmCudaContext* ctx, const void* const* scales,
+    const void* const* values, void* output, int rows, int hidden, int k, int is_transposed) {
+    if (!ctx || !scales || !values || !output || (rows != 1 && rows != 4)
+        || hidden <= 0 || hidden % 32 || k <= 0 || k % 32 != 0
+        || (is_transposed != 0 && is_transposed != 1)) return -1;
+    if (reinterpret_cast<uintptr_t>(output) % 4 != 0) return -2;
+    for (int index = 0; index < 2; ++index) {
+        if (!scales[index] || !values[index]
+            || reinterpret_cast<uintptr_t>(scales[index]) % 2 != 0
+            || reinterpret_cast<uintptr_t>(values[index]) % 4 != 0) return -2;
+    }
+    const cudaError_t selected = cudaSetDevice(ctx->device_id);
+    if (selected != cudaSuccess) return static_cast<int>(selected);
+    m40llm_q8_ffn::checksum_split_weights_ordered<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+        static_cast<const uint16_t*>(scales[0]), static_cast<const uint32_t*>(values[0]),
+        static_cast<const uint16_t*>(scales[1]), static_cast<const uint32_t*>(values[1]),
+        static_cast<uint32_t*>(output), hidden, k, is_transposed);
     return static_cast<int>(cudaPeekAtLastError());
 }
 
