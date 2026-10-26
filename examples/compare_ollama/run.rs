@@ -1182,12 +1182,13 @@ pub async fn compare() -> Result<()> {
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
         "comparison_kind": if args.should_profile_runtime { "selected-runtime-stage-profile" } else if args.should_time_ollama { "selected-runtime-vs-ollama" } else if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
         "candidate_runtime_config":candidate_runtime,
-        "actual_q8_attention_projection_backend":model.q8_attention_projection.backend(),
         "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
     });
     manifest["primary_runtime_config"] = serde_json::to_value(primary_runtime)?;
+    manifest["actual_q8_attention_projection_backend"] =
+        serde_json::to_value(model.q8_attention_projection.backend())?;
     manifest["quality_control_runtime_config"] =
         serde_json::to_value(args.control_runtime_config())?;
     manifest["prefill_execution_contract"] = json!(super::q8_runtime::PREFILL_EXECUTION_CONTRACT);
