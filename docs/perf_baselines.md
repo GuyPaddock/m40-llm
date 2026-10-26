@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Eight-Value FFN Gains Remain Below Gate
+
+Aligned eight-byte payload tasks improve complete one-row FFN throughput
+**2.00-2.03%**, with positive paired intervals but upper bounds below 2.35%,
+missing the unchanged 5% gate. Both kernels retain 32 registers and zero
+reported stack/local storage. See [drift, loads, pairs and audit](experiments/2026-10-26-maxwell-ffn-eight-screen.md).
+
+FP32 summation ownership changes; all existing CPU bounds pass, but this is
+not actual-model/token-equality evidence. Keep `45d0214` benchmark-only,
+without task-width/geometry rescue or combining rejected candidates.
+Qualified status remains **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both original targets and runtime defaults remain unchanged.
+
 ## 2026-10-26: Physical FFN Cohorts Do Not Qualify
 
 Two independent physical 128-thread output groups per 256-thread CTA preserve

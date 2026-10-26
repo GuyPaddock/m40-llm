@@ -17,18 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Active bounded round:** [eight-value FP32 FFN tasks](experiments/2026-10-26-maxwell-ffn-eight-hypothesis.md)
-tests wider payload tasks in the original one-output/128-thread CTA, reducing
-source-level load/scale groups without changing weights or activation precision.
-Summation ownership changes, so use unchanged CPU tolerances and explicit
-control-drift reporting rather than claiming bit equality. Actual-512/frozen
-quality and HTTP gates remain mandatory; no closed mapping is combined and
-no task-width/geometry rescue is allowed. Defaults and prepared down/head stay
-fixed. The benchmark-only API and exclusive `--ffn-f32-eight-values` mode
-now pass primitive and complete-FFN adapter checks with cuBLAS on/off,
-including stricter payload alignment, guarded ownership and explicit
-four-value-control drift. Next inspect compiled release instructions/resources
-and run paired timing before any runtime integration.
+**Latest fixed screen:** [eight-value FP32 FFN tasks](experiments/2026-10-26-maxwell-ffn-eight-screen.md)
+improve complete one-row FFN throughput **2.00-2.03%** with positive intervals,
+but all upper bounds are below 2.35%, short of 5%. Wider payload loads retain
+32 registers and zero stack/local bytes; control/prepared words are unchanged.
+Changed summation ownership passes existing CPU bounds, with explicit drift
+reported rather than bit-equality claims. Keep `45d0214` benchmark-only, with
+no task-width/geometry rescue or runtime integration. Next seek independently
+measured larger-scope costs, not another closed-mapping combination or an
+unmeasured bandwidth attribution. Both original targets remain unmet and
+defaults unchanged.
 
 **Latest fixed screen:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md)
 preserve control bits but regress complete one-row FFN throughput **0.49-0.52%**
