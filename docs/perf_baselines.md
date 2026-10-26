@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Compressed KV Does Not Stack As A Short-Context Speedup
+
+Five release resident-generation rounds with the optimized packed Q8
+runtime measure **49.104 tok/s dense**, **19.694 compressed defaults**,
+**20.217 window128/top8**, and **22.765 window128/top4**. All generate 512
+tokens. These are not HTTP measurements. See [full timing, memory, output,
+reproduction and audit](experiments/2026-10-26-maxwell-packed-kv-stack.md).
+
+Default window1024 contains the full prompt/continuation and preserves
+dense IDs, but allocates **58.887 MiB KV versus 36.000 MiB dense** at this
+1024-token allocation bound. Window128 reduces KV to **30.238 MiB**, with
+output divergence at generated steps 323/top8 and 196/top4 and visible
+repetition. This is not a long-context crossover or a new quality claim.
+Exact HTTP status remains **49.146 versus 43.106 tok/s**, both targets unmet;
+no defaults or policies change.
+
 ## 2026-10-25: Packed Runtime Beats Fresh Ollama By 14.01%
 
 Five alternating release pairs measure **49.146449 versus 43.105570

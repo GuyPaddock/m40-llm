@@ -17,6 +17,14 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Requested KV-stack side diagnostic:** [five resident-generation rounds](experiments/2026-10-26-maxwell-packed-kv-stack.md)
+measure 49.104 tok/s dense, 19.694 compressed defaults, 20.217
+window128/top8 and 22.765 window128/top4 with the optimized Q8 path fixed.
+All generate 512 tokens; defaults preserve dense IDs but reserve more KV
+at the short 1024 context bound. Smaller windows save KV but change output
+and remain slower. This is not HTTP/exact-goal qualification or a reason
+to change defaults; the exact-track next action below remains unchanged.
+
 **Latest selected-runtime gap checkpoint:** the
 [fresh packed-runtime/Ollama comparison](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
 measures **49.146 versus 43.106 buffered HTTP tok/s, +14.014%**, paired
