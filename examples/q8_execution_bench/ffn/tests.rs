@@ -383,7 +383,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SplitF32x8 {
+                let dispatch = if kernel == FfnKernel::RoleParallel {
+                    "role_parallel_dispatch"
+                } else if kernel == FfnKernel::SplitF32x8 {
                     "eight_value_dispatch"
                 } else if kernel == FfnKernel::SplitF32x4Cohorts {
                     "cohorts_dispatch"
@@ -397,6 +399,15 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
+                if kernel == FfnKernel::RoleParallel {
+                    assert_eq!(timing[dispatch]["roles"], 2);
+                    assert_eq!(timing[dispatch]["partials_per_role"], 128);
+                    assert_eq!(timing[dispatch]["threads"], 256);
+                    assert_eq!(timing[dispatch]["blocks_per_row"], pipeline.hidden_dim);
+                    assert_eq!(timing[dispatch]["shared_bytes"], 1024);
+                    assert_eq!(timing[dispatch]["has_changed_summation_ownership"], false);
+                    assert_eq!(timing[dispatch]["has_activation_quantization"], false);
+                }
                 if kernel == FfnKernel::SplitF32x8 {
                     assert_eq!(timing[dispatch]["values_per_task"], 8);
                     assert_eq!(timing[dispatch]["payload_load_bytes"], 8);
@@ -483,6 +494,14 @@ fn test_virtual_warp_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_persistent_tiles_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4PersistentTiles)
+}
+
+/// Separate physical gate/up roles preserve complete control bits and typed
+/// cache/scratch ownership while dispatching the new single-output kernel.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_role_parallel_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::RoleParallel)
 }
 
 /// Two physical output cohorts preserve the captured projections, hidden and

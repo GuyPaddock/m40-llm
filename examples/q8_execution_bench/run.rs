@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Separate physical gate/up roles, retaining original FP32 reduction trees.
+    #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_payload_entropy","ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_f32_role_parallel: bool,
     /// Offline lossless payload size feasibility; never creates a CUDA model.
     #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     ffn_payload_entropy: bool,
@@ -649,6 +652,37 @@ mod argument_tests {
             "--ffn-q81",
         ] {
             assert!(parse(&[valid.as_slice(), &[other]].concat()).is_err());
+        }
+    }
+
+    /// Role-parallel work requires captured inputs and cannot combine probes.
+    #[test]
+    fn test_role_parallel_requires_an_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_f32_role_parallel);
+        assert!(parse(&["--ffn-f32-role-parallel"]).is_err());
+        let capture = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-f32-role-parallel",
+        ];
+        assert!(parse(&capture).unwrap().ffn_f32_role_parallel);
+        for other in [
+            "--ffn-payload-entropy",
+            "--ffn-f32-native-warp",
+            "--ffn-f32-cohorts",
+            "--ffn-f32-virtual-warp",
+            "--ffn-f32-eight-values",
+            "--ffn-f32-task-pairs",
+            "--ffn-weight-read",
+            "--prepared-warp-packet",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+        ] {
+            assert!(parse(&[capture.as_slice(), &[other]].concat()).is_err());
         }
     }
 

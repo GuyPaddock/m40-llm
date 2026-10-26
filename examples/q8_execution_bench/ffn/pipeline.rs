@@ -25,6 +25,7 @@ pub(super) enum DownProjection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
+    RoleParallel,
     NativeWarp,
     TaskPairPacket,
     Native,
@@ -46,6 +47,7 @@ pub(super) enum FfnKernel {
 impl Serialize for FfnKernel {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         match self {
+            Self::RoleParallel => serializer.serialize_str("split-f32x4-role-parallel-256"),
             Self::NativeWarp => serializer.serialize_str("split-f32x4-native-warp-128"),
             Self::TaskPairPacket => serializer.serialize_str("task-pair-packet-f32x4-128"),
             Self::Native => serializer.serialize_none(),
@@ -80,7 +82,8 @@ impl FfnKernel {
     pub fn has_split_weights(self) -> bool {
         matches!(
             self,
-            Self::NativeWarp
+            Self::RoleParallel
+                | Self::NativeWarp
                 | Self::TaskPairPacket
                 | Self::SplitF32x4
                 | Self::SplitF32x8
@@ -99,7 +102,7 @@ impl FfnKernel {
     pub fn threads(self) -> u32 {
         match self {
             Self::Native => 256,
-            Self::SplitF32x4Cohorts => 256,
+            Self::SplitF32x4Cohorts | Self::RoleParallel => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
             Self::NativeWarp
@@ -121,7 +124,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::NativeWarp
+            Self::RoleParallel
+            | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::Q81(_)
             | Self::SplitF32x4
@@ -142,7 +146,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::NativeWarp
+            Self::RoleParallel
+            | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::Q81(_)
             | Self::SplitF32x4
@@ -782,6 +787,27 @@ impl<'a> FfnPipeline<'a> {
         } else {
             None
         };
+        let role_parallel_dispatch = if self.kernel == FfnKernel::RoleParallel {
+            let operation = "ffn_q8_split_f32x4_role_parallel_256";
+            let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
+                - before.by_op.get(operation).map_or(0, |v| v.launches);
+            ensure!(
+                launches
+                    == if matches!(stage, Stage::IsolatedDown) {
+                        0
+                    } else {
+                        iterations as u64
+                    },
+                "wrong role-parallel dispatch"
+            );
+            Some(
+                json!({"operation":operation,"fused_launches":launches,"threads":256,"blocks_per_row":self.hidden_dim,
+                "roles":2,"partials_per_role":128,"values_per_task":4,"shared_bytes":1024,
+                "has_changed_summation_ownership":false,"has_activation_quantization":false}),
+            )
+        } else {
+            None
+        };
         let native_warp_dispatch = if self.kernel == FfnKernel::NativeWarp {
             let operation = "ffn_q8_split_f32x4_native_warp_128";
             let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
@@ -939,6 +965,7 @@ impl<'a> FfnPipeline<'a> {
             "persistent_tiles_dispatch":persistent_tiles_dispatch,
             "cohorts_dispatch":cohorts_dispatch,
             "eight_value_dispatch":eight_value_dispatch,"task_pair_dispatch":task_pair_dispatch,"native_warp_dispatch":native_warp_dispatch,
+            "role_parallel_dispatch":role_parallel_dispatch,
             "completion":"one event synchronization after the repeated stage; excluded from enqueue counters"}),
         )
     }

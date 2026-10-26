@@ -105,6 +105,7 @@ impl Q8FfnFp32Variant {
 
 #[derive(Clone, Copy)]
 enum SplitFfnKernel {
+    RoleParallel,
     NativeWarp,
     EightValues,
     Cohorts,
@@ -119,6 +120,36 @@ enum SplitFfnKernel {
 }
 
 impl CudaContext {
+    /// Separate physical gate/up roles with original 128-partial FP32 trees.
+    ///
+    /// # Safety
+    /// Same spans, alignment and stream lifetime as `ffn_q8_split_f32_async`.
+    /// No output/capture span may overlap input, weights or another output.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_role_parallel_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::RoleParallel,
+        )
+    }
+
     /// A native 32-partial FP32 tree per output warp. Summation association
     /// differs from the qualified 128-thread control; weights stay unchanged.
     ///
@@ -597,7 +628,10 @@ impl CudaContext {
                 "invalid split FP32 FFN intermediate outputs"
             );
         }
-        if matches!(kernel, SplitFfnKernel::NativeWarp) {
+        if matches!(
+            kernel,
+            SplitFfnKernel::NativeWarp | SplitFfnKernel::RoleParallel
+        ) {
             ensure!(k <= i32::MAX - 31, "native warp K exceeds safe indexing");
             let weights = (hidden as usize)
                 .checked_mul(k as usize)
@@ -641,6 +675,7 @@ impl CudaContext {
         }
         let _guard = self.inner.lock.lock().unwrap();
         let enqueue = match kernel {
+            SplitFfnKernel::RoleParallel => ffi::m40llm_ffn_q8_split_role_parallel_f32_async,
             SplitFfnKernel::NativeWarp => ffi::m40llm_ffn_q8_split_native_warp_f32_async,
             SplitFfnKernel::EightValues => ffi::m40llm_ffn_q8_split_f32x8_async,
             SplitFfnKernel::Cohorts => ffi::m40llm_ffn_q8_split_cohorts_f32_async,
@@ -673,6 +708,7 @@ impl CudaContext {
             return Ok(());
         }
         record_async_kernel(match kernel {
+            SplitFfnKernel::RoleParallel => "ffn_q8_split_f32x4_role_parallel_256",
             SplitFfnKernel::NativeWarp => "ffn_q8_split_f32x4_native_warp_128",
             SplitFfnKernel::EightValues => "ffn_q8_split_f32x8_128",
             SplitFfnKernel::Cohorts => "ffn_q8_split_f32x4_cohorts_256",

@@ -170,6 +170,9 @@ impl PreparedFfnWeights {
             values[index] = v.as_ptr();
         }
         let enqueue = match kernel {
+            super::pipeline::FfnKernel::RoleParallel => {
+                CudaContext::ffn_q8_split_role_parallel_f32_async
+            }
             super::pipeline::FfnKernel::NativeWarp => {
                 CudaContext::ffn_q8_split_native_warp_f32_async
             }

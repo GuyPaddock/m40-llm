@@ -55,7 +55,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     {
         return projection::benchmark(args);
     }
-    let is_fp32_ablation = args.ffn_f32_native_warp
+    let is_fp32_ablation = args.ffn_f32_role_parallel
+        || args.ffn_f32_native_warp
         || args.ffn_f32_task_pairs
         || args.ffn_f32_eight_values
         || args.ffn_f32_cohorts
@@ -123,6 +124,12 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"});
     manifest["is_weight_read_diagnostic"] = json!(args.ffn_weight_read);
+    if args.ffn_f32_role_parallel {
+        manifest["fp32_variants"] = json!([FfnKernel::RoleParallel]);
+        manifest["control"] = json!("qualified split-f32x4-128 and immutable prepared down/vocabulary; separate physical gate/up roles preserve original 128-partial arithmetic");
+        manifest["role_parallel_contract"] = json!({"roles":2,"partials_per_role":128,"threads":256,"outputs_per_cta":1,
+            "has_changed_summation_ownership":false,"has_activation_quantization":false,"shared_bytes":1024});
+    }
     if args.ffn_f32_native_warp {
         manifest["fp32_variants"] = json!([FfnKernel::NativeWarp]);
         manifest["control"] = json!("qualified split-f32x4-128 and immutable prepared down/vocabulary; candidate has a native 32-partial FP32 tree, not emulated 128 partials");
@@ -151,7 +158,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
-            if args.ffn_f32_native_warp
+            if args.ffn_f32_role_parallel
+                || args.ffn_f32_native_warp
                 || args.ffn_f32_task_pairs
                 || args.ffn_weight_read
                 || args.ffn_f32_eight_values
