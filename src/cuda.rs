@@ -24,6 +24,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "cuda")]
+mod decode_reductions;
+#[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
 mod q8_output;
@@ -817,6 +819,17 @@ mod ffi {
             rows: u32,
             dim: u32,
             eps: f32,
+        ) -> i32;
+        pub fn m40llm_rms_norm_f32_weighted_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weight: *const c_void,
+            output: *mut c_void,
+            rows: u32,
+            dim: u32,
+            eps: f32,
+            weight_dtype: u32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_rms_norm_f32_weighted_async(
             ctx: *mut M40llmCudaContext,

@@ -41,6 +41,7 @@ struct M40llmCudaContext {
 
 #include "q8_execution.cuh"
 #include "q8_ffn.cuh"
+#include "decode_reductions.cuh"
 #include "q8_unfused.cuh"
 #include "q8_separate_warp.cuh"
 #include "q8_separate_activation.cuh"

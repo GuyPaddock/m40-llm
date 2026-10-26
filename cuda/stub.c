@@ -313,6 +313,9 @@ int m40llm_rms_norm_f32_async(M40llmCudaContext* ctx, const void* d_in, void* d_
 int m40llm_rms_norm_f32_weighted(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
     (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
 }
+int m40llm_rms_norm_f32_weighted_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weight; (void)output; (void)rows; (void)dim; (void)eps; (void)weight_dtype; (void)stream_kind; return -1;
+}
 int m40llm_rms_norm_f32_weighted_async(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
     (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
 }

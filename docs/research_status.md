@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Active bounded round:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-hypothesis.md)
+target the existing shared reduction barriers and one-block vocabulary scan,
+not closed FFN/projection mappings. The benchmark-only weighted RMSNorm
+warp finish preserves old bits for FP16/FP32 weights, ragged dimensions,
+zeros, distinct rows and both streams with cuBLAS on/off. No generation
+selector or default change is added. Next implement the independent fixed
+partitioned argmax, then extend the existing benchmark. Independent >=5%
+stage gates and >=3% profile-weighted scope precede any runtime/actual-512/
+HTTP work. There is no performance result for this round yet.
+
 **Latest fixed screen:** [split-plane QKV/output storage](experiments/2026-10-26-maxwell-split-projection-screen.md)
 preserves qualified packed control bits, but QKV regresses **0.78-2.12%**
 at one request and output gains only **2.02-2.49%**, below 5%, with intervals
