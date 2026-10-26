@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Fixed Column Visitation Transpose Regresses
+
+One fixed checksum-only transpose of CTA-to-column ownership regresses
+one-row read throughput **3.33-3.36% versus same-kernel sequential** and
+**2.44-2.50% versus original reader**, with negative paired intervals.
+Four-row comparisons also regress. Dispatch-index tags and normalized
+source checks pass; original reader/gate-up/down instruction words and
+allocations remain unchanged. See
+[both controls, compiler evidence and audit](experiments/2026-10-26-maxwell-column-order-screen.md).
+
+Keep `034be32` diagnostic-only without an inference consumer or permutation,
+geometry, cache, layout or register rescue. This does not measure physical
+SM placement, partition behavior or DRAM traffic. Qualified exact status
+stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet and runtime defaults unchanged.
+
 ## 2026-10-26: Synthetic Greedy Adapter Has Tiny CPU Cost
 
 Five paired CPU-only release replays of qualified actual512 IDs measure

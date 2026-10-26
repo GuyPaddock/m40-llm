@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest dominant-read screen:** [fixed column visitation](experiments/2026-10-26-maxwell-column-order-screen.md)
+regresses one-row checksum throughput **3.33-3.36% versus same-kernel
+sequential**, **2.44-2.50% versus original**, all paired intervals negative.
+Four-row comparisons also regress. CTA index tags/CPU inverse checks pass,
+with unchanged 32-register reader resources, original control words and
+allocation ownership. Keep `034be32` diagnostic-only without inference,
+permutation/geometry/layout/cache/register rescue or physical-SM/DRAM claims.
+Independent audit and twelve corruptions pass, as do CUDA on/off and
+regressions. Next needs independent dominant-cost scope; qualified runtime,
+defaults and both unmet exact targets remain unchanged.
+
 **Latest independent host-cost screen:** [synthetic greedy logits](experiments/2026-10-26-maxwell-greedy-adapter-scope.md)
 cost **6.072 ms per actual512 trace**, about **11.86 us/token**, in five
 CPU-only release pairs. This observed cost is 0.0583% of qualified HTTP,
