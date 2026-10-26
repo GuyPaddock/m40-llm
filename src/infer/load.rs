@@ -74,7 +74,7 @@ impl LoadedModel {
                 || (cfg!(feature = "cuda")
                     && cfg!(nvcc)
                     && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
-            "warp-256 attention projections require compiled CUDA; \
+            "experimental attention projections require compiled CUDA; \
              use M40LLM_Q8_ATTN_PROJECTIONS=native"
         );
         attention_projection.validate_execution(execution)?;

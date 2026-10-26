@@ -1,4 +1,4 @@
-//! Model-local selection of the screened native Q8 QKV/output reductions.
+//! Model-local selection of screened native Q8 QKV/output implementations.
 use super::execution_weights::{Q8ExecutionConfig, Q8ExecutionMode, Q8ProjectionGroup};
 use anyhow::{ensure, Result};
 use serde::Serialize;
@@ -10,6 +10,8 @@ pub enum Q8AttentionProjectionBackend {
     Native,
     #[serde(rename = "warp-256")]
     Warp256,
+    #[serde(rename = "packed-warp-256")]
+    PackedWarp256,
 }
 
 impl Q8AttentionProjectionBackend {
@@ -21,7 +23,31 @@ impl Q8AttentionProjectionBackend {
         match value {
             "native" => Ok(Self::Native),
             "warp-256" => Ok(Self::Warp256),
-            _ => anyhow::bail!("M40LLM_Q8_ATTN_PROJECTIONS must be native or warp-256"),
+            "packed-warp-256" => Ok(Self::PackedWarp256),
+            _ => anyhow::bail!(
+                "M40LLM_Q8_ATTN_PROJECTIONS must be native, warp-256 or packed-warp-256"
+            ),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Warp256 => "warp-256",
+            Self::PackedWarp256 => "packed-warp-256",
+        }
+    }
+
+    /// Exact enqueue identities for explicit backends; native dispatch still
+    /// depends on the existing independently selected projection paths.
+    pub fn get_operations(self) -> Option<[&'static str; 2]> {
+        match self {
+            Self::Native => None,
+            Self::Warp256 => Some(["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"]),
+            Self::PackedWarp256 => Some([
+                "qkv_f32xq8_0_gguf_packed_warp",
+                "gemm_f32xq8_0_gguf_coltile4_packed_warp",
+            ]),
         }
     }
 
@@ -39,7 +65,7 @@ impl Q8AttentionProjectionBackend {
                 || execution.mode == Q8ExecutionMode::Off
                 || (!execution.families.contains(Q8ProjectionGroup::Qkv)
                     && !execution.families.contains(Q8ProjectionGroup::Output)),
-            "warp-256 attention projections require raw Q8_0 QKV/output weights; \
+            "experimental attention projections require raw Q8_0 QKV/output weights; \
              exclude qkv/output from prepared families or use M40LLM_Q8_ATTN_PROJECTIONS=native"
         );
         Ok(())
@@ -91,7 +117,7 @@ impl Q8AttentionProjectionState {
         let props = model.cuda.current_device_props()?;
         ensure!(
             props.major == 5 && props.minor == 2 && !model.d_weights_base.is_null(),
-            "warp-256 attention projections require sm_52 and uploaded device weights; \
+            "experimental attention projections require sm_52 and uploaded device weights; \
              use M40LLM_Q8_ATTN_PROJECTIONS=native"
         );
         model.validate_standard_layers()?;
@@ -108,15 +134,15 @@ impl Q8AttentionProjectionState {
                         && view.shape[0] <= i32::MAX as u64
                         && view.shape[1] > 0
                         && view.shape[1] <= i32::MAX as u64,
-                    "warp-256 attention projections require bounded Q8_0 QKV/output in layer {layer}; \
+                    "experimental attention projections require bounded Q8_0 QKV/output in layer {layer}; \
                      use M40LLM_Q8_ATTN_PROJECTIONS=native"
                 );
-                model.tensor_device_ptr("warp-256 attention projection", view)?;
+                model.tensor_device_ptr("Q8 attention projection", view)?;
             }
             let widths = std::array::from_fn(|i| weights[i].shape[1] as i32);
             ensure!(
                 widths.iter().map(|&v| i64::from(v)).sum::<i64>() <= i64::from(i32::MAX) - 255,
-                "warp-256 QKV widths overflow CUDA grid"
+                "Q8 attention projection widths overflow CUDA grid"
             );
             let biases = [w.bq, w.bk, w.bv];
             let mut bias_ptrs = [None; 3];
@@ -125,10 +151,10 @@ impl Q8AttentionProjectionState {
                     ensure!(
                         view.dtype == crate::gguf::GgmlDType::F32
                             && view.nbytes == widths[i] as usize * 4,
-                        "warp-256 QKV requires FP32 bias vectors"
+                        "Q8 attention projection requires FP32 bias vectors"
                     );
                     bias_ptrs[i] =
-                        Some(model.tensor_device_ptr("warp-256 QKV bias", view)? as usize);
+                        Some(model.tensor_device_ptr("Q8 projection bias", view)? as usize);
                 }
             }
             let key = std::array::from_fn(|i| weights[i].dptr as usize);
@@ -144,7 +170,7 @@ impl Q8AttentionProjectionState {
                         }
                     )
                     .is_none(),
-                "aliased warp-256 layer QKV identities"
+                "aliased Q8 attention layer QKV identities"
             );
             ensure!(
                 state
@@ -154,11 +180,11 @@ impl Q8AttentionProjectionState {
                         (w.wo.shape[1] as i32, w.wo.shape[0] as i32)
                     )
                     .is_none(),
-                "aliased warp-256 layer output identity"
+                "aliased Q8 attention layer output identity"
             );
         }
         state.backend = backend;
-        eprintln!("[q8-attn-projections] backend=warp-256 scope=single-row qkv_layers={} output_layers={} stream=decode extra_device_bytes=0",state.qkv.len(),state.output.len());
+        eprintln!("[q8-attn-projections] backend={} scope=single-row qkv_layers={} output_layers={} stream=decode extra_device_bytes=0",backend.as_str(),state.qkv.len(),state.output.len());
         Ok(state)
     }
 
@@ -171,13 +197,13 @@ impl Q8AttentionProjectionState {
         k: i32,
     ) -> Result<()> {
         let spec = self.qkv.get(&weights.map(|p| p as usize)).ok_or_else(|| {
-            anyhow::anyhow!("warp-256 QKV requires this model's original layer weight spans")
+            anyhow::anyhow!("Q8 QKV requires this model's original layer weight spans")
         })?;
         ensure!(
             spec.widths == widths
                 && spec.k == k
                 && spec.biases == biases.map(|b| b.map(|p| p as usize)),
-            "warp-256 QKV shape/bias does not match the loaded model"
+            "Q8 QKV shape/bias does not match the loaded model"
         );
         Ok(())
     }
@@ -191,7 +217,7 @@ impl Q8AttentionProjectionState {
     ) -> Result<()> {
         ensure!(
             self.output.get(&(weight as usize)) == Some(&(n, k)),
-            "warp-256 output requires this model's original attention-output weight and shape"
+            "Q8 output requires this model's original attention-output weight and shape"
         );
         Ok(())
     }

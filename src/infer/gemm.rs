@@ -1011,7 +1011,14 @@ impl LoadedModel {
                     [n_q, n_k, n_v],
                     k,
                 )?;
-                self.cuda.qkv_f32xq8_0_gguf_warp_async(
+                let enqueue = match self.q8_attention_projection.backend() {
+                    super::Q8AttentionProjectionBackend::PackedWarp256 => {
+                        crate::cuda::CudaContext::qkv_f32xq8_0_gguf_packed_warp_async
+                    }
+                    _ => crate::cuda::CudaContext::qkv_f32xq8_0_gguf_warp_async,
+                };
+                enqueue(
+                    &self.cuda,
                     d_x_f32,
                     [d_wq_f16, d_wk_f16, d_wv_f16],
                     [d_bq_f32, d_bk_f32, d_bv_f32],
@@ -1223,7 +1230,14 @@ impl LoadedModel {
         if m == 1 && !self.q8_attention_projection.backend().is_native() {
             self.q8_attention_projection
                 .validate_output(d_w_out_f16, n, k)?;
-            return self.cuda.gemm_f32xq8_0_gguf_coltile4_warp_async(
+            let enqueue = match self.q8_attention_projection.backend() {
+                super::Q8AttentionProjectionBackend::PackedWarp256 => {
+                    crate::cuda::CudaContext::gemm_f32xq8_0_gguf_coltile4_packed_warp_async
+                }
+                _ => crate::cuda::CudaContext::gemm_f32xq8_0_gguf_coltile4_warp_async,
+            };
+            return enqueue(
+                &self.cuda,
                 d_in_f32,
                 d_w_out_f16,
                 d_out_f32,

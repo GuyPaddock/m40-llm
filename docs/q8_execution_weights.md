@@ -209,6 +209,17 @@ retained. The explicit CUDA APIs require sixteen-byte activation alignment
 but only two-byte weight alignment. They do not select runtime behavior.
 See the [fixed stage/quality/HTTP gates](experiments/2026-10-25-maxwell-packed-projection-hypothesis.md).
 
+The model-local runtime selector also accepts
+`M40LLM_Q8_ATTN_PROJECTIONS=packed-warp-256`. It captures the choice once
+and uses packed QKV/output only for single-row decode. The qualified
+`warp-256` control and default `native` remain available; multi-row prefill
+is unchanged. Both explicit variants require uploaded sm_52 raw Q8_0
+QKV/output weights and validated model-local spans, reject conflicting
+prepared families, and allocate no extra weight/scratch storage. Packed
+inputs additionally require sixteen-byte alignment. This opt-in runtime
+path still requires full-model quality and HTTP qualification; primitive
+microbenchmarks do not promote it or change defaults.
+
 ## Prepared Projection Reduction Probe
 
 `DeviceQ8ExecutionWeight::enqueue_separate_warp_async` is a benchmark-only
