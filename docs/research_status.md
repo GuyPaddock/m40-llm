@@ -17,6 +17,14 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest incremental qualification:** the
+[combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)
+passes at **47.323 versus 44.950 tok/s, +5.279%**, with a positive paired
+interval, unchanged actual IDs and all 109 existing prepared tensor identities.
+Five pairs are sufficient under the original rules; no extension is needed.
+Next time this selected combination against fresh official Ollama. It is
+not yet a new cross-engine claim or either original goal; defaults remain.
+
 **Latest selected-runtime gap checkpoint:** the
 [fresh split-plane/Ollama comparison](experiments/2026-10-25-maxwell-split-ollama-http.md)
 measures FP32 split-f32x4-128 plus SGEMM at **45.075 vs 43.119 HTTP tok/s**,
@@ -57,16 +65,15 @@ positive benchmark candidate, not a runtime win. The independent
 now also passes at **30.42-31.57%** one-request throughput gain, preserving
 bits, storage and 40-register usage. Both stage gates and the combined
 optimistic **4.68-4.72%** ceiling pass. Primitive implementation `12191f5`
-is now followed by the combined model-local runtime `b7edf08` and
-explicit-control/evidence tooling `1349613` now pass the
+is followed by the combined model-local runtime `b7edf08` and
+explicit-control/evidence tooling `1349613`, which pass the
 [actual-model quality gate](experiments/2026-10-25-maxwell-projection-runtime-quality.md):
 **512 actual IDs and all twelve task outputs match**, with zero regressions
 across seven dense-valid tasks and **zero sampled full-vocabulary logit
 differences**. All 109 gate/up/down/head cache identities are unchanged;
-QKV/output each dispatch 18,432 candidate launches. Next run paired HTTP
-against current split-FFN/SGEMM, then fresh official Ollama only if the
-original E2E gate passes. No throughput/default promotion follows from
-single diagnostic generation times. Do not rescue geometry or revive failed
+QKV/output each dispatch 18,432 candidate launches. The incremental HTTP
+gate is now passed above; fresh official Ollama remains next. No default
+promotion follows from single diagnostic generation times. Do not rescue geometry or revive failed
 prepared layouts. Prepared down/head and original micro/quality/HTTP gates
 remain fixed. Do not
 replace the exact-engine objective with numerical, pruning or scheduling results.

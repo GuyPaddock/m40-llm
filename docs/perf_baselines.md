@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Combined Projection Runtime Passes HTTP Gate
+
+Five alternating release HTTP pairs measure **47.322695 versus 44.949943
+tok/s, +5.278655%**, against the current split-FFN/SGEMM control. The paired
+95% gain interval is **[4.945304%, 5.864675%]**; variation is low and neither
+extension nor borderline confirmation is required. Actual 512 IDs, all
+HTTP smokes and completed quality remain equal. See [paired results,
+dispatch, memory and audit](experiments/2026-10-25-maxwell-projection-incremental-http.md).
+
+Both models retain all 109 prepared gate/up/down/vocabulary tensors with
+no new device-weight storage. This qualifies the explicit QKV/output warp
+combination experimentally, not a default or a fresh Ollama comparison.
+The original 53.06 and 1.30x-fresh-Ollama objectives remain unmet; official
+Ollama timing is the next gate.
+
 ## 2026-10-25: Combined QKV/Output Runtime Preserves Quality
 
 The opt-in projection warp combination now preserves **512 actual generated
