@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Gate/Up Read Cost Is Close To Real Work
+
+A checksum-only read of the actual gate/up planes takes **0.208 ms** versus
+**0.221 ms** for qualified one-row gate/up/SwiGLU, or **93.94-94.00%** of
+its latency. Complete real FFN remains **0.352 ms**; checksum is never used
+as an activation or fed to down. See [fixed mapping, raw intervals, compiled
+loads, memory and audit](experiments/2026-10-26-maxwell-ffn-read-screen.md).
+
+This surrogate removes inference arithmetic but changes output/resource
+work; it is not measured DRAM time, a rigorous lower bound or a speedup.
+It argues against another arithmetic-only probe on the same mapping without
+new evidence. Keep diagnostic `1001976` benchmark-only. Qualified status is
+still **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet and runtime defaults are unchanged.
+
 ## 2026-10-26: Eight-Value FFN Gains Remain Below Gate
 
 Aligned eight-byte payload tasks improve complete one-row FFN throughput

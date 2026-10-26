@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest cost diagnostic:** [actual gate/up plane reads](experiments/2026-10-26-maxwell-ffn-read-screen.md)
+take **93.94-94.00%** of real one-row gate/up/SwiGLU latency, about
+**0.208 versus 0.221 ms**. All original-block CPU checksums and real FFN
+bounds pass; compiled control/prepared words remain unchanged. This is a
+checksum surrogate, not pure DRAM timing, an inference lower bound or an
+optimization. Keep `1001976` benchmark-only. Next audit independent
+weight-access/work-ownership costs, including prepared down/vocabulary,
+before another arithmetic-only candidate; do not reopen closed mappings.
+Both exact targets remain unmet and runtime defaults unchanged.
+
 **Latest fixed screen:** [eight-value FP32 FFN tasks](experiments/2026-10-26-maxwell-ffn-eight-screen.md)
 improve complete one-row FFN throughput **2.00-2.03%** with positive intervals,
 but all upper bounds are below 2.35%, short of 5%. Wider payload loads retain

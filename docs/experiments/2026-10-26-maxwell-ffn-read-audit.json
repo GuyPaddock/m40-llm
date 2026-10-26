@@ -1,0 +1,218 @@
+{
+  "passes_audit": true,
+  "source": "1001976189a7c67e6ca9e82d630c52a5845609af",
+  "executable_sha256": "8674b75c59725f93a5301c41c7828cf52f033822f06d6f11f13e9027b878b6d5",
+  "pairs": 30,
+  "gpu_boundaries": 60,
+  "serial_primary_intervals": 120,
+  "validation_records": 6,
+  "tracked_device_bytes_after": 0,
+  "runtime_integration_allowed": false,
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35215680599212645,
+        "gate_up_swiglu": 0.221343994140625,
+        "isolated_down": 0.13114240169525146,
+        "weight_read_checksum": 0.20792319774627685
+      },
+      "checksum_fraction_of_real_gate_up": 0.9393667921894389,
+      "real_gate_up_minus_checksum_ms": 0.01342079639434815,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3513823986053467,
+          "max_gpu_ms": 0.3522592067718506
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.2211359977722168,
+          "max_gpu_ms": 0.22225921154022216
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13080960512161255,
+          "max_gpu_ms": 0.13163520097732545
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20729279518127441,
+          "max_gpu_ms": 0.20830080509185792
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.540499210357666,
+        "gate_up_swiglu": 0.9550399780273438,
+        "isolated_down": 0.5654335975646972,
+        "weight_read_checksum": 0.8159040451049805
+      },
+      "checksum_fraction_of_real_gate_up": 0.8543140223200377,
+      "real_gate_up_minus_checksum_ms": 0.13913593292236326,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5375295639038087,
+          "max_gpu_ms": 1.5456831932067872
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9518207550048828,
+          "max_gpu_ms": 0.9650143623352051
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5499360084533691,
+          "max_gpu_ms": 0.5717887878417969
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8152992248535156,
+          "max_gpu_ms": 0.8174912452697753
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35244479179382326,
+        "gate_up_swiglu": 0.22146239280700683,
+        "isolated_down": 0.13143359422683715,
+        "weight_read_checksum": 0.20813438892364503
+      },
+      "checksum_fraction_of_real_gate_up": 0.9398182069902203,
+      "real_gate_up_minus_checksum_ms": 0.013328003883361805,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.35190401077270506,
+          "max_gpu_ms": 0.35269439220428467
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.22131199836730958,
+          "max_gpu_ms": 0.2215264081954956
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13121600151062013,
+          "max_gpu_ms": 0.13189120292663575
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.2074336051940918,
+          "max_gpu_ms": 0.20956799983978272
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5295488357543945,
+        "gate_up_swiglu": 0.9657919883728028,
+        "isolated_down": 0.5641568183898926,
+        "weight_read_checksum": 0.8156671524047852
+      },
+      "checksum_fraction_of_real_gate_up": 0.8445577952857605,
+      "real_gate_up_minus_checksum_ms": 0.15012483596801762,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5149888038635253,
+          "max_gpu_ms": 1.5369664192199708
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9590880393981933,
+          "max_gpu_ms": 0.9861696243286133
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5514976024627686,
+          "max_gpu_ms": 0.5680704116821289
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8156224250793457,
+          "max_gpu_ms": 0.8168191909790039
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.3521440029144287,
+        "gate_up_swiglu": 0.22127680778503417,
+        "isolated_down": 0.13137279748916625,
+        "weight_read_checksum": 0.2080064058303833
+      },
+      "checksum_fraction_of_real_gate_up": 0.9400280486351611,
+      "real_gate_up_minus_checksum_ms": 0.013270401954650873,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.35180160999298093,
+          "max_gpu_ms": 0.35335679054260255
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.22111361026763915,
+          "max_gpu_ms": 0.22187840938568115
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13115839958190917,
+          "max_gpu_ms": 0.13229440450668334
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20753281116485595,
+          "max_gpu_ms": 0.20959041118621827
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5115936279296875,
+        "gate_up_swiglu": 0.9558848381042481,
+        "isolated_down": 0.5580031871795654,
+        "weight_read_checksum": 0.8160799980163574
+      },
+      "checksum_fraction_of_real_gate_up": 0.8537430090792552,
+      "real_gate_up_minus_checksum_ms": 0.13980484008789062,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.4963168144226073,
+          "max_gpu_ms": 1.529520034790039
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9504511833190918,
+          "max_gpu_ms": 0.9597632408142089
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5515232086181641,
+          "max_gpu_ms": 0.5661503791809082
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.815833568572998,
+          "max_gpu_ms": 0.8194080352783203
+        }
+      ]
+    }
+  ],
+  "interpretation": "surrogate read/checksum cost, not DRAM traffic, a rigorous inference lower bound or a measured speedup"
+}
