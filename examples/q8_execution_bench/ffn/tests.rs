@@ -366,7 +366,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SplitF32x4VirtualWarp {
+                let dispatch = if kernel == FfnKernel::SplitF32x4PersistentTiles {
+                    "persistent_tiles_dispatch"
+                } else if kernel == FfnKernel::SplitF32x4VirtualWarp {
                     "virtual_warp_dispatch"
                 } else if kernel == FfnKernel::SplitF32x4WeightCg {
                     "weight_cg_dispatch"
@@ -374,6 +376,14 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
+                if kernel == FfnKernel::SplitF32x4PersistentTiles {
+                    assert_eq!(timing[dispatch]["block_cap_per_row"], 192);
+                    assert_eq!(
+                        timing[dispatch]["blocks_per_row"],
+                        pipeline.hidden_dim.min(192)
+                    );
+                    assert_eq!(timing[dispatch]["has_device_wide_barrier"], false);
+                }
             }
             for counter in [
                 "device_allocs",
@@ -426,6 +436,14 @@ fn test_byte_permute_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_virtual_warp_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4VirtualWarp)
+}
+
+/// CTA reuse must retain captured gate/up, hidden and complete down bits,
+/// unchanged scratch/cache ownership and actual allocation-free dispatch.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_persistent_tiles_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4PersistentTiles)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

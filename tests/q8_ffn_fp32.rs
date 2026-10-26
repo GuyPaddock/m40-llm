@@ -24,6 +24,7 @@ const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    PersistentTiles,
     VirtualWarp,
     Dynamic,
     TwoColumns,
@@ -204,10 +205,12 @@ fn compare_case(
             (None, SplitKernel::WeightCg),
             (None, SplitKernel::BytePermute),
             (None, SplitKernel::VirtualWarp),
+            (None, SplitKernel::PersistentTiles),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::PersistentTiles => CudaContext::ffn_q8_split_persistent_tiles_f32_async,
             SplitKernel::VirtualWarp => CudaContext::ffn_q8_split_virtual_warp_f32_async,
             SplitKernel::Dynamic => CudaContext::ffn_q8_split_f32_async,
             SplitKernel::TwoColumns => CudaContext::ffn_q8_split_f32_two_columns_async,
@@ -421,6 +424,8 @@ fn compare_case(
 /// packed position, not only signed extremes or one repeated word.
 /// Register-owned virtual partials must retain the same intermediate and final
 /// bits even when only one of the four output warps has a valid column.
+/// Reused CTAs must reset accumulators and protect shared storage across every
+/// iteration, including output widths straddling the fixed 192-block cap.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -432,7 +437,16 @@ fn test_fp32_ffn_variants_preserve_native_math_and_guards() -> Result<()> {
     let _stream = EnvRestore::set("M40LLM_Q8_DECODE_STREAM", "decode");
     let ctx = CudaContext::new_m40()?;
     let initial = CudaContext::total_device_bytes();
-    for (k, hidden, offset) in [(32, 1, 0), (96, 37, 2), (2048, 257, 0), (4096, 37, 2)] {
+    for (k, hidden, offset) in [
+        (32, 1, 0),
+        (96, 37, 2),
+        (2048, 257, 0),
+        (4096, 37, 2),
+        (32, 191, 0),
+        (32, 192, 2),
+        (96, 193, 0),
+        (32, 577, 0),
+    ] {
         for rows in [1, 4] {
             compare_case(&ctx, k, hidden, rows, offset)?;
         }
@@ -463,6 +477,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_weight_cg_f32_async,
                 CudaContext::ffn_q8_split_byte_permute_f32_async,
                 CudaContext::ffn_q8_split_virtual_warp_f32_async,
+                CudaContext::ffn_q8_split_persistent_tiles_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),

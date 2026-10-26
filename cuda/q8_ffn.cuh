@@ -363,6 +363,52 @@ __global__ void gate_up_split_f32x4_virtual_warp(
     }
 }
 
+// Reuse a fixed CTA grid, preserving the qualified physical per-column tree.
+__global__ void gate_up_split_f32x4_persistent_tiles(
+    const float* __restrict__ input, const __half* __restrict__ gate_scales,
+    const uint32_t* __restrict__ gate_values, const __half* __restrict__ up_scales,
+    const uint32_t* __restrict__ up_values, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output, int hidden, int k) {
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int tasks = k / 4;
+    const float4* activation = reinterpret_cast<const float4*>(input + static_cast<size_t>(row) * k);
+    extern __shared__ float published[];
+    for (uint32_t column = blockIdx.x; column < static_cast<uint32_t>(hidden); column += gridDim.x) {
+        const size_t value_base = static_cast<size_t>(column) * tasks;
+        const size_t scale_base = static_cast<size_t>(column) * (k / 32);
+        float gate_acc = 0.0f, up_acc = 0.0f;
+        for (int task = tid; task < tasks; task += 128) {
+            const float4 a = activation[task];
+            const uint32_t gate_q = gate_values[value_base + task];
+            const uint32_t up_q = up_values[value_base + task];
+            const float gs = __half2float(gate_scales[scale_base + task / 8]);
+            const float us = __half2float(up_scales[scale_base + task / 8]);
+            const float values[4] = {a.x, a.y, a.z, a.w};
+            #pragma unroll
+            for (int index = 0; index < 4; ++index) {
+                gate_acc += values[index] * (static_cast<float>(static_cast<int8_t>(gate_q >> (index * 8))) * gs);
+                up_acc += values[index] * (static_cast<float>(static_cast<int8_t>(up_q >> (index * 8))) * us);
+            }
+        }
+        published[tid] = gate_acc;
+        published[tid + 128] = up_acc;
+        __syncthreads();
+        if (tid < 32) {
+            const float g = reduce_published<128>(published, tid);
+            const float u = reduce_published<128>(published + 128, tid);
+            if (tid == 0) {
+                const size_t index = static_cast<size_t>(row) * hidden + column;
+                output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+                if (gate_output) gate_output[index] = g;
+                if (up_output) up_output[index] = u;
+            }
+        }
+        // Other warps may not overwrite partials until the first has read them.
+        __syncthreads();
+    }
+}
+
 template<int Variant>
 int launch_split_f32(
     M40llmCudaContext* ctx, const void* input, const void* const* scales,
@@ -383,6 +429,12 @@ int launch_split_f32(
     }
     if constexpr (Variant == 1) {
         gate_up_split_f32x4<<<dim3(hidden,rows),128,1024,ctx->decode_stream>>>(
+            static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
+            static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
+            static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    } else if constexpr (Variant == 7) {
+        const int blocks = hidden < 192 ? hidden : 192;
+        gate_up_split_f32x4_persistent_tiles<<<dim3(blocks,rows),128,1024,ctx->decode_stream>>>(
             static_cast<const float*>(input),static_cast<const __half*>(scales[0]),static_cast<const uint32_t*>(values[0]),
             static_cast<const __half*>(scales[1]),static_cast<const uint32_t*>(values[1]),static_cast<float*>(output),
             static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
@@ -428,6 +480,13 @@ extern "C" int m40llm_ffn_q8_split_virtual_warp_f32_async(
     const void* const* values, void* output, void* gate_output, void* up_output,
     int rows, int hidden, int k) {
     return m40llm_q8_ffn::launch_split_f32<6>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
+}
+
+extern "C" int m40llm_ffn_q8_split_persistent_tiles_f32_async(
+    M40llmCudaContext* ctx, const void* input, const void* const* scales,
+    const void* const* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    return m40llm_q8_ffn::launch_split_f32<7>(ctx,input,scales,values,output,gate_output,up_output,rows,hidden,k);
 }
 
 extern "C" int m40llm_ffn_q8_split_weight_cg_f32_async(
