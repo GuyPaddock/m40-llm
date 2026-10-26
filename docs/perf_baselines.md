@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Indexed Lossless Byte Coding Misses Feasibility
+
+Actual gate/up payload entropy is **7.65-7.68 bits/byte**. A CPU-only
+Huffman size model with 1024-symbol aligned/indexed chunks saves only
+**2.37-2.69%**, before decoder costs; 32/256-symbol chunks increase storage.
+All six tensors miss the prespecified 10% byte-saving threshold. See
+[source counts, indexed costs and independent byte audit](experiments/2026-10-26-maxwell-ffn-entropy-study.md).
+
+Keep `fc7f377` offline-only; no CUDA decoder or generation format follows.
+This is not a universal compression bound, resident-VRAM prediction or
+throughput result. Qualified status remains **49.146 HTTP tok/s** versus
+**43.106 official Ollama**; both targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Native Warp FFN Association Regresses
 
 A native 32-partial FP32 output-warp mapping regresses complete one-row

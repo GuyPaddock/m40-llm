@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest offline feasibility:** [indexed lossless byte coding](experiments/2026-10-26-maxwell-ffn-entropy-study.md)
+finds gate/up payload entropy **7.65-7.68 bits/byte**. The largest fixed
+1024-symbol aligned/indexed Huffman model saves only **2.37-2.69%**, before
+decoder storage/execution; smaller chunks increase storage. All six tensors
+miss the 10% byte-saving threshold. Keep `fc7f377` CPU-only with no codec,
+CUDA decoder, format or default change. The bound is zero-order, not universal,
+and byte counts are not speedups. Next work needs independently supported
+execution-cost scope, not further codebook/chunk tuning. Qualified runtime
+and both exact targets remain unchanged/unmet.
+
 **Latest association screen:** [native 32-partial FP32 output warps](experiments/2026-10-26-maxwell-native-warp-ffn-screen.md)
 regress complete one-row FFN throughput **4.72-4.77%**, with negative
 paired intervals at all three layers. Existing CPU bounds and capture parity
