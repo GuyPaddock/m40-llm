@@ -17,6 +17,14 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Active bounded round:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-hypothesis.md)
+tests two independent 128-thread output groups in one 256-thread CTA, keeping
+two accumulators per thread and the original FP32 tree. This differs from
+the closed per-thread multi-column, virtual-partial and looping-CTA probes.
+One fixed configuration, no geometry/register rescue or combination with
+closed candidates. Primitive correctness, compiled resources and the existing
+complete-FFN/actual-model/HTTP gates precede any runtime change.
+
 **Latest fixed screen:** [exact weighted-norm and argmax reductions](experiments/2026-10-26-maxwell-decode-reductions-screen.md)
 preserve control bits/indices, guards and model preparation. Complete argmax
 is **15.43-16.28x faster** in ten fresh pairs, but contributes only **1.2533%
