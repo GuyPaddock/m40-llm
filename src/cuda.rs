@@ -32,6 +32,8 @@ mod q8_prefill;
 #[cfg(feature = "cuda")]
 mod q8_qkv;
 #[cfg(feature = "cuda")]
+mod q8_split_projection;
+#[cfg(feature = "cuda")]
 pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
 
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
@@ -479,6 +481,27 @@ mod ffi {
             biases: *const *const c_void,
             outputs: *const *mut c_void,
             widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_separate_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_coltile4_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            n: i32,
             k: i32,
             stream_kind: u32,
         ) -> i32;

@@ -125,6 +125,13 @@ int m40llm_ffn_q8_f32_coalesced_capture_async(M40llmCudaContext* ctx, const void
     (void)ctx; (void)input; (void)gate; (void)up; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
 }
+int m40llm_qkv_f32xq8_separate_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)biases;
+    (void)outputs; (void)widths; (void)k; (void)stream_kind; return -1;
+}
+int m40llm_gemm_f32xq8_separate_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int n, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
+}
 int m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, int n, int k, uint32_t stream_kind) {
     (void)ctx; (void)input; (void)weight; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
 }

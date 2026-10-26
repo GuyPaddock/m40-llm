@@ -17,6 +17,19 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Next bounded screen:** [split-plane QKV/output storage](experiments/2026-10-26-maxwell-split-projection-hypothesis.md)
+has benchmark-only CUDA consumers with the qualified packed/warp geometry
+and FP32 tree. The parity/rejection tests pass with cuBLAS on/off, including
+four distinct rows, biases, tails, guards, immutable planes and both streams.
+Attention/projection/MLP/forward regressions, qualified packed controls,
+211 non-CUDA tests, Clippy and formatting pass; four optional forward tests
+remain ignored, not passes. No generation selector or
+defaults change is added. Next extend the existing projection benchmark,
+inspect compiled sm_52 instructions/resources and measure against current
+packed raw-GGUF controls. Independent stage gates, profile-weighted scope,
+actual-512 quality and HTTP qualification remain required; there is no
+performance result for these consumers yet.
+
 **Latest fixed screen:** [reusable FFN blocks](experiments/2026-10-26-maxwell-persistent-tiles-screen.md)
 preserve control bits but regress one-row complete FFN **9.79-9.85%** and
 four-row **5.61-7.58%**, with all intervals negative. The fixed 192-block
