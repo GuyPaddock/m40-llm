@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Split Attention Projection Storage Does Not Qualify
+
+The existing split representation preserves current packed QKV/output bits,
+but one-request QKV throughput regresses **0.78-2.12%**. Output's median
+gain is **2.02-2.49%**, below 5%, with intervals spanning zero and only
+**0.102-0.125% optimistic standalone E2E scope**. Neither stage qualifies.
+See [pairs, compiled loads, memory, warmup correction and audit](experiments/2026-10-26-maxwell-split-projection-screen.md).
+
+Aligned 64-bit payload loads replace four U16 reads, with unchanged 32/40
+registers and control instruction words. That does not establish a runtime
+gain. Keep `0b96c46` / `34a2427` benchmark-only, with no geometry rescue or
+default change. `5719ffc` fixes an insufficient untimed warmup budget and
+preserves the incomplete first output attempt separately. Qualified status
+stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet.
+
 ## 2026-10-26: Reusing FFN Blocks Regresses
 
 One fixed 192-block-per-row grid preserves qualified FP32 control bits,
