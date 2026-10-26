@@ -60,9 +60,13 @@ no extra weight preparation. Primitive/runner implementation `8b7b20c` is
 benchmark-only. Both independent gates and the combined optimistic **5.23-5.33%**
 scope pass. Next add an explicit model-local packed QKV/output choice,
 preserving split-f32x4-128 FFN, SGEMM prefix, dense reference KV and all 109
-prepared identities. Then actual-512/frozen-quality, incremental HTTP and
-fresh Ollama gates. No defaults or HTTP claims change from surrogate-input
-microbenchmarks; do not combine rejected FFN candidates.
+prepared identities. Runtime integration `c264c89` and qualification tooling
+`43ea00a` now pass the [actual-model quality gate](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md):
+512 actual IDs and twelve frozen outputs match, all seven sampled full-vocabulary
+logit differences are zero, and all 109 prepared identities remain fixed.
+Next incremental HTTP, then fresh Ollama if its gate passes. No defaults or
+HTTP claims change from surrogate-input microbenchmarks or unpaired quality
+timing; do not combine rejected FFN candidates.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

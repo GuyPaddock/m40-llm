@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Packed QKV/Output Passes Runtime Quality
+
+The explicit packed-load projection combination preserves all **512 actual
+IDs**, twelve frozen task outputs and all 109 prepared identities against
+the qualified warp/split-FFN/SGEMM control. Seven dense-valid tasks have
+zero regressions; five dense-failed cases remain inconclusive. Seven
+sampled full-vocabulary logit comparisons have zero max/mean difference.
+See [source, reproduction, memory, validation and audit](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md).
+
+This passes the prerequisite for controlled HTTP timing, not a performance
+or default-promotion gate. Selected dispatch is verified and all other
+enqueue counters match. Qualified **47.379 HTTP tok/s**, both unmet
+original targets and runtime defaults remain unchanged until paired timing.
+
 ## 2026-10-25: Packed Native QKV/Output Loads Pass Screens
 
 Fixed packed loads preserve qualified warp-control bits and improve
