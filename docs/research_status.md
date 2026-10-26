@@ -17,6 +17,15 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Active bounded round:** [eight-value FP32 FFN tasks](experiments/2026-10-26-maxwell-ffn-eight-hypothesis.md)
+tests wider payload tasks in the original one-output/128-thread CTA, reducing
+source-level load/scale groups without changing weights or activation precision.
+Summation ownership changes, so use unchanged CPU tolerances and explicit
+control-drift reporting rather than claiming bit equality. Actual-512/frozen
+quality and HTTP gates remain mandatory; no closed mapping is combined and
+no task-width/geometry rescue is allowed. Defaults and prepared down/head stay
+fixed. Next implement the benchmark-only entry and behavioral checks.
+
 **Latest fixed screen:** [two physical FFN cohorts per CTA](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md)
 preserve control bits but regress complete one-row FFN throughput **0.49-0.52%**
 with all intervals negative; four-row results also miss 5%. Registers rise
