@@ -5,6 +5,7 @@ mod joint;
 mod pipeline;
 mod prepared;
 mod prepared_projection;
+mod prepared_read;
 mod projection;
 mod reductions;
 mod validation;
@@ -31,7 +32,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     if args.decode_reductions {
         return reductions::benchmark(args);
     }
-    if args.prepared_f32_warp || args.prepared_f32_packed_activation {
+    if args.prepared_weight_read || args.prepared_f32_warp || args.prepared_f32_packed_activation {
         return prepared_projection::benchmark(args);
     }
     if args.qkv_f32_warp

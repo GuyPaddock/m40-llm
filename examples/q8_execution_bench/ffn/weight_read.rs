@@ -18,10 +18,19 @@ use std::{
 };
 
 /// Derive modular sums directly from original interleaved GGUF blocks.
-fn checksum_columns(source: &[u8], k: usize, hidden: usize) -> Result<Vec<u32>> {
+pub(super) fn checksum_columns(
+    source: &[u8],
+    k: usize,
+    hidden: usize,
+    scale_reads_per_block: u32,
+) -> Result<Vec<u32>> {
     ensure!(
         k > 0 && k.is_multiple_of(32) && hidden > 0,
         "invalid checksum shape"
+    );
+    ensure!(
+        matches!(scale_reads_per_block, 4 | 8),
+        "unsupported checksum scale multiplicity"
     );
     let column_bytes = (k / 32)
         .checked_mul(34)
@@ -35,10 +44,10 @@ fn checksum_columns(source: &[u8], k: usize, hidden: usize) -> Result<Vec<u32>> 
         .map(|column| {
             column.chunks_exact(34).fold(0u32, |sum, block| {
                 let scale = u32::from(u16::from_le_bytes([block[0], block[1]]));
-                block[2..].chunks_exact(4).fold(sum, |acc, word| {
-                    acc.wrapping_add(u32::from_le_bytes(word.try_into().unwrap()))
-                        .wrapping_add(scale)
-                })
+                block[2..].chunks_exact(4).fold(
+                    sum.wrapping_add(scale.wrapping_mul(scale_reads_per_block)),
+                    |acc, word| acc.wrapping_add(u32::from_le_bytes(word.try_into().unwrap())),
+                )
             })
         })
         .collect())
@@ -140,11 +149,13 @@ impl ReadProbe {
             source_bytes(pipeline.model, &layer.source.gate)?,
             pipeline.d_model,
             pipeline.hidden_dim,
+            8,
         )?;
         let up = checksum_columns(
             source_bytes(pipeline.model, &layer.source.up)?,
             pipeline.d_model,
             pipeline.hidden_dim,
+            8,
         )?;
         let expected: Vec<_> = (0..pipeline.rows)
             .flat_map(|_| gate.iter().zip(&up).flat_map(|(&g, &u)| [g, u]))
@@ -254,21 +265,28 @@ mod tests {
         let mut block = vec![255u8; 34];
         block[..2].copy_from_slice(&0xabcd_u16.to_le_bytes());
         assert_eq!(
-            checksum_columns(&block, 32, 1)?,
+            checksum_columns(&block, 32, 1, 8)?,
             vec![0xabcd_u32.wrapping_sub(1).wrapping_mul(8)]
         );
+        assert_eq!(
+            checksum_columns(&block, 32, 1, 4)?,
+            vec![0xabcd_u32.wrapping_mul(4).wrapping_sub(8)]
+        );
+        for repeats in [0, 1, 3, 16, u32::MAX] {
+            assert!(checksum_columns(&block, 32, 1, repeats).is_err());
+        }
         let mut columns = block.clone();
         columns.extend(vec![0; 34]);
         assert_eq!(
-            checksum_columns(&columns, 32, 2)?,
+            checksum_columns(&columns, 32, 2, 8)?,
             vec![0xabcd_u32.wrapping_sub(1).wrapping_mul(8), 0]
         );
         for (k, hidden) in [(0, 1), (31, 1), (32, 0), (64, 1), (32, 2)] {
-            assert!(checksum_columns(&block, k, hidden).is_err());
+            assert!(checksum_columns(&block, k, hidden, 8).is_err());
         }
         block[2] ^= 1;
         assert_eq!(
-            checksum_columns(&block, 32, 1)?[0],
+            checksum_columns(&block, 32, 1, 8)?[0],
             0xabcd_u32.wrapping_sub(1).wrapping_mul(8).wrapping_sub(1)
         );
         Ok(())

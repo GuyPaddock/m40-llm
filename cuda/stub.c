@@ -95,6 +95,10 @@ int m40llm_ffn_q8_weight_checksum_async(M40llmCudaContext* ctx, const void* cons
     (void)ctx; (void)scales; (void)values; (void)output;
     (void)rows; (void)hidden; (void)k; return -1;
 }
+int m40llm_q8_separate_weight_checksum_async(M40llmCudaContext* ctx, const void* scales, const void* values, void* output, int rows, int n, int k, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)n; (void)k; (void)threads; (void)stream_kind; return -1;
+}
 int m40llm_ffn_q8_split_cohorts_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;

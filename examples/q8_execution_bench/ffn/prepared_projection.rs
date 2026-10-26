@@ -444,7 +444,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let stats = model.q8_execution_stats();
     write_record(
         &mut file,
-        json!({"kind":"prepared_projection_manifest","schema_version":2,
+        json!({"kind":if args.prepared_weight_read {"prepared_read_manifest"} else {"prepared_projection_manifest"},"schema_version":2,
         "revision":command_output("git",&["rev-parse","HEAD"])?,"worktree":command_output("git",&["status","--short"])?,
         "executable_sha256":file_sha256(&std::env::current_exe()?)?,"build_profile":"release",
         "model_sha256":inputs.artifact.plan.model_sha256,"fixture_sha256":inputs.artifact_sha256,
@@ -452,20 +452,38 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "cuda_flags":["-O3","sm_52","compute_52","no fast math"],"nvcc":command_output("nvcc",&["--version"])?,
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,"prepared_weights":stats,"gpu_before":gpu,
         "control":"qualified split-f32x4-128 gate/up; original prepared four-column down/vocabulary shared tree",
-        "candidate":if args.prepared_f32_packed_activation {
+        "candidate":if args.prepared_weight_read {
+            "checksum-only four-column/eight-value weight read; original shared tree/threads; no inference activations or measured DRAM traffic"
+        } else if args.prepared_f32_packed_activation {
             "two float4 activation loads; original weight loads/shared tree/tasks/FP32 association; down M1=256 else128, vocabulary128"
         } else { "same prepared planes and FP32 task order; original-tree warp finish, down M1=256 else128; vocabulary128" },
-        "candidate_kernel":format!("{:?}",select_candidate(args)),
+        "candidate_kernel":if args.prepared_weight_read {"projection_q8_weight_checksum".to_string()} else {format!("{:?}",select_candidate(args))},
+        "is_weight_read_diagnostic":args.prepared_weight_read,
+        "original_weight_bytes":model.weights_len,"tracked_device_bytes":CudaContext::total_device_bytes(),
         "memory_scope":"source plus full qualified down/vocabulary cache; one split gate/up pair per FFN case; both arms share all allocations; no KV",
         "runtime_defaults_changed":false,"is_e2e_claim":false}),
     )?;
     for layer in &inputs.artifact.layers {
         for rows in [1, 4] {
-            benchmark_down(&mut file, &model, layer, rows, args)?;
+            if args.prepared_weight_read {
+                super::prepared_read::benchmark_down(&mut file, &model, layer, rows, args)?;
+            } else {
+                benchmark_down(&mut file, &model, layer, rows, args)?;
+            }
         }
     }
     for rows in [1, 4] {
-        benchmark_vocabulary(&mut file, &model, &inputs.artifact.layers[0], rows, args)?;
+        if args.prepared_weight_read {
+            super::prepared_read::benchmark_vocabulary(
+                &mut file,
+                &model,
+                &inputs.artifact.layers[0],
+                rows,
+                args,
+            )?;
+        } else {
+            benchmark_vocabulary(&mut file, &model, &inputs.artifact.layers[0], rows, args)?;
+        }
     }
     ensure!(
         serde_json::to_value(model.q8_execution_stats())? == serde_json::to_value(stats)?,
@@ -478,7 +496,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     );
     write_record(
         &mut file,
-        json!({"kind":"prepared_projection_complete","is_complete":true,"cases":8,
+        json!({"kind":if args.prepared_weight_read {"prepared_read_complete"} else {"prepared_projection_complete"},"is_complete":true,"cases":8,
         "device_bytes_before":initial,"device_bytes_after":CudaContext::total_device_bytes(),"gpu_after_release":inspect_gpu()?,
         "runtime_defaults_changed":false,"is_e2e_claim":false}),
     )

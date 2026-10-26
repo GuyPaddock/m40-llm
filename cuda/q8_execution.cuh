@@ -163,6 +163,62 @@ extern "C" int m40llm_gemm_f32xq8_separate_f32_async(
     return cudaGetLastError() == cudaSuccess ? 0 : -2;
 }
 
+// Diagnostic only: original four-column task/reduction mapping, no activations.
+__global__ void q8_separate_checksum_kernel(
+    const uint16_t* __restrict__ scales, const uint2* __restrict__ values,
+    uint32_t* __restrict__ output, int N, int K) {
+    const int tid = threadIdx.x;
+    const int col0 = blockIdx.x * 4;
+    const int blocks_per_col = K / 32;
+    uint32_t sums[4] = {};
+    for (int task = tid; task < blocks_per_col * 4; task += blockDim.x) {
+        const int qblock = task / 4;
+        const int offset = task % 4;
+        #pragma unroll
+        for (int c = 0; c < 4; ++c) {
+            if (col0 + c < N) {
+                const size_t block = static_cast<size_t>(col0 + c) * blocks_per_col + qblock;
+                const uint2 packed = values[block * 4 + offset];
+                sums[c] += packed.x + packed.y + static_cast<uint32_t>(scales[block]);
+            }
+        }
+    }
+    extern __shared__ uint32_t checksum_reduction[];
+    #pragma unroll
+    for (int c = 0; c < 4; ++c) checksum_reduction[c * blockDim.x + tid] = sums[c];
+    __syncthreads();
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            #pragma unroll
+            for (int c = 0; c < 4; ++c) {
+                checksum_reduction[c * blockDim.x + tid] += checksum_reduction[c * blockDim.x + tid + stride];
+            }
+        }
+        __syncthreads();
+    }
+    if (tid == 0) {
+        #pragma unroll
+        for (int c = 0; c < 4; ++c) {
+            if (col0 + c < N) output[static_cast<size_t>(blockIdx.y) * N + col0 + c] = checksum_reduction[c * blockDim.x];
+        }
+    }
+}
+
+extern "C" int m40llm_q8_separate_weight_checksum_async(
+    M40llmCudaContext* ctx, const void* scales, const void* values, void* output,
+    int rows, int n, int k, int threads, uint32_t stream_kind) {
+    if (!ctx || !scales || !values || !output || (rows != 1 && rows != 4)
+        || n <= 0 || k <= 0 || k % 32 || k > INT32_MAX - 31
+        || (threads != 128 && threads != 256) || stream_kind > 1) return -1;
+    if (reinterpret_cast<uintptr_t>(scales) % 2 || reinterpret_cast<uintptr_t>(values) % 8
+        || reinterpret_cast<uintptr_t>(output) % 4) return -2;
+    const cudaStream_t stream = stream_kind == 1 ? ctx->decode_stream : ctx->prefill_stream;
+    q8_separate_checksum_kernel<<<dim3((static_cast<unsigned>(n)+3)/4,rows),threads,4*threads*sizeof(uint32_t),stream>>>(
+        static_cast<const uint16_t*>(scales), static_cast<const uint2*>(values),
+        static_cast<uint32_t*>(output), n, k);
+    return static_cast<int>(cudaPeekAtLastError());
+}
+
 template<int Columns>
 __device__ __forceinline__ void accumulate_q8_tiled_values(
     const unsigned char* record, int offset, float activation, float (&acc)[Columns]) {

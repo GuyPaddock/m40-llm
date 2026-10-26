@@ -36,6 +36,8 @@ mod q8_qkv;
 #[cfg(feature = "cuda")]
 mod q8_split_projection;
 #[cfg(feature = "cuda")]
+mod q8_weight_read;
+#[cfg(feature = "cuda")]
 pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
 
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
@@ -729,6 +731,17 @@ mod ffi {
             values: *const c_void,
             output: *mut c_void,
             m: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q8_separate_weight_checksum_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            rows: i32,
             n: i32,
             k: i32,
             threads: i32,
