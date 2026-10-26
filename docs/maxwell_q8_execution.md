@@ -10,12 +10,20 @@ permission to substitute pruning or approximate attention for this work.
 
 Keep original Qwen2.5-3B Q8_0 weights, all 36 layers, full dense FP16 KV at
 context 1024, the canonical 65-token ChatML browser prompt and greedy decoding.
-The [qualified control](experiments/2026-10-25-q8-native-order-http.md) prepares
-only down/vocabulary with split storage and a 6144 MiB extra-payload budget.
-Single-row down retains native-order 4-column/256-thread reduction. Native
-fused QKV/MLP, decode-stream scheduling, greedy head flags and parallel
-head128 split8/256 remain fixed. The qualified rate is 35.724705 HTTP tok/s,
-not the older 31.85 native-only result.
+The [current qualified configuration](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
+uses split-f32x4-128 fused gate/up/SwiGLU, packed-warp-256 raw-Q8 QKV/output,
+prepared down/vocabulary with native-order 4-column/256-thread reduction,
+and a bounded dequant-SGEMM 64-token prompt prefix. Decode-stream scheduling,
+greedy head flags and parallel head128 split8/256 attention remain fixed.
+All 109 prepared identities and their 2,917,580,800-byte payload are pinned.
+Source plus prepared payload is 6,197,100,544 bytes before KV/workspace.
+
+Five fresh paired HTTP trials measure **49.146449 versus 43.105570 tok/s**
+for the official Ollama baseline. Both original targets remain unmet:
+53.06 and 1.30x the fresh baseline, currently 56.037241 HTTP tok/s.
+The [35.724705 down/vocabulary-only control](experiments/2026-10-25-q8-native-order-http.md)
+is the historical M01-M08 comparison baseline, not the current best runtime.
+Keep it explicitly named when reproducing those experiments.
 
 FP32-activation candidates must preserve actual 512-token output and pass the
 existing E2E gate. Q8_1 activation quantization is a separate opt-in numerical
@@ -36,7 +44,14 @@ enables weight preparation.
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
 | M08 | Corrected exact branch qualified: [independent gains](experiments/2026-10-25-maxwell-completed-http.md), [combined quality](experiments/2026-10-25-maxwell-completed-combined-quality.md) and [combined HTTP +16.616%](experiments/2026-10-25-maxwell-completed-combined-http.md); numerical historical evidence remains separate |
-| M09 | [Fresh selected-runtime checkpoint](experiments/2026-10-25-maxwell-selected-ollama-http.md): 41.331 vs 42.946 HTTP tok/s, 3.761% slower; original targets unmet, continue the native-FFN next-work sequence |
+| M09 | [Current fresh official checkpoint](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md): 49.146 vs 43.106 HTTP tok/s, +14.014%; both original targets still unmet. The earlier 41.331 checkpoint remains historical |
+
+The [plan-evidence audit](experiments/2026-10-26-maxwell-plan-evidence-audit.md)
+distinguishes completed exact-path qualification from historical numerical
+evidence. Q8_1 quality reports predate the sequential-prefix ownership repair;
+they cannot qualify the repaired runtime. The next bounded follow-up refreshes
+both existing Q8_1 geometries against the corrected explicit native/sequential
+control. It does not substitute numerical results for the exact-output goal.
 
 The standalone [untimed launch observer](cuda_launch_trace.md), preserved in
 `723a456`, is an M01 prerequisite with no Cargo/inference dependency. Its
