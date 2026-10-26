@@ -366,7 +366,9 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SplitF32x4WeightCg {
+                let dispatch = if kernel == FfnKernel::SplitF32x4VirtualWarp {
+                    "virtual_warp_dispatch"
+                } else if kernel == FfnKernel::SplitF32x4WeightCg {
                     "weight_cg_dispatch"
                 } else {
                     "byte_permute_dispatch"
@@ -415,6 +417,15 @@ fn test_weight_cg_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()>
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_byte_permute_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SplitF32x4BytePermute)
+}
+
+/// Virtual-thread ownership must preserve captured projections, hidden and
+/// completed down bits across distinct rows without changing scratch/cache.
+/// Actual timed dispatch must be the new primitive, not a silent control run.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_virtual_warp_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::SplitF32x4VirtualWarp)
 }
 
 /// Complete-FFN screening needs a reproducible positive paired interval and

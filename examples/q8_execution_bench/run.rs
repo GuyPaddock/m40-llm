@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Four output warps preserving the qualified virtual 128-thread FP32 tree.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_f32_virtual_warp: bool,
     /// Fixed vector activation loads, original prepared shared reduction.
     #[arg(long, requires="ffn_inputs", conflicts_with_all=["prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     prepared_f32_packed_activation: bool,
@@ -583,6 +586,50 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Virtual ownership is opt-in, requires captured-input provenance, and
+    /// cannot accidentally combine with a closed experiment or peer screen.
+    #[test]
+    fn test_virtual_warp_screen_requires_an_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let capture = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+        ];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_f32_virtual_warp);
+        assert!(parse(&["--ffn-f32-virtual-warp"]).is_err());
+        assert!(
+            parse(&[capture.as_slice(), &["--ffn-f32-virtual-warp"]].concat())
+                .unwrap()
+                .ffn_f32_virtual_warp
+        );
+        for other in [
+            "--prepared-f32-packed-activation",
+            "--prepared-f32-warp",
+            "--qkv-f32-packed",
+            "--output-f32-packed",
+            "--qkv-f32-warp",
+            "--output-f32-warp",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+            "--ffn-f32-factored-scales",
+            "--ffn-f32-coalesced-pairs",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-split-two-columns",
+            "--ffn-f32-joint",
+            "--ffn-f32-fixed-k",
+            "--ffn-f32-unfused",
+            "--ffn-f32-weight-cg",
+            "--ffn-f32-byte-permute",
+        ] {
+            assert!(
+                parse(&[capture.as_slice(), &["--ffn-f32-virtual-warp", other]].concat()).is_err()
+            );
+        }
+    }
 
     /// FFN modes require provenance, exclude conflicting arithmetic experiments,
     /// and leave the original projection CLI valid. Two-column split work

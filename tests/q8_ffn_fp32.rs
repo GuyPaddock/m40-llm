@@ -24,6 +24,7 @@ const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    VirtualWarp,
     Dynamic,
     TwoColumns,
     FixedK2048,
@@ -202,10 +203,12 @@ fn compare_case(
             (None, SplitKernel::Unfused),
             (None, SplitKernel::WeightCg),
             (None, SplitKernel::BytePermute),
+            (None, SplitKernel::VirtualWarp),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::VirtualWarp => CudaContext::ffn_q8_split_virtual_warp_f32_async,
             SplitKernel::Dynamic => CudaContext::ffn_q8_split_f32_async,
             SplitKernel::TwoColumns => CudaContext::ffn_q8_split_f32_two_columns_async,
             SplitKernel::FixedK2048 => CudaContext::ffn_q8_split_f32_k2048_async,
@@ -416,6 +419,8 @@ fn compare_case(
 /// L2-only weight loads must preserve all qualified fused bits as well.
 /// Byte permutation must retain those bits with every byte value in every
 /// packed position, not only signed extremes or one repeated word.
+/// Register-owned virtual partials must retain the same intermediate and final
+/// bits even when only one of the four output warps has a valid column.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -457,6 +462,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 CudaContext::ffn_q8_split_unfused_f32_async,
                 CudaContext::ffn_q8_split_weight_cg_f32_async,
                 CudaContext::ffn_q8_split_byte_permute_f32_async,
+                CudaContext::ffn_q8_split_virtual_warp_f32_async,
             ] {
                 for (rows, hidden, k, offset) in [
                     (0, 1, 2048, 0),
