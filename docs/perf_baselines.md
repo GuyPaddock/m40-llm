@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Legacy PC-Sampling Setup Is Unsupported
+
+A standalone fixed-MID capability check returns **27 /
+CUPTI_ERROR_NOT_SUPPORTED** during PC-sampling configuration. This is a
+separate API from unavailable event/metric groups. Context cleanup succeeds,
+the GPU is empty afterward and no kernel/sample/timing trial occurs. See
+[raw statuses, provenance, audit and scope](experiments/2026-10-26-maxwell-pc-sampling-capability.md).
+
+No permission retry, collector or SDK/driver change follows. Stalls,
+occupancy and physical traffic remain unmeasured. This is not a throughput
+result or evidence that closed kernel candidates should be reopened.
+Qualified exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and runtime/defaults unchanged.
+
 ## 2026-10-26: Actual Official MMVQ JIT Confirms Offline Evidence
 
 An isolated four-token official Ollama diagnostic captures actual loaded

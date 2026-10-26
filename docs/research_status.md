@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent capability check:** [legacy PC sampling](experiments/2026-10-26-maxwell-pc-sampling-capability.md)
+returns **27 / CUPTI_ERROR_NOT_SUPPORTED** during fixed-MID configuration
+on the M40 with CUPTI API 26 and driver 580.159.04. The SDK-only tool
+launches no kernels; context cleanup and final empty GPU state are verified.
+This differs from unavailable event/metric counters but supplies no stall,
+occupancy or traffic data either. No root/period/SDK rescue or collector
+follows. Independent audit and ten corruption controls pass. Next needs
+independent dominant-cost evidence using available timing/code tools, not
+retuning closed candidates. Qualified runtime/defaults and both original
+unmet HTTP targets remain unchanged.
+
 **Latest official-backend inspection:** [actual pinned runner JIT](experiments/2026-10-26-maxwell-ollama-jit-inspection.md)
 confirms one-token Q8 MMVQ's 480 encoded words match M01 offline assembly.
 Actual resources are 48 registers, 384 static shared bytes, no stack/local

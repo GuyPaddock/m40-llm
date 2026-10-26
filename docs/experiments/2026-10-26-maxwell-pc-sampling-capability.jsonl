@@ -1,0 +1,14 @@
+{"kind":"preflight","device_index":0,"effective_uid":1000,"compiled_cupti_api":26,"sampling_period":"MID","sampling_period2":0}
+{"kind":"api","api":"cuInit","status":0,"message":"no error"}
+{"kind":"api","api":"cuDriverGetVersion","status":0,"message":"no error"}
+{"kind":"api","api":"cuDeviceGet","status":0,"message":"no error"}
+{"kind":"api","api":"cuDeviceGetName","status":0,"message":"no error"}
+{"kind":"api","api":"cuDeviceGetAttribute.major","status":0,"message":"no error"}
+{"kind":"api","api":"cuDeviceGetAttribute.minor","status":0,"message":"no error"}
+{"kind":"device","name":"Tesla M40 24GB","major":5,"minor":2,"driver_api_version":13000}
+{"kind":"api","api":"cuCtxCreate","status":0,"message":"no error"}
+{"kind":"api","api":"cuptiGetVersion","status":0,"message":"CUPTI_SUCCESS"}
+{"kind":"sdk","runtime_cupti_api":26}
+{"kind":"api","api":"cuptiActivityConfigurePCSampling","status":27,"message":"CUPTI_ERROR_NOT_SUPPORTED"}
+{"kind":"api","api":"cuCtxDestroy","status":0,"message":"no error"}
+{"kind":"result","exit_code":2,"has_setup_support":false,"has_clean_context":true,"has_kernel_measurements":false,"kernel_launches":0,"samples":null}

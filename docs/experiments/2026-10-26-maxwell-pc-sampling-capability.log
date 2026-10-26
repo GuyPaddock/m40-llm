@@ -1,0 +1,9 @@
+2026-10-26T23:20:07Z
+37b2def338f0f9185bda56b469d668fb12e37602
+e9bf42338ff9264a9e9ea71c8838e023d8375ed37c941ff47daee92df1823c61  target/research-tools/cuda-pc-sampling-probe
+b41723cc3708dd37466220686e4375199eded0f874532e0cd38e19268cd758d6  examples/cuda_pc_sampling_probe.cpp
+index, uuid, name, driver_version, compute_mode
+0, GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, Default
+gpu_uuid, pid, process_name, used_gpu_memory [MiB]
+probe_exit_status=2
+gpu_uuid, pid, process_name, used_gpu_memory [MiB]

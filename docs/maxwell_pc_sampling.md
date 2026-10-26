@@ -43,3 +43,10 @@ An explicit unsupported response closes this SDK/driver route without
 root retries or period/SDK changes. Only an explicit permissions error
 could justify one separately recorded privileged diagnostic. No inference
 kernel or runtime/default promotion follows from capability setup alone.
+
+## Current Result
+
+The [2026-10-26 observation](experiments/2026-10-26-maxwell-pc-sampling-capability.md)
+returns `27 / CUPTI_ERROR_NOT_SUPPORTED` during configuration, before
+enabling sampling. Context cleanup succeeds and the GPU is empty afterward.
+No root retry or collector follows; there are no measured stall samples.
