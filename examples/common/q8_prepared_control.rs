@@ -2,14 +2,17 @@ use super::{FfnChoice, RuntimeConfig};
 use anyhow::{ensure, Context, Result};
 use m40_llm::infer::execution_weights::{Q8ExecutionLayout, Q8ExecutionMode, Q8ExecutionStats};
 
-/// Allow only the split FFN's intentional gate/up cache delta. Down/head keys,
-/// source identity, launch and accounting remain pinned to the qualified control.
+/// Allow only an intentional new split-FFN gate/up delta. Every existing control
+/// key, including gate/up for the current split control, stays pinned with its
+/// source identity, payload bytes, launch geometry and accounting.
 pub fn validate_prepared_control(
     control: &Q8ExecutionStats,
     candidate: &Q8ExecutionStats,
+    control_config: RuntimeConfig,
     config: RuntimeConfig,
 ) -> Result<()> {
-    let expected_control = RuntimeConfig::default().execution_config()?;
+    config.validate_comparison(control_config)?;
+    let expected_control = control_config.execution_config()?;
     let expected_candidate = config.execution_config()?;
     ensure!(
         control.mode == Q8ExecutionMode::Split
@@ -76,7 +79,7 @@ pub fn validate_prepared_control(
         .iter()
         .filter(|new| !control.tensors.iter().any(|old| new.key == old.key))
         .collect();
-    if config.ffn == FfnChoice::SplitF32x4 {
+    if config.ffn == FfnChoice::SplitF32x4 && control_config.ffn != FfnChoice::SplitF32x4 {
         ensure!(
             control.tensors.len() > 1 && extras.len() == 2 * (control.tensors.len() - 1),
             "split FFN requires exactly two extra gate/up tensors per layer"

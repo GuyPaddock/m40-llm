@@ -26,7 +26,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::protocol::{self, CacheEvidence, Pair, CONTEXT_TOKENS, MAX_TOKENS};
-use super::q8_runtime::{ControlChoice, FfnChoice, PrefillChoice, RuntimeConfig};
+use super::q8_runtime::{
+    AttentionProjectionChoice, ControlChoice, FfnChoice, PrefillChoice, RuntimeConfig,
+};
 
 #[path = "q8.rs"]
 mod q8;
@@ -75,6 +77,8 @@ struct Args {
     q8_runtime_prefill: Option<PrefillChoice>,
     #[arg(long, value_enum, requires = "q8_runtime_candidate")]
     q8_runtime_control: Option<ControlChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_attention: Option<AttentionProjectionChoice>,
     /// Completed model_quality report for this exact candidate/source/corpus.
     #[arg(long, requires = "q8_runtime_candidate")]
     q8_runtime_quality_report: Option<PathBuf>,
@@ -99,6 +103,7 @@ impl Args {
         self.q8_runtime_candidate.map(|ffn| RuntimeConfig {
             ffn,
             prefill: self.q8_runtime_prefill.unwrap_or_default(),
+            attention_projection: self.q8_runtime_attention.unwrap_or_default(),
         })
     }
 

@@ -35,6 +35,7 @@ fn validate(
     corpus_bytes: &[u8],
     prompt_ids: &[u32],
 ) -> Result<bool> {
+    config.validate_comparison(control_config)?;
     let manifest = only_record(rows, "q8_runtime_manifest")?;
     let summary = only_record(rows, "q8_runtime_summary")?;
     let browser = only_record(rows, "q8_runtime_browser_comparison")?;
@@ -119,6 +120,31 @@ fn validate(
         .iter()
         .find(|row| row["label"] == "candidate")
         .context("candidate generation")?;
+    if config.attention_projection == super::super::q8_runtime::AttentionProjectionChoice::Warp256 {
+        let layers = manifest["candidate"]["layers"]
+            .as_u64()
+            .context("projection quality layer count")?;
+        let launches = layers
+            .checked_mul(512)
+            .context("projection launch count overflow")?;
+        ensure!(
+            layers > 0
+                && manifest["candidate"]["active_layer_count"] == layers
+                && control["actual_attention_projection_backend"] == "native"
+                && candidate["actual_attention_projection_backend"] == "warp-256",
+            "projection quality requires actual model backends and all source layers"
+        );
+        for op in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
+            ensure!(
+                candidate["dispatch"]["operations"][op]["launches"] == launches
+                    && control["dispatch"]["operations"][op]["launches"]
+                        .as_u64()
+                        .unwrap_or(0)
+                        == 0,
+                "projection quality dispatch does not match all actual generated steps"
+            );
+        }
+    }
     let fixed = generations.iter().all(|row| {
         row["generation"]["generated_token_ids"]
             .as_array()
@@ -241,6 +267,8 @@ mod tests {
     /// Timing promotion requires complete consistent evidence. A real changed
     /// continuation is a failed gate, not a malformed report or an exact win.
     /// Evidence from the unsafe prefix schedule must not qualify a repaired run.
+    /// Projection candidates additionally require matching actual backends and
+    /// full one-row dispatch, rather than a changed configuration label alone.
     #[test]
     fn test_quality_preflight_distinguishes_failed_gate_from_stale_summary() -> Result<()> {
         let config = RuntimeConfig::default();
@@ -288,6 +316,53 @@ mod tests {
             &[1, 2]
         )?);
         rows[0]["control_config"] = serde_json::to_value(config)?;
+        let projection_control =
+            super::super::super::q8_runtime::ControlChoice::QualifiedSplitSgemm.config();
+        let projection_candidate = RuntimeConfig {
+            attention_projection:
+                super::super::super::q8_runtime::AttentionProjectionChoice::Warp256,
+            ..projection_control
+        };
+        let mut projection = rows.clone();
+        projection[0]["control_config"] = serde_json::to_value(projection_control)?;
+        projection[0]["candidate_config"] = serde_json::to_value(projection_candidate)?;
+        projection[0]["candidate"]["layers"] = json!(36);
+        projection[0]["candidate"]["active_layer_count"] = json!(36);
+        projection[3]["actual_attention_projection_backend"] = json!("native");
+        projection[4]["actual_attention_projection_backend"] = json!("warp-256");
+        let operation = "gemm_f32xq8_0_gguf_coltile4_warp";
+        projection[4]["dispatch"] = json!({"operations":{
+            "qkv_f32xq8_0_gguf_warp":{"launches":18432},
+            "gemm_f32xq8_0_gguf_coltile4_warp":{"launches":18432}}});
+        assert!(validate(
+            &projection,
+            projection_candidate,
+            projection_control,
+            "model",
+            corpus,
+            &[1, 2]
+        )?);
+        projection[4]["dispatch"]["operations"][operation]["launches"] = json!(0);
+        assert!(validate(
+            &projection,
+            projection_candidate,
+            projection_control,
+            "model",
+            corpus,
+            &[1, 2]
+        )
+        .is_err());
+        projection[4]["dispatch"]["operations"][operation]["launches"] = json!(18432);
+        projection[4]["actual_attention_projection_backend"] = Value::Null;
+        assert!(validate(
+            &projection,
+            projection_candidate,
+            projection_control,
+            "model",
+            corpus,
+            &[1, 2]
+        )
+        .is_err());
         for contract in [Value::Null, json!("prefix-unfenced-v0")] {
             let mut stale = rows.clone();
             stale[0]["prefill_execution_contract"] = contract;

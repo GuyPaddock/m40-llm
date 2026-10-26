@@ -69,6 +69,20 @@ fn record_generation(
     )?;
     let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
     let counters = dispatch(&before);
+    let forwarded_tokens = if config.prefill == PrefillChoice::Sequential {
+        generated.prompt_token_len + generated.metrics.generated_tokens - 1
+    } else {
+        generated.metrics.generated_tokens
+    };
+    if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
+        for operation in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
+            ensure!(
+                counters["operations"][operation]["launches"].as_u64()
+                    == Some(forwarded_tokens as u64 * u64::from(model.model_config.block_count)),
+                "requested projection candidate did not execute every one-row layer forward"
+            );
+        }
+    }
     let expected_ffn = match config.ffn {
         q8_runtime::FfnChoice::Native => None,
         q8_runtime::FfnChoice::PackedF32_256 => Some("ffn_q8_f32_packed_warp_256"),
@@ -78,11 +92,6 @@ fn record_generation(
         q8_runtime::FfnChoice::Q81_256 => Some("ffn_q8_1_threads256"),
     };
     if let Some(operation) = expected_ffn {
-        let forwarded_tokens = if config.prefill == PrefillChoice::Sequential {
-            generated.prompt_token_len + generated.metrics.generated_tokens - 1
-        } else {
-            generated.metrics.generated_tokens
-        };
         ensure!(
             counters["operations"][operation]["launches"].as_u64()
                 == Some(forwarded_tokens as u64 * u64::from(model.model_config.block_count)),
@@ -106,6 +115,7 @@ fn record_generation(
     }
     report.append(json!({"kind":"q8_runtime_browser_generation","label":label,"config":config,
         "prompt_token_ids":generated.token_ids[..generated.prompt_token_len],
+        "actual_attention_projection_backend":model.q8_attention_projection.backend(),
         "generation":tasks::generation_record(&generated, elapsed_ms, model)?,"dispatch":counters,
         "scope":"one untimed qualification run, natural stopping and actual GPU-greedy tokens; not HTTP throughput"}))?;
     Ok(generated)
@@ -218,8 +228,10 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
     let config = RuntimeConfig {
         ffn: args.q8_runtime_candidate.context("runtime candidate")?,
         prefill: args.q8_runtime_prefill.unwrap_or_default(),
+        attention_projection: args.q8_runtime_attention.unwrap_or_default(),
     };
     let control = args.q8_runtime_control.unwrap_or_default().config();
+    config.validate_comparison(control)?;
     let corpus_bytes = fs::read(&args.corpus)?;
     let corpus = Corpus::parse(std::str::from_utf8(&corpus_bytes)?)?;
     let splits = args.split.selected();
@@ -243,7 +255,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
     );
     let a_stats = reference.q8_execution_stats();
     let b_stats = candidate.q8_execution_stats();
-    q8_runtime::validate_prepared_control(&a_stats, &b_stats, config)?;
+    q8_runtime::validate_prepared_control(&a_stats, &b_stats, control, config)?;
     let prompt = qwen_workload::render_user_prompt(qwen_workload::USER_PROMPT);
     let prompt_ids = tokenizer.encode_with_specials(&prompt, false, false)?;
     ensure!(
@@ -380,8 +392,9 @@ mod tests {
     }
 
     /// Full-logit diagnostics replay actual greedy prefixes, report every
-    /// vocabulary element, dispatch the requested FFN/prefill path and release
-    /// all fixture storage. Preparation timings are not part of weight identity.
+    /// vocabulary element, dispatch the requested FFN/prefill/projection paths
+    /// and release fixture storage. The new split control pins gate/up too;
+    /// preparation timings are not part of weight identity.
     #[test]
     #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
     fn test_runtime_prefix_diagnostics_exercise_candidates() -> Result<()> {
@@ -409,55 +422,88 @@ mod tests {
             RuntimeConfig {
                 ffn: FfnChoice::PackedF32_256,
                 prefill: PrefillChoice::Sequential,
+                ..RuntimeConfig::default()
             },
             RuntimeConfig {
                 ffn: FfnChoice::Q81_128,
                 prefill: PrefillChoice::Sequential,
+                ..RuntimeConfig::default()
             },
             RuntimeConfig {
                 ffn: FfnChoice::Native,
                 prefill: PrefillChoice::DequantSgemm,
+                ..RuntimeConfig::default()
             },
             RuntimeConfig {
                 ffn: FfnChoice::SplitF32x4,
                 prefill: PrefillChoice::DequantSgemm,
+                ..RuntimeConfig::default()
+            },
+            RuntimeConfig {
+                attention_projection: q8_runtime::AttentionProjectionChoice::Warp256,
+                ..q8_runtime::ControlChoice::QualifiedSplitSgemm.config()
             },
         ] {
             let load = |config: RuntimeConfig| -> Result<LoadedModel> {
                 let (mut gguf, bytes) = crate::q8_fixture::build_prefill_fixture(false);
                 gguf.metadata.remove("tokenizer.ggml.model");
-                let mut model = LoadedModel::from_gguf_with_q8_backends(
+                let mut model = LoadedModel::from_gguf_with_q8_runtime(
                     gguf,
                     bytes,
                     -1,
                     config.execution_config()?,
                     config.ffn_config()?,
                     config.prefill_backend(),
+                    config.attention_projection.backend(),
                 )?;
                 model.allocate_kv_cache_for_layers(16)?;
                 Ok(model)
             };
-            let control = if config.ffn == FfnChoice::SplitF32x4 {
-                q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config()
-            } else {
-                RuntimeConfig::default()
-            };
+            let control =
+                if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
+                    q8_runtime::ControlChoice::QualifiedSplitSgemm.config()
+                } else if config.ffn == FfnChoice::SplitF32x4 {
+                    q8_runtime::ControlChoice::QualifiedPacked128Sgemm.config()
+                } else {
+                    RuntimeConfig::default()
+                };
             let mut reference = load(control)?;
             let mut candidate = load(config)?;
             let a_stats = reference.q8_execution_stats();
             let b_stats = candidate.q8_execution_stats();
-            q8_runtime::validate_prepared_control(&a_stats, &b_stats, config)?;
+            q8_runtime::validate_prepared_control(&a_stats, &b_stats, control, config)?;
             let mut invalid = b_stats.clone();
             invalid.resident_bytes += 1;
-            assert!(q8_runtime::validate_prepared_control(&a_stats, &invalid, config).is_err());
+            assert!(
+                q8_runtime::validate_prepared_control(&a_stats, &invalid, control, config).is_err()
+            );
             let mut invalid = b_stats.clone();
             invalid.tensors[0].key.layout =
                 m40_llm::infer::execution_weights::Q8ExecutionLayout::ColumnBlocks;
-            assert!(q8_runtime::validate_prepared_control(&a_stats, &invalid, config).is_err());
-            if config.ffn == FfnChoice::SplitF32x4 {
-                assert!(q8_runtime::validate_prepared_control(&a_stats, &a_stats, config).is_err());
+            assert!(
+                q8_runtime::validate_prepared_control(&a_stats, &invalid, control, config).is_err()
+            );
+            if config.ffn == FfnChoice::SplitF32x4 && control.ffn != FfnChoice::SplitF32x4 {
                 assert!(
-                    q8_runtime::validate_prepared_control(&a_stats, &b_stats, control).is_err()
+                    q8_runtime::validate_prepared_control(&a_stats, &a_stats, control, config)
+                        .is_err()
+                );
+                assert!(q8_runtime::validate_prepared_control(
+                    &a_stats, &b_stats, control, control
+                )
+                .is_err());
+            }
+            if config.attention_projection == q8_runtime::AttentionProjectionChoice::Warp256 {
+                let mut changed = b_stats.clone();
+                let gate = changed
+                    .tensors
+                    .iter_mut()
+                    .find(|t| t.key.source.tensor_name().contains(".feed_forward.w1."))
+                    .expect("prepared gate");
+                gate.source_bytes += 34;
+                assert!(
+                    q8_runtime::validate_prepared_control(&a_stats, &changed, control, config)
+                        .is_err()
                 );
             }
             let mut changed_times = a_stats.clone();

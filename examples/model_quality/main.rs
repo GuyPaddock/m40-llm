@@ -93,6 +93,8 @@ struct Args {
     q8_runtime_prefill: Option<q8_runtime::PrefillChoice>,
     #[arg(long, value_enum, requires = "q8_runtime_candidate")]
     q8_runtime_control: Option<q8_runtime::ControlChoice>,
+    #[arg(long, value_enum, requires = "q8_runtime_candidate")]
+    q8_runtime_attention: Option<q8_runtime::AttentionProjectionChoice>,
     /// Untimed comparison of sequential admission, explicit stream drains and
     /// packed prefixes on identical prompt IDs, hidden states and physical KV.
     #[arg(long="q8-prefill-drift", conflicts_with_all=["q8_runtime_candidate","capture_ffn_inputs","q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
@@ -215,6 +217,7 @@ mod argument_tests {
 
     /// Runtime comparisons require explicit candidates and cannot mutate the
     /// frozen model with pruning, capture or unrelated timing experiments.
+    /// Combined projection selection requires an explicit runtime candidate.
     #[test]
     fn test_runtime_candidate_arguments_are_explicit_and_exclusive() {
         for choice in [
@@ -227,6 +230,22 @@ mod argument_tests {
             assert!(parse(&["--q8-runtime-candidate", choice]).is_ok());
         }
         assert!(parse(&["--q8-runtime-prefill", "dequant-sgemm"]).is_err());
+        assert!(parse(&["--q8-runtime-attention", "warp-256"]).is_err());
+        let projections = parse(&[
+            "--q8-runtime-candidate",
+            "split-f32x4-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-control",
+            "qualified-split-sgemm",
+            "--q8-runtime-attention",
+            "warp-256",
+        ])
+        .unwrap();
+        assert_eq!(
+            projections.q8_runtime_attention,
+            Some(q8_runtime::AttentionProjectionChoice::Warp256)
+        );
         for extra in [
             vec!["--skip-layers", "1"],
             vec!["--capture-ffn-inputs", "new.json"],

@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::ValueEnum;
 use m40_llm::{
     generate::PromptPrefill,
-    infer::{q8_prefill::Q8PrefillBackend, Q8FfnConfig},
+    infer::{q8_prefill::Q8PrefillBackend, Q8AttentionProjectionBackend, Q8FfnConfig},
 };
 use serde::Serialize;
 
@@ -46,13 +46,33 @@ pub enum PrefillChoice {
     DequantSgemm,
 }
 
-/// Historical comparisons remain reproducible; incremental work names the
-/// already qualified packed128/SGEMM control instead of silently replacing it.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AttentionProjectionChoice {
+    #[default]
+    Native,
+    #[value(name = "warp-256")]
+    #[serde(rename = "warp-256")]
+    Warp256,
+}
+
+impl AttentionProjectionChoice {
+    pub fn backend(self) -> Q8AttentionProjectionBackend {
+        match self {
+            Self::Native => Q8AttentionProjectionBackend::Native,
+            Self::Warp256 => Q8AttentionProjectionBackend::Warp256,
+        }
+    }
+}
+
+/// Historical controls remain explicit. New projection work names the current
+/// split-FFN/SGEMM control instead of silently substituting an older baseline.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ControlChoice {
     #[default]
     NativeSequential,
     QualifiedPacked128Sgemm,
+    QualifiedSplitSgemm,
 }
 
 impl ControlChoice {
@@ -62,19 +82,35 @@ impl ControlChoice {
             Self::QualifiedPacked128Sgemm => RuntimeConfig {
                 ffn: FfnChoice::PackedF32_128,
                 prefill: PrefillChoice::DequantSgemm,
+                attention_projection: AttentionProjectionChoice::Native,
+            },
+            Self::QualifiedSplitSgemm => RuntimeConfig {
+                ffn: FfnChoice::SplitF32x4,
+                prefill: PrefillChoice::DequantSgemm,
+                attention_projection: AttentionProjectionChoice::Native,
             },
         }
     }
 }
 
-/// Independent decode/prefill axes, with identical prepared down/vocabulary.
+/// Typed decode/prefill/projection choices, with pinned existing preparation.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct RuntimeConfig {
     pub ffn: FfnChoice,
     pub prefill: PrefillChoice,
+    pub attention_projection: AttentionProjectionChoice,
 }
 
 impl RuntimeConfig {
+    pub fn validate_comparison(self, control: Self) -> Result<()> {
+        anyhow::ensure!(
+            self.attention_projection == AttentionProjectionChoice::Native
+                || control == ControlChoice::QualifiedSplitSgemm.config(),
+            "warp projection comparison requires qualified-split-sgemm as the explicit control"
+        );
+        Ok(())
+    }
+
     pub fn ffn_config(self) -> Result<Q8FfnConfig> {
         match self.ffn {
             FfnChoice::Native => Ok(Q8FfnConfig::native()),
@@ -107,6 +143,12 @@ impl RuntimeConfig {
     }
 
     pub fn execution_config(self) -> Result<m40_llm::infer::execution_weights::Q8ExecutionConfig> {
+        anyhow::ensure!(
+            self.attention_projection == AttentionProjectionChoice::Native
+                || (self.ffn == FfnChoice::SplitF32x4
+                    && self.prefill == PrefillChoice::DequantSgemm),
+            "warp runtime comparison requires qualified split-f32x4-128 plus dequant-sgemm"
+        );
         m40_llm::infer::execution_weights::Q8ExecutionConfig::parse(
             "split",
             Some("6144"),
@@ -131,13 +173,14 @@ impl RuntimeConfig {
             tokenizer.is_qwen2(),
             "Maxwell runtime comparison requires Qwen2 ChatML"
         );
-        let mut model = LoadedModel::from_gguf_with_q8_backends(
+        let mut model = LoadedModel::from_gguf_with_q8_runtime(
             gguf,
             std::fs::read(path)?,
             -1,
             self.execution_config()?,
             self.ffn_config()?,
             self.prefill_backend(),
+            self.attention_projection.backend(),
         )?;
         let props = model.cuda.current_device_props()?;
         ensure!(
@@ -222,7 +265,11 @@ mod tests {
                 PrefillChoice::NativePacked,
                 PrefillChoice::DequantSgemm,
             ] {
-                let config = RuntimeConfig { ffn, prefill };
+                let config = RuntimeConfig {
+                    ffn,
+                    prefill,
+                    ..RuntimeConfig::default()
+                };
                 assert_eq!(
                     config.ffn_config()?.has_quantization(),
                     config.is_numerical()
@@ -236,6 +283,45 @@ mod tests {
                     prefill == PrefillChoice::Sequential
                 );
             }
+        }
+        Ok(())
+    }
+
+    /// The next incremental control is exactly split FFN/SGEMM. Projection
+    /// changes keep all preparation and reject unrelated experiment mixtures.
+    #[test]
+    fn test_projection_candidate_pins_current_split_control() -> Result<()> {
+        let control = ControlChoice::QualifiedSplitSgemm.config();
+        assert_eq!(control.ffn, FfnChoice::SplitF32x4);
+        assert_eq!(control.prefill, PrefillChoice::DequantSgemm);
+        assert_eq!(
+            control.attention_projection,
+            AttentionProjectionChoice::Native
+        );
+        let candidate = RuntimeConfig {
+            attention_projection: AttentionProjectionChoice::Warp256,
+            ..control
+        };
+        assert_eq!(
+            serde_json::to_value(candidate.execution_config()?)?,
+            serde_json::to_value(control.execution_config()?)?
+        );
+        assert!(!candidate.is_numerical());
+        candidate.validate_comparison(control)?;
+        assert!(candidate
+            .validate_comparison(ControlChoice::QualifiedPacked128Sgemm.config())
+            .is_err());
+        for config in [
+            RuntimeConfig {
+                ffn: FfnChoice::Native,
+                ..candidate
+            },
+            RuntimeConfig {
+                prefill: PrefillChoice::Sequential,
+                ..candidate
+            },
+        ] {
+            assert!(config.execution_config().is_err());
         }
         Ok(())
     }

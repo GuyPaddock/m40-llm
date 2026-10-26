@@ -52,7 +52,12 @@ impl ComparisonRun {
         let stats = model.q8_execution_stats();
         if let Some(config) = runtime {
             let control = self.server.state.model.q8_execution_stats();
-            super::super::q8_runtime::validate_prepared_control(&control, &stats, config)?;
+            super::super::q8_runtime::validate_prepared_control(
+                &control,
+                &stats,
+                self.args.control_runtime_config(),
+                config,
+            )?;
         }
         let source_hash: String = stats
             .tensors
@@ -445,6 +450,42 @@ mod tests {
             candidate.execution_config()?.families
         );
         assert!(parse_args(&["--q8-runtime-control", "qualified-packed128-sgemm"]).is_err());
+        Ok(())
+    }
+
+    /// Projection pairs retain the current split-FFN/SGEMM control and all
+    /// prepared families; selected-vs-Ollama uses the same explicit candidate.
+    #[test]
+    fn test_projection_incremental_control_is_explicit() -> Result<()> {
+        use super::super::super::q8_runtime::{AttentionProjectionChoice, ControlChoice};
+        let values = [
+            "--compare-q8-runtime",
+            "split-f32x4-128",
+            "--q8-runtime-prefill",
+            "dequant-sgemm",
+            "--q8-runtime-control",
+            "qualified-split-sgemm",
+            "--q8-runtime-attention",
+            "warp-256",
+            "--q8-runtime-quality-report",
+            "quality.jsonl",
+        ];
+        let args = parse_args(&values)?;
+        let control = ControlChoice::QualifiedSplitSgemm.config();
+        let candidate = args.candidate_runtime_config().unwrap();
+        assert_eq!(args.primary_runtime_config(), Some(control));
+        assert_eq!(
+            candidate.attention_projection,
+            AttentionProjectionChoice::Warp256
+        );
+        candidate.validate_comparison(control)?;
+        assert_eq!(
+            serde_json::to_value(args.primary_execution_config()?)?,
+            serde_json::to_value(candidate.execution_config()?)?
+        );
+        let selected = parse_args(&[values.as_slice(), &["--time-ollama"]].concat())?;
+        assert_eq!(selected.primary_runtime_config(), Some(candidate));
+        assert!(parse_args(&["--q8-runtime-attention", "warp-256"]).is_err());
         Ok(())
     }
 

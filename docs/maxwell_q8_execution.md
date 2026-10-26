@@ -318,6 +318,17 @@ or activation quantization. In-memory reference fixtures initialize native
 state and must not replace a model's state during workspace/session use.
 Runtime quality and HTTP qualification are still pending for this combination.
 
+The shared `model_quality` and `compare_ollama` tools accept
+`--q8-runtime-attention warp-256` together with `split-f32x4-128` and
+`dequant-sgemm`. Use `--q8-runtime-control qualified-split-sgemm` for this
+incremental comparison. This control includes the existing gate/up cache,
+so both models must preserve every gate/up/down/vocabulary key and payload;
+there is no new preparation delta. The older native/sequential and
+packed128/SGEMM controls remain explicitly named for historical work.
+Browser quality records carry the actual model projection backend and
+one-row launch counts. HTTP preflight rejects missing/wrong dispatch or
+backend evidence; merely relabeling a previous quality report is not enough.
+
 ### M03 Primitive Checkpoint
 
 `CudaContext::ffn_q8_f32_ablation_async` is an explicit experimental API,
