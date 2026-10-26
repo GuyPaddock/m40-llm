@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Fixed warp finish for prepared down and vocabulary, with unchanged FFN.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["qkv_f32_warp","output_f32_warp","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k"])]
+    prepared_f32_warp: bool,
     /// Complete FFN baseline from frozen paired inputs, not synthetic projections.
     #[arg(long, requires="ffn_capture_report", conflicts_with_all=["sparse_inputs","layout","tensors"])]
     ffn_inputs: Option<PathBuf>,
@@ -596,6 +599,21 @@ mod argument_tests {
         assert!(!parse(&flags).unwrap().ffn_f32_joint);
         assert!(!parse(&flags).unwrap().ffn_f32_fixed_k);
         assert!(!parse(&flags).unwrap().qkv_f32_warp);
+        assert!(!parse(&flags).unwrap().prepared_f32_warp);
+        assert!(
+            parse(&[flags.as_slice(), &["--prepared-f32-warp"]].concat())
+                .unwrap()
+                .prepared_f32_warp
+        );
+        assert!(parse(&["--prepared-f32-warp"]).is_err());
+        for other in [
+            "--qkv-f32-warp",
+            "--ffn-q81",
+            "--ffn-f32-split-planes",
+            "--ffn-f32-fixed-k",
+        ] {
+            assert!(parse(&[flags.as_slice(), &["--prepared-f32-warp", other]].concat()).is_err());
+        }
         assert!(
             parse(&[flags.as_slice(), &["--qkv-f32-warp"]].concat())
                 .unwrap()

@@ -218,6 +218,7 @@ pub(super) struct FfnPipeline<'a> {
     pub quantized: Option<GuardedQ8Activation>,
     pub prepared: Option<super::prepared::PreparedFfnWeights>,
     pub joint: Option<super::joint::JointFfnWeights>,
+    should_use_warp_down: bool,
 }
 
 impl<'a> FfnPipeline<'a> {
@@ -269,6 +270,7 @@ impl<'a> FfnPipeline<'a> {
             quantized: None,
             prepared: None,
             joint: None,
+            should_use_warp_down: false,
         })
     }
 
@@ -321,6 +323,12 @@ impl<'a> FfnPipeline<'a> {
         );
         self.drain()?;
         self.prepared = Some(super::prepared::PreparedFfnWeights::new(self.model, layer)?);
+        Ok(())
+    }
+
+    pub fn select_warp_down(&mut self, is_enabled: bool) -> Result<()> {
+        self.drain()?;
+        self.should_use_warp_down = is_enabled;
         Ok(())
     }
 
@@ -566,6 +574,25 @@ impl<'a> FfnPipeline<'a> {
         } else {
             (&self.hidden, &self.output)
         };
+        if self.should_use_warp_down {
+            let weight = self
+                .model
+                .q8_execution
+                .get_separate_weight(self.down_weight)
+                .context("missing qualified prepared down weight")?;
+            return unsafe {
+                weight.enqueue_separate_warp_async(
+                    input.pointer(),
+                    output.pointer(),
+                    self.rows,
+                    m40_llm::infer::execution_weights::Q8SeparateLaunch::new(
+                        4,
+                        if self.rows == 1 { 256 } else { 128 },
+                    )?,
+                    self.projection_stream(),
+                )
+            };
+        }
         unsafe {
             self.model.mlp_down_proj_f32xf16_gguf_f32_async(
                 input.pointer(),

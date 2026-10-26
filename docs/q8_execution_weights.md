@@ -183,6 +183,19 @@ The [qualified runtime profile](experiments/2026-10-25-maxwell-projection-stage-
 defines the bounded experiment and promotion gates. Primitive parity alone
 does not qualify it for model generation or establish an E2E speedup.
 
+Use `q8_execution_bench --prepared-f32-warp` with the existing explicit
+model, frozen `--ffn-inputs` / `--ffn-capture-report`, release build and
+`--rows 1,4`. It compares complete FFN plus isolated down on layers 0/17/35,
+holding split-f32x4-128 gate/up fixed, then independently compares vocabulary
+projection. Down uses 256 threads for one row and 128 for four; vocabulary
+uses 128. Both arms borrow the same prepared model-owned weights, and the
+only extra preparation is the shared per-layer gate/up pair already used by
+the FFN benchmark. Vocabulary inputs are frozen normalized-FFN surrogates,
+not captured output-normalized hidden states. Actual operation counts,
+planes, guards and allocation-free enqueue are checked. Timings do not
+qualify runtime or change default dispatch; the original complete-FFN,
+quality and HTTP gates still apply.
+
 ## Source and Identity
 
 `Q8SourceIdentity` includes the caller-supplied 32-byte model SHA-256, tensor

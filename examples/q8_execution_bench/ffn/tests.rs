@@ -257,6 +257,59 @@ fn test_q81_pipeline_accounts_for_quantization_and_keeps_down() -> Result<()> {
     Ok(())
 }
 
+/// The prepared-down screen changes only reduction dispatch: both genuine
+/// row counts retain split gate/up bits, complete output, owned cache bytes
+/// and allocation-free timing across the existing cross-stream schedule.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_prepared_down_warp_keeps_complete_ffn_bits_and_cache() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build(0);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layer = sample_layer(&model)?;
+        let cache = serde_json::to_value(model.q8_execution_stats())?;
+        assert!(model
+            .q8_execution
+            .get_separate_weight(std::ptr::null())
+            .is_none());
+        for rows in [1, 4] {
+            let mut p = FfnPipeline::new(&model, &layer, rows)?;
+            p.prepare_split_weights(&layer)?;
+            p.select_kernel(FfnKernel::SplitF32x4)?;
+            validation::validate(&p, &layer)?;
+            let hidden = p.hidden.read(&model.cuda)?;
+            let output = p.output.read(&model.cuda)?;
+            let resident = CudaContext::total_device_bytes();
+            p.select_warp_down(true)?;
+            validation::validate(&p, &layer)?;
+            assert_eq!(p.hidden.read(&model.cuda)?, hidden);
+            assert!(p
+                .output
+                .read(&model.cuda)?
+                .iter()
+                .zip(&output)
+                .all(|(a, b)| a.to_bits() == b.to_bits()));
+            let timing = p.time(Stage::Complete, 7)?;
+            assert_eq!(timing["enqueue_counters"]["launches"], 14);
+            assert_eq!(timing["enqueue_counters"]["device_allocs"], 0);
+            assert_eq!(CudaContext::total_device_bytes(), resident);
+            p.verify_guards_and_inputs(&layer)?;
+        }
+        assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
 /// Complete-FFN screening needs a reproducible positive paired interval and
 /// at least 5% gain. Bad, tied or regressing timing samples cannot qualify.
 #[test]

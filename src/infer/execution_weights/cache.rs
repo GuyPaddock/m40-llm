@@ -222,6 +222,14 @@ impl Q8ExecutionCache {
         self.stats.clone()
     }
 
+    /// Borrow this model's existing split owner for explicit diagnostics. This
+    /// never prepares weights, changes dispatch or dereferences the lookup key.
+    pub fn get_separate_weight(&self, source: *const c_void) -> Option<&DeviceQ8ExecutionWeight> {
+        self.tensors
+            .get(&(source as usize))
+            .map(|entry| &entry.split)
+    }
+
     pub(crate) fn has_prepared_vocabulary(&self) -> bool {
         self.stats.has_prepared_vocabulary
     }

@@ -4,6 +4,7 @@ mod fixture;
 mod joint;
 mod pipeline;
 mod prepared;
+mod prepared_projection;
 mod projection;
 mod validation;
 
@@ -24,6 +25,9 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.prepared_f32_warp {
+        return prepared_projection::benchmark(args);
+    }
     if args.qkv_f32_warp || args.output_f32_warp {
         return projection::benchmark(args);
     }
