@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Fixed FFN Column Gap Regresses Reads
+
+A single 128-byte gap after payload columns regresses one-row read
+throughput **2.25-2.34%**, with negative paired intervals at every layer;
+four-row regressions are **2.32-2.35%**. Both arms execute the same pitched
+checksum kernel with unchanged scale planes and 32 registers. See
+[raw costs, compiler evidence and audit](experiments/2026-10-26-maxwell-ffn-column-gap-screen.md).
+
+Keep `2e96ce7` diagnostic-only. No inference consumer or gap-size/geometry
+rescue follows. This does not attribute cache/DRAM partition behavior or
+measure memory traffic. Qualified status remains **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both original targets remain unmet and
+runtime defaults unchanged.
+
 ## 2026-10-26: Thread-Owned FFN Packets Miss The Gate
 
 Packing two original per-thread tasks into one payload preserves control

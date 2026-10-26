@@ -1,0 +1,1230 @@
+{
+  "passes_audit": true,
+  "source": "2e96ce79a7287bd07a675ce419dcf8644dd0e17d",
+  "executable_sha256": "df5b2756625d3a270539091fed416f0a77d3e54a3636ea0709b0824d55f9b72e",
+  "pairs": 30,
+  "gpu_boundaries": 60,
+  "serial_primary_intervals": 180,
+  "validation_records": 6,
+  "tracked_device_bytes_after": 0,
+  "runtime_integration_allowed": false,
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.3521023988723755,
+        "gate_up_swiglu": 0.2213279962539673,
+        "isolated_down": 0.13156160116195678,
+        "pitched_read_column_gap": 0.21270399093627929,
+        "pitched_read_zero_gap": 0.20788800716400146,
+        "weight_read_checksum": 0.20797760486602784
+      },
+      "checksum_fraction_of_real_gate_up": 0.9396805121182217,
+      "real_gate_up_minus_checksum_ms": 0.013350391387939448,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.35170559883117675,
+          "max_gpu_ms": 0.35336639881134035
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.2211008071899414,
+          "max_gpu_ms": 0.22163519859313965
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13115520477294923,
+          "max_gpu_ms": 0.13196799755096436
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.21259839534759523,
+          "max_gpu_ms": 0.21282880306243895
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.20781440734863282,
+          "max_gpu_ms": 0.20821759700775147
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20757761001586914,
+          "max_gpu_ms": 0.2094815969467163
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.58121919631958,
+        "gate_up_swiglu": 0.9856255531311036,
+        "isolated_down": 0.5929728031158448,
+        "pitched_read_column_gap": 0.8364895820617676,
+        "pitched_read_zero_gap": 0.8170751571655274,
+        "weight_read_checksum": 0.816153621673584
+      },
+      "checksum_fraction_of_real_gate_up": 0.8280564754848871,
+      "real_gate_up_minus_checksum_ms": 0.1694719314575196,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5423423767089843,
+          "max_gpu_ms": 1.5964096069335938
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9651904106140137,
+          "max_gpu_ms": 1.0008895874023438
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5781824111938476,
+          "max_gpu_ms": 0.6041855812072754
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.8363871574401855,
+          "max_gpu_ms": 0.8365376472473145
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.8169024467468262,
+          "max_gpu_ms": 0.8171199798583985
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8154560089111328,
+          "max_gpu_ms": 0.8183615684509278
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35203840732574465,
+        "gate_up_swiglu": 0.2212928056716919,
+        "isolated_down": 0.1314527988433838,
+        "pitched_read_column_gap": 0.21280319690704347,
+        "pitched_read_zero_gap": 0.2078239917755127,
+        "weight_read_checksum": 0.20809919834136964
+      },
+      "checksum_fraction_of_real_gate_up": 0.9403794113854014,
+      "real_gate_up_minus_checksum_ms": 0.013193607330322266,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3518239974975586,
+          "max_gpu_ms": 0.35343360900878906
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.22110400199890137,
+          "max_gpu_ms": 0.2213536024093628
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13138879537582399,
+          "max_gpu_ms": 0.13208320140838622
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.21250560283660888,
+          "max_gpu_ms": 0.21345279216766358
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.2076927900314331,
+          "max_gpu_ms": 0.20805759429931642
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.2073375940322876,
+          "max_gpu_ms": 0.20918080806732178
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.596889591217041,
+        "gate_up_swiglu": 0.9962847709655762,
+        "isolated_down": 0.5921088218688965,
+        "pitched_read_column_gap": 0.836451244354248,
+        "pitched_read_zero_gap": 0.8169407844543457,
+        "weight_read_checksum": 0.8159680366516113
+      },
+      "checksum_fraction_of_real_gate_up": 0.8190108495393279,
+      "real_gate_up_minus_checksum_ms": 0.1803167343139649,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5574527740478517,
+          "max_gpu_ms": 1.6213632583618165
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9789695739746094,
+          "max_gpu_ms": 1.0013888359069825
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5682176113128662,
+          "max_gpu_ms": 0.5970816135406494
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.8362719535827636,
+          "max_gpu_ms": 0.8366592407226563
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.8166144371032715,
+          "max_gpu_ms": 0.8175999641418457
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8154751777648925,
+          "max_gpu_ms": 0.8167807579040527
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35192320346832273,
+        "gate_up_swiglu": 0.22124800682067872,
+        "isolated_down": 0.13138879537582399,
+        "pitched_read_column_gap": 0.21260159015655516,
+        "pitched_read_zero_gap": 0.20780799388885499,
+        "weight_read_checksum": 0.20810561180114745
+      },
+      "checksum_fraction_of_real_gate_up": 0.9405988094157921,
+      "real_gate_up_minus_checksum_ms": 0.013142395019531267,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3518304109573364,
+          "max_gpu_ms": 0.35318400859832766
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.22105600833892822,
+          "max_gpu_ms": 0.22157440185546876
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13106559514999389,
+          "max_gpu_ms": 0.13191360235214233
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.2125312089920044,
+          "max_gpu_ms": 0.2127295970916748
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.20763840675354003,
+          "max_gpu_ms": 0.20838720798492433
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20746560096740724,
+          "max_gpu_ms": 0.21078720092773437
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.529520034790039,
+        "gate_up_swiglu": 0.9831392288208007,
+        "isolated_down": 0.5589024066925049,
+        "pitched_read_column_gap": 0.8365376472473145,
+        "pitched_read_zero_gap": 0.8169088363647461,
+        "weight_read_checksum": 0.8161727905273437
+      },
+      "checksum_fraction_of_real_gate_up": 0.8301700985996456,
+      "real_gate_up_minus_checksum_ms": 0.16696643829345703,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5210559844970704,
+          "max_gpu_ms": 1.5418368339538575
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9540160179138184,
+          "max_gpu_ms": 0.9863231658935547
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5215487957000733,
+          "max_gpu_ms": 0.5695519924163819
+        },
+        {
+          "stage": "pitched_read_column_gap",
+          "min_gpu_ms": 0.8363807678222657,
+          "max_gpu_ms": 0.8366944313049316
+        },
+        {
+          "stage": "pitched_read_zero_gap",
+          "min_gpu_ms": 0.8167327880859375,
+          "max_gpu_ms": 0.8170175552368164
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8154879570007324,
+          "max_gpu_ms": 0.8162912368774414
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 0,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.023470521594405547,
+          -0.02081670082044207
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21270399093627929,
+        "control_median_ms": 0.20788800716400146,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.20788800716400146,
+            0.21270399093627929
+          ],
+          [
+            0.20781440734863282,
+            0.21270720958709716
+          ],
+          [
+            0.20817279815673828,
+            0.21259839534759523
+          ],
+          [
+            0.2078336000442505,
+            0.21282880306243895
+          ],
+          [
+            0.20821759700775147,
+            0.21268799304962158
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.022641717962502028
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 0,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.02344203886603191,
+          -0.02308196724302225
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.8364895820617676,
+        "control_median_ms": 0.8170751571655274,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.8169024467468262,
+            0.8365119934082031
+          ],
+          [
+            0.8170751571655274,
+            0.8364895820617676
+          ],
+          [
+            0.8170880317687989,
+            0.8363936424255372
+          ],
+          [
+            0.8169440269470215,
+            0.8363871574401855
+          ],
+          [
+            0.8171199798583985,
+            0.8365376472473145
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.023209404292146463
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 17,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.0266250144227671,
+          -0.020931253001891137
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21280319690704347,
+        "control_median_ms": 0.2078239917755127,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.20805759429931642,
+            0.21250560283660888
+          ],
+          [
+            0.2078239917755127,
+            0.21338880062103271
+          ],
+          [
+            0.20776960849761963,
+            0.21345279216766358
+          ],
+          [
+            0.2076927900314331,
+            0.21280319690704347
+          ],
+          [
+            0.20792319774627685,
+            0.21263039112091064
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.02339816884285717
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 17,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.02371849735649767,
+          -0.02278021403833219
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.836451244354248,
+        "control_median_ms": 0.8169407844543457,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.8170944213867187,
+            0.8362719535827636
+          ],
+          [
+            0.8166399955749511,
+            0.8364800453186035
+          ],
+          [
+            0.8169407844543457,
+            0.8363424301147461
+          ],
+          [
+            0.8166144371032715,
+            0.836451244354248
+          ],
+          [
+            0.8175999641418457,
+            0.8366592407226563
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.02332528050091509
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 35,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.02393268453350539,
+          -0.01949831757290743
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21260159015655516,
+        "control_median_ms": 0.20780799388885499,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.20838720798492433,
+            0.2125312089920044
+          ],
+          [
+            0.20780799388885499,
+            0.21260159015655516
+          ],
+          [
+            0.20778241157531738,
+            0.212662410736084
+          ],
+          [
+            0.20763840675354003,
+            0.2127295970916748
+          ],
+          [
+            0.20794239044189453,
+            0.21253440380096436
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.022547320855739073
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_gap_screen",
+      "layer_id": 35,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.02371586650497215,
+          -0.023307351394013742
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.8365376472473145,
+        "control_median_ms": 0.8169088363647461,
+        "interpretation": "read-cost diagnostic only; positive gate may justify a separate inference experiment, never runtime integration",
+        "pairs": [
+          [
+            0.8168319702148438,
+            0.8363807678222657
+          ],
+          [
+            0.8167327880859375,
+            0.8365728378295898
+          ],
+          [
+            0.8169088363647461,
+            0.8364031791687012
+          ],
+          [
+            0.8169183731079102,
+            0.8366944313049316
+          ],
+          [
+            0.8170175552368164,
+            0.8365376472473145
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.023464348493051568
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "preparation": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 7.0112250000000005,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 354574336,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 378527744,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 64.524071,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4568558080,
+        "tracked_bytes_before": 4520651264
+      }
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 6.910966999999999,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 354574336,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 378527744,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 64.182061,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4569424384,
+        "tracked_bytes_before": 4521517568
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 6.974328,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1091799040,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1115752448,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 63.86854,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4568558080,
+        "tracked_bytes_before": 4520651264
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 6.860874,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1091799040,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1115752448,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 64.212275,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4569424384,
+        "tracked_bytes_before": 4521517568
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 6.863633,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3221559296,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3245512704,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 64.742277,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4568558080,
+        "tracked_bytes_before": 4520651264
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "column_gap_preparation": {
+        "additional_payload_bytes": 47906816,
+        "allocation_upload_ms": 6.8492630000000005,
+        "column_gap_bytes": 128,
+        "combined_prepared_bytes": 95813632,
+        "k": 2048,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3221559296,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3245512704,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "PayloadColumnGap128V1",
+        "logical_payload_bytes": 45088768,
+        "n": 11008,
+        "packing_and_inverse_ms": 63.490013,
+        "padding_bytes": 2818048,
+        "payload_stride_bytes": 2176,
+        "retained_host_payload_bytes": 47906816,
+        "source_payload_bits_preserved": true,
+        "tracked_bytes_after": 4569424384,
+        "tracked_bytes_before": 4521517568
+      }
+    }
+  ],
+  "interpretation": "surrogate read/checksum cost, not DRAM traffic, a rigorous inference lower bound or a measured speedup"
+}

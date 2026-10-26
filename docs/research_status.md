@@ -17,6 +17,16 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest placement diagnostic:** [fixed 128-byte FFN payload gaps](experiments/2026-10-26-maxwell-ffn-column-gap-screen.md)
+regress one-row checksum throughput **2.25-2.34%**, with negative paired
+intervals at all three layers, and four-row throughput **2.32-2.35%**.
+Both arms use the same dynamic-pitch kernel with unchanged 32 registers;
+all CPU sums, padding/guards, source/cache and cleanup checks hold. Keep
+`2e96ce7` diagnostic-only without an inference consumer or gap-size/geometry
+rescue. No physical partition/DRAM attribution is established. Next work
+needs independent evidence of enough remaining FFN cost, not another closed
+layout combination. Exact targets and qualified runtime/defaults unchanged.
+
 **Latest fixed screen:** [thread-owned gate/up task pairs](experiments/2026-10-26-maxwell-ffn-task-pair-screen.md)
 preserve control bits with unchanged 32 registers and wider payload loads,
 but complete one-row FFN gains only **0.23-0.34%**. All interval upper
