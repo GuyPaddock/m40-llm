@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Native 32-partial output warps; FP32 association differs from control.
+    #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_f32_native_warp: bool,
     /// Add one fixed 128-byte payload column-gap read diagnostic.
     #[arg(long, requires = "ffn_weight_read")]
     ffn_weight_read_gap: bool,
@@ -619,6 +622,35 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Native warp arithmetic is an explicit captured-input experiment,
+    /// never an implicit replacement or combination with a closed mapping.
+    #[test]
+    fn test_native_warp_requires_an_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_f32_native_warp);
+        assert!(parse(&["--ffn-f32-native-warp"]).is_err());
+        let capture = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-f32-native-warp",
+        ];
+        assert!(parse(&capture).unwrap().ffn_f32_native_warp);
+        for other in [
+            "--ffn-f32-virtual-warp",
+            "--ffn-f32-eight-values",
+            "--ffn-f32-task-pairs",
+            "--ffn-weight-read",
+            "--prepared-warp-packet",
+            "--ffn-f32-ablation",
+            "--ffn-q81",
+        ] {
+            assert!(parse(&[capture.as_slice(), &[other]].concat()).is_err());
+        }
+    }
 
     /// A column-gap diagnostic requires the explicit read experiment and
     /// captured provenance; ordinary inference/other experiments cannot select it.

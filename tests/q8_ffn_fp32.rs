@@ -18,12 +18,14 @@ use m40_llm::{
     },
     profile,
 };
+use std::ffi::c_void;
 
 const GUARD: usize = 8;
 const GUARD_BITS: u32 = 0x4b12_3456;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SplitKernel {
+    NativeWarp,
     EightValues,
     Cohorts,
     PersistentTiles,
@@ -40,7 +42,8 @@ fn weights(k: usize, hidden: usize, seed: u8) -> Vec<u8> {
     let mut bytes = fixture::make_column_blocks(k, hidden);
     for (index, block) in bytes.chunks_exact_mut(34).enumerate() {
         if index % 7 == 0 {
-            block[..2].copy_from_slice(&0u16.to_le_bytes());
+            block[..2]
+                .copy_from_slice(&(if index % 14 == 0 { 0x8000u16 } else { 0 }).to_le_bytes());
         }
         for (lane, value) in block[2..].iter_mut().enumerate() {
             *value = if index % 2 == 0 {
@@ -212,10 +215,12 @@ fn compare_case(
             (None, SplitKernel::PersistentTiles),
             (None, SplitKernel::Cohorts),
             (None, SplitKernel::EightValues),
+            (None, SplitKernel::NativeWarp),
         ])
         .filter(|(_, kernel)| *kernel != SplitKernel::FixedK2048 || k == 2048)
     {
         let enqueue_split = match split_kernel {
+            SplitKernel::NativeWarp => CudaContext::ffn_q8_split_native_warp_f32_async,
             SplitKernel::EightValues => CudaContext::ffn_q8_split_f32x8_async,
             SplitKernel::Cohorts => CudaContext::ffn_q8_split_cohorts_f32_async,
             SplitKernel::PersistentTiles => CudaContext::ffn_q8_split_persistent_tiles_f32_async,
@@ -238,7 +243,7 @@ fn compare_case(
         }
         if matches!(
             split_kernel,
-            SplitKernel::Cohorts | SplitKernel::EightValues
+            SplitKernel::NativeWarp | SplitKernel::Cohorts | SplitKernel::EightValues
         ) {
             unsafe {
                 ctx.memcpy_d2d_async(
@@ -300,11 +305,13 @@ fn compare_case(
         assert_eq!(delta.stream_syncs, 0);
         if matches!(
             split_kernel,
-            SplitKernel::Cohorts | SplitKernel::EightValues
+            SplitKernel::NativeWarp | SplitKernel::Cohorts | SplitKernel::EightValues
         ) {
             assert_eq!(delta.stream_waits, 0);
             let after = profile::snapshot();
-            let op = if split_kernel == SplitKernel::EightValues {
+            let op = if split_kernel == SplitKernel::NativeWarp {
+                "ffn_q8_split_f32x4_native_warp_128"
+            } else if split_kernel == SplitKernel::EightValues {
                 "ffn_q8_split_f32x8_128"
             } else {
                 "ffn_q8_split_f32x4_cohorts_256"
@@ -324,7 +331,7 @@ fn compare_case(
         if variant.is_none() {
             if !matches!(
                 split_kernel,
-                SplitKernel::Dynamic | SplitKernel::EightValues
+                SplitKernel::NativeWarp | SplitKernel::Dynamic | SplitKernel::EightValues
             ) {
                 assert_eq!(
                     actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
@@ -397,7 +404,7 @@ fn compare_case(
             if variant.is_none() {
                 if !matches!(
                     split_kernel,
-                    SplitKernel::Dynamic | SplitKernel::EightValues
+                    SplitKernel::NativeWarp | SplitKernel::Dynamic | SplitKernel::EightValues
                 ) {
                     for (a, b) in projections.iter().zip(split_projections.as_ref().unwrap()) {
                         assert_eq!(
@@ -482,6 +489,8 @@ fn compare_case(
 /// 256-thread block, including inactive odd tails and an ordered producer.
 /// Eight-value tasks change ownership but retain the unchanged CPU tolerances;
 /// their capture and ordinary output bits still agree, with no weaker old checks.
+/// Native 32-partial warp reduction also retains those CPU tolerances rather
+/// than claiming bit equality with the original 128-partial association.
 /// Distinct rows,
 /// signed extremes, zero scales, hidden tails and two-byte weight bases protect
 /// the packed representation and one-warp reduction without changing defaults.
@@ -539,6 +548,7 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 )
                 .is_err());
             for enqueue in [
+                CudaContext::ffn_q8_split_native_warp_f32_async,
                 CudaContext::ffn_q8_split_f32_async,
                 CudaContext::ffn_q8_split_f32_two_columns_async,
                 CudaContext::ffn_q8_split_f32_k2048_async,
@@ -594,6 +604,51 @@ fn test_fp32_ffn_rejects_unsupported_arguments_without_gpu_work() -> Result<()> 
                 )
                 .is_err());
             }
+            for out in [
+                input.as_mut_ptr().cast::<u8>().add(16).cast(),
+                weight.as_mut_ptr(),
+                (usize::MAX - 3) as *mut c_void,
+            ] {
+                assert!(ctx
+                    .ffn_q8_split_native_warp_f32_async(
+                        input.as_ptr(),
+                        [weight.as_ptr(); 2],
+                        [weight.as_ptr(); 2],
+                        out,
+                        1,
+                        2,
+                        32,
+                        None
+                    )
+                    .is_err());
+            }
+            assert!(ctx
+                .ffn_q8_split_native_warp_f32_async(
+                    input.as_ptr(),
+                    [weight.as_ptr(); 2],
+                    [weight.as_ptr(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    2,
+                    32,
+                    Some((
+                        output.as_mut_ptr().cast::<u8>().add(4).cast(),
+                        input.as_mut_ptr()
+                    ))
+                )
+                .is_err());
+            assert!(ctx
+                .ffn_q8_split_native_warp_f32_async(
+                    (usize::MAX - 15) as *const c_void,
+                    [weight.as_ptr(); 2],
+                    [weight.as_ptr(); 2],
+                    output.as_mut_ptr(),
+                    1,
+                    2,
+                    32,
+                    None
+                )
+                .is_err());
             for k in [32, 96, 4096] {
                 let error = ctx
                     .ffn_q8_split_f32_k2048_async(

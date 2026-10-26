@@ -51,7 +51,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     {
         return projection::benchmark(args);
     }
-    let is_fp32_ablation = args.ffn_f32_task_pairs
+    let is_fp32_ablation = args.ffn_f32_native_warp
+        || args.ffn_f32_task_pairs
         || args.ffn_f32_eight_values
         || args.ffn_f32_cohorts
         || args.ffn_f32_persistent_tiles
@@ -118,6 +119,12 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"});
     manifest["is_weight_read_diagnostic"] = json!(args.ffn_weight_read);
+    if args.ffn_f32_native_warp {
+        manifest["fp32_variants"] = json!([FfnKernel::NativeWarp]);
+        manifest["control"] = json!("qualified split-f32x4-128 and immutable prepared down/vocabulary; candidate has a native 32-partial FP32 tree, not emulated 128 partials");
+        manifest["native_warp_contract"] = json!({"output_warps":4,"partials_per_output":32,"threads":128,
+            "has_changed_summation_ownership":true,"has_activation_quantization":false,"shared_bytes":0});
+    }
     if args.ffn_f32_task_pairs {
         manifest["control"]=json!("qualified split-f32x4-128 and immutable prepared down/vocabulary; candidate changes only payload layout for two original tasks per thread");
         manifest["fp32_variants"] = json!([FfnKernel::TaskPairPacket]);
@@ -140,7 +147,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     for layer in &inputs.artifact.layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
-            if args.ffn_f32_task_pairs
+            if args.ffn_f32_native_warp
+                || args.ffn_f32_task_pairs
                 || args.ffn_weight_read
                 || args.ffn_f32_eight_values
                 || args.ffn_f32_cohorts

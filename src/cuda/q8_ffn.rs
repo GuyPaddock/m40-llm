@@ -1,5 +1,5 @@
 use super::{ffi, record_async_kernel, CudaContext};
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use std::ffi::c_void;
 
 /// The only two geometries in M04's independent numerical experiment.
@@ -105,6 +105,7 @@ impl Q8FfnFp32Variant {
 
 #[derive(Clone, Copy)]
 enum SplitFfnKernel {
+    NativeWarp,
     EightValues,
     Cohorts,
     PersistentTiles,
@@ -118,6 +119,37 @@ enum SplitFfnKernel {
 }
 
 impl CudaContext {
+    /// A native 32-partial FP32 tree per output warp. Summation association
+    /// differs from the qualified 128-thread control; weights stay unchanged.
+    ///
+    /// # Safety
+    /// Same spans, alignment and stream lifetime as `ffn_q8_split_f32_async`.
+    /// No output/capture span may overlap input, weights or another output.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_split_native_warp_f32_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 2],
+        values: [*const c_void; 2],
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        self.enqueue_split_f32(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            SplitFfnKernel::NativeWarp,
+        )
+    }
+
     /// Enqueue the fixed one-column joint gate/up layout on decode.
     /// No allocation, transfer or synchronization occurs.
     ///
@@ -565,8 +597,51 @@ impl CudaContext {
                 "invalid split FP32 FFN intermediate outputs"
             );
         }
+        if matches!(kernel, SplitFfnKernel::NativeWarp) {
+            ensure!(k <= i32::MAX - 31, "native warp K exceeds safe indexing");
+            let weights = (hidden as usize)
+                .checked_mul(k as usize)
+                .context("native warp weight span overflow")?;
+            let input_bytes = (rows as usize)
+                .checked_mul(k as usize)
+                .and_then(|v| v.checked_mul(4))
+                .context("native warp input span overflow")?;
+            let output_bytes = (rows as usize)
+                .checked_mul(hidden as usize)
+                .and_then(|v| v.checked_mul(4))
+                .context("native warp output span overflow")?;
+            let span = |p: *const c_void, bytes: usize| -> Result<_> {
+                let start = p as usize;
+                Ok((
+                    start,
+                    start
+                        .checked_add(bytes)
+                        .context("native warp address overflow")?,
+                ))
+            };
+            let reads = [
+                span(input, input_bytes)?,
+                span(scales[0], weights / 16)?,
+                span(scales[1], weights / 16)?,
+                span(values[0], weights)?,
+                span(values[1], weights)?,
+            ];
+            let pointers = [output, g, u];
+            let mut writes = [(0, 0); 3];
+            for index in 0..if intermediates.is_some() { 3 } else { 1 } {
+                let (start, end) = span(pointers[index].cast_const(), output_bytes)?;
+                for &(other_start, other_end) in reads.iter().chain(&writes[..index]) {
+                    ensure!(
+                        end <= other_start || other_end <= start,
+                        "native warp output overlaps another span"
+                    );
+                }
+                writes[index] = (start, end);
+            }
+        }
         let _guard = self.inner.lock.lock().unwrap();
         let enqueue = match kernel {
+            SplitFfnKernel::NativeWarp => ffi::m40llm_ffn_q8_split_native_warp_f32_async,
             SplitFfnKernel::EightValues => ffi::m40llm_ffn_q8_split_f32x8_async,
             SplitFfnKernel::Cohorts => ffi::m40llm_ffn_q8_split_cohorts_f32_async,
             SplitFfnKernel::PersistentTiles => ffi::m40llm_ffn_q8_split_persistent_tiles_f32_async,
@@ -598,6 +673,7 @@ impl CudaContext {
             return Ok(());
         }
         record_async_kernel(match kernel {
+            SplitFfnKernel::NativeWarp => "ffn_q8_split_f32x4_native_warp_128",
             SplitFfnKernel::EightValues => "ffn_q8_split_f32x8_128",
             SplitFfnKernel::Cohorts => "ffn_q8_split_f32x4_cohorts_256",
             SplitFfnKernel::PersistentTiles => "ffn_q8_split_f32x4_persistent_tiles_128",
