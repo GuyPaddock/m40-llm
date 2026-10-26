@@ -69,6 +69,15 @@ fn test_projection_probe_preserves_outputs_dispatch_and_ownership() -> Result<()
                         assert!(probe.preparation().is_none());
                         assert_eq!(probe.bytes(), probe.scratch_bytes());
                     }
+                    for is_candidate in [false, true] {
+                        let warmup = probe.warm(is_candidate, 1.0)?;
+                        assert!(warmup["gpu_ms"].as_f64().unwrap() >= 1.0);
+                        assert_eq!(warmup["minimum_gpu_ms"], 1.0);
+                        assert!(
+                            warmup["batches"].as_u64().unwrap()
+                                <= warmup["maximum_batches"].as_u64().unwrap()
+                        );
+                    }
                     assert_eq!(checked["control_bits_equal"], true);
                     assert_eq!(checked["guards_and_immutable_read_spans"], true);
                     let before = profile::snapshot();

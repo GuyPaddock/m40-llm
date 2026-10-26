@@ -433,17 +433,11 @@ impl<'a> ProjectionProbe<'a> {
     }
 
     pub fn warm(&self, is_candidate: bool, minimum_ms: f64) -> Result<Value> {
-        let mut elapsed = 0.0;
-        for batch in 1..=256 {
-            elapsed += self.time(is_candidate, 128)?["gpu_ms"]
+        super::warmup::measure(minimum_ms, |iterations| {
+            self.time(is_candidate, iterations)?["gpu_ms"]
                 .as_f64()
-                .context("missing projection warmup")?
-                * 128.0;
-            if elapsed >= minimum_ms {
-                return Ok(json!({"gpu_ms":elapsed,"batches":batch,"iterations_per_batch":128}));
-            }
-        }
-        anyhow::bail!("projection bounded warmup exhausted")
+                .context("missing projection warmup")
+        })
     }
 }
 
