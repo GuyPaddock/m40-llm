@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest fixed screen:** [lossless cross-column warp packets](experiments/2026-10-26-maxwell-warp-packet-screen.md)
+preserve control bits and improve isolated one-row down **7.52-7.61%**, but
+complete FFN improves only **2.46-2.62%**, below 5% with upper bounds under
+2.77%. Vocabulary improves **9.28%** with positive bounds, but its qualified
+profile-weighted optimistic E2E scope is **0.6823%**, below 3%. Intended
+wider loads are compiled with unchanged 40 registers and no stack/local
+storage. Keep `966ead2` benchmark-only without width/thread/register/cache
+rescue, integration or combining rejected probes. Next candidate needs
+independent evidence of enough scope in dominant FFN work. Both original
+targets remain unmet; no new generation/HTTP claim or defaults change.
+
 **Latest cost diagnostic:** [prepared down/vocabulary reads](experiments/2026-10-26-maxwell-prepared-read-screen.md)
 retain **89.08-89.55%** of real one-row down time and **89.36%** of
 vocabulary time. Source-derived checksums, original real-operation bounds,

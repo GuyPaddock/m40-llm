@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Warp Packets Improve Projections Below FFN Gate
+
+Lossless cross-column packets preserve control bits and improve isolated
+one-row down **7.52-7.61%**, but complete FFN gains only **2.46-2.62%**,
+below 5% with all interval upper bounds below 2.77%. Vocabulary improves
+**9.28%**, but its independent optimistic E2E scope is just **0.6823%**,
+below 3%. See [pairs, compiled loads, setup/memory and audit](experiments/2026-10-26-maxwell-warp-packet-screen.md).
+
+The intended two LDG128 payload/one packed-scale reads are realized with
+unchanged 40 registers and no stack/local storage. Keep `966ead2`
+benchmark-only; no runtime integration, geometry rescue or combining failed
+probes. Qualified status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Prepared Reads Retain Most Projection Cost
 
 Checksum-only original-mapping reads take **89.08-89.55%** of real one-row
