@@ -161,27 +161,51 @@ impl RuntimeConfig {
     }
 
     #[cfg(all(feature = "cuda", nvcc))]
-    pub fn load_model(
-        self,
-        path: &std::path::Path,
-        context: u32,
-    ) -> Result<(m40_llm::infer::LoadedModel, m40_llm::tokenizer::Tokenizer)> {
-        use m40_llm::{gguf, infer::LoadedModel, tokenizer::Tokenizer};
-        let gguf = gguf::load_gguf(path)?;
-        let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
+    pub fn validate_loaded_model(self, model: &m40_llm::infer::LoadedModel) -> Result<()> {
         ensure!(
-            tokenizer.is_qwen2(),
-            "Maxwell runtime comparison requires Qwen2 ChatML"
+            model.q8_ffn == self.ffn_config()?
+                && model.q8_prefill == self.prefill_backend()
+                && model.q8_attention_projection.backend() == self.attention_projection.backend(),
+            "loaded runtime backends differ from the requested FFN/prefill/projection configuration"
         );
-        let mut model = LoadedModel::from_gguf_with_q8_runtime(
+        Ok(())
+    }
+
+    /// Shared by primary and candidate loaders. Keep every execution choice at
+    /// this boundary so a newly added axis cannot be omitted by one caller.
+    #[cfg(all(feature = "cuda", nvcc))]
+    pub fn load_weights(
+        self,
+        gguf: m40_llm::gguf::GgufModel,
+        bytes: Vec<u8>,
+    ) -> Result<m40_llm::infer::LoadedModel> {
+        let model = m40_llm::infer::LoadedModel::from_gguf_with_q8_runtime(
             gguf,
-            std::fs::read(path)?,
+            bytes,
             -1,
             self.execution_config()?,
             self.ffn_config()?,
             self.prefill_backend(),
             self.attention_projection.backend(),
         )?;
+        self.validate_loaded_model(&model)?;
+        Ok(model)
+    }
+
+    #[cfg(all(feature = "cuda", nvcc))]
+    pub fn load_model(
+        self,
+        path: &std::path::Path,
+        context: u32,
+    ) -> Result<(m40_llm::infer::LoadedModel, m40_llm::tokenizer::Tokenizer)> {
+        use m40_llm::{gguf, tokenizer::Tokenizer};
+        let gguf = gguf::load_gguf(path)?;
+        let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
+        ensure!(
+            tokenizer.is_qwen2(),
+            "Maxwell runtime comparison requires Qwen2 ChatML"
+        );
+        let mut model = self.load_weights(gguf, std::fs::read(path)?)?;
         let props = model.cuda.current_device_props()?;
         ensure!(
             props.major == 5 && props.minor == 2,

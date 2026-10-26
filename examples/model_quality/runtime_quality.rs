@@ -447,15 +447,7 @@ mod tests {
             let load = |config: RuntimeConfig| -> Result<LoadedModel> {
                 let (mut gguf, bytes) = crate::q8_fixture::build_prefill_fixture(false);
                 gguf.metadata.remove("tokenizer.ggml.model");
-                let mut model = LoadedModel::from_gguf_with_q8_runtime(
-                    gguf,
-                    bytes,
-                    -1,
-                    config.execution_config()?,
-                    config.ffn_config()?,
-                    config.prefill_backend(),
-                    config.attention_projection.backend(),
-                )?;
+                let mut model = config.load_weights(gguf, bytes)?;
                 model.allocate_kv_cache_for_layers(16)?;
                 Ok(model)
             };
@@ -471,6 +463,13 @@ mod tests {
             let mut candidate = load(config)?;
             let a_stats = reference.q8_execution_stats();
             let b_stats = candidate.q8_execution_stats();
+            let before_validation = profile::snapshot();
+            config.validate_loaded_model(&candidate)?;
+            assert!(config.validate_loaded_model(&reference).is_err());
+            assert_eq!(
+                profile::counter_delta(&before_validation, &profile::snapshot()),
+                Default::default()
+            );
             q8_runtime::validate_prepared_control(&a_stats, &b_stats, control, config)?;
             let mut invalid = b_stats.clone();
             invalid.resident_bytes += 1;

@@ -484,6 +484,13 @@ impl ComparisonRun {
                 .as_ref()
                 .context("prepared server not loaded")?,
         };
+        let requested_runtime = match variant {
+            ServerVariant::Control => self.args.primary_runtime_config(),
+            ServerVariant::Prepared => self.args.candidate_runtime_config(),
+        };
+        if let Some(config) = requested_runtime {
+            config.validate_loaded_model(&server.state.model)?;
+        }
         let is_stage_profile_enabled =
             std::env::var("M40LLM_STAGE_PROFILE").ok().as_deref() == Some("1");
         let before = gpu_snapshot(self.args.ollama_pid, &self.gpu_uuid)?;
@@ -524,6 +531,20 @@ impl ComparisonRun {
             self.prompt_ids.len(),
         )
         .and_then(|()| {
+            if requested_runtime.is_some_and(|config| {
+                config.attention_projection == AttentionProjectionChoice::Warp256
+            }) {
+                let layers = u64::from(server.state.model.model_config.block_count);
+                let forwards = metrics.generated_tokens as u64;
+                for op in ["qkv_f32xq8_0_gguf_warp", "gemm_f32xq8_0_gguf_coltile4_warp"] {
+                    let launches = counters_after.by_op.get(op).map_or(0, |v| v.launches)
+                        - counters_before.by_op.get(op).map_or(0, |v| v.launches);
+                    ensure!(
+                        launches == layers * forwards,
+                        "requested projection backend did not execute every one-row layer forward"
+                    );
+                }
+            }
             if let Some(evidence) = &self.selected_quality {
                 ensure!(
                     evidence.expected_output == response.output,
@@ -556,6 +577,7 @@ impl ComparisonRun {
             "q8_execution_mode": execution.mode, "q8_execution_families": execution.families,
             "q8_prepared_bytes": execution.resident_bytes,
             "q8_ffn":server.state.model.q8_ffn,"q8_prefill_backend":server.state.model.q8_prefill,
+            "q8_attention_projection_backend":server.state.model.q8_attention_projection.backend(),
             "prompt_prefill":server.state.prompt_prefill,
             "resident_q8_activation_scratch_bytes_after_request":activation_bytes,
             "resident_prefill_weight_scratch_bytes_after_request":temporary_weight_bytes,
@@ -1116,14 +1138,7 @@ pub async fn compare() -> Result<()> {
     let bytes = std::fs::read(&args.model)?;
     let control_execution = args.primary_execution_config()?;
     let mut model = if let Some(config) = primary_runtime {
-        LoadedModel::from_gguf_with_q8_backends(
-            gguf_model,
-            bytes,
-            -1,
-            control_execution,
-            config.ffn_config()?,
-            config.prefill_backend(),
-        )?
+        config.load_weights(gguf_model, bytes)?
     } else {
         LoadedModel::from_gguf_with_q8_execution(gguf_model, bytes, -1, control_execution)?
     };
@@ -1167,6 +1182,7 @@ pub async fn compare() -> Result<()> {
         "max_tokens": MAX_TOKENS, "sampling": "greedy argmax top_k=1, penalties=1/0/0, seed=0; Ollama temperature=0, m40 default temperature ignored by greedy path",
         "comparison_kind": if args.should_profile_runtime { "selected-runtime-stage-profile" } else if args.should_time_ollama { "selected-runtime-vs-ollama" } else if candidate_runtime.is_some() { "q8-runtime" } else if candidate_q8_config.is_some() { "q8-execution" } else if args.should_compare_stage_profile { "stage-profile-perturbation" } else if args.should_compare_head128 { "head128-attention" } else { "ollama-baseline" },
         "candidate_runtime_config":candidate_runtime,
+        "actual_q8_attention_projection_backend":model.q8_attention_projection.backend(),
         "control_q8_execution": model.q8_execution_stats(), "candidate_q8_config": candidate_q8_config,
         "m40_cold_load_elapsed_ms": load_ms, "gpu_uuid": gpu_uuid, "gpu": gpu,
         "primary_boundary": "client send through complete buffered HTTP body, resident weights, prompt KV reset",
