@@ -352,6 +352,14 @@ kernels still have scalar weight/activation loads, an independent bounded
 load-vectorization opportunity rather than a reason to revive failed FFN
 experiments.
 
+The [packed QKV/output load screens](experiments/2026-10-25-maxwell-packed-projection-screen.md)
+now pass against qualified scalar-load warp controls: +46.87-51.97% QKV and
++40.02-46.78% output throughput, unchanged bits and 32/40 registers. Both
+independent stage gates and 5.23-5.33% combined optimistic scope pass.
+Implementation `8b7b20c` remains benchmark-only pending explicit model-local
+integration, actual-512/frozen-quality and measured HTTP qualification.
+No prepared weight delta, runtime default change or E2E speed claim follows.
+
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and
 `dequant-sgemm`. Use `--q8-runtime-control qualified-split-sgemm` for this

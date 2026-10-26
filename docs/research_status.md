@@ -53,9 +53,16 @@ but gains only **0.138-0.295% complete one-row throughput**, with all
 intervals spanning zero. Keep `d5a3350` benchmark-only; no conversion or
 geometry rescue follows. The independent source/SASS finding shows scalar
 U8 weight and FP32 activation loads remain in qualified QKV/output kernels.
-Next bound alignment-safe U16/float4 load vectorization there, retaining
-current geometry, original signed conversion, FP32 association/bias and
-every quality/E2E gate. Do not combine rejected FFN candidates.
+The resulting [packed projection screens](experiments/2026-10-25-maxwell-packed-projection-screen.md)
+now pass: one-request **QKV throughput +46.87-51.97%**, **output +40.02-46.78%**,
+positive paired intervals, exact control bits, unchanged 32/40 registers and
+no extra weight preparation. Primitive/runner implementation `8b7b20c` is
+benchmark-only. Both independent gates and the combined optimistic **5.23-5.33%**
+scope pass. Next add an explicit model-local packed QKV/output choice,
+preserving split-f32x4-128 FFN, SGEMM prefix, dense reference KV and all 109
+prepared identities. Then actual-512/frozen-quality, incremental HTTP and
+fresh Ollama gates. No defaults or HTTP claims change from surrogate-input
+microbenchmarks; do not combine rejected FFN candidates.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

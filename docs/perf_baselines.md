@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Packed Native QKV/Output Loads Pass Screens
+
+Fixed packed loads preserve qualified warp-control bits and improve
+one-request **QKV throughput 46.87-51.97%** and **output projection
+40.02-46.78%**, with positive paired intervals. Register usage remains
+32/40 without reported spills; no additional weight preparation is needed.
+See [complete pairs, instructions, validation and audits](experiments/2026-10-25-maxwell-packed-projection-screen.md).
+
+Both independent stage gates pass; their combined optimistic current-profile
+scope is **5.23-5.33%**, not measured E2E speed. `8b7b20c` permits an explicit
+combined runtime-quality experiment, followed by incremental HTTP and fresh
+Ollama checks. Actual inputs are frozen FFN surrogates, so generated-token
+quality is still required. Qualified **47.379 HTTP tok/s**, both original
+unmet targets and runtime defaults remain unchanged.
+
 ## 2026-10-25: Exact Byte Conversion Is Near Neutral
 
 Exact byte permutation removes signed byte-to-float instructions while
