@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Driver JIT Matches Native Projection Code
+
+Untimed loaded-module capture finds **identical gate/up and prepared
+down/head encoded words** under native loading and forced PTX JIT. The whole
+project module's 100,400 words across 135 disassembled entries and resource
+reports match, despite different ELF container bytes. See
+[actual loaded-code evidence and compatibility checks](experiments/2026-10-26-maxwell-driver-jit-inspection.md).
+
+No new timing matrix or runtime compiler selector follows. Global forced
+JIT fails the cuBLAS-enabled context; a no-model API probe records CUDA
+initialization success and cuBLAS creation status 3. Explicit cuBLAS-disabled
+primitive tests pass under both modes. This is not an OOM diagnosis, a
+performance result or capture of Ollama's actual JIT cubin. Qualified exact
+status stays **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Disabled Forward Diagnostics CPU Scope
 
 Five CPU-only release pairs measure **246.311 ms per nominal 512-token

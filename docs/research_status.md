@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest compiler-path inspection:** [actual loaded driver-JIT modules](experiments/2026-10-26-maxwell-driver-jit-inspection.md)
+have identical qualified gate/up and prepared down/head words to embedded
+sm_52. All 100,400 project words across 135 disassembled entries and resource
+reports match. No compiler candidate or timing matrix follows. Global forced
+JIT fails cuBLAS initialization; a standalone probe returns create status 3
+after CUDA initializes. Explicit no-cuBLAS primitive tests pass native/JIT,
+with identical dispatch. The external observer now has bounded opt-in module
+capture and in-process driver settings. This is not Ollama JIT capture or
+a speed/OOM claim. Next needs independent dominant execution-cost evidence;
+qualified runtime, defaults and both original unmet targets are unchanged.
+
 **Latest independent wrapper-cost screen:** [disabled diagnostics](experiments/2026-10-26-maxwell-disabled-diagnostics-cost.md)
 cost **246.311 ms per nominal512 replay**, about **481.08 us/token**, in five
 CPU-only release pairs on core 0. This is 2.3643% of qualified HTTP before
