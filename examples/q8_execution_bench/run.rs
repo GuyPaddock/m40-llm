@@ -71,6 +71,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Offline lossless payload size feasibility; never creates a CUDA model.
+    #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_payload_entropy: bool,
     /// Native 32-partial output warps; FP32 association differs from control.
     #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     ffn_f32_native_warp: bool,
@@ -622,6 +625,32 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Offline payload analysis requires frozen provenance and cannot select
+    /// a CUDA timing experiment or become an implicit inference mode.
+    #[test]
+    fn test_payload_entropy_requires_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_payload_entropy);
+        assert!(parse(&["--ffn-payload-entropy"]).is_err());
+        let valid = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-payload-entropy",
+        ];
+        assert!(parse(&valid).unwrap().ffn_payload_entropy);
+        for other in [
+            "--ffn-f32-native-warp",
+            "--ffn-f32-task-pairs",
+            "--ffn-weight-read",
+            "--ffn-q81",
+        ] {
+            assert!(parse(&[valid.as_slice(), &[other]].concat()).is_err());
+        }
+    }
 
     /// Native warp arithmetic is an explicit captured-input experiment,
     /// never an implicit replacement or combination with a closed mapping.

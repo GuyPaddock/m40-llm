@@ -4,6 +4,7 @@ mod column_gap;
 mod fixture;
 mod joint;
 mod packet;
+mod payload_entropy;
 mod pipeline;
 mod prepared;
 mod prepared_projection;
@@ -32,6 +33,9 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_payload_entropy {
+        return payload_entropy::run(args);
+    }
     if args.decode_reductions {
         return reductions::benchmark(args);
     }
