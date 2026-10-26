@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Prepared Warp Finish Misses Runtime Gates
+
+The fixed prepared-down warp finish preserves control bits but gains only
+**2.44-2.60% complete one-row FFN throughput**, below the unchanged 5% gate.
+Isolated down gains 7.53-8.12%; those are not complete-FFN wins. Vocabulary
+gains **6.54%**, but its optimistic standalone profile-weighted E2E estimate
+is only **0.474%**, below 3%. See [pairs, instructions, tests and decision](experiments/2026-10-25-maxwell-prepared-warp-screen.md).
+
+Keep `8d1c15d` / `5218f41` benchmark-only without runtime integration or a
+geometry rescue. Control SASS, FP32 math, prepared planes and 40-register
+usage remain unchanged. The qualified runtime stays **47.379 HTTP tok/s**;
+both original targets remain unmet and defaults stay unchanged.
+
 ## 2026-10-25: Qualified Projection Runtime Remains FFN Dominated
 
 Five profiling-off/on pairs preserve actual 512 IDs and measure **1.0095%

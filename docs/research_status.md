@@ -27,10 +27,14 @@ is rejected and preserved separately; shared typed loading and dispatch
 guards are fixed. Defaults remain unchanged. The
 [new selected-runtime profile](experiments/2026-10-25-maxwell-projection-stage-profile.md)
 preserves actual IDs with 1.01% instrumentation overhead. Middle-stage
-shares are 39.43% gate/up, 23.33% down and 3.80% attention. Next inspect
-the prepared projection instructions and test one original-tree warp finish
-with fixed math/layout/geometry, retaining the qualified down/head controls
-and all original micro/quality/HTTP gates. No revival of failed FFN variants.
+shares are 39.43% gate/up, 23.33% down and 3.80% attention. The subsequent
+[prepared-projection warp screen](experiments/2026-10-25-maxwell-prepared-warp-screen.md)
+preserves bits but gains only 2.44-2.60% complete FFN, below 5%. Vocabulary
+passes its 6.54% projection screen but has only 0.474% optimistic E2E scope.
+Keep `8d1c15d` / `5218f41` benchmark-only without integration or a geometry
+rescue. Next inspect the qualified gate/up load/conversion dependency chain
+before proposing an independent bounded exact hypothesis; do not revive
+failed layouts or replace either original goal with numerical/model changes.
 
 The independent
 [combined QKV/output HTTP run](experiments/2026-10-25-maxwell-projection-incremental-http.md)

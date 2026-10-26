@@ -332,6 +332,10 @@ preserves actual IDs with 1.01% instrumentation overhead and locates 39.43%
 gate/up, 23.33% prepared down and 3.80% attention. Its next bounded hypothesis
 tests the existing prepared projection's reduction only, retaining qualified
 controls, original math/layout/geometry and all promotion gates.
+The resulting [prepared projection screen](experiments/2026-10-25-maxwell-prepared-warp-screen.md)
+preserves bits but misses the 5% complete-FFN gate at 2.44-2.60%. Vocabulary
+gains 6.54%, with only 0.474% optimistic standalone E2E scope. Keep both
+benchmark-only; no runtime integration or geometry expansion follows.
 
 The shared `model_quality` and `compare_ollama` tools accept
 `--q8-runtime-attention warp-256` together with `split-f32x4-128` and
