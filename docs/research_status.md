@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest fixed screen:** [thread-owned gate/up task pairs](experiments/2026-10-26-maxwell-ffn-task-pair-screen.md)
+preserve control bits with unchanged 32 registers and wider payload loads,
+but complete one-row FFN gains only **0.23-0.34%**. All interval upper
+bounds are below 0.62%, far below 5%; one crosses zero. All four-row
+intervals cross zero. Keep `65801ff` benchmark-only with no packet-width,
+geometry/register/cache rescue or runtime integration. Tests and independent
+artifact audit pass; source/control/cache/stream/cleanup checks hold.
+Next work needs independent evidence of enough scope in dominant FFN cost,
+not another instruction-count claim. Both exact targets remain unmet and
+qualified runtime/defaults unchanged.
+
 **Latest fixed screen:** [lossless cross-column warp packets](experiments/2026-10-26-maxwell-warp-packet-screen.md)
 preserve control bits and improve isolated one-row down **7.52-7.61%**, but
 complete FFN improves only **2.46-2.62%**, below 5% with upper bounds under

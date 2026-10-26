@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Thread-Owned FFN Packets Miss The Gate
+
+Packing two original per-thread tasks into one payload preserves control
+bits but gains only **0.23-0.34%** complete one-row FFN throughput. All upper
+confidence bounds are below 0.62%, far short of 5%; one crosses zero.
+Four-row intervals all cross zero. See [raw pairs, compiler evidence and
+audit](experiments/2026-10-26-maxwell-ffn-task-pair-screen.md).
+
+The intended LDG128 payload is compiled with unchanged 32 registers and
+zero stack/local storage. Fewer load instructions do not establish lower
+DRAM traffic or a useful end-to-end gain. Preserve `65801ff` benchmark-only,
+with no runtime integration or geometry/register/cache rescue. Qualified
+status stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both
+original targets remain unmet and defaults unchanged.
+
 ## 2026-10-26: Warp Packets Improve Projections Below FFN Gate
 
 Lossless cross-column packets preserve control bits and improve isolated
