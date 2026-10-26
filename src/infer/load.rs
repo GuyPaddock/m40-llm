@@ -10,13 +10,14 @@ use std::ffi::c_void;
 
 impl LoadedModel {
     pub fn from_gguf(gguf: GgufModel, gguf_bytes: Vec<u8>, device_id: i32) -> Result<Self> {
-        Self::from_gguf_with_q8_backends(
+        Self::from_gguf_with_q8_runtime(
             gguf,
             gguf_bytes,
             device_id,
             Q8ExecutionConfig::from_env()?,
             super::Q8FfnConfig::from_env()?,
             super::q8_prefill::Q8PrefillBackend::from_env()?,
+            super::Q8AttentionProjectionBackend::from_env()?,
         )
     }
 
@@ -46,6 +47,37 @@ impl LoadedModel {
         ffn: super::Q8FfnConfig,
         prefill: super::q8_prefill::Q8PrefillBackend,
     ) -> Result<Self> {
+        Self::from_gguf_with_q8_runtime(
+            gguf,
+            gguf_bytes,
+            device_id,
+            execution,
+            ffn,
+            prefill,
+            super::Q8AttentionProjectionBackend::Native,
+        )
+    }
+
+    /// Explicit independent model-local choices; ambient experiment flags do
+    /// not override them. The old backend constructor remains a native control.
+    pub fn from_gguf_with_q8_runtime(
+        gguf: GgufModel,
+        gguf_bytes: Vec<u8>,
+        device_id: i32,
+        execution: Q8ExecutionConfig,
+        ffn: super::Q8FfnConfig,
+        prefill: super::q8_prefill::Q8PrefillBackend,
+        attention_projection: super::Q8AttentionProjectionBackend,
+    ) -> Result<Self> {
+        anyhow::ensure!(
+            attention_projection.is_native()
+                || (cfg!(feature = "cuda")
+                    && cfg!(nvcc)
+                    && std::env::var("M40LLM_ENABLE_NVCC").ok().as_deref() != Some("0")),
+            "warp-256 attention projections require compiled CUDA; \
+             use M40LLM_Q8_ATTN_PROJECTIONS=native"
+        );
+        attention_projection.validate_execution(execution)?;
         anyhow::ensure!(
             ffn.is_native()
                 || (cfg!(feature = "cuda")
@@ -147,6 +179,7 @@ impl LoadedModel {
             layer_mask: super::LayerMask::default(),
             q8_ffn: ffn,
             q8_prefill: prefill,
+            q8_attention_projection: super::Q8AttentionProjectionState::native(),
             #[cfg(feature = "cuda")]
             forward_workspace: std::sync::Mutex::new(None),
             #[cfg(feature = "cuda")]
@@ -170,6 +203,11 @@ impl LoadedModel {
         };
         #[cfg(feature = "cuda")]
         let mut model = model;
+        #[cfg(feature = "cuda")]
+        {
+            model.q8_attention_projection =
+                super::Q8AttentionProjectionState::prepare(&model, attention_projection)?;
+        }
         #[cfg(feature = "cuda")]
         model.validate_q8_ffn_backend()?;
         #[cfg(feature = "cuda")]

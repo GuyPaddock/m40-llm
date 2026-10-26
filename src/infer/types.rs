@@ -269,6 +269,8 @@ pub struct LoadedModel {
     pub q8_ffn: super::Q8FfnConfig,
     /// Load-time experimental prefill backend; native for in-memory references.
     pub q8_prefill: super::q8_prefill::Q8PrefillBackend,
+    /// Owned load-time QKV/output selection; use native state in reference fixtures.
+    pub q8_attention_projection: super::Q8AttentionProjectionState,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]

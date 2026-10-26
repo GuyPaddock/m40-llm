@@ -1004,6 +1004,24 @@ impl LoadedModel {
     ) -> Result<bool> {
         #[cfg(feature = "cuda")]
         {
+            if m == 1 && !self.q8_attention_projection.backend().is_native() {
+                self.q8_attention_projection.validate_qkv(
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                )?;
+                self.cuda.qkv_f32xq8_0_gguf_warp_async(
+                    d_x_f32,
+                    [d_wq_f16, d_wk_f16, d_wv_f16],
+                    [d_bq_f32, d_bk_f32, d_bv_f32],
+                    [d_q_out_f32, d_k_out_f32, d_v_out_f32],
+                    [n_q, n_k, n_v],
+                    k,
+                    CudaStream::Decode,
+                )?;
+                return Ok(true);
+            }
             if m == 1
                 && k > 0
                 && n_q > 0
@@ -1176,6 +1194,11 @@ impl LoadedModel {
         if m <= 0 || n <= 0 || k <= 0 {
             anyhow::bail!("out_proj: invalid dims");
         }
+        #[cfg(feature = "cuda")]
+        if m == 1 && !self.q8_attention_projection.backend().is_native() {
+            self.out_proj_f32xf16_gguf_f32_async(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)?;
+            return self.cuda.synchronize_stream(CudaStream::Decode);
+        }
         self.matmul_f32xf16_gguf_f32(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| {
                 format!("attention output projection GGUF GEMM failed: m={m} n={n} k={k}")
@@ -1195,6 +1218,19 @@ impl LoadedModel {
     ) -> Result<()> {
         if m <= 0 || n <= 0 || k <= 0 {
             anyhow::bail!("out_proj: invalid dims");
+        }
+        #[cfg(feature = "cuda")]
+        if m == 1 && !self.q8_attention_projection.backend().is_native() {
+            self.q8_attention_projection
+                .validate_output(d_w_out_f16, n, k)?;
+            return self.cuda.gemm_f32xq8_0_gguf_coltile4_warp_async(
+                d_in_f32,
+                d_w_out_f16,
+                d_out_f32,
+                n,
+                k,
+                CudaStream::Decode,
+            );
         }
         self.matmul_f32xf16_gguf_f32_async(d_in_f32, d_w_out_f16, d_out_f32, m, n, k)
             .with_context(|| {

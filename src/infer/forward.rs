@@ -110,6 +110,9 @@ fn forward_finite_log_enabled() -> bool {
 impl LoadedModel {
     #[cfg(feature = "cuda")]
     fn profiled_projection_stream(&self, weight: *const c_void) -> CudaStream {
+        if self.q8_attention_projection.contains_weight(weight) {
+            return CudaStream::Decode;
+        }
         let is_decode = match self.gguf_weight_dtype(weight) {
             GgmlDType::Q8_0 => q8_decode_kernel_decode_stream_enabled(),
             GgmlDType::Q4_0 | GgmlDType::Q6K => q4_decode_kernel_decode_stream_enabled(),

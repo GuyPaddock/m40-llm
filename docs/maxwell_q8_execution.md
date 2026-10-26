@@ -303,7 +303,20 @@ prespecified combined QKV/output optimistic ceiling is **4.68-4.72%**,
 clearing feasibility but not measured runtime qualification. Next use an
 immutable opt-in combined choice with unchanged split-FFN/SGEMM control,
 then actual-512/frozen quality and the original HTTP/Ollama gates.
-Neither projection primitive currently selects a new generation default.
+Neither projection primitive selects a new generation default.
+
+The combined runtime is opt-in with `M40LLM_Q8_ATTN_PROJECTIONS=warp-256`.
+Generic model loading captures that choice once; explicit backend/reference
+constructors stay native unless passed the new typed backend. It affects
+only one-row fused QKV and attention-output projection, always on decode.
+Multi-row prefill, prepared gate/up/down/vocabulary and SGEMM are unchanged.
+Raw QKV/output device identities and shapes are validated at loading and
+dispatch; prepared QKV/output families, non-Q8 models and unsupported CUDA
+builds fail explicitly rather than falling back. Use `native` to disable.
+Model-local state has no per-token environment lookup, new device allocation
+or activation quantization. In-memory reference fixtures initialize native
+state and must not replace a model's state during workspace/session use.
+Runtime quality and HTTP qualification are still pending for this combination.
 
 ### M03 Primitive Checkpoint
 
