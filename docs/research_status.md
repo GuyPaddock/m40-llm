@@ -17,6 +17,14 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest incremental qualification:** [packed QKV/output](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md)
+passes twenty fresh confirmation pairs at **49.082 versus 47.186 HTTP
+tok/s, +4.018%**, paired interval **[3.802%, 4.144%]**. Actual 512 IDs,
+quality, all 109 prepared identities and dispatch match. The five-pair
+screen triggered the prescribed fresh confirmation; it is not pooled.
+Next run fresh official Ollama timing for this selected opt-in combination.
+Both original goals and defaults remain unchanged.
+
 **Latest selected-runtime gap checkpoint:** the
 [corrected fresh projection/Ollama comparison](experiments/2026-10-25-maxwell-projection-ollama-http.md)
 measures **47.379 versus 43.097 buffered HTTP tok/s, +9.937%**, with a
@@ -64,7 +72,7 @@ prepared identities. Runtime integration `c264c89` and qualification tooling
 `43ea00a` now pass the [actual-model quality gate](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md):
 512 actual IDs and twelve frozen outputs match, all seven sampled full-vocabulary
 logit differences are zero, and all 109 prepared identities remain fixed.
-Next incremental HTTP, then fresh Ollama if its gate passes. No defaults or
+The incremental HTTP gate above now passes; fresh Ollama is next. No defaults or
 HTTP claims change from surrogate-input microbenchmarks or unpaired quality
 timing; do not combine rejected FFN candidates.
 

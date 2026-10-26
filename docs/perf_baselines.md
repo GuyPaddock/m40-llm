@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-25: Packed Projections Confirm 4.02% HTTP Gain
+
+Twenty fresh alternating pairs measure **49.082435 versus 47.186286 HTTP
+tok/s**, **+4.018433%**, paired 95% interval **[3.802092%, 4.143568%]**.
+The initial five-pair 3.918% result triggered borderline confirmation and
+is not pooled into the headline. Actual 512 IDs, HTTP smokes, all 109
+prepared identities and selected dispatch pass. See [timing, memory,
+reproduction and independent audit](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md).
+
+This retains the opt-in packed QKV/output combination without new defaults.
+Prompt/decode medians are 501.079 / 9,883.993 ms. No new weight/scratch is
+added. Ollama is an untimed oracle here; fresh cross-engine timing is next.
+Both original goals remain unmet, and this result does not imply a new
+Ollama-relative percentage.
+
 ## 2026-10-25: Packed QKV/Output Passes Runtime Quality
 
 The explicit packed-load projection combination preserves all **512 actual
