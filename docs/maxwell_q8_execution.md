@@ -66,6 +66,26 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ## Experimental Runtime Selection
 
+### Diagnostic Library Read Reference
+
+The shared `q8_execution_bench` accepts `--ffn-weight-read
+--ffn-weight-read-cub` with frozen M02 inputs. It compares the original
+per-column modular checksums with public CUB segmented reduction over the
+same split planes. It is not an inference implementation or measured DRAM
+bandwidth. The fixed [contract](experiments/2026-10-26-maxwell-cub-read-hypothesis.md)
+requires a 10% one-row read improvement before further investigation.
+Original real FFN/down controls and all inference gates remain separate.
+
+One queried, caller-owned workspace is capped at 1 MiB and reused without
+enqueue allocations, transfers or explicit synchronization. Invalid spans,
+overlap, alignment and signed segment-offset overflow fail before work.
+The adapter uses CUDA 12.8's bundled CUB 2.7.0 with its default sm_52 policy;
+there is no custom policy search or runtime configuration switch. The
+[CUB license notice](third_party/cub-LICENSE.txt) accompanies binary/header use.
+The build exposes C99/POSIX declarations required by these headers while
+continuing to hide GNU/C23 math extensions. A libstdc++ classification-name
+bridge re-exports existing standard overloads; it adds no math implementation.
+
 ### Explicit Runtime Qualification
 
 The existing `model_quality` runner accepts independent

@@ -103,6 +103,14 @@ int m40llm_ffn_q8_split_f32x8_async(M40llmCudaContext* ctx, const void* input, c
     (void)ctx; (void)input; (void)scales; (void)values; (void)output;
     (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
 }
+uint32_t m40llm_q8_cub_checksum_version(void) { return 0; }
+int m40llm_ffn_q8_cub_checksum_scratch_bytes(M40llmCudaContext* ctx, size_t* bytes) {
+    (void)ctx; (void)bytes; return -2;
+}
+int m40llm_ffn_q8_cub_checksum_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, void* scratch, size_t bytes, int rows, int hidden, int k) {
+    (void)ctx; (void)scales; (void)values; (void)output; (void)scratch;
+    (void)bytes; (void)rows; (void)hidden; (void)k; return -2;
+}
 int m40llm_ffn_q8_weight_checksum_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k) {
     (void)ctx; (void)scales; (void)values; (void)output;
     (void)rows; (void)hidden; (void)k; return -1;

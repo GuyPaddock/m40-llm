@@ -7,7 +7,7 @@ use super::{
 use crate::run::{inspect_gpu, write_record, Args};
 use anyhow::{ensure, Context, Result};
 use m40_llm::{
-    cuda::{CudaContext, CudaEvent, CudaStream},
+    cuda::{CudaContext, CudaEvent, CudaStream, DeviceBuffer},
     evaluation::{ffn_capture::FfnLayerSamples, identity::sha256},
     profile,
 };
@@ -55,6 +55,7 @@ pub(super) fn checksum_columns(
 
 struct ReadProbe {
     output: GuardedF32,
+    cub_scratch: Option<DeviceBuffer>,
     start: CudaEvent,
     stop: CudaEvent,
 }
@@ -62,6 +63,7 @@ struct ReadProbe {
 #[derive(Clone, Copy)]
 enum ReadLayout<'a> {
     Original,
+    Cub,
     Ordered(bool),
     Pitched,
     ColumnGap(&'a super::column_gap::GappedPayloads),
@@ -74,6 +76,26 @@ fn calculate_dispatch_owner(column: usize, hidden: usize, is_transposed: bool) -
     } else {
         column
     }
+}
+
+fn summarize_cub_pairs(pairs: &[(f64, f64)]) -> Result<Value> {
+    let mut result = super::ablation::summarize(pairs)?;
+    result["control_median_ms"] = result
+        .as_object_mut()
+        .unwrap()
+        .remove("native_median_ms")
+        .unwrap();
+    result
+        .as_object_mut()
+        .unwrap()
+        .remove("passes_micro_screen");
+    result["passes_read_screen"] = json!(
+        result["throughput_gain"].as_f64().unwrap() >= 0.10
+            && result["bootstrap_gain_ci95"][0].as_f64().unwrap() > 0.0
+    );
+    result["interpretation"] =
+        json!("library checksum reference only; not FFN or measured DRAM cost");
+    Ok(result)
 }
 
 fn time_control(pipeline: &FfnPipeline<'_>, stage: Stage, iterations: usize) -> Result<Value> {
@@ -97,9 +119,18 @@ fn time_control(pipeline: &FfnPipeline<'_>, stage: Stage, iterations: usize) -> 
 }
 
 impl ReadProbe {
-    fn new(pipeline: &FfnPipeline<'_>) -> Result<Self> {
+    fn new(pipeline: &FfnPipeline<'_>, should_use_cub: bool) -> Result<Self> {
         let ctx = &pipeline.model.cuda;
         Ok(Self {
+            cub_scratch: if should_use_cub {
+                Some(DeviceBuffer::new_tagged(
+                    ctx,
+                    ctx.ffn_q8_cub_checksum_scratch_bytes()?,
+                    "ffn_read:cub_scratch",
+                )?)
+            } else {
+                None
+            },
             output: GuardedF32::new(
                 ctx,
                 &vec![0.0; pipeline.rows * pipeline.hidden_dim * 2],
@@ -114,6 +145,13 @@ impl ReadProbe {
         unsafe {
             let prepared = pipeline.prepared.as_ref().context("missing read planes")?;
             match layout {
+                ReadLayout::Cub => prepared.enqueue_checksum_cub(
+                    self.output.pointer(),
+                    pipeline.rows,
+                    self.cub_scratch
+                        .as_ref()
+                        .context("missing CUB checksum scratch")?,
+                ),
                 ReadLayout::Ordered(is_transposed) => prepared.enqueue_checksum_ordered(
                     self.output.pointer(),
                     pipeline.rows,
@@ -153,6 +191,7 @@ impl ReadProbe {
         let after = profile::snapshot();
         let counters = profile::counter_delta(&before, &after);
         let op = match layout {
+            ReadLayout::Cub => "ffn_q8_cub_checksum",
             ReadLayout::Original => "ffn_q8_weight_checksum_128",
             ReadLayout::Ordered(_) => "ffn_q8_weight_checksum_ordered_128",
             _ => "ffn_q8_weight_checksum_pitched_128",
@@ -174,12 +213,14 @@ impl ReadProbe {
         let gpu_ms = f64::from(self.start.elapsed_sync(&self.stop, "ffn_read_benchmark")?)
             / iterations as f64;
         Ok(
-            json!({"stage":match layout {ReadLayout::Original=>"weight_read_checksum",ReadLayout::Ordered(false)=>"ordered_read_sequential",ReadLayout::Ordered(true)=>"ordered_read_transpose32",ReadLayout::Pitched=>"pitched_read_zero_gap",ReadLayout::ColumnGap(_)=>"pitched_read_column_gap"},"gpu_ms":gpu_ms,"iterations":iterations,
+            json!({"stage":match layout {ReadLayout::Original=>"weight_read_checksum",ReadLayout::Cub=>"cub_segmented_read_checksum",ReadLayout::Ordered(false)=>"ordered_read_sequential",ReadLayout::Ordered(true)=>"ordered_read_transpose32",ReadLayout::Pitched=>"pitched_read_zero_gap",ReadLayout::ColumnGap(_)=>"pitched_read_column_gap"},"gpu_ms":gpu_ms,"iterations":iterations,
             "has_cta_index_tag":matches!(layout, ReadLayout::Ordered(_)),
             "column_gap_bytes":if matches!(layout,ReadLayout::ColumnGap(_)) {128} else {0},
             "started_unix_us":started_unix_us,"completed_unix_us":SystemTime::now().duration_since(UNIX_EPOCH)?.as_micros(),
             "host_enqueue_and_completion_ms":began.elapsed().as_secs_f64()*1000.0/iterations as f64,
-            "enqueue_counters":counters,"operation":op,"blocks_per_row":pipeline.hidden_dim,"threads":128,"shared_bytes":1024,
+            "enqueue_counters":counters,"operation":op,"blocks_per_row":pipeline.hidden_dim,"threads":if matches!(layout,ReadLayout::Cub) {256} else {128},"shared_bytes":if matches!(layout,ReadLayout::Cub) {0} else {1024},
+            "shared_bytes_kind":"requested_dynamic; static library storage reported separately",
+            "cub_scratch_bytes":self.cub_scratch.as_ref().map_or(0,DeviceBuffer::bytes),
             "logical_unique_weight_bytes_per_call":pipeline.prepared.as_ref().unwrap().bytes * pipeline.rows,
             "has_inference_output":false,"has_measured_dram_traffic":false}),
         )
@@ -240,7 +281,7 @@ pub(super) fn benchmark_case(
     args: &Args,
 ) -> Result<()> {
     pipeline.select_kernel(FfnKernel::SplitF32x4)?;
-    let probe = ReadProbe::new(pipeline)?;
+    let probe = ReadProbe::new(pipeline, args.ffn_weight_read_cub)?;
     let gap = if args.ffn_weight_read_gap {
         Some(
             pipeline
@@ -256,6 +297,13 @@ pub(super) fn benchmark_case(
     let prepared_before = serde_json::to_value(pipeline.model.q8_execution_stats())?;
     probe.enqueue(pipeline, ReadLayout::Original)?;
     let checks = probe.verify(pipeline, layer, ReadLayout::Original)?;
+    if args.ffn_weight_read_cub {
+        probe.enqueue(pipeline, ReadLayout::Cub)?;
+        ensure!(
+            probe.verify(pipeline, layer, ReadLayout::Cub)? == checks,
+            "CUB checksum differs from original/CPU"
+        );
+    }
     if let Some(gap) = &gap {
         for layout in [ReadLayout::Pitched, ReadLayout::ColumnGap(gap)] {
             probe.enqueue(pipeline, layout)?;
@@ -282,6 +330,8 @@ pub(super) fn benchmark_case(
         "preparation":pipeline.prepared.as_ref().unwrap().report,"real_scratch_bytes":pipeline.scratch_bytes(),
         "column_gap_preparation":gap.as_ref().map(|g|&g.report),
         "has_verified_dispatch_owner_tags":args.ffn_weight_read_column_order,
+        "has_verified_cub_checksums":args.ffn_weight_read_cub,
+        "cub_scratch_bytes":probe.cub_scratch.as_ref().map_or(0,DeviceBuffer::bytes),
         "tracked_device_bytes":resident,"runtime_integration_allowed":false}),
     )?;
     let control_warmup = pipeline.warm_up(1000.0, 256)?;
@@ -292,6 +342,15 @@ pub(super) fn benchmark_case(
     })?;
     let mut gap_warmups = Vec::new();
     let mut order_warmups = Vec::new();
+    let cub_warmup = if args.ffn_weight_read_cub {
+        Some(warmup::measure(100.0, |count| {
+            Ok(probe.time(pipeline, count, ReadLayout::Cub)?["gpu_ms"]
+                .as_f64()
+                .unwrap())
+        })?)
+    } else {
+        None
+    };
     if args.ffn_weight_read_column_order {
         for layout in [ReadLayout::Ordered(false), ReadLayout::Ordered(true)] {
             order_warmups.push(warmup::measure(100.0, |count| {
@@ -313,11 +372,12 @@ pub(super) fn benchmark_case(
     write_record(
         output,
         json!({"kind":"ffn_read_warmup","layer_id":layer.source.layer_id,"rows":pipeline.rows,
-        "real_ffn":control_warmup,"read_checksum":read_warmup,"pitched_read_warmups":gap_warmups,"ordered_read_warmups":order_warmups,"gpu_after":inspect_gpu()?}),
+        "real_ffn":control_warmup,"read_checksum":read_warmup,"cub_read_warmup":cub_warmup,"pitched_read_warmups":gap_warmups,"ordered_read_warmups":order_warmups,"gpu_after":inspect_gpu()?}),
     )?;
     let mut gap_pairs = Vec::new();
     let mut order_pairs = Vec::new();
     let mut original_order_pairs = Vec::new();
+    let mut cub_pairs = Vec::new();
     for trial in 0..args.trials {
         let gpu_before = inspect_gpu()?;
         let mut measurements = Vec::new();
@@ -325,6 +385,8 @@ pub(super) fn benchmark_case(
             vec![0, 4, 5, 1, 2, 3]
         } else if args.ffn_weight_read_column_order {
             vec![0, 6, 7, 1, 2, 3]
+        } else if args.ffn_weight_read_cub {
+            vec![0, 8, 1, 2, 3]
         } else {
             vec![0, 1, 2, 3]
         };
@@ -334,6 +396,7 @@ pub(super) fn benchmark_case(
         for arm in arms {
             measurements.push(match arm {
                 0 => probe.time(pipeline, args.iterations, ReadLayout::Original)?,
+                8 => probe.time(pipeline, args.iterations, ReadLayout::Cub)?,
                 1 => time_control(pipeline, Stage::GateUpSwiglu, args.iterations)?,
                 2 => time_control(pipeline, Stage::IsolatedDown, args.iterations)?,
                 6 => probe.time(pipeline, args.iterations, ReadLayout::Ordered(false))?,
@@ -346,6 +409,19 @@ pub(super) fn benchmark_case(
                 )?,
                 _ => time_control(pipeline, Stage::Complete, args.iterations)?,
             });
+        }
+        if args.ffn_weight_read_cub {
+            let get = |stage| -> Result<f64> {
+                measurements
+                    .iter()
+                    .find(|m| m["stage"] == stage)
+                    .and_then(|m| m["gpu_ms"].as_f64())
+                    .context("missing CUB reference timing")
+            };
+            cub_pairs.push((
+                get("weight_read_checksum")?,
+                get("cub_segmented_read_checksum")?,
+            ));
         }
         if args.ffn_weight_read_column_order {
             let get = |stage| -> Result<f64> {
@@ -387,6 +463,21 @@ pub(super) fn benchmark_case(
             "measurements":measurements,"gpu_before":gpu_before,"gpu_after":inspect_gpu()?,"tracked_device_bytes":resident,
             "interpretation":"standalone read/checksum versus real gate/up, down and complete FFN; never inference speedup or measured bandwidth"}),
         )?;
+    }
+    if args.ffn_weight_read_cub {
+        let result = summarize_cub_pairs(&cub_pairs)?;
+        write_record(
+            output,
+            json!({"kind":"ffn_read_cub_screen","layer_id":layer.source.layer_id,
+            "rows":pipeline.rows,"result":result,"one_row_read_gain_gate_percent":10,
+            "runtime_integration_allowed":false}),
+        )?;
+        probe.enqueue(pipeline, ReadLayout::Cub)?;
+        ensure!(
+            probe.verify(pipeline, layer, ReadLayout::Cub)? == checks,
+            "CUB checksum changed after timed scratch reuse"
+        );
+        probe.enqueue(pipeline, ReadLayout::Original)?;
     }
     if gap.is_some() {
         let mut result = super::ablation::summarize(&gap_pairs)?;
@@ -457,6 +548,22 @@ pub(super) fn benchmark_case(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Read-reference qualification uses its prespecified 10% threshold,
+    /// not the shared inference screen's 5%, and still requires valid pairs.
+    #[test]
+    fn test_cub_summary_requires_ten_percent_read_gain() -> Result<()> {
+        for (ratio, should_pass) in [(1.0, false), (1.07, false), (1.11, true)] {
+            let pairs = vec![(ratio, 1.0); 5];
+            let result = summarize_cub_pairs(&pairs)?;
+            assert_eq!(result["passes_read_screen"], should_pass);
+            assert_eq!(result["control_median_ms"], ratio);
+            assert!(result.get("passes_micro_screen").is_none());
+        }
+        assert!(summarize_cub_pairs(&[(2.0, 1.0); 4]).is_err());
+        assert!(summarize_cub_pairs(&[(f64::NAN, 1.0); 5]).is_err());
+        Ok(())
+    }
 
     /// The diagnostic transpose covers every column once, and inverse tags
     /// distinguish it from an ignored selector for nontrivial output widths.

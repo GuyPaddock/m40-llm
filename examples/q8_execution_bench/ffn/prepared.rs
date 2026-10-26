@@ -30,6 +30,28 @@ fn split_planes(weight: &DeviceQ8ExecutionWeight) -> Result<(&DeviceBuffer, &Dev
 }
 
 impl PreparedFfnWeights {
+    /// # Safety
+    /// Output and CUB scratch remain live/disjoint and decode producers are ordered.
+    pub unsafe fn enqueue_checksum_cub(
+        &self,
+        output: *mut c_void,
+        rows: usize,
+        scratch: &DeviceBuffer,
+    ) -> Result<()> {
+        let (gs, gv) = split_planes(&self.device[0])?;
+        let (us, uv) = split_planes(&self.device[1])?;
+        let shape = self.device[0].key().source.shape();
+        self.ctx.ffn_q8_cub_checksum_async(
+            [gs.as_ptr(), us.as_ptr()],
+            [gv.as_ptr(), uv.as_ptr()],
+            output,
+            scratch,
+            i32::try_from(rows)?,
+            i32::try_from(shape.output_dim())?,
+            i32::try_from(shape.input_dim())?,
+        )
+    }
+
     pub fn prepare_column_gap(&self) -> Result<super::column_gap::GappedPayloads> {
         super::column_gap::GappedPayloads::new(&self.ctx, &self.host, self.bytes)
     }

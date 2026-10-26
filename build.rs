@@ -132,6 +132,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
     println!("cargo:rerun-if-changed=cuda/q8_execution.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_ffn.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_cub_read.cuh");
     println!("cargo:rerun-if-changed=cuda/decode_reductions.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_unfused.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_separate_warp.cuh");
@@ -188,6 +189,12 @@ fn main() {
             // extension math declarations that conflict with CUDA.
             .flag("-Xcompiler")
             .flag("-D__STRICT_ANSI__")
+            // CUB's standard-library headers require C99 math and POSIX
+            // locale/thread declarations, but not GNU/C23 math extensions.
+            .flag("-Xcompiler")
+            .flag("-D_ISOC99_SOURCE")
+            .flag("-Xcompiler")
+            .flag("-D_POSIX_C_SOURCE=200809L")
             // Avoid TS 18661/C23 math extensions such as rsqrt/cospi/sinpi.
             .flag("-Xcompiler")
             .flag("-U__STDC_WANT_IEC_60559_FUNCS_EXT__")

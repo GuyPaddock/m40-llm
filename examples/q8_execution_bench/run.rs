@@ -90,6 +90,9 @@ struct Args {
         conflicts_with = "ffn_weight_read_gap"
     )]
     ffn_weight_read_column_order: bool,
+    /// Fixed public-library segmented checksum reference; never inference output.
+    #[arg(long, requires = "ffn_weight_read", conflicts_with_all = ["ffn_weight_read_gap", "ffn_weight_read_column_order"])]
+    ffn_weight_read_cub: bool,
     /// Add one fixed 128-byte payload column-gap read diagnostic.
     #[arg(long, requires = "ffn_weight_read")]
     ffn_weight_read_gap: bool,
@@ -749,6 +752,32 @@ mod argument_tests {
             "--ffn-q81",
         ] {
             assert!(parse(&[capture.as_slice(), &[other]].concat()).is_err());
+        }
+    }
+
+    /// CUB is an explicit read reference, never an implicit or combined experiment.
+    #[test]
+    fn test_cub_requires_exclusive_read_diagnostics() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_weight_read_cub);
+        assert!(parse(&["--ffn-weight-read-cub"]).is_err());
+        let valid = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-weight-read",
+            "--ffn-weight-read-cub",
+        ];
+        assert!(parse(&valid).unwrap().ffn_weight_read_cub);
+        for other in [
+            "--ffn-weight-read-gap",
+            "--ffn-weight-read-column-order",
+            "--ffn-q81",
+            "--ffn-f32-shared-scales",
+        ] {
+            assert!(parse(&[valid.as_slice(), &[other]].concat()).is_err());
         }
     }
 
