@@ -131,6 +131,18 @@ class LaunchTrace {
                      "\"captures_modules\":%s,\"module_record_limit\":%zu,\"module_byte_limit\":%zu}\n",
                      static_cast<long>(getpid()), record_limit,
                      captures_modules_ ? "true" : "false", module_limit, total_byte_limit);
+        std::fputs("{\"kind\":\"cuda_trace_environment\",\"cuda_force_ptx_jit\":", file_);
+        const auto write_env = [this](const char *name) {
+            const char *value = std::getenv(name);
+            if (value) write_json_string(file_, value);
+            else std::fputs("null", file_);
+        };
+        write_env("CUDA_FORCE_PTX_JIT");
+        std::fputs(",\"cuda_disable_ptx_jit\":", file_);
+        write_env("CUDA_DISABLE_PTX_JIT");
+        std::fputs(",\"cuda_cache_disable\":", file_);
+        write_env("CUDA_CACHE_DISABLE");
+        std::fputs("}\n", file_);
         std::fflush(file_);
     }
 

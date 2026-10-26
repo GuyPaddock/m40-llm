@@ -52,9 +52,11 @@ with zero modules is not proof of kernel/code coverage.
 For a driver-JIT inspection, launch a separate process with
 `CUDA_FORCE_PTX_JIT=1 CUDA_CACHE_DISABLE=1`; preserve those settings with
 the trace and compare relevant functions against the exact executable's
-embedded SASS. Module capture itself does not prove JIT origin. Keep binary
-images in ignored research storage and commit hashes, extracted relevant
-SASS/resources and provenance. Do not use traced durations for timing claims,
+embedded SASS. Module capture itself does not prove JIT origin.
+The `cuda_trace_environment` row records driver force/disable-JIT and
+cache-disable settings inside the observed process; unset values are null.
+Keep binary images in ignored research storage. Commit hashes, extracted
+relevant SASS/resources and provenance. Do not use traced durations for timing claims,
 infer performance from register counts, or globally enable JIT from a source
 inspection. Existing launch-only usage and inference builds are unchanged.
 
