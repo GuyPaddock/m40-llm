@@ -72,6 +72,14 @@ HTTP scope even if all disappeared. It does not justify a prefix rewrite.
 Further work should first establish avoided dominant decode-reader work,
 not produce another implementation on the strength of unmeasured headroom.
 
+The [subsequent reader-work audit](experiments/2026-10-26-maxwell-reader-work-audit.md)
+finds each logical payload word is already read once per output column,
+with activation loads shared between gate and up. It separates repeated
+source operands from physical requests and records the costs/results of
+existing reuse/packing probes. No new kernel is admitted. Changing weight
+organization must explain savings beyond those closed experiments and
+account for any increased resident storage and per-token traffic.
+
 ## Checkpoints
 
 | Unit | Current State |

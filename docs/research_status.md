@@ -17,6 +17,18 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest reader-work audit:** the [qualified gate/up address ledger](experiments/2026-10-26-maxwell-reader-work-audit.md)
+finds no duplicate logical payload reads. One layer consumes 45,088,768
+payload bytes once, with 2,818,048 unique scale bytes. Repeated scale
+operands and activation reads are not physical DRAM measurements. Existing
+joint/task packets, shared scales, two-column reuse and byte coding remain
+closed at their recorded gates. FP32 pre-expansion removes conversion but
+increases unique gate/up weight bytes 3.765x, adding 4,768,137,216 bytes
+if replacing all current split pairs. No new implementation is justified by
+this audit. Preserve 49.146 HTTP tok/s; no hardware-ceiling claim or change
+to original targets/defaults. Further admission needs different avoided work
+or independently supported physical amplification/reuse evidence.
+
 **Latest prefix attribution:** [remaining grouped operations](experiments/2026-10-26-maxwell-prefill-nongemm.md)
 preserve actual512 IDs, raw fixture KV/logits and ordinary work. Five release
 off/on pairs add 1.800% latency, below the fixed 3% perturbation screen.
