@@ -6,7 +6,17 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The active sequence is the workspace's
+The current task is documentation-only preservation and feasibility work.
+The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
+fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean
+source `63240c5`. Its manifest binds the original reports, preparation,
+source/model/executable hashes and locally retained measured binaries.
+Do not replace that checkpoint with a later candidate or change defaults.
+Next prepare separate no-old compressed-attention, joint-only ownership
+and model-compatibility proposals. Stop for review before runtime/CUDA edits.
+The exact-dense targets and rejected-verifier stop remain binding.
+
+The preceding execution sequence is the workspace's
 [Maxwell Q8 execution plan](../../M40_LLM_MAXWELL_Q8_EXECUTION_PLAN.md), outside
 this Git repository. It orders pinned Ollama dispatch verification, complete
 FFN measurements, bounded FP32/Q8_1 experiments, independent prefill SGEMM,

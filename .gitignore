@@ -4,6 +4,9 @@
 debug/
 target/
 
+# Measured executables/source archives, retained outside Cargo clean paths.
+/local-artifacts/qualified-references/
+
 
 # Local artifacts and logs
 model.gguf
