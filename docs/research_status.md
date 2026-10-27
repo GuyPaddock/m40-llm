@@ -33,6 +33,9 @@ configuration and original unmet targets remain unchanged.
 **Next eligible exact-engine work:** separately qualify the compound FFN
 in generation, actual512/frozen tasks and controlled HTTP, since its gate
 passed. Do not treat the microbenchmark win as already promoted.
+The [fixed runtime qualification plan](experiments/2026-10-27-maxwell-compound-runtime-plan.md)
+retains original prepared owners and budgets additional joint pairs explicitly;
+no new consumer or search is allowed.
 
 **Latest complete-FFN checkpoint:** the single
 [compound consumer](experiments/2026-10-27-maxwell-compound-ffn-screen.md)
