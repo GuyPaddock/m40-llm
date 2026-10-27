@@ -366,6 +366,13 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
             pipeline.prepare_split_weights(&layer)?;
+            if kernel == FfnKernel::JointSharedScales {
+                pipeline.joint = Some(super::joint::JointFfnWeights::new(
+                    &model,
+                    &layer,
+                    pipeline.prepared.as_ref().unwrap().bytes,
+                )?);
+            }
             pipeline.select_kernel(FfnKernel::SplitF32x4)?;
             validation::validate(&pipeline, &layer)?;
             let read = || -> Result<Vec<u32>> {
@@ -417,7 +424,10 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                 assert_eq!(timing["unfused_dispatch"]["swiglu_launches"], 7);
             } else {
                 assert_eq!(timing["enqueue_counters"]["launches"], 14);
-                let dispatch = if kernel == FfnKernel::SharedScales {
+                let dispatch = if matches!(
+                    kernel,
+                    FfnKernel::SharedScales | FfnKernel::JointSharedScales
+                ) {
                     "shared_scales_dispatch"
                 } else if kernel == FfnKernel::RoleParallel {
                     "role_parallel_dispatch"
@@ -435,7 +445,10 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
                     "byte_permute_dispatch"
                 };
                 assert_eq!(timing[dispatch]["fused_launches"], 7);
-                if kernel == FfnKernel::SharedScales {
+                if matches!(
+                    kernel,
+                    FfnKernel::SharedScales | FfnKernel::JointSharedScales
+                ) {
                     assert_eq!(timing[dispatch]["threads"], 128);
                     assert_eq!(timing[dispatch]["blocks_per_row"], pipeline.hidden_dim);
                     assert_eq!(
@@ -561,6 +574,14 @@ fn test_role_parallel_ffn_preserves_complete_bits_and_reuses_scratch() -> Result
 #[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
 fn test_shared_scales_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
     compare_split_pipeline(FfnKernel::SharedScales)
+}
+
+/// Compound packing/shared scales retain every complete-FFN bit, actual
+/// dispatch, immutable typed source owners and reusable scratch without leaks.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_compound_ffn_preserves_complete_bits_and_reuses_scratch() -> Result<()> {
+    compare_split_pipeline(FfnKernel::JointSharedScales)
 }
 
 /// Two physical output cohorts preserve the captured projections, hidden and

@@ -25,6 +25,7 @@ pub(super) enum DownProjection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FfnKernel {
+    JointSharedScales,
     SharedScales,
     RoleParallel,
     NativeWarp,
@@ -48,6 +49,7 @@ pub(super) enum FfnKernel {
 impl Serialize for FfnKernel {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         match self {
+            Self::JointSharedScales => serializer.serialize_str("joint-f32x4-shared-scales-128"),
             Self::SharedScales => serializer.serialize_str("split-f32x4-shared-scales-128"),
             Self::RoleParallel => serializer.serialize_str("split-f32x4-role-parallel-256"),
             Self::NativeWarp => serializer.serialize_str("split-f32x4-native-warp-128"),
@@ -84,7 +86,8 @@ impl FfnKernel {
     pub fn has_split_weights(self) -> bool {
         matches!(
             self,
-            Self::SharedScales
+            Self::JointSharedScales
+                | Self::SharedScales
                 | Self::RoleParallel
                 | Self::NativeWarp
                 | Self::TaskPairPacket
@@ -108,7 +111,8 @@ impl FfnKernel {
             Self::SplitF32x4Cohorts | Self::RoleParallel => 256,
             Self::Fp32(variant) => variant.threads(),
             Self::Q81(launch) => launch.threads() as u32,
-            Self::SharedScales
+            Self::JointSharedScales
+            | Self::SharedScales
             | Self::NativeWarp
             | Self::TaskPairPacket
             | Self::SplitF32x4
@@ -128,7 +132,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_packed_loads(),
-            Self::SharedScales
+            Self::JointSharedScales
+            | Self::SharedScales
             | Self::RoleParallel
             | Self::NativeWarp
             | Self::TaskPairPacket
@@ -151,7 +156,8 @@ impl FfnKernel {
         match self {
             Self::Native => false,
             Self::Fp32(variant) => variant.has_warp_reduction(),
-            Self::SharedScales
+            Self::JointSharedScales
+            | Self::SharedScales
             | Self::RoleParallel
             | Self::NativeWarp
             | Self::TaskPairPacket
@@ -369,7 +375,8 @@ impl<'a> FfnPipeline<'a> {
             "fixed-width FFN benchmark requires K=2048"
         );
         ensure!(
-            kernel != FfnKernel::JointF32x4 || self.joint.is_some(),
+            !matches!(kernel, FfnKernel::JointF32x4 | FfnKernel::JointSharedScales)
+                || self.joint.is_some(),
             "prepare joint FFN weights before selecting the candidate"
         );
         ensure!(
@@ -441,7 +448,10 @@ impl<'a> FfnPipeline<'a> {
                     )
             };
         }
-        if self.kernel == FfnKernel::JointF32x4 {
+        if matches!(
+            self.kernel,
+            FfnKernel::JointF32x4 | FfnKernel::JointSharedScales
+        ) {
             let joint = self.joint.as_ref().context("missing joint FFN weights")?;
             ensure!(
                 joint.device.key().gate.shape().input_dim() == self.d_model
@@ -449,7 +459,13 @@ impl<'a> FfnPipeline<'a> {
                 "joint FFN prepared shape mismatch"
             );
             return unsafe {
-                joint.device.enqueue_async(
+                let enqueue = if self.kernel == FfnKernel::JointSharedScales {
+                    m40_llm::infer::execution_weights::DeviceQ8FfnPair::enqueue_shared_scales_async
+                } else {
+                    m40_llm::infer::execution_weights::DeviceQ8FfnPair::enqueue_async
+                };
+                enqueue(
+                    &joint.device,
                     self.input.pointer(),
                     self.hidden.pointer(),
                     self.rows as i32,
@@ -793,8 +809,15 @@ impl<'a> FfnPipeline<'a> {
         } else {
             None
         };
-        let shared_scales_dispatch = if self.kernel == FfnKernel::SharedScales {
-            let operation = "ffn_q8_split_f32x4_shared_scales_128";
+        let shared_scales_dispatch = if matches!(
+            self.kernel,
+            FfnKernel::SharedScales | FfnKernel::JointSharedScales
+        ) {
+            let operation = if self.kernel == FfnKernel::JointSharedScales {
+                "ffn_q8_joint_f32x4_shared_scales_128"
+            } else {
+                "ffn_q8_split_f32x4_shared_scales_128"
+            };
             let launches = after.by_op.get(operation).map_or(0, |v| v.launches)
                 - before.by_op.get(operation).map_or(0, |v| v.launches);
             ensure!(

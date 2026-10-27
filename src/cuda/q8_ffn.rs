@@ -235,6 +235,64 @@ impl CudaContext {
         k: i32,
         intermediates: Option<(*mut c_void, *mut c_void)>,
     ) -> Result<()> {
+        self.enqueue_joint_ffn(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            false,
+        )
+    }
+
+    /// Benchmark-only fixed joint consumer with once-published FP32 scales.
+    /// K is bounded to 4096; all other span requirements match joint-only.
+    ///
+    /// # Safety
+    /// Same ownership, alignment, disjointness and producer/lifetime contract
+    /// as `ffn_q8_joint_f32_async`. No allocation or synchronization occurs.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_joint_shared_scales_f32_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        ensure!(k <= 4096, "joint shared-scale FFN requires K <= 4096");
+        self.enqueue_joint_ffn(
+            input,
+            scales,
+            values,
+            output,
+            rows,
+            hidden,
+            k,
+            intermediates,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn enqueue_joint_ffn(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+        has_shared_scales: bool,
+    ) -> Result<()> {
         ensure!(
             matches!(rows, 1 | 4) && hidden > 0 && k > 0 && k % 32 == 0,
             "joint FP32 FFN requires rows 1/4 and complete Q8 blocks"
@@ -270,7 +328,12 @@ impl CudaContext {
             );
         }
         let _guard = self.inner.lock.lock().unwrap();
-        let rc = ffi::m40llm_ffn_q8_joint_f32_async(
+        let enqueue = if has_shared_scales {
+            ffi::m40llm_ffn_q8_joint_shared_scales_f32_async
+        } else {
+            ffi::m40llm_ffn_q8_joint_f32_async
+        };
+        let rc = enqueue(
             self.inner.raw.as_ptr(),
             input,
             scales,
@@ -282,8 +345,15 @@ impl CudaContext {
             hidden,
             k,
         );
-        ensure!(rc == 0, "m40llm_ffn_q8_joint_f32_async failed: {rc}");
-        record_async_kernel("ffn_q8_joint_f32x4_128");
+        ensure!(
+            rc == 0,
+            "joint FFN enqueue failed: {rc}, shared_scales={has_shared_scales}"
+        );
+        record_async_kernel(if has_shared_scales {
+            "ffn_q8_joint_f32x4_shared_scales_128"
+        } else {
+            "ffn_q8_joint_f32x4_128"
+        });
         Ok(())
     }
 

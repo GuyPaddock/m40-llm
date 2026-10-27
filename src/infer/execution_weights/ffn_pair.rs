@@ -139,6 +139,29 @@ mod device {
                 intermediates,
             )
         }
+
+        /// # Safety
+        /// Same spans and lifetime contract as `enqueue_async`; K <= 4096.
+        /// Uses the same immutable planes without additional global storage.
+        pub unsafe fn enqueue_shared_scales_async(
+            &self,
+            input: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            intermediates: Option<(*mut c_void, *mut c_void)>,
+        ) -> Result<()> {
+            let shape = self.key.gate.shape();
+            self.ctx.ffn_q8_joint_shared_scales_f32_async(
+                input,
+                self.planes[0].as_ptr(),
+                self.planes[1].as_ptr(),
+                output,
+                rows,
+                i32::try_from(shape.output_dim())?,
+                i32::try_from(shape.input_dim())?,
+                intermediates,
+            )
+        }
     }
 }
 #[cfg(feature = "cuda")]

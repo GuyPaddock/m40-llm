@@ -1,6 +1,7 @@
 mod ablation;
 mod access;
 mod column_gap;
+mod compound;
 mod fixture;
 mod joint;
 mod packet;
@@ -65,7 +66,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     {
         return projection::benchmark(args);
     }
-    let is_fp32_ablation = args.ffn_f32_shared_scales
+    let is_fp32_ablation = args.ffn_f32_compound
+        || args.ffn_f32_shared_scales
         || args.ffn_f32_role_parallel
         || args.ffn_f32_native_warp
         || args.ffn_f32_task_pairs
@@ -133,6 +135,15 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "timing_scope":"CUDA events and host enqueue+completion per repeated stage; required cross-stream waits included; setup/validation/copies excluded",
         "interpretation":"complete FFN microbenchmark baseline, not token/HTTP throughput, a speedup, verifier cost or measured DRAM traffic"});
     manifest["is_weight_read_diagnostic"] = json!(args.ffn_weight_read);
+    if args.ffn_f32_compound {
+        manifest["kind"] = json!("ffn_compound_manifest");
+        manifest["fp32_variants"] = json!(compound::ARMS);
+        manifest["control"] = json!("contemporaneous four arms, both original split and joint owners retained; unchanged prepared down/vocabulary; no runtime selector");
+        manifest["compound_contract"] = json!({"threads":128,"outputs_per_cta":1,
+            "max_k":4096,"shared_bytes_formula":"1024+8*(K/32)","block_barriers":2,
+            "has_changed_summation_ownership":false,"has_activation_quantization":false,
+            "complete_ffn_gate":0.05,"comparisons":["compound-vs-split","compound-vs-joint"]});
+    }
     if args.ffn_f32_shared_scales {
         manifest["fp32_variants"] = json!([FfnKernel::SharedScales]);
         manifest["control"] = json!("qualified split-f32x4-128; shared scale reuse preserves original task/FMA/reduction and immutable prepared down/vocabulary");
@@ -193,7 +204,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     for layer in individual_layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
-            if args.ffn_f32_shared_scales
+            if args.ffn_f32_compound
+                || args.ffn_f32_shared_scales
                 || args.ffn_f32_role_parallel
                 || args.ffn_f32_native_warp
                 || args.ffn_f32_task_pairs
@@ -218,7 +230,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                     "scratch_capacity_bytes":pipeline.scratch_bytes()}),
                 )?;
             }
-            if args.ffn_f32_joint {
+            if args.ffn_f32_joint || args.ffn_f32_compound {
                 pipeline.joint = Some(joint::JointFfnWeights::new(
                     &model,
                     layer,
@@ -244,6 +256,10 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
             }
             if args.ffn_q81 {
                 pipeline.reserve_quantized_scratch()?;
+            }
+            if args.ffn_f32_compound {
+                compound::benchmark_case(&mut output, &mut pipeline, layer, args)?;
+                continue;
             }
             if args.ffn_weight_read {
                 weight_read::benchmark_case(&mut output, &mut pipeline, layer, args)?;

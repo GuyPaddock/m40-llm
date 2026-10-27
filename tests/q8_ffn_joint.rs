@@ -41,7 +41,8 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize, rows: usize) -> Result<()
         let mut weights = fixture::make_column_blocks(k, n);
         for (b, block) in weights.chunks_exact_mut(34).enumerate() {
             if b % 7 == 0 {
-                block[..2].fill(0);
+                block[..2]
+                    .copy_from_slice(&if b % 14 == 0 { 0u16 } else { 0x8000u16 }.to_le_bytes());
             }
             for (i, v) in block[2..].iter_mut().enumerate() {
                 *v = [0x80, 0x7f, 0xff, 0, 1, 0x40, 0xc0, 8][(i + b + seed) % 8];
@@ -88,18 +89,45 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize, rows: usize) -> Result<()
     let u = upload(ctx, &initial)?;
     let ptr = |buffer: &DeviceBuffer| unsafe { buffer.as_mut_ptr().cast::<u8>().add(32).cast() };
     let mut expected = Vec::new();
-    for is_joint in [false, true] {
+    for arm in 0..4 {
+        // A real other-stream producer must finish before the shared input is read.
+        let producer = upload(ctx, &input_bytes)?;
+        unsafe {
+            ctx.memcpy_d2d_async(
+                x.as_mut_ptr(),
+                producer.as_ptr(),
+                input_bytes.len(),
+                CudaStream::Prefill,
+            )?;
+        }
+        ctx.stream_wait_for_stream(
+            CudaStream::Decode,
+            CudaStream::Prefill,
+            "joint_ffn_input_producer",
+        )?;
         let before = profile::snapshot();
         unsafe {
-            if is_joint {
-                joint.enqueue_async(
+            if arm == 1 || arm == 3 {
+                let enqueue = if arm == 3 {
+                    DeviceQ8FfnPair::enqueue_shared_scales_async
+                } else {
+                    DeviceQ8FfnPair::enqueue_async
+                };
+                enqueue(
+                    &joint,
                     x.as_ptr(),
                     ptr(&out),
                     rows as i32,
                     Some((ptr(&g), ptr(&u))),
                 )?;
             } else {
-                ctx.ffn_q8_split_f32_async(
+                let enqueue = if arm == 2 {
+                    CudaContext::ffn_q8_split_shared_scales_f32_async
+                } else {
+                    CudaContext::ffn_q8_split_f32_async
+                };
+                enqueue(
+                    ctx,
                     x.as_ptr(),
                     scales,
                     values,
@@ -129,11 +157,11 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize, rows: usize) -> Result<()
             assert_eq!(&buffer[..32], &initial[..32]);
             assert_eq!(&buffer[buffer.len() - 32..], &initial[initial.len() - 32..]);
         }
-        if is_joint {
+        if arm != 0 {
             assert_eq!(
                 actual.as_slice(),
                 expected.as_slice(),
-                "joint packing changed gate/up/SwiGLU bits"
+                "four-arm comparison changed gate/up/SwiGLU bits"
             );
         } else {
             expected = actual.to_vec();
@@ -154,14 +182,29 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize, rows: usize) -> Result<()
             }
         }
     }
-    unsafe {
-        joint.enqueue_async(x.as_ptr(), ptr(&out), rows as i32, None)?;
+    for enqueue in [
+        DeviceQ8FfnPair::enqueue_async,
+        DeviceQ8FfnPair::enqueue_shared_scales_async,
+    ] {
+        unsafe {
+            enqueue(&joint, x.as_ptr(), ptr(&out), rows as i32, None)?;
+        }
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        assert_eq!(
+            read(ctx, &out)?,
+            expected[0],
+            "optional capture changed ordinary output"
+        );
     }
+    let graph = ctx.capture_graph(CudaStream::Decode, || unsafe {
+        joint.enqueue_shared_scales_async(x.as_ptr(), ptr(&out), rows as i32, None)
+    })?;
+    graph.launch(CudaStream::Decode)?;
     ctx.synchronize_stream(CudaStream::Decode)?;
     assert_eq!(
         read(ctx, &out)?,
         expected[0],
-        "capture changed ordinary joint kernel"
+        "graph replay changed compound output"
     );
     for (device, original) in joint.planes().into_iter().zip(host.planes()) {
         assert_eq!(read(ctx, device)?, original);
@@ -170,7 +213,7 @@ fn compare_case(ctx: &CudaContext, k: usize, n: usize, rows: usize) -> Result<()
     Ok(())
 }
 
-/// Joint records retain one-column gate/up/SwiGLU bits and CPU agreement
+/// All four arms retain one-column gate/up/SwiGLU bits and CPU agreement
 /// across distinct rows, signed extremes, zero scales and odd hidden tails.
 /// Every temporary allocation is released after decode completion.
 #[test]
@@ -209,9 +252,13 @@ fn test_joint_ffn_rejects_invalid_spans_without_launch() -> Result<()> {
             (1, 32, 0, 2, 0),
             (1, 32, 0, 0, 4),
         ] {
-            unsafe {
-                assert!(ctx
-                    .ffn_q8_joint_f32_async(
+            for enqueue in [
+                CudaContext::ffn_q8_joint_f32_async,
+                CudaContext::ffn_q8_joint_shared_scales_f32_async,
+            ] {
+                unsafe {
+                    assert!(enqueue(
+                        &ctx,
                         x.as_ptr().cast::<u8>().add(xoff).cast(),
                         w.as_ptr().cast::<u8>().add(soff).cast(),
                         w.as_ptr().cast::<u8>().add(voff).cast(),
@@ -222,9 +269,22 @@ fn test_joint_ffn_rejects_invalid_spans_without_launch() -> Result<()> {
                         None
                     )
                     .is_err());
+                }
             }
         }
         unsafe {
+            assert!(ctx
+                .ffn_q8_joint_shared_scales_f32_async(
+                    x.as_ptr(),
+                    w.as_ptr(),
+                    w.as_ptr(),
+                    y.as_mut_ptr(),
+                    1,
+                    1,
+                    4128,
+                    None
+                )
+                .is_err());
             assert!(ctx
                 .ffn_q8_joint_f32_async(
                     x.as_ptr(),
