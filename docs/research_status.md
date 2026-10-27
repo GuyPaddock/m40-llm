@@ -6,7 +6,21 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The current task is documentation-only preservation and feasibility work.
+The user has approved two independent opt-in experiments, in order:
+no-old compressed-KV attention reuse, then joint-only prepared ownership.
+Complete and document each gate decision before starting the next experiment;
+stop after both. No compatibility GPU tests, downloads, default changes or
+new kernel search are authorized. Record each commit/gate in MemPalace.
+
+The first hardware prerequisite passes: the
+[head128 recent-ring layout record](experiments/2026-10-27-no-old-layout.jsonl)
+checks 88 cases across four physical slots, both RoPE layouts, reset/reuse,
+sequential append and dense-prefix reconstruction at W-1/W/W+1, block
+boundaries and repeated rollover. Stored recent K/V words match dense exactly.
+No attention kernel has yet been changed. Next implement only the bounded
+existing-kernel adapter and apply all correctness gates before timing.
+
+The preceding preservation and feasibility checkpoint remains below.
 The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
 fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean
 source `63240c5`. Its manifest binds the original reports, preparation,
@@ -26,7 +40,7 @@ now cover Qwen0.5/1.5/3/7B plus a required Llama1B artifact row. Qwen7B fails
 the unchanged 128 MiB prefix and 6144 MiB preparation caps, even with proposed
 joint-only ownership. Smaller Qwen shapes fit on paper, not as new runtime
 qualifications. Llama estimates await explicit Q8 GGUF metadata.
-All four documentation units are complete. **Next is feasibility review**,
+All four documentation units are complete. **Feasibility review approved**,
 then, only if authorized, no-old reuse, independent joint-only ownership,
 and model-specific validation. No new runtime/CUDA code or benchmarks ran.
 Existing checksum sets, model/binary hashes, quality/paired-HTTP audits,
