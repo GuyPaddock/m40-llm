@@ -411,7 +411,7 @@ mod hardware {
     }
 
     /// Packed-prefix profiling preserves sampled IDs/logits and device effects,
-    /// resolves after the existing drain, and labels conversion/SGEMM per layer.
+    /// resolves after the existing drain, and labels projection/non-GEMM groups.
     /// Prefix rows must not masquerade as generated tokens; decode reuses events.
     #[test]
     #[ignore = "requires M40/cuBLAS; run with --include-ignored --test-threads=1"]
@@ -441,7 +441,12 @@ mod hardware {
             let model = model(is_qwen, Q8PrefillBackend::DequantSgemm)?;
             // The Qwen-shaped math fixture has no real Qwen vocabulary. Feed
             // valid IDs directly rather than fabricate tokenizer semantics.
-            let run = || -> Result<(Vec<u32>, Vec<Vec<f32>>)> {
+            struct GenerationState {
+                sampled: Vec<u32>,
+                logits: Vec<Vec<f32>>,
+                kv_bytes: Vec<u8>,
+            }
+            let run = || -> Result<GenerationState> {
                 model.reset_kv_cache()?;
                 let mut decode = session(&model)?;
                 let mut ids = vec![2, 3, 4];
@@ -460,7 +465,35 @@ mod hardware {
                     sampled.push(token);
                     logits_by_step.push(logits);
                 }
-                Ok((sampled, logits_by_step))
+                let kv = model.kv_cache.as_ref().unwrap();
+                let bytes_per_vector = (kv.num_heads() * kv.head_dim() * 2) as usize;
+                let mut kv_bytes = Vec::new();
+                for layer in 0..2 {
+                    assert_eq!(kv.debug_sequence_length(&model.cuda, layer)?, 4);
+                    for position in 0..4 {
+                        let start = kv_bytes.len();
+                        kv_bytes.resize(start + 2 * bytes_per_vector, 0);
+                        let (key, value) = kv_bytes[start..].split_at_mut(bytes_per_vector);
+                        assert_eq!(
+                            unsafe {
+                                ffi_debug_read_kv_token(
+                                    &model.cuda,
+                                    kv,
+                                    layer,
+                                    position,
+                                    key.as_mut_ptr(),
+                                    value.as_mut_ptr(),
+                                )
+                            },
+                            0
+                        );
+                    }
+                }
+                Ok(GenerationState {
+                    sampled,
+                    logits: logits_by_step,
+                    kv_bytes,
+                })
             };
             run()?;
             let before = profile::snapshot();
@@ -471,7 +504,7 @@ mod hardware {
             {
                 let _prefix_disabled = EnvRestore::set("M40LLM_STAGE_PROFILE_PREFILL", "0");
                 let before = profile::snapshot();
-                assert_eq!(run()?.0, control.0);
+                assert_eq!(run()?.sampled, control.sampled);
                 assert_eq!(
                     profile::counter_delta(&before, &profile::snapshot()),
                     control_counts
@@ -491,8 +524,9 @@ mod hardware {
                 profile::counter_delta(&before, &profile::snapshot()),
                 control_counts
             );
-            assert_eq!(measured.0, control.0);
-            for (actual, expected) in measured.1.iter().zip(&control.1) {
+            assert_eq!(measured.sampled, control.sampled);
+            assert_eq!(measured.kv_bytes, control.kv_bytes);
+            for (actual, expected) in measured.logits.iter().zip(&control.logits) {
                 assert_eq!(
                     actual.iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
                     expected.iter().map(|x| x.to_bits()).collect::<Vec<_>>()
@@ -514,6 +548,54 @@ mod hardware {
             assert!(!report.event_pool_reused);
             assert!(report.prefill_wall_ms > 0.0);
             assert!(report.gpu_stage_union_ms <= report.gpu_stage_sum_ms + 0.001);
+            assert!(report.event_pool_capacity >= report.stages.len());
+            for stage in ["prefill_embeddings", "prefill_output_copy"] {
+                let spans: Vec<_> = report.stages.iter().filter(|s| s.stage == stage).collect();
+                assert_eq!(spans.len(), 1);
+                assert_eq!(spans[0].layer_id, None);
+                assert_eq!(spans[0].stream, "decode");
+            }
+            let hidden_copies: Vec<_> = report
+                .stages
+                .iter()
+                .filter(|s| s.stage == "prefill_hidden_copy")
+                .collect();
+            assert_eq!(hidden_copies.len(), 1);
+            assert_eq!(hidden_copies[0].layer_id, Some(0));
+            for layer in 0..2 {
+                for stage in [
+                    "prefill_attn_norm",
+                    "prefill_rope_kv",
+                    "prefill_attention",
+                    "prefill_attn_residual",
+                    "prefill_ffn_norm",
+                    "prefill_swiglu",
+                    "prefill_mlp_residual",
+                ] {
+                    let spans: Vec<_> = report
+                        .stages
+                        .iter()
+                        .filter(|s| s.layer_id == Some(layer) && s.stage == stage)
+                        .collect();
+                    assert_eq!(spans.len(), 1, "missing/duplicated group {stage}");
+                    let span = spans[0];
+                    assert_eq!(
+                        span.stream,
+                        if stage == "prefill_attention" {
+                            "prefill"
+                        } else {
+                            "decode"
+                        }
+                    );
+                    assert!(span.gpu_elapsed_ms.is_finite() && span.gpu_elapsed_ms >= 0.0);
+                    assert_eq!(span.counters.stream_syncs + span.counters.stream_waits, 0);
+                    assert_eq!(span.counters.device_allocs + span.counters.device_frees, 0);
+                    assert_eq!(
+                        span.counters.launches,
+                        if stage == "prefill_rope_kv" { 6 } else { 1 }
+                    );
+                }
+            }
             for layer in 0..2 {
                 for stage in ["q8_prefill_dequantize", "q8_prefill_sgemm"] {
                     let spans: Vec<_> = report
@@ -553,6 +635,7 @@ mod hardware {
             assert_eq!(decode.len(), 1);
             assert_eq!(decode[0]["generated_step"], 0);
             assert_eq!(decode[0]["event_pool_reused"], true);
+            assert_eq!(decode[0]["event_pool_capacity"], report.event_pool_capacity);
             assert_eq!(decode[0]["session_id"], report.session_id);
         }
         std::fs::remove_dir_all(directory)?;

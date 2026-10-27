@@ -104,8 +104,8 @@ pub struct TokenGpuProfile {
     pub host_timings: Vec<HostTiming>,
 }
 
-/// A packed-prefix scope is not a generated token. Its spans currently cover
-/// Q8 conversion/SGEMM and shared bias operations, not all prefill GPU work.
+/// A packed-prefix scope is not a generated token. Grouped spans cover its
+/// projections and non-GEMM work; stream intervals can include host enqueue gaps.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct PrefillGpuProfile {
     pub kind: String,
@@ -182,7 +182,11 @@ impl DecodeGpuProfiler {
             })
             .transpose()?;
         let capacity = (layer_count as usize)
-            .checked_mul(16)
+            .checked_mul(if config.should_profile_prefill {
+                24
+            } else {
+                16
+            })
             .and_then(|n| n.checked_add(16))
             .context("stage event pool size overflow")?;
         let origin = ctx.create_event()?;

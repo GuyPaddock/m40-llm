@@ -2586,6 +2586,7 @@ impl LoadedModel {
 
         let prefill_weight_bytes = self.q8_prefill_weight_bytes()?;
         self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, prefill_weight_bytes, |ws| {
+            let embedding_stage = GpuStageSpan::begin("prefill_embeddings", CudaStream::Decode)?;
             for (seq_idx, item) in items.iter().enumerate() {
                 let q_offset = meta.offsets()[seq_idx].q_offset as usize;
                 for (tok_idx, &tok_id) in item.token_ids.iter().enumerate() {
@@ -2596,6 +2597,7 @@ impl LoadedModel {
                     }
                 }
             }
+            embedding_stage.finish()?;
 
             for layer in self.layer_mask.active_layers(self.model_config.block_count)? {
                 let w = self.map_standard_layer(layer)?;
@@ -2631,6 +2633,7 @@ impl LoadedModel {
                 let label = format!("forward.prefill.layer.{layer}.rows.{rows}");
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let gpu_stage = GpuStageSpan::begin("prefill_attn_norm", CudaStream::Decode)?;
                 if let Some((d_weight, dtype)) = attn_norm_ptr {
                     self.run_rms_norm_weighted_async(
                         ws.scratch_a,
@@ -2650,6 +2653,7 @@ impl LoadedModel {
                         self.model_config.layer_norm_epsilon,
                     )?;
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attn_norm",
@@ -2683,6 +2687,7 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_qkv_project_to_rope_kv",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_rope_kv", CudaStream::Decode)?;
                 for (seq_idx, item) in items.iter().enumerate() {
                     let q_offset = meta.offsets()[seq_idx].q_offset as usize;
                     let kv_slot = kv_physical_slot_for_layer_sequence_in(
@@ -2733,6 +2738,7 @@ impl LoadedModel {
                         )?;
                     }
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "rope_q_k_and_kv_append",
@@ -2747,6 +2753,7 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_rope_kv_to_attention",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_attention", CudaStream::Prefill)?;
                 unsafe {
                     prefill_plan.dispatch_async(
                         ws.dq as *const c_void,
@@ -2757,6 +2764,7 @@ impl LoadedModel {
                         ws.datt,
                     )?;
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attention_varlen",
@@ -2789,12 +2797,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_out_project_to_attn_residual",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_attn_residual", CudaStream::Decode)?;
                 self.cuda.residual_add_f32_async(
                     ws.scratch_a,
                     ws.dy_attn as *const c_void,
                     ws.d_x1,
                     rows * d_model,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "attn_residual",
@@ -2804,6 +2814,7 @@ impl LoadedModel {
 
                 let profile_before = profile::snapshot_if_enabled();
                 let op_start = std::time::Instant::now();
+                let gpu_stage = GpuStageSpan::begin("prefill_ffn_norm", CudaStream::Decode)?;
                 if let Some((d_weight, dtype)) = ffn_norm_ptr {
                     self.run_rms_norm_weighted_async(
                         ws.d_x1,
@@ -2823,6 +2834,7 @@ impl LoadedModel {
                         self.model_config.layer_norm_epsilon,
                     )?;
                 }
+                gpu_stage.finish()?;
                 log_profiled_op(&label, "ffn_norm", profile_before.as_ref(), op_start.elapsed());
 
                 let profile_before = profile::snapshot_if_enabled();
@@ -2850,12 +2862,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_mlp_gate_up_to_swiglu",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_swiglu", CudaStream::Decode)?;
                 self.cuda.swiglu_f32_async(
                     ws.dgate as *const c_void,
                     ws.dup as *const c_void,
                     ws.dhid,
                     rows * hidden_dim,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(&label, "swiglu", profile_before.as_ref(), op_start.elapsed());
 
                 let profile_before = profile::snapshot_if_enabled();
@@ -2888,12 +2902,14 @@ impl LoadedModel {
                     CudaStream::Prefill,
                     "prefill_mlp_down_to_mlp_residual",
                 )?;
+                let gpu_stage = GpuStageSpan::begin("prefill_mlp_residual", CudaStream::Decode)?;
                 self.cuda.residual_add_f32_async(
                     ws.d_x1 as *const c_void,
                     ws.dy_mlp as *const c_void,
                     ws.scratch_b,
                     rows * d_model,
                 )?;
+                gpu_stage.finish()?;
                 log_profiled_op(
                     &label,
                     "mlp_residual",
@@ -2902,6 +2918,7 @@ impl LoadedModel {
                 );
 
                 if layer + 1 != layer_count {
+                    let gpu_stage = GpuStageSpan::begin("prefill_hidden_copy", CudaStream::Decode)?;
                     unsafe {
                         self.cuda.memcpy_d2d_async(
                             ws.scratch_a,
@@ -2910,6 +2927,7 @@ impl LoadedModel {
                             CudaStream::Decode,
                         )?;
                     }
+                    gpu_stage.finish()?;
                 }
                 if std::env::var("M40LLM_PREFILL_SYNC_EACH_LAYER")
                     .ok()
@@ -2921,6 +2939,8 @@ impl LoadedModel {
                 }
             }
 
+            gpu_profile::set_layer(None);
+            let output_stage = GpuStageSpan::begin("prefill_output_copy", CudaStream::Decode)?;
             for (seq_idx, item) in items.iter().enumerate() {
                 let seq = meta.sequences()[seq_idx];
                 let final_row =
@@ -2935,8 +2955,8 @@ impl LoadedModel {
                     )?;
                 }
             }
+            output_stage.finish()?;
 
-            gpu_profile::set_layer(None);
             if std::env::var("M40LLM_SERVER_BATCH_PREFILL_LOG")
                 .ok()
                 .as_deref()

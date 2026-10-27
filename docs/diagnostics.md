@@ -127,6 +127,13 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
   includes process/session IDs, absolute position, per-layer stage names,
   producer stream, event offsets/duration, CPU call duration, launch/sync/copy/
   allocation deltas, and named host stream-synchronization/D2H-copy durations.
+- `M40LLM_STAGE_PROFILE_PREFILL=1`: also emit a distinct
+  `packed_prefill_gpu_profile` for the packed prefix, not generated-token rows.
+  Grouped spans cover embeddings, norms, bias, RoPE/KV append, attention,
+  residuals, SwiGLU and hidden/output copies alongside Q8 conversion/SGEMM.
+  They add no new stream dependencies or drains. The pool reserves at most
+  24 event pairs per layer plus 16 fixed pairs only when prefix profiling is
+  requested; ordinary token-only profiling retains its smaller pool.
 
 The event pool is allocated once per decode session and reused across sampled
 tokens. Markers add no stream waits. The collector uses nonblocking event
