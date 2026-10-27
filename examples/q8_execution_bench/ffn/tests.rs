@@ -106,6 +106,40 @@ fn parse(
     FfnInputs::parse(&text, &report, corpus, corpus_sha, &"1".repeat(64))
 }
 
+/// The shared entry guard admits the diagnostic's one-row contract while
+/// retaining both-row coverage for ordinary FFN screens before any file I/O.
+#[test]
+fn test_shared_row_guard_admits_reuse_without_weakening_baseline() {
+    use clap::Parser;
+    let base = [
+        "bench",
+        "--model",
+        "missing.gguf",
+        "--output",
+        "unused.jsonl",
+        "--ffn-inputs",
+        "missing.json",
+        "--ffn-capture-report",
+        "missing.jsonl",
+    ];
+    for (rows, is_reuse, should_pass) in [
+        ("1", true, true),
+        ("1,4", true, false),
+        ("4", true, false),
+        ("1,4", false, true),
+        ("1", false, false),
+        ("4", false, false),
+    ] {
+        let mut argv = base.to_vec();
+        argv.extend(["--rows", rows]);
+        if is_reuse {
+            argv.push("--ffn-layer-reuse");
+        }
+        let args = super::Args::try_parse_from(argv).unwrap();
+        assert_eq!(super::validate_rows(&args).is_ok(), should_pass);
+    }
+}
+
 /// Benchmark inputs bind actual completed task histories, model/corpus hashes
 /// and execution configuration to distinct captured rows, not a model label.
 #[test]

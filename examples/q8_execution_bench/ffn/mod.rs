@@ -33,10 +33,16 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-pub(super) fn benchmark(args: &Args) -> Result<()> {
+fn validate_rows(args: &Args) -> Result<()> {
     if args.ffn_layer_reuse {
         reuse::validate_args(args)?;
+    } else {
+        ensure!(args.rows == [1, 4], "FFN baseline requires --rows 1,4");
     }
+    Ok(())
+}
+
+pub(super) fn benchmark(args: &Args) -> Result<()> {
     if args.ffn_payload_entropy {
         return payload_entropy::run(args);
     }
@@ -77,10 +83,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         || args.ffn_f32_unfused
         || args.ffn_f32_weight_cg
         || args.ffn_f32_byte_permute;
-    ensure!(
-        !cfg!(debug_assertions) && args.rows == [1, 4],
-        "FFN baseline requires release and --rows 1,4"
-    );
+    validate_rows(args)?;
+    ensure!(!cfg!(debug_assertions), "FFN baseline requires release");
     let inputs = FfnInputs::load(args)?;
     ensure!(
         !args.ffn_f32_fixed_k || inputs.artifact.plan.d_model == 2048,
