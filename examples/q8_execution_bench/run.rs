@@ -23,6 +23,8 @@ use serde_json::{json, Value};
 mod ffn;
 #[path = "sparse_inputs.rs"]
 mod sparse_inputs;
+#[path = "verification.rs"]
+mod verification;
 
 #[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -71,6 +73,12 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Frozen qualified browser-token evidence for perfect target verification.
+    #[arg(long,conflicts_with_all=["ffn_inputs","sparse_inputs"])]
+    verification_trace: Option<PathBuf>,
+    /// Validate exact 512 greedy IDs without running primary timing trials.
+    #[arg(long, requires = "verification_trace")]
+    verification_only_preflight: bool,
     /// Authorized fixed four-arm joint packing/shared-scale FFN study.
     #[arg(long,requires="ffn_inputs",conflicts_with_all=["ffn_layer_reuse","ffn_f32_shared_scales","ffn_f32_role_parallel","ffn_payload_entropy","ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
     ffn_f32_compound: bool,
@@ -548,6 +556,9 @@ pub fn benchmark() -> Result<()> {
             && args.rows.iter().all(|&rows| (1..=64).contains(&rows)),
         "require >=5 trials, >0 iterations and rows in 1..=64"
     );
+    if args.verification_trace.is_some() {
+        return verification::benchmark(&args);
+    }
     if args.ffn_inputs.is_some() {
         return ffn::benchmark(&args);
     }
