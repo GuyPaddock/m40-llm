@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Remaining Prefix Work Has Small E2E Scope
+
+Five release profiling-off/on pairs preserve actual512 IDs, ordinary CUDA
+work and 109 prepared identities. New prefix groups total **106.794 ms**,
+including **54.584 ms packed attention** and **47.560 ms RoPE/KV**.
+Even eliminating every new group gives only **1.029% optimistic HTTP scope**;
+including the existing bias group gives **1.446%**, below the unchanged
+3% floor. See [coverage, perturbation, raw pairs and audit](experiments/2026-10-26-maxwell-prefill-nongemm.md).
+
+Instrumentation increases latency **1.800%**. Host-call time overlaps GPU
+work and must not be counted as exclusive CPU savings. No prefix rewrite,
+new throughput qualification or hardware-ceiling claim follows. Preserve
+**49.146 vs 43.106 HTTP tok/s** and both unmet targets. The next candidate
+must explain expensive reader work avoided and account for all storage,
+conversion and reuse costs before implementation and complete-FFN testing.
+
 ## 2026-10-26: Activity-Only Collector Fails Joint Calibration
 
 Five warmed resident/native 16-token off/on pairs per engine preserve IDs

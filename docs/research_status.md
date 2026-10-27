@@ -17,6 +17,24 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest prefix attribution:** [remaining grouped operations](experiments/2026-10-26-maxwell-prefill-nongemm.md)
+preserve actual512 IDs, raw fixture KV/logits and ordinary work. Five release
+off/on pairs add 1.800% latency, below the fixed 3% perturbation screen.
+Attention costs 54.584 ms and RoPE/KV 47.560 ms; all new groups total
+106.794 ms, only 1.029% optimistic HTTP scope. Even including bias gives
+1.446%. Do not rewrite prefix kernels from this result. Host bias-call time
+is overlapping, not removable CPU-only cost. The qualified 49.146 vs 43.106
+HTTP result, selected runtime and both unmet original targets are unchanged.
+
+**Next-candidate requirement:** preserve that configuration and use the
+[avoided-work admission checklist](maxwell_q8_execution.md#admission-for-further-optimization)
+before implementation. Name expensive work the actual reader must perform,
+explain how changed organization/reuse avoids it, account for all memory
+and conversion overhead, and prove complete-FFN then E2E gains. No new
+candidate is nominated by the prefix profile. DRAM transactions, achieved
+occupancy and warp stalls remain unmeasured; **no hardware-ceiling claim**
+is supported. Closed arithmetic/geometry/layout probes stay closed.
+
 **Latest collector calibration:** [five short-request off/on pairs per engine](experiments/2026-10-26-maxwell-activity-calibration.md)
 preserve all 100 frozen 16-ID generations and dispatch, but **fail joint
 calibration**. M40's point decode overhead is 1.580%, yet every on-capture

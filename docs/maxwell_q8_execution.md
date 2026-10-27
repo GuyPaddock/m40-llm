@@ -32,6 +32,46 @@ satisfy the original exact-output goal by changing the continuation. Nothing
 in this investigation changes the project compressed-KV default or globally
 enables weight preparation.
 
+## Admission For Further Optimization
+
+Preserve the qualified 49.146 HTTP tok/s configuration. Negative bounded
+experiments are not evidence that Maxwell's hardware ceiling has been
+reached. DRAM transactions, achieved occupancy and warp stalls remain
+unmeasured; static register counts and read-checksum timings cannot replace
+those measurements.
+
+Before implementing another candidate, write down:
+
+- The expensive work in the actual qualified reader or dataflow that the
+  candidate avoids. Name the loads, repeated data, conversion, addressing,
+  synchronization or materialization involved. An arithmetic substitution
+  alone is not a credible significant-E2E hypothesis without cost evidence.
+- The expected saving at actual Qwen dimensions and its complete-FFN/E2E
+  scope. Distinguish logical bytes/instructions from measured physical
+  transactions; do not claim bandwidth saturation from payload estimates.
+- New resident and peak setup bytes, scratch, padding, metadata, load-time
+  repacking cost and per-token conversion/read/write overhead. Explain reuse
+  and ownership, including whether source storage can actually be released.
+- How the proposal differs from recorded losing layout/reuse experiments.
+  Do not rescue them with another geometry/cache/register parameter sweep.
+- One bounded test, its control, exact-output checks and a stop condition.
+  A weight organization/reuse proposal must prove real complete-FFN gains,
+  not just a faster checksum or isolated dot product.
+
+Keep the existing gates: at least 5% complete-FFN improvement with positive
+paired confidence before runtime integration, then HTTP improvement above
+`max(3%, twice observed variation)` with positive paired confidence, actual
+512-token equality and frozen dense-valid quality. Independent projection
+work must meet its separately declared stage and E2E gates. Include all
+conversion, launches and dependencies. Preserve failed code and measurements
+before separate removal; no defaults or exact-goal relaxation.
+
+The [remaining prefix profile](experiments/2026-10-26-maxwell-prefill-nongemm.md)
+accounts for 106.794 ms in newly measured groups, only 1.029% optimistic
+HTTP scope even if all disappeared. It does not justify a prefix rewrite.
+Further work should first establish avoided dominant decode-reader work,
+not produce another implementation on the strength of unmeasured headroom.
+
 ## Checkpoints
 
 | Unit | Current State |
