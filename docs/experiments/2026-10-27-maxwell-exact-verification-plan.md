@@ -52,3 +52,37 @@ Do not count prompt echo or repeated one-row calls as batched verification.
 
 Keep failed implementations committed before separate removal. This is a
 plan, not evidence that verification, rollback or a drafter already works.
+
+## Inspected Implementation Boundary
+
+After compound checkpoint `0516e71`, source inspection finds that current
+packed prefill starts at position zero, attends to the packed prompt's FP32
+K/V and returns only the final hidden row. It cannot verify a continuation
+against existing dense FP16 KV by simply changing its token slice. There is
+also no sequence truncate/rollback API. Reusing either assumption would make
+the experiment invalid.
+
+Use one bounded dense-only continuation branch of the existing packed
+forward routine, leaving the existing prefill entrypoints unchanged. Batch
+all projections/FFN over actual candidate rows, append at absolute prefix
+positions, and run each causal query through the existing dense FP16 KV
+attention kernel with its own prefix-plus-row length. Return all hidden
+rows. This shares projection work without inventing another attention
+algorithm; per-row attention/logits overhead remains in measured costs.
+Use the existing configured Q8 prefill backend, including every dequantization
+and synchronization, not a cached full FP32 model.
+
+A research-only verification session exclusively borrows a mutable model
+with explicitly allocated dense KV. It owns reusable hidden/logits/norm/token
+scratch, cached next-token prediction and committed length. Each attempt
+holds a mutable session borrow. Commit only the verified prefix; a bounded
+dense truncate operation zeroes rejected K/V and publishes per-layer lengths.
+On failure or abandoned attempts, drain producers and roll back to the
+original prefix. Reject compressed KV, invalid bounds and poisoned sessions;
+do not touch server scheduling or create a compressed-state transaction.
+
+Compare serial and batched target greedy IDs, per-position diagnostic logits,
+prefix KV and lengths. Include wrong candidates, partial/full/zero commit,
+drop rollback and capacity failure. The benchmark uses only known greedy
+continuations as perfect drafts, then calculates real-drafter break-even
+curves. No neural drafter or EAGLE code is authorized by a timing result.
