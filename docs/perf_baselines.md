@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Input-Channel Coding Misses Byte Feasibility
+
+A fixed CPU-only scan of original layer0/17/35 gate/up weights finds only
+**0.41-1.88% optimistic stored-byte saving** when conditioned on input channel,
+after literal scales, code lengths and index costs. Even omitting all
+codebook/index storage gives only **4.07-5.54%**, below the 10% size gate.
+See [source counts, independent recount and stop decision](experiments/2026-10-26-maxwell-channel-entropy.md).
+
+No encoder, decoder, CUDA kernel, actual compression or speedup is produced.
+Full-model/tensor hashes, 15 scanner checks, sampled independent channel
+counts and twelve corruption controls pass. The initial AWK orchestration
+failure is retained separately, not pooled. Qualified **49.146 vs 43.106
+HTTP tok/s**, both original targets and runtime/defaults remain unchanged.
+
 ## 2026-10-26: Unchanged FFN Has Mixed SM-Clock Sensitivity
 
 Five outer process pairs at observed **1113/822 MHz SM**, memory fixed at

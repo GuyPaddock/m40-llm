@@ -1,0 +1,186 @@
+{
+  "passes_audit": true,
+  "tensors": 6,
+  "input_channels_per_tensor": 2048,
+  "cases": [
+    {
+      "passes_audit": true,
+      "layer_id": 0,
+      "family": "gate",
+      "source": {
+        "byte_offset": 354574336,
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa"
+      },
+      "pooled_entropy_bits": 7.6509420705514,
+      "conditional_entropy_bits": 7.52922064305519,
+      "coordinate_information_bits": 0.12172142749620996,
+      "ideal_conditional_payload_bytes": 21217706,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23503274,
+      "optimistic_stored_byte_saving": 0.018792064995511337,
+      "ideal_saving_without_metadata": 0.05538577224585328,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 103648,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    },
+    {
+      "passes_audit": true,
+      "layer_id": 0,
+      "family": "up",
+      "source": {
+        "byte_offset": 378527744,
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c"
+      },
+      "pooled_entropy_bits": 7.6489752754529,
+      "conditional_entropy_bits": 7.5384486378909,
+      "coordinate_information_bits": 0.11052663756199976,
+      "ideal_conditional_payload_bytes": 21243711,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23529279,
+      "optimistic_stored_byte_saving": 0.017706415721721047,
+      "ideal_saving_without_metadata": 0.0543001229720631,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 106180,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    },
+    {
+      "passes_audit": true,
+      "layer_id": 17,
+      "family": "gate",
+      "source": {
+        "byte_offset": 1091799040,
+        "dtype": "Q8_0",
+        "name": "blk.17.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86"
+      },
+      "pooled_entropy_bits": 7.66886732080424,
+      "conditional_entropy_bits": 7.6454409825943275,
+      "coordinate_information_bits": 0.023426338209912245,
+      "ideal_conditional_payload_bytes": 21545220,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23830788,
+      "optimistic_stored_byte_saving": 0.005119104554976106,
+      "ideal_saving_without_metadata": 0.04171281180531805,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 104960,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    },
+    {
+      "passes_audit": true,
+      "layer_id": 17,
+      "family": "up",
+      "source": {
+        "byte_offset": 1115752448,
+        "dtype": "Q8_0",
+        "name": "blk.17.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d"
+      },
+      "pooled_entropy_bits": 7.66253451617718,
+      "conditional_entropy_bits": 7.637400810173852,
+      "coordinate_information_bits": 0.025133706003328093,
+      "ideal_conditional_payload_bytes": 21522563,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23808131,
+      "optimistic_stored_byte_saving": 0.006064982485999515,
+      "ideal_saving_without_metadata": 0.04265868973634146,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 104708,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    },
+    {
+      "passes_audit": true,
+      "layer_id": 35,
+      "family": "gate",
+      "source": {
+        "byte_offset": 3221559296,
+        "dtype": "Q8_0",
+        "name": "blk.35.ffn_gate.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a"
+      },
+      "pooled_entropy_bits": 7.68321516526429,
+      "conditional_entropy_bits": 7.650548551496455,
+      "coordinate_information_bits": 0.03266661376783464,
+      "ideal_conditional_payload_bytes": 21559614,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23845182,
+      "optimistic_stored_byte_saving": 0.0045181879755898935,
+      "ideal_saving_without_metadata": 0.04111189522593195,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 105908,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    },
+    {
+      "passes_audit": true,
+      "layer_id": 35,
+      "family": "up",
+      "source": {
+        "byte_offset": 3245512704,
+        "dtype": "Q8_0",
+        "name": "blk.35.ffn_up.weight",
+        "shape": [
+          2048,
+          11008
+        ],
+        "source_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c"
+      },
+      "pooled_entropy_bits": 7.67837427328867,
+      "conditional_entropy_bits": 7.654076706681605,
+      "coordinate_information_bits": 0.024297566607065058,
+      "ideal_conditional_payload_bytes": 21569556,
+      "literal_scale_bytes": 1409024,
+      "code_length_table_bytes": 524288,
+      "index_bytes": 352256,
+      "optimistic_stored_bytes": 23855124,
+      "optimistic_stored_byte_saving": 0.004103132214004823,
+      "ideal_saving_without_metadata": 0.04069683946434677,
+      "has_size_feasibility": false,
+      "peak_rss_kib": 105980,
+      "has_materialized_encoded_stream": false,
+      "has_measured_speedup": false
+    }
+  ],
+  "has_candidate_for_format_design": false,
+  "has_encoder": false,
+  "has_decoder": false,
+  "has_measured_speedup": false,
+  "changes_defaults": false
+}

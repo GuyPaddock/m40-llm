@@ -80,6 +80,15 @@ existing reuse/packing probes. No new kernel is admitted. Changing weight
 organization must explain savings beyond those closed experiments and
 account for any increased resident storage and per-token traffic.
 
+The [fixed input-channel entropy scan](experiments/2026-10-26-maxwell-channel-entropy.md)
+tests whether known tensor coordinates reveal enough redundancy to avoid
+payload reads. Its optimistic stored savings are only 0.41-1.88% with
+metadata, or 4.07-5.54% without codebook/index costs, both below the 10%
+size gate. No encoder, decoder or CUDA consumer follows, nor another
+conditioning/codebook search.
+This is a restricted information-model result, not a universal compression
+bound, measured physical traffic or hardware ceiling.
+
 ## Checkpoints
 
 | Unit | Current State |

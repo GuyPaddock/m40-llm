@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest representation feasibility:** [fixed input-channel information scan](experiments/2026-10-26-maxwell-channel-entropy.md)
+rechecks all six actual model/tensor hashes and every channel histogram.
+Conditional entropy yields only 0.41-1.88% optimistic stored-byte savings
+with metadata, or 4.07-5.54% even without codebook/index costs. Both miss
+the unchanged 10% size gate. Stop without a codec/CUDA implementation or
+another conditioning/chunk search. The interrupted AWK recount attempt is
+preserved separately; all six corrected cases, sampled independent source
+counts, behavioral tests and corruption controls pass. No physical traffic,
+performance, hardware-ceiling or default claim follows; qualified 49.146
+HTTP tok/s and both original unmet targets remain unchanged.
+
 **Latest independent cost evidence:** [fixed-memory SM-clock sensitivity](experiments/2026-10-26-maxwell-sm-clock.md)
 uses unchanged FFN/checksum code and five outer process pairs. Observed SM
 1113 to 822 MHz raises one-row complete FFN 9.00-9.11%, gate/up 6.60-6.79%,
