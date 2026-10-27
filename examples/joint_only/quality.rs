@@ -127,6 +127,11 @@ pub fn execute(args: &Args, report: &mut Report) -> Result<()> {
         "candidate":run::identity(&b),"control_payload_hashes":hashes_a,"candidate_payload_hashes":hashes_b,
         "resident_reduction_bytes":sa.resident_bytes-sb.resident_bytes,"skipped_device_allocations":allocations_a-allocations_b,
         "control_load_ms":load_a,"candidate_load_ms":load_b}))?;
+    // Match the qualified runner's setup boundary before comparing ordinary
+    // request allocation/free counts against its frozen dispatch evidence.
+    for model in [&a, &b] {
+        generate(model, &protocol::render_user_prompt("Say ready."), 2)?;
+    }
     let prompt = protocol::render_prompt();
     let before = profile::snapshot();
     let ga = generate(&a, &prompt, 512)?;
