@@ -6,6 +6,7 @@ use anyhow::Result;
 use half::f16;
 use m40_llm::gguf::{GgmlDType, GgufModel, GgufScalar, GgufTensor, GgufValue};
 use m40_llm::infer::LoadedModel;
+use m40_llm::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
 use std::ffi::c_void;
 
 fn halves_from_f32(vals: &[f32]) -> Vec<u8> {
@@ -107,7 +108,9 @@ fn insert_minimal_metadata(gg: &mut GgufModel, d_model: usize, num_heads: u32, h
 }
 
 #[test]
+/// Compare the tiny dense reference, independent of compressed generation defaults.
 fn forward_one_token_minimal_parity_toy() -> Result<()> {
+    let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
@@ -408,7 +411,9 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
 }
 
 #[test]
+/// Preserve sequential dense attention semantics in the two-token CPU/CUDA comparison.
 fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
+    let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     let ctx = match cuda_env::ctx_m40_or_skip() {
         Some(ctx) => ctx,
         None => return Ok(()),
