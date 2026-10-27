@@ -21,8 +21,16 @@ plans direct construction of 36 joint pairs plus 37 down/head split owners,
 retaining original GGUF sources. The projected reduction is 1,724,645,376
 device bytes, not a speed claim. It requires a new identity/residency audit;
 the frozen 109-resident-owner qualification cannot be reused for joint-only.
-Next prepare the bounded model-compatibility matrix and recommended order.
-Stop for review before runtime/CUDA edits.
+The [compatibility matrix and recommended order](experiments/2026-10-27-compound-compatibility-proposal.md)
+now cover Qwen0.5/1.5/3/7B plus a required Llama1B artifact row. Qwen7B fails
+the unchanged 128 MiB prefix and 6144 MiB preparation caps, even with proposed
+joint-only ownership. Smaller Qwen shapes fit on paper, not as new runtime
+qualifications. Llama estimates await explicit Q8 GGUF metadata.
+All four documentation units are complete. **Next is feasibility review**,
+then, only if authorized, no-old reuse, independent joint-only ownership,
+and model-specific validation. No new runtime/CUDA code or benchmarks ran.
+Existing checksum sets, model/binary hashes, quality/paired-HTTP audits,
+formatting and local links were checked; no new performance claim follows.
 The exact-dense targets and rejected-verifier stop remain binding.
 
 The preceding execution sequence is the workspace's
