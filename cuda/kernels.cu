@@ -5223,33 +5223,6 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
-    // Borrow the unwrapped recent ring without changing the cache's storage
-    // kind. The dense-only entrypoint and existing kernel bodies stay intact.
-    int m40llm_attention_no_old_head128_async(
-        M40llmCudaContext* ctx, const M40llmKVCache* kv, uint32_t seq_id,
-        const void* q_dev_f32, uint32_t q_heads, uint32_t seq_len,
-        uint32_t recent_window, void* partials_f32, size_t partial_bytes,
-        void* out_dev_f32) {
-        if (!ctx || !kv || !q_dev_f32 || !out_dev_f32 || !partials_f32) return -1;
-        if (!kv->compressed || !kv->fp16_k_q4_v_old_backing || !kv->q4_old_v_backing ||
-            !kv->d_recent_k || !kv->d_recent_v || kv->head_dim != 128u) return -2;
-        if (seq_id >= kv->max_batch_size || seq_len == 0 ||
-            seq_len > kv->max_seq_len || seq_len > 8192u ||
-            recent_window != kv->recent_window || seq_len > recent_window) return -3;
-        if (!q_heads || !kv->num_heads || q_heads % kv->num_heads ||
-            partial_bytes < (size_t)q_heads * 8u * 130u * sizeof(float)) return -4;
-        const uint32_t span = (seq_len + 7u) / 8u;
-        const size_t shared_bytes = (span + 8u * 129u + 2u) * sizeof(float);
-        attention_last_token_gqa_head128_parallel_kernel<<<dim3(q_heads, 8), 256, shared_bytes, ctx->decode_stream>>>(
-            kv->d_recent_k, kv->d_recent_v, recent_window, kv->num_heads, q_heads,
-            seq_id, static_cast<const float*>(q_dev_f32), seq_len, 8,
-            static_cast<float*>(partials_f32), static_cast<float*>(out_dev_f32));
-        if (cudaGetLastError() != cudaSuccess) return -5;
-        attention_head128_merge_partitions_kernel<<<q_heads, 128, 0, ctx->decode_stream>>>(
-            static_cast<const float*>(partials_f32), 8, static_cast<float*>(out_dev_f32));
-        return cudaGetLastError() == cudaSuccess ? 0 : -6;
-    }
-
     int m40llm_attention_last_token_f32_gqa_async(
         M40llmCudaContext* ctx,
         const M40llmKVCache* kv,

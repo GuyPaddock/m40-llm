@@ -7,41 +7,6 @@ use super::{
     ffi, record_async_kernel, CudaContext, CudaStream, DeviceBuffer, KVCache, Q8DecodeEventDiag,
 };
 
-/// Captured once per compressed cache, never polled in the attention loop.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum NoOldAttention {
-    #[default]
-    Off,
-    DenseRecent,
-}
-
-impl NoOldAttention {
-    pub fn parse(value: &str) -> Result<Self> {
-        match value {
-            "off" => Ok(Self::Off),
-            "dense-recent" => Ok(Self::DenseRecent),
-            _ => anyhow::bail!("M40LLM_KV_NO_OLD_ATTENTION must be off or dense-recent"),
-        }
-    }
-
-    pub(super) fn from_env() -> Result<Self> {
-        let mode = Self::parse(
-            &std::env::var("M40LLM_KV_NO_OLD_ATTENTION").unwrap_or_else(|_| "off".into()),
-        )?;
-        if mode == Self::DenseRecent
-            && (std::env::var("M40LLM_KV_BLOCK_SELECT_POLICY").unwrap_or_else(|_| "topk".into())
-                != "topk"
-                || std::env::vars().any(|(key, _)| key.starts_with("M40LLM_KV_FORCE_")))
-        {
-            eprintln!(
-                "[kv-no-old] ineligible diagnostic selection policy; retaining original attention"
-            );
-            return Ok(Self::Off);
-        }
-        Ok(mode)
-    }
-}
-
 /// Bounded launch choices for the experimental full-context head128 kernel.
 #[derive(Debug, Clone, Copy)]
 pub struct Head128AttentionConfig {
@@ -110,83 +75,6 @@ impl Head128AttentionWorkspace {
 }
 
 impl KVCache {
-    /// Allocate scratch during cache/session preparation, never in attention.
-    pub fn prepare_no_old_attention(&self, ctx: &CudaContext, q_heads: u32) -> Result<()> {
-        if self.inner.no_old_attention == NoOldAttention::Off
-            || self.inner.head_dim != 128
-            || self.inner.exact_old_backing != "fp16-k-q4-v"
-        {
-            return Ok(());
-        }
-        ensure!(
-            q_heads > 0 && q_heads.is_multiple_of(self.num_heads()),
-            "invalid no-old GQA heads"
-        );
-        let mut workspace = self.inner.head128_attention_workspace.lock().unwrap();
-        ensure!(workspace.is_none(), "no-old scratch already prepared");
-        *workspace = Some(Head128AttentionWorkspace::new(ctx, q_heads)?);
-        eprintln!("[kv-no-old] opt-in dense-recent head128 partitions=8 threads=256 window={} scratch_bytes={}",
-            self.inner.recent_window, workspace.as_ref().unwrap().bytes());
-        Ok(())
-    }
-
-    /// # Safety
-    /// Q/output and this cache belong to ctx. seq_len is the authoritative
-    /// valid prefix length for this exclusively owned physical slot. All
-    /// producers must precede this enqueue on the decode stream.
-    #[allow(clippy::too_many_arguments)]
-    pub unsafe fn try_enqueue_no_old_attention(
-        &self,
-        ctx: &CudaContext,
-        seq_id: u32,
-        d_q: *const c_void,
-        q_heads: u32,
-        seq_len: u32,
-        recent_window: u32,
-        d_out: *mut c_void,
-    ) -> Result<bool> {
-        if self.inner.no_old_attention == NoOldAttention::Off
-            || !self.inner.compressed
-            || self.inner.head_dim != 128
-            || self.inner.exact_old_backing != "fp16-k-q4-v"
-            || recent_window != self.inner.recent_window
-            || seq_len == 0
-            || seq_len > recent_window
-            || seq_len > 8192
-        {
-            return Ok(false);
-        }
-        let workspace = self.inner.head128_attention_workspace.lock().unwrap();
-        let workspace = workspace
-            .as_ref()
-            .context("prepare no-old attention scratch before enqueue")?;
-        ensure!(
-            q_heads <= workspace.q_head_capacity
-                && Arc::ptr_eq(&ctx.inner, &workspace.partials.ctx.inner),
-            "no-old scratch capacity/context mismatch"
-        );
-        let _guard = ctx.inner.lock.lock().unwrap();
-        let rc = ffi::m40llm_attention_no_old_head128_async(
-            ctx.inner.raw.as_ptr(),
-            self.inner.raw.as_ptr(),
-            seq_id,
-            d_q,
-            q_heads,
-            seq_len,
-            recent_window,
-            workspace.partials.as_mut_ptr(),
-            workspace.bytes(),
-            d_out,
-        );
-        ensure!(
-            rc == 0,
-            "m40llm_attention_no_old_head128_async failed: {rc}"
-        );
-        record_async_kernel("attention_no_old_head128_parallel");
-        record_async_kernel("attention_no_old_head128_merge");
-        Ok(true)
-    }
-
     /// # Safety
     /// Q/output must hold `q_heads * 128` floats on this cache's CUDA context.
     /// They and the workspace must stay live until decode-stream completion.

@@ -335,8 +335,6 @@ impl LoadedModel {
             exact_old_backing,
         )?;
         let dense = kv.dense_equivalent_bytes();
-        #[cfg(feature = "cuda")]
-        kv.prepare_no_old_attention(&self.cuda, self.model_config.attention_head_count)?;
         let actual = kv.actual_bytes();
         eprintln!(
             "[kv-compress] mode={:?} selection_policy=topk top_blocks={} exact_old_backing={} exact_old_attention={} dense_equivalent_bytes={} actual_allocated_bytes={} recent_fp16_bytes={} old_k_fp16_bytes={} q4_old_v_payload_bytes={} q4_old_v_scale_bytes={} summary_index_bytes={} compression_ratio={:.3}",
@@ -577,17 +575,6 @@ impl LoadedModel {
                     );
                 }
                 if direct_fp16_k_q4_v {
-                    if kv.try_enqueue_no_old_attention(
-                        &self.cuda,
-                        seq_id,
-                        d_q,
-                        num_heads,
-                        seq_len,
-                        compression.recent_window,
-                        d_out,
-                    )? {
-                        return Ok(());
-                    }
                     return kv
                         .attention_last_token_f32_gqa_block_select_exact_fp16_k_q4_v_old_direct_async(
                             &self.cuda,
