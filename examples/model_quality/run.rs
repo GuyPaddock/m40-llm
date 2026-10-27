@@ -128,6 +128,8 @@ pub fn memory(model: &LoadedModel) -> Result<Value> {
         "allocated_context_tokens":cache.max_seq_len(),
         "head128_attention_workspace_bytes":cache.head128_attention_workspace_bytes(),
         "prepared_weight_bytes":model.q8_execution_stats().resident_bytes,
+        "joint_ffn_pairs":model.q8_ffn_pair_stats(),
+        "weight_payload_bytes_including_joint":model.q8_execution_stats().total_weight_payload_bytes+model.q8_ffn_pair_stats().resident_bytes,
         "activation_sparsity":model.activation_research_stats()?,
         "materialized_f32_bytes":materialized_bytes,
         "combined_tracked_device_bytes":CudaContext::total_device_bytes(),

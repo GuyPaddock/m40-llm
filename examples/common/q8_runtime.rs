@@ -1,8 +1,8 @@
 #![cfg_attr(not(all(feature = "cuda", nvcc)), allow(dead_code))]
 
-#[cfg(all(feature = "cuda", nvcc))]
-use anyhow::ensure;
 use anyhow::Result;
+#[cfg(all(feature = "cuda", nvcc))]
+use anyhow::{ensure, Context};
 use clap::ValueEnum;
 use m40_llm::{
     generate::PromptPrefill,
@@ -31,6 +31,9 @@ pub enum FfnChoice {
     #[value(name = "split-f32x4-128")]
     #[serde(rename = "split-f32x4-128")]
     SplitF32x4,
+    #[value(name = "joint-shared-scales-128")]
+    #[serde(rename = "joint-shared-scales-128")]
+    JointSharedScales,
     #[value(name = "q8-1-128")]
     Q81_128,
     #[value(name = "q8-1-256")]
@@ -78,6 +81,7 @@ pub enum ControlChoice {
     QualifiedPacked128Sgemm,
     QualifiedSplitSgemm,
     QualifiedWarpSgemm,
+    QualifiedPackedProjectionSgemm,
 }
 
 impl ControlChoice {
@@ -99,6 +103,11 @@ impl ControlChoice {
                 prefill: PrefillChoice::DequantSgemm,
                 attention_projection: AttentionProjectionChoice::Warp256,
             },
+            Self::QualifiedPackedProjectionSgemm => RuntimeConfig {
+                ffn: FfnChoice::SplitF32x4,
+                prefill: PrefillChoice::DequantSgemm,
+                attention_projection: AttentionProjectionChoice::PackedWarp256,
+            },
         }
     }
 }
@@ -113,6 +122,13 @@ pub struct RuntimeConfig {
 
 impl RuntimeConfig {
     pub fn validate_comparison(self, control: Self) -> Result<()> {
+        if self.ffn == FfnChoice::JointSharedScales {
+            anyhow::ensure!(control==ControlChoice::QualifiedPackedProjectionSgemm.config()
+                && self.prefill==PrefillChoice::DequantSgemm
+                && self.attention_projection==AttentionProjectionChoice::PackedWarp256,
+                "compound comparison requires qualified-packed-projection-sgemm control and unchanged SGEMM/packed-warp projections");
+            return Ok(());
+        }
         anyhow::ensure!(
             match self.attention_projection {
                 AttentionProjectionChoice::Native => true,
@@ -130,6 +146,7 @@ impl RuntimeConfig {
             FfnChoice::PackedF32_256 => Q8FfnConfig::packed_f32(256),
             FfnChoice::PackedF32_128 => Q8FfnConfig::packed_f32(128),
             FfnChoice::SplitF32x4 => Ok(Q8FfnConfig::split_f32x4()),
+            FfnChoice::JointSharedScales => Ok(Q8FfnConfig::joint_shared_scales()),
             FfnChoice::Q81_128 => Q8FfnConfig::q8_1(128),
             FfnChoice::Q81_256 => Q8FfnConfig::q8_1(256),
         }
@@ -158,18 +175,25 @@ impl RuntimeConfig {
     pub fn execution_config(self) -> Result<m40_llm::infer::execution_weights::Q8ExecutionConfig> {
         anyhow::ensure!(
             self.attention_projection == AttentionProjectionChoice::Native
-                || (self.ffn == FfnChoice::SplitF32x4
-                    && self.prefill == PrefillChoice::DequantSgemm),
+                || (matches!(
+                    self.ffn,
+                    FfnChoice::SplitF32x4 | FfnChoice::JointSharedScales
+                ) && self.prefill == PrefillChoice::DequantSgemm),
             "warp runtime comparison requires qualified split-f32x4-128 plus dequant-sgemm"
         );
         m40_llm::infer::execution_weights::Q8ExecutionConfig::parse(
             "split",
             Some("6144"),
-            Some(if self.ffn == FfnChoice::SplitF32x4 {
-                "gate-up,down,vocabulary"
-            } else {
-                "down,vocabulary"
-            }),
+            Some(
+                if matches!(
+                    self.ffn,
+                    FfnChoice::SplitF32x4 | FfnChoice::JointSharedScales
+                ) {
+                    "gate-up,down,vocabulary"
+                } else {
+                    "down,vocabulary"
+                },
+            ),
         )
     }
 
@@ -181,6 +205,58 @@ impl RuntimeConfig {
                 && model.q8_attention_projection.backend() == self.attention_projection.backend(),
             "loaded runtime backends differ from the requested FFN/prefill/projection configuration"
         );
+        let stats = model.q8_ffn_pair_stats();
+        let base = model.q8_execution_stats();
+        if self.ffn == FfnChoice::JointSharedScales {
+            ensure!(
+                stats.is_enabled
+                    && stats.pair_count == model.model_config.block_count as usize
+                    && stats.pairs.len() == stats.pair_count
+                    && stats.retained_host_pair_bytes == 0,
+                "compound runtime requires one owned joint pair per source layer"
+            );
+            let mut bytes = 0usize;
+            let mut largest = 0;
+            for (layer, pair) in stats.pairs.iter().enumerate() {
+                let mapped = model.map_standard_layer(layer)?;
+                for (identity, source) in [
+                    (&pair.gate, mapped.w_gate.dptr),
+                    (&pair.up, mapped.w_up.dptr),
+                ] {
+                    let owner = model
+                        .q8_execution
+                        .get_separate_weight(source.cast_const())
+                        .context("missing retained compound control tensor")?;
+                    ensure!(
+                        *identity == owner.key().source,
+                        "joint pair identity differs from original split owner"
+                    );
+                }
+                let size = pair
+                    .gate
+                    .shape()
+                    .source_bytes()?
+                    .checked_mul(2)
+                    .context("joint bytes overflow")?;
+                bytes = bytes
+                    .checked_add(size)
+                    .context("combined joint bytes overflow")?;
+                largest = largest.max(size);
+            }
+            ensure!(
+                stats.resident_bytes == bytes
+                    && stats.combined_prepared_bytes == base.resident_bytes + bytes
+                    && stats.budget_bytes == base.budget_bytes
+                    && stats.combined_prepared_bytes <= stats.budget_bytes
+                    && stats.peak_temporary_host_pair_bytes == largest,
+                "compound preparation accounting differs"
+            );
+        } else {
+            ensure!(
+                !stats.is_enabled && stats.resident_bytes == 0 && stats.pair_count == 0,
+                "control unexpectedly owns compound joint pairs"
+            );
+        }
         Ok(())
     }
 
@@ -280,6 +356,40 @@ pub fn validate_environment(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The compound changes only the qualified FFN axis; old controls or
+    /// altered prefix/projection choices cannot qualify a favorable comparison.
+    #[test]
+    fn test_compound_comparison_pins_all_other_qualified_axes() -> Result<()> {
+        let control = ControlChoice::QualifiedPackedProjectionSgemm.config();
+        let candidate = RuntimeConfig {
+            ffn: FfnChoice::JointSharedScales,
+            ..control
+        };
+        candidate.validate_comparison(control)?;
+        assert_eq!(candidate.ffn_config()?, Q8FfnConfig::joint_shared_scales());
+        assert_eq!(
+            serde_json::to_value(candidate.execution_config()?)?,
+            serde_json::to_value(control.execution_config()?)?
+        );
+        assert!(!candidate.is_numerical());
+        assert!(candidate
+            .validate_comparison(ControlChoice::QualifiedWarpSgemm.config())
+            .is_err());
+        for changed in [
+            RuntimeConfig {
+                prefill: PrefillChoice::Sequential,
+                ..candidate
+            },
+            RuntimeConfig {
+                attention_projection: AttentionProjectionChoice::Native,
+                ..candidate
+            },
+        ] {
+            assert!(changed.validate_comparison(control).is_err());
+        }
+        Ok(())
+    }
 
     /// Decode and prefill selections remain independent, typed and immutable;
     /// the reference never inherits experimental activation quantization.

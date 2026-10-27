@@ -576,6 +576,8 @@ impl ComparisonRun {
             "client_started_unix_ms": started_unix_ms, "client_finished_unix_ms": finished_unix_ms,
             "q8_execution_mode": execution.mode, "q8_execution_families": execution.families,
             "q8_prepared_bytes": execution.resident_bytes,
+            "joint_ffn_pairs":server.state.model.q8_ffn_pair_stats(),
+            "weight_payload_bytes_including_joint":execution.total_weight_payload_bytes+server.state.model.q8_ffn_pair_stats().resident_bytes,
             "q8_ffn":server.state.model.q8_ffn,"q8_prefill_backend":server.state.model.q8_prefill,
             "q8_attention_projection_backend":server.state.model.q8_attention_projection.backend(),
             "prompt_prefill":server.state.prompt_prefill,

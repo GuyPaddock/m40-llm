@@ -88,6 +88,7 @@ fn record_generation(
         q8_runtime::FfnChoice::PackedF32_256 => Some("ffn_q8_f32_packed_warp_256"),
         q8_runtime::FfnChoice::PackedF32_128 => Some("ffn_q8_f32_packed_warp_128"),
         q8_runtime::FfnChoice::SplitF32x4 => Some("ffn_q8_split_f32x4_128"),
+        q8_runtime::FfnChoice::JointSharedScales => Some("ffn_q8_joint_f32x4_shared_scales_128"),
         q8_runtime::FfnChoice::Q81_128 => Some("ffn_q8_1_threads128"),
         q8_runtime::FfnChoice::Q81_256 => Some("ffn_q8_1_threads256"),
     };
@@ -116,6 +117,7 @@ fn record_generation(
     report.append(json!({"kind":"q8_runtime_browser_generation","label":label,"config":config,
         "prompt_token_ids":generated.token_ids[..generated.prompt_token_len],
         "actual_attention_projection_backend":model.q8_attention_projection.backend(),
+        "joint_ffn_pairs":model.q8_ffn_pair_stats(),
         "generation":tasks::generation_record(&generated, elapsed_ms, model)?,"dispatch":counters,
         "scope":"one untimed qualification run, natural stopping and actual GPU-greedy tokens; not HTTP throughput"}))?;
     Ok(generated)
@@ -281,6 +283,7 @@ pub(super) fn evaluate(args: Args) -> Result<()> {
         "control_config":control,"candidate_config":config,"is_numerical_track":config.is_numerical(),
         "original_exact_goal_eligible":!config.is_numerical(),"environment":environment,
         "prepared_control":a_stats,"prepared_candidate":b_stats,"corpus_sha256":records::sha256(&corpus_bytes)?,"selected_splits":splits,
+        "joint_control":reference.q8_ffn_pair_stats(),"joint_candidate":candidate.q8_ffn_pair_stats(),
         "reference_memory":run::memory(&reference)?,"candidate_memory":run::memory(&candidate)?,
         "revision":records::command_text("git", &["rev-parse","HEAD"])?,
         "worktree":records::command_text("git", &["status","--short"])?,
@@ -447,6 +450,10 @@ mod tests {
                 attention_projection: q8_runtime::AttentionProjectionChoice::PackedWarp256,
                 ..q8_runtime::ControlChoice::QualifiedWarpSgemm.config()
             },
+            RuntimeConfig {
+                ffn: FfnChoice::JointSharedScales,
+                ..q8_runtime::ControlChoice::QualifiedPackedProjectionSgemm.config()
+            },
         ] {
             let load = |config: RuntimeConfig| -> Result<LoadedModel> {
                 let (mut gguf, bytes) = crate::q8_fixture::build_prefill_fixture(false);
@@ -455,7 +462,9 @@ mod tests {
                 model.allocate_kv_cache_for_layers(16)?;
                 Ok(model)
             };
-            let control = if config.attention_projection
+            let control = if config.ffn == FfnChoice::JointSharedScales {
+                q8_runtime::ControlChoice::QualifiedPackedProjectionSgemm.config()
+            } else if config.attention_projection
                 == q8_runtime::AttentionProjectionChoice::PackedWarp256
             {
                 q8_runtime::ControlChoice::QualifiedWarpSgemm.config()
@@ -546,6 +555,7 @@ mod tests {
                 FfnChoice::PackedF32_256 => "ffn_q8_f32_packed_warp_256",
                 FfnChoice::Q81_128 => "ffn_q8_1_threads128",
                 FfnChoice::SplitF32x4 => "ffn_q8_split_f32x4_128",
+                FfnChoice::JointSharedScales => "ffn_q8_joint_f32x4_shared_scales_128",
                 _ => "dequantize_q8_0_to_f32_colmajor",
             };
             assert!(

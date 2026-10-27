@@ -27,6 +27,114 @@ fn only_record<'a>(rows: &'a [Value], kind: &str) -> Result<&'a Value> {
     Ok(row)
 }
 
+fn validate_compound_evidence(manifest: &Value, control: &Value, candidate: &Value) -> Result<()> {
+    let layers = manifest["candidate"]["layers"]
+        .as_u64()
+        .context("compound layer count")?;
+    let stats = &manifest["joint_candidate"];
+    let pairs = stats["pairs"]
+        .as_array()
+        .context("missing joint pair identities")?;
+    ensure!(
+        layers > 0
+            && manifest["candidate"]["active_layer_count"] == layers
+            && stats["is_enabled"] == true
+            && stats["pair_count"] == layers
+            && pairs.len() as u64 == layers
+            && manifest["joint_control"]["is_enabled"] == false
+            && manifest["joint_control"]["resident_bytes"] == 0
+            && candidate["joint_ffn_pairs"] == *stats
+            && control["joint_ffn_pairs"] == manifest["joint_control"],
+        "compound quality requires actual model-owned pair evidence"
+    );
+    let split = manifest["prepared_candidate"]["tensors"]
+        .as_array()
+        .context("missing retained split cache")?;
+    let mut bytes = 0u64;
+    let mut largest = 0;
+    let mut sources = BTreeSet::new();
+    for pair in pairs {
+        let mut pair_bytes = 0u64;
+        for (role, suffixes) in [
+            ("gate", [".ffn_gate.weight", ".feed_forward.w3.weight"]),
+            ("up", [".ffn_up.weight", ".feed_forward.w1.weight"]),
+        ] {
+            let source = &pair[role];
+            let name = source["tensor_name"]
+                .as_str()
+                .context("missing compound role name")?;
+            ensure!(
+                suffixes.iter().any(|s| name.ends_with(s))
+                    && sources.insert(serde_json::to_string(source)?),
+                "compound roles/identities are duplicated or changed"
+            );
+            let matches = split
+                .iter()
+                .filter(|t| t["key"]["source"] == *source)
+                .collect::<Vec<_>>();
+            ensure!(
+                matches.len() == 1,
+                "compound source does not match retained split identity"
+            );
+            let size = matches[0]["resident_bytes"]
+                .as_u64()
+                .context("missing split owner size")?;
+            ensure!(
+                matches[0]["source_bytes"] == size,
+                "compound split control changed storage size"
+            );
+            pair_bytes = pair_bytes
+                .checked_add(size)
+                .context("compound pair byte overflow")?;
+        }
+        bytes = bytes
+            .checked_add(pair_bytes)
+            .context("compound byte overflow")?;
+        largest = largest.max(pair_bytes);
+    }
+    let base = manifest["prepared_candidate"]["resident_bytes"]
+        .as_u64()
+        .context("missing retained cache size")?;
+    let budget = stats["budget_bytes"]
+        .as_u64()
+        .context("missing combined budget")?;
+    let combined = base
+        .checked_add(bytes)
+        .context("combined preparation overflow")?;
+    ensure!(
+        stats["resident_bytes"] == bytes
+            && stats["combined_prepared_bytes"] == combined
+            && combined <= budget
+            && stats["budget_bytes"] == manifest["prepared_candidate"]["budget_bytes"]
+            && stats["peak_temporary_host_pair_bytes"] == largest
+            && stats["retained_host_pair_bytes"] == 0,
+        "compound quality memory accounting differs"
+    );
+    let launches = layers
+        .checked_mul(512)
+        .context("compound launch count overflow")?;
+    ensure!(
+        candidate["dispatch"]["operations"]["ffn_q8_joint_f32x4_shared_scales_128"]["launches"]
+            == launches
+            && control["dispatch"]["operations"]["ffn_q8_split_f32x4_128"]["launches"] == launches,
+        "compound quality dispatch must cover every actual decoded layer"
+    );
+    for other in [
+        "ffn_q8_split_f32x4_128",
+        "ffn_q8_joint_f32x4_128",
+        "ffn_q8_split_f32x4_shared_scales_128",
+    ] {
+        ensure!(
+            candidate["dispatch"]["operations"][other]["launches"]
+                .as_u64()
+                .unwrap_or(0)
+                == 0,
+            "compound quality used an undeclared FFN path"
+        );
+    }
+    Ok(())
+}
+
 fn validate(
     rows: &[Value],
     config: RuntimeConfig,
@@ -120,6 +228,9 @@ fn validate(
         .iter()
         .find(|row| row["label"] == "candidate")
         .context("candidate generation")?;
+    if config.ffn == super::super::q8_runtime::FfnChoice::JointSharedScales {
+        validate_compound_evidence(manifest, control, candidate)?;
+    }
     if !config.attention_projection.backend().is_native() {
         let layers = manifest["candidate"]["layers"]
             .as_u64()
@@ -240,6 +351,48 @@ pub(super) fn load(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Matching labels alone cannot qualify a compound report: original role
+    /// identities, combined storage and every decoded layer must be evidenced.
+    #[test]
+    fn test_compound_evidence_rejects_missing_dispatch_or_hidden_memory() -> Result<()> {
+        let gate =
+            json!({"tensor_name":"blk.0.ffn_gate.weight","shape":{"input_dim":32,"output_dim":64}});
+        let up =
+            json!({"tensor_name":"blk.0.ffn_up.weight","shape":{"input_dim":32,"output_dim":64}});
+        let joint = json!({"is_enabled":true,"pair_count":1,"pairs":[{"gate":gate,"up":up}],
+            "resident_bytes":4352,"combined_prepared_bytes":8704,"budget_bytes":9000,
+            "peak_temporary_host_pair_bytes":4352,"retained_host_pair_bytes":0});
+        let empty = json!({"is_enabled":false,"resident_bytes":0});
+        let manifest = json!({"candidate":{"layers":1,"active_layer_count":1},"joint_candidate":joint,
+            "joint_control":empty,"prepared_candidate":{"resident_bytes":4352,"budget_bytes":9000,
+                "tensors":[{"key":{"source":gate},"resident_bytes":2176,"source_bytes":2176},
+                {"key":{"source":up},"resident_bytes":2176,"source_bytes":2176}]}});
+        let control = json!({"joint_ffn_pairs":empty,"dispatch":{"operations":{"ffn_q8_split_f32x4_128":{"launches":512}}}});
+        let candidate = json!({"joint_ffn_pairs":joint,"dispatch":{"operations":{"ffn_q8_joint_f32x4_shared_scales_128":{"launches":512}}}});
+        validate_compound_evidence(&manifest, &control, &candidate)?;
+        for mutation in 0..4 {
+            let mut m = manifest.clone();
+            let mut c = candidate.clone();
+            match mutation {
+                0 => {
+                    c["dispatch"]["operations"]["ffn_q8_joint_f32x4_shared_scales_128"]
+                        ["launches"] = json!(0)
+                }
+                1 => {
+                    m["joint_candidate"]["resident_bytes"] = json!(0);
+                    c["joint_ffn_pairs"] = m["joint_candidate"].clone();
+                }
+                2 => {
+                    m["joint_candidate"]["pairs"][0]["gate"] = up.clone();
+                    c["joint_ffn_pairs"] = m["joint_candidate"].clone();
+                }
+                _ => c["dispatch"]["operations"]["ffn_q8_joint_f32x4_128"]["launches"] = json!(1),
+            }
+            assert!(validate_compound_evidence(&m, &control, &c).is_err());
+        }
+        Ok(())
+    }
 
     /// A valid report cannot qualify a later runtime with changed actual IDs
     /// or output, even when its model/configuration names still match.
