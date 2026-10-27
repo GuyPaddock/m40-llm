@@ -38,6 +38,13 @@ enables weight preparation.
 
 ## Admission For Further Optimization
 
+The [compound stage checkpoint](experiments/2026-10-27-maxwell-compound-stage-profile.md)
+retains exact actual-512 output with 0.980% instrumentation throughput loss.
+Middle sampled gate/up and down total about 64.3% of captured stages. The
+remaining stronger target requires 938.958 ms request savings, equivalent
+to about 15.05% lower FFN latency if all savings came from sampled FFN.
+This is optimistic cost scope, not a forecast or new kernel admission.
+
 Preserve the qualified compound and split control configurations. Negative bounded
 experiments are not evidence that Maxwell's hardware ceiling has been
 reached. DRAM transactions, achieved occupancy and warp stalls remain

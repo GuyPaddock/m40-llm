@@ -17,11 +17,15 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Current measurement-only follow-up:** [compound cost checkpoint](experiments/2026-10-27-maxwell-compound-profile-plan.md)
-uses the existing profiler for five off/on pairs at steps0/255/511. No new
-kernel or search is admitted. Establish the new cost distribution before
-proposing further dominant-work removal; keep both original targets and the
-negative verifier stop intact.
+**Completed measurement-only follow-up:** [compound cost checkpoint](experiments/2026-10-27-maxwell-compound-stage-profile.md)
+preserves actual 512 IDs, dispatch and ownership with 0.980% profiling cost.
+Five off/on pairs show middle gate/up 7.421 ms and down 4.761 ms, about 64.3%
+of captured stages. The original stronger target needs 938.958 ms additional
+request savings, optimistically 15.05% lower FFN latency if FFN supplied all
+of it. Complete coverage, attribution, isolation and thirteen corruption
+controls pass. No new kernel or search is admitted, nor physical traffic or
+hardware-ceiling conclusion. Next needs a distinct substantial avoided-work
+proposal; original targets and negative verifier stop remain binding.
 
 **Latest qualified runtime:** the fixed [compound FFN](experiments/2026-10-27-maxwell-compound-runtime.md)
 passes actual-512/frozen quality and twenty fresh incremental HTTP pairs:

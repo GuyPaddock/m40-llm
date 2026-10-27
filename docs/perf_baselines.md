@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Qualified Compound Remains FFN-Dominated
+
+Five profiling-off/on release pairs retain exact 512 IDs and completed quality
+at **50.878/50.379 HTTP tok/s**, a 0.980% instrumentation throughput loss.
+This is attribution, not another optimization or replacement for qualified
+**50.910 versus 43.195 HTTP tok/s**. See [costs, audits and remaining scope](experiments/2026-10-27-maxwell-compound-stage-profile.md).
+
+Middle sampled gate/up/SwiGLU costs 7.421 ms and prepared down 4.761 ms,
+together about 64.3% of captured stage time; attention is 0.780 ms. Meeting
+the stronger unchanged target 56.153 HTTP tok/s requires another 938.958 ms
+per request. If savings came only from FFN, the optimistic equivalent is
+15.05% lower FFN latency. This admits no new kernel or geometry search, does
+not establish hardware saturation and does not reopen closed experiments.
+Defaults and the negative perfect-drafter stop remain unchanged.
+
 ## 2026-10-27: Compound FFN Qualifies In Full Generation
 
 Twenty fresh paired release HTTP trials give **50.799 versus 49.221 tok/s**,

@@ -18,20 +18,20 @@ binding; measurement does not reopen any losing implementation.
 
 - Restore the qualified quality report's frozen environment. Keep the
   compound, packed-warp-256 QKV/output, prepared down/vocabulary, bounded
-  dequant-SGEMM prefix, explicit dense FP16 KV/context1024 and all36 layers.
-- Use canonical65 prompt IDs and greedy actual512 tokens, natural length
+  dequant-SGEMM prefix, explicit dense FP16 KV/context 1024 and all 36 layers.
+- Use canonical 65 prompt IDs and greedy actual 512 tokens, natural length
   stops, the same source model and completed compound quality evidence.
-  Official Ollama0.40.11 is an untimed tokenizer oracle only.
+  Official Ollama 0.40.11 is an untimed tokenizer oracle only.
 - Run the existing five alternating profile-off/on HTTP pairs, after both
-  warmups. Sample generated steps0/255/511 only. Do not add timing layers
+  warmups. Sample generated steps 0/255/511 only. Do not add timing layers
   or search another token set. Verify outputs, actual-ID replays and actual
   compound dispatch against completed quality.
-- Require seven profiled sessions and21 event rows, separating warmup and
-  final replay from five primary sessions. Every row must cover all36
-  layers,400 ordinary spans and a single vocabulary projection. Preserve
+- Require seven profiled sessions and 21 event rows, separating warmup and
+  final replay from five primary sessions. Every row must cover all 36
+  layers, 400 ordinary spans and a single vocabulary projection. Preserve
   event-pool reuse and ordinary enqueue counters.
 - Record instrumentation perturbation separately. If absolute HTTP latency
-  change exceeds3%, do not use this capture for quantitative attribution;
+  change exceeds 3%, do not use this capture for quantitative attribution;
   retain the evidence and stop instead of tuning the collector.
 - Serialize all GPU work, request escalation, verify process isolation and
   stable clocks at boundaries. No builds, tests or MemPalace calls overlap
