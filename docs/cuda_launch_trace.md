@@ -38,6 +38,16 @@ scheduling perturb the workload; these are not unprofiled kernel latency,
 HTTP throughput, occupancy or DRAM traffic. Overlapping spans cannot be
 summed as elapsed time. Keep authoritative throughput runs observer-free.
 
+Absolute clocks exceed the exact-integer range of double-precision JSON
+tools. Before jq analysis, run `perl scripts/normalize_cuda_activity.pl
+TRACE.jsonl > NEW-normalized.jsonl`. This requires 64-bit Perl integers;
+it subtracts exact clocks to add integer `duration_ns` and relative start/end
+fields, and changes absolute timestamps to strings. Relative times use the
+first delivered activity as origin, not necessarily the earliest execution.
+Preserve the original trace separately. Invalid ranges fail, not round.
+`bash scripts/test_cuda_launch_activity.sh /absolute/new-result-directory`
+checks this precision boundary and the real two-launch opt-in behavior.
+
 ## Run
 
 Use an idle GPU and the separately installed CUDA 12.x CUPTI SDK:

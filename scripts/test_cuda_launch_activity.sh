@@ -11,6 +11,24 @@ mkdir "$directory"
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 fixture="$root/target/research-tools/cuda-launch-trace-smoke"
 [[ -x $fixture ]]
+# Protect nanosecond subtraction above the exact-integer range of JSON doubles.
+printf '%s\n' \
+  '{"kind":"cuda_kernel_activity","start_ns":1793061468773531615,"end_ns":1793061468773531632}' \
+  '{"kind":"cuda_kernel_activity","start_ns":1793061468773531600,"end_ns":1793061468773531605}' \
+  '{"kind":"cuda_trace_complete","launch_records":2}' \
+  | perl "$root/scripts/normalize_cuda_activity.pl" > "$directory/normalized.jsonl"
+jq -se 'length==3 and .[0].duration_ns==17 and .[0].relative_start_ns==0
+  and .[0].relative_end_ns==17 and .[0].start_ns=="1793061468773531615"
+  and .[1].duration_ns==5 and .[1].relative_start_ns== -15
+  and .[2]=={kind:"cuda_trace_complete",launch_records:2}' "$directory/normalized.jsonl" > /dev/null
+for timestamps in '0,1' '17,17' '19,18' '9223372036854775806,9223372036854775808'; do
+  if printf '{"kind":"cuda_kernel_activity","start_ns":%s,"end_ns":%s}\n' \
+      "${timestamps%,*}" "${timestamps#*,}" \
+      | perl "$root/scripts/normalize_cuda_activity.pl" > /dev/null 2> "$directory/rejected-clock.log"; then
+    printf 'Invalid clock range accepted: %s\n' "$timestamps" >&2
+    exit 1
+  fi
+done
 for mode in unset zero enabled; do
   environment=(env -u LD_PRELOAD -u M40LLM_CUDA_TRACE_ACTIVITY M40LLM_CUDA_TRACE_MODULES=0)
   if [[ $mode == zero ]]; then environment+=(M40LLM_CUDA_TRACE_ACTIVITY=0); fi
