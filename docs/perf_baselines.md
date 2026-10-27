@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: No-Old Adapter Fails Exact Cache Gate
+
+The bounded borrowed-recent head128 adapter passes 88 layout and 140
+primitive/rollover cases, but changes one valid FP16 K word and one V word
+at the two-layer Qwen fixture's second prefix token. Greedy IDs match and
+maximum logit error is only 5.59e-9; the bit-identical KV gate nevertheless
+fails. See [evidence and stop decision](experiments/2026-10-27-no-old-screen.md).
+
+Preserve rejected code `db04697` before separate removal. No resident or
+HTTP timing, real-model actual512 qualification or new speed claim follows.
+The immutable 50.910426 HTTP tok/s compound reference and 56.153149 target
+are unchanged. Joint-only ownership remains a separate authorized task.
+
 ## 2026-10-27: Qualified Compound Remains FFN-Dominated
 
 Five profiling-off/on release pairs retain exact 512 IDs and completed quality

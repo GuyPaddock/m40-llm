@@ -17,8 +17,14 @@ The first hardware prerequisite passes: the
 checks 88 cases across four physical slots, both RoPE layouts, reset/reuse,
 sequential append and dense-prefix reconstruction at W-1/W/W+1, block
 boundaries and repeated rollover. Stored recent K/V words match dense exactly.
-No attention kernel has yet been changed. Next implement only the bounded
-existing-kernel adapter and apply all correctness gates before timing.
+The [no-old experiment is now rejected](experiments/2026-10-27-no-old-screen.md):
+primitive parity/read-only/rollover passes 140 cases, but full-forward valid
+FP16 KV differs at N=2. Tiny in-tolerance logits and matching greedy IDs do
+not override that failure. Code is preserved in `db04697`; remove the adapter
+separately. No performance measurements or further no-old searches follow.
+Next is the independent joint-only storage experiment, after documenting
+and closing this decision. Its gate requires the exact resident reduction,
+unchanged behavior and no meaningful regression, not a throughput gain.
 
 The preceding preservation and feasibility checkpoint remains below.
 The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
