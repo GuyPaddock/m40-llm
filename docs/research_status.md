@@ -16,7 +16,12 @@ The [no-old compressed-attention proposal](experiments/2026-10-27-compressed-no-
 now identifies serial candidate reductions and a conditional existing-kernel
 adapter. Layout is compatible before rollover, but exact output/cache and
 numerical equivalence remain unproven. No runtime implementation is admitted.
-Next prepare separate joint-only ownership and model-compatibility proposals.
+The [joint-only ownership proposal](experiments/2026-10-27-joint-only-ownership-proposal.md)
+plans direct construction of 36 joint pairs plus 37 down/head split owners,
+retaining original GGUF sources. The projected reduction is 1,724,645,376
+device bytes, not a speed claim. It requires a new identity/residency audit;
+the frozen 109-resident-owner qualification cannot be reused for joint-only.
+Next prepare the bounded model-compatibility matrix and recommended order.
 Stop for review before runtime/CUDA edits.
 The exact-dense targets and rejected-verifier stop remain binding.
 
