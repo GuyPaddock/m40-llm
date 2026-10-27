@@ -12,9 +12,9 @@ use serde_json::{json, Value};
 use std::{fs::OpenOptions, io::Write, path::PathBuf, process::Command, time::Instant};
 
 #[path = "../../examples/common/qwen_workload.rs"]
-mod workload;
+pub(super) mod workload;
 
-fn run_command(program: &str, args: &[&str]) -> Result<String> {
+pub(super) fn run_command(program: &str, args: &[&str]) -> Result<String> {
     let output = Command::new(program).args(args).output()?;
     ensure!(
         output.status.success(),
@@ -24,7 +24,7 @@ fn run_command(program: &str, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
-fn read_gpu_state() -> Result<Value> {
+pub(super) fn read_gpu_state() -> Result<Value> {
     let device = std::env::var("CUDA_VISIBLE_DEVICES")?;
     let processes = run_command(
         "nvidia-smi",
@@ -47,6 +47,21 @@ fn read_gpu_state() -> Result<Value> {
         "clocks":run_command("nvidia-smi", &["-i", &device, "--query-gpu=uuid,pstate,clocks.sm,clocks.mem", "--format=csv,noheader,nounits"])?,
         "processes":processes
     }))
+}
+
+pub(super) fn collect_launch_counts(
+    before: &profile::ProfileSnapshot,
+    after: &profile::ProfileSnapshot,
+) -> std::collections::BTreeMap<&'static str, u64> {
+    after
+        .by_op
+        .iter()
+        .filter_map(|(op, counters)| {
+            let previous = before.by_op.get(op).copied().unwrap_or_default();
+            let launches = counters.launches.saturating_sub(previous.launches);
+            (launches > 0).then_some((*op, launches))
+        })
+        .collect()
 }
 
 fn describe_kv(config: &KvCompressionConfig) -> Value {
@@ -202,15 +217,7 @@ fn test_preferred_q8_runtime_with_compressed_kv() -> Result<()> {
                     ensure!(ids == dense_ids, "dense generation changed between rounds");
                 }
             }
-            let operations: std::collections::BTreeMap<_, _> = after
-                .by_op
-                .iter()
-                .filter_map(|(op, v)| {
-                    let previous = before.by_op.get(op).copied().unwrap_or_default();
-                    let n = v.launches.saturating_sub(previous.launches);
-                    (n > 0).then_some((*op, n))
-                })
-                .collect();
+            let operations = collect_launch_counts(&before, &after);
             for op in model
                 .q8_attention_projection
                 .backend()
