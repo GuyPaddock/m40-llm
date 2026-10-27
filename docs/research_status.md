@@ -17,6 +17,12 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Current measurement-only follow-up:** [compound cost checkpoint](experiments/2026-10-27-maxwell-compound-profile-plan.md)
+uses the existing profiler for five off/on pairs at steps0/255/511. No new
+kernel or search is admitted. Establish the new cost distribution before
+proposing further dominant-work removal; keep both original targets and the
+negative verifier stop intact.
+
 **Latest qualified runtime:** the fixed [compound FFN](experiments/2026-10-27-maxwell-compound-runtime.md)
 passes actual-512/frozen quality and twenty fresh incremental HTTP pairs:
 **50.799 versus 49.221 tok/s**, **+3.205%**, interval +3.156% to +3.303%.
