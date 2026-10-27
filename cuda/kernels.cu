@@ -9477,6 +9477,34 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         return 0;
     }
 
+    __global__ void truncate_dense_kv_kernel(
+        __half* k, __half* v, uint32_t* lengths, uint32_t first_slot,
+        uint32_t new_len, size_t slot_stride, size_t tail_start, size_t tail_elems) {
+        const uint32_t slot = first_slot + blockIdx.y;
+        const size_t i = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+        if (i < tail_elems) {
+            const size_t offset = static_cast<size_t>(slot) * slot_stride + tail_start + i;
+            k[offset] = __float2half(0.0f);
+            v[offset] = __float2half(0.0f);
+        }
+        if (i == 0) lengths[slot] = new_len;
+    }
+
+    int m40llm_kvcache_truncate_dense_async(M40llmCudaContext* ctx, M40llmKVCache* kv,
+        uint32_t first_slot, uint32_t slots, uint32_t new_len, uint32_t old_len) {
+        if (!ctx || !kv || kv->compressed || !kv->d_k || !kv->d_v) return -1;
+        if (!slots || first_slot >= kv->max_batch_size || slots > kv->max_batch_size-first_slot ||
+            new_len > old_len || old_len > kv->max_seq_len || slots > 65535) return -2;
+        const size_t elems = static_cast<size_t>(kv->num_heads) * kv->head_dim;
+        const size_t tail = static_cast<size_t>(old_len-new_len) * elems;
+        const size_t blocks = tail ? (tail+255)/256 : 1;
+        if (blocks > 2147483647u) return -2;
+        truncate_dense_kv_kernel<<<dim3(static_cast<unsigned>(blocks),slots),256,0,ctx->decode_stream>>>(
+            kv->d_k,kv->d_v,kv->d_seq_map,first_slot,new_len,
+            static_cast<size_t>(kv->max_seq_len)*elems,static_cast<size_t>(new_len)*elems,tail);
+        return cudaGetLastError()==cudaSuccess ? 0 : -3;
+    }
+
     int m40llm_kvcache_reset(M40llmCudaContext* ctx, M40llmKVCache* kv) {
         if (!ctx || !kv) return -1;
         if (ensure_device(ctx) != 0) return -2;

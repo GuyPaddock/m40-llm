@@ -1112,6 +1112,14 @@ mod ffi {
             rope_layout: u32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
+        pub fn m40llm_kvcache_truncate_dense_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            first_slot: u32,
+            slots: u32,
+            new_len: u32,
+            old_len: u32,
+        ) -> i32;
         pub fn m40llm_kvcache_debug_read_length(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -5287,6 +5295,51 @@ fn attention_group_name(group: u32) -> &'static str {
 
 impl KVCache {
     #[cfg(feature = "cuda")]
+    pub(crate) fn has_exclusive_storage(&self) -> bool {
+        Arc::strong_count(&self.inner) == 1
+    }
+
+    /// Zero a speculative suffix and publish shortened physical-slot lengths.
+    ///
+    /// # Safety
+    /// Dense KV belongs to ctx; caller exclusively owns these slots. Drain
+    /// all other producers/readers before enqueue, retain ownership until
+    /// decode completes, and supply the actual written upper bound old_len.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn truncate_dense_async(
+        &self,
+        ctx: &CudaContext,
+        first_slot: u32,
+        slots: u32,
+        new_len: u32,
+        old_len: u32,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            !self.is_compressed()
+                && slots > 0
+                && slots <= 65535
+                && first_slot
+                    .checked_add(slots)
+                    .is_some_and(|end| end <= self.max_batch_size())
+                && new_len <= old_len
+                && old_len <= self.max_seq_len(),
+            "invalid dense KV truncation bounds or compressed cache"
+        );
+        let _guard = ctx.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_kvcache_truncate_dense_async(
+            ctx.inner.raw.as_ptr(),
+            self.inner.raw.as_ptr(),
+            first_slot,
+            slots,
+            new_len,
+            old_len,
+        );
+        anyhow::ensure!(rc == 0, "dense KV truncation failed: {rc}");
+        record_async_kernel("kvcache_truncate_dense");
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
     /// Cloned cache handles share mutable native storage. Comparisons that
     /// mutate two caches must reject aliases even when the handles differ.
     pub fn has_same_storage(&self, other: &Self) -> bool {
@@ -7161,7 +7214,8 @@ impl Drop for KVCacheInner {
 #[cfg(feature = "cuda")]
 /// # Safety
 /// `out_k_f16` and `out_v_f16` must be valid pointers to write one token's K and V (num_heads*head_dim f16 each).
-/// `seq_id`/`token` must be within appended ranges; the context and cache must be on the same device.
+/// `seq_id`/`token` must be within allocated dense capacity; the context and
+/// cache must be on the same device and all producers must be finished.
 pub unsafe fn ffi_debug_read_kv_token(
     ctx: &CudaContext,
     kv: &KVCache,

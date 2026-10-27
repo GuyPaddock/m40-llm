@@ -26,3 +26,5 @@ pub mod sampling;
 pub mod server;
 pub(crate) mod timing;
 pub mod tokenizer;
+#[cfg(feature = "cuda")]
+pub mod verification;

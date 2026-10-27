@@ -2503,6 +2503,55 @@ impl LoadedModel {
         items: &[ForwardPrefillSequence<'_>],
         kv: &KVCache,
     ) -> Result<usize> {
+        self.forward_causal_rows(items, kv, None)
+    }
+
+    /// # Safety
+    /// Research-only dense continuation. `output` holds tokens.len()*D f32;
+    /// caller exclusively owns KV sequence zero through completion/rollback.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn forward_verification_rows(
+        &self,
+        tokens: &[u32],
+        start: u32,
+        output: *mut c_void,
+    ) -> Result<usize> {
+        anyhow::ensure!(
+            matches!(tokens.len(), 2 | 4 | 8),
+            "verification requires 2, 4 or 8 actual rows"
+        );
+        let kv = self
+            .kv_cache
+            .as_ref()
+            .context("verification requires explicit dense KV")?;
+        anyhow::ensure!(
+            !kv.is_compressed() && !output.is_null(),
+            "verification requires dense FP16 KV and valid output"
+        );
+        anyhow::ensure!(
+            start
+                .checked_add(tokens.len() as u32)
+                .is_some_and(|end| end <= kv.max_seq_len()),
+            "verification exceeds KV capacity"
+        );
+        self.forward_causal_rows(
+            &[ForwardPrefillSequence {
+                token_ids: tokens,
+                sequence_id: 0,
+                d_out_f32: output,
+            }],
+            kv,
+            Some(start),
+        )
+    }
+
+    #[cfg(feature = "cuda")]
+    unsafe fn forward_causal_rows(
+        &self,
+        items: &[ForwardPrefillSequence<'_>],
+        kv: &KVCache,
+        verification_start: Option<u32>,
+    ) -> Result<usize> {
         anyhow::ensure!(self.q8_prefill.is_native() || items.len() == 1,
             "experimental Q8 prefill supports one packed prompt; use M40LLM_Q8_PREFILL_BACKEND=native for server batching");
         anyhow::ensure!(
@@ -2582,7 +2631,11 @@ impl LoadedModel {
         let total_bytes_d = rows
             .checked_mul(bytes_d)
             .context("batched prefill total d_model byte size overflow")?;
-        let prefill_plan = VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?;
+        let prefill_plan = if verification_start.is_none() {
+            Some(VarlenPrefillPlan::new(&self.cuda, meta.clone(), head_dim)?)
+        } else {
+            None
+        };
 
         let prefill_weight_bytes = self.q8_prefill_weight_bytes()?;
         self.with_forward_workspace_for_rows(d_model, kv_dim, hidden_dim, rows, prefill_weight_bytes, |ws| {
@@ -2700,6 +2753,7 @@ impl LoadedModel {
                         let pos: u32 = tok_idx
                             .try_into()
                             .context("batched prefill token position does not fit in u32")?;
+                        let pos = pos + verification_start.unwrap_or(0);
                         let row = q_offset + tok_idx;
                         let q_row = unsafe { mut_byte_offset(ws.dq, row * bytes_d) };
                         let k_row_mut = unsafe { mut_byte_offset(ws.dk, row * bytes_kv) };
@@ -2726,7 +2780,7 @@ impl LoadedModel {
                             self.model_config.rope_freq_scale,
                             self.model_config.rope_layout_code(),
                         )?;
-                        self.cuda.rope_f32_inplace_layout_async(
+                        if verification_start.is_none() { self.cuda.rope_f32_inplace_layout_async(
                             k_row_mut,
                             1,
                             kv_heads,
@@ -2735,7 +2789,7 @@ impl LoadedModel {
                             self.model_config.rope_freq_base,
                             self.model_config.rope_freq_scale,
                             self.model_config.rope_layout_code(),
-                        )?;
+                        )?; }
                     }
                 }
                 gpu_stage.finish()?;
@@ -2753,16 +2807,24 @@ impl LoadedModel {
                     CudaStream::Decode,
                     "prefill_rope_kv_to_attention",
                 )?;
-                let gpu_stage = GpuStageSpan::begin("prefill_attention", CudaStream::Prefill)?;
+                let gpu_stage = GpuStageSpan::begin("prefill_attention", if verification_start.is_some() {CudaStream::Decode} else {CudaStream::Prefill})?;
                 unsafe {
-                    prefill_plan.dispatch_async(
+                    if let Some(start) = verification_start {
+                        let slot = kv_physical_slot_for_layer_sequence_in(kv,layer_count as u32,layer_id,0)?;
+                        for row in 0..rows {
+                            kv.attention_last_token_f32_gqa_async(&self.cuda,slot,
+                                const_byte_offset(ws.dq,row*bytes_d),q_heads,start+row as u32+1,
+                                mut_byte_offset(ws.datt,row*bytes_d))?;
+                        }
+                        self.cuda.stream_wait_for_stream(CudaStream::Prefill,CudaStream::Decode,"verification_attention_to_output")?;
+                    } else { prefill_plan.as_ref().context("missing packed prefill plan")?.dispatch_async(
                         ws.dq as *const c_void,
                         ws.dk as *const c_void,
                         ws.dv as *const c_void,
                         q_heads,
                         kv_heads,
                         ws.datt,
-                    )?;
+                    )?; }
                 }
                 gpu_stage.finish()?;
                 log_profiled_op(
@@ -2945,12 +3007,12 @@ impl LoadedModel {
                 let seq = meta.sequences()[seq_idx];
                 let final_row =
                     meta.offsets()[seq_idx].q_offset as usize + seq.query_len as usize - 1;
-                let src = unsafe { const_byte_offset(ws.scratch_b, final_row * bytes_d) };
+                let src = unsafe { const_byte_offset(ws.scratch_b, if verification_start.is_some() {0} else {final_row * bytes_d}) };
                 unsafe {
                     self.cuda.memcpy_d2d_async(
                         item.d_out_f32,
                         src,
-                        bytes_d,
+                        if verification_start.is_some() {total_bytes_d} else {bytes_d},
                         CudaStream::Decode,
                     )?;
                 }
