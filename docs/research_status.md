@@ -17,6 +17,15 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Pending scope decision, not an active experiment:** the
+[compound FFN assessment](experiments/2026-10-26-maxwell-compound-ffn-proposal.md)
+identifies partially distinct remaining work in joint packing plus shared
+scale reuse. Their gains cannot be added, and the explicit no-combination
+rule remains binding. The user has been asked whether to allow one fixed
+four-arm study under all existing gates. No new kernel, benchmark or runtime
+change is authorized by this proposal or by silence; preserve 49.146 HTTP
+tok/s until a separately qualified replacement exists.
+
 **Latest representation feasibility:** [fixed input-channel information scan](experiments/2026-10-26-maxwell-channel-entropy.md)
 rechecks all six actual model/tensor hashes and every channel histogram.
 Conditional entropy yields only 0.41-1.88% optimistic stored-byte savings
