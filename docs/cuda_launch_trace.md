@@ -4,9 +4,39 @@ This optional Linux CUPTI callback observer runs outside Cargo and inference.
 It records standard and extended driver/runtime launch API exits: symbol,
 demangled name, grid/block dimensions, dynamic shared memory, stream, context,
 correlation ID, API return status and a host monotonic observation timestamp.
-It does not synchronize, read tensors, collect hardware counters or measure
-GPU elapsed time. Logging perturbs execution; never use it for speed claims.
+By default it does not synchronize, read tensors, collect hardware counters
+or measure GPU elapsed time. Logging perturbs execution; never use it for speed claims.
 No NVIDIA sample implementation is copied.
+
+## Concurrent-Kernel Activities
+
+Explicit `M40LLM_CUDA_TRACE_ACTIVITY=1` additionally enables CUPTI concurrent
+kernel activity timestamps. Unset/zero preserves launch-only behavior; other
+values fail. This does not enable serialized kernel profiling or counters.
+Setup failure is an error rather than a successful empty capture.
+
+`cuda_kernel_activity` rows contain GPU start/end nanoseconds, launch
+geometry, reported resources and context/stream/correlation IDs. Join them
+to callback launch records using context/correlation IDs, not record order
+or the callback's host clock. Activity buffers arrive asynchronously and
+may not be chronological. There is one activity per executed kernel, not
+one per runtime/driver callback. Invalid timestamps are reported explicitly.
+
+Host buffers are bounded to eight outstanding 1 MiB allocations, each
+released by its completion callback. The activity cap is 100,000 per
+process, independent of the existing callback cap. Graceful shutdown
+disables collection, flushes completed activities without forced incomplete
+records, then emits `cuda_activity_complete` with counts before unsubscribing.
+Require zero drops, no invalid timestamps, a complete final record and
+expected executed-kernel coverage. A killed process is incomplete.
+`is_timing_measurement=false` continues to identify a diagnostic trace, not
+an authoritative throughput trial; `captures_kernel_activity` identifies
+whether GPU timestamps were requested.
+
+Spans measure instrumented GPU execution. Logging, collection and host
+scheduling perturb the workload; these are not unprofiled kernel latency,
+HTTP throughput, occupancy or DRAM traffic. Overlapping spans cannot be
+summed as elapsed time. Keep authoritative throughput runs observer-free.
 
 ## Run
 

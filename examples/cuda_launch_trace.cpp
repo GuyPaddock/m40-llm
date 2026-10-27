@@ -1,6 +1,7 @@
 // Optional untimed CUPTI callback observer; never linked into inference.
 #include <cuda_runtime_api.h>
 #include <cupti.h>
+#include "cuda_kernel_activity.hpp"
 
 #include <array>
 #include <chrono>
@@ -103,6 +104,11 @@ class LaunchTrace {
             fail_module("M40LLM_CUDA_TRACE_MODULES must be 0 or 1");
         }
         captures_modules_ = modules && std::strcmp(modules, "1") == 0;
+        const char *activity = std::getenv("M40LLM_CUDA_TRACE_ACTIVITY");
+        if (activity && std::strcmp(activity, "0") != 0 && std::strcmp(activity, "1") != 0) {
+            fail_module("M40LLM_CUDA_TRACE_ACTIVITY must be 0 or 1");
+        }
+        captures_activity_ = activity && std::strcmp(activity, "1") == 0;
         require(cuptiSubscribe(&subscriber_, callback, this), "subscribe");
         if (captures_modules_) {
             require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_RESOURCE,
@@ -128,9 +134,11 @@ class LaunchTrace {
         }
         std::fprintf(file_, "{\"kind\":\"cuda_trace_start\",\"pid\":%ld,"
                      "\"is_timing_measurement\":false,\"record_limit\":%zu,"
-                     "\"captures_modules\":%s,\"module_record_limit\":%zu,\"module_byte_limit\":%zu}\n",
+                     "\"captures_modules\":%s,\"captures_kernel_activity\":%s,"
+                     "\"module_record_limit\":%zu,\"module_byte_limit\":%zu}\n",
                      static_cast<long>(getpid()), record_limit,
-                     captures_modules_ ? "true" : "false", module_limit, total_byte_limit);
+                     captures_modules_ ? "true" : "false", captures_activity_ ? "true" : "false",
+                     module_limit, total_byte_limit);
         std::fputs("{\"kind\":\"cuda_trace_environment\",\"cuda_force_ptx_jit\":", file_);
         const auto write_env = [this](const char *name) {
             const char *value = std::getenv(name);
@@ -144,10 +152,12 @@ class LaunchTrace {
         write_env("CUDA_CACHE_DISABLE");
         std::fputs("}\n", file_);
         std::fflush(file_);
+        if (captures_activity_) activities_.enable(file_, mutex_, write_json_string);
     }
 
     ~LaunchTrace() {
         if (!file_) return;
+        activities_.finish();
         const auto status = cuptiUnsubscribe(subscriber_);
         std::fprintf(file_, "{\"kind\":\"cuda_trace_complete\",\"launch_records\":%zu,"
                      "\"dropped_launches\":%zu,\"failed_launches\":%zu,"
@@ -169,8 +179,10 @@ class LaunchTrace {
     FILE *file_ = nullptr;
     std::string prefix_;
     bool captures_modules_ = false;
+    bool captures_activity_ = false;
     CUpti_SubscriberHandle subscriber_ = nullptr;
     std::mutex mutex_;
+    KernelActivityTrace activities_;
     size_t records_ = 0, dropped_ = 0, failed_ = 0, unknown_ = 0;
     size_t module_records_ = 0, module_bytes_ = 0;
 
