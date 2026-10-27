@@ -109,6 +109,14 @@ class LaunchTrace {
             fail_module("M40LLM_CUDA_TRACE_ACTIVITY must be 0 or 1");
         }
         captures_activity_ = activity && std::strcmp(activity, "1") == 0;
+        const char *callbacks = std::getenv("M40LLM_CUDA_TRACE_CALLBACKS");
+        if (callbacks && std::strcmp(callbacks, "0") != 0 && std::strcmp(callbacks, "1") != 0) {
+            fail_module("M40LLM_CUDA_TRACE_CALLBACKS must be 0 or 1");
+        }
+        should_capture_callbacks_ = !callbacks || std::strcmp(callbacks, "1") == 0;
+        if (!should_capture_callbacks_ && !captures_activity_) {
+            fail_module("M40LLM_CUDA_TRACE_CALLBACKS=0 requires M40LLM_CUDA_TRACE_ACTIVITY=1");
+        }
         require(cuptiSubscribe(&subscriber_, callback, this), "subscribe");
         if (captures_modules_) {
             require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_RESOURCE,
@@ -126,18 +134,21 @@ class LaunchTrace {
             CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx,
             CUPTI_DRIVER_TRACE_CBID_cuLaunchKernelEx_ptsz,
         };
-        for (auto id : runtime_ids) {
-            require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_RUNTIME_API, id), "runtime");
-        }
-        for (auto id : driver_ids) {
-            require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_DRIVER_API, id), "driver");
+        if (should_capture_callbacks_) {
+            for (auto id : runtime_ids) {
+                require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_RUNTIME_API, id), "runtime");
+            }
+            for (auto id : driver_ids) {
+                require(cuptiEnableCallback(1, subscriber_, CUPTI_CB_DOMAIN_DRIVER_API, id), "driver");
+            }
         }
         std::fprintf(file_, "{\"kind\":\"cuda_trace_start\",\"pid\":%ld,"
                      "\"is_timing_measurement\":false,\"record_limit\":%zu,"
-                     "\"captures_modules\":%s,\"captures_kernel_activity\":%s,"
+                     "\"captures_modules\":%s,\"captures_kernel_activity\":%s,\"captures_launch_callbacks\":%s,"
                      "\"module_record_limit\":%zu,\"module_byte_limit\":%zu}\n",
                      static_cast<long>(getpid()), record_limit,
                      captures_modules_ ? "true" : "false", captures_activity_ ? "true" : "false",
+                     should_capture_callbacks_ ? "true" : "false",
                      module_limit, total_byte_limit);
         std::fputs("{\"kind\":\"cuda_trace_environment\",\"cuda_force_ptx_jit\":", file_);
         const auto write_env = [this](const char *name) {
@@ -152,7 +163,7 @@ class LaunchTrace {
         write_env("CUDA_CACHE_DISABLE");
         std::fputs("}\n", file_);
         std::fflush(file_);
-        if (captures_activity_) activities_.enable(file_, mutex_, write_json_string);
+        if (captures_activity_) activities_.enable(file_, mutex_, write_json_string, should_capture_callbacks_);
     }
 
     ~LaunchTrace() {
@@ -180,6 +191,7 @@ class LaunchTrace {
     std::string prefix_;
     bool captures_modules_ = false;
     bool captures_activity_ = false;
+    bool should_capture_callbacks_ = true;
     CUpti_SubscriberHandle subscriber_ = nullptr;
     std::mutex mutex_;
     KernelActivityTrace activities_;

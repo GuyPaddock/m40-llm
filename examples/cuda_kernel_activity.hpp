@@ -9,10 +9,12 @@
 
 class KernelActivityTrace {
   public:
-    void enable(FILE *file, std::mutex &mutex, void (*write_string)(FILE *, const char *)) {
+    void enable(FILE *file, std::mutex &mutex, void (*write_string)(FILE *, const char *),
+                bool should_flush_each_record) {
         file_ = file;
         mutex_ = &mutex;
         write_string_ = write_string;
+        should_flush_each_record_ = should_flush_each_record;
         instance_ = this;
         require(cuptiActivityRegisterCallbacks(request_buffer, complete_buffer), "register activities");
         require(cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL), "enable concurrent kernels");
@@ -41,6 +43,7 @@ class KernelActivityTrace {
     std::mutex *mutex_ = nullptr;
     void (*write_string_)(FILE *, const char *) = nullptr;
     bool is_enabled_ = false;
+    bool should_flush_each_record_ = true;
     std::atomic<size_t> buffers_{0};
     size_t records_ = 0, dropped_ = 0, invalid_timestamps_ = 0;
 
@@ -92,6 +95,10 @@ class KernelActivityTrace {
         {
             std::lock_guard<std::mutex> lock(*trace.mutex_);
             trace.dropped_ += dropped;
+            if (std::fflush(trace.file_) != 0) {
+                std::perror("flush CUDA activity buffer");
+                std::_Exit(2);
+            }
         }
         std::free(buffer);
         trace.buffers_.fetch_sub(1);
@@ -119,7 +126,7 @@ class KernelActivityTrace {
                      kernel.streamId, kernel.correlationId, kernel.gridX, kernel.gridY, kernel.gridZ,
                      kernel.blockX, kernel.blockY, kernel.blockZ, kernel.registersPerThread,
                      kernel.staticSharedMemory, kernel.dynamicSharedMemory);
-        if (std::fflush(file_) != 0) {
+        if (should_flush_each_record_ && std::fflush(file_) != 0) {
             std::perror("write CUDA kernel activity");
             std::_Exit(2);
         }

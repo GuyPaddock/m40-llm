@@ -15,6 +15,17 @@ kernel activity timestamps. Unset/zero preserves launch-only behavior; other
 values fail. This does not enable serialized kernel profiling or counters.
 Setup failure is an error rather than a successful empty capture.
 
+Use `M40LLM_CUDA_TRACE_CALLBACKS=0` together with activity enabled for an
+activity-only diagnostic. This registers no launch callbacks and flushes
+activity output once per completed host buffer instead of per kernel.
+Unset/one preserves existing callback observation; other values fail, and
+zero without activity is rejected rather than emitting an empty success.
+The start record exposes `captures_launch_callbacks`. Callback completion
+counts are zero in this mode, not proof that no kernels ran. Validate actual
+activity shapes, counts, output and final completion records instead.
+Collection overhead still needs measurement; activity-only is not a promise
+of unperturbed execution or a larger record budget.
+
 `cuda_kernel_activity` rows contain GPU start/end nanoseconds, launch
 geometry, reported resources and context/stream/correlation IDs. Join them
 to callback launch records using context/correlation IDs, not record order
