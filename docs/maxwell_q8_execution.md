@@ -10,17 +10,21 @@ permission to substitute pruning or approximate attention for this work.
 
 Keep original Qwen2.5-3B Q8_0 weights, all 36 layers, full dense FP16 KV at
 context 1024, the canonical 65-token ChatML browser prompt and greedy decoding.
-The [current qualified configuration](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md)
-uses split-f32x4-128 fused gate/up/SwiGLU, packed-warp-256 raw-Q8 QKV/output,
+The [current qualified opt-in configuration](experiments/2026-10-27-maxwell-compound-runtime.md)
+uses joint-shared-scales-128 fused gate/up/SwiGLU, packed-warp-256 raw-Q8 QKV/output,
 prepared down/vocabulary with native-order 4-column/256-thread reduction,
 and a bounded dequant-SGEMM 64-token prompt prefix. Decode-stream scheduling,
 greedy head flags and parallel head128 split8/256 attention remain fixed.
 All 109 prepared identities and their 2,917,580,800-byte payload are pinned.
-Source plus prepared payload is 6,197,100,544 bytes before KV/workspace.
+The 36 joint pairs add 1,724,645,376 bytes, making total prepared allocation
+4,642,226,176 and source plus all prepared payload 7,921,745,920 bytes before
+KV/workspace. The prior split-f32x4-128 configuration remains the control,
+with 6,197,100,544 source/prepared bytes; none of its 109 owners are released.
 
-Five fresh paired HTTP trials measure **49.146449 versus 43.105570 tok/s**
-for the official Ollama baseline. Both original targets remain unmet:
-53.06 and 1.30x the fresh baseline, currently 56.037241 HTTP tok/s.
+Twenty fresh incremental HTTP pairs measure **50.798730 versus 49.221402
+tok/s**, **+3.2046%** over split. Five separate official pairs measure
+**50.910426 versus 43.194730 tok/s**. Both original targets remain unmet:
+53.06 and 1.30x the fresh baseline, currently 56.153149 HTTP tok/s.
 The [35.724705 down/vocabulary-only control](experiments/2026-10-25-q8-native-order-http.md)
 is the historical M01-M08 comparison baseline, not the current best runtime.
 Keep it explicitly named when reproducing those experiments.
@@ -34,7 +38,7 @@ enables weight preparation.
 
 ## Admission For Further Optimization
 
-Preserve the qualified 49.146 HTTP tok/s configuration. Negative bounded
+Preserve the qualified compound and split control configurations. Negative bounded
 experiments are not evidence that Maxwell's hardware ceiling has been
 reached. DRAM transactions, achieved occupancy and warp stalls remain
 unmeasured; static register counts and read-checksum timings cannot replace
@@ -101,7 +105,7 @@ bound, measured physical traffic or hardware ceiling.
 | M06 | Complete: [model-local FFN selection, reusable scratch and runtime regressions](experiments/2026-10-25-maxwell-ffn-runtime.md); full-model qualification remains M08 |
 | M07 | Complete: [bounded reusable Q8 prefill SGEMM, runtime/fixture parity and real dispatch smoke](q8_prefill.md); full-model qualification remains M08 |
 | M08 | Corrected exact branch qualified: [independent gains](experiments/2026-10-25-maxwell-completed-http.md), [combined quality](experiments/2026-10-25-maxwell-completed-combined-quality.md) and [combined HTTP +16.616%](experiments/2026-10-25-maxwell-completed-combined-http.md); numerical historical evidence remains separate |
-| M09 | [Current fresh official checkpoint](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md): 49.146 vs 43.106 HTTP tok/s, +14.014%; both original targets still unmet. The earlier 41.331 checkpoint remains historical |
+| M09 | [Current fresh official checkpoint](experiments/2026-10-27-maxwell-compound-runtime.md): compound 50.910 vs 43.195 HTTP tok/s, +17.863%; original targets unmet. Prior split 49.146 remains the control checkpoint |
 
 The [plan-evidence audit](experiments/2026-10-26-maxwell-plan-evidence-audit.md)
 distinguishes completed exact-path qualification from historical numerical
@@ -190,7 +194,7 @@ timed. No policy/geometry rescue or measured DRAM/occupancy claim follows.
 ### Explicit Runtime Qualification
 
 The existing `model_quality` runner accepts independent
-`--q8-runtime-candidate native|packed-f32-256|packed-f32-128|split-f32x4-128|q8-1-128|q8-1-256`
+`--q8-runtime-candidate native|packed-f32-256|packed-f32-128|split-f32x4-128|joint-shared-scales-128|q8-1-128|q8-1-256`
 and `--q8-runtime-prefill sequential|native-packed|dequant-sgemm` selections.
 Both models use the qualified prepared down/vocabulary configuration, dense
 KV/context 1024 and the same source GGUF. The historical reference uses native FFN
@@ -280,7 +284,7 @@ Run attribution separately from all timed comparisons.
 
 ### Load-Time Configuration
 
-`M40LLM_Q8_FFN_KERNEL=native|packed-f32|split-f32x4-128|q8-1` is captured once by
+`M40LLM_Q8_FFN_KERNEL=native|packed-f32|split-f32x4-128|joint-shared-scales-128|q8-1` is captured once by
 `LoadedModel::from_gguf`. Unset means `native`, preserving the existing
 dispatch and all runtime defaults. `packed-f32` selects the screened
 256-thread packed/warp FP32-activation kernel; `q8-1` selects the 128-thread
@@ -312,6 +316,19 @@ accumulation. This is not Q8_1 activation quantization. It requires
 `M40LLM_Q8_EXECUTION_WEIGHTS=split` and a family list containing `gate-up`.
 Use `gate-up,down,vocabulary` to retain the qualified prepared down/head.
 Missing preparation or insufficient budget is an error, not a native fallback.
+
+The separately qualified `joint-shared-scales-128` reuses the fixed 128-thread
+consumer from the approved compound experiment, with identical FP32 arithmetic
+and reduction. It requires the same split owners and adds model-owned joint
+pairs once at load, charged against the combined preparation budget. It
+rejects K>4096, multi-row use or missing/mismatched pair identities rather than
+falling back. Decode borrows the pairs without packing/upload/allocation/sync.
+For quality/HTTP tools use the compound choice with
+`--q8-runtime-control qualified-packed-projection-sgemm`, unchanged
+`--q8-runtime-prefill dequant-sgemm` and
+`--q8-runtime-attention packed-warp-256`. The [runtime report](experiments/2026-10-27-maxwell-compound-runtime.md)
+records actual-512/frozen quality, incremental gain and the extra 1.72 GB.
+It does not change defaults or qualify other geometry/model combinations.
 
 The model's existing execution cache owns separate original FP16 scale and
 signed-byte planes. Packing/upload occurs once at load, releases each temporary

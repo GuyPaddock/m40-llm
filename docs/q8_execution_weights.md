@@ -154,6 +154,16 @@ The separately screened `M40LLM_Q8_FFN_KERNEL=split-f32x4-128` is an explicit,
 fixed-geometry exception requiring split gate/up preparation. See
 [load-time FFN selection](maxwell_q8_execution.md#load-time-configuration).
 
+The qualified opt-in `M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128` retains
+all original split planes and adds 36 model-local joint pairs on Qwen. The
+combined preparation budget includes both sets; `q8_ffn_pair_stats()` reports
+joint identities, 1,724,645,376 additional bytes, temporary host packing and
+cold preparation separately from original per-tensor statistics. Selected
+one-row decode calls the existing fixed compound consumer without hot packing,
+upload, allocation or synchronization. Unsupported shapes or missing pairs
+fail instead of falling back. See [actual512, quality and HTTP qualification](experiments/2026-10-27-maxwell-compound-runtime.md).
+This remains opt-in; native FFN and the split control are unchanged.
+
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.
 This also applies when `M40LLM_Q8_LM_HEAD_ARGMAX=1`: that flag no longer bypasses

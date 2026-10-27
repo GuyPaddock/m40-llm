@@ -17,6 +17,20 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest qualified runtime:** the fixed [compound FFN](experiments/2026-10-27-maxwell-compound-runtime.md)
+passes actual-512/frozen quality and twenty fresh incremental HTTP pairs:
+**50.799 versus 49.221 tok/s**, **+3.205%**, interval +3.156% to +3.303%.
+Separate official pairs give **50.910 versus 43.195 HTTP tok/s**, **+17.863%**.
+Both original targets remain unmet: 53.06 and 56.153 HTTP tok/s. The opt-in
+`joint-shared-scales-128` uses exactly the admitted consumer; no new geometry,
+arithmetic, kernel search or defaults. All 109 original prepared owners remain;
+36 joint pairs add 1,724,645,376 bytes, fully budgeted/reported. Original
+split remains a qualified control; all 137 compiled entries are unchanged.
+Runtime/ownership, CUDA on/off, non-CUDA/Clippy and raw audits pass. Code
+`e5a06ac` / `63240c5`; measured clean source `63240c5`. No EAGLE follows the
+negative verifier below. Further work needs a separately justified avoided-work
+hypothesis, not rescue tuning of closed probes.
+
 **Latest requested follow-up, stop decision:** [exact target verification](experiments/2026-10-27-maxwell-exact-verification-screen.md)
 reproduces all actual512 IDs at lengths2/4/8 with causal dense KV and
 exclusive session commit/rollback, but even a free perfect drafter loses.
@@ -30,9 +44,9 @@ tests/audits/cleanup pass. Retain research code `0b7992b` / `885cc98`, not
 generation or scheduler integration. The qualified **49.146 HTTP tok/s**
 configuration and original unmet targets remain unchanged.
 
-**Next eligible exact-engine work:** separately qualify the compound FFN
-in generation, actual512/frozen tasks and controlled HTTP, since its gate
-passed. Do not treat the microbenchmark win as already promoted.
+**Completed subsequent exact-engine work:** qualify the compound FFN
+in generation, actual512/frozen tasks and controlled HTTP, reported above.
+The earlier microbenchmark alone was not promotion evidence.
 The [fixed runtime qualification plan](experiments/2026-10-27-maxwell-compound-runtime-plan.md)
 retains original prepared owners and budgets additional joint pairs explicitly;
 no new consumer or search is allowed.

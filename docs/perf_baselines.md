@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Compound FFN Qualifies In Full Generation
+
+Twenty fresh paired release HTTP trials give **50.799 versus 49.221 tok/s**,
+**+3.205%**, paired 95% interval **+3.156% to +3.303%**, clearing the unchanged
+3% gate after a borderline five-pair screen. Actual 512 IDs, sampled full
+logits and all twelve frozen task outputs match; seven dense-valid tasks
+have no regression. See [quality, timing, memory and raw evidence](experiments/2026-10-27-maxwell-compound-runtime.md).
+
+Separate fresh official pairs give **50.910 versus 43.195 HTTP tok/s**,
+**+17.863%**. Both original targets remain unmet: 53.06 and 56.153 HTTP tok/s.
+This qualifies the fixed compound as an opt-in configuration, not a default
+change. All 109 original prepared identities and all 137 compiled CUDA entries
+are unchanged. The 36 extra joint pairs cost 1,724,645,376 bytes, bringing
+candidate weight payload to 7,921,745,920 bytes; no new hot allocation or sync.
+Split remains the control, and the negative perfect-drafter study stays closed.
+
 ## 2026-10-27: Perfect-Drafter Verification Is Slower
 
 Five contemporaneous release trials with exact actual512 IDs give resident
