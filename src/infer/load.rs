@@ -233,6 +233,7 @@ impl LoadedModel {
                 original_file_bytes,
                 execution,
                 hash_ms,
+                ffn.ownership(),
             )?;
         }
         #[cfg(feature = "cuda")]

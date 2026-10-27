@@ -46,5 +46,5 @@ pub use kv::with_exact_block_staging;
 pub use layer_influence::LayerInfluenceCapture;
 pub use layer_mask::LayerMask;
 pub use q8_attention_projection::{Q8AttentionProjectionBackend, Q8AttentionProjectionState};
-pub use q8_ffn::{Q8FfnConfig, Q8FfnKernel, Q8FfnScratch};
+pub use q8_ffn::{Q8FfnConfig, Q8FfnKernel, Q8FfnOwnership, Q8FfnScratch};
 pub use types::{DeviceTensorView, LoadedModel, ModelConfig, StandardLayerWeights};

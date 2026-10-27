@@ -164,6 +164,22 @@ upload, allocation or synchronization. Unsupported shapes or missing pairs
 fail instead of falling back. See [actual512, quality and HTTP qualification](experiments/2026-10-27-maxwell-compound-runtime.md).
 This remains opt-in; native FFN and the split control are unchanged.
 
+The independent storage experiment adds opt-in
+`M40LLM_Q8_FFN_OWNERSHIP=joint-only`. It requires the compound consumer and
+split preparation of exactly `gate-up,down,vocabulary`; incompatible choices
+fail instead of falling back. Default ownership stays `retain-split`.
+Original uploaded GGUF gate/up sources remain available to SGEMM prefill.
+Only their redundant split execution copies are omitted; the fixed joint
+consumer and prepared down/vocabulary kernels are unchanged.
+
+Logical source coverage and resident split counts are different quantities:
+Qwen3B retains 109 logical sources, but joint-only owns 37 split down/head
+tensors and 36 joint pairs. Joint payloads can be cold-audited through
+`debug_joint_payload_hashes()`; that readback never runs in normal decode.
+The immutable 109-resident-owner qualification is not evidence for this new
+ownership scheme. It requires its own quality, allocation and non-regression
+results; do not claim a throughput gain from the projected byte reduction.
+
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.
 This also applies when `M40LLM_Q8_LM_HEAD_ARGMAX=1`: that flag no longer bypasses

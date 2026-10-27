@@ -42,6 +42,7 @@ impl PreparedTensor {
 /// owned execution keys retain semantic model/tensor/layout identity.
 pub struct Q8ExecutionCache {
     tensors: HashMap<usize, PreparedTensor>,
+    sources: HashMap<usize, (Q8SourceIdentity, ProjectionFamily)>,
     stats: Q8ExecutionStats,
     ffn_pairs: super::ffn_pairs::FfnPairCache,
 }
@@ -50,6 +51,7 @@ impl Q8ExecutionCache {
     pub fn disabled() -> Self {
         Self {
             tensors: HashMap::new(),
+            sources: HashMap::new(),
             stats: Q8ExecutionStats::empty(),
             ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
         }
@@ -65,6 +67,7 @@ impl Q8ExecutionCache {
         original_file_bytes: usize,
         config: Q8ExecutionConfig,
         hash_elapsed_ms: f64,
+        ownership: crate::infer::Q8FfnOwnership,
     ) -> Result<Self> {
         Self::prepare_with_upload(
             ctx,
@@ -76,6 +79,7 @@ impl Q8ExecutionCache {
             original_file_bytes,
             config,
             hash_elapsed_ms,
+            ownership,
             DeviceQ8ExecutionWeight::upload,
         )
     }
@@ -90,6 +94,7 @@ impl Q8ExecutionCache {
         original_file_bytes: usize,
         config: Q8ExecutionConfig,
         hash_elapsed_ms: f64,
+        ownership: crate::infer::Q8FfnOwnership,
         mut upload: impl FnMut(&CudaContext, &HostQ8ExecutionWeight) -> Result<DeviceQ8ExecutionWeight>,
     ) -> Result<Self> {
         ensure!(
@@ -104,6 +109,7 @@ impl Q8ExecutionCache {
         let mut entries = Vec::new();
         let mut source_pointers = HashSet::new();
         let mut estimated = 0_usize;
+        let mut joint_estimated = 0_usize;
         let mut largest_host = 0_usize;
         for tensor in tensors {
             let Some(family) = ProjectionFamily::from_name(&tensor.name, lm_head_name) else {
@@ -125,7 +131,23 @@ impl Q8ExecutionCache {
                 "aliased Q8 projection offsets are not supported by preparation: {}",
                 identity.tensor_name()
             );
-            for layout in family.layouts(config.mode) {
+            let is_joint_source = ownership == crate::infer::Q8FfnOwnership::JointOnly
+                && matches!(family, ProjectionFamily::Gate | ProjectionFamily::Up);
+            if is_joint_source {
+                ensure!(
+                    identity.shape().input_dim() <= 4096
+                        && identity.shape().input_dim().is_multiple_of(32),
+                    "unsupported joint-only source shape"
+                );
+                joint_estimated = joint_estimated
+                    .checked_add(identity.shape().source_bytes()?)
+                    .context("joint-only estimate overflow")?;
+            }
+            for layout in family
+                .layouts(config.mode)
+                .into_iter()
+                .filter(|_| !is_joint_source)
+            {
                 let bytes = layout.allocation_plan(identity.shape())?.resident_bytes();
                 estimated = estimated
                     .checked_add(bytes)
@@ -138,7 +160,12 @@ impl Q8ExecutionCache {
             !entries.is_empty(),
             "no supported Q8_0 projections for execution preparation; use M40LLM_Q8_EXECUTION_WEIGHTS=off"
         );
-        check_budget(estimated, config.budget_bytes)?;
+        check_budget(
+            estimated
+                .checked_add(joint_estimated)
+                .context("combined preparation overflow")?,
+            config.budget_bytes,
+        )?;
         let mut stats = Q8ExecutionStats::empty();
         stats.mode = config.mode;
         stats.families = config.families;
@@ -160,10 +187,19 @@ impl Q8ExecutionCache {
             .context("Q8 host payload estimate overflow")?;
         let mut cache = Self {
             tensors: HashMap::new(),
+            sources: entries
+                .iter()
+                .map(|(identity, family, pointer)| (*pointer, (identity.clone(), *family)))
+                .collect(),
             stats,
             ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
         };
         for (identity, family, pointer) in entries {
+            if ownership == crate::infer::Q8FfnOwnership::JointOnly
+                && matches!(family, ProjectionFamily::Gate | ProjectionFamily::Up)
+            {
+                continue;
+            }
             let source = Q8SourceView::new(&identity, host_weights)?;
             let split = cache.upload(
                 ctx,
@@ -225,6 +261,18 @@ impl Q8ExecutionCache {
         self.stats.clone()
     }
 
+    /// Logical source coverage is not a count of resident split allocations.
+    pub fn logical_sources(&self) -> Vec<Q8SourceIdentity> {
+        let mut sources: Vec<_> = self.sources.values().map(|(id, _)| id.clone()).collect();
+        sources.sort_by(|a, b| a.tensor_name().cmp(b.tensor_name()));
+        sources
+    }
+
+    /// Explicit cold/debug readback; never called by ordinary generation.
+    pub fn debug_joint_payload_hashes(&self) -> Result<Vec<(super::Q8FfnPairKey, String)>> {
+        self.ffn_pairs.debug_payload_hashes()
+    }
+
     pub(crate) fn prepare_compound_pairs(
         &mut self,
         ctx: &CudaContext,
@@ -242,15 +290,15 @@ impl Q8ExecutionCache {
                     .iter()
                     .enumerate()
                     .map(|(index, source)| {
-                        let entry = self
-                            .tensors
+                        let (identity, family) = self
+                            .sources
                             .get(&(*source as usize))
-                            .context("compound FFN requires prepared gate/up sources")?;
+                            .context("compound FFN requires validated gate/up sources")?;
                         ensure!(
-                            entry.family == [ProjectionFamily::Gate, ProjectionFamily::Up][index],
+                            *family == [ProjectionFamily::Gate, ProjectionFamily::Up][index],
                             "compound FFN source role mismatch"
                         );
-                        Ok(entry.split.key().source.clone())
+                        Ok(identity.clone())
                     })
                     .collect::<Result<Vec<_>>>()?;
                 Ok((
@@ -504,6 +552,7 @@ mod tests {
                     families: super::super::Q8ExecutionFamilies::all(),
                 },
                 0.0,
+                crate::infer::Q8FfnOwnership::RetainSplit,
                 |_, _| {
                     attempts += 1;
                     anyhow::bail!("invalid plan unexpectedly reached upload")
@@ -569,6 +618,7 @@ mod tests {
                     families: super::super::Q8ExecutionFamilies::all(),
                 },
                 0.0,
+                crate::infer::Q8FfnOwnership::RetainSplit,
                 |ctx, host| {
                     uploads += 1;
                     if uploads == 2 {

@@ -1,4 +1,4 @@
-//! Model-local joint owners. Original split tensors remain immutable/resident.
+//! Model-local joint owners, constructed from validated logical source plans.
 use super::{DeviceQ8FfnPair, HostQ8FfnPair, Q8FfnPairKey, Q8FfnPairStats, Q8SourceView};
 use crate::cuda::CudaContext;
 use anyhow::{ensure, Context, Result};
@@ -111,6 +111,16 @@ impl FfnPairCache {
 
     pub fn stats(&self) -> Q8FfnPairStats {
         self.stats.clone()
+    }
+
+    pub fn debug_payload_hashes(&self) -> Result<Vec<(Q8FfnPairKey, String)>> {
+        let mut hashes = self
+            .pairs
+            .values()
+            .map(|pair| Ok((pair.key().clone(), pair.debug_payload_sha256()?)))
+            .collect::<Result<Vec<_>>>()?;
+        hashes.sort_by(|a, b| a.0.gate.tensor_name().cmp(b.0.gate.tensor_name()));
+        Ok(hashes)
     }
     pub fn get(
         &self,

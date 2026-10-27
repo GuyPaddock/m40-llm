@@ -13,7 +13,7 @@ use m40_llm::{
     decode_session::DecodeSession,
     infer::{
         execution_weights::Q8ExecutionConfig, q8_prefill::Q8PrefillBackend, LoadedModel,
-        Q8AttentionProjectionBackend, Q8FfnConfig,
+        Q8AttentionProjectionBackend, Q8FfnConfig, Q8FfnOwnership,
     },
     kv_compression::{KvCompressionConfig, ScopedRuntimeConfig},
     profile,
@@ -48,6 +48,104 @@ fn model(is_qwen: bool, ffn: Q8FfnConfig, execution: Q8ExecutionConfig) -> Resul
 }
 fn config() -> Result<Q8ExecutionConfig> {
     Q8ExecutionConfig::parse("split", Some("6144"), Some("gate-up,down,vocabulary"))
+}
+
+/// Joint-only replaces physical split gate/up owners without changing source
+/// coverage, joint payloads, forward logits, prefill or warm allocations.
+#[test]
+#[ignore = "explicit M40 joint-only ownership gate"]
+fn test_joint_only_ownership_matches_retained_compound() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+    let initial = CudaContext::total_device_bytes();
+    for is_qwen in [false, true] {
+        let before = profile::snapshot();
+        let mut a = model(is_qwen, Q8FfnConfig::joint_shared_scales(), config()?)?;
+        let control_allocs = profile::counter_delta(&before, &profile::snapshot()).device_allocs;
+        let before = profile::snapshot();
+        let mut b = model(
+            is_qwen,
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::JointOnly)?,
+            config()?,
+        )?;
+        let candidate_allocs = profile::counter_delta(&before, &profile::snapshot()).device_allocs;
+        assert_eq!(
+            control_allocs - candidate_allocs,
+            8,
+            "four skipped split tensors have two planes each"
+        );
+        assert_eq!(
+            a.q8_execution.logical_sources(),
+            b.q8_execution.logical_sources()
+        );
+        assert_eq!(a.q8_execution_stats().tensors.len(), 7);
+        assert_eq!(b.q8_execution_stats().tensors.len(), 3);
+        assert_eq!(
+            a.q8_execution.debug_joint_payload_hashes()?,
+            b.q8_execution.debug_joint_payload_hashes()?
+        );
+        assert_eq!(
+            a.q8_execution_stats().resident_bytes - b.q8_execution_stats().resident_bytes,
+            b.q8_ffn_pair_stats().resident_bytes
+        );
+        for layer in 0..2 {
+            let mapped = b.map_standard_layer(layer)?;
+            assert!(b
+                .q8_execution
+                .get_separate_weight(mapped.w_gate.dptr)
+                .is_none());
+            assert!(b
+                .q8_execution
+                .get_separate_weight(mapped.w_up.dptr)
+                .is_none());
+            assert!(b
+                .q8_execution
+                .get_separate_weight(mapped.w_down.dptr)
+                .is_some());
+        }
+        a.allocate_kv_cache_for_layers(32)?;
+        b.allocate_kv_cache_for_layers(32)?;
+        let d = a.model_config.embedding_length as usize;
+        {
+            let mut x = DecodeSession::new(&a, d, true, "joint:a", "joint:a-x", "joint:a-out")?;
+            let mut y = DecodeSession::new(&b, d, true, "joint:b", "joint:b-x", "joint:b-out")?;
+            let ids = [1, 7, 3, 4, 5, 8, 9, 11];
+            for length in 1..=ids.len() {
+                let expected = x.logits_for_ids(&ids[..length], |_| {})?;
+                let before = profile::snapshot();
+                let actual = y.logits_for_ids(&ids[..length], |_| {})?;
+                assert!(expected
+                    .iter()
+                    .zip(&actual)
+                    .all(|(a, b)| a.to_bits() == b.to_bits()));
+                if length > 1 {
+                    assert_eq!(
+                        profile::counter_delta(&before, &profile::snapshot()).device_allocs,
+                        0
+                    );
+                }
+            }
+        }
+        let resident = CudaContext::total_device_bytes();
+        let short = Q8ExecutionConfig {
+            budget_bytes: b.q8_ffn_pair_stats().combined_prepared_bytes - 1,
+            ..config()?
+        };
+        assert!(model(
+            is_qwen,
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::JointOnly)?,
+            short
+        )
+        .is_err());
+        assert_eq!(
+            CudaContext::total_device_bytes(),
+            resident,
+            "partial construction leaked"
+        );
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
 }
 
 /// The model-local compound preserves full-forward split-control logits and

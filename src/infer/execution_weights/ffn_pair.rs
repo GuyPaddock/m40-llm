@@ -10,7 +10,7 @@ pub struct Q8FfnPairKey {
     pub up: Q8SourceIdentity,
 }
 
-/// Joint owners are additional to, not substitutes for, split tensor owners.
+/// Physical joint owners; original GGUF sources always remain resident.
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct Q8FfnPairStats {
     pub is_enabled: bool,
@@ -129,6 +129,25 @@ mod device {
         }
         pub fn planes(&self) -> [&DeviceBuffer; 2] {
             [&self.planes[0], &self.planes[1]]
+        }
+
+        /// Cold audit only. Hash actual resident scale/value bytes in order.
+        pub fn debug_payload_sha256(&self) -> Result<String> {
+            let mut digest = ring::digest::Context::new(&ring::digest::SHA256);
+            for plane in &self.planes {
+                let mut bytes = vec![0u8; plane.bytes()];
+                unsafe {
+                    self.ctx
+                        .memcpy_d2h(bytes.as_mut_ptr().cast(), plane.as_ptr(), bytes.len())?;
+                }
+                digest.update(&bytes);
+            }
+            Ok(digest
+                .finish()
+                .as_ref()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect())
         }
 
         /// # Safety

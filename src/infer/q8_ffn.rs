@@ -19,12 +19,32 @@ pub enum Q8FfnKernel {
     Q81,
 }
 
+/// Physical preparation ownership, independent of the unchanged FFN consumer.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Q8FfnOwnership {
+    #[default]
+    RetainSplit,
+    JointOnly,
+}
+
+impl Q8FfnOwnership {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "retain-split" => Ok(Self::RetainSplit),
+            "joint-only" => Ok(Self::JointOnly),
+            _ => anyhow::bail!("M40LLM_Q8_FFN_OWNERSHIP must be retain-split or joint-only"),
+        }
+    }
+}
+
 /// Captured when loading the model. No per-token environment lookup or mutable
 /// process-global selection participates in dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Q8FfnConfig {
     kernel: Q8FfnKernel,
     threads: Option<u32>,
+    ownership: Q8FfnOwnership,
 }
 
 impl Default for Q8FfnConfig {
@@ -38,6 +58,7 @@ impl Q8FfnConfig {
         Self {
             kernel: Q8FfnKernel::Native,
             threads: None,
+            ownership: Q8FfnOwnership::RetainSplit,
         }
     }
 
@@ -54,6 +75,7 @@ impl Q8FfnConfig {
         Self {
             kernel: Q8FfnKernel::SplitF32x4,
             threads: Some(128),
+            ownership: Q8FfnOwnership::RetainSplit,
         }
     }
 
@@ -62,6 +84,7 @@ impl Q8FfnConfig {
         Self {
             kernel: Q8FfnKernel::JointSharedScales,
             threads: Some(128),
+            ownership: Q8FfnOwnership::RetainSplit,
         }
     }
 
@@ -69,6 +92,23 @@ impl Q8FfnConfig {
         self,
         execution: super::execution_weights::Q8ExecutionConfig,
     ) -> Result<()> {
+        ensure!(
+            self.ownership != Q8FfnOwnership::JointOnly
+                || (self.kernel == Q8FfnKernel::JointSharedScales
+                    && execution
+                        .families
+                        .contains(super::execution_weights::Q8ProjectionGroup::Down)
+                    && execution
+                        .families
+                        .contains(super::execution_weights::Q8ProjectionGroup::Vocabulary)
+                    && !execution
+                        .families
+                        .contains(super::execution_weights::Q8ProjectionGroup::Qkv)
+                    && !execution
+                        .families
+                        .contains(super::execution_weights::Q8ProjectionGroup::Output)),
+            "joint-only ownership requires compound FFN and prepared gate-up,down,vocabulary"
+        );
         if matches!(
             self.kernel,
             Q8FfnKernel::SplitF32x4 | Q8FfnKernel::JointSharedScales
@@ -94,6 +134,7 @@ impl Q8FfnConfig {
         Ok(Self {
             kernel,
             threads: Some(threads),
+            ownership: Q8FfnOwnership::RetainSplit,
         })
     }
 
@@ -111,11 +152,30 @@ impl Q8FfnConfig {
     }
 
     pub fn from_env() -> Result<Self> {
-        match std::env::var("M40LLM_Q8_FFN_KERNEL") {
+        let config = match std::env::var("M40LLM_Q8_FFN_KERNEL") {
             Ok(value) => Self::parse(&value),
             Err(std::env::VarError::NotPresent) => Ok(Self::native()),
             Err(error) => Err(error.into()),
-        }
+        }?;
+        let ownership = match std::env::var("M40LLM_Q8_FFN_OWNERSHIP") {
+            Ok(value) => Q8FfnOwnership::parse(&value)?,
+            Err(std::env::VarError::NotPresent) => Q8FfnOwnership::RetainSplit,
+            Err(error) => return Err(error.into()),
+        };
+        config.with_ownership(ownership)
+    }
+
+    pub fn with_ownership(mut self, ownership: Q8FfnOwnership) -> Result<Self> {
+        ensure!(
+            ownership != Q8FfnOwnership::JointOnly || self.kernel == Q8FfnKernel::JointSharedScales,
+            "joint-only ownership requires joint-shared-scales-128; no fallback"
+        );
+        self.ownership = ownership;
+        Ok(self)
+    }
+
+    pub fn ownership(self) -> Q8FfnOwnership {
+        self.ownership
     }
 
     pub fn kernel(self) -> Q8FfnKernel {
@@ -153,6 +213,42 @@ pub struct Q8FfnScratch {
 mod compound_tests {
     use super::*;
     use crate::infer::execution_weights::Q8ExecutionConfig;
+
+    /// Joint-only cannot erase split ownership for a non-compound consumer or
+    /// silently select another preparation family or mixed representation.
+    #[test]
+    fn test_joint_only_requires_compound_preparation() -> Result<()> {
+        assert!(Q8FfnOwnership::parse("unknown").is_err());
+        assert_eq!(
+            Q8FfnConfig::default().ownership(),
+            Q8FfnOwnership::RetainSplit
+        );
+        assert!(Q8FfnConfig::native()
+            .with_ownership(Q8FfnOwnership::JointOnly)
+            .is_err());
+        let candidate =
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::JointOnly)?;
+        for (mode, families) in [
+            ("off", "all"),
+            ("mixed", "gate-up,down,vocabulary"),
+            ("split", "gate-up"),
+            ("split", "all"),
+        ] {
+            assert!(candidate
+                .validate_execution(Q8ExecutionConfig::parse(
+                    mode,
+                    Some("6144"),
+                    Some(families)
+                )?)
+                .is_err());
+        }
+        candidate.validate_execution(Q8ExecutionConfig::parse(
+            "split",
+            Some("6144"),
+            Some("gate-up,down,vocabulary"),
+        )?)?;
+        Ok(())
+    }
 
     /// The compound is explicit, fixed at 128 threads, non-quantizing and
     /// cannot inherit missing or mixed gate/up preparation as a fallback.
@@ -239,14 +335,16 @@ impl super::LoadedModel {
                 mapped.w_gate.dptr.cast_const(),
                 mapped.w_up.dptr.cast_const(),
             ];
-            self.q8_execution.ffn_planes(
-                [
-                    mapped.w_gate.dptr.cast_const(),
-                    mapped.w_up.dptr.cast_const(),
-                ],
-                hidden as i32,
-                k as i32,
-            )?;
+            if self.q8_ffn.ownership() == Q8FfnOwnership::RetainSplit {
+                self.q8_execution.ffn_planes(
+                    [
+                        mapped.w_gate.dptr.cast_const(),
+                        mapped.w_up.dptr.cast_const(),
+                    ],
+                    hidden as i32,
+                    k as i32,
+                )?;
+            }
             if self.q8_ffn.kernel() == Q8FfnKernel::JointSharedScales {
                 self.q8_execution
                     .compound_pair(sources, hidden as i32, k as i32)?;
