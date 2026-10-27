@@ -43,6 +43,7 @@ impl PreparedTensor {
 pub struct Q8ExecutionCache {
     tensors: HashMap<usize, PreparedTensor>,
     stats: Q8ExecutionStats,
+    ffn_pairs: super::ffn_pairs::FfnPairCache,
 }
 
 impl Q8ExecutionCache {
@@ -50,6 +51,7 @@ impl Q8ExecutionCache {
         Self {
             tensors: HashMap::new(),
             stats: Q8ExecutionStats::empty(),
+            ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
         }
     }
 
@@ -159,6 +161,7 @@ impl Q8ExecutionCache {
         let mut cache = Self {
             tensors: HashMap::new(),
             stats,
+            ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
         };
         for (identity, family, pointer) in entries {
             let source = Q8SourceView::new(&identity, host_weights)?;
@@ -220,6 +223,73 @@ impl Q8ExecutionCache {
 
     pub fn stats(&self) -> Q8ExecutionStats {
         self.stats.clone()
+    }
+
+    pub(crate) fn prepare_compound_pairs(
+        &mut self,
+        ctx: &CudaContext,
+        weights: &[u8],
+        sources: &[[*const c_void; 2]],
+    ) -> Result<()> {
+        ensure!(
+            !self.ffn_pairs.stats().is_enabled,
+            "compound FFN pairs already prepared"
+        );
+        let plans = sources
+            .iter()
+            .map(|sources| {
+                let identities = sources
+                    .iter()
+                    .enumerate()
+                    .map(|(index, source)| {
+                        let entry = self
+                            .tensors
+                            .get(&(*source as usize))
+                            .context("compound FFN requires prepared gate/up sources")?;
+                        ensure!(
+                            entry.family == [ProjectionFamily::Gate, ProjectionFamily::Up][index],
+                            "compound FFN source role mismatch"
+                        );
+                        Ok(entry.split.key().source.clone())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok((
+                    sources.map(|p| p as usize),
+                    super::Q8FfnPairKey {
+                        gate: identities[0].clone(),
+                        up: identities[1].clone(),
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.ffn_pairs = super::ffn_pairs::FfnPairCache::prepare(
+            ctx,
+            weights,
+            &plans,
+            self.stats.resident_bytes,
+            self.stats.budget_bytes,
+        )?;
+        let stats = self.ffn_pairs.stats();
+        eprintln!("[q8-ffn-pairs] pairs={} joint_bytes={} combined_prepared_bytes={} budget_bytes={} temporary_host_pair_bytes={} preparation_ms={:.3}",
+            stats.pair_count,stats.resident_bytes,stats.combined_prepared_bytes,stats.budget_bytes,
+            stats.peak_temporary_host_pair_bytes,stats.preparation_elapsed_ms);
+        Ok(())
+    }
+
+    pub(crate) fn compound_pair(
+        &self,
+        sources: [*const c_void; 2],
+        hidden: i32,
+        k: i32,
+    ) -> Result<&super::DeviceQ8FfnPair> {
+        self.ffn_pairs.get(sources, hidden, k)
+    }
+
+    pub fn ffn_pair_stats(&self) -> super::Q8FfnPairStats {
+        let mut stats = self.ffn_pairs.stats();
+        stats.combined_prepared_bytes = self.stats.resident_bytes + stats.resident_bytes;
+        stats.budget_bytes = self.stats.budget_bytes;
+        stats
     }
 
     /// Borrow this model's existing split owner for explicit diagnostics. This
@@ -359,6 +429,9 @@ impl Q8ExecutionCache {
 }
 
 impl crate::infer::LoadedModel {
+    pub fn q8_ffn_pair_stats(&self) -> super::Q8FfnPairStats {
+        self.q8_execution.ffn_pair_stats()
+    }
     pub fn q8_execution_stats(&self) -> Q8ExecutionStats {
         let mut stats = self.q8_execution.stats();
         if stats.mode == Q8ExecutionMode::Off {

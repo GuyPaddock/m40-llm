@@ -572,6 +572,7 @@ mod hardware {
                         Q8FfnKernel::Q81 if config.threads() == Some(128) => "ffn_q8_1_threads128",
                         Q8FfnKernel::Q81 => "ffn_q8_1_threads256",
                         Q8FfnKernel::SplitF32x4 => "ffn_q8_split_f32x4_128",
+                        Q8FfnKernel::JointSharedScales => "ffn_q8_joint_f32x4_shared_scales_128",
                         Q8FfnKernel::Native => unreachable!("candidate list excludes native"),
                     };
                     assert_eq!(

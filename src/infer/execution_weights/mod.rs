@@ -18,7 +18,9 @@ pub use warp_packet::{HostQ8WarpPacket, Q8WarpPacketKey};
 mod runtime;
 #[cfg(feature = "cuda")]
 pub use ffn_pair::DeviceQ8FfnPair;
-pub use ffn_pair::{HostQ8FfnPair, Q8FfnPairKey};
+pub use ffn_pair::{HostQ8FfnPair, Q8FfnPairKey, Q8FfnPairStats};
+#[cfg(feature = "cuda")]
+mod ffn_pairs;
 pub use runtime::{
     Q8ExecutionConfig, Q8ExecutionFamilies, Q8ExecutionMode, Q8ExecutionStats,
     Q8PreparedTensorStats, Q8ProjectionGroup,

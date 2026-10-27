@@ -264,6 +264,11 @@ impl LoadedModel {
                         "experimental Q8 FFN requires matching Q8_0 gate/up weights; use M40LLM_Q8_FFN_KERNEL=native");
                 }
                 match self.q8_ffn.kernel() {
+                    super::Q8FfnKernel::JointSharedScales => {
+                        self.q8_execution
+                            .compound_pair([d_w_gate_f16, d_w_up_f16], h, k)?
+                            .enqueue_shared_scales_async(d_x_f32, d_out_f32, 1, None)?;
+                    }
                     super::Q8FfnKernel::SplitF32x4 => {
                         self.q8_execution.project_ffn(
                             &self.cuda,

@@ -236,6 +236,23 @@ impl LoadedModel {
             )?;
         }
         #[cfg(feature = "cuda")]
+        if model.q8_ffn.kernel() == super::Q8FfnKernel::JointSharedScales {
+            let sources = (0..model.model_config.block_count as usize)
+                .map(|layer| {
+                    let mapped = model.map_standard_layer(layer)?;
+                    Ok([
+                        mapped.w_gate.dptr.cast_const(),
+                        mapped.w_up.dptr.cast_const(),
+                    ])
+                })
+                .collect::<Result<Vec<_>>>()?;
+            model.q8_execution.prepare_compound_pairs(
+                &model.cuda,
+                &model.host_weights,
+                &sources,
+            )?;
+        }
+        #[cfg(feature = "cuda")]
         model.validate_q8_ffn_prepared_weights()?;
         if !model.q8_ffn.is_native() {
             eprintln!("[q8-ffn] kernel={:?} threads={:?} scope=single-row activation_bytes={} numerical_track={}",

@@ -1,4 +1,4 @@
-//! One bounded, lossless joint gate/up layout. Not a runtime selection policy.
+//! Lossless joint gate/up layout and typed ownership. Selection is model-local.
 use super::{Q8MatrixShape, Q8SourceIdentity, Q8SourceView};
 use anyhow::{ensure, Context, Result};
 use serde::Serialize;
@@ -8,6 +8,22 @@ use serde::Serialize;
 pub struct Q8FfnPairKey {
     pub gate: Q8SourceIdentity,
     pub up: Q8SourceIdentity,
+}
+
+/// Joint owners are additional to, not substitutes for, split tensor owners.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct Q8FfnPairStats {
+    pub is_enabled: bool,
+    pub pair_count: usize,
+    pub pairs: Vec<Q8FfnPairKey>,
+    pub resident_bytes: usize,
+    pub combined_prepared_bytes: usize,
+    pub budget_bytes: usize,
+    pub peak_temporary_host_pair_bytes: usize,
+    pub retained_host_pair_bytes: usize,
+    pub packing_elapsed_ms: f64,
+    pub upload_elapsed_ms: f64,
+    pub preparation_elapsed_ms: f64,
 }
 
 #[derive(Debug)]
