@@ -1,5 +1,9 @@
 # Exact Multi-Token Verification On Maxwell
 
+**Measured checkpoint:** [the bounded study](2026-10-27-maxwell-exact-verification-screen.md)
+passes causal/greedy/KV ownership and rollback checks but loses with a perfect
+drafter at every tested length. Stop without EAGLE; no runtime promotion.
+
 ## Scope And Order
 
 User-requested follow-up after the single compound FFN checkpoint. Preserve

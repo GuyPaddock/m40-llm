@@ -2,7 +2,8 @@
 
 ## Status
 
-**Approved scoped exception, 2026-10-27; implementation not yet measured.** The user
+**Approved scoped exception, 2026-10-27; measured gate passes.** See the
+[four-arm confirmation](2026-10-27-maxwell-compound-ffn-screen.md). The user
 explicitly approved exactly one fixed joint-packing plus shared-scale consumer,
 the contemporaneous four-arm comparison and all existing gates. This overrides
 only the no-combination restriction for this experiment. It does not authorize
@@ -17,8 +18,9 @@ in force for all other combinations. Neither individual candidate is reopened
 for runtime use, and no acceptance gate is changed.
 
 Preserve the qualified 49.146 HTTP tok/s configuration. The original 53.06
-and 56.037 HTTP tok/s targets remain unmet. No kernel, test, benchmark or
-hardware setting is changed for this source assessment.
+and 56.037 HTTP tok/s targets remain unmet. The original source assessment
+changed no kernel or hardware setting; its later implementation remains
+benchmark-only without generation/HTTP qualification.
 
 ## Existing Evidence And Remaining Work
 

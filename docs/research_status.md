@@ -17,6 +17,23 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest requested follow-up, stop decision:** [exact target verification](experiments/2026-10-27-maxwell-exact-verification-screen.md)
+reproduces all actual512 IDs at lengths2/4/8 with causal dense KV and
+exclusive session commit/rollback, but even a free perfect drafter loses.
+Five paired resident-generation trials yield **49.92 tok/s serial** versus
+**11.59 / 21.90 / 37.81** at lengths2/4/8, all intervals negative. Seventy
+measured rejection/rollback/correction cycles produce no positive drafter
+budget either. Stop this verifier performance experiment; **no EAGLE**.
+This is not HTTP qualification or a universal hardware ceiling. All 109
+prepared identities and 136 prior compiled CUDA entries are unchanged;
+tests/audits/cleanup pass. Retain research code `0b7992b` / `885cc98`, not
+generation or scheduler integration. The qualified **49.146 HTTP tok/s**
+configuration and original unmet targets remain unchanged.
+
+**Next eligible exact-engine work:** separately qualify the compound FFN
+in generation, actual512/frozen tasks and controlled HTTP, since its gate
+passed. Do not treat the microbenchmark win as already promoted.
+
 **Latest complete-FFN checkpoint:** the single
 [compound consumer](experiments/2026-10-27-maxwell-compound-ffn-screen.md)
 clears the unchanged gate after twenty fresh pairs: **5.43-5.55%** over split,
@@ -37,9 +54,9 @@ fixed four-arm study. Preserve geometry, arithmetic, reduction order and all
 gates; report incremental gain over joint-only and total gain over split.
 No generation integration without complete-FFN qualification. Preserve
 49.146 HTTP tok/s until a separately qualified replacement exists.
-**Next requested work:** the [exact multi-token verification study](experiments/2026-10-27-maxwell-exact-verification-plan.md)
-follows this checkpoint, starting with a perfect-drafter upper bound and
-causal/KV rollback correctness, not a neural drafter.
+The requested verification study has now completed its bounded feasibility
+checkpoint and stops before a real drafter. Its [plan](experiments/2026-10-27-maxwell-exact-verification-plan.md)
+remains the design/ownership record.
 
 **Latest representation feasibility:** [fixed input-channel information scan](experiments/2026-10-26-maxwell-channel-entropy.md)
 rechecks all six actual model/tensor hashes and every channel histogram.

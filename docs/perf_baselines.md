@@ -2,6 +2,25 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Perfect-Drafter Verification Is Slower
+
+Five contemporaneous release trials with exact actual512 IDs give resident
+complete-generation throughput **49.92 tok/s serial**, **11.59 at K2**,
+**21.90 at K4**, **37.81 at K8**. All paired gain intervals are negative;
+even a free perfect drafter loses. See [scope, costs, memory, rollback and stop decision](experiments/2026-10-27-maxwell-exact-verification-screen.md).
+
+The study uses real batched projections, absolute causal dense FP16 KV,
+exclusive session transactions and 511 target rows plus the prompt's cached
+first token. Seventy rejection/rollback/correction cycles pass, but all
+drafter cost/acceptance budgets remain negative. Stop without EAGLE or a
+neural drafter. No new kernel/batch-length search, default or server changes.
+
+This is the existing temporary-dequantization/SGEMM verifier, **not** an
+optimal-verifier or hardware-ceiling proof. It is also **not HTTP E2E**:
+retain the qualified **49.146 HTTP tok/s**, both original unmet targets and
+all runtime defaults. The compound FFN's separate passing microbenchmark
+remains eligible for actual-generation/HTTP qualification, not yet promoted.
+
 ## 2026-10-27: Fixed Compound FFN Passes Its Micro Gate
 
 Twenty fresh four-arm confirmation pairs show **5.43-5.55% complete one-row
