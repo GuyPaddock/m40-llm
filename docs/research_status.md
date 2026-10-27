@@ -17,6 +17,19 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest actual-runner cost evidence:** [concurrent-kernel activities](experiments/2026-10-26-maxwell-kernel-activity.md)
+work on M40 even though PC sampling/counters do not. One bounded official
+sixteen-token request produces 18,486 complete correlated GPU spans, no
+drops/invalid timestamps, fresh 65-ID KV and clean owned-process shutdown.
+Startup/prefill are separated from fifteen decode forwards. Instrumented
+median FFN is 13.926 ms, all quantization 0.584 ms, total kernel execution
+21.075 ms. Large observer gaps make the 44.539 ms median decode interval
+unsuitable for normal-engine speed claims. Exact integer normalization and
+twelve corruption controls protect the audit. No matched-clock engine
+comparison, optimization, default or quality promotion follows. Quantitative
+stage comparisons need matched phases and collector perturbation checks;
+qualified runtime and both original unmet HTTP targets remain unchanged.
+
 **Latest benchmark-validity check:** [same-work layer reuse](experiments/2026-10-26-maxwell-layer-reuse-screen.md)
 compares grouped and alternating frozen layers (0,17), (17,35), (35,0).
 Complete-FFN median changes are **-0.006% to -0.060%**; all nine stage

@@ -66,6 +66,20 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ## Experimental Runtime Selection
 
+### Actual Runner Activity Costs
+
+The [bounded official activity checkpoint](experiments/2026-10-26-maxwell-kernel-activity.md)
+now measures GPU spans, complementing callback and loaded-code inspection.
+Concurrent-kernel activities work on M40, unlike the unavailable counters
+and PC sampling. A cold sixteen-token request yields fifteen one-token
+decode forwards after separately identified startup and prefill work.
+Complete correlated spans give 13.926 ms median FFN and 0.584 ms total
+activation quantization within 21.075 ms summed kernel execution.
+These are instrumented stage costs, not unprofiled throughput. Large host
+gaps and unmatched warmup/clocks preclude quantitative engine deltas; matched
+phases and collector perturbation checks must precede such comparisons.
+No defaults, exact-output gates or qualified runtime change.
+
 ### Layer-Reuse Diagnostic
 
 The shared benchmark accepts `--ffn-layer-reuse --rows 1` with the frozen

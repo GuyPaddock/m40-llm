@@ -1,0 +1,1026 @@
+{
+  "passes_audit": true,
+  "source_revision": "be82fa4c3cbad4cf97b59dfff1b0570be8aa0adb",
+  "driver_runtime_pairs": 18486,
+  "gpu_activities": 18486,
+  "generated_tokens": 16,
+  "prompt_tokens": 65,
+  "response": "Sure, I'll walk you through the entire process of loading a web page from",
+  "startup_kernel_count": 2098,
+  "prefill_kernel_count": 1193,
+  "decode_forwards": 15,
+  "prefill": {
+    "busy_ms": 232.545177,
+    "span_ms": 270.684377
+  },
+  "decode_frames": [
+    {
+      "kernels": 1013,
+      "busy_ms": 21.06837,
+      "span_ms": 45.011728,
+      "first_correlation_id": 3296,
+      "last_correlation_id": 4344,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.572024
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.415623
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092128
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.123887
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.173122
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.163352
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.973787
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.079265
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.42297
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.234492
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121025
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.694615
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.925784999999998,
+      "quantization_ms": 0.581087
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.079624,
+      "span_ms": 61.242617,
+      "first_correlation_id": 4345,
+      "last_correlation_id": 5393,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.580819
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.4136
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092383
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.122834
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.171068
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.173794
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.970046
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.078941
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.421238
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.237311
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.122303
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.693207
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.922187999999998,
+      "quantization_ms": 0.5817829999999999
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.075832,
+      "span_ms": 44.514706,
+      "first_correlation_id": 5394,
+      "last_correlation_id": 6442,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.583355
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.414183
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092419
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.129232
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.171905
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.163254
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.967964
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.08147
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.419866
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.236162
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121471
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.692439
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.002112
+        }
+      },
+      "ffn_ms": 13.92921,
+      "quantization_ms": 0.584068
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.071959,
+      "span_ms": 34.755943,
+      "first_correlation_id": 6443,
+      "last_correlation_id": 7491,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.584281
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.409799
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092161
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.12657
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.17667
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.164775
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.971801
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.081405
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.416983
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.234981
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121438
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.689015
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.926637999999997,
+      "quantization_ms": 0.587297
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.076778,
+      "span_ms": 44.982928,
+      "first_correlation_id": 7492,
+      "last_correlation_id": 8540,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.583962
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.414859
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092191
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.124114
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.176
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.159492
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.971097
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082241
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.420061
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.235714
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.12176
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.693175
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.002112
+        }
+      },
+      "ffn_ms": 13.928924,
+      "quantization_ms": 0.588258
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.068613,
+      "span_ms": 34.784262,
+      "first_correlation_id": 8541,
+      "last_correlation_id": 9589,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.580693
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.410184
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.096416
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.124457
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.171549
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.164472
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.968252
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.081697
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.420792
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.234846
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.1208
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.692375
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.923405999999998,
+      "quantization_ms": 0.586588
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.074002,
+      "span_ms": 70.890821,
+      "first_correlation_id": 9590,
+      "last_correlation_id": 10638,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.583123
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.406852
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092318
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.123731
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.1697
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.162111
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.971164
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082304
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.42092
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.243611
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121153
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.694935
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.913753999999999,
+      "quantization_ms": 0.5900129999999999
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.076001,
+      "span_ms": 44.538674,
+      "first_correlation_id": 10639,
+      "last_correlation_id": 11687,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.582903
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.409095
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092224
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.128501
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.177344
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.163796
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.967933
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.080804
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.421305
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.235847
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121282
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.692855
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.002112
+        }
+      },
+      "ffn_ms": 13.928446,
+      "quantization_ms": 0.588331
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.086156,
+      "span_ms": 34.581256,
+      "first_correlation_id": 11688,
+      "last_correlation_id": 12736,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.580856
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.411468
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092099
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.129198
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.177093
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.169386
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.970266
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.080703
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.416254
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.241053
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.120797
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.694903
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.930655,
+      "quantization_ms": 0.5930279999999999
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.076397,
+      "span_ms": 44.938223,
+      "first_correlation_id": 12737,
+      "last_correlation_id": 13785,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.583668
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.413223
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092383
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.128626
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.175648
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.161179
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.969558
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.081981
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.420958
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.236223
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.120927
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.689943
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.930807000000001,
+      "quantization_ms": 0.5883149999999999
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.066221,
+      "span_ms": 34.59044,
+      "first_correlation_id": 13786,
+      "last_correlation_id": 14834,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.581111
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.414247
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092188
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.125161
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.175104
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.16285
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.965661
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082338
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.41951
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.232765
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121087
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.692119
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.927786999999999,
+      "quantization_ms": 0.584475
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.074601,
+      "span_ms": 65.942874,
+      "first_correlation_id": 14835,
+      "last_correlation_id": 15883,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.584695
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.411522
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092574
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.12847
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.172384
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.164715
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.968923
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082175
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.421529
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.234663
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.120256
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.690615
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.925206,
+      "quantization_ms": 0.583876
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.072966,
+      "span_ms": 44.780525,
+      "first_correlation_id": 15884,
+      "last_correlation_id": 16932,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.584402
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.413064
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092189
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.124273
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.170593
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.163695
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.972379
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082113
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.419317
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.23341
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121636
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.693815
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.921755000000003,
+      "quantization_ms": 0.5803849999999999
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.067525,
+      "span_ms": 34.570501,
+      "first_correlation_id": 16933,
+      "last_correlation_id": 17981,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.580921
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.414981
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092379
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.126542
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.170974
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.164059
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.970647
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.082529
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.416883
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.232835
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.12112
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.691575
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.00208
+        }
+      },
+      "ffn_ms": 13.925996,
+      "quantization_ms": 0.580797
+    },
+    {
+      "kernels": 1013,
+      "busy_ms": 21.081057,
+      "span_ms": 44.48267,
+      "first_correlation_id": 17982,
+      "last_correlation_id": 19030,
+      "by_stage": {
+        "attention": {
+          "launches": 108,
+          "ms": 1.584599
+        },
+        "down_projection": {
+          "launches": 36,
+          "ms": 4.414027
+        },
+        "down_quantization": {
+          "launches": 36,
+          "ms": 0.092359
+        },
+        "gate_up_projection": {
+          "launches": 72,
+          "ms": 9.126416
+        },
+        "gate_up_quantization": {
+          "launches": 72,
+          "ms": 0.171111
+        },
+        "other": {
+          "launches": 363,
+          "ms": 1.165825
+        },
+        "out_projection": {
+          "launches": 36,
+          "ms": 0.971421
+        },
+        "out_quantization": {
+          "launches": 36,
+          "ms": 0.08269
+        },
+        "qkv_projection": {
+          "launches": 108,
+          "ms": 1.422328
+        },
+        "qkv_quantization": {
+          "launches": 108,
+          "ms": 0.234072
+        },
+        "swiglu": {
+          "launches": 36,
+          "ms": 0.121019
+        },
+        "vocabulary_projection": {
+          "launches": 1,
+          "ms": 1.693111
+        },
+        "vocabulary_quantization": {
+          "launches": 1,
+          "ms": 0.002079
+        }
+      },
+      "ffn_ms": 13.924932000000002,
+      "quantization_ms": 0.582311
+    }
+  ],
+  "median_decode": {
+    "busy_ms": 21.074601,
+    "span_ms": 44.538674,
+    "ffn_ms": 13.925996,
+    "quantization_ms": 0.584475,
+    "by_stage": {
+      "attention": {
+        "launches": 108,
+        "median_ms": 1.583123
+      },
+      "down_projection": {
+        "launches": 36,
+        "median_ms": 4.413223
+      },
+      "down_quantization": {
+        "launches": 36,
+        "median_ms": 0.092318
+      },
+      "gate_up_projection": {
+        "launches": 72,
+        "median_ms": 9.126416
+      },
+      "gate_up_quantization": {
+        "launches": 72,
+        "median_ms": 0.172384
+      },
+      "other": {
+        "launches": 363,
+        "median_ms": 1.163796
+      },
+      "out_projection": {
+        "launches": 36,
+        "median_ms": 0.970266
+      },
+      "out_quantization": {
+        "launches": 36,
+        "median_ms": 0.081981
+      },
+      "qkv_projection": {
+        "launches": 108,
+        "median_ms": 1.420792
+      },
+      "qkv_quantization": {
+        "launches": 108,
+        "median_ms": 0.234981
+      },
+      "swiglu": {
+        "launches": 36,
+        "median_ms": 0.12112
+      },
+      "vocabulary_projection": {
+        "launches": 1,
+        "median_ms": 1.692855
+      },
+      "vocabulary_quantization": {
+        "launches": 1,
+        "median_ms": 0.00208
+      }
+    }
+  },
+  "has_authoritative_throughput": false,
+  "changes_runtime_defaults": false,
+  "scope": "one instrumented cold request, short-context GPU spans; not steady512 throughput or matched-clock engine qualification"
+}

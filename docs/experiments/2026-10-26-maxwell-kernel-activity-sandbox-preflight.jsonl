@@ -1,0 +1,1 @@
+{"kind":"cuda_trace_error","operation":"subscribe","status":15,"message":"CUPTI_ERROR_NOT_INITIALIZED"}

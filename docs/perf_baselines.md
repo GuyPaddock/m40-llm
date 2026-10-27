@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Official Runner GPU Activities Are Available
+
+The external observer now captures concurrent-kernel timestamps on M40.
+A bounded official Ollama request has 18,486 correlated activities, no drops
+or invalid clocks, and verified fresh 65-ID prompt state. Startup and prefill
+are excluded from its fifteen decode forwards. Median summed GPU execution
+is **21.075 ms**, including **13.926 ms FFN** and **0.584 ms all activation
+quantization**. See [stages, exact-clock audit and limitations](experiments/2026-10-26-maxwell-kernel-activity.md).
+
+The heavily instrumented median decode interval is **44.539 ms**. Do not use
+its host gaps, cold-request wall time or unmatched clock/context conditions
+for speed/engine comparisons. No runtime/default/precision change follows.
+Qualified **49.146 vs 43.106 HTTP tok/s** and both unmet targets are unchanged.
+
 ## 2026-10-26: Layer-Reuse Order Has Small Tested Effects
 
 Grouped versus alternating execution of identical frozen layer work changes
