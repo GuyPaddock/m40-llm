@@ -2,6 +2,19 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Layer-Reuse Order Has Small Tested Effects
+
+Grouped versus alternating execution of identical frozen layer work changes
+complete-FFN median latency **-0.006% to -0.060%**. All nine stage intervals
+cross zero and lie within +/-0.45%, below the fixed +/-3% diagnostic scope.
+Output bits and work counts match. See [actual pairs, memory and audit](experiments/2026-10-26-maxwell-layer-reuse-screen.md).
+
+The benchmark adds no CUDA/inference code and preserves all 135 original
+kernel entries. It checks temporal reuse for three pairs, not actual cache
+traffic, the full 36-layer dependency chain or production throughput. No
+closed candidate is reopened. Qualified exact status remains **49.146 HTTP
+tok/s** versus **43.106 official Ollama**, both targets unmet/defaults unchanged.
+
 ## 2026-10-26: CUB Read Reference Misses The Diagnostic Gate
 
 Public-library segmented checksums over the original gate/up planes

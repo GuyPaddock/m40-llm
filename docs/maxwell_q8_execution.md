@@ -66,6 +66,22 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ## Experimental Runtime Selection
 
+### Layer-Reuse Diagnostic
+
+The shared benchmark accepts `--ffn-layer-reuse --rows 1` with the frozen
+M02 model/fixture/capture and release settings. It compares the same two
+original layer pipelines grouped versus alternating for pairs (0,17),
+(17,35), (35,0), with separate scratch and unchanged kernels. It rejects
+four-row or combined experimental modes instead of changing streams.
+Use ten iterations and five initial trials; 10/20 fresh trials remain
+available for uncertain results. No model generation or defaults change.
+
+The [first measured checkpoint](experiments/2026-10-26-maxwell-layer-reuse-screen.md)
+finds all stage confidence intervals within +/-0.45%, closing a material
+tested temporal-order bias under the fixed +/-3% diagnostic threshold.
+It is not a DRAM measurement, a true 36-layer forward or permission to
+retune closed candidates.
+
 ### Diagnostic Library Read Reference
 
 The [fixed public-CUB reference](experiments/2026-10-26-maxwell-cub-read-screen.md)

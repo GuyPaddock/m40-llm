@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest benchmark-validity check:** [same-work layer reuse](experiments/2026-10-26-maxwell-layer-reuse-screen.md)
+compares grouped and alternating frozen layers (0,17), (17,35), (35,0).
+Complete-FFN median changes are **-0.006% to -0.060%**; all nine stage
+intervals cross zero and stay within +/-0.45%, below the fixed +/-3% scope.
+Output bits, work counts, inputs/guards, all 37 prepared identities and
+cleanup match. The one-row-only runner remains benchmark-only. A shared
+preflight admission error was corrected before any timing. This closes a
+material tested temporal-reuse bias, not cache/traffic measurement or a true
+36-layer forward. No closed-candidate rescue, runtime or default change;
+qualified exact status and both unmet targets remain unchanged.
+
 **Latest independent read reference:** [public CUB segmented reduction](experiments/2026-10-26-maxwell-cub-read-screen.md)
 preserves original per-column checksums but regresses one-row throughput
 **22.87-23.01%**, with all paired intervals negative; four rows also regress.
