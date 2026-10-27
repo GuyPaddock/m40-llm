@@ -68,6 +68,12 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ### Actual Runner Activity Costs
 
+The [subsequent off/on calibration](experiments/2026-10-26-maxwell-activity-calibration.md)
+fails joint attribution: complete native captures add 5.607% decode overhead;
+M40's 1.580% point estimate comes from capped, incomplete captures. Keep
+activity-only observation diagnostic. Do not subtract these engine stages,
+raise the cap to claim success or change runtime/defaults from that evidence.
+
 The [bounded official activity checkpoint](experiments/2026-10-26-maxwell-kernel-activity.md)
 now measures GPU spans, complementing callback and loaded-code inspection.
 Concurrent-kernel activities work on M40, unlike the unavailable counters

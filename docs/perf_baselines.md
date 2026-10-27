@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Activity-Only Collector Fails Joint Calibration
+
+Five warmed resident/native 16-token off/on pairs per engine preserve IDs
+and dispatch. M40 decode changes **288.019 to 292.570 ms, +1.580%**, but
+every on-capture drops 7520 of 107,520 activities. Official native changes
+**336.464 to 355.330 ms, +5.607%**, interval **[4.622%, 7.430%]**, despite
+complete captures. Both therefore fail the prescribed attribution checkpoint.
+See [all pairs, accounting, native admission failure and limits](experiments/2026-10-26-maxwell-activity-calibration.md).
+
+These are collector costs, not new HTTP throughput or an engine comparison.
+Do not call capped M40 timing a successful low-overhead capture. No cap,
+model, runtime/default or qualification target is changed; the exact track
+remains **49.146 vs 43.106 HTTP tok/s**, both goals unmet.
+
 ## 2026-10-26: Official Runner GPU Activities Are Available
 
 The external observer now captures concurrent-kernel timestamps on M40.

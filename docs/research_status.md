@@ -17,6 +17,19 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest collector calibration:** [five short-request off/on pairs per engine](experiments/2026-10-26-maxwell-activity-calibration.md)
+preserve all 100 frozen 16-ID generations and dispatch, but **fail joint
+calibration**. M40's point decode overhead is 1.580%, yet every on-capture
+truncates at 100,000 of 107,520 activities; that is not complete-collector
+cost. Official native captures are complete at 84,038 activities, but decode
+overhead is 5.607%, interval [4.622%, 7.430%], above 3%. No quantitative
+engine-stage delta follows. A native CPU-only discovery preflight was rejected
+before requests, fixed to use the pinned CUDA backend explicitly, then only
+native was resumed. No M40 rerun, cap/threshold change or collector rescue.
+All measured GPU boundaries are isolated P0/1113/3004; raw warmups, failures,
+counts and twelve corruption controls are retained. No inference/default or
+qualified throughput change; both original targets remain unmet.
+
 **Latest actual-runner cost evidence:** [concurrent-kernel activities](experiments/2026-10-26-maxwell-kernel-activity.md)
 work on M40 even though PC sampling/counters do not. One bounded official
 sixteen-token request produces 18,486 complete correlated GPU spans, no
