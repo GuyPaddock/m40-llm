@@ -273,6 +273,8 @@ fn forward_one_token_minimal_parity_toy() -> Result<()> {
 
     // Read back device output
     let mut out_dev_bytes = vec![0u8; d_model * 4];
+    lm.cuda
+        .synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     unsafe {
         lm.cuda.memcpy_d2h(
             out_dev_bytes.as_mut_ptr() as *mut c_void,
@@ -532,6 +534,8 @@ fn forward_two_tokens_minimal_parity_toy() -> Result<()> {
     }
 
     let mut y1_dev_bytes = vec![0u8; d_model * 4];
+    lm.cuda
+        .synchronize_stream(m40_llm::cuda::CudaStream::Decode)?;
     unsafe {
         lm.cuda
             .memcpy_d2h(y1_dev_bytes.as_mut_ptr() as *mut c_void, d_y1, d_model * 4)?;
