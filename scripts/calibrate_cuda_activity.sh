@@ -13,6 +13,13 @@ model=${M40LLM_QWEN_THROUGHPUT_MODEL:?explicit model path required}
 probe=${M40LLM_ACTIVITY_TEST_BINARY:?explicit release throughput test binary required}
 observer=${M40LLM_ACTIVITY_OBSERVER:?explicit tested observer library required}
 runner=${M40LLM_ACTIVITY_NATIVE_RUNNER:?explicit official native runner required}
+engines=${M40LLM_ACTIVITY_ENGINES:-m40,native}
+case $engines in
+  m40) engine_list=(m40) ;;
+  native) engine_list=(native) ;;
+  m40,native) engine_list=(m40 native) ;;
+  *) printf 'M40LLM_ACTIVITY_ENGINES must be m40, native, or m40,native\n' >&2; exit 1 ;;
+esac
 reference=docs/experiments/2026-10-25-maxwell-packed-projection-runtime-quality.jsonl
 [[ -x $probe && -x $runner && -f $observer ]]
 [[ $(git status --short) == '' ]]
@@ -27,8 +34,8 @@ export M40LLM_QWEN_THROUGHPUT_MODEL="$model" M40LLM_QWEN_ACTIVITY_REFERENCE="$re
 : "${CUDA_VISIBLE_DEVICES:?frozen GPU UUID required}"
 jq -n --arg revision "$(git rev-parse HEAD)" --arg observer "$(sha256sum "$observer")" \
   --arg probe "$(sha256sum "$probe")" --arg runner "$(sha256sum "$runner")" \
-  --arg model "$model" --arg gpu "$CUDA_VISIBLE_DEVICES" \
-  '{revision:$revision,observer:$observer,probe:$probe,runner:$runner,model:$model,gpu:$gpu,
+  --arg model "$model" --arg gpu "$CUDA_VISIBLE_DEVICES" --arg engines "$engines" \
+  '{revision:$revision,observer:$observer,probe:$probe,runner:$runner,model:$model,gpu:$gpu,engines:$engines,
     pairs:5,warmups:4,generated_tokens:16,scope:"resident/native short requests, not public HTTP qualification"}' > "$directory/manifest.json"
 head -n1 "$reference" | jq '{prompt:.browser_prompt_ids,stream:false,cache_prompt:false,
   return_tokens:true,n_predict:16,temperature:0,top_k:1,top_p:1,min_p:0,
@@ -50,7 +57,7 @@ snapshot() {
   nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-gpu=uuid,pstate,clocks.sm,clocks.mem --format=csv,noheader > "$1-gpu.csv"
   nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-compute-apps=pid,process_name,used_gpu_memory --format=csv,noheader > "$1-processes.csv"
 }
-for engine in m40 native; do
+for engine in "${engine_list[@]}"; do
   for pair in 0 1 2 3 4; do
     order=(off on)
     if (( pair%2 )); then order=(on off); fi
@@ -67,7 +74,8 @@ for engine in m40 native; do
           "$probe" --exact q8_activity::test_qualified_runtime_activity_probe \
           --ignored --nocapture --test-threads=1 > "$prefix.log" 2>&1
       else
-        "${environment[@]}" LD_LIBRARY_PATH="$(dirname "$runner")/cuda_v12:$(dirname "$runner")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${environment[@]}" GGML_BACKEND_PATH="$(dirname "$runner")/cuda_v12/libggml-cuda.so" \
+          LD_LIBRARY_PATH="$(dirname "$runner"):$(dirname "$runner")/cuda_v12${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
           "$runner" --model "$model" --port 18436 --host 127.0.0.1 --no-webui --offline \
           -c 1024 -np 1 -b 512 -ub 512 -ngl 99 --flash-attn off --cache-ram 0 \
           --no-jinja --chat-template chatml --context-shift --keep 4 \
@@ -103,4 +111,4 @@ for engine in m40 native; do
   done
 done
 snapshot "$directory/final"
-printf 'All ten process pairs completed without overlapping inference.\n'
+printf 'All requested process pairs completed without overlapping inference.\n'
