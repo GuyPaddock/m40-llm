@@ -17,7 +17,18 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Approved scoped experiment, 2026-10-27:** the
+**Latest complete-FFN checkpoint:** the single
+[compound consumer](experiments/2026-10-27-maxwell-compound-ffn-screen.md)
+clears the unchanged gate after twenty fresh pairs: **5.43-5.55%** over split,
+**0.58-0.67%** incremental over joint-only, positive paired bounds at all
+three one-row layers. Four arms retain identical bits, both weight owners
+and prepared down/vocabulary. All original 135 compiled entries are unchanged;
+one new consumer uses 32 registers, no spills, 1536 dynamic shared bytes.
+Audits/corruption controls and CUDA on/off/regression/non-CUDA/Clippy checks
+pass. Keep `c629471` benchmark-only; no runtime/HTTP or actual512 promotion.
+Qualified 49.146 HTTP tok/s and both original unmet targets remain unchanged.
+
+**Approved exception, now measured:** the
 [compound FFN assessment](experiments/2026-10-26-maxwell-compound-ffn-proposal.md)
 identifies partially distinct remaining work in joint packing plus shared
 scale reuse. Their gains cannot be added, and the explicit no-combination
@@ -26,7 +37,7 @@ fixed four-arm study. Preserve geometry, arithmetic, reduction order and all
 gates; report incremental gain over joint-only and total gain over split.
 No generation integration without complete-FFN qualification. Preserve
 49.146 HTTP tok/s until a separately qualified replacement exists.
-The [exact multi-token verification study](experiments/2026-10-27-maxwell-exact-verification-plan.md)
+**Next requested work:** the [exact multi-token verification study](experiments/2026-10-27-maxwell-exact-verification-plan.md)
 follows this checkpoint, starting with a perfect-drafter upper bound and
 causal/KV rollback correctness, not a neural drafter.
 

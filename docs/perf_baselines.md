@@ -2,6 +2,26 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Fixed Compound FFN Passes Its Micro Gate
+
+Twenty fresh four-arm confirmation pairs show **5.43-5.55% complete one-row
+FFN gain over qualified split**, and **0.58-0.67% incremental over joint-only**,
+with positive paired bounds at frozen layers0/17/35. All checked gate/up,
+SwiGLU and down bits match. See [raw trials, resources, memory and gates](experiments/2026-10-27-maxwell-compound-ffn-screen.md).
+
+The user's single exception combines joint packing and shared-scale reuse
+without changing geometry or FP32 arithmetic. Both existing weight pairs
+remain resident, 95,813,632 bytes total. One new consumer uses 32 registers,
+no reported stack/local storage, 1536 dynamic shared bytes and two barriers;
+all 135 original CUDA entries retain identical words. Numerical/ownership,
+CUDA on/off, regressions, non-CUDA warnings, Clippy and raw-record audits pass.
+
+Keep `c629471` benchmark-only. This passes the >=5% admission gate, **not**
+HTTP/actual512 qualification. Do not add the individual gains or claim E2E
+improvement. Preserve **49.146 HTTP tok/s**, both unmet original targets and
+all runtime defaults. The next requested study is exact multi-token
+verification with a perfect-drafter upper bound, not EAGLE integration.
+
 ## 2026-10-26: Input-Channel Coding Misses Byte Feasibility
 
 A fixed CPU-only scan of original layer0/17/35 gate/up weights finds only
