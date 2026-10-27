@@ -186,7 +186,7 @@ fn test_q81_pipeline_accounts_for_quantization_and_keeps_down() -> Result<()> {
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
         )?;
-        let layer = sample_layer(&model)?;
+        let layer = sample_layer(&model, 0)?;
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
             let capacity = pipeline.scratch_bytes();
@@ -275,7 +275,7 @@ fn test_prepared_down_candidates_keep_complete_ffn_bits_and_cache() -> Result<()
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
         )?;
-        let layer = sample_layer(&model)?;
+        let layer = sample_layer(&model, 0)?;
         let cache = serde_json::to_value(model.q8_execution_stats())?;
         assert!(model
             .q8_execution
@@ -327,7 +327,7 @@ fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
         )?;
-        let layer = sample_layer(&model)?;
+        let layer = sample_layer(&model, 0)?;
         let cache = serde_json::to_value(model.q8_execution_stats())?;
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
@@ -617,8 +617,8 @@ fn configure() -> Vec<env_restore::EnvRestore> {
     .collect()
 }
 
-fn sample_layer(model: &LoadedModel) -> Result<FfnLayerSamples> {
-    let mapped = model.map_standard_layer(0)?;
+fn sample_layer(model: &LoadedModel, layer_id: usize) -> Result<FfnLayerSamples> {
+    let mapped = model.map_standard_layer(layer_id)?;
     let source = |view: &m40_llm::infer::DeviceTensorView| -> Result<FfnTensorSource> {
         let tensor = model
             .gguf
@@ -670,7 +670,7 @@ fn sample_layer(model: &LoadedModel) -> Result<FfnLayerSamples> {
     }
     Ok(FfnLayerSamples {
         source: FfnLayerSource {
-            layer_id: 0,
+            layer_id,
             gate: source(&mapped.w_gate)?,
             up: source(&mapped.w_up)?,
             down: source(&mapped.w_down)?,
@@ -684,6 +684,68 @@ fn sample_layer(model: &LoadedModel) -> Result<FfnLayerSamples> {
         normalized_inputs: input,
         swiglu_inputs: hidden,
     })
+}
+
+/// Reordering independent real CUDA pipelines preserves their distinct
+/// outputs and guards, with identical kernel work and reusable scratch.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_layer_reuse_orders_preserve_bits_and_ownership() -> Result<()> {
+    use super::reuse::{read_outputs, LayerOrder, ReuseTimer};
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build_with_layers(0, 2);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layers = [sample_layer(&model, 0)?, sample_layer(&model, 1)?];
+        let mut left = FfnPipeline::new(&model, &layers[0], 1)?;
+        let mut right = FfnPipeline::new(&model, &layers[1], 1)?;
+        left.prepare_split_weights(&layers[0])?;
+        right.prepare_split_weights(&layers[1])?;
+        left.select_kernel(FfnKernel::SplitF32x4)?;
+        right.select_kernel(FfnKernel::SplitF32x4)?;
+        let pipelines = [&left, &right];
+        for (p, layer) in pipelines.into_iter().zip(&layers) {
+            validation::validate(p, layer)?;
+        }
+        let timer = ReuseTimer::new(&model.cuda)?;
+        let resident = CudaContext::total_device_bytes();
+        for stage in [Stage::GateUpSwiglu, Stage::IsolatedDown, Stage::Complete] {
+            for count in [1, 3, 10] {
+                let grouped = timer.measure(pipelines, stage, LayerOrder::Grouped, count)?;
+                let expected = [read_outputs(&left, stage)?, read_outputs(&right, stage)?];
+                assert_ne!(
+                    expected[0], expected[1],
+                    "distinct layers must not alias the test oracle"
+                );
+                let alternating =
+                    timer.measure(pipelines, stage, LayerOrder::Alternating, count)?;
+                assert_eq!(read_outputs(&left, stage)?, expected[0]);
+                assert_eq!(read_outputs(&right, stage)?, expected[1]);
+                assert_eq!(grouped["enqueue_counters"], alternating["enqueue_counters"]);
+                assert_eq!(grouped["layer_operations"], count * 2);
+                assert_eq!(CudaContext::total_device_bytes(), resident);
+            }
+        }
+        assert!(timer
+            .measure(pipelines, Stage::Complete, LayerOrder::Grouped, 0)
+            .is_err());
+        assert!(timer
+            .measure(pipelines, Stage::Quantize, LayerOrder::Grouped, 1)
+            .is_err());
+        for (p, layer) in pipelines.into_iter().zip(&layers) {
+            p.verify_guards_and_inputs(layer)?;
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
 }
 
 /// Genuine one/four-row pipelines use the production wrappers and prepared
@@ -705,7 +767,7 @@ fn test_ffn_pipeline_matches_cpu_and_reuses_cross_stream_scratch() -> Result<()>
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
         )?;
-        let layer = sample_layer(&model)?;
+        let layer = sample_layer(&model, 0)?;
         for rows in [1, 4] {
             let pipeline = FfnPipeline::new(&model, &layer, rows)?;
             let result = validation::validate(&pipeline, &layer)?;
@@ -829,7 +891,7 @@ fn test_ffn_ablations_reuse_scratch_and_preserve_complete_outputs() -> Result<()
             -1,
             Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
         )?;
-        let layer = sample_layer(&model)?;
+        let layer = sample_layer(&model, 0)?;
         for rows in [1, 4] {
             let mut pipeline = FfnPipeline::new(&model, &layer, rows)?;
             assert!(pipeline.select_kernel(FfnKernel::SplitF32x4).is_err());

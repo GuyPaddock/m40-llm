@@ -11,6 +11,7 @@ mod prepared_projection;
 mod prepared_read;
 mod projection;
 mod reductions;
+mod reuse;
 mod task_pair;
 mod validation;
 mod warmup;
@@ -33,6 +34,9 @@ use std::{
 };
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_layer_reuse {
+        reuse::validate_args(args)?;
+    }
     if args.ffn_payload_entropy {
         return payload_entropy::run(args);
     }
@@ -98,7 +102,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     )?;
     inputs.validate_model(&model)?;
     let setup_ms = began.elapsed().as_secs_f64() * 1000.0;
-    let mut manifest = json!({"kind":if args.ffn_weight_read {"ffn_read_manifest"} else if args.ffn_q81 {"ffn_q81_manifest"} else if is_fp32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
+    let mut manifest = json!({"kind":if args.ffn_layer_reuse {"ffn_reuse_manifest"} else if args.ffn_weight_read {"ffn_read_manifest"} else if args.ffn_q81 {"ffn_q81_manifest"} else if is_fp32_ablation {"ffn_ablation_manifest"} else {"ffn_baseline_manifest"},"schema_version":1,
         "model":args.model,"model_sha256":inputs.artifact.plan.model_sha256,
         "fixture":args.ffn_inputs,"fixture_sha256":inputs.artifact_sha256,"capture_report":args.ffn_capture_report,
         "capture_report_sha256":inputs.report_sha256,"capture_revision":inputs.manifest["revision"],
@@ -167,8 +171,22 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
                 "gate":">=5% one-row read gain with positive paired intervals versus original and same-kernel controls; no inference claim"});
         }
     }
+    if args.ffn_layer_reuse {
+        manifest["layer_reuse_contract"] = json!({"pairs":[[0,17],[17,35],[35,0]],
+            "orders":["grouped","alternating"],"one_stream":"decode",
+            "has_inter_layer_hidden_dependency":false,"has_measured_dram_traffic":false,
+            "sensitivity_threshold_percent":3,"runtime_integration_allowed":false});
+    }
     write_record(&mut output, manifest)?;
-    for layer in &inputs.artifact.layers {
+    if args.ffn_layer_reuse {
+        reuse::benchmark(&mut output, &model, &inputs, args)?;
+    }
+    let individual_layers = if args.ffn_layer_reuse {
+        &[][..]
+    } else {
+        &inputs.artifact.layers[..]
+    };
+    for layer in individual_layers {
         for &rows in &args.rows {
             let mut pipeline = FfnPipeline::new(&model, layer, rows)?;
             if args.ffn_f32_shared_scales
@@ -285,7 +303,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     );
     write_record(
         &mut output,
-        json!({"kind":if args.ffn_weight_read {"ffn_read_complete"} else if args.ffn_q81 {"ffn_q81_complete"} else if is_fp32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":6,
+        json!({"kind":if args.ffn_layer_reuse {"ffn_reuse_complete"} else if args.ffn_weight_read {"ffn_read_complete"} else if args.ffn_q81 {"ffn_q81_complete"} else if is_fp32_ablation {"ffn_ablation_complete"} else {"ffn_baseline_complete"},"is_complete":true,"cases":if args.ffn_layer_reuse {3} else {6},
         "device_bytes_before":initial_device_bytes,"device_bytes_after":CudaContext::total_device_bytes(),
         "gpu_after_release":inspect_gpu()?,"scope":"Rust-tracked payload cleanup, not driver context RSS"}),
     )
