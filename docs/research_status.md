@@ -12,8 +12,12 @@ fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean
 source `63240c5`. Its manifest binds the original reports, preparation,
 source/model/executable hashes and locally retained measured binaries.
 Do not replace that checkpoint with a later candidate or change defaults.
-Next prepare separate no-old compressed-attention, joint-only ownership
-and model-compatibility proposals. Stop for review before runtime/CUDA edits.
+The [no-old compressed-attention proposal](experiments/2026-10-27-compressed-no-old-proposal.md)
+now identifies serial candidate reductions and a conditional existing-kernel
+adapter. Layout is compatible before rollover, but exact output/cache and
+numerical equivalence remain unproven. No runtime implementation is admitted.
+Next prepare separate joint-only ownership and model-compatibility proposals.
+Stop for review before runtime/CUDA edits.
 The exact-dense targets and rejected-verifier stop remain binding.
 
 The preceding execution sequence is the workspace's
