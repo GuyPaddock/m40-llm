@@ -2,11 +2,19 @@
 
 ## Status
 
-**Proposal only, not authorized or implemented.** The existing
+**Approved scoped exception, 2026-10-27; implementation not yet measured.** The user
+explicitly approved exactly one fixed joint-packing plus shared-scale consumer,
+the contemporaneous four-arm comparison and all existing gates. This overrides
+only the no-combination restriction for this experiment. It does not authorize
+geometry, arithmetic, reduction, threshold or search changes. Report compound
+benefit over both joint-only and qualified split control. Runtime integration
+remains conditional on the complete-FFN gate; failure closes the experiment.
+
+The existing
 [shared-scale contract](2026-10-26-maxwell-shared-scales-ffn-hypothesis.md)
 explicitly forbids combining rejected experiments. That restriction remains
-in force unless the user approves one scoped exception. This note does not
-reopen either candidate, alter any acceptance gate or authorize runtime use.
+in force for all other combinations. Neither individual candidate is reopened
+for runtime use, and no acceptance gate is changed.
 
 Preserve the qualified 49.146 HTTP tok/s configuration. The original 53.06
 and 56.037 HTTP tok/s targets remain unmet. No kernel, test, benchmark or
@@ -92,11 +100,12 @@ The HTTP gate remains >=max(3%, twice observed variation) with positive
 paired bounds. Defaults and original final targets stay unchanged. If the
 compound fails, preserve code/results and close it without another variant.
 
-## Conditional Atomic Sequence
+## Approved Atomic Sequence
 
-The following is **not an execution order until approved**:
+The user approved this sequence on 2026-10-27:
 
-1. Record the user's narrow exception and fixed compound contract.
+1. `docs(research): authorize fixed compound study`: record the user's narrow
+   exception and fixed compound contract. No code or hardware changes.
 2. Add one benchmark-only consumer, four-arm comparison and behavioral tests;
    commit verified code before timing. No generation selector yet.
 3. Record clean release results and the gate decision. Preserve any losing
@@ -104,5 +113,6 @@ The following is **not an execution order until approved**:
 4. Only after qualification, plan runtime integration, actual-model quality
    and controlled HTTP delivery as separate verified commits.
 
-Without approval, retain the existing closure rule and do not implement,
-time, integrate or silently select this compound path.
+After this checkpoint, follow the independently requested
+[exact multi-token verification study](2026-10-27-maxwell-exact-verification-plan.md).
+It does not relax this experiment's gate or replace either original target.

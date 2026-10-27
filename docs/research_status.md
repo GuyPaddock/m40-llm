@@ -17,14 +17,18 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
-**Pending scope decision, not an active experiment:** the
+**Approved scoped experiment, 2026-10-27:** the
 [compound FFN assessment](experiments/2026-10-26-maxwell-compound-ffn-proposal.md)
 identifies partially distinct remaining work in joint packing plus shared
 scale reuse. Their gains cannot be added, and the explicit no-combination
-rule remains binding. The user has been asked whether to allow one fixed
-four-arm study under all existing gates. No new kernel, benchmark or runtime
-change is authorized by this proposal or by silence; preserve 49.146 HTTP
-tok/s until a separately qualified replacement exists.
+rule remains binding except for the user's explicit approval of this single
+fixed four-arm study. Preserve geometry, arithmetic, reduction order and all
+gates; report incremental gain over joint-only and total gain over split.
+No generation integration without complete-FFN qualification. Preserve
+49.146 HTTP tok/s until a separately qualified replacement exists.
+The [exact multi-token verification study](experiments/2026-10-27-maxwell-exact-verification-plan.md)
+follows this checkpoint, starting with a perfect-drafter upper bound and
+causal/KV rollback correctness, not a neural drafter.
 
 **Latest representation feasibility:** [fixed input-channel information scan](experiments/2026-10-26-maxwell-channel-entropy.md)
 rechecks all six actual model/tensor hashes and every channel histogram.
