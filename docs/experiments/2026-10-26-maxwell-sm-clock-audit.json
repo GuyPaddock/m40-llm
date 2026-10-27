@@ -1,0 +1,1256 @@
+{
+  "passes_audit": true,
+  "source": "c2db5fed1e1407951e676aa799845640f24a5d25",
+  "executable_sha256": "aa218ae8b24422d7ace65c1563fabc3e36ec93b61ae661eb5013d74fc5add579",
+  "outer_process_pairs": 5,
+  "processes": 10,
+  "inner_trials_per_shape": 5,
+  "serial_primary_intervals": 1200,
+  "gpu_boundaries": 600,
+  "observed_sm_mhz": {
+    "high": 1113,
+    "low": 822
+  },
+  "memory_mhz": 3004,
+  "original_policy_restored": true,
+  "tracked_device_bytes_after": 0,
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.35301120281219484,
+          "low_ms": 0.38427200317382815,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.3526367902755737,
+          "low_ms": 0.38490560054779055,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.3527616024017334,
+          "low_ms": 0.38518400192260743,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.3529184103012085,
+          "low_ms": 0.38543999195098877,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.352675199508667,
+          "low_ms": 0.38449599742889407,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.3527616024017334,
+      "low_median_ms": 0.38490560054779055,
+      "latency_increase": 0.0911210231703472,
+      "interval_95": [
+        0.08855469773367042,
+        0.09215042542559271
+      ],
+      "frequency_elasticity": 0.2877371267684304,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.221891188621521,
+          "low_ms": 0.2364192008972168,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.22167999744415284,
+          "low_ms": 0.2370784044265747,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.2218463897705078,
+          "low_ms": 0.23672959804534913,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.2216639995574951,
+          "low_ms": 0.2363487958908081,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.22167680263519288,
+          "low_ms": 0.23700480461120604,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.22167999744415284,
+      "low_median_ms": 0.23672959804534913,
+      "latency_increase": 0.06788885228577146,
+      "interval_95": [
+        0.06547358804984449,
+        0.06946232028129251
+      ],
+      "frequency_elasticity": 0.2167248715400596,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.1324064016342163,
+          "low_ms": 0.14929920434951782,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.13202240467071533,
+          "low_ms": 0.15029439926147461,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.13288320302963258,
+          "low_ms": 0.14967039823532105,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.13171839714050293,
+          "low_ms": 0.14952000379562377,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.13222399950027466,
+          "low_ms": 0.1500480055809021,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.13222399950027466,
+      "low_median_ms": 0.14967039823532105,
+      "latency_increase": 0.13194577989610834,
+      "interval_95": [
+        0.12633045278073984,
+        0.1384007103667937
+      ],
+      "frequency_elasticity": 0.4089367577525481,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.20964159965515136,
+          "low_ms": 0.21962881088256836,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.2093503952026367,
+          "low_ms": 0.22080318927764891,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.2095103979110718,
+          "low_ms": 0.21952641010284424,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.20981121063232422,
+          "low_ms": 0.219596791267395,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.2096992015838623,
+          "low_ms": 0.21964480876922607,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.20964159965515136,
+      "low_median_ms": 0.21962881088256836,
+      "latency_increase": 0.047639453447433144,
+      "interval_95": [
+        0.04663993218274287,
+        0.05470634084032522
+      ],
+      "frequency_elasticity": 0.1535582084203889,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 1.4646847724914551,
+          "low_ms": 1.5505087852478028,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 1.5066847801208496,
+          "low_ms": 1.5744031906127929,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 1.4894847869873047,
+          "low_ms": 1.5524991989135741,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 1.4398464202880858,
+          "low_ms": 1.59454402923584,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 1.5032511711120606,
+          "low_ms": 1.5668416023254395,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 1.4894847869873047,
+      "low_median_ms": 1.5668416023254395,
+      "latency_increase": 0.05193528394110025,
+      "interval_95": [
+        0.04230193359259893,
+        0.10744035389330064
+      ],
+      "frequency_elasticity": 0.16706019840371233,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.9374879837036133,
+          "low_ms": 0.9846112251281738,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.9424511909484863,
+          "low_ms": 0.9819840431213379,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.9486592292785645,
+          "low_ms": 0.9961152076721191,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.958892822265625,
+          "low_ms": 0.9955743789672852,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.9743264198303223,
+          "low_ms": 0.9965855598449707,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.9486592292785645,
+      "low_median_ms": 0.9955743789672852,
+      "latency_increase": 0.04945416461546337,
+      "interval_95": [
+        0.022845670159005627,
+        0.050265435124188684
+      ],
+      "frequency_elasticity": 0.15926866954477664,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.5307519912719727,
+          "low_ms": 0.5802336215972901,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.5494272232055664,
+          "low_ms": 0.5707776069641113,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.5293536186218262,
+          "low_ms": 0.5780992031097412,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.5353119850158692,
+          "low_ms": 0.5883584022521973,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.5513504028320313,
+          "low_ms": 0.5845024108886718,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.5353119850158692,
+      "low_median_ms": 0.5802336215972901,
+      "latency_increase": 0.08391673984300807,
+      "interval_95": [
+        0.03885934816622072,
+        0.09909439489712812
+      ],
+      "frequency_elasticity": 0.26587930157323225,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.8182720184326172,
+          "low_ms": 0.8543647766113281,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.8177984237670899,
+          "low_ms": 0.8533472061157227,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.8188927650451661,
+          "low_ms": 0.8541888236999512,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.8182944297790528,
+          "low_ms": 0.8539615631103515,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.8177375793457031,
+          "low_ms": 0.8537216186523438,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.8182720184326172,
+      "low_median_ms": 0.8539615631103515,
+      "latency_increase": 0.043615746199041405,
+      "interval_95": [
+        0.04310217425457208,
+        0.0441085083757915
+      ],
+      "frequency_elasticity": 0.140861204460656,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.3527424097061157,
+          "low_ms": 0.3848896026611328,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.3532160043716431,
+          "low_ms": 0.38502719402313235,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.35284159183502195,
+          "low_ms": 0.38458240032196045,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.35272319316864015,
+          "low_ms": 0.3862015962600708,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.3531584024429321,
+          "low_ms": 0.3849119901657104,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.35284159183502195,
+      "low_median_ms": 0.3849119901657104,
+      "latency_increase": 0.0908917743055746,
+      "interval_95": [
+        0.08991315937303646,
+        0.09491409620865032
+      ],
+      "frequency_elasticity": 0.28704381067785634,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.22188479900360109,
+          "low_ms": 0.2365664005279541,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.22227840423583983,
+          "low_ms": 0.23654398918151856,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.22191040515899657,
+          "low_ms": 0.23618879318237304,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.22157759666442872,
+          "low_ms": 0.2365056037902832,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.2218656063079834,
+          "low_ms": 0.23652479648590088,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.22188479900360109,
+      "low_median_ms": 0.23652479648590088,
+      "latency_increase": 0.06598017326127059,
+      "interval_95": [
+        0.06417890660463255,
+        0.06737146422100793
+      ],
+      "frequency_elasticity": 0.21082222694313207,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.1329408049583435,
+          "low_ms": 0.15070079565048217,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.1326591968536377,
+          "low_ms": 0.1500704050064087,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.132368004322052,
+          "low_ms": 0.14973759651184082,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.13238400220870972,
+          "low_ms": 0.15013439655303956,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.13249599933624268,
+          "low_ms": 0.15012799501419066,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.13249599933624268,
+      "low_median_ms": 0.15012799501419066,
+      "latency_increase": 0.133075683539714,
+      "interval_95": [
+        0.13122198433639976,
+        0.13408262364168055
+      ],
+      "frequency_elasticity": 0.41222868706399707,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.20994880199432372,
+          "low_ms": 0.21954240798950195,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.20940799713134767,
+          "low_ms": 0.21936318874359131,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.20959999561309814,
+          "low_ms": 0.2202239990234375,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.20961918830871581,
+          "low_ms": 0.21946239471435547,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.20965440273284913,
+          "low_ms": 0.21971840858459474,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.20961918830871581,
+      "low_median_ms": 0.21954240798950195,
+      "latency_increase": 0.047339271565977725,
+      "interval_95": [
+        0.04569497850927284,
+        0.05068704023233983
+      ],
+      "frequency_elasticity": 0.15261265463229798,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 1.4607551574707032,
+          "low_ms": 1.5568767547607423,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 1.4790495872497558,
+          "low_ms": 1.553667163848877,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 1.496617603302002,
+          "low_ms": 1.5691264152526856,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 1.5233759880065918,
+          "low_ms": 1.566476821899414,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 1.4731840133666991,
+          "low_ms": 1.5278047561645507,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 1.4790495872497558,
+      "low_median_ms": 1.5568767547607423,
+      "latency_increase": 0.05261971483708239,
+      "interval_95": [
+        0.02829297181533086,
+        0.06580267527959549
+      ],
+      "frequency_elasticity": 0.16920630218105495,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.9299839973449707,
+          "low_ms": 0.997929573059082,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.9416159629821778,
+          "low_ms": 0.9906559944152832,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.9661600112915039,
+          "low_ms": 0.9866592407226562,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.9498559951782226,
+          "low_ms": 0.9965215682983398,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.9392831802368165,
+          "low_ms": 0.9709695816040039,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.9416159629821778,
+      "low_median_ms": 0.9906559944152832,
+      "latency_increase": 0.05208071375276124,
+      "interval_95": [
+        0.021217219913449048,
+        0.07306101600467363
+      ],
+      "frequency_elasticity": 0.16751632540544217,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.5296351909637451,
+          "low_ms": 0.5791232109069824,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.5373023986816406,
+          "low_ms": 0.5677311897277832,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.5437727928161621,
+          "low_ms": 0.5646815776824952,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.5688960075378418,
+          "low_ms": 0.58122239112854,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.5346432209014893,
+          "low_ms": 0.5577631950378418,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.5373023986816406,
+      "low_median_ms": 0.5677311897277832,
+      "latency_increase": 0.05663252410710351,
+      "interval_95": [
+        0.021667200028431033,
+        0.09343793763625663
+      ],
+      "frequency_elasticity": 0.1817608738660905,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.8179424285888672,
+          "low_ms": 0.8535200119018554,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.8177791595458984,
+          "low_ms": 0.8532383918762207,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.8175583839416504,
+          "low_ms": 0.8533535957336426,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.8179327964782714,
+          "low_ms": 0.8542880058288574,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.8181599617004395,
+          "low_ms": 0.8534943580627441,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.8179327964782714,
+      "low_median_ms": 0.8534943580627441,
+      "latency_increase": 0.04347736358975718,
+      "interval_95": [
+        0.043187638134805084,
+        0.04444767284930817
+      ],
+      "frequency_elasticity": 0.14042366112934107,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.3527712106704712,
+          "low_ms": 0.38471360206604005,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.35294399261474607,
+          "low_ms": 0.3843424081802368,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.3523008108139038,
+          "low_ms": 0.3843775987625122,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.35285439491271975,
+          "low_ms": 0.3845184087753296,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.35244479179382326,
+          "low_ms": 0.3848639965057373,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.3527712106704712,
+      "low_median_ms": 0.3845184087753296,
+      "latency_increase": 0.08999373289141199,
+      "interval_95": [
+        0.08896146760532475,
+        0.09198378147939534
+      ],
+      "frequency_elasticity": 0.28432646492806996,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.22169280052185059,
+          "low_ms": 0.23653759956359863,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.22168960571289062,
+          "low_ms": 0.236627197265625,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.22178239822387696,
+          "low_ms": 0.23664638996124268,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.22168960571289062,
+          "low_ms": 0.23692479133605956,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.22157759666442872,
+          "low_ms": 0.2367487907409668,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.22168960571289062,
+      "low_median_ms": 0.23664638996124268,
+      "latency_increase": 0.06746723284682332,
+      "interval_95": [
+        0.06696112371175045,
+        0.06872304894122983
+      ],
+      "frequency_elasticity": 0.21542190968339173,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.1318079948425293,
+          "low_ms": 0.14908159971237184,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.13283200263977052,
+          "low_ms": 0.14954240322113038,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.13224639892578124,
+          "low_ms": 0.14936959743499756,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.13211840391159058,
+          "low_ms": 0.15039039850234986,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.13218239545822144,
+          "low_ms": 0.14954559803009032,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.13218239545822144,
+      "low_median_ms": 0.14954240322113038,
+      "latency_increase": 0.13133373550032146,
+      "interval_95": [
+        0.12580101368099594,
+        0.1383001463065383
+      ],
+      "frequency_elasticity": 0.4071522184344016,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.20946879386901857,
+          "low_ms": 0.2195744037628174,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.20946879386901857,
+          "low_ms": 0.2194943904876709,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.20954880714416504,
+          "low_ms": 0.2193727970123291,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.2096031904220581,
+          "low_ms": 0.21967039108276368,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.2097951889038086,
+          "low_ms": 0.21989119052886963,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.20954880714416504,
+      "low_median_ms": 0.2195744037628174,
+      "latency_increase": 0.04784373032367095,
+      "interval_95": [
+        0.04688163107225596,
+        0.04824398759902104
+      ],
+      "frequency_elasticity": 0.1542015126502926,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "stage": "complete",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 1.5290847778320313,
+          "low_ms": 1.5679136276245118,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 1.480726432800293,
+          "low_ms": 1.5653792381286622,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 1.4986047744750977,
+          "low_ms": 1.5303296089172362,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 1.4927583694458009,
+          "low_ms": 1.60849609375,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 1.495132827758789,
+          "low_ms": 1.5771519660949707,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 1.495132827758789,
+      "low_median_ms": 1.5679136276245118,
+      "latency_increase": 0.048678484288798396,
+      "interval_95": [
+        0.02116958052082185,
+        0.07753279209358421
+      ],
+      "frequency_elasticity": 0.15682899872260178,
+      "is_material_response": false
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "stage": "gate_up_swiglu",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.9498592376708984,
+          "low_ms": 1.010435199737549,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.9304351806640625,
+          "low_ms": 0.9856736183166503,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.9300576210021972,
+          "low_ms": 0.9679103851318359,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.928326416015625,
+          "low_ms": 0.9941856384277343,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.9440223693847656,
+          "low_ms": 1.020627212524414,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.9304351806640625,
+      "low_median_ms": 0.9941856384277343,
+      "latency_increase": 0.06851681781655383,
+      "interval_95": [
+        0.04069937525897571,
+        0.08114727534430455
+      ],
+      "frequency_elasticity": 0.21866456666347753,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "stage": "isolated_down",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.5393695831298828,
+          "low_ms": 0.5872096061706543,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.5335391998291016,
+          "low_ms": 0.573583984375,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.5272640228271485,
+          "low_ms": 0.5694752216339112,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.5591455936431885,
+          "low_ms": 0.5792319774627686,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.5465695858001709,
+          "low_ms": 0.5645599842071534,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.5393695831298828,
+      "low_median_ms": 0.573583984375,
+      "latency_increase": 0.0634340576763266,
+      "interval_95": [
+        0.03291511067276964,
+        0.08869618261223189
+      ],
+      "frequency_elasticity": 0.20293181735960206,
+      "is_material_response": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "stage": "weight_read_checksum",
+      "process_pairs": [
+        {
+          "pair": 0,
+          "high_ms": 0.8177984237670899,
+          "low_ms": 0.8533663749694824,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 1,
+          "high_ms": 0.8177696228027344,
+          "low_ms": 0.8533087730407715,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 2,
+          "high_ms": 0.8177663803100585,
+          "low_ms": 0.8536576271057129,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 3,
+          "high_ms": 0.818563175201416,
+          "low_ms": 0.8539520263671875,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        },
+        {
+          "pair": 4,
+          "high_ms": 0.8179776191711425,
+          "low_ms": 0.8540960311889648,
+          "high_sm_mhz": 1113,
+          "low_sm_mhz": 822
+        }
+      ],
+      "high_median_ms": 0.8177984237670899,
+      "low_median_ms": 0.8536576271057129,
+      "latency_increase": 0.04384846228174655,
+      "interval_95": [
+        0.0432328893332683,
+        0.044155746039141075
+      ],
+      "frequency_elasticity": 0.1415968841045034,
+      "is_material_response": false
+    }
+  ],
+  "bootstrap": {
+    "method": "exhaustive ordered paired percentile",
+    "resamples": 3125,
+    "percentile_indices": [
+      78,
+      3046
+    ],
+    "unit": "outer process-pair medians"
+  },
+  "is_optimization_claim": false,
+  "is_hardware_ceiling_claim": false,
+  "has_measured_dram_traffic": false,
+  "changes_defaults": false
+}

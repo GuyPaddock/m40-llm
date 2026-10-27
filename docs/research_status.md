@@ -17,6 +17,17 @@ active execution order. Their negative conditional gates remain recorded.
 
 ## Current Phase: Maxwell Q8 Execution
 
+**Latest independent cost evidence:** [fixed-memory SM-clock sensitivity](experiments/2026-10-26-maxwell-sm-clock.md)
+uses unchanged FFN/checksum code and five outer process pairs. Observed SM
+1113 to 822 MHz raises one-row complete FFN 9.00-9.11%, gate/up 6.60-6.79%,
+down 13.13-13.31% and checksum 4.73-4.78%, all paired intervals positive.
+Original clock/boost/persistence policy is restored; actual work, identities,
+numerics and all 600 isolated boundaries pass. This is not pure arithmetic
+or memory-time attribution, DRAM saturation, an optimization or a new
+throughput qualification. No candidate is automatically admitted and no
+closed probe is reopened. Preserve 49.146 vs 43.106 HTTP tok/s and both
+unmet original goals; next needs a distinct sufficient avoided-work case.
+
 **Latest reader-work audit:** the [qualified gate/up address ledger](experiments/2026-10-26-maxwell-reader-work-audit.md)
 finds no duplicate logical payload reads. One layer consumes 45,088,768
 payload bytes once, with 2,818,048 unique scale bytes. Repeated scale

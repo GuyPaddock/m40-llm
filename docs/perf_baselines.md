@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-26: Unchanged FFN Has Mixed SM-Clock Sensitivity
+
+Five outer process pairs at observed **1113/822 MHz SM**, memory fixed at
+3004 MHz, increase one-row latency **6.60-6.79% gate/up**, **13.13-13.31%
+prepared down**, **9.00-9.11% complete FFN** and **4.73-4.78% checksum**.
+All intervals are positive. See [all pairs, numerics, restored policy and limits](experiments/2026-10-26-maxwell-sm-clock.md).
+
+This is a diagnostic, not a new implementation, clock recommendation or
+HTTP result. All work/identities and isolation checks pass; original
+application clocks, boost/default and persistence are restored and
+independently verified. Sensitivity does not identify pure arithmetic or
+DRAM time, establish saturation or reopen closed probes. Preserve qualified
+**49.146 versus 43.106 HTTP tok/s**, both original targets unmet/defaults
+unchanged. New candidates still need sufficient avoided-work evidence.
+
 ## 2026-10-26: Remaining Prefix Work Has Small E2E Scope
 
 Five release profiling-off/on pairs preserve actual512 IDs, ordinary CUDA

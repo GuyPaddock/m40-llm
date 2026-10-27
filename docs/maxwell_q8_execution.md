@@ -114,6 +114,18 @@ runtime claim. No global forced-JIT setting is recommended.
 
 ## Experimental Runtime Selection
 
+### Fixed-Memory Clock Sensitivity
+
+The [two-state diagnostic](experiments/2026-10-26-maxwell-sm-clock.md)
+keeps unchanged kernels and memory 3004 MHz while observing SM 1113/822 MHz.
+One-row latency rises 6.60-6.79% gate/up, 13.13-13.31% prepared down and
+9.00-9.11% complete FFN. Five outer pairs and exhaustive paired intervals
+are distinct from the existing inner benchmark rounds and promotion gates.
+Original hardware policy is restored. This does not measure pure arithmetic,
+DRAM traffic, occupancy or stalls, nor justify clock changes or another
+kernel automatically. Qualified runtime/defaults and original targets stay
+unchanged; closed probes cannot be rescued from this sensitivity alone.
+
 ### Actual Runner Activity Costs
 
 The [subsequent off/on calibration](experiments/2026-10-26-maxwell-activity-calibration.md)
