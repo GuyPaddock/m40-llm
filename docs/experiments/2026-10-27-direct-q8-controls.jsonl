@@ -8,3 +8,11 @@
 {"control":"free-bonus","is_rejected":true}
 {"control":"missing-pair","is_rejected":true}
 {"control":"uncounted-gemm","is_rejected":true}
+{"control":"altered-clocks","is_rejected":true}
+{"control":"competing-process","is_rejected":true}
+{"control":"missing-span","is_rejected":true}
+{"control":"changed-observer","is_rejected":true}
+{"control":"uncleared-suffix","is_rejected":true}
+{"control":"wrong-correction","is_rejected":true}
+{"control":"negative-rollback","is_rejected":true}
+{"control":"teardown-leak","is_rejected":true}
