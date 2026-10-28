@@ -13,6 +13,13 @@ drafts. Correctness and cache ownership precede paired complete measurements.
 Do not reuse the rejected SGEMM verification path, add a drafter, change
 defaults or rescue a failed schedule. Stop after the measured assessment.
 
+The [direct-target correctness checkpoint](experiments/2026-10-28-direct-verifier-correctness.md)
+passes all 512 actual IDs, all 511 full-vocabulary vectors with zero difference,
+all 10,616,832 valid KV words bit-identically, eight rejection/partial cases,
+invalid/drop/alias cases and twelve frozen task outputs. All actual prepared
+payloads are unchanged; target cuBLAS/allocations are zero and final tracked
+teardown is zero. Complete performance measurement is next, not yet qualified.
+
 The [fixed four-row operator probe](experiments/2026-10-28-four-row-operator.md)
 is complete and passes its exact-output, resource, ownership and >=5%
 complete-FFN gates at all three frozen layers against both controls. Gains are
@@ -24,9 +31,10 @@ dynamic shared bytes; all 137 original CUDA entries are unchanged.
 The [updated full-verifier assessment](experiments/2026-10-28-four-row-feasibility.md)
 rejects simply patching the old SGEMM verifier: its modeled batch is still
 111.9 ms. A fully direct schedule around existing qualified one-row consumers
-is conditionally plausible, not implemented or qualified. Real drafter
-acceptance and complete verification costs remain unknown. **Stop for review**;
-no full verifier, neural drafter, EAGLE, kernel rescue or default change.
+was conditionally plausible at that checkpoint. The subsequently authorized
+prototype above passes correctness; measured complete costs and real drafter
+acceptance remain unknown. No neural drafter, EAGLE, kernel rescue or default
+change follows automatically.
 The immutable 50.910426 HTTP tok/s reference and 56.153149 target are unchanged.
 
 The preceding [bounded feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
