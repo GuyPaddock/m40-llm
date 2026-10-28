@@ -6,6 +6,13 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user authorizes one [fully direct four-row verifier feasibility prototype](experiments/2026-10-28-direct-verifier-plan.md).
+Use the fixed shared-read operator and original direct one-row consumers in a
+layer-major schedule, with exclusive dense transactions and frozen perfect
+drafts. Correctness and cache ownership precede paired complete measurements.
+Do not reuse the rejected SGEMM verification path, add a drafter, change
+defaults or rescue a failed schedule. Stop after the measured assessment.
+
 The [fixed four-row operator probe](experiments/2026-10-28-four-row-operator.md)
 is complete and passes its exact-output, resource, ownership and >=5%
 complete-FFN gates at all three frozen layers against both controls. Gains are
