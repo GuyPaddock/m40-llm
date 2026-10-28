@@ -34,7 +34,7 @@ pub fn generate(model: &LoadedModel, prompt: &str, max_tokens: usize) -> Result<
     )
 }
 
-fn dispatch(before: &profile::ProfileSnapshot) -> Value {
+pub(super) fn dispatch(before: &profile::ProfileSnapshot) -> Value {
     let after = profile::snapshot();
     let operations: std::collections::BTreeMap<_, _> = after
         .by_op

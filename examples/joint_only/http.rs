@@ -18,6 +18,26 @@ struct Server {
     state: Arc<AppState>,
     url: String,
     task: tokio::task::JoinHandle<std::io::Result<()>>,
+    shutdown: tokio::sync::oneshot::Sender<()>,
+}
+
+/// Graceful shutdown drains connection tasks that retain router/model owners.
+fn spawn_router(
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+) -> (
+    tokio::sync::oneshot::Sender<()>,
+    tokio::task::JoinHandle<std::io::Result<()>>,
+) {
+    let (shutdown, stopped) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        axum::serve(listener, router.into_make_service())
+            .with_graceful_shutdown(async {
+                let _ = stopped.await;
+            })
+            .await
+    });
+    (shutdown, task)
 }
 
 fn validate_timing_gpu(state: &Value) -> Result<()> {
@@ -51,11 +71,17 @@ async fn start(model: LoadedModel) -> Result<Server> {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let url = format!("http://{}/generate", listener.local_addr()?);
     let router = app_router(state.clone());
-    let task = tokio::spawn(async move { axum::serve(listener, router.into_make_service()).await });
-    Ok(Server { state, url, task })
+    let (shutdown, task) = spawn_router(listener, router);
+    Ok(Server {
+        state,
+        url,
+        task,
+        shutdown,
+    })
 }
 
 async fn request(client: &reqwest::Client, server: &Server, expected: &str) -> Result<Value> {
+    let counters = m40_llm::profile::snapshot();
     let began = Instant::now();
     let response=client.post(&server.url).json(&json!({"prompt":protocol::render_prompt(),"prompt_format":"raw", "max_tokens":512,"top_k":1,"seed":0}))
         .send().await?.error_for_status()?;
@@ -71,7 +97,8 @@ async fn request(client: &reqwest::Client, server: &Server, expected: &str) -> R
         "HTTP fixed work/output changed"
     );
     Ok(
-        json!({"output":response.output,"metrics":metrics,"http_ms":elapsed,"http_tok_per_sec":512000./elapsed}),
+        json!({"output":response.output,"metrics":metrics,"http_ms":elapsed,"http_tok_per_sec":512000./elapsed,
+        "dispatch":quality::dispatch(&counters)}),
     )
 }
 
@@ -121,6 +148,10 @@ pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
                 let row = request(&client, if arm == 0 { &a } else { &b }, expected).await?;
                 let after = run::gpu()?;
                 validate_timing_gpu(&after)?;
+                ensure!(
+                    row["dispatch"] == generation["control_dispatch"],
+                    "ordinary HTTP dispatch/counters differ from completed quality"
+                );
                 rates[arm] = row["http_tok_per_sec"].as_f64().context("HTTP rate")?;
                 report.record(json!({"kind":"joint_only_http_trial","phase":phase,"pair":pair,"arm":arm,"row":row,"gpu_before":before,"gpu_after":after}))?;
             }
@@ -171,10 +202,11 @@ pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
             "post-HTTP actual IDs differ"
         );
     }
-    a.task.abort();
-    b.task.abort();
-    let _ = a.task.await;
-    let _ = b.task.await;
+    drop(client);
+    let _ = a.shutdown.send(());
+    let _ = b.shutdown.send(());
+    tokio::time::timeout(std::time::Duration::from_secs(5), a.task).await???;
+    tokio::time::timeout(std::time::Duration::from_secs(5), b.task).await???;
     drop(a.state);
     drop(b.state);
     ensure!(
@@ -182,4 +214,36 @@ pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
         "HTTP teardown leaked"
     );
     report.record(json!({"kind":"joint_only_http_complete","is_storage_gate_passed":true,"device_bytes_after":CudaContext::total_device_bytes(),"requires_speedup":false}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Idle keep-alive connections must release captured state after server
+    /// shutdown, even while the client's connection pool is still alive.
+    #[tokio::test]
+    async fn test_graceful_shutdown_releases_connection_owners() -> Result<()> {
+        let owner = Arc::new(());
+        let captured = owner.clone();
+        let router = axum::Router::new().route(
+            "/",
+            axum::routing::get(move || {
+                let state = captured.clone();
+                async move {
+                    drop(state);
+                    "ok"
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let url = format!("http://{}", listener.local_addr()?);
+        let (shutdown, task) = spawn_router(listener, router);
+        let client = reqwest::Client::new();
+        assert_eq!(client.get(url).send().await?.text().await?, "ok");
+        let _ = shutdown.send(());
+        tokio::time::timeout(std::time::Duration::from_secs(5), task).await???;
+        assert_eq!(Arc::strong_count(&owner), 1);
+        Ok(())
+    }
 }
