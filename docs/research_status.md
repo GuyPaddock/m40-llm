@@ -26,6 +26,14 @@ Next is the independent joint-only storage experiment, after documenting
 and closing this decision. Its gate requires the exact resident reduction,
 unchanged behavior and no meaningful regression, not a throughput gain.
 
+Joint-only correctness now passes independently at clean source `9c4a027`:
+[actual quality](experiments/2026-10-27-joint-only-quality.jsonl),
+[new logical/resident audit](experiments/2026-10-27-joint-only-quality-audit.json),
+and [137 unchanged CUDA entries](experiments/2026-10-27-joint-only-sass-audit.json).
+The exact resident reduction, 512 actual IDs, seven full-vocabulary bit
+checks, twelve frozen outputs and ordinary dispatch/counters all match.
+HTTP non-regression is still pending; this is not completed storage promotion.
+
 The preceding preservation and feasibility checkpoint remains below.
 The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
 fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean
