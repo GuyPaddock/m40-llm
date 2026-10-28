@@ -79,12 +79,12 @@ impl Q8FfnConfig {
         }
     }
 
-    /// The single compound consumer qualified by the four-arm FFN screen.
+    /// The qualified compound consumer with preferred joint-only ownership.
     pub const fn joint_shared_scales() -> Self {
         Self {
             kernel: Q8FfnKernel::JointSharedScales,
             threads: Some(128),
-            ownership: Q8FfnOwnership::RetainSplit,
+            ownership: Q8FfnOwnership::JointOnly,
         }
     }
 
@@ -159,7 +159,7 @@ impl Q8FfnConfig {
         }?;
         let ownership = match std::env::var("M40LLM_Q8_FFN_OWNERSHIP") {
             Ok(value) => Q8FfnOwnership::parse(&value)?,
-            Err(std::env::VarError::NotPresent) => Q8FfnOwnership::RetainSplit,
+            Err(std::env::VarError::NotPresent) => config.ownership(),
             Err(error) => return Err(error.into()),
         };
         config.with_ownership(ownership)
@@ -223,6 +223,24 @@ mod compound_tests {
             Q8FfnConfig::default().ownership(),
             Q8FfnOwnership::RetainSplit
         );
+        assert_eq!(
+            Q8FfnConfig::joint_shared_scales().ownership(),
+            Q8FfnOwnership::JointOnly
+        );
+        for config in [
+            Q8FfnConfig::native(),
+            Q8FfnConfig::split_f32x4(),
+            Q8FfnConfig::packed_f32(256)?,
+            Q8FfnConfig::q8_1(128)?,
+        ] {
+            assert_eq!(config.ownership(), Q8FfnOwnership::RetainSplit);
+        }
+        assert_eq!(
+            Q8FfnConfig::joint_shared_scales()
+                .with_ownership(Q8FfnOwnership::RetainSplit)?
+                .ownership(),
+            Q8FfnOwnership::RetainSplit
+        );
         assert!(Q8FfnConfig::native()
             .with_ownership(Q8FfnOwnership::JointOnly)
             .is_err());
@@ -253,7 +271,7 @@ mod compound_tests {
     /// The compound is explicit, fixed at 128 threads, non-quantizing and
     /// cannot inherit missing or mixed gate/up preparation as a fallback.
     #[test]
-    fn test_compound_selection_requires_explicit_split_owners() -> Result<()> {
+    fn test_compound_selection_requires_split_preparation() -> Result<()> {
         assert!(Q8FfnConfig::default().is_native());
         let compound = Q8FfnConfig::parse("joint-shared-scales-128")?;
         assert_eq!(compound, Q8FfnConfig::joint_shared_scales());

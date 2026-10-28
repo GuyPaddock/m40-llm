@@ -6,7 +6,9 @@ use anyhow::{ensure, Context};
 use clap::ValueEnum;
 use m40_llm::{
     generate::PromptPrefill,
-    infer::{q8_prefill::Q8PrefillBackend, Q8AttentionProjectionBackend, Q8FfnConfig},
+    infer::{
+        q8_prefill::Q8PrefillBackend, Q8AttentionProjectionBackend, Q8FfnConfig, Q8FfnOwnership,
+    },
 };
 use serde::Serialize;
 
@@ -146,7 +148,10 @@ impl RuntimeConfig {
             FfnChoice::PackedF32_256 => Q8FfnConfig::packed_f32(256),
             FfnChoice::PackedF32_128 => Q8FfnConfig::packed_f32(128),
             FfnChoice::SplitF32x4 => Ok(Q8FfnConfig::split_f32x4()),
-            FfnChoice::JointSharedScales => Ok(Q8FfnConfig::joint_shared_scales()),
+            // This named historical comparison retains the reference's owners.
+            FfnChoice::JointSharedScales => {
+                Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::RetainSplit)
+            }
             FfnChoice::Q81_128 => Q8FfnConfig::q8_1(128),
             FfnChoice::Q81_256 => Q8FfnConfig::q8_1(256),
         }
@@ -357,8 +362,8 @@ pub fn validate_environment(
 mod tests {
     use super::*;
 
-    /// The compound changes only the qualified FFN axis; old controls or
-    /// altered prefix/projection choices cannot qualify a favorable comparison.
+    /// The historical compound retains split owners and changes only the FFN
+    /// axis; altered prefix/projection choices cannot qualify the comparison.
     #[test]
     fn test_compound_comparison_pins_all_other_qualified_axes() -> Result<()> {
         let control = ControlChoice::QualifiedPackedProjectionSgemm.config();
@@ -367,7 +372,10 @@ mod tests {
             ..control
         };
         candidate.validate_comparison(control)?;
-        assert_eq!(candidate.ffn_config()?, Q8FfnConfig::joint_shared_scales());
+        assert_eq!(
+            candidate.ffn_config()?,
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::RetainSplit)?
+        );
         assert_eq!(
             serde_json::to_value(candidate.execution_config()?)?,
             serde_json::to_value(control.execution_config()?)?

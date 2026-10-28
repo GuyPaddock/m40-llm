@@ -29,6 +29,7 @@ fn configure() -> Vec<EnvRestore> {
         ("M40LLM_FUSED_Q8_QKV", "1"),
         ("M40LLM_FUSED_Q8_MLP_SWIGLU", "1"),
         ("M40LLM_DECODE_GRAPH", "0"),
+        ("M40LLM_Q8_FFN_KERNEL", "joint-shared-scales-128"),
     ]
     .into_iter()
     .map(|(k, v)| EnvRestore::set(k, v))
@@ -50,26 +51,30 @@ fn config() -> Result<Q8ExecutionConfig> {
     Q8ExecutionConfig::parse("split", Some("6144"), Some("gate-up,down,vocabulary"))
 }
 
-/// Joint-only replaces physical split gate/up owners without changing source
-/// coverage, joint payloads, forward logits, prefill or warm allocations.
+/// Default compound ownership omits split gate/up copies, while an explicit
+/// retained-split override preserves the reference. Both keep identical source
+/// coverage, joint payloads, forward logits, prefill and warm allocations.
 #[test]
 #[ignore = "explicit M40 joint-only ownership gate"]
 fn test_joint_only_ownership_matches_retained_compound() -> Result<()> {
     let _lock = cuda_test_scope::lock_cuda();
     let _env = configure();
+    let _ownership = EnvRestore::set("M40LLM_Q8_FFN_OWNERSHIP", "");
+    std::env::remove_var("M40LLM_Q8_FFN_OWNERSHIP");
     let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
     let initial = CudaContext::total_device_bytes();
     for is_qwen in [false, true] {
         let before = profile::snapshot();
-        let mut a = model(is_qwen, Q8FfnConfig::joint_shared_scales(), config()?)?;
+        let mut a = {
+            let _retained = EnvRestore::set("M40LLM_Q8_FFN_OWNERSHIP", "retain-split");
+            model(is_qwen, Q8FfnConfig::from_env()?, config()?)?
+        };
         let control_allocs = profile::counter_delta(&before, &profile::snapshot()).device_allocs;
         let before = profile::snapshot();
-        let mut b = model(
-            is_qwen,
-            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::JointOnly)?,
-            config()?,
-        )?;
+        let mut b = model(is_qwen, Q8FfnConfig::from_env()?, config()?)?;
         let candidate_allocs = profile::counter_delta(&before, &profile::snapshot()).device_allocs;
+        assert_eq!(a.q8_ffn.ownership(), Q8FfnOwnership::RetainSplit);
+        assert_eq!(b.q8_ffn.ownership(), Q8FfnOwnership::JointOnly);
         assert_eq!(
             control_allocs - candidate_allocs,
             8,
@@ -144,6 +149,10 @@ fn test_joint_only_ownership_matches_retained_compound() -> Result<()> {
             "partial construction leaked"
         );
     }
+    {
+        let _native = EnvRestore::set("M40LLM_Q8_FFN_KERNEL", "native");
+        assert_eq!(Q8FfnConfig::from_env()?, Q8FfnConfig::native());
+    }
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
@@ -160,7 +169,9 @@ fn test_compound_runtime_matches_split_and_retains_owners() -> Result<()> {
     let initial = CudaContext::total_device_bytes();
     for is_qwen in [false, true] {
         let mut control = model(is_qwen, Q8FfnConfig::split_f32x4(), config()?)?;
-        let mut candidate = model(is_qwen, Q8FfnConfig::joint_shared_scales(), config()?)?;
+        let retained =
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::RetainSplit)?;
+        let mut candidate = model(is_qwen, retained, config()?)?;
         let stats = candidate.q8_ffn_pair_stats();
         assert_eq!(stats.pair_count, 2);
         assert!(stats.is_enabled);
@@ -233,7 +244,7 @@ fn test_compound_runtime_matches_split_and_retains_owners() -> Result<()> {
                 assert_eq!(CudaContext::total_device_bytes(), resident);
             }
         }
-        assert_eq!(candidate.q8_ffn, Q8FfnConfig::joint_shared_scales());
+        assert_eq!(candidate.q8_ffn, retained);
         assert_eq!(serde_json::to_value(candidate.q8_ffn_pair_stats())?, frozen);
         let input = DeviceBuffer::new_tagged(&candidate.cuda, d * 4, "compound:invalid-input")?;
         let output = DeviceBuffer::new_tagged(
@@ -287,15 +298,23 @@ fn test_compound_combined_budget_failure_releases_model() -> Result<()> {
     let _env = configure();
     let initial = CudaContext::total_device_bytes();
     let required = {
-        let loaded = model(false, Q8FfnConfig::joint_shared_scales(), config()?)?;
+        let loaded = model(
+            false,
+            Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::RetainSplit)?,
+            config()?,
+        )?;
         loaded.q8_ffn_pair_stats().combined_prepared_bytes
     };
     assert_eq!(CudaContext::total_device_bytes(), initial);
     let mut limited = config()?;
     limited.budget_bytes = required - 1;
-    let error = model(false, Q8FfnConfig::joint_shared_scales(), limited)
-        .err()
-        .expect("combined budget must reject");
+    let error = model(
+        false,
+        Q8FfnConfig::joint_shared_scales().with_ownership(Q8FfnOwnership::RetainSplit)?,
+        limited,
+    )
+    .err()
+    .expect("combined budget must reject");
     assert!(error.to_string().contains("budget"));
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())

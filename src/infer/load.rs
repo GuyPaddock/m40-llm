@@ -256,8 +256,8 @@ impl LoadedModel {
         #[cfg(feature = "cuda")]
         model.validate_q8_ffn_prepared_weights()?;
         if !model.q8_ffn.is_native() {
-            eprintln!("[q8-ffn] kernel={:?} threads={:?} scope=single-row activation_bytes={} numerical_track={}",
-                model.q8_ffn.kernel(),model.q8_ffn.threads(),
+            eprintln!("[q8-ffn] kernel={:?} ownership={:?} threads={:?} scope=single-row activation_bytes={} numerical_track={}",
+                model.q8_ffn.kernel(),model.q8_ffn.ownership(),model.q8_ffn.threads(),
                 model.q8_ffn.activation_bytes(model.model_config.embedding_length as usize)?,model.q8_ffn.has_quantization());
         }
         Ok(model)
