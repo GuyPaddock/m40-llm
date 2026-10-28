@@ -1,0 +1,17 @@
+{
+  "is_quality_audit_passed": true,
+  "schema_version": 1,
+  "revision": "2d453533447b67298869abe4e439d804e82dd764",
+  "logical_sources": 109,
+  "control_split_owners": 109,
+  "candidate_split_owners": 37,
+  "joint_pairs": 36,
+  "skipped_device_allocations": 144,
+  "resident_reduction_bytes": 1724645376,
+  "actual512_ids_identical": true,
+  "sampled_logit_bits_identical": true,
+  "frozen_tasks": 12,
+  "dense_valid": 7,
+  "inconclusive": 5,
+  "device_bytes_after": 0
+}

@@ -6,10 +6,10 @@ use anyhow::{ensure, Context, Result};
 use m40_llm::{
     cuda::CudaContext,
     evaluation::identity::file_sha256,
-    generate::PromptPrefill,
+    generate::{PromptFormat, PromptPrefill},
     infer::{LoadedModel, Q8FfnOwnership},
     kv_compression::KvCompressionConfig,
-    server::{app_router, AppState, GenerateResponse},
+    server::{app_router, AppState, GenerateRequest, GenerateResponse},
 };
 use serde_json::{json, Value};
 use std::{fs, sync::Arc, time::Instant};
@@ -80,11 +80,27 @@ async fn start(model: LoadedModel) -> Result<Server> {
     })
 }
 
+fn request_body() -> GenerateRequest {
+    GenerateRequest {
+        prompt: protocol::render_prompt(),
+        max_tokens: Some(512),
+        should_include_metrics: true,
+        top_k: Some(1),
+        seed: Some(0),
+        prompt_format: PromptFormat::Raw,
+        ..GenerateRequest::default()
+    }
+}
+
 async fn request(client: &reqwest::Client, server: &Server, expected: &str) -> Result<Value> {
     let counters = m40_llm::profile::snapshot();
     let began = Instant::now();
-    let response=client.post(&server.url).json(&json!({"prompt":protocol::render_prompt(),"prompt_format":"raw", "max_tokens":512,"top_k":1,"seed":0}))
-        .send().await?.error_for_status()?;
+    let response = client
+        .post(&server.url)
+        .json(&request_body())
+        .send()
+        .await?
+        .error_for_status()?;
     let bytes = response.bytes().await?;
     let elapsed = began.elapsed().as_secs_f64() * 1000.;
     let response: GenerateResponse = serde_json::from_slice(&bytes)?;
@@ -220,18 +236,23 @@ pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
 mod tests {
     use super::*;
 
-    /// Idle keep-alive connections must release captured state after server
-    /// shutdown, even while the client's connection pool is still alive.
+    /// The actual benchmark request must ask for fixed-work metrics; idle
+    /// keep-alive connections must release captured state after shutdown.
     #[tokio::test]
     async fn test_graceful_shutdown_releases_connection_owners() -> Result<()> {
         let owner = Arc::new(());
         let captured = owner.clone();
         let router = axum::Router::new().route(
             "/",
-            axum::routing::get(move || {
+            axum::routing::post(move |axum::Json(request): axum::Json<GenerateRequest>| {
                 let state = captured.clone();
                 async move {
                     drop(state);
+                    assert!(request.should_include_metrics);
+                    assert_eq!(request.max_tokens, Some(512));
+                    assert_eq!(request.top_k, Some(1));
+                    assert_eq!(request.seed, Some(0));
+                    assert!(matches!(request.prompt_format, PromptFormat::Raw));
                     "ok"
                 }
             }),
@@ -240,7 +261,16 @@ mod tests {
         let url = format!("http://{}", listener.local_addr()?);
         let (shutdown, task) = spawn_router(listener, router);
         let client = reqwest::Client::new();
-        assert_eq!(client.get(url).send().await?.text().await?, "ok");
+        assert_eq!(
+            client
+                .post(url)
+                .json(&request_body())
+                .send()
+                .await?
+                .text()
+                .await?,
+            "ok"
+        );
         let _ = shutdown.send(());
         tokio::time::timeout(std::time::Duration::from_secs(5), task).await???;
         assert_eq!(Arc::strong_count(&owner), 1);
