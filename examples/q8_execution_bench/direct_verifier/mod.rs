@@ -109,6 +109,51 @@ fn new_session<'m>(
     }
 }
 
+fn prepared_payload_hashes(model: &LoadedModel) -> Result<Value> {
+    use m40_llm::infer::execution_weights::DeviceQ8ExecutionView;
+    let mut hashes = Vec::new();
+    for tensor in model.q8_execution_stats().tensors {
+        let pointer = unsafe {
+            model
+                .d_weights_base
+                .cast::<u8>()
+                .add(usize::try_from(tensor.key.source.byte_offset())?)
+                .cast()
+        };
+        let weight = model
+            .q8_execution
+            .get_separate_weight(pointer)
+            .context("missing prepared source owner")?;
+        ensure!(
+            weight.key() == &tensor.key,
+            "prepared source identity changed"
+        );
+        let DeviceQ8ExecutionView::SeparateScalesValues { scales, values, .. } = weight.view()
+        else {
+            anyhow::bail!("unsupported prepared payload layout");
+        };
+        let mut digest = ring::digest::Context::new(&ring::digest::SHA256);
+        for plane in [scales, values] {
+            let mut bytes = vec![0; plane.bytes()];
+            unsafe {
+                model
+                    .cuda
+                    .memcpy_d2h(bytes.as_mut_ptr().cast(), plane.as_ptr(), bytes.len())?;
+            }
+            digest.update(&bytes);
+        }
+        let hash = digest
+            .finish()
+            .as_ref()
+            .iter()
+            .map(|v| format!("{v:02x}"))
+            .collect::<String>();
+        hashes.push(json!({"key":tensor.key,"sha256":hash}));
+    }
+    ensure!(hashes.len() == 37, "wrong prepared payload count");
+    Ok(json!(hashes))
+}
+
 fn check_gpu() -> Result<Value> {
     let state = inspect_gpu()?;
     let fields: Vec<_> = state["device"]
@@ -313,12 +358,14 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let prepared = serde_json::to_value(model.q8_execution_stats())?;
     let joint = serde_json::to_value(model.q8_ffn_pair_stats())?;
     let joint_hashes = model.q8_execution.debug_joint_payload_hashes()?;
+    let prepared_hashes = prepared_payload_hashes(&model)?;
     write_record(
         &mut out,
         json!({"kind":"direct_verifier_manifest","schema_version":1,
         "revision":command_output("git",&["rev-parse","HEAD"])?,"worktree":"","executable_sha256":executable_sha256,
         "model_sha256":frozen.reference["model"]["sha256"],"quality_sha256":file_sha256(Path::new(QUALITY))?,
         "environment":environment,"prepared":prepared,"joint":joint,"joint_payload_hashes":joint_hashes,
+        "prepared_payload_hashes":prepared_hashes,
         "logical_sources":model.q8_execution.logical_sources(),"source_bytes":model.weights_len,
         "dense_kv_bytes":model.kv_cache.as_ref().unwrap().actual_bytes(),"correctness_only":args.direct_verifier_correctness_only,
         "trials":args.trials,"rows":4,"build_profile":"release","nvcc":command_output("nvcc",&["--version"])?,
@@ -333,7 +380,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     ensure!(
         serde_json::to_value(model.q8_execution_stats())? == prepared
             && serde_json::to_value(model.q8_ffn_pair_stats())? == joint
-            && model.q8_execution.debug_joint_payload_hashes()? == joint_hashes,
+            && model.q8_execution.debug_joint_payload_hashes()? == joint_hashes
+            && prepared_payload_hashes(&model)? == prepared_hashes,
         "prepared ownership/payloads changed"
     );
     drop(model);
@@ -345,7 +393,7 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         &mut out,
         json!({"kind":"direct_verifier_complete","is_complete":true,
         "is_correctness_passed":args.direct_verifier_correctness_only,"device_bytes_after":CudaContext::total_device_bytes(),
-        "is_runtime_claim":false}),
+        "is_runtime_claim":false,"prepared_payload_hashes":prepared_hashes,"joint_payload_hashes":joint_hashes}),
     )
 }
 
