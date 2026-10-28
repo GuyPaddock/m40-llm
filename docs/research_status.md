@@ -6,11 +6,16 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The user has authorized a [bounded direct-Q8 verification feasibility assessment](experiments/2026-10-27-direct-q8-feasibility-plan.md),
-including one diagnostic session for missing stage costs. Follow the
-[evidence ledger](experiments/2026-10-27-direct-q8-ledger.md). No new CUDA
-kernel, verifier integration, drafter or runtime-default change is authorized.
-Preserve the old SGEMM verifier's rejection and stop at the assessment decision.
+The [bounded direct-Q8 feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
+is complete. Thirty full-batch observations, 40 rejection cycles and 140 GPU
+boundary checks pass. Four-row verification still costs 176.050 ms; its
+conversion/SGEMM spans are 88.759/54.474 ms. The old verifier remains rejected.
+The accounted model recommends only one fixed four-row joint gate/up operator
+probe for review. Reader savings and real drafter acceptance are unmeasured;
+the existing negative n-gram gate stays closed. No new CUDA kernel was written.
+Stop for review before any operator implementation, verifier integration,
+drafter, kernel search or runtime-default change. The immutable 50.910426
+checkpoint and 56.153149 target are unchanged.
 
 The user has now authorized **joint-only as preferred ownership for the
 opt-in compound FFN**. Its constructor and environment selection omit redundant

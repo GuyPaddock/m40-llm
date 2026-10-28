@@ -1,0 +1,17 @@
+f86974ad69c0c9e1409c65bc1d67293d36cefa9529e7dd45a49e47e7bc83ca68  docs/experiments/2026-10-27-direct-q8-audit.json
+83e2cdc5ae58f1c876c2fdbeb352b3fc652d98d3d26b596f2bb0e06bafddb025  docs/experiments/2026-10-27-direct-q8-clock-attempt.jsonl
+333475079de4c653ce9e8a2fb7d796992d0c2b64f2efd1704ed846ad949c5de6  docs/experiments/2026-10-27-direct-q8-clock-attempt.log
+e1a0d93e02021c9ad4290d79d844ebed0c3f2f4206bc6a890194b764b89f9ba6  docs/experiments/2026-10-27-direct-q8-clock-attempt.md
+e53d0d7e9c1aad25fd87a5bb1efda904a576e3105c8b4be3fbc6cad825c8c602  docs/experiments/2026-10-27-direct-q8-controls.jsonl
+59777f28fac55ea0ff064ad07f98d7046b50dd235ff40588feca7249dbb10f1c  docs/experiments/2026-10-27-direct-q8-controls.sh
+1f383bcea2c871991fdddeca90e6d661c06e6ece38c641de2bf5e211261ba07c  docs/experiments/2026-10-27-direct-q8-cost.jsonl
+badaac3a907f00809442d2e4a568af90185156c8867ef16d80f29428e92767b2  docs/experiments/2026-10-27-direct-q8-feasibility-plan.md
+266b81ea738d84f9271805c8913f63595e6ea98d01ab9d4215eb46bddf21f792  docs/experiments/2026-10-27-direct-q8-feasibility.md
+c2cf545bd73f5ff93979d7a20aaa2dbca3f9f79f1f12c4c59f79034f431470ee  docs/experiments/2026-10-27-direct-q8-ledger.md
+776a5c931c549642d6aa7b73302a0a69182f954c6e1e85e8d855cba755396ce7  docs/experiments/2026-10-27-direct-q8-math-tests.json
+682b5ce5c11c305ce95e2615980e1ab06dab3fd7aeb2dce240e6075def23ab34  docs/experiments/2026-10-27-direct-q8-model.json
+583c6c2c735d23911a1a9314c4e675284d35621cefdc452349ea9d271aafbc34  docs/experiments/2026-10-27-direct-q8-model.pl
+9a6f031af9582f8a39c920cc846b03c2618a7be3f12684f0b6d93f4cdae87cde  docs/experiments/2026-10-27-direct-q8-sass-audit.json
+ad182f2f842fd1fcadfa3682f59544a65a277a4cd9d82e2447196e1e4611f5d6  docs/experiments/2026-10-27-direct-q8-validation.tar.gz
+bb4bac4876cef280a1204e006e7aae0440e6d50510bc113898fff632534585fd  local-artifacts/qualified-references/direct-q8-cost-6fec43a/q8_execution_bench
+adde84158d3611b6d2be37a6e68de4fcfbb5f4d59e556d97acf350fd0fe65a05  local-artifacts/qualified-references/direct-q8-cost-6fec43a/source.tar.gz

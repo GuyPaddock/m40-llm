@@ -2,6 +2,24 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-28: Direct-Q8 Feasibility, No New Speed Claim
+
+The [bounded assessment](experiments/2026-10-27-direct-q8-feasibility.md)
+profiles the existing rejected verifier, not a new reader. Release batch
+medians at widths 2/4/8 are 172.870/176.050/200.030 ms. At four rows,
+conversion and SGEMM event spans total 88.759/54.474 ms respectively.
+All 30 full observations and 40 rejection cycles pass their bounded output,
+prefix-state, ownership and cleanup checks. Instrumentation stays within 3%.
+
+The model supports reviewing one fixed four-row joint gate/up operator probe,
+not implementing a speculative decoder. Even an assumed halving of gate/up
+time needs roughly 89.2% conditional draft acceptance for a modeled 3% gain,
+or 94.2% for the 56.153149 target with optimistic 0.25 ms drafting and 1 ms
+extra batch cost. These are scenarios, **not measured throughput or acceptance**.
+The previous n-gram rejection remains closed. No CUDA kernel, defaults,
+reference artifacts or model semantics changed. The immutable qualified
+reference stays **50.910426 HTTP tok/s**; stop for proposal review.
+
 ## 2026-10-27: Prefer Joint-Only Compound Ownership
 
 The user authorized joint-only as the preferred ownership for the opt-in
