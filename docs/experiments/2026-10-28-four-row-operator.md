@@ -120,7 +120,8 @@ The original model hash is
 Source archive SHA-256 is
 `292fbf0f5401cb3212e59f08b0ff589b2fd2035e1ac64f233122a02942d45d53`.
 Read-only local source and executable copies are retained under
-`local-artifacts/research/four-row-de0481d/`. The immutable reference and its
+`local-artifacts/qualified-references/four-row-de0481d/`. This is an
+operator-only checkpoint, not a qualified runtime. The immutable reference and its
 measured binaries are not modified.
 
 ```bash
