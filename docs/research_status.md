@@ -6,11 +6,28 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The user authorizes a [bounded causal draft-acceptance/cost study](experiments/2026-10-28-draft-acceptance-plan.md).
-Evaluate fixed prompt/past-only sources on disclosed development traces and
-fresh frozen held-out prompts; preserve all verifier/reference/default controls.
-Real proposal costs and joint eligibility/acceptance precede any conditional
-research drafter implementation. No neural source or runtime promotion is assumed.
+The [bounded causal draft study](experiments/2026-10-28-draft-feasibility.md)
+is complete. **Stop for review.** Three fixed CPU sources were tested on
+13 disclosed traces and eight new precommitted held-out prompts, with causal
+access, five all-in CPU replays and joint rejection/coverage cost modeling.
+None qualifies for general browser acceleration: history lookup -10.32%,
+prompt-copy -0.12%, online backoff -31.21% projected resident throughput.
+The historical negative lookup gate is not reversed; neural costs/acceptance
+remain unmeasured and no neural/EAGLE implementation is admitted.
+
+The user-authorized conditional **copy-only research drafter is implemented**.
+Unchanged prompt-copy drives actual target predictions through the existing
+direct verifier. All 21 live traces preserve actual IDs/counts/stops, 1,544
+full-vocabulary vectors and 85,948,416 valid KV words bit-identically. Thirteen
+natural rejections clear 516,096 suffix words before correction. Five paired
+release requests per copy case give +12.7955% and +6.6723% resident throughput,
+positive intervals, no extensions, and zero tracked teardown. These are
+52/68-token specialized copy tasks, **not HTTP/browser512 qualification**.
+All 138 compiled CUDA entries and 113 prior checksums remain unchanged.
+The [live report](experiments/2026-10-28-draft-live-measurement.md) preserves
+source/binaries, isolation, audits and tests. Defaults, immutable 50.910426
+HTTP reference and preferred joint-only ownership remain unchanged. No runtime
+promotion, automatic workload routing or additional search follows.
 
 The [fully direct four-row verifier feasibility prototype](experiments/2026-10-28-direct-verifier-plan.md)
 is complete and accepted. Its fixed layer-major schedule uses the

@@ -2,6 +2,32 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-28: Real Drafting Helps Literal Copy Only
+
+The [causal draft study](experiments/2026-10-28-draft-feasibility.md) rejects
+general browser acceleration for all three fixed CPU sources. Projected
+resident gains are -10.32% history lookup, -0.12% prompt-copy and -31.21%
+online backoff. Cheap proposals do not compensate for poor acceptance/coverage.
+The historical negative n-gram gate remains valid; neural sources are unmeasured.
+
+The conditional research-only prompt-copy drafter is implemented with the
+existing direct verifier. It uses real causal prompt spans, not oracle drafts.
+[Five paired release trials per copy case](experiments/2026-10-28-draft-live-measurement.md)
+give **29.064->32.783 resident tok/s, +12.7955%**, interval
+[12.6511%,12.8623%], for 132 prompt/52 output tokens; and
+**15.628->16.671 tok/s, +6.6723%**, interval [6.6499%,6.8529%], for
+393 prompt/68 output tokens. Actual IDs/counts/natural stops match. Setup,
+prefill, source/miss/history work, target transactions and teardown are charged.
+No extension or confirmation condition is met.
+
+All 21 preflight cases preserve 1,544 full-vocabulary vectors and 85,948,416
+valid KV words bit-identically; 13 natural rejections clear 516,096 suffix words.
+Tests/audits pass, target cuBLAS/allocations are zero, teardown is zero and all
+138 CUDA entries plus 113 prior checksums are unchanged. This is **specialized
+resident copy throughput**, not browser512 HTTP or a new Ollama comparison.
+The immutable **50.910426 HTTP tok/s**, joint-only preference and original
+HTTP goals remain unchanged. No general drafter/default promotion follows.
+
 ## 2026-10-28: Fully Direct Four-Row Target Passes
 
 The [bounded direct verifier](experiments/2026-10-28-direct-verifier-measurement.md)
