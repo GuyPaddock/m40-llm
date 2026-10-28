@@ -25,6 +25,8 @@ mod ffn;
 mod sparse_inputs;
 #[path = "verification.rs"]
 mod verification;
+#[path = "verification_cost.rs"]
+mod verification_cost;
 
 #[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -73,6 +75,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Bounded observation of the rejected verifier; never a new target kernel.
+    #[arg(long, conflicts_with_all=["verification_trace", "ffn_inputs", "sparse_inputs"])]
+    direct_q8_feasibility: bool,
     /// Frozen qualified browser-token evidence for perfect target verification.
     #[arg(long,conflicts_with_all=["ffn_inputs","sparse_inputs"])]
     verification_trace: Option<PathBuf>,
@@ -549,6 +554,9 @@ fn run_tensor(
 
 pub fn benchmark() -> Result<()> {
     let args = Args::parse();
+    if args.direct_q8_feasibility {
+        return verification_cost::benchmark(&args);
+    }
     ensure!(
         args.trials >= 5
             && args.iterations > 0

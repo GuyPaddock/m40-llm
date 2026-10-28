@@ -165,6 +165,32 @@ impl DecodeGpuProfiler {
     }
 
     pub fn new(ctx: &CudaContext, layer_count: u32, config: GpuProfileConfig) -> Result<Self> {
+        let capacity = (layer_count as usize)
+            .checked_mul(if config.should_profile_prefill {
+                24
+            } else {
+                16
+            })
+            .and_then(|n| n.checked_add(16))
+            .context("stage event pool size overflow")?;
+        Self::create(ctx, config, capacity)
+    }
+
+    /// Explicit cold allocation for bounded research scopes with more spans
+    /// than one ordinary decode token. Existing constructor sizes are unchanged.
+    pub fn new_with_event_capacity(
+        ctx: &CudaContext,
+        config: GpuProfileConfig,
+        capacity: usize,
+    ) -> Result<Self> {
+        ensure!(
+            (1..=4096).contains(&capacity),
+            "invalid diagnostic event capacity"
+        );
+        Self::create(ctx, config, capacity)
+    }
+
+    fn create(ctx: &CudaContext, config: GpuProfileConfig, capacity: usize) -> Result<Self> {
         let setup_start = Instant::now();
         ensure!(
             !config.generated_steps.is_empty(),
@@ -181,14 +207,6 @@ impl DecodeGpuProfiler {
                     .with_context(|| format!("open stage-profile report {}", path.display()))
             })
             .transpose()?;
-        let capacity = (layer_count as usize)
-            .checked_mul(if config.should_profile_prefill {
-                24
-            } else {
-                16
-            })
-            .and_then(|n| n.checked_add(16))
-            .context("stage event pool size overflow")?;
         let origin = ctx.create_event()?;
         let pool: Vec<EventPair> = (0..capacity)
             .map(|_| {
