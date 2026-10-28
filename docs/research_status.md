@@ -6,22 +6,28 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The user authorized the [fixed four-row operator probe](experiments/2026-10-28-four-row-operator-plan.md).
-Implement exactly one 128-thread shared-read joint-Q8 gate/up/SwiGLU consumer,
-then apply the frozen correctness/resource and three-arm complete-FFN gates.
-No rescue search or runtime integration. Only a passing operator updates the
-full-verifier cost model; stop after results and assessment for review.
+The [fixed four-row operator probe](experiments/2026-10-28-four-row-operator.md)
+is complete and passes its exact-output, resource, ownership and >=5%
+complete-FFN gates at all three frozen layers against both controls. Gains are
+45.2-45.3% versus four one-row compound calls and 43.0-43.1% versus independent
+row dispatch. Five paired trials have positive intervals and low variation;
+no confirmation condition is met. The candidate uses 36 registers and 4608
+dynamic shared bytes; all 137 original CUDA entries are unchanged.
 
-The [bounded direct-Q8 feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
-is complete. Thirty full-batch observations, 40 rejection cycles and 140 GPU
-boundary checks pass. Four-row verification still costs 176.050 ms; its
-conversion/SGEMM spans are 88.759/54.474 ms. The old verifier remains rejected.
-The accounted model recommends only one fixed four-row joint gate/up operator
-probe for review. Reader savings and real drafter acceptance are unmeasured;
-the existing negative n-gram gate stays closed. No new CUDA kernel was written.
-Stop for review before any operator implementation, verifier integration,
-drafter, kernel search or runtime-default change. The immutable 50.910426
-checkpoint and 56.153149 target are unchanged.
+The [updated full-verifier assessment](experiments/2026-10-28-four-row-feasibility.md)
+rejects simply patching the old SGEMM verifier: its modeled batch is still
+111.9 ms. A fully direct schedule around existing qualified one-row consumers
+is conditionally plausible, not implemented or qualified. Real drafter
+acceptance and complete verification costs remain unknown. **Stop for review**;
+no full verifier, neural drafter, EAGLE, kernel rescue or default change.
+The immutable 50.910426 HTTP tok/s reference and 56.153149 target are unchanged.
+
+The preceding [bounded feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
+recorded 30 full-batch observations, 40 rejection cycles and 140 GPU boundaries.
+Its four-row SGEMM verifier costs 176.050 ms, with conversion/SGEMM spans
+88.759/54.474 ms, and remains rejected. The operator above is the completed
+successor to that assessment, not a reversal of its implementation rejection.
+The negative n-gram gate stays closed and real drafter acceptance is unmeasured.
 
 The user has now authorized **joint-only as preferred ownership for the
 opt-in compound FFN**. Its constructor and environment selection omit redundant

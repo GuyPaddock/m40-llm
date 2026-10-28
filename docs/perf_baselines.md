@@ -2,6 +2,26 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-28: Fixed Four-Row Reader Clears FFN Gate
+
+The [single authorized shared-read operator](experiments/2026-10-28-four-row-operator.md)
+passes exact intermediate/down parity and preserves all 137 original CUDA
+controls. Complete four-row FFN latency is 0.918-0.920 ms versus 1.334-1.337
+for four one-row compound calls and 1.314-1.316 for independent-row dispatch.
+That is **45.2-45.3% / 43.0-43.1% throughput gain**, respectively, with positive
+paired bounds at layers 0/17/35. All arms use four original one-row prepared
+down calls. Five trials suffice under the unchanged extension rules; maximum
+variation is 0.0578%. Candidate resources are 36 registers, 4608 dynamic shared
+bytes and no reported local/stack storage. Final tracked teardown is zero.
+
+This is **not an HTTP or full-verifier gain**. The
+[updated assessment](experiments/2026-10-28-four-row-feasibility.md) still
+rejects patching the SGEMM verifier, modeled at 111.9 ms/batch. A different
+fully direct assembly is conditionally plausible, but assembled execution and
+real drafter acceptance remain unmeasured. No runtime selector, neural drafter
+or default changes were made. Keep the immutable **50.910426 HTTP tok/s**
+checkpoint, joint-only preference and **56.153149** target. Stop for review.
+
 ## 2026-10-28: Direct-Q8 Feasibility, No New Speed Claim
 
 The [bounded assessment](experiments/2026-10-27-direct-q8-feasibility.md)
