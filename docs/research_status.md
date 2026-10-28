@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user has authorized a [bounded direct-Q8 verification feasibility assessment](experiments/2026-10-27-direct-q8-feasibility-plan.md),
+including one diagnostic session for missing stage costs. Follow the
+[evidence ledger](experiments/2026-10-27-direct-q8-ledger.md). No new CUDA
+kernel, verifier integration, drafter or runtime-default change is authorized.
+Preserve the old SGEMM verifier's rejection and stop at the assessment decision.
+
 The user has now authorized **joint-only as preferred ownership for the
 opt-in compound FFN**. Its constructor and environment selection omit redundant
 split gate/up owners unless explicitly overridden with `retain-split`.
