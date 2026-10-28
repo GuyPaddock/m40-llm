@@ -1,0 +1,10 @@
+{"control":"incomplete","is_rejected":true}
+{"control":"wrong-model","is_rejected":true}
+{"control":"changed-owner","is_rejected":true}
+{"control":"wrong-bytes","is_rejected":true}
+{"control":"changed-output","is_rejected":true}
+{"control":"changed-prefix","is_rejected":true}
+{"control":"wrong-length","is_rejected":true}
+{"control":"free-bonus","is_rejected":true}
+{"control":"missing-pair","is_rejected":true}
+{"control":"uncounted-gemm","is_rejected":true}
