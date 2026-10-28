@@ -722,6 +722,66 @@ __global__ void gate_up_joint_f32x4_shared_scales(
     }
 }
 
+// Fixed research consumer: one payload and scale read, four independent rows.
+__global__ void gate_up_joint_four_rows(
+    const float* __restrict__ input, const uint32_t* __restrict__ scales,
+    const uint2* __restrict__ payload, float* __restrict__ output,
+    float* __restrict__ gate_output, float* __restrict__ up_output) {
+    const int column = blockIdx.x;
+    const int tid = threadIdx.x;
+    extern __shared__ float published[];
+    float* cached_gate_scales = published + 1024;
+    float* cached_up_scales = cached_gate_scales + 64;
+    if (tid < 64) {
+        const uint32_t s = scales[static_cast<size_t>(column) * 64 + tid];
+        cached_gate_scales[tid] = __half2float(__ushort_as_half(static_cast<unsigned short>(s)));
+        cached_up_scales[tid] = __half2float(__ushort_as_half(static_cast<unsigned short>(s >> 16)));
+    }
+    __syncthreads();
+    float gate_acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float up_acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    for (int task = tid; task < 512; task += 128) {
+        const uint2 q = payload[static_cast<size_t>(column) * 512 + task];
+        const float gs = cached_gate_scales[task / 8];
+        const float us = cached_up_scales[task / 8];
+        float g[4], u[4];
+        #pragma unroll
+        for (int index = 0; index < 4; ++index) {
+            g[index] = static_cast<float>(static_cast<int8_t>(q.x >> (index * 8))) * gs;
+            u[index] = static_cast<float>(static_cast<int8_t>(q.y >> (index * 8))) * us;
+        }
+        #pragma unroll
+        for (int row = 0; row < 4; ++row) {
+            const float4 a = reinterpret_cast<const float4*>(input + row * 2048)[task];
+            const float values[4] = {a.x, a.y, a.z, a.w};
+            #pragma unroll
+            for (int index = 0; index < 4; ++index) {
+                gate_acc[row] += values[index] * g[index];
+                up_acc[row] += values[index] * u[index];
+            }
+        }
+    }
+    #pragma unroll
+    for (int row = 0; row < 4; ++row) {
+        published[row * 256 + tid] = gate_acc[row];
+        published[row * 256 + tid + 128] = up_acc[row];
+    }
+    __syncthreads();
+    if (tid < 32) {
+        #pragma unroll
+        for (int row = 0; row < 4; ++row) {
+            const float g = reduce_published<128>(published + row * 256, tid);
+            const float u = reduce_published<128>(published + row * 256 + 128, tid);
+            if (tid == 0) {
+                const size_t index = static_cast<size_t>(row) * 11008 + column;
+                output[index] = g * (1.0f / (1.0f + expf(-g))) * u;
+                if (gate_output) gate_output[index] = g;
+                if (up_output) up_output[index] = u;
+            }
+        }
+    }
+}
+
 // Native 32-partial association, distinct from 128-partial emulation below.
 __global__ void gate_up_split_f32x4_native_warp(
     const float* __restrict__ input, const __half* __restrict__ gate_scales,
@@ -1132,6 +1192,25 @@ extern "C" int m40llm_ffn_q8_joint_shared_scales_f32_async(
     m40llm_q8_ffn::gate_up_joint_f32x4_shared_scales<<<dim3(hidden,rows),128,1024+(k/32)*8,ctx->decode_stream>>>(
         static_cast<const float*>(input),static_cast<const uint32_t*>(scales),static_cast<const uint2*>(values),
         static_cast<float*>(output),static_cast<float*>(gate_output),static_cast<float*>(up_output),hidden,k);
+    return cudaGetLastError() == cudaSuccess ? 0 : -4;
+}
+
+extern "C" int m40llm_ffn_q8_joint_four_rows_f32_async(
+    M40llmCudaContext* ctx, const void* input, const void* scales,
+    const void* values, void* output, void* gate_output, void* up_output,
+    int rows, int hidden, int k) {
+    if (!ctx || !input || !scales || !values || !output || input == output) return -1;
+    if (rows != 4 || hidden != 11008 || k != 2048 ||
+        reinterpret_cast<uintptr_t>(input) % 16 || reinterpret_cast<uintptr_t>(output) % 4 ||
+        reinterpret_cast<uintptr_t>(scales) % 4 || reinterpret_cast<uintptr_t>(values) % 8) return -2;
+    if (gate_output || up_output) {
+        if (!gate_output || !up_output || gate_output == up_output || gate_output == output ||
+            up_output == output || gate_output == input || up_output == input ||
+            reinterpret_cast<uintptr_t>(gate_output) % 4 || reinterpret_cast<uintptr_t>(up_output) % 4) return -3;
+    }
+    m40llm_q8_ffn::gate_up_joint_four_rows<<<11008,128,4608,ctx->decode_stream>>>(
+        static_cast<const float*>(input),static_cast<const uint32_t*>(scales),static_cast<const uint2*>(values),
+        static_cast<float*>(output),static_cast<float*>(gate_output),static_cast<float*>(up_output));
     return cudaGetLastError() == cudaSuccess ? 0 : -4;
 }
 

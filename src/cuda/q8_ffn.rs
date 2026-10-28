@@ -357,6 +357,75 @@ impl CudaContext {
         Ok(())
     }
 
+    /// Research-only fixed four-row shared-read joint consumer. No runtime
+    /// selector uses this API; dimensions cannot select another geometry.
+    ///
+    /// # Safety
+    /// Input contains 4*2048 f32 values at 16-byte alignment. Output and optional
+    /// intermediates contain 4*11008 f32 values. Joint planes contain the
+    /// validated D2048/H11008 pair. All spans are disjoint, belong to this
+    /// context and survive decode completion. Order producers before enqueue.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn ffn_q8_joint_four_rows_f32_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        rows: i32,
+        hidden: i32,
+        k: i32,
+        intermediates: Option<(*mut c_void, *mut c_void)>,
+    ) -> Result<()> {
+        ensure!(
+            rows == 4 && hidden == 11008 && k == 2048,
+            "four-row probe requires D2048/H11008/R4"
+        );
+        ensure!(
+            !input.is_null()
+                && !scales.is_null()
+                && !values.is_null()
+                && !output.is_null()
+                && input != output.cast_const()
+                && (input as usize).is_multiple_of(16)
+                && (output as usize).is_multiple_of(4)
+                && (scales as usize).is_multiple_of(4)
+                && (values as usize).is_multiple_of(8),
+            "invalid four-row joint spans/alignment"
+        );
+        let (g, u) = intermediates.unwrap_or((std::ptr::null_mut(), std::ptr::null_mut()));
+        if intermediates.is_some() {
+            ensure!(
+                !g.is_null()
+                    && !u.is_null()
+                    && g != u
+                    && g != output
+                    && u != output
+                    && g.cast_const() != input
+                    && u.cast_const() != input
+                    && (g as usize).is_multiple_of(4)
+                    && (u as usize).is_multiple_of(4),
+                "invalid four-row intermediate spans"
+            );
+        }
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_ffn_q8_joint_four_rows_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            g,
+            u,
+            rows,
+            hidden,
+            k,
+        );
+        ensure!(rc == 0, "four-row joint enqueue failed: {rc}");
+        record_async_kernel("ffn_q8_joint_four_rows_128");
+        Ok(())
+    }
+
     /// Fixed 128-thread/four-value FP32 experiment on existing separate planes.
     /// Optional intermediates use the same kernel; no setup or sync occurs here.
     ///

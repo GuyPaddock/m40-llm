@@ -3,6 +3,7 @@ mod access;
 mod column_gap;
 mod compound;
 mod fixture;
+mod four_row;
 mod joint;
 mod packet;
 mod payload_entropy;
@@ -44,6 +45,9 @@ fn validate_rows(args: &Args) -> Result<()> {
 }
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_four_row_reuse {
+        return four_row::benchmark(args);
+    }
     if args.ffn_payload_entropy {
         return payload_entropy::run(args);
     }
