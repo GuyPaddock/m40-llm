@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user authorized the [fixed four-row operator probe](experiments/2026-10-28-four-row-operator-plan.md).
+Implement exactly one 128-thread shared-read joint-Q8 gate/up/SwiGLU consumer,
+then apply the frozen correctness/resource and three-arm complete-FFN gates.
+No rescue search or runtime integration. Only a passing operator updates the
+full-verifier cost model; stop after results and assessment for review.
+
 The [bounded direct-Q8 feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
 is complete. Thirty full-batch observations, 40 rejection cycles and 140 GPU
 boundary checks pass. Four-row verification still costs 176.050 ms; its
