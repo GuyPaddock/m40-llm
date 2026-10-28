@@ -1,0 +1,10 @@
+{"control":"incomplete","is_rejected":true}
+{"control":"wrong-model","is_rejected":true}
+{"control":"changed-fixture","is_rejected":true}
+{"control":"changed-memory","is_rejected":true}
+{"control":"wrong-down","is_rejected":true}
+{"control":"extra-sync","is_rejected":true}
+{"control":"changed-output","is_rejected":true}
+{"control":"changed-pair","is_rejected":true}
+{"control":"overlap","is_rejected":true}
+{"control":"altered-clocks","is_rejected":true}
