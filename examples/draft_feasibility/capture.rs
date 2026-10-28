@@ -1,19 +1,11 @@
 use super::records::{self, Trace};
 use anyhow::{ensure, Result};
 use m40_llm::{
-    cuda::CudaContext,
-    gguf,
-    infer::{
-        execution_weights::Q8ExecutionConfig, q8_prefill::Q8PrefillBackend, LoadedModel,
-        Q8AttentionProjectionBackend, Q8FfnConfig,
-    },
-    tokenizer::Tokenizer,
-    verification::VerificationSession,
+    cuda::CudaContext, infer::LoadedModel, tokenizer::Tokenizer, verification::VerificationSession,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
-    collections::BTreeMap,
     fs::{self, OpenOptions},
     path::Path,
     time::Instant,
@@ -85,36 +77,15 @@ pub fn capture(model_path: &Path, output: &Path) -> Result<()> {
         records::command("git", &["status", "--short"])?.is_empty(),
         "commit source and prompts before capture"
     );
-    let reference: Value = serde_json::from_slice(&fs::read(records::REFERENCE)?)?;
-    ensure!(
-        records::hash_file(model_path)? == reference["model"]["sha256"],
-        "wrong model"
-    );
-    let env: BTreeMap<_, _> = std::env::vars()
-        .filter(|(k, _)| k.starts_with("M40LLM_") || k == "CUDA_VISIBLE_DEVICES")
-        .collect();
-    ensure!(
-        serde_json::to_value(&env)? == reference["configuration"]["environment"],
-        "restore qualified environment"
-    );
     let prompts: Vec<Prompt> = serde_json::from_slice(&fs::read(records::PROMPTS)?)?;
     ensure!(prompts.len() == 8, "frozen eight-case capture");
     let initial = CudaContext::total_device_bytes();
-    let gguf = gguf::load_gguf(model_path)?;
-    let tokenizer = Tokenizer::from_gguf_metadata(&gguf.metadata)?;
-    ensure!(tokenizer.is_qwen2(), "Qwen tokenizer required");
-    let mut model = LoadedModel::from_gguf_with_q8_runtime(
-        gguf,
-        fs::read(model_path)?,
-        -1,
-        Q8ExecutionConfig::parse("split", Some("6144"), Some("gate-up,down,vocabulary"))?,
-        Q8FfnConfig::joint_shared_scales(),
-        Q8PrefillBackend::DequantSgemm,
-        Q8AttentionProjectionBackend::PackedWarp256,
-    )?;
-    model.allocate_kv_cache_for_layers(1024)?;
-    let props = model.cuda.current_device_props()?;
-    ensure!(props.major == 5 && props.minor == 2, "M40 sm_52 required");
+    let super::runtime::Runtime {
+        mut model,
+        tokenizer,
+        reference,
+        environment: env,
+    } = super::runtime::load(model_path)?;
     let mut out = OpenOptions::new()
         .write(true)
         .create_new(true)

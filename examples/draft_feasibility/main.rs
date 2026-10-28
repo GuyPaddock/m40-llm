@@ -1,8 +1,12 @@
 #[cfg(all(feature = "cuda", nvcc))]
 mod capture;
 mod cost;
+#[cfg(all(feature = "cuda", nvcc))]
+mod live;
 mod records;
 mod replay;
+#[cfg(all(feature = "cuda", nvcc))]
+mod runtime;
 mod source;
 #[cfg(test)]
 mod tests;
@@ -21,6 +25,16 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    Live {
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long)]
+        heldout: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        correctness_report: Option<PathBuf>,
+    },
     Capture {
         #[arg(long)]
         model: PathBuf,
@@ -37,6 +51,20 @@ enum Command {
 
 fn main() -> Result<()> {
     match Args::parse().command {
+        Command::Live {
+            model,
+            heldout,
+            output,
+            correctness_report,
+        } => {
+            #[cfg(all(feature = "cuda", nvcc))]
+            return live::run(&model, &heldout, &output, correctness_report.as_deref());
+            #[cfg(not(all(feature = "cuda", nvcc)))]
+            {
+                let _ = (model, heldout, output, correctness_report);
+                anyhow::bail!("live research requires release CUDA/NVCC");
+            }
+        }
         Command::Capture { model, output } => {
             #[cfg(all(feature = "cuda", nvcc))]
             return capture::capture(&model, &output);
