@@ -2,6 +2,30 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Joint-Only Saves 1.606 GiB, Timing Neutral
+
+The independent opt-in ownership change saves exactly **1,724,645,376 device
+bytes**. Original uploaded GGUF remains; logical sources stay at 109 while
+physical split owners fall from 109 to 37, plus the same 36 joint pairs. Joint
+payloads, seven full-vocabulary samples, all 512 actual IDs and twelve frozen
+outputs match. See [ownership, quality and measurement evidence](experiments/2026-10-27-joint-only-ownership.md).
+
+Five alternating release HTTP pairs give **50.863 retained-split versus
+50.893 joint-only tok/s**, +0.059%, paired 95% interval -0.059% to +0.325%.
+Storage non-regression passes; this is **not a demonstrated speedup**. Median
+prefill/decode is 488.868/9531.999 ms versus 485.956/9528.324 ms. Weight residency
+falls from 7,921,745,920 to 6,197,100,544 B; cold tracked device high-water matches
+those values, excluding separate KV/library storage. Host RSS is essentially
+unchanged. Full memory scopes, cold observations and 28 corruption controls
+are in the linked report.
+
+Default ownership stays `retain-split`; `joint-only` requires explicit opt-in
+with the qualified compound consumer. The no-old adapter was rejected and
+removed after preserving its code. Both approved experiments are complete.
+The immutable **50.910426 HTTP tok/s** reference, **56.153149** target,
+measured artifacts and runtime defaults remain unchanged. No new kernel
+search, compatibility GPU testing or performance promotion follows.
+
 ## 2026-10-27: No-Old Adapter Fails Exact Cache Gate
 
 The bounded borrowed-recent head128 adapter passes 88 layout and 140

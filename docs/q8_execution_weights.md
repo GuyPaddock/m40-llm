@@ -154,8 +154,9 @@ The separately screened `M40LLM_Q8_FFN_KERNEL=split-f32x4-128` is an explicit,
 fixed-geometry exception requiring split gate/up preparation. See
 [load-time FFN selection](maxwell_q8_execution.md#load-time-configuration).
 
-The qualified opt-in `M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128` retains
-all original split planes and adds 36 model-local joint pairs on Qwen. The
+The qualified opt-in `M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128` with default
+`retain-split` ownership retains all original split planes and adds 36
+model-local joint pairs on Qwen. The
 combined preparation budget includes both sets; `q8_ffn_pair_stats()` reports
 joint identities, 1,724,645,376 additional bytes, temporary host packing and
 cold preparation separately from original per-tensor statistics. Selected
@@ -177,8 +178,12 @@ Qwen3B retains 109 logical sources, but joint-only owns 37 split down/head
 tensors and 36 joint pairs. Joint payloads can be cold-audited through
 `debug_joint_payload_hashes()`; that readback never runs in normal decode.
 The immutable 109-resident-owner qualification is not evidence for this new
-ownership scheme. It requires its own quality, allocation and non-regression
-results; do not claim a throughput gain from the projected byte reduction.
+ownership scheme. Its [independent completed storage qualification](experiments/2026-10-27-joint-only-ownership.md)
+verifies the exact 1,724,645,376-byte reduction, bit-identical payloads/logits,
+512 actual IDs and frozen outputs. Five paired HTTP trials are timing-neutral,
+50.863 versus 50.893 tok/s, and pass storage non-regression. This is not a
+speedup or replacement for the immutable 50.910426 reference. Keep ownership
+opt-in; no runtime defaults or kernels change.
 
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.

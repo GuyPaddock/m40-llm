@@ -1,0 +1,128 @@
+{
+  "scope": "storage-only; single instrumented solo load observations, five paired HTTP trials; tracked peak excludes direct KV and CUDA/library allocations",
+  "control_load": {
+    "source_revision": "9c4a027447f779a4504e1932d1c316153a42543b",
+    "executable_sha256": "5a37540144a34b2f68c859529a2777741b4b120f55dbc21d50cae41e57841d85",
+    "load_elapsed_ms": 17834.65484,
+    "host_process_vmhwm": "VmHWM:\t 6999336 kB",
+    "tracked_device_final_bytes": 7921745920,
+    "tracked_device_setup_high_water_bytes": 7921745920,
+    "dense_kv_component_bytes": 37748736,
+    "split_preparation_ms": 10244.573747999999,
+    "joint_preparation_ms": 1570.5270520000001,
+    "temporary_host_pair_bytes": 47906816,
+    "estimated_host_setup_payload_bytes": 6895608736,
+    "allocation_counters": {
+      "cublas_calls": 0,
+      "d2h_bytes": 0,
+      "d2h_copies": 0,
+      "device_allocs": 291,
+      "device_frees": 0,
+      "h2d_bytes": 7921745920,
+      "h2d_copies": 291,
+      "launches": 0,
+      "stream_syncs": 292,
+      "stream_waits": 0
+    }
+  },
+  "candidate_load": {
+    "source_revision": "9c4a027447f779a4504e1932d1c316153a42543b",
+    "executable_sha256": "5a37540144a34b2f68c859529a2777741b4b120f55dbc21d50cae41e57841d85",
+    "load_elapsed_ms": 17297.024986,
+    "host_process_vmhwm": "VmHWM:\t 6999296 kB",
+    "tracked_device_final_bytes": 6197100544,
+    "tracked_device_setup_high_water_bytes": 6197100544,
+    "dense_kv_component_bytes": 37748736,
+    "split_preparation_ms": 9691.350749000001,
+    "joint_preparation_ms": 1598.14536,
+    "temporary_host_pair_bytes": 47906816,
+    "estimated_host_setup_payload_bytes": 6895608736,
+    "allocation_counters": {
+      "cublas_calls": 0,
+      "d2h_bytes": 0,
+      "d2h_copies": 0,
+      "device_allocs": 147,
+      "device_frees": 0,
+      "h2d_bytes": 6197100544,
+      "h2d_copies": 147,
+      "launches": 0,
+      "stream_syncs": 148,
+      "stream_waits": 0
+    }
+  },
+  "resident_reduction_bytes": 1724645376,
+  "component_weight_reduction_gib": 1.606201171875,
+  "http_summary": {
+    "comparison": {
+      "bootstrap_gain_ci95": [
+        -0.0005875222773964461,
+        0.0032532465861339066
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate": {
+        "mad_over_median": 0.0002723588159764527,
+        "max": 50.99159164877403,
+        "median": 50.89317644943652,
+        "min": 50.864056932269264
+      },
+      "control": {
+        "mad_over_median": 0.0006093872584966542,
+        "max": 50.89395826653574,
+        "median": 50.862963024938956,
+        "min": 50.721950531200434
+      },
+      "gain": 0.0005940162094517643,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": 5,
+      "passes_promotion_gate": false,
+      "promotion_threshold": 0.03,
+      "reaches_original_target": false
+    },
+    "kind": "joint_only_http_summary",
+    "phase": "screen",
+    "reverse_comparison": {
+      "bootstrap_gain_ci95": [
+        -0.003242697292238139,
+        0.0005878676627444346
+      ],
+      "bootstrap_resamples": 10000,
+      "bootstrap_seed": 0,
+      "candidate": {
+        "mad_over_median": 0.0006093872584966542,
+        "max": 50.89395826653574,
+        "median": 50.862963024938956,
+        "min": 50.721950531200434
+      },
+      "control": {
+        "mad_over_median": 0.0002723588159764527,
+        "max": 50.99159164877403,
+        "median": 50.89317644943652,
+        "min": 50.864056932269264
+      },
+      "gain": -0.0005936635636719645,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": 5,
+      "passes_promotion_gate": false,
+      "promotion_threshold": 0.03,
+      "reaches_original_target": false
+    },
+    "scope": "storage-only non-regression; not exact-dense speed-goal qualification"
+  },
+  "http_phase_medians": [
+    {
+      "ownership": "retain-split",
+      "http_ms": 10066.263732,
+      "prefill_ms": 488.867527,
+      "decode_ms": 9531.999232
+    },
+    {
+      "ownership": "joint-only",
+      "http_ms": 10060.287757999999,
+      "prefill_ms": 485.956036,
+      "decode_ms": 9528.323976
+    }
+  ]
+}

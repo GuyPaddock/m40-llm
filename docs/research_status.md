@@ -6,60 +6,49 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The user has approved two independent opt-in experiments, in order:
-no-old compressed-KV attention reuse, then joint-only prepared ownership.
-Complete and document each gate decision before starting the next experiment;
-stop after both. No compatibility GPU tests, downloads, default changes or
-new kernel search are authorized. Record each commit/gate in MemPalace.
+Both approved independent experiments are complete. **Stop here for review**;
+no additional CUDA search, compatibility inference, downloads, limit changes
+or runtime-default promotion is authorized. Progress and gate decisions are
+recorded in MemPalace and the linked artifacts.
 
-The first hardware prerequisite passes: the
-[head128 recent-ring layout record](experiments/2026-10-27-no-old-layout.jsonl)
-checks 88 cases across four physical slots, both RoPE layouts, reset/reuse,
-sequential append and dense-prefix reconstruction at W-1/W/W+1, block
-boundaries and repeated rollover. Stored recent K/V words match dense exactly.
-The [no-old experiment is now rejected](experiments/2026-10-27-no-old-screen.md):
-primitive parity/read-only/rollover passes 140 cases, but full-forward valid
-FP16 KV differs at N=2. Tiny in-tolerance logits and matching greedy IDs do
-not override that failure. Code is preserved in `db04697`; remove the adapter
-separately. No performance measurements or further no-old searches follow.
-Next is the independent joint-only storage experiment, after documenting
-and closing this decision. Its gate requires the exact resident reduction,
-unchanged behavior and no meaningful regression, not a throughput gain.
+1. [No-old compressed attention reuse](experiments/2026-10-27-no-old-screen.md)
+   is rejected. The 88 layout and 140 primitive/rollover cases pass, but valid
+   FP16 KV differs at full-forward N=2. Tiny logits and matching greedy IDs
+   do not override the exact-cache gate. Preserve code `db04697`; removal
+   `f76d541` restores the original path. No performance claim or rescue search.
+2. [Joint-only ownership](experiments/2026-10-27-joint-only-ownership.md)
+   passes its separate storage gate. Save exactly 1,724,645,376 resident device
+   bytes without ever allocating 72 split gate/up copies. Original GGUF and
+   down/head sources remain. Final clean source `3e7caee` preserves joint
+   payloads, sampled full-vocabulary logits, all 512 actual IDs, twelve frozen
+   outputs and ordinary dispatch. Five HTTP pairs give 50.863 retained-split
+   versus 50.893 joint-only tok/s, +0.059%, interval -0.059% to +0.325%.
+   This is timing-neutral storage improvement, not a dense-speed gain.
 
-Joint-only correctness now passes independently at clean source `9c4a027`:
-[actual quality](experiments/2026-10-27-joint-only-quality.jsonl),
-[new logical/resident audit](experiments/2026-10-27-joint-only-quality-audit.json),
-and [137 unchanged CUDA entries](experiments/2026-10-27-joint-only-sass-audit.json).
-The exact resident reduction, 512 actual IDs, seven full-vocabulary bit
-checks, twelve frozen outputs and ordinary dispatch/counters all match.
-HTTP non-regression is still pending; this is not completed storage promotion.
+The new audit separates 109 logical sources, 37 physical split owners and 36
+joint pairs; 28 corruption controls pass. All 137 compiled CUDA entries match.
+Affected CUDA/cuBLAS-on/off, packed-prefix, ownership, full-forward, HTTP
+cleanup, non-CUDA warnings and Clippy checks pass. Final tracked teardown is 0.
+Default ownership remains `retain-split`; `joint-only` is opt-in. Runtime KV
+defaults and all existing quality/statistical rules remain unchanged.
 
-The preceding preservation and feasibility checkpoint remains below.
 The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
 fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean
 source `63240c5`. Its manifest binds the original reports, preparation,
 source/model/executable hashes and locally retained measured binaries.
-Do not replace that checkpoint with a later candidate or change defaults.
-The [no-old compressed-attention proposal](experiments/2026-10-27-compressed-no-old-proposal.md)
-now identifies serial candidate reductions and a conditional existing-kernel
-adapter. Layout is compatible before rollover, but exact output/cache and
-numerical equivalence remain unproven. No runtime implementation is admitted.
-The [joint-only ownership proposal](experiments/2026-10-27-joint-only-ownership-proposal.md)
-plans direct construction of 36 joint pairs plus 37 down/head split owners,
-retaining original GGUF sources. The projected reduction is 1,724,645,376
-device bytes, not a speed claim. It requires a new identity/residency audit;
-the frozen 109-resident-owner qualification cannot be reused for joint-only.
+All 34 preserved artifact/model/binary/archive checksums still pass. Do not
+replace that checkpoint or represent storage/compressed work as progress
+toward the **56.153149 HTTP tok/s** exact-dense target. A new speed kernel
+needs a distinct supported structural hypothesis, substantial request-level
+savings and predefined stop criteria. Failed FFN geometries/layouts and the
+negative verifier/EAGLE direction stay closed.
+
 The [compatibility matrix and recommended order](experiments/2026-10-27-compound-compatibility-proposal.md)
-now cover Qwen0.5/1.5/3/7B plus a required Llama1B artifact row. Qwen7B fails
-the unchanged 128 MiB prefix and 6144 MiB preparation caps, even with proposed
-joint-only ownership. Smaller Qwen shapes fit on paper, not as new runtime
-qualifications. Llama estimates await explicit Q8 GGUF metadata.
-All four documentation units are complete. **Feasibility review approved**,
-then, only if authorized, no-old reuse, independent joint-only ownership,
-and model-specific validation. No new runtime/CUDA code or benchmarks ran.
-Existing checksum sets, model/binary hashes, quality/paired-HTTP audits,
-formatting and local links were checked; no new performance claim follows.
-The exact-dense targets and rejected-verifier stop remain binding.
+remains metadata-only for Qwen0.5/1.5/3/7B and Llama1B. Qwen7B still fails
+the unchanged 128 MiB prefix and 6144 MiB preparation caps, including joint-only.
+Smaller Qwen shapes are not newly qualified; Llama awaits an explicit Q8 GGUF
+artifact. No weights were downloaded or substituted. Further GPU testing
+requires separate authorization and explicit artifacts.
 
 The preceding execution sequence is the workspace's
 [Maxwell Q8 execution plan](../../M40_LLM_MAXWELL_Q8_EXECUTION_PLAN.md), outside
