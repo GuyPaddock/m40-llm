@@ -23,6 +23,9 @@ History updates occur only after simulated target commit/correction, never
 after rejected guesses. Each trace starts a fresh state. Full four-row batches
 require three guesses; incomplete proposals use ordinary serial decoding.
 Stops and final output tails are not padded or manufactured.
+Eligibility uses the configured output budget, never a reference's future EOS.
+The fixed sources decline guesses containing stop IDs; a stop actually produced
+by target verification terminates without an unnecessary correction decode.
 
 Use existing browser512 and twelve frozen tasks as disclosed development data.
 Freeze eight new held-out prompts before generating any target output: prose,
