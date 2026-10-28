@@ -1,0 +1,3177 @@
+{
+   "accounting" : "interpolated measured complete batches; original per-position serial correction or measured early correction, whichever larger; observed rejection target delta/rollback/bookkeeping; direct setup/prefill/teardown; finite tails; all-in drafter cost on every decision including ineligible ones",
+   "curves" : [
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.503213407593993,
+         "resident_tps" : {
+            "max" : 25.7773099238452,
+            "median" : 25.7255519687806,
+            "min" : 25.7100621919075
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.504793399603748,
+         "resident_tps" : {
+            "max" : 25.6951627304835,
+            "median" : 25.6437338054514,
+            "min" : 25.6283423705401
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.506363373386644,
+         "resident_tps" : {
+            "max" : 25.6135374476434,
+            "median" : 25.5624344250758,
+            "min" : 25.547140398556
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.509473645004777,
+         "resident_tps" : {
+            "max" : 25.4518328438263,
+            "median" : 25.4013724009141,
+            "min" : 25.3862704373986
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.515578069596092,
+         "resident_tps" : {
+            "max" : 25.1344725468621,
+            "median" : 25.0852614299984,
+            "min" : 25.0705328957237
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.533012543901972,
+         "resident_tps" : {
+            "max" : 24.2281655783213,
+            "median" : 24.1824361894216,
+            "min" : 24.168748455791
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.425892318058319,
+         "resident_tps" : {
+            "max" : 29.7893544945019,
+            "median" : 29.7295402759108,
+            "min" : 29.7116109261749
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.427719880721811,
+         "resident_tps" : {
+            "max" : 29.6943355659175,
+            "median" : 29.6349019362403,
+            "min" : 29.6170865199688
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.429535844910231,
+         "resident_tps" : {
+            "max" : 29.5999208726412,
+            "median" : 29.5408642109539,
+            "min" : 29.5231616455885
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.433133416729186,
+         "resident_tps" : {
+            "max" : 29.4128812833178,
+            "median" : 29.3545678772672,
+            "min" : 29.3370878205101
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.44019412967737,
+         "resident_tps" : {
+            "max" : 29.045804935374,
+            "median" : 28.9889365565719,
+            "min" : 28.9718891136883
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.460358931036877,
+         "resident_tps" : {
+            "max" : 27.9975658206376,
+            "median" : 27.9447243067973,
+            "min" : 27.928882542954
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.302313804317899,
+         "resident_tps" : {
+            "max" : 36.1928341118123,
+            "median" : 36.1289188542595,
+            "min" : 36.093256229965
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.304584476726327,
+         "resident_tps" : {
+            "max" : 36.0748340945234,
+            "median" : 36.0113345596348,
+            "min" : 35.9759035771754
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.306840416932182,
+         "resident_tps" : {
+            "max" : 35.957601011094,
+            "median" : 35.8945131560556,
+            "min" : 35.859311565841
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.311308670537579,
+         "resident_tps" : {
+            "max" : 35.7254059311058,
+            "median" : 35.6631295154895,
+            "min" : 35.6283800766671
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.3200745575963,
+         "resident_tps" : {
+            "max" : 35.2698974198427,
+            "median" : 35.2091976128803,
+            "min" : 35.1753267285192
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.345082563514568,
+         "resident_tps" : {
+            "max" : 33.9704985076033,
+            "median" : 33.9141852962834,
+            "min" : 33.8827590561863
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.099135377458767,
+         "resident_tps" : {
+            "max" : 46.6984382985614,
+            "median" : 46.6502921340519,
+            "min" : 46.5544810889281
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.102279163198853,
+         "resident_tps" : {
+            "max" : 46.5353051608295,
+            "median" : 46.4874946176302,
+            "min" : 46.3923504355556
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.105401083237937,
+         "resident_tps" : {
+            "max" : 46.373307811754,
+            "median" : 46.3258293926915,
+            "min" : 46.2313451355759
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.111580232394128,
+         "resident_tps" : {
+            "max" : 46.0526733611336,
+            "median" : 46.0058488916668,
+            "min" : 45.9126640521993
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.123685937417697,
+         "resident_tps" : {
+            "max" : 45.4245246185472,
+            "median" : 45.3789681576392,
+            "min" : 45.2883030077833
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.158101347081866,
+         "resident_tps" : {
+            "max" : 43.6388504937923,
+            "median" : 43.5968036963268,
+            "min" : 43.5131135110467
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0916085912563938,
+         "resident_tps" : {
+            "max" : 56.6031737313517,
+            "median" : 56.5592111716701,
+            "min" : 56.4078561151601
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0874958578689924,
+         "resident_tps" : {
+            "max" : 56.3891805586737,
+            "median" : 56.3455496510145,
+            "min" : 56.1953344521622
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0834139983462048,
+         "resident_tps" : {
+            "max" : 56.1767993311331,
+            "median" : 56.1334963366462,
+            "min" : 55.9844081673309
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0753415206543209,
+         "resident_tps" : {
+            "max" : 55.7568004024067,
+            "median" : 55.7141422406268,
+            "min" : 55.5672704095449
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0595521527314982,
+         "resident_tps" : {
+            "max" : 54.9353654010414,
+            "median" : 54.8939544333233,
+            "min" : 54.7513695444602
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0148487180882857,
+         "resident_tps" : {
+            "max" : 52.610134800997,
+            "median" : 52.5721540077881,
+            "min" : 52.4413612416623
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.174080941818432,
+         "resident_tps" : {
+            "max" : 60.9068917959344,
+            "median" : 60.854886934446,
+            "min" : 60.6695379315592
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.169499476381001,
+         "resident_tps" : {
+            "max" : 60.668296469189,
+            "median" : 60.6166980824698,
+            "min" : 60.4327949769314
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.164953627292111,
+         "resident_tps" : {
+            "max" : 60.4315631843578,
+            "median" : 60.380366525399,
+            "min" : 60.197892463905
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.155967129684563,
+         "resident_tps" : {
+            "max" : 59.963596225308,
+            "median" : 59.913189073943,
+            "min" : 59.7335235792278
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.138403748072106,
+         "resident_tps" : {
+            "max" : 59.049073616299,
+            "median" : 59.0001916622891,
+            "min" : 58.8259522108577
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0887762319567129,
+         "resident_tps" : {
+            "max" : 56.4655547945226,
+            "median" : 56.4208550223164,
+            "min" : 56.2614965892984
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.249352088034424,
+         "resident_tps" : {
+            "max" : 64.8475027878928,
+            "median" : 64.7883710325962,
+            "min" : 64.5591042279256
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.244318551055394,
+         "resident_tps" : {
+            "max" : 64.5850751222139,
+            "median" : 64.5264207759423,
+            "min" : 64.2990008979063
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.239325410735914,
+         "resident_tps" : {
+            "max" : 64.3247629028036,
+            "median" : 64.2665802071609,
+            "min" : 64.0409850276026
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.229458390341929,
+         "resident_tps" : {
+            "max" : 63.8103833044838,
+            "median" : 63.7531270020211,
+            "min" : 63.5311159489536
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.210188305841349,
+         "resident_tps" : {
+            "max" : 62.805915349938,
+            "median" : 62.7504466707146,
+            "min" : 62.5353523002041
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.155839671560448,
+         "resident_tps" : {
+            "max" : 59.9736965249463,
+            "median" : 59.9231157291144,
+            "min" : 59.7269372995087
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.268682591751788,
+         "resident_tps" : {
+            "max" : 65.8589872003536,
+            "median" : 65.7990567117914,
+            "min" : 65.5579899833663
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.263545818527886,
+         "resident_tps" : {
+            "max" : 65.5911112006303,
+            "median" : 65.5316670252063,
+            "min" : 65.2925520166528
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.258450474159408,
+         "resident_tps" : {
+            "max" : 65.3254055004722,
+            "median" : 65.2664417427443,
+            "min" : 65.0292548474142
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.248382083248189,
+         "resident_tps" : {
+            "max" : 64.8004003456819,
+            "median" : 64.7423801147503,
+            "min" : 64.5089801350491
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.228721010041178,
+         "resident_tps" : {
+            "max" : 63.7753056235243,
+            "median" : 63.7191057519074,
+            "min" : 63.4930125094607
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.173285913951983,
+         "resident_tps" : {
+            "max" : 60.8857997716772,
+            "median" : 60.8345750512717,
+            "min" : 60.6284556078606
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.509473645004777,
+         "resident_tps" : {
+            "max" : 25.4518328438263,
+            "median" : 25.4013724009142,
+            "min" : 25.3862704373986
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.511014129232972,
+         "resident_tps" : {
+            "max" : 25.371743793521,
+            "median" : 25.321600104972,
+            "min" : 25.3065928190757
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.512544968057461,
+         "resident_tps" : {
+            "max" : 25.2921571931296,
+            "median" : 25.2423272857429,
+            "min" : 25.2274137899158
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.515578069596092,
+         "resident_tps" : {
+            "max" : 25.1344725468621,
+            "median" : 25.0852614299984,
+            "min" : 25.0705328957237
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.521532426969978,
+         "resident_tps" : {
+            "max" : 24.8249291464177,
+            "median" : 24.7769215262971,
+            "min" : 24.7625527397989
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.538548465119504,
+         "resident_tps" : {
+            "max" : 23.940415158423,
+            "median" : 23.895764545795,
+            "min" : 23.8823993225028
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.433133416729186,
+         "resident_tps" : {
+            "max" : 29.4128812833178,
+            "median" : 29.3545678772672,
+            "min" : 29.3370878205101
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.434915240344674,
+         "resident_tps" : {
+            "max" : 29.3202451133015,
+            "median" : 29.2622980843216,
+            "min" : 29.2449277119684
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.436685897498222,
+         "resident_tps" : {
+            "max" : 29.2281906283894,
+            "median" : 29.1706065344313,
+            "min" : 29.1533448173348
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.440194129677369,
+         "resident_tps" : {
+            "max" : 29.045804935374,
+            "median" : 28.9889365565719,
+            "min" : 28.9718891136883
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.447081114462892,
+         "resident_tps" : {
+            "max" : 28.6877779653297,
+            "median" : 28.6323015593388,
+            "min" : 28.6156708666934
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.466761536101595,
+         "resident_tps" : {
+            "max" : 27.6647662970673,
+            "median" : 27.6131723852161,
+            "min" : 27.5977041985104
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.311308670537578,
+         "resident_tps" : {
+            "max" : 35.7254059311058,
+            "median" : 35.6631295154895,
+            "min" : 35.6283800766671
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.313521264261247,
+         "resident_tps" : {
+            "max" : 35.6104293162733,
+            "median" : 35.5485527622234,
+            "min" : 35.514026139227
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.315719686489222,
+         "resident_tps" : {
+            "max" : 35.496190395685,
+            "median" : 35.4347098644085,
+            "min" : 35.4004039210227
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.3200745575963,
+         "resident_tps" : {
+            "max" : 35.2698974198427,
+            "median" : 35.2091976128803,
+            "min" : 35.1753267285192
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.328620099165417,
+         "resident_tps" : {
+            "max" : 34.8258583812025,
+            "median" : 34.7666760611754,
+            "min" : 34.7336508294792
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.353014713553105,
+         "resident_tps" : {
+            "max" : 33.5583838278305,
+            "median" : 33.5034275561192,
+            "min" : 33.4727576108967
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.111580232394127,
+         "resident_tps" : {
+            "max" : 46.0526733611336,
+            "median" : 46.0058488916669,
+            "min" : 45.9126640521993
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.11463790680474,
+         "resident_tps" : {
+            "max" : 45.8940131061998,
+            "median" : 45.8475105565422,
+            "min" : 45.7549653966691
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.117674606208335,
+         "resident_tps" : {
+            "max" : 45.7364423275709,
+            "median" : 45.6902583892838,
+            "min" : 45.5983463447928
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.123685937417697,
+         "resident_tps" : {
+            "max" : 45.4245246185472,
+            "median" : 45.3789681576392,
+            "min" : 45.2883030077833
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.135466170039714,
+         "resident_tps" : {
+            "max" : 44.813280927116,
+            "median" : 44.7689416570159,
+            "min" : 44.6806953640401
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.168980204304815,
+         "resident_tps" : {
+            "max" : 43.0744206037217,
+            "median" : 43.0334539378431,
+            "min" : 42.9519106137396
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0753415206543211,
+         "resident_tps" : {
+            "max" : 55.7568004024067,
+            "median" : 55.7141422406268,
+            "min" : 55.5672704095449
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0713502251725839,
+         "resident_tps" : {
+            "max" : 55.5491472199379,
+            "median" : 55.5068060865615,
+            "min" : 55.3610239370911
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0673884487407346,
+         "resident_tps" : {
+            "max" : 55.3430350100482,
+            "median" : 55.3010073840092,
+            "min" : 55.156302834016
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0595521527314984,
+         "resident_tps" : {
+            "max" : 54.9353654010414,
+            "median" : 54.8939544333232,
+            "min" : 54.7513695444602
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0442197494900207,
+         "resident_tps" : {
+            "max" : 54.1377825207844,
+            "median" : 54.0975648399078,
+            "min" : 53.959081903201
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.000774204273488621,
+         "resident_tps" : {
+            "max" : 51.8781912590433,
+            "median" : 51.8412595661715,
+            "min" : 51.7140738636451
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.155967129684564,
+         "resident_tps" : {
+            "max" : 59.963596225308,
+            "median" : 59.913189073943,
+            "min" : 59.7335235792278
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.151525672762641,
+         "resident_tps" : {
+            "max" : 59.7323201277339,
+            "median" : 59.6823008992298,
+            "min" : 59.5040154340921
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.147118215140305,
+         "resident_tps" : {
+            "max" : 59.5028212125425,
+            "median" : 59.45318544601,
+            "min" : 59.2762641710608
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.138403748072107,
+         "resident_tps" : {
+            "max" : 59.049073616299,
+            "median" : 59.0001916622891,
+            "min" : 58.8259522108577
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.121366083295634,
+         "resident_tps" : {
+            "max" : 58.1620272703022,
+            "median" : 58.1146023234357,
+            "min" : 57.9455467697981
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0731814918446756,
+         "resident_tps" : {
+            "max" : 55.6538971790196,
+            "median" : 55.6104727401375,
+            "min" : 55.4556529348612
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.229458390341929,
+         "resident_tps" : {
+            "max" : 63.8103833044838,
+            "median" : 63.7531270020212,
+            "min" : 63.5311159489536
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.224583564529162,
+         "resident_tps" : {
+            "max" : 63.5562661869334,
+            "median" : 63.4994648060228,
+            "min" : 63.2792138704654
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.219747243597238,
+         "resident_tps" : {
+            "max" : 63.3041650223369,
+            "median" : 63.24781316267,
+            "min" : 63.0293014957921
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.210188305841349,
+         "resident_tps" : {
+            "max" : 62.805915349938,
+            "median" : 62.7504466707146,
+            "min" : 62.5353523002041
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.191512964175805,
+         "resident_tps" : {
+            "max" : 61.8325808733562,
+            "median" : 61.7788173875901,
+            "min" : 61.5703214329049
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.138792241081047,
+         "resident_tps" : {
+            "max" : 59.0855466504432,
+            "median" : 59.0364522497614,
+            "min" : 58.8460272248559
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.248382083248189,
+         "resident_tps" : {
+            "max" : 64.800400345682,
+            "median" : 64.7423801147503,
+            "min" : 64.5089801350491
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.243408062144896,
+         "resident_tps" : {
+            "max" : 64.5410496115988,
+            "median" : 64.4834926739225,
+            "min" : 64.2519522324147
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.238473520461458,
+         "resident_tps" : {
+            "max" : 64.2837666014817,
+            "median" : 64.2266674300191,
+            "min" : 63.9969643919899
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.228721010041178,
+         "resident_tps" : {
+            "max" : 63.7753056235243,
+            "median" : 63.7191057519074,
+            "min" : 63.4930125094607
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.209669628701016,
+         "resident_tps" : {
+            "max" : 62.7821383236614,
+            "median" : 62.7276744667308,
+            "min" : 62.5085501426025
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.155902642102351,
+         "resident_tps" : {
+            "max" : 59.9799506260813,
+            "median" : 59.9302381711416,
+            "min" : 59.7301912435465
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.533012543901972,
+         "resident_tps" : {
+            "max" : 24.2281655783213,
+            "median" : 24.1824361894216,
+            "min" : 24.168748455791
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.534408939425715,
+         "resident_tps" : {
+            "max" : 24.1555814287461,
+            "median" : 24.1101253699185,
+            "min" : 24.0965193495585
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.53579700878513,
+         "resident_tps" : {
+            "max" : 24.0834308837986,
+            "median" : 24.0382457117559,
+            "min" : 24.0247206751247
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.538548465119504,
+         "resident_tps" : {
+            "max" : 23.9404151584231,
+            "median" : 23.895764545795,
+            "min" : 23.8823993225028
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.543954672442665,
+         "resident_tps" : {
+            "max" : 23.6594195588756,
+            "median" : 23.6158099947424,
+            "min" : 23.602756016156
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0,
+         "conditional_guess_acceptance" : 0,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2,
+         "min_resident_gain" : -0.559439053584197,
+         "resident_tps" : {
+            "max" : 22.8546640863935,
+            "median" : 22.81396820221,
+            "min" : 22.8017854048961
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.460358931036876,
+         "resident_tps" : {
+            "max" : 27.9975658206376,
+            "median" : 27.9447243067973,
+            "min" : 27.928882542954
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.461973953453575,
+         "resident_tps" : {
+            "max" : 27.9136175367662,
+            "median" : 27.8610921320433,
+            "min" : 27.8453450211529
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.46357933792828,
+         "resident_tps" : {
+            "max" : 27.8301711712985,
+            "median" : 27.7779590476059,
+            "min" : 27.7623057438829
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.466761536101594,
+         "resident_tps" : {
+            "max" : 27.6647662970672,
+            "median" : 27.6131723852161,
+            "min" : 27.5977041985103
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.47301399437929,
+         "resident_tps" : {
+            "max" : 27.3397856294519,
+            "median" : 27.2893956512739,
+            "min" : 27.2742879814213
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.015625,
+         "conditional_guess_acceptance" : 0.25,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.3125,
+         "min_resident_gain" : -0.490921509881461,
+         "resident_tps" : {
+            "max" : 26.4090950972776,
+            "median" : 26.3620744881731,
+            "min" : 26.3479758558239
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.345082563514568,
+         "resident_tps" : {
+            "max" : 33.9704985076033,
+            "median" : 33.9141852962834,
+            "min" : 33.8827590561863
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.347083779589871,
+         "resident_tps" : {
+            "max" : 33.8665238072316,
+            "median" : 33.810554504042,
+            "min" : 33.7793199389431
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.349072802783256,
+         "resident_tps" : {
+            "max" : 33.7631836427631,
+            "median" : 33.707555106895,
+            "min" : 33.6765104685301
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.353014713553105,
+         "resident_tps" : {
+            "max" : 33.5583838278305,
+            "median" : 33.5034275561192,
+            "min" : 33.4727576108967
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.360757019604371,
+         "resident_tps" : {
+            "max" : 33.1561484733061,
+            "median" : 33.1025006798213,
+            "min" : 33.0725600532312
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.125,
+         "conditional_guess_acceptance" : 0.5,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 2.75,
+         "min_resident_gain" : -0.382910666291368,
+         "resident_tps" : {
+            "max" : 32.0052892195993,
+            "median" : 31.9552982434911,
+            "min" : 31.927396030948
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.158101347081866,
+         "resident_tps" : {
+            "max" : 43.6388504937923,
+            "median" : 43.5968036963268,
+            "min" : 43.5131135110467
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.160847677060063,
+         "resident_tps" : {
+            "max" : 43.496360787641,
+            "median" : 43.4545879931305,
+            "min" : 43.371442402655
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.163576147870202,
+         "resident_tps" : {
+            "max" : 43.3547985686917,
+            "median" : 43.3132971074777,
+            "min" : 43.2306908133093
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.168980204304815,
+         "resident_tps" : {
+            "max" : 43.0744206037217,
+            "median" : 43.0334539378431,
+            "min" : 42.9519106137396
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.179588057670696,
+         "resident_tps" : {
+            "max" : 42.5244050782881,
+            "median" : 42.4844774514408,
+            "min" : 42.4049994272342
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.421875,
+         "conditional_guess_acceptance" : 0.75,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.3125,
+         "min_resident_gain" : -0.209856007228321,
+         "resident_tps" : {
+            "max" : 40.9555267118626,
+            "median" : 40.9184896027689,
+            "min" : 40.844757666705
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0148487180882859,
+         "resident_tps" : {
+            "max" : 52.610134800997,
+            "median" : 52.5721540077882,
+            "min" : 52.4413612416623
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0112931061598716,
+         "resident_tps" : {
+            "max" : 52.425219425851,
+            "median" : 52.3875050593518,
+            "min" : 52.2576283105863
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.0077623220445624,
+         "resident_tps" : {
+            "max" : 52.2415993878947,
+            "median" : 52.2041486545211,
+            "min" : 52.0751783336025
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : 0.000774204273488621,
+         "resident_tps" : {
+            "max" : 51.8781912590433,
+            "median" : 51.8412595661716,
+            "min" : 51.7140738636451
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : -0.0129152624688336,
+         "resident_tps" : {
+            "max" : 51.1663347240173,
+            "median" : 51.1304092571262,
+            "min" : 51.0066834340724
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.729,
+         "conditional_guess_acceptance" : 0.9,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.71,
+         "min_resident_gain" : -0.0518906199493027,
+         "resident_tps" : {
+            "max" : 49.1433452581525,
+            "median" : 49.1102035190183,
+            "min" : 48.9960506566529
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0887762319567138,
+         "resident_tps" : {
+            "max" : 56.4655547945226,
+            "median" : 56.4208550223164,
+            "min" : 56.2614965892984
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0848352109579733,
+         "resident_tps" : {
+            "max" : 56.2604289725154,
+            "median" : 56.2160532499029,
+            "min" : 56.0578480038765
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0809226175263287,
+         "resident_tps" : {
+            "max" : 56.0567881018938,
+            "median" : 56.0127329178242,
+            "min" : 55.8556683864778
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0731814918446756,
+         "resident_tps" : {
+            "max" : 55.6538971790196,
+            "median" : 55.6104727401375,
+            "min" : 55.4556529348612
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0580271760561897,
+         "resident_tps" : {
+            "max" : 54.8652430602681,
+            "median" : 54.8230401432773,
+            "min" : 54.6725677966829
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.857375,
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.8525,
+         "min_resident_gain" : 0.0150277813153279,
+         "resident_tps" : {
+            "max" : 52.6279212055256,
+            "median" : 52.5890888344512,
+            "min" : 52.4506141669575
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.155839671560448,
+         "resident_tps" : {
+            "max" : 59.9736965249463,
+            "median" : 59.9231157291144,
+            "min" : 59.7269372995087
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.151530143151282,
+         "resident_tps" : {
+            "max" : 59.7491652452065,
+            "median" : 59.698962313633,
+            "min" : 59.5042464372568
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.147252631374304,
+         "resident_tps" : {
+            "max" : 59.5263089083153,
+            "median" : 59.4764796225048,
+            "min" : 59.2832100046203
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.138792241081047,
+         "resident_tps" : {
+            "max" : 59.0855466504431,
+            "median" : 59.0364522497614,
+            "min" : 58.846027224856
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.12224036534932,
+         "resident_tps" : {
+            "max" : 58.2233181124174,
+            "median" : 58.1756455367328,
+            "min" : 57.9907244797239
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 0.970299,
+         "conditional_guess_acceptance" : 0.99,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 3.9701,
+         "min_resident_gain" : 0.0753510143793032,
+         "resident_tps" : {
+            "max" : 55.7812884690075,
+            "median" : 55.737529537298,
+            "min" : 55.5677609889312
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.173285913951983,
+         "resident_tps" : {
+            "max" : 60.8857997716772,
+            "median" : 60.8345750512717,
+            "min" : 60.6284556078606
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.168891262999713,
+         "resident_tps" : {
+            "max" : 60.6567820182766,
+            "median" : 60.6059417687708,
+            "min" : 60.4013661175639
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.164529410341935,
+         "resident_tps" : {
+            "max" : 60.4294806778016,
+            "median" : 60.3790205868716,
+            "min" : 60.1759714485532
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.155902642102351,
+         "resident_tps" : {
+            "max" : 59.9799506260813,
+            "median" : 59.9302381711416,
+            "min" : 59.7301912435465
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.139026947241864,
+         "resident_tps" : {
+            "max" : 59.1006604957878,
+            "median" : 59.0523943135537,
+            "min" : 58.8581554468714
+         }
+      },
+      {
+         "all_three_guesses_accept_probability" : 1,
+         "conditional_guess_acceptance" : 1,
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "mean_useful_rows_per_eligible_attempt" : 4,
+         "min_resident_gain" : 0.0912323406745874,
+         "resident_tps" : {
+            "max" : 56.610955809943,
+            "median" : 56.5666690206467,
+            "min" : 56.3884137171689
+         }
+      }
+   ],
+   "drafter_budgets" : [
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -39.4297248514235,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -40.5634960984994,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -41.094868781274,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -43.1875145691823,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -33.3408138947612,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -34.6498564911218,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -35.2531484572986,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -37.6692994070882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -23.146636172865,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -24.7025088960134,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -25.4111849892316,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -28.2829199260764,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -7.08734359094955,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -8.96447260940973,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -9.84524236979384,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -13.3025834108622,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 6.0558243236553,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 3.95404053287104,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 2.96786026098604,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : -0.903255303191562,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 11.1093040581106,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 8.92698776932282,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 7.90302075594476,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 3.883578514299,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 15.4069146773788,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 13.161423663573,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 12.1062219930905,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 7.96417238369882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 16.5176114724411,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 14.2503040511429,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 13.184086337998,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 0,
+         "max_all_in_drafter_ms" : 8.99879476218122,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -40.4297248514235,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -41.5634960984994,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -42.094868781274,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -44.1875145691824,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -34.3408138947612,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -35.6498564911218,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -36.2531484572986,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -38.6692994070882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -24.1466361728649,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -25.7025088960133,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -26.4111849892316,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -29.2829199260764,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -8.08734359094957,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -9.96447260940974,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -10.8452423697939,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -14.3025834108622,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 5.05582432365531,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 2.95404053287105,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 1.96786026098605,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : -1.90325530319155,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 10.1093040581106,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 7.92698776932287,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 6.90302075594481,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 2.88357851429905,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 14.4069146773788,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 12.161423663573,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 11.1062219930905,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 6.96417238369882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 15.5176114724411,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 13.2503040511429,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 12.184086337998,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 1,
+         "max_all_in_drafter_ms" : 7.99879476218122,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -44.4297248514235,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -45.5634960984994,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -46.094868781274,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -48.1875145691824,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -38.3408138947611,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -39.6498564911217,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -40.2531484572986,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -42.6692994070882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -28.1466361728649,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -29.7025088960133,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -30.4111849892316,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -33.2829199260764,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -12.0873435909496,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -13.9644726094098,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -14.8452423697939,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.75,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -18.3025834108622,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 1.05582432365531,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -1.04595946712895,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -2.03213973901395,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.9,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -5.90325530319155,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 6.10930405811064,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 3.92698776932288,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 2.90302075594482,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : -1.11642148570094,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 10.4069146773788,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 8.16142366357299,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 7.10622199309049,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 0.99,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 2.96417238369882,
+         "target" : 56.153149
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 11.5176114724411,
+         "target" : "resident-break-even"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 9.25030405114287,
+         "target" : "resident-three-percent"
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 8.18408633799799,
+         "target" : 53.06
+      },
+      {
+         "conditional_guess_acceptance" : 1,
+         "extra_per_attempt_ms" : 5,
+         "max_all_in_drafter_ms" : 3.99879476218121,
+         "target" : 56.153149
+      }
+   ],
+   "eligibility_sensitivity" : [
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "eligibility" : 0.25,
+         "min_resident_gain" : 0.0818798181760179,
+         "resident_tps" : {
+            "max" : 56.092950320341,
+            "median" : 56.0382684473034,
+            "min" : 55.9051308375372
+         }
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "eligibility" : 0.25,
+         "min_resident_gain" : 0.0561901343503042,
+         "resident_tps" : {
+            "max" : 54.7566317815133,
+            "median" : 54.7045230677323,
+            "min" : 54.5776403794262
+         }
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "eligibility" : 0.5,
+         "min_resident_gain" : 0.126525580316565,
+         "resident_tps" : {
+            "max" : 58.4217781715675,
+            "median" : 58.368477615992,
+            "min" : 58.2121589675349
+         }
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "eligibility" : 0.5,
+         "min_resident_gain" : 0.106721336715407,
+         "resident_tps" : {
+            "max" : 57.3910941435594,
+            "median" : 57.3396568401767,
+            "min" : 57.1887931453239
+         }
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 0.25,
+         "eligibility" : 1,
+         "min_resident_gain" : 0.169499476381001,
+         "resident_tps" : {
+            "max" : 60.668296469189,
+            "median" : 60.6166980824698,
+            "min" : 60.4327949769314
+         }
+      },
+      {
+         "conditional_guess_acceptance" : 0.95,
+         "drafter_ms" : 1,
+         "eligibility" : 1,
+         "min_resident_gain" : 0.155967129684563,
+         "resident_tps" : {
+            "max" : 59.963596225308,
+            "median" : 59.913189073943,
+            "min" : 59.7335235792278
+         }
+      }
+   ],
+   "guessed_tokens" : 3,
+   "historical_http_assumption" : {
+      "extra_session_setup_ms" : 0.369562,
+      "fixed_overhead_ms" : 554.537659999998,
+      "is_new_http_result" : false,
+      "original_reference_requests" : [
+         {
+            "decode_ms" : 9502.341458,
+            "fixed_ms" : 554.537659999998,
+            "http_ms" : 10056.879118,
+            "pair" : 0
+         },
+         {
+            "decode_ms" : 9521.149514,
+            "fixed_ms" : 532.406252999999,
+            "http_ms" : 10053.555767,
+            "pair" : 1
+         },
+         {
+            "decode_ms" : 9523.230879,
+            "fixed_ms" : 519.363820999999,
+            "http_ms" : 10042.5947,
+            "pair" : 2
+         },
+         {
+            "decode_ms" : 9529.747907,
+            "fixed_ms" : 535.927803,
+            "http_ms" : 10065.67571,
+            "pair" : 3
+         },
+         {
+            "decode_ms" : 9535.820373,
+            "fixed_ms" : 546.38473,
+            "http_ms" : 10082.205103,
+            "pair" : 4
+         }
+      ]
+   },
+   "known_correct_seed" : true,
+   "measurement_sha256" : "555646bab7f3200452c0dce9b30b3317f19d42bdecdc517016a62ec10a87b69e",
+   "minimum_acceptance" : [
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.834990941919386,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.837799846194685,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.840597187168896,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.846157634630799,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.85714469384402,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.889094517566264,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.857532624155283,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.860296668484807,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.863049576058984,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.86852241307497,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.879339098930359,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.910813370719552,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.868116478435695,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.870859873481095,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.87359232455492,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.879024818539619,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.88976301625371,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.921017966233194,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.909714209847152,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.912378876470029,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.915033319033682,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.920311912894249,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.930750495754182,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 0,
+         "minimum_conditional_guess_acceptance" : 0.961166827939451,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.846157634630799,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.848920965567231,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.851673181168735,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.85714469384402,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.867958961986005,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.899427606724203,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.86852241307497,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.871242552995682,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.87395198084414,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.879339098930359,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.889989148825407,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.92099872417748,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.879024818539619,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.88172506634146,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.884414782747626,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.88976301625371,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.900337371043861,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.931135113351047,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.920311912894249,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.922936248593032,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.925550730898976,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.930750495754182,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.941035643219948,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 1,
+         "minimum_conditional_guess_acceptance" : 0.971022795885801,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.889094517566264,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.891692061908543,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.894280035048723,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.899427606724203,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.909611559472978,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.939318469725549,
+         "target" : "resident-break-even"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.910813370719552,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.913373505696654,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.915924389846623,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.92099872417748,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.931039854884148,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.960345299914479,
+         "target" : "resident-three-percent"
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.921017966233194,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.923560834489763,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.926094595342875,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.931135113351047,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.941110271960497,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.970230123959482,
+         "target" : 53.06
+      },
+      {
+         "drafter_ms" : 0,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.961166827939451,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.25,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.963643584400415,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 0.5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.966111782006919,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 1,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.971022795885801,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 2,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : 0.98074547201395,
+         "target" : 56.153149
+      },
+      {
+         "drafter_ms" : 5,
+         "extra_per_attempt_ms" : 5,
+         "minimum_conditional_guess_acceptance" : null,
+         "target" : 56.153149
+      }
+   ],
+   "perfect_draft_requests" : [
+      {
+         "attempts" : 127,
+         "candidate_total_ms" : 7774.185753,
+         "decode_without_drafter_ms" : 7390.32152400002,
+         "draft_decisions" : 127,
+         "mean_complete_batch_ms" : 57.7462913070866,
+         "ordinary_serial_rows" : 3,
+         "pair" : 0,
+         "rejections" : 0,
+         "serial_mean_row_ms" : 18.5898792759296,
+         "serial_total_ms" : 9887.241122
+      },
+      {
+         "attempts" : 127,
+         "candidate_total_ms" : 7785.014578,
+         "decode_without_drafter_ms" : 7401.68846299997,
+         "draft_decisions" : 127,
+         "mean_complete_batch_ms" : 57.8371522755906,
+         "ordinary_serial_rows" : 3,
+         "pair" : 1,
+         "rejections" : 0,
+         "serial_mean_row_ms" : 18.6073321780822,
+         "serial_total_ms" : 9890.383414
+      },
+      {
+         "attempts" : 127,
+         "candidate_total_ms" : 7780.142027,
+         "decode_without_drafter_ms" : 7397.93619899998,
+         "draft_decisions" : 127,
+         "mean_complete_batch_ms" : 57.8076254566929,
+         "ordinary_serial_rows" : 3,
+         "pair" : 2,
+         "rejections" : 0,
+         "serial_mean_row_ms" : 18.5846709158513,
+         "serial_total_ms" : 9877.878684
+      },
+      {
+         "attempts" : 127,
+         "candidate_total_ms" : 7781.266565,
+         "decode_without_drafter_ms" : 7399.52745199999,
+         "draft_decisions" : 127,
+         "mean_complete_batch_ms" : 57.8202653464567,
+         "ordinary_serial_rows" : 3,
+         "pair" : 3,
+         "rejections" : 0,
+         "serial_mean_row_ms" : 18.6160865596869,
+         "serial_total_ms" : 9901.866096
+      },
+      {
+         "attempts" : 127,
+         "candidate_total_ms" : 7809.879469,
+         "decode_without_drafter_ms" : 7420.167262,
+         "draft_decisions" : 127,
+         "mean_complete_batch_ms" : 57.9808614724409,
+         "ordinary_serial_rows" : 3,
+         "pair" : 4,
+         "rejections" : 0,
+         "serial_mean_row_ms" : 18.6300282857143,
+         "serial_total_ms" : 9908.258126
+      }
+   ],
+   "rejection_means" : [
+      {
+         "accepted" : 0,
+         "correction_ms" : 18.494949,
+         "correction_ms_range" : {
+            "max" : 18.629231,
+            "median" : 18.483019,
+            "min" : 18.430289
+         },
+         "elapsed_ms" : 75.9275038,
+         "elapsed_ms_range" : {
+            "max" : 76.300959,
+            "median" : 75.824526,
+            "min" : 75.798501
+         },
+         "other_ms" : 0.000494599999992573,
+         "rollback_ms" : 0.0232528,
+         "rollback_ms_range" : {
+            "max" : 0.04038,
+            "median" : 0.014656,
+            "min" : 0.014492
+         },
+         "target_ms" : 57.4088074,
+         "target_ms_range" : {
+            "max" : 57.638706,
+            "median" : 57.360835,
+            "min" : 57.326622
+         }
+      },
+      {
+         "accepted" : 1,
+         "correction_ms" : 18.4670558,
+         "correction_ms_range" : {
+            "max" : 18.533833,
+            "median" : 18.461286,
+            "min" : 18.433333
+         },
+         "elapsed_ms" : 75.8454598,
+         "elapsed_ms_range" : {
+            "max" : 75.879896,
+            "median" : 75.848921,
+            "min" : 75.781371
+         },
+         "other_ms" : 0.000530399999998821,
+         "rollback_ms" : 0.0146224,
+         "rollback_ms_range" : {
+            "max" : 0.015112,
+            "median" : 0.014575,
+            "min" : 0.014237
+         },
+         "target_ms" : 57.3632512,
+         "target_ms_range" : {
+            "max" : 57.422618,
+            "median" : 57.3726,
+            "min" : 57.289472
+         }
+      },
+      {
+         "accepted" : 2,
+         "correction_ms" : 18.5005978,
+         "correction_ms_range" : {
+            "max" : 18.578814,
+            "median" : 18.464126,
+            "min" : 18.462021
+         },
+         "elapsed_ms" : 75.955927,
+         "elapsed_ms_range" : {
+            "max" : 76.263456,
+            "median" : 75.886606,
+            "min" : 75.829891
+         },
+         "other_ms" : 0.000590800000004776,
+         "rollback_ms" : 0.018019,
+         "rollback_ms_range" : {
+            "max" : 0.030216,
+            "median" : 0.014503,
+            "min" : 0.014132
+         },
+         "target_ms" : 57.4367194,
+         "target_ms_range" : {
+            "max" : 57.66707,
+            "median" : 57.40143,
+            "min" : 57.351166
+         }
+      },
+      {
+         "accepted" : 3,
+         "correction_ms" : 18.4935602,
+         "correction_ms_range" : {
+            "max" : 18.527736,
+            "median" : 18.512173,
+            "min" : 18.446097
+         },
+         "elapsed_ms" : 75.8866206,
+         "elapsed_ms_range" : {
+            "max" : 75.985256,
+            "median" : 75.88268,
+            "min" : 75.782539
+         },
+         "other_ms" : 0.000617199999993545,
+         "rollback_ms" : 0.0146944,
+         "rollback_ms_range" : {
+            "max" : 0.015455,
+            "median" : 0.014528,
+            "min" : 0.014215
+         },
+         "target_ms" : 57.3777488,
+         "target_ms_range" : {
+            "max" : 57.457205,
+            "median" : 57.35965,
+            "min" : 57.321484
+         }
+      }
+   ],
+   "schema_version" : 1,
+   "scope" : "measured full-verifier costs; hypothetical real-drafter acceptance and historical HTTP overhead",
+   "serial_continuation_rows" : 511,
+   "unmeasured_late_rejection_and_real_drafter" : true
+}

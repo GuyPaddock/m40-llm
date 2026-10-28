@@ -2,6 +2,34 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-28: Fully Direct Four-Row Target Passes
+
+The [bounded direct verifier](experiments/2026-10-28-direct-verifier-measurement.md)
+passes complete resident-generation feasibility, **65.799057 versus 51.767457
+tok/s**, +27.1051%, paired 95% interval [26.8683%,27.2526%]. Five alternating
+release pairs retain the same 512 actual IDs, length stop and dense KV state.
+Session setup, packed prompt, target/commit, serial tails and teardown are
+charged. Median request is 7,781.267 versus 9,890.383 ms. Complete batch cost
+is 57.820 ms, replacing the earlier 60.17-60.43 ms hypothetical assembly.
+Twenty early-prefix rejection/correction observations cost about 75.8-76.0 ms.
+No statistical extension or confirmation condition is met.
+
+All 511 full-vocabulary comparisons and 10,616,832 valid KV words are bitwise
+equal; all rejection/partial/drop/ownership checks and twelve frozen task
+outputs pass. All 138 existing CUDA entries and prepared payloads are unchanged.
+Target cuBLAS/allocations are zero; model teardown returns tracked bytes to 0.
+Raw records, independent audits, logs and retained measured executable/source
+are linked in the report. Original SGEMM-verifier rejection remains valid.
+
+This is **perfect-draft resident throughput, not HTTP or real-drafter throughput**.
+The [measured acceptance assessment](experiments/2026-10-28-direct-verifier-feasibility.md)
+supports a separately reviewed acceptance/cost study only. A hypothetical 1 ms
+drafter needs about 86.9% conditional guess acceptance for the resident 3%
+screen and 92.0% for the historical-overhead HTTP target scenario. No drafter,
+generation integration or default change follows. Preserve the immutable
+**50.910426 HTTP tok/s**, joint-only preference and **56.153149** target.
+The authorized experiment is complete; stop for review.
+
 ## 2026-10-28: Fixed Four-Row Reader Clears FFN Gate
 
 The [single authorized shared-read operator](experiments/2026-10-28-four-row-operator.md)

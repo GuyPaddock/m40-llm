@@ -6,19 +6,32 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The user authorizes one [fully direct four-row verifier feasibility prototype](experiments/2026-10-28-direct-verifier-plan.md).
-Use the fixed shared-read operator and original direct one-row consumers in a
-layer-major schedule, with exclusive dense transactions and frozen perfect
-drafts. Correctness and cache ownership precede paired complete measurements.
-Do not reuse the rejected SGEMM verification path, add a drafter, change
-defaults or rescue a failed schedule. Stop after the measured assessment.
+The [fully direct four-row verifier feasibility prototype](experiments/2026-10-28-direct-verifier-plan.md)
+is complete. **Stop for review.** Its fixed layer-major schedule uses the
+existing R4 gate/up reader and qualified direct one-row consumers, exclusive
+dense transactions and frozen perfect drafts. No new CUDA kernel or generation
+integration is introduced. Runtime defaults and preferred joint-only ownership
+are unchanged.
 
 The [direct-target correctness checkpoint](experiments/2026-10-28-direct-verifier-correctness.md)
 passes all 512 actual IDs, all 511 full-vocabulary vectors with zero difference,
 all 10,616,832 valid KV words bit-identically, eight rejection/partial cases,
 invalid/drop/alias cases and twelve frozen task outputs. All actual prepared
 payloads are unchanged; target cuBLAS/allocations are zero and final tracked
-teardown is zero. Complete performance measurement is next, not yet qualified.
+teardown is zero. The [complete release measurements](experiments/2026-10-28-direct-verifier-measurement.md)
+pass the resident feasibility gate: 65.799057 versus 51.767457 tok/s, +27.1051%,
+paired interval [26.8683%,27.2526%]. Five alternating pairs have low variation;
+no extension/confirmation is required. Complete batch mean is 57.820 ms;
+20 measured rejection/correction cycles cost about 75.8-76.0 ms at the early
+prefix. Setup, prompt, transactions and tails are charged. This is **not HTTP
+or real-drafter throughput**, and does not replace the immutable reference.
+
+The [measured feasibility decision](experiments/2026-10-28-direct-verifier-feasibility.md)
+recommends only a separately authorized draft-acceptance/cost study. A 1 ms
+all-in drafter needs modeled conditional acceptance about 86.9% for the resident
+3% screen, or 92.0% for the historical-overhead 56.153149 HTTP scenario. Late
+rejection and real proposal cost/coverage remain unmeasured. No EAGLE, neural
+drafter, default change, new search or automatic integration is authorized.
 
 The [fixed four-row operator probe](experiments/2026-10-28-four-row-operator.md)
 is complete and passes its exact-output, resource, ownership and >=5%
@@ -32,9 +45,9 @@ The [updated full-verifier assessment](experiments/2026-10-28-four-row-feasibili
 rejects simply patching the old SGEMM verifier: its modeled batch is still
 111.9 ms. A fully direct schedule around existing qualified one-row consumers
 was conditionally plausible at that checkpoint. The subsequently authorized
-prototype above passes correctness; measured complete costs and real drafter
-acceptance remain unknown. No neural drafter, EAGLE, kernel rescue or default
-change follows automatically.
+prototype above now passes correctness and measured resident feasibility;
+real drafter acceptance remains unknown. No neural drafter, EAGLE, kernel
+rescue or default change follows automatically.
 The immutable 50.910426 HTTP tok/s reference and 56.153149 target are unchanged.
 
 The preceding [bounded feasibility assessment](experiments/2026-10-27-direct-q8-feasibility.md)
