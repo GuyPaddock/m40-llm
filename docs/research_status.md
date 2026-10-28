@@ -6,8 +6,14 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user authorizes a [bounded causal draft-acceptance/cost study](experiments/2026-10-28-draft-acceptance-plan.md).
+Evaluate fixed prompt/past-only sources on disclosed development traces and
+fresh frozen held-out prompts; preserve all verifier/reference/default controls.
+Real proposal costs and joint eligibility/acceptance precede any conditional
+research drafter implementation. No neural source or runtime promotion is assumed.
+
 The [fully direct four-row verifier feasibility prototype](experiments/2026-10-28-direct-verifier-plan.md)
-is complete. **Stop for review.** Its fixed layer-major schedule uses the
+is complete and accepted. Its fixed layer-major schedule uses the
 existing R4 gate/up reader and qualified direct one-row consumers, exclusive
 dense transactions and frozen perfect drafts. No new CUDA kernel or generation
 integration is introduced. Runtime defaults and preferred joint-only ownership
