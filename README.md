@@ -148,6 +148,13 @@ back for host sampling.
 
 ## Experimental Features
 
+For the opt-in qualified Q8 compound FFN, joint-only prepared-weight ownership
+is preferred and selected automatically. It saves 1.606 GiB on Qwen2.5-3B
+without a measured performance regression. `M40LLM_Q8_FFN_OWNERSHIP=retain-split`
+keeps the historical reference configuration. See the
+[configuration and storage qualification](docs/q8_execution_weights.md#opt-in-runtime-preparation).
+Weight preparation and the compound kernel remain opt-in.
+
 Research support and opt-in diagnostics:
 
 - Compressed KV-cache modes and long-context quality harness:

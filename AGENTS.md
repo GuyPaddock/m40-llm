@@ -32,6 +32,8 @@ measurements in the linked docs, not here.
   or `--kv-compress-mode off`. Do not silently substitute attention semantics.
 - Keep graphs, score-cluster, fallback/anchor policies, and cache experiments
   opt-in unless broader validation and an explicit task authorize promotion.
+- Prefer joint-only ownership for the opt-in qualified compound FFN. Select
+  `retain-split` explicitly for historical reference or diagnostic runs.
 - Preserve required license and copyright notices when borrowing code.
 
 ## Validation and Measurements

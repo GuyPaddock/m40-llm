@@ -6,10 +6,18 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-Both approved independent experiments are complete. **Stop here for review**;
-no additional CUDA search, compatibility inference, downloads, limit changes
-or runtime-default promotion is authorized. Progress and gate decisions are
-recorded in MemPalace and the linked artifacts.
+The user has now authorized **joint-only as preferred ownership for the
+opt-in compound FFN**. Its constructor and environment selection omit redundant
+split gate/up owners unless explicitly overridden with `retain-split`.
+Native and other FFN defaults, global preparation, KV configuration and
+qualified kernels are unchanged. Historical benchmark tools pin retained
+ownership explicitly; no measured reference is reinterpreted.
+The [preference validation](experiments/2026-10-27-preferred-joint-ownership.md)
+records implementation `a37cedc`, explicit control pins and passing checks.
+
+Both preceding independent experiments are complete. No additional CUDA
+search, compatibility inference, downloads or limit changes are authorized.
+Progress and gate decisions are recorded in MemPalace and the linked artifacts.
 
 1. [No-old compressed attention reuse](experiments/2026-10-27-no-old-screen.md)
    is rejected. The 88 layout and 140 primitive/rollover cases pass, but valid
@@ -29,8 +37,9 @@ The new audit separates 109 logical sources, 37 physical split owners and 36
 joint pairs; 28 corruption controls pass. All 137 compiled CUDA entries match.
 Affected CUDA/cuBLAS-on/off, packed-prefix, ownership, full-forward, HTTP
 cleanup, non-CUDA warnings and Clippy checks pass. Final tracked teardown is 0.
-Default ownership remains `retain-split`; `joint-only` is opt-in. Runtime KV
-defaults and all existing quality/statistical rules remain unchanged.
+The storage experiment left ownership defaults unchanged at measurement time;
+the subsequent user-authorized compound-only preference is described above.
+Runtime KV defaults and all existing quality/statistical rules remain unchanged.
 
 The [immutable compound reference](experiments/2026-10-27-compound-reference.md)
 fixes **50.910426 versus official 43.194730 HTTP tok/s**, measured at clean

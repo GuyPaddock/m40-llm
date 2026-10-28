@@ -36,6 +36,21 @@ satisfy the original exact-output goal by changing the continuation. Nothing
 in this investigation changes the project compressed-KV default or globally
 enables weight preparation.
 
+## Preferred Runtime Ownership
+
+After the [independent storage qualification](experiments/2026-10-27-joint-only-ownership.md),
+joint-only is the preferred ownership for the opt-in compound FFN. The typed
+constructor and environment selection now choose it unless explicitly
+overridden with `M40LLM_Q8_FFN_OWNERSHIP=retain-split`. This saves exactly
+1,724,645,376 device bytes on the measured Qwen3B model, without meaningful
+paired HTTP regression. Keep original GGUF sources and prepared down/head.
+
+The fixed control above is historical and immutable. Benchmark tools pin its
+retained ownership explicitly; its recorded memory, binaries and timing are
+not revised. Weight preparation and the compound kernel remain opt-in, and
+the exact-dense performance target is unchanged. See the
+[load-time ownership settings](q8_execution_weights.md#opt-in-runtime-preparation).
+
 ## Admission For Further Optimization
 
 The [compound stage checkpoint](experiments/2026-10-27-maxwell-compound-stage-profile.md)
@@ -326,9 +341,11 @@ Missing preparation or insufficient budget is an error, not a native fallback.
 
 The separately qualified `joint-shared-scales-128` reuses the fixed 128-thread
 consumer from the approved compound experiment, with identical FP32 arithmetic
-and reduction. It requires the same split owners and adds model-owned joint
-pairs once at load, charged against the combined preparation budget. It
-rejects K>4096, multi-row use or missing/mismatched pair identities rather than
+and reduction. Its preferred joint-only ownership retains split down/head
+owners and constructs joint gate/up pairs directly from original sources.
+An explicit retained-split override also keeps the redundant gate/up planes
+for historical references. All resident owners count against the preparation
+budget. It rejects K>4096, multi-row use or missing/mismatched pair identities rather than
 falling back. Decode borrows the pairs without packing/upload/allocation/sync.
 For quality/HTTP tools use the compound choice with
 `--q8-runtime-control qualified-packed-projection-sgemm`, unchanged

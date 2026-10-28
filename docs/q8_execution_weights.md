@@ -154,24 +154,48 @@ The separately screened `M40LLM_Q8_FFN_KERNEL=split-f32x4-128` is an explicit,
 fixed-geometry exception requiring split gate/up preparation. See
 [load-time FFN selection](maxwell_q8_execution.md#load-time-configuration).
 
-The qualified opt-in `M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128` with default
-`retain-split` ownership retains all original split planes and adds 36
-model-local joint pairs on Qwen. The
-combined preparation budget includes both sets; `q8_ffn_pair_stats()` reports
+The immutable qualified reference uses
+`M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128`. It retains all original split
+planes and adds 36 model-local
+joint pairs on Qwen. Its combined preparation budget includes both sets;
+`q8_ffn_pair_stats()` reports
 joint identities, 1,724,645,376 additional bytes, temporary host packing and
 cold preparation separately from original per-tensor statistics. Selected
 one-row decode calls the existing fixed compound consumer without hot packing,
 upload, allocation or synchronization. Unsupported shapes or missing pairs
 fail instead of falling back. See [actual512, quality and HTTP qualification](experiments/2026-10-27-maxwell-compound-runtime.md).
 This remains opt-in; native FFN and the split control are unchanged.
+Reproducing that ownership now requires explicit `retain-split` selection.
 
-The independent storage experiment adds opt-in
-`M40LLM_Q8_FFN_OWNERSHIP=joint-only`. It requires the compound consumer and
-split preparation of exactly `gate-up,down,vocabulary`; incompatible choices
-fail instead of falling back. Default ownership stays `retain-split`.
+**Joint-only is now the preferred ownership and the default for this opt-in
+compound consumer**, through both `Q8FfnConfig::joint_shared_scales()` and
+`M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128`. An omitted ownership flag
+keeps that choice. Explicit `M40LLM_Q8_FFN_OWNERSHIP=joint-only` is equivalent.
+It requires split preparation of exactly `gate-up,down,vocabulary`;
+incompatible choices fail instead of falling back.
 Original uploaded GGUF gate/up sources remain available to SGEMM prefill.
 Only their redundant split execution copies are omitted; the fixed joint
 consumer and prepared down/vocabulary kernels are unchanged.
+
+```bash
+export M40LLM_Q8_EXECUTION_WEIGHTS=split
+export M40LLM_Q8_EXECUTION_FAMILIES=gate-up,down,vocabulary
+export M40LLM_Q8_EXECUTION_BUDGET_MB=6144
+export M40LLM_Q8_FFN_KERNEL=joint-shared-scales-128
+# Optional: this ownership is already selected for the compound consumer.
+export M40LLM_Q8_FFN_OWNERSHIP=joint-only
+```
+
+Use `M40LLM_Q8_FFN_OWNERSHIP=retain-split` or typed
+`.with_ownership(Q8FfnOwnership::RetainSplit)` to preserve the original owners.
+Historical compound choices in `model_quality` and `compare_ollama` explicitly
+retain split ownership rather than silently changing their reference audits.
+The independent `joint_only` qualification runner always selects each arm
+explicitly. Startup logs include the resolved ownership.
+
+This preference does not globally enable weight preparation or the compound
+kernel. Native and other FFN choices retain their existing ownership and
+selection defaults. It does not change KV compression or prefill settings.
 
 Logical source coverage and resident split counts are different quantities:
 Qwen3B retains 109 logical sources, but joint-only owns 37 split down/head
@@ -182,8 +206,9 @@ ownership scheme. Its [independent completed storage qualification](experiments/
 verifies the exact 1,724,645,376-byte reduction, bit-identical payloads/logits,
 512 actual IDs and frozen outputs. Five paired HTTP trials are timing-neutral,
 50.863 versus 50.893 tok/s, and pass storage non-regression. This is not a
-speedup or replacement for the immutable 50.910426 reference. Keep ownership
-opt-in; no runtime defaults or kernels change.
+speedup or replacement for the immutable 50.910426 reference. The user
+subsequently authorized this compound-only ownership preference; the measured
+reports and original binaries remain unchanged. No new kernels are involved.
 
 When vocabulary weights are prepared, GPU greedy selection uses the prepared
 projection into existing logits scratch followed by the existing device argmax.

@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-27: Prefer Joint-Only Compound Ownership
+
+The user authorized joint-only as the preferred ownership for the opt-in
+compound FFN, following the storage qualification below. Compound selection
+now omits redundant split gate/up planes unless `retain-split` is explicitly
+requested. Native FFN, global preparation and KV defaults are unchanged.
+Historical benchmark choices explicitly preserve retained ownership.
+
+This is a configuration promotion, **not a new timing result**. The verified
+1,724,645,376-byte saving and neutral 50.863/50.893 HTTP tok/s comparison remain
+the supporting evidence. No performance claim, acceptance rule, measured
+artifact or immutable 50.910426 reference is revised. See the
+[preferred settings](q8_execution_weights.md#opt-in-runtime-preparation).
+The [configuration validation](experiments/2026-10-27-preferred-joint-ownership.md)
+records the focused checks; it adds no timing samples to the existing comparison.
+
 ## 2026-10-27: Joint-Only Saves 1.606 GiB, Timing Neutral
 
 The independent opt-in ownership change saves exactly **1,724,645,376 device
