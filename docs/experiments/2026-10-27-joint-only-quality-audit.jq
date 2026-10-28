@@ -9,6 +9,9 @@ def by_name: sort_by(.tensor_name);
 | $rows | one("joint_only_quality_complete") as $done
 | $o.control as $a | $o.candidate as $b
 | $frozen[0] as $f
+| ([$a.logical_sources[] | select(.tensor_name|endswith("ffn_gate.weight")) | . as $gate
+    | {gate:$gate,up:($a.logical_sources | map(select(.tensor_name==($gate.tensor_name|sub("ffn_gate";"ffn_up")))) | .[0])}]
+    | sort_by(.gate.tensor_name)) as $expected_pairs
 | ($frozen|map(select(.kind=="q8_runtime_browser_generation" and .label=="candidate"))|.[0]) as $prior
 | $rows
 | require($m.schema_version==1 and $m.reference_id=="compound-runtime-63240c5-v1"
@@ -21,6 +24,7 @@ def by_name: sort_by(.tensor_name);
     and ($a.resident_split.tensors|length)==109 and ($b.resident_split.tensors|length)==37;
     "logical coverage is not physical split residency")
 | require($a.resident_split.tensors==$f.prepared_candidate.tensors
+    and $b.resident_split.tensors==($a.resident_split.tensors|map(select(.key.source.tensor_name|test("ffn_down.weight$|^token_embd.weight$"))))
     and $a.uploaded_gguf_bytes==3279519744 and $b.uploaded_gguf_bytes==3279519744
     and $a.resident_split.resident_bytes==2917580800 and $b.resident_split.resident_bytes==1192935424
     and $o.resident_reduction_bytes==1724645376 and $o.skipped_device_allocations==144
@@ -31,6 +35,9 @@ def by_name: sort_by(.tensor_name);
     and all($o.control_payload_hashes[];.[1]|test("^[a-f0-9]{64}$"))
     and ([$o.control_payload_hashes[][0]]|sort_by(.gate.tensor_name))==($a.joint.pairs|sort_by(.gate.tensor_name))
     and $a.joint.pairs==$b.joint.pairs and $a.joint.resident_bytes==1724645376 and $b.joint.resident_bytes==1724645376
+    and ($expected_pairs|length)==36 and all($expected_pairs[];.up!=null)
+    and ($a.joint.pairs|sort_by(.gate.tensor_name))==$expected_pairs
+    and $a.joint.pair_count==36 and $b.joint.pair_count==36
     and $a.joint.combined_prepared_bytes==4642226176 and $b.joint.combined_prepared_bytes==2917580800
     and $b.joint.budget_bytes==6442450944 and $b.joint.retained_host_pair_bytes==0
     and $b.joint.peak_temporary_host_pair_bytes==47906816;"joint identity/payload/budget")
