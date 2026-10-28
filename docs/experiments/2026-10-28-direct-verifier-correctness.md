@@ -56,8 +56,8 @@ perl docs/experiments/2026-10-28-direct-verifier-audit.pl \
 ```
 
 CUDA attention grid 11/11, compound 3/3, prepared consumers 2/2, fixed four-row
-operator 2/2, forward fixtures 23/23 and transaction tests 3/3 pass serially
-with hardware access. Transaction 3/3 and operator 2/2 also pass without
+operator 2/2, forward fixtures 2/2 and transaction tests 3/3 pass serially
+with hardware access, 23 tests across these suites. Transaction 3/3 and operator 2/2 also pass without
 cuBLAS. Warning-as-error non-CUDA tests pass, 219 tests total. CLI/admission
 tests 2/2, CUDA/server all-target Clippy and formatting pass. Logs are retained
 with the final measurement archive.
