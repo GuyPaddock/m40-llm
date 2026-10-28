@@ -203,3 +203,29 @@ fn test_verification_rejects_aliases_capacity_and_unverified_commits() -> Result
     assert_eq!(CudaContext::total_device_bytes(), initial);
     Ok(())
 }
+
+/// The new prototype rejects unrelated shapes/configurations and cloned dense
+/// owners before target work, leaving the older research constructor usable.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_direct_verification_rejects_unsupported_and_aliased_models() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let initial = CudaContext::total_device_bytes();
+    {
+        let mut loaded = model(true, Q8PrefillBackend::Native, 32)?;
+        let alias = loaded.kv_cache.as_ref().unwrap().clone();
+        assert!(VerificationSession::new_direct_four_rows(&mut loaded, &[]).is_err());
+        drop(alias);
+        let before = m40_llm::profile::snapshot();
+        assert!(VerificationSession::new_direct_four_rows(&mut loaded, &[]).is_err());
+        assert_eq!(
+            m40_llm::profile::counter_delta(&before, &m40_llm::profile::snapshot()).launches,
+            0
+        );
+        let mut old = VerificationSession::new(&mut loaded, &[])?;
+        assert!(old.prefill(&[1, 2, 3])? < 96);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}

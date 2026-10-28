@@ -21,6 +21,7 @@ pub struct VerificationSession<'m> {
     next_token: Option<u32>,
     stop_tokens: Vec<u32>,
     is_poisoned: bool,
+    direct_workspace: Option<crate::infer::DirectVerificationWorkspace>,
 }
 
 #[derive(Debug)]
@@ -97,7 +98,18 @@ impl<'m> VerificationSession<'m> {
             next_token: None,
             stop_tokens: stop_tokens.to_vec(),
             is_poisoned: false,
+            direct_workspace: None,
         })
+    }
+
+    /// Bounded research prototype, never selected by generation defaults.
+    /// Keeps the original SGEMM constructor available only as its old control.
+    pub fn new_direct_four_rows(model: &'m mut LoadedModel, stop_tokens: &[u32]) -> Result<Self> {
+        let mut session = Self::new(model, stop_tokens)?;
+        session.direct_workspace = Some(crate::infer::DirectVerificationWorkspace::new(
+            session.model,
+        )?);
+        Ok(session)
     }
 
     pub fn committed_len(&self) -> u32 {
@@ -112,6 +124,7 @@ impl<'m> VerificationSession<'m> {
             + self.logits.bytes()
             + self.token.bytes()
             + self.norm.as_ref().map_or(0, DeviceBuffer::bytes)
+            + self.direct_workspace.as_ref().map_or(0, |w| w.bytes())
     }
 
     /// Same packed-prefix/final-token preparation for serial and verified runs.
@@ -216,6 +229,10 @@ impl<'m> VerificationSession<'m> {
         ensure!(!self.is_poisoned, "verification session is poisoned");
         let original_next = self.next_token.context("prefill before verification")?;
         ensure!(
+            self.direct_workspace.is_none() || candidates.len() == 4,
+            "direct verification requires exactly four candidates"
+        );
+        ensure!(
             matches!(candidates.len(), 2 | 4 | 8),
             "verification requires 2, 4 or 8 candidates"
         );
@@ -241,11 +258,20 @@ impl<'m> VerificationSession<'m> {
         };
         let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
         unsafe {
-            attempt.session.model.forward_verification_rows(
-                candidates,
-                start,
-                attempt.session.hidden.as_mut_ptr(),
-            )?;
+            if let Some(workspace) = &attempt.session.direct_workspace {
+                attempt.session.model.forward_direct_verification_rows(
+                    candidates,
+                    start,
+                    attempt.session.hidden.as_mut_ptr(),
+                    workspace,
+                )?;
+            } else {
+                attempt.session.model.forward_verification_rows(
+                    candidates,
+                    start,
+                    attempt.session.hidden.as_mut_ptr(),
+                )?;
+            }
         }
         for row in 0..candidates.len() {
             let (prediction, logits) = attempt.session.read_prediction(row, capture_logits)?;

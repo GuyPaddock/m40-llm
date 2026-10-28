@@ -39,6 +39,8 @@ pub use batch::{
 #[cfg(feature = "cuda")]
 pub use ffn_capture::FfnCapture;
 #[cfg(feature = "cuda")]
+pub(crate) use forward::DirectVerificationWorkspace;
+#[cfg(feature = "cuda")]
 pub use forward::{ForwardBatchItem, ForwardPrefillSequence};
 #[cfg(feature = "cuda")]
 pub use kv::with_exact_block_staging;

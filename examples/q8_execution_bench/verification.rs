@@ -15,7 +15,7 @@ use std::{
 };
 #[path = "../compare_ollama/protocol.rs"]
 #[allow(dead_code)]
-mod protocol;
+pub(super) mod protocol;
 #[path = "../common/q8_runtime.rs"]
 #[allow(dead_code)]
 mod runtime;

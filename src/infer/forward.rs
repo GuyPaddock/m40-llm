@@ -19,6 +19,9 @@ use crate::gpu_profile::{self, GpuStageSpan};
 #[path = "forward_diagnostic_cost.rs"]
 mod diagnostic_cost;
 #[cfg(feature = "cuda")]
+#[path = "direct_verification.rs"]
+mod direct_verification;
+#[cfg(feature = "cuda")]
 use crate::infer::{BatchMetadata, BatchSequence, VarlenPrefillPlan};
 #[cfg(feature = "cuda")]
 use crate::kv_compression;
@@ -31,6 +34,8 @@ use crate::timing;
 #[cfg(feature = "cuda")]
 use anyhow::Context;
 use anyhow::{anyhow, Result};
+#[cfg(feature = "cuda")]
+pub(crate) use direct_verification::DirectVerificationWorkspace;
 use std::ffi::c_void;
 
 #[cfg(feature = "cuda")]
