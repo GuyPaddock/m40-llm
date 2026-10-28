@@ -63,6 +63,11 @@ fn rejection_positions(width: usize) -> Vec<usize> {
 
 fn validate_gpu() -> Result<Value> {
     let state = inspect_gpu()?;
+    validate_gpu_state(&state)?;
+    Ok(state)
+}
+
+fn validate_gpu_state(state: &Value) -> Result<()> {
     let fields = state["device"]
         .as_str()
         .context("device snapshot")?
@@ -73,11 +78,11 @@ fn validate_gpu() -> Result<Value> {
         fields.len() == 9
             && fields[0] == "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852"
             && fields[3] == "P0"
-            && fields[5] == "1113"
-            && fields[6] == "3004",
+            && fields[5].strip_suffix(" MHz").unwrap_or(fields[5]) == "1113"
+            && fields[6].strip_suffix(" MHz").unwrap_or(fields[6]) == "3004",
         "diagnostic GPU/clocks differ: {fields:?}"
     );
-    Ok(state)
+    Ok(())
 }
 
 fn prefix_hash(session: &VerificationSession<'_>, layers: u32, prefix: usize) -> Result<String> {
@@ -419,6 +424,24 @@ mod fixture;
 mod tests {
     use super::*;
     use clap::Parser;
+
+    /// NVIDIA's default CSV includes units. Normalizing that presentation
+    /// must not accept different clocks, a different GPU or an idle P-state.
+    #[test]
+    fn test_gpu_snapshot_accepts_units_but_rejects_clock_changes() {
+        let line = "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 32, 1113 MHz, 3004 MHz, 6155 MiB, 89 %";
+        assert!(validate_gpu_state(&json!({"device":line})).is_ok());
+        assert!(validate_gpu_state(&json!({"device":line.replace(" MHz","")})).is_ok());
+        for changed in [
+            line.replace("1113", "822"),
+            line.replace("3004", "2505"),
+            line.replace("P0", "P8"),
+            line.replace("e590a24b", "00000000"),
+            line.replace(" MHz", " kHz"),
+        ] {
+            assert!(validate_gpu_state(&json!({"device":changed})).is_err());
+        }
+    }
 
     /// The observation mode must be explicit and cannot select an existing
     /// verifier or FFN experiment in the same invocation.
