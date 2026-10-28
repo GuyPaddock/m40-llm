@@ -1,0 +1,21 @@
+{
+   "complete_request_counters_checked" : true,
+   "device_bytes_after" : 0,
+   "exact_empirical_paired_ci95" : [
+      0.268682591751788,
+      0.272526267193881
+   ],
+   "executable_sha256" : "7e922a3e4e95613254b6520d6bbf38c33880ee12d03b33c7fad6b3d83dae7de4",
+   "gain" : 0.271050584295206,
+   "is_http_claim" : false,
+   "is_passed" : true,
+   "paired_ci95" : [
+      0.268682591751788,
+      0.272526267193881
+   ],
+   "pairs" : 5,
+   "rejected_corruptions" : 10,
+   "rejection_cycles" : 20,
+   "revision" : "50d4d17f3ca59e7a8999fea7c385ff01f288c276",
+   "warmups" : 2
+}
