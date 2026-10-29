@@ -6,6 +6,18 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user-approved [bounded research tracks](experiments/2026-10-29-research-tracks-plan.md)
+supersede the previous wait-for-a-lead instruction. Assess frozen-target
+training, an exact portfolio of positive sub-threshold work, and one opt-in
+relaxed-accumulation FFN experiment. M40 is initially authorized; EVERY switch
+to A4000 or back needs user confirmation for VM shutdown. Never use both GPUs.
+The drafter pilot cap is 72 aggregate GPU-hours, conditional on admission.
+Reuse the last same-model Ollama 43.194730 result; do not rerun merely to refresh
+the 56.153149 target. Reference 50.910426, joint-only and defaults stay fixed.
+Contract committed first; admissions and implementations remain pending.
+
+## Preceding Checkpoints
+
 The [structural-routes decision memorandum](experiments/2026-10-28-structural-routes-decision.md)
 is complete. Defer both implementations: no supported new FFN access
 architecture or compatible learned artifact with measured acceptance/cost
