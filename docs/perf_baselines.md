@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: Drafter Data Gate Stops Before GPU Work
+
+The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
+finds zero MBPP prompts meeting the frozen65-447-token range. All964 approved
+source rows were checked with the real Qwen ChatML tokenizer; longest prompts
+are58 train,36 calibration and55 held-out tokens. Required quotas remain
+256/48/96. No grouping or exclusion pass can increase these upper bounds.
+
+R1 is not admitted. No teacher generation, training, acceptance evaluation or
+GPU switch ran; additional GPU-hours are zero. The1.538085ms cost result still
+stands, but learned acceptance and projected gains remain unmeasured. This
+is a data-specification stop, not a neural-drafter performance or quality failure.
+Keep the specification, immutable runtime reference and earlier evidence intact.
+
 ## 2026-10-29: Compact Draft Proposal Cost Passes
 
 The [fixed rank256 cost probe](experiments/2026-10-29-compact-draft-cost.md)

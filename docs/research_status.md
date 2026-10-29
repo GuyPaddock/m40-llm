@@ -96,15 +96,26 @@ training or evaluation hours. No device switch requested.
 
 The [drafter data and pilot admission plan](experiments/2026-10-29-drafter-pilot-admission.md)
 and [preparation specification](experiments/2026-10-29-drafter-data-spec.json)
-are ready for review, not execution. They pin causal raw-hidden/three-label
+received R0 approval and conditional R1 approval only if every prerequisite
+passes. They pin causal raw-hidden/three-label
 alignment, source/license metadata, document/template isolation, benchmark
 exclusions and a fixed four-epoch pilot. Actual dataset records, selected IDs,
 split hashes and upstream document audits remain pending; the specification
 explicitly forbids teacher generation until a realized manifest is reviewed.
 Proposed pilot caps are2 teacher/2 training/1 evaluation GPU-hours inside the
 unchanged4/20/40/8 parent caps. No automatic use of the larger allowance.
-No teacher data, training, GPU switching or runtime changes in this planning
-task. Keep qualified controls and all prior measurements unchanged.
+The [CPU admission checkpoint](experiments/2026-10-29-drafter-data-admission-stop.md)
+now stops before R1. Tool commit `911bc48` validates the original Qwen tokenizer
+and all964 MBPP records: train374/calibration90/held-out500, with zero prompts
+reaching the frozen65-token minimum. Maximum lengths are58/36/55 tokens,
+including ChatML, against quotas256/48/96. Grouping/exclusions cannot repair
+this upper bound. No constraints were relaxed, no complete training manifest
+was fabricated, and the remaining admission checks did not run after failure.
+Pinned sources, per-row counts, local token ledger and independent audit are
+retained. Three conversion, four capacity and seven Qwen tokenizer tests pass;
+the audit rejects five corruptions. No teacher, training, evaluation, GPU
+switch or runtime change occurred. GPU usage remains0.005923/72 hours.
+The conditional pilot is not admitted; stop for a revised user direction.
 
 ## Preceding Checkpoints
 

@@ -1,0 +1,25 @@
+{
+  "status": "verified_negative_capacity",
+  "partitions": [
+    {
+      "split": "train",
+      "source_rows": 374,
+      "eligible": 0,
+      "quota": 256
+    },
+    {
+      "split": "calibration",
+      "source_rows": 90,
+      "eligible": 0,
+      "quota": 48
+    },
+    {
+      "split": "held_out",
+      "source_rows": 500,
+      "eligible": 0,
+      "quota": 96
+    }
+  ],
+  "checked_prompt_rows": 964,
+  "is_r1_admitted": false
+}
