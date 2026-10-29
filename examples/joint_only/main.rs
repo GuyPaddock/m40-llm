@@ -1,5 +1,7 @@
 //! Independent ownership qualification; never changes the frozen reference.
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
+mod compact_draft;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod dataflow;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
 #[path = "../q8_execution_bench/ffn/reductions/data.rs"]
@@ -53,6 +55,7 @@ mod run {
         PortfolioOperators,
         PortfolioQuality,
         PortfolioHttp,
+        CompactDraftCost,
     }
 
     #[derive(Parser)]
@@ -198,6 +201,7 @@ mod run {
             Phase::PortfolioOperators => super::portfolio_logits::execute(&args, &mut report)?,
             Phase::PortfolioQuality => super::portfolio::quality::execute(&args, &mut report)?,
             Phase::PortfolioHttp => super::portfolio::http::execute(&args, &mut report).await?,
+            Phase::CompactDraftCost => super::compact_draft::execute(&args, &mut report)?,
             Phase::Load => {
                 let before = profile::snapshot();
                 let initial = CudaContext::total_device_bytes();
