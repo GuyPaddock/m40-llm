@@ -105,6 +105,23 @@ results. Report projections, negative gates and pending work separately.
 
 ## Initial Progress
 
+### Reviewed Execution Clarifications
+
+The subsequent user approval requires contemporary correctness, representative
+actual-logit and complete-operator measurements before portfolio runtime
+qualification. Keep the three components and five runtime comparison arms
+fixed. Account for all1,192,935,424 additional packet bytes and cold setup.
+Do not expand the portfolio on failure. The ILP4 probe stays separate and
+benchmark-only until its existing gates pass.
+
+The compact drafter is authorized through the bounded M40 cost probe, NOT an
+automatic full training run. After cost measurement, freeze and submit the
+dataset manifest, causal alignment, split isolation, licenses, training schedule
+and pilot stop criterion for review BEFORE teacher generation or training.
+Require another checkpoint after the small pilot before using the larger
+training allowance. The72-hour ceiling is not permission to bypass either
+review. Every device switch still needs explicit user confirmation.
+
 - Contract recorded; no GPU budget consumed and no device switch requested.
 - Paper assessments, portfolio integration, approximate implementation and
   training/measurement remain pending at this commit.
