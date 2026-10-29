@@ -99,8 +99,8 @@ and [preparation specification](experiments/2026-10-29-drafter-data-spec.json)
 received R0 approval and conditional R1 approval only if every prerequisite
 passes. They pin causal raw-hidden/three-label
 alignment, source/license metadata, document/template isolation, benchmark
-exclusions and a fixed four-epoch pilot. Actual dataset records, selected IDs,
-split hashes and upstream document audits remain pending; the specification
+exclusions and a fixed four-epoch pilot. Sources have been acquired; selected
+training IDs, split hashes and upstream document audits remain pending. The specification
 explicitly forbids teacher generation until a realized manifest is reviewed.
 Proposed pilot caps are2 teacher/2 training/1 evaluation GPU-hours inside the
 unchanged4/20/40/8 parent caps. No automatic use of the larger allowance.
