@@ -1,0 +1,106 @@
+{
+  "is_passed": true,
+  "revision": "1b1890ad7f2dac99b10536dccdf2a01ae5d6d623",
+  "executable_sha256": "21cb3e53fe9c9a9f7d9bbcedc93da4e84fd4fb2fd50807b676815ab534f5ab46",
+  "timed_requests": 120,
+  "tokens_per_request": 512,
+  "phases_not_pooled": true,
+  "results": [
+    {
+      "candidate": "down",
+      "phase": "screen",
+      "pairs": 5,
+      "control_http_tps": 50.903911392722684,
+      "candidate_http_tps": 52.06192999305771,
+      "gain_percent": 2.2749108440821786,
+      "paired_ci95_percent": [
+        2.168065899510241,
+        2.305402513703436
+      ],
+      "control_variation_percent": 0.020249918679482184,
+      "candidate_variation_percent": 0.020702268083606656,
+      "requires_confirmation": true,
+      "next_pairs": 20
+    },
+    {
+      "candidate": "down",
+      "phase": "confirmation",
+      "pairs": 20,
+      "control_http_tps": 50.82465536469561,
+      "candidate_http_tps": 51.94191183211744,
+      "gain_percent": 2.1982568487772136,
+      "paired_ci95_percent": [
+        2.1338253990404343,
+        2.2453132828661904
+      ],
+      "control_variation_percent": 0.052011747115323706,
+      "candidate_variation_percent": 0.05293316520100761,
+      "requires_confirmation": true,
+      "next_pairs": null
+    },
+    {
+      "candidate": "vocabulary",
+      "phase": "screen",
+      "pairs": 5,
+      "control_http_tps": 50.8613165024323,
+      "candidate_http_tps": 51.23668126750334,
+      "gain_percent": 0.738016219169424,
+      "paired_ci95_percent": [
+        0.5104230589516145,
+        1.011531118105946
+      ],
+      "control_variation_percent": 0.10638958600728177,
+      "candidate_variation_percent": 0.043795822840742675,
+      "requires_confirmation": false,
+      "next_pairs": null
+    },
+    {
+      "candidate": "argmax",
+      "phase": "screen",
+      "pairs": 5,
+      "control_http_tps": 50.85413400152888,
+      "candidate_http_tps": 51.54331140560028,
+      "gain_percent": 1.3552042869330538,
+      "paired_ci95_percent": [
+        1.2215379134326687,
+        1.4637451060820705
+      ],
+      "control_variation_percent": 0.009787221248550752,
+      "candidate_variation_percent": 0.0805044009957632,
+      "requires_confirmation": false,
+      "next_pairs": null
+    },
+    {
+      "candidate": "all",
+      "phase": "screen",
+      "pairs": 5,
+      "control_http_tps": 50.57755536344345,
+      "candidate_http_tps": 52.5919804676688,
+      "gain_percent": 3.982843950740511,
+      "paired_ci95_percent": [
+        3.73689179948109,
+        4.258220789654854
+      ],
+      "control_variation_percent": 0.030619875210500243,
+      "candidate_variation_percent": 0.2365314718415915,
+      "requires_confirmation": true,
+      "next_pairs": 20
+    },
+    {
+      "candidate": "all",
+      "phase": "confirmation",
+      "pairs": 20,
+      "control_http_tps": 50.523256390000306,
+      "candidate_http_tps": 52.54852277287111,
+      "gain_percent": 4.0085824382286805,
+      "paired_ci95_percent": [
+        3.9335989735435284,
+        4.057069090413812
+      ],
+      "control_variation_percent": 0.058990393099819016,
+      "candidate_variation_percent": 0.10484884629831408,
+      "requires_confirmation": false,
+      "next_pairs": null
+    }
+  ]
+}

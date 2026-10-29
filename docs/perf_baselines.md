@@ -2,6 +2,28 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: Exact Portfolio Passes HTTP Gate
+
+The [fixed five-arm qualification](experiments/2026-10-29-portfolio-runtime.md)
+passes exact outputs, full-logit/KV comparisons, ownership and the combined
+HTTP gate. Twenty fresh combined pairs measure **50.523256 -> 52.548523 HTTP
+tok/s, +4.008582%**, paired 95% interval **[3.933599%, 4.057069%]**.
+The five-pair screen triggered confirmation; the two cohorts are not pooled.
+Standalone final gains are down 2.198257%, vocabulary 0.738016%, and argmax
+1.355204%. These are separately measured, not summed into the combined claim.
+
+All five arms preserve the actual 512 IDs, seven sampled full-vocabulary
+vectors, 10,616,832 valid KV words and twelve frozen task outputs. All 138
+compiled CUDA entries are unchanged; teardown returns tracked bytes to zero.
+Equal retained packets cost 1,192,935,424 extra device bytes and about 6.4 s
+additional cold preparation. This is an opt-in research configuration.
+
+The immutable **50.910426** reference is untouched. The new candidate is
+3.217606% above that historical median, not a paired 4.01% gain over it.
+Neither 53.06 nor **56.153149 HTTP tok/s** is reached. No fresh Ollama run,
+A4000 switch or default change occurred. Raw timings, resource costs,
+correctness evidence and independent audits are linked in the report.
+
 ## 2026-10-29: Exact Portfolio Operator Checkpoint
 
 The [contemporary packet/argmax screen](experiments/2026-10-29-portfolio-operator-checkpoint.md)

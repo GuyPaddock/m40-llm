@@ -57,10 +57,20 @@ and off. Budget/upload failures leave no partial owners. The attention grid,
 affected compound/logit/packet tests, non-CUDA warning-as-error suite, Clippy
 and formatting pass. This is adapter coverage, not full-model qualification.
 
-Next: validate full simultaneous 1,192,935,424-byte packet residency and
-ownership/quality/compiled controls, then paired HTTP with fresh confirmation
-when borderline. No combined runtime qualification or training is complete.
-No new kernel was added.
+The [full runtime qualification](experiments/2026-10-29-portfolio-runtime.md)
+now passes. All five arms preserve 512 actual IDs, 35 full-vocabulary samples,
+valid KV and twelve frozen outputs; packet residency is exactly
+1,192,935,424 added bytes. All 138 CUDA instruction streams and 34 immutable
+reference checksums are unchanged. Fresh combined 20-pair HTTP confirmation
+gives 52.548523 versus 50.523256 tok/s, +4.008582%, interval
+[3.933599%, 4.057069%]. Standalone down/vocabulary/argmax remain separate
+positive sub-threshold results. Extra cold preparation is about 6.4 seconds.
+Defaults and immutable 50.910426 remain unchanged; 56.153149 is not reached.
+
+Next: the approved fixed ILP4 benchmark-only operator and separate 5%
+complete-FFN gate, then the compact drafter cost probe. No approximate
+qualification or training is complete. Do not expand the exact portfolio.
+No new CUDA kernel was added for it.
 The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
 0/72 drafter GPU-hours consumed; no device switch requested.
