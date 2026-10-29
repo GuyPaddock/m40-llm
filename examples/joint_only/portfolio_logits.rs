@@ -16,6 +16,9 @@ use m40_llm::{
 use serde_json::{json, Value};
 use std::fs;
 
+#[path = "portfolio_timings.rs"]
+mod timings;
+
 #[cfg(test)]
 #[path = "../../tests/common/cuda_test_scope.rs"]
 mod cuda_test_scope;
@@ -175,6 +178,32 @@ impl<'m> LogitProbe<'m> {
 }
 
 pub fn execute(args: &Args, report: &mut Report) -> Result<()> {
+    let should_measure = matches!(args.phase, run::Phase::PortfolioOperators);
+    if should_measure {
+        let path = args
+            .quality_report
+            .as_ref()
+            .context("operator timing requires --quality-report from portfolio-logits")?;
+        let prior = fs::read_to_string(path)?;
+        let records = prior
+            .lines()
+            .map(serde_json::from_str::<Value>)
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        ensure!(
+            records
+                .iter()
+                .any(|r| r["kind"] == "portfolio_actual_logits_complete"
+                    && r["is_gate_passed"] == true
+                    && r["sampled_full_vocabularies"] == 7
+                    && r["actual_generated_ids"]
+                        .as_array()
+                        .is_some_and(|ids| ids.len() == 512)
+                    && r["device_bytes_after"] == 0),
+            "missing completed actual-logit correctness gate"
+        );
+        report.record(json!({"kind":"portfolio_operator_admission","correctness_report":path,
+            "correctness_sha256":sha256(prior.as_bytes())?,"scope":"isolated operators on real logits; no HTTP or runtime qualification"}))?;
+    }
     let path = "docs/experiments/2026-10-27-maxwell-compound-runtime-quality.jsonl";
     let text = fs::read_to_string(path)?;
     let records = text
@@ -204,7 +233,8 @@ pub fn execute(args: &Args, report: &mut Report) -> Result<()> {
         let planes = unsafe { weight.read_planes()? };
         report.record(json!({"kind":"portfolio_actual_logits_setup","source_report":path,
             "source_report_sha256":sha256(text.as_bytes())?,"model":run::identity(&model),
-            "packet_preparation":probe.packet.report,"scope":"correctness only; not operator or runtime timing"}))?;
+            "packet_preparation":probe.packet.report,"scope":"setup and correctness excluded from operator timing",
+            "measures_operators":should_measure}))?;
         let mut session = DecodeSession::new_for_sequence_with_kv_config(
             &model,
             0,
@@ -226,6 +256,10 @@ pub fn execute(args: &Args, report: &mut Report) -> Result<()> {
                 report.record(json!({"kind":"portfolio_actual_logits_validation","step":step,
                     "prefix_tokens":ids.len(),"prefix_ids_sha256":sha256(&ids.iter().flat_map(|v|v.to_le_bytes()).collect::<Vec<_>>())?,
                     "result":result}))?;
+                if should_measure {
+                    probe.measure_operators(report, step, token)?;
+                    probe.verify(&session, token)?;
+                }
             }
             ids.push(token);
         }

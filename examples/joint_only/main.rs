@@ -48,6 +48,7 @@ mod run {
         Load,
         Dataflow,
         PortfolioLogits,
+        PortfolioOperators,
     }
 
     #[derive(Parser)]
@@ -190,6 +191,7 @@ mod run {
             Phase::Http => super::http::execute(&args, &mut report).await?,
             Phase::Dataflow => super::dataflow::execute(&args, &mut report).await?,
             Phase::PortfolioLogits => super::portfolio_logits::execute(&args, &mut report)?,
+            Phase::PortfolioOperators => super::portfolio_logits::execute(&args, &mut report)?,
             Phase::Load => {
                 let before = profile::snapshot();
                 let initial = CudaContext::total_device_bytes();
