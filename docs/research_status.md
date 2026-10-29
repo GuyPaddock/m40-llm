@@ -72,12 +72,24 @@ before performance. Compiler/resource admission passes; on the new fixed
 dynamic-range fixture the original control fails 101 SwiGLU values and ILP4
 passes. This is not evidence of an ILP4 speed loss. Preserve the unchanged
 tolerance, code and evidence; no rescue, runtime selector or HTTP qualification.
-Next: the independent compact drafter cost probe. No approximate qualification
-or training is complete. Do not expand the exact portfolio.
-No new CUDA kernel was added for it.
+The [compact drafter cost probe](experiments/2026-10-29-compact-draft-cost.md)
+passes at1.538085ms median and1.555598ms p95, against the3.884ms cap. The fixed
+rank256 three-head architecture adds163,728,908 device bytes. It uses existing
+operations and synthetic parameters; all768 hidden/full455808-logit oracle
+checks, immutable owners and zero teardown pass. All138 compiled controls
+remain unchanged. The target is resident but not used as a teacher.
+
+Stop at the required cost-review checkpoint. Learned acceptance is unmeasured;
+about92.59% equal conditional acceptance with full coverage would be required
+for the stronger projected HTTP target. Before teacher generation or training,
+freeze and review the data/license/split manifest and small-pilot stop rules.
+No approximate qualification or training is complete. Do not expand the exact
+portfolio or automatically begin training.
+No new CUDA kernel was added for the exact portfolio or drafter cost probe.
 The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
-0/72 drafter GPU-hours consumed; no device switch requested.
+0.005923/72 drafter GPU-hours consumed by the M40 cost probe; zero teacher,
+training or evaluation hours. No device switch requested.
 
 ## Preceding Checkpoints
 

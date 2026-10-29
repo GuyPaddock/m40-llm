@@ -96,8 +96,11 @@ Use exact-target greedy labels, full-vocabulary cross entropy and one fixed
 training schedule; no held-out checkpoint selection or architecture search.
 This manifest is pending, so training is NOT admitted by this document.
 
-No GPU hours have been used. Next permitted drafting work is the <=4h M40
-proposal-cost probe after the independent portfolio and numerical experiments.
+The [fixed M40 cost probe](2026-10-29-compact-draft-cost.md) now passes:
+median1.538085ms, p951.555598ms versus the3.884ms admission threshold.
+It used0.005923 GPU-hours, synthetic untrained parameters and no teacher data.
+Acceptance remains unmeasured. Stop for the required user checkpoint before
+a reviewed data manifest, teacher generation or a small training pilot.
 Any A4000 switch and return requires user confirmation. If training is later
 admitted, measure three-position acceptance/cost jointly on prose, code,
 retrieval and copying with short/middle/long contexts. Only a passing measured

@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: Compact Draft Proposal Cost Passes
+
+The [fixed rank256 cost probe](experiments/2026-10-29-compact-draft-cost.md)
+measures **1.538085ms median**, **1.555598ms p95** across1000 complete decisions,
+below the unchanged3.884ms admission cap. It uses existing cuBLAS/SiLU/argmax,
+synthetic untrained parameters and a resident qualified joint-only Qwen target.
+Additional device storage is163,728,908 bytes; no per-decision allocation or
+upload occurs. Full-vocabulary FP64 checks, owner integrity and cleanup pass.
+
+This is not learned acceptance or measured HTTP performance. The preserved
+target-cost recurrence requires about92.59% equal conditional acceptance at
+full eligibility to project56.153149 HTTP tok/s with this proposal cost.
+Cost alone does not establish that the model can reach that acceptance.
+No teacher data, training, new CUDA kernel, device switch or runtime promotion
+follows automatically. Stop for data/licensing/split and small-pilot review.
+
 ## 2026-10-29: ILP4 Stops At Numerical Admission
 
 The [fixed ILP4 probe](experiments/2026-10-29-ilp4-decision.md) preserves all
