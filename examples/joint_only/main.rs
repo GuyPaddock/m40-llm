@@ -1,5 +1,7 @@
 //! Independent ownership qualification; never changes the frozen reference.
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
+mod dataflow;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod http;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
 #[path = "../compare_ollama/protocol.rs"]
@@ -35,6 +37,7 @@ mod run {
         Quality,
         Http,
         Load,
+        Dataflow,
     }
 
     #[derive(Parser)]
@@ -49,6 +52,9 @@ mod run {
         pub ownership: String,
         #[arg(long)]
         pub quality_report: Option<PathBuf>,
+        /// New sampled-event output; never append to historical evidence.
+        #[arg(long)]
+        pub profile_report: Option<PathBuf>,
     }
 
     pub struct Report(File);
@@ -172,6 +178,7 @@ mod run {
         match args.phase {
             Phase::Quality => super::quality::execute(&args, &mut report)?,
             Phase::Http => super::http::execute(&args, &mut report).await?,
+            Phase::Dataflow => super::dataflow::execute(&args, &mut report).await?,
             Phase::Load => {
                 let before = profile::snapshot();
                 let initial = CudaContext::total_device_bytes();

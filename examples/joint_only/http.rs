@@ -14,11 +14,11 @@ use m40_llm::{
 use serde_json::{json, Value};
 use std::{fs, sync::Arc, time::Instant};
 
-struct Server {
-    state: Arc<AppState>,
+pub(super) struct Server {
+    pub(super) state: Arc<AppState>,
     url: String,
-    task: tokio::task::JoinHandle<std::io::Result<()>>,
-    shutdown: tokio::sync::oneshot::Sender<()>,
+    pub(super) task: tokio::task::JoinHandle<std::io::Result<()>>,
+    pub(super) shutdown: tokio::sync::oneshot::Sender<()>,
 }
 
 /// Graceful shutdown drains connection tasks that retain router/model owners.
@@ -40,7 +40,7 @@ fn spawn_router(
     (shutdown, task)
 }
 
-fn validate_timing_gpu(state: &Value) -> Result<()> {
+pub(super) fn validate_timing_gpu(state: &Value) -> Result<()> {
     let clocks = state["clocks"]
         .as_str()
         .context("GPU clocks")?
@@ -61,7 +61,7 @@ fn validate_timing_gpu(state: &Value) -> Result<()> {
     Ok(())
 }
 
-async fn start(model: LoadedModel) -> Result<Server> {
+pub(super) async fn start(model: LoadedModel) -> Result<Server> {
     let mut state = AppState::new_with_kv_config(model, KvCompressionConfig::dense_reference());
     state.prompt_prefill = PromptPrefill::PackedPrefix {
         max_prompt_tokens: 128,
@@ -92,7 +92,11 @@ fn request_body() -> GenerateRequest {
     }
 }
 
-async fn request(client: &reqwest::Client, server: &Server, expected: &str) -> Result<Value> {
+pub(super) async fn request(
+    client: &reqwest::Client,
+    server: &Server,
+    expected: &str,
+) -> Result<Value> {
     let counters = m40_llm::profile::snapshot();
     let began = Instant::now();
     let response = client
@@ -118,7 +122,7 @@ async fn request(client: &reqwest::Client, server: &Server, expected: &str) -> R
     )
 }
 
-pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
+pub(super) fn read_quality(args: &Args) -> Result<Vec<Value>> {
     let path = args
         .quality_report
         .as_ref()
@@ -138,6 +142,15 @@ pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
             && evidence[0]["executable_sha256"] == file_sha256(&std::env::current_exe()?)?,
         "quality source/executable differs"
     );
+    Ok(evidence)
+}
+
+pub async fn execute(args: &Args, report: &mut Report) -> Result<()> {
+    let evidence = read_quality(args)?;
+    let path = args
+        .quality_report
+        .as_ref()
+        .expect("validated quality path");
     let generation = evidence
         .iter()
         .find(|r| r["kind"] == "joint_only_generation")
