@@ -346,6 +346,62 @@ fn test_prepared_down_candidates_keep_complete_ffn_bits_and_cache() -> Result<()
     Ok(())
 }
 
+/// The rebased portfolio uses compound gate/up in both arms and preserves
+/// complete FFN bits, immutable owners and allocation-free packet execution.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_compound_packet_down_preserves_complete_bits() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _hardware = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let (gguf, bytes) = model_fixture::build_prefill_fixture(true);
+        let model = LoadedModel::from_gguf_with_q8_execution(
+            gguf,
+            bytes,
+            -1,
+            Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
+        )?;
+        let layer = sample_layer(&model, 0)?;
+        let cache = serde_json::to_value(model.q8_execution_stats())?;
+        for rows in [1, 4] {
+            let mut p = FfnPipeline::new(&model, &layer, rows)?;
+            p.prepare_split_weights(&layer)?;
+            p.joint = Some(super::joint::JointFfnWeights::new(
+                &model,
+                &layer,
+                p.prepared.as_ref().unwrap().bytes,
+            )?);
+            p.warp_packet = Some(super::packet::PreparedWarpPacket::new(
+                &model,
+                model.map_standard_layer(0)?.w_down.dptr.cast_const(),
+                128 * 1024 * 1024,
+            )?);
+            p.select_kernel(FfnKernel::JointSharedScales)?;
+            validation::validate(&p, &layer)?;
+            let expected = p.output.read(&model.cuda)?;
+            let resident = CudaContext::total_device_bytes();
+            p.select_down_projection(DownProjection::WarpPacket)?;
+            validation::validate(&p, &layer)?;
+            assert!(p
+                .output
+                .read(&model.cuda)?
+                .iter()
+                .zip(&expected)
+                .all(|(a, b)| a.to_bits() == b.to_bits()));
+            let timing = p.time(Stage::Complete, 7)?;
+            assert_eq!(timing["enqueue_counters"]["launches"], 14);
+            assert_eq!(timing["enqueue_counters"]["device_allocs"], 0);
+            assert_eq!(CudaContext::total_device_bytes(), resident);
+            p.verify_guards_and_inputs(&layer)?;
+        }
+        assert_eq!(serde_json::to_value(model.q8_execution_stats())?, cache);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
 /// Protect exact-control variants' bits and the eight-value variant's unchanged
 /// numerical bounds, then verify actual complete-FFN dispatch and ownership.
 fn compare_split_pipeline(kernel: FfnKernel) -> Result<()> {
@@ -692,24 +748,26 @@ fn sample_layer(model: &LoadedModel, layer_id: usize) -> Result<FfnLayerSamples>
         source.source_sha256 = sha256(&model.host_weights[start..start + source.byte_len()?])?;
         Ok(source)
     };
-    let input = model_fixture::projection::make_input(4, 64);
-    let a = DeviceBuffer::new_tagged(&model.cuda, 64 * 4, "ffn-test:input")?;
-    let h = DeviceBuffer::new_tagged(&model.cuda, 128 * 4, "ffn-test:hidden")?;
-    let mut hidden = vec![0.0f32; 4 * 128];
+    let gate_source = source(&mapped.w_gate)?;
+    let [k, n] = gate_source.shape;
+    let input = model_fixture::projection::make_input(4, k);
+    let a = DeviceBuffer::new_tagged(&model.cuda, k * 4, "ffn-test:input")?;
+    let h = DeviceBuffer::new_tagged(&model.cuda, n * 4, "ffn-test:hidden")?;
+    let mut hidden = vec![0.0f32; 4 * n];
     for row in 0..4 {
         unsafe {
             model.cuda.memcpy_h2d(
                 a.as_mut_ptr(),
-                input[row * 64..(row + 1) * 64].as_ptr().cast(),
-                256,
+                input[row * k..(row + 1) * k].as_ptr().cast(),
+                k * 4,
             )?;
             assert!(model.try_mlp_gate_up_swiglu_f32xf16_gguf_decode_async(
                 a.as_ptr(),
                 1,
-                64,
+                k as i32,
                 mapped.w_gate.dptr,
                 mapped.w_up.dptr,
-                128,
+                n as i32,
                 h.as_mut_ptr(),
                 None,
             )?);
@@ -717,16 +775,16 @@ fn sample_layer(model: &LoadedModel, layer_id: usize) -> Result<FfnLayerSamples>
         model.cuda.synchronize_stream(CudaStream::Decode)?;
         unsafe {
             model.cuda.memcpy_d2h(
-                hidden[row * 128..(row + 1) * 128].as_mut_ptr().cast(),
+                hidden[row * n..(row + 1) * n].as_mut_ptr().cast(),
                 h.as_ptr(),
-                512,
+                n * 4,
             )?;
         }
     }
     Ok(FfnLayerSamples {
         source: FfnLayerSource {
             layer_id,
-            gate: source(&mapped.w_gate)?,
+            gate: gate_source,
             up: source(&mapped.w_up)?,
             down: source(&mapped.w_down)?,
         },

@@ -68,6 +68,17 @@ fn projection_operation(projection: DownProjection) -> &'static str {
     }
 }
 
+fn control_kernel(args: &Args) -> (FfnKernel, &'static str) {
+    if args.prepared_compound_control {
+        (
+            FfnKernel::JointSharedScales,
+            "ffn_q8_joint_f32x4_shared_scales_128",
+        )
+    } else {
+        (FfnKernel::SplitF32x4, "ffn_q8_split_f32x4_128")
+    }
+}
+
 fn benchmark_down(
     file: &mut File,
     model: &LoadedModel,
@@ -77,7 +88,15 @@ fn benchmark_down(
 ) -> Result<()> {
     let mut p = FfnPipeline::new(model, layer, rows)?;
     p.prepare_split_weights(layer)?;
-    p.select_kernel(FfnKernel::SplitF32x4)?;
+    if args.prepared_compound_control {
+        p.joint = Some(super::joint::JointFfnWeights::new(
+            model,
+            layer,
+            p.prepared.as_ref().context("missing split pair")?.bytes,
+        )?);
+    }
+    let (gate_kernel, gate_operation) = control_kernel(args);
+    p.select_kernel(gate_kernel)?;
     let down_view = model.map_standard_layer(layer.source.layer_id)?.w_down;
     let down_weight = model
         .q8_execution
@@ -91,7 +110,8 @@ fn benchmark_down(
     p.drain()?;
     let control_down = p.isolated_output.read(&model.cuda)?;
     if args.prepared_warp_packet {
-        let pair_bytes = p.prepared.as_ref().unwrap().bytes;
+        let pair_bytes =
+            p.prepared.as_ref().unwrap().bytes + p.joint.as_ref().map_or(0, |pair| pair.bytes);
         p.warp_packet = Some(super::packet::PreparedWarpPacket::new(
             model,
             down_view.dptr.cast_const(),
@@ -112,7 +132,8 @@ fn benchmark_down(
         "row_positions":layer.rows[..rows],"control_checks":control_checks,"candidate_checks":candidate_checks,
         "control_hidden_bits_equal":true,"control_complete_output_bits_equal":true,"control_down_bits_equal":true,
         "gate_up_preparation":p.prepared.as_ref().unwrap().report,"scratch_bytes":p.scratch_bytes(),
-        "packet_preparation":p.warp_packet.as_ref().map(|v|&v.report)}),
+        "packet_preparation":p.warp_packet.as_ref().map(|v|&v.report),
+        "gate_up_kernel":gate_kernel,"joint_preparation":p.joint.as_ref().map(|v|&v.report)}),
     )?;
     p.select_down_projection(DownProjection::Control)?;
     let control_warm = p.warm_up(1000.0, 256)?;
@@ -164,7 +185,7 @@ fn benchmark_down(
                             },
                         "wrong prepared down dispatch"
                     );
-                    let gate_op = "ffn_q8_split_f32x4_128";
+                    let gate_op = gate_operation;
                     let gate_count = operation_count(&before, &profile::snapshot(), gate_op);
                     ensure!(
                         gate_count
@@ -219,7 +240,10 @@ fn benchmark_down(
         file,
         json!({"kind":"prepared_projection_screen","family":"down","layer_id":layer.source.layer_id,
         "rows":rows,"complete_ffn":summarize(&complete_pairs)?,"isolated_projection":summarize(&down_pairs)?,
-        "gate":"complete FFN >=5% and positive paired interval; isolated down is diagnostic only",
+        "gate_up_kernel":gate_kernel,
+        "gate":if args.prepared_compound_control {
+            "portfolio component screen; no standalone runtime admission; whole portfolio correctness and HTTP gates remain required"
+        } else {"complete FFN >=5% and positive paired interval; isolated down is diagnostic only"},
         "runtime_integration_allowed":false}),
     )?;
     eprintln!(
@@ -480,7 +504,10 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "capture_report_sha256":inputs.report_sha256,"execution_configuration":inputs.manifest["execution_configuration"],
         "cuda_flags":["-O3","sm_52","compute_52","no fast math"],"nvcc":command_output("nvcc",&["--version"])?,
         "rows":args.rows,"trials":args.trials,"iterations":args.iterations,"prepared_weights":stats,"gpu_before":gpu,
-        "control":"qualified split-f32x4-128 gate/up; original prepared four-column down/vocabulary shared tree",
+        "control":if args.prepared_compound_control {
+            "qualified joint-shared-scales-128 gate/up; original prepared four-column down/vocabulary shared tree"
+        } else {"qualified split-f32x4-128 gate/up; original prepared four-column down/vocabulary shared tree"},
+        "is_compound_control":args.prepared_compound_control,
         "candidate":if args.prepared_weight_read {
             "checksum-only four-column/eight-value weight read; original shared tree/threads; no inference activations or measured DRAM traffic"
         } else if args.prepared_warp_packet {
@@ -491,7 +518,9 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "candidate_kernel":if args.prepared_weight_read {"projection_q8_weight_checksum".to_string()} else {format!("{:?}",select_candidate(args))},
         "is_weight_read_diagnostic":args.prepared_weight_read,
         "original_weight_bytes":model.weights_len,"tracked_device_bytes":CudaContext::total_device_bytes(),
-        "memory_scope":"source plus full qualified down/vocabulary cache; one split gate/up pair per FFN case; both arms share all allocations; no KV",
+        "memory_scope":if args.prepared_compound_control {
+            "source plus full qualified down/vocabulary cache; one split and one joint gate/up pair per FFN case; original and packet retained in both arms; no KV; not full runtime packet residency"
+        } else {"source plus full qualified down/vocabulary cache; one split gate/up pair per FFN case; both arms share all allocations; no KV"},
         "runtime_defaults_changed":false,"is_e2e_claim":false}),
     )?;
     for layer in &inputs.artifact.layers {

@@ -27,10 +27,24 @@ Initial paper admissions are complete, not runtime qualification:
   four byte-position accumulation chains without changing layout or geometry.
   It has not passed an operator, quality or HTTP gate.
 
-Next is the research-only exact-portfolio adapter and contemporary correctness/
-measurement, then the independent approximate probe and admitted draft-cost
-study. No new GPU measurements, runtime implementation or training yet;
-0/72 drafter GPU-hours consumed and no device switch requested.
+The prepared packet benchmark now accepts explicit `--prepared-compound-control`
+alongside `--prepared-warp-packet`, rebasing complete FFN onto the qualified
+joint/shared-scale consumer without altering legacy defaults or CUDA kernels.
+Both timing arms retain identical split/joint/packet allocations and report
+joint preparation costs. The compound/packet synthetic M40 test passes exact
+complete bits, guards, immutable owners, scratch reuse and tracked cleanup.
+The first test attempt used a projection-only fixture with inconsistent down
+width; it was replaced with the existing full-forward Qwen fixture, not a
+relaxed runtime shape check. Compound hardware/CLI checks4/4, warning-as-error
+non-CUDA suite, changed-example Clippy and formatting pass.
+
+Next: representative actual output-norm/logit inputs, contemporary operator
+measurements and the fixed five runtime arms. The vocabulary microbenchmark
+still labels its old inputs as surrogates; this is NOT actual-logit admission.
+No performance qualification, runtime integration or training is complete.
+The attached approval additionally requires review after drafter cost and
+after a small training pilot; teacher generation needs a reviewed manifest.
+0/72 drafter GPU-hours consumed; no device switch requested.
 
 ## Preceding Checkpoints
 
