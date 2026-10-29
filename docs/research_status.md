@@ -6,6 +6,16 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [structural-routes decision memorandum](experiments/2026-10-28-structural-routes-decision.md)
+is complete. Defer both implementations: no supported new FFN access
+architecture or compatible learned artifact with measured acceptance/cost
+has qualified. Learned drafting remains unresolved, not rejected. The memo
+prices the smallest decisive studies and distinguishes conditional HTTP
+scenarios from measurements. No GPU rerun could resolve the identified gaps;
+none was performed. Preserve the verifier and explicit copy-only capability.
+Next requires a named artifact lead or a genuinely new avoided-work design,
+not another fusion/layout search. Stop for review; no defaults change.
+
 The [exact-dense dataflow plan](experiments/2026-10-28-exact-dataflow-plan.md)
 is complete; stop for review. Its
 [measurement and avoided-work checkpoint](experiments/2026-10-28-dataflow-findings.md)
