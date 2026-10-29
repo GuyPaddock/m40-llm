@@ -126,7 +126,12 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
   reports instead of printing `[gpu-stage-profile]` JSON to stderr. Each record
   includes process/session IDs, absolute position, per-layer stage names,
   producer stream, event offsets/duration, CPU call duration, launch/sync/copy/
-  allocation deltas, and named host stream-synchronization/D2H-copy durations.
+  allocation deltas, and named host stream-synchronization/H2D/D2H-copy durations.
+  New records also carry `cpu_start_ms` for stages and `start_ms` for host
+  operations, relative to the host scope start. Add the respective duration
+  to obtain the host interval end. Older records leave these fields absent;
+  missing offsets are unknown, not zero. Host offsets and CUDA event offsets
+  use different clock origins and must not be directly subtracted.
 - `M40LLM_STAGE_PROFILE_PREFILL=1`: also emit a distinct
   `packed_prefill_gpu_profile` for the packed prefix, not generated-token rows.
   Grouped spans cover embeddings, norms, bias, RoPE/KV append, attention,

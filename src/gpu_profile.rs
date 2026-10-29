@@ -76,6 +76,10 @@ pub struct GpuStageTiming {
     pub gpu_elapsed_ms: f32,
     /// Host call duration, including any synchronization already inside a wrapper.
     pub cpu_call_elapsed_ms: f64,
+    /// Host offset from scope start, not a timestamp on the CUDA event clock.
+    /// Historical records have no host offset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_start_ms: Option<f64>,
     pub counters: OpCounters,
 }
 
@@ -83,6 +87,8 @@ pub struct GpuStageTiming {
 pub struct HostTiming {
     pub operation: String,
     pub elapsed_ms: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_ms: Option<f64>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -135,6 +141,7 @@ struct PendingStage {
     layer_id: Option<u32>,
     stream: CudaStream,
     cpu_call_elapsed_ms: Option<f64>,
+    cpu_start_ms: f64,
     counters: OpCounters,
 }
 
@@ -146,6 +153,7 @@ struct Collector {
     layer_id: Option<u32>,
     is_active: bool,
     completed_scopes: usize,
+    host_origin: Instant,
 }
 
 pub struct DecodeGpuProfiler {
@@ -226,6 +234,7 @@ impl DecodeGpuProfiler {
                 layer_id: None,
                 is_active: false,
                 completed_scopes: 0,
+                host_origin: Instant::now(),
             })),
             session_id: NEXT_SESSION.fetch_add(1, Ordering::Relaxed),
             prompt_len: None,
@@ -272,6 +281,8 @@ impl DecodeGpuProfiler {
         collector.host_timings.clear();
         collector.layer_id = None;
         collector.origin.record(CudaStream::Decode)?;
+        let started_at = Instant::now();
+        collector.host_origin = started_at;
         collector.is_active = true;
         drop(collector);
         ACTIVE.with(|active| *active.borrow_mut() = Some(self.collector.clone()));
@@ -281,7 +292,7 @@ impl DecodeGpuProfiler {
             generated_step,
             absolute_position,
             prefix_tokens: None,
-            started_at: Instant::now(),
+            started_at,
             before: profile::snapshot(),
             setup_ms: self.setup_ms,
             _same_thread: PhantomData,
@@ -414,6 +425,7 @@ impl GpuProfileScope {
                 gpu_end_ms,
                 gpu_elapsed_ms,
                 cpu_call_elapsed_ms: cpu_ms,
+                cpu_start_ms: Some(pending.cpu_start_ms),
                 counters: pending.counters,
             });
         }
@@ -502,16 +514,22 @@ impl GpuStageSpan {
         );
         collector.pool[index].start.record(stream)?;
         let layer_id = collector.layer_id;
+        let started_at = Instant::now();
+        let cpu_start_ms = started_at
+            .duration_since(collector.host_origin)
+            .as_secs_f64()
+            * 1000.0;
         collector.pending.push(PendingStage {
             name,
             layer_id,
             stream,
             cpu_call_elapsed_ms: None,
+            cpu_start_ms,
             counters: OpCounters::default(),
         });
         drop(collector);
         Ok(Self {
-            capture: Some((shared, index, Instant::now(), before)),
+            capture: Some((shared, index, started_at, before)),
         })
     }
 
@@ -544,9 +562,16 @@ pub fn measure_host<T>(operation: &'static str, f: impl FnOnce() -> Result<T>) -
     };
     let started_at = Instant::now();
     let result = f();
-    collector.lock().unwrap().host_timings.push(HostTiming {
+    let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
+    let mut collector = collector.lock().unwrap();
+    let start_ms = started_at
+        .duration_since(collector.host_origin)
+        .as_secs_f64()
+        * 1000.0;
+    collector.host_timings.push(HostTiming {
         operation: operation.to_owned(),
-        elapsed_ms: started_at.elapsed().as_secs_f64() * 1000.0,
+        elapsed_ms,
+        start_ms: Some(start_ms),
     });
     result
 }
@@ -587,5 +612,52 @@ mod tests {
         );
         assert_eq!(interval_union_ms(&[(3.0, 4.0), (0.0, 10.0)]), 10.0);
         assert_eq!(interval_union_ms(&[]), 0.0);
+    }
+
+    /// Historical profiles remain readable without inventing missing host timestamps.
+    #[test]
+    fn test_historical_host_timing_has_no_offset() {
+        let timing: HostTiming = serde_json::from_value(serde_json::json!({
+            "operation": "d2h_copy", "elapsed_ms": 0.25
+        }))
+        .unwrap();
+        assert_eq!(timing.start_ms, None);
+        assert_eq!(timing.elapsed_ms, 0.25);
+        assert!(serde_json::to_value(timing)
+            .unwrap()
+            .get("start_ms")
+            .is_none());
+    }
+
+    /// Nested blocking calls overlap enqueue spans and must not be added twice.
+    #[test]
+    fn test_host_timeline_retains_offsets_and_overlap() {
+        let spans: Vec<HostTiming> = serde_json::from_value(serde_json::json!([
+            {"operation":"enqueue", "start_ms":1.0, "elapsed_ms":4.0},
+            {"operation":"blocking_copy", "start_ms":2.0, "elapsed_ms":2.0},
+            {"operation":"next_enqueue", "start_ms":7.0, "elapsed_ms":1.0}
+        ]))
+        .unwrap();
+        let intervals: Vec<_> = spans
+            .iter()
+            .map(|span| {
+                let start = span.start_ms.unwrap();
+                (start, start + span.elapsed_ms)
+            })
+            .collect();
+        assert_eq!(interval_union_ms(&intervals), 5.0);
+        assert_eq!(serde_json::to_value(&spans).unwrap()[2]["start_ms"], 7.0);
+    }
+
+    /// Disabled instrumentation invokes the operation once and preserves its error.
+    #[test]
+    fn test_unprofiled_host_call_preserves_behavior() {
+        let mut calls = 0;
+        let result: Result<()> = measure_host("test", || {
+            calls += 1;
+            anyhow::bail!("operation failed")
+        });
+        assert_eq!(calls, 1);
+        assert_eq!(result.unwrap_err().to_string(), "operation failed");
     }
 }

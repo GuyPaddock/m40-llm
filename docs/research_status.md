@@ -16,6 +16,15 @@ No kernel, scheduling, training or drafter integration is authorized here.
 Prompt-copy stays an explicit copy-only research capability. The three tested
 CPU sources remain closed for general browser acceleration.
 
+The first diagnostic increment adds sampled host-relative enqueue/copy offsets
+and H2D call duration to the existing profiler, without changing CUDA kernels
+or device dependencies. Four profiler unit tests, three M40 hardware tests,
+the warning-as-error non-CUDA suite and CUDA/server all-target Clippy pass.
+Historical records remain readable with unknown offsets. Whole-model quality,
+compiled-kernel identity and paired HTTP attribution are still pending; no
+new performance result is claimed. Next: the joint-only measurement runner,
+source-derived buffer inventory, qualification and five off/on HTTP pairs.
+
 The [bounded causal draft study](experiments/2026-10-28-draft-feasibility.md)
 is complete. Three fixed CPU sources were tested on
 13 disclosed traces and eight new precommitted held-out prompts, with causal

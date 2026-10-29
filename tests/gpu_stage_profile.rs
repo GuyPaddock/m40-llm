@@ -81,6 +81,7 @@ fn test_event_query_does_not_synchronize() -> Result<()> {
 
 /// Reuse event pairs across tokens while preserving an explicit two-stream data
 /// dependency; resolving timestamps adds no synchronization or other GPU work.
+/// Host offsets include upload and blocking completion without conflating clocks.
 #[test]
 #[ignore = "requires CUDA hardware; run with --include-ignored --test-threads=1"]
 fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Result<()> {
@@ -106,6 +107,9 @@ fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Resu
     let mut pool_capacity = None;
     for step in 0..2 {
         let scope = profiler.begin_token(step, 10 + step)?;
+        unsafe {
+            ctx.memcpy_h2d(a.as_mut_ptr(), [1.0_f32; 4].as_ptr().cast(), 16)?;
+        }
         gpu_profile::set_layer(Some(0));
         let stage = GpuStageSpan::begin("decode_residual", CudaStream::Decode)?;
         unsafe {
@@ -139,7 +143,8 @@ fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Resu
         assert_eq!(report.stages[0].stream, "decode");
         assert_eq!(report.stages[1].stage, "prefill_projection");
         assert_eq!(report.stages[1].stream, "prefill");
-        assert_eq!(report.counters.stream_syncs, 1);
+        assert_eq!(report.counters.stream_syncs, 2);
+        assert_eq!(report.counters.h2d_copies, 1);
         assert_eq!(report.counters.stream_waits, 1);
         assert_eq!(report.counters.cublas_calls, 1);
         assert_eq!(report.event_pool_reused, step != 0);
@@ -148,6 +153,23 @@ fn test_buffered_profile_preserves_two_stream_result_and_reuses_events() -> Resu
             .host_timings
             .iter()
             .any(|timing| timing.operation == "stream_synchronize"));
+        let upload = report
+            .host_timings
+            .iter()
+            .find(|t| t.operation == "h2d_copy")
+            .unwrap();
+        let first_start = report.stages[0].cpu_start_ms.unwrap();
+        assert!(upload.start_ms.unwrap() + upload.elapsed_ms <= first_start);
+        for timing in &report.host_timings {
+            assert!(timing.start_ms.unwrap() >= 0.0);
+            assert!(timing.start_ms.unwrap() + timing.elapsed_ms <= report.token_wall_ms);
+        }
+        for timing in &report.stages {
+            assert!(timing.cpu_start_ms.unwrap() >= first_start);
+            assert!(
+                timing.cpu_start_ms.unwrap() + timing.cpu_call_elapsed_ms <= report.token_wall_ms
+            );
+        }
         if let Some(capacity) = pool_capacity {
             assert_eq!(report.event_pool_capacity, capacity);
         } else {

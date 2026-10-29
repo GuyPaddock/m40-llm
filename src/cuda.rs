@@ -2499,15 +2499,18 @@ impl CudaContext {
         src_host: *const c_void,
         bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
-        }
-        crate::profile::record_h2d_copy("memcpy_h2d", bytes);
-        crate::profile::record_stream_sync("memcpy_h2d_completion");
-        Ok(())
+        crate::gpu_profile::measure_host("h2d_copy", || {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes)
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
+            }
+            crate::profile::record_h2d_copy("memcpy_h2d", bytes);
+            crate::profile::record_stream_sync("memcpy_h2d_completion");
+            Ok(())
+        })
     }
     /// # Safety
     /// `dst_host` must be a valid, writable host pointer to at least `bytes` bytes.
