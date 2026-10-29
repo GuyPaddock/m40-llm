@@ -79,7 +79,10 @@ operations and synthetic parameters; all768 hidden/full455808-logit oracle
 checks, immutable owners and zero teardown pass. All138 compiled controls
 remain unchanged. The target is resident but not used as a teacher.
 
-Stop at the required cost-review checkpoint. Learned acceptance is unmeasured;
+The user accepted the cost-only result and ILP4's numerical-admission stop.
+The original FP32 control, not ILP4, failed the synthetic dynamic-range
+tolerance. No ILP4 performance or quality regression was demonstrated; do not
+reopen it. Learned acceptance remains unmeasured;
 about92.59% equal conditional acceptance with full coverage would be required
 for the stronger projected HTTP target. Before teacher generation or training,
 freeze and review the data/license/split manifest and small-pilot stop rules.
@@ -90,6 +93,18 @@ The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
 0.005923/72 drafter GPU-hours consumed by the M40 cost probe; zero teacher,
 training or evaluation hours. No device switch requested.
+
+The [drafter data and pilot admission plan](experiments/2026-10-29-drafter-pilot-admission.md)
+and [preparation specification](experiments/2026-10-29-drafter-data-spec.json)
+are ready for review, not execution. They pin causal raw-hidden/three-label
+alignment, source/license metadata, document/template isolation, benchmark
+exclusions and a fixed four-epoch pilot. Actual dataset records, selected IDs,
+split hashes and upstream document audits remain pending; the specification
+explicitly forbids teacher generation until a realized manifest is reviewed.
+Proposed pilot caps are2 teacher/2 training/1 evaluation GPU-hours inside the
+unchanged4/20/40/8 parent caps. No automatic use of the larger allowance.
+No teacher data, training, GPU switching or runtime changes in this planning
+task. Keep qualified controls and all prior measurements unchanged.
 
 ## Preceding Checkpoints
 
