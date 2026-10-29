@@ -23,6 +23,14 @@ are profiler-overhead measurements, not another optimized runtime or a fresh
 Ollama comparison. Detailed buffer lifetimes, logical-load estimates, raw
 records, independent audits and limitations are linked in the report.
 
+The follow-up [learned-drafter paper assessment](experiments/2026-10-28-learned-draft-feasibility.md)
+is complete. It adds no performance measurement: all neural costs and
+acceptance remain unmeasured. Existing verifier scenarios require about 92.03%
+conditional acceptance at 1 ms all-in proposal cost for the historical-overhead
+HTTP target. No compatible learned artifact and measured cost/acceptance pair
+is qualified, so implementation remains deferred. See the
+[completion audit](experiments/2026-10-28-dataflow-completion.md).
+
 ## 2026-10-28: Real Drafting Helps Literal Copy Only
 
 The [causal draft study](experiments/2026-10-28-draft-feasibility.md) rejects

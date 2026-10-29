@@ -6,14 +6,20 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The [exact-dense dataflow audit](experiments/2026-10-28-exact-dataflow-plan.md)
-has completed its [measurement and avoided-work checkpoint](experiments/2026-10-28-dataflow-findings.md).
-Five off/on pairs measure50.780194/50.251923 HTTP tok/s and1.05125% latency
-perturbation. Actual512 IDs, sampled full logits and10,616,832 valid KV words
-are bit-identical; all138 compiled CUDA entries are unchanged. The audit does
+The [exact-dense dataflow plan](experiments/2026-10-28-exact-dataflow-plan.md)
+is complete; stop for review. Its
+[measurement and avoided-work checkpoint](experiments/2026-10-28-dataflow-findings.md)
+uses five off/on pairs: 50.780194/50.251923 HTTP tok/s and 1.05125% latency
+perturbation. Actual 512 IDs, sampled full logits and 10,616,832 valid KV words
+are bit-identical; all 138 compiled CUDA entries are unchanged. The audit does
 not justify a new speed kernel: small boundaries lack individual scope, while
-larger fusion has unmeasured synchronization/duplicate-work costs. Follow with a paper-only
-learned-drafter assessment. Preserve joint-only ownership, all defaults and the
+larger fusion has unmeasured synchronization/duplicate-work costs.
+The completed [learned-drafter paper assessment](experiments/2026-10-28-learned-draft-feasibility.md)
+ranks causal hidden-state drafting, frozen auxiliary heads and an independent
+small model for future evidence gathering. None has a verified compatible
+artifact plus measured all-in M40 cost and acceptance sufficient to authorize
+implementation. Published tree speedups are not linear-verifier evidence.
+Preserve joint-only ownership, all defaults and the
 immutable 50.910426 HTTP checkpoint; the relative target remains 56.153149.
 No kernel, scheduling, training or drafter integration is authorized here.
 Prompt-copy stays an explicit copy-only research capability. The three tested
@@ -21,12 +27,13 @@ CPU sources remain closed for general browser acceleration.
 
 The diagnostic increment adds sampled host-relative offsets and H2D call
 duration, without changing device work. Tests pass: four profiler units,
-three profiler hardware cases, eight runner/protocol cases,25 affected CUDA
+three profiler hardware cases, eight runner/protocol cases, 25 affected CUDA
 regressions, non-CUDA warning-as-error tests and CUDA/server all-target Clippy.
 Historical records remain readable with unknown offsets. The independent
 audit rejects seven corrupt records. Raw evidence and retained executable
-are linked in the report. Next: primary-source learned-drafter assessment,
-then the goal completion audit and stop for review.
+are linked in the report. The [completion audit](experiments/2026-10-28-dataflow-completion.md)
+maps the plan to source, raw evidence and checks. No new kernel, drafter,
+download, training or broader benchmark follows automatically.
 
 The [bounded causal draft study](experiments/2026-10-28-draft-feasibility.md)
 is complete. Three fixed CPU sources were tested on
