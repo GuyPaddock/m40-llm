@@ -6,6 +6,7 @@ target/
 
 # Measured executables/source archives, retained outside Cargo clean paths.
 /local-artifacts/qualified-references/
+/local-artifacts/2026-10-29-portfolio-operators/
 
 
 # Local artifacts and logs

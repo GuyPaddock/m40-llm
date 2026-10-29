@@ -38,10 +38,19 @@ width; it was replaced with the existing full-forward Qwen fixture, not a
 relaxed runtime shape check. Compound hardware/CLI checks4/4, warning-as-error
 non-CUDA suite, changed-example Clippy and formatting pass.
 
-Next: representative actual output-norm/logit inputs, contemporary operator
-measurements and the fixed five runtime arms. The vocabulary microbenchmark
-still labels its old inputs as surrogates; this is NOT actual-logit admission.
-No performance qualification, runtime integration or training is complete.
+The [contemporary operator checkpoint](experiments/2026-10-29-portfolio-operator-checkpoint.md)
+now validates actual output-norm/logit inputs: all512 greedy IDs match,
+seven full vocabulary vectors are bit-identical, and both argmax consumers
+agree. Single-row complete FFN gains2.82-2.87% have positive paired bounds;
+actual vocabulary gains9.27-9.32%, argmax costs about0.173 versus0.0104ms.
+Four-row layer35 FFN remains inconclusive and is not admitted.
+The conservative contemporary absolute-cost transfer is321.030ms/request,
+conditional3.297%, not a measured HTTP gain or joint confidence interval.
+
+Next: implement the fixed five runtime arms, validate full simultaneous
+1,192,935,424-byte packet residency and ownership/quality/compiled controls,
+then paired HTTP with fresh confirmation when borderline. No combined
+runtime qualification or training is complete. No new kernel was added.
 The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
 0/72 drafter GPU-hours consumed; no device switch requested.

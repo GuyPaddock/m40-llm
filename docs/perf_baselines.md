@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: Exact Portfolio Operator Checkpoint
+
+The [contemporary packet/argmax screen](experiments/2026-10-29-portfolio-operator-checkpoint.md)
+uses the qualified compound control and actual Qwen output-normalized hidden
+states. All512 greedy IDs and seven sampled full-vocabulary vectors match;
+both argmax implementations agree and tracked allocations return to zero.
+Five paired operator trials give single-row complete FFN gains2.82-2.87%
+at layers0/17/35, actual vocabulary gains9.27-9.32%, and argmax latency about
+0.173 to0.0104ms. Four-row layer35 FFN remains inconclusive.
+
+The contemporary absolute-cost transfer estimates321.030ms/request,
+conditional3.297%, only28.112ms beyond the3% threshold. This is an admission
+budget, not measured HTTP throughput; full runtime correctness, extra
+1,192,935,424-byte residency and fixed five-arm HTTP qualification remain.
+The immutable50.910426 reference and defaults are unchanged. No fresh
+Ollama comparison, training or approximate-numerics result is claimed.
+
 ## 2026-10-28: Exact Dataflow Audit Finds No New Kernel
 
 The [dataflow audit](experiments/2026-10-28-dataflow-findings.md) measures

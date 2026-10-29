@@ -1,0 +1,401 @@
+{
+  "correctness_passed": true,
+  "operator_screen_passed": true,
+  "sampled_full_vocabulary_vectors": 7,
+  "actual_generated_ids": 512,
+  "applicable_rows": 1,
+  "four_row_limitation": "layer35 complete FFN interval crosses zero; no four-row admission",
+  "ffn": [
+    {
+      "layer_id": 0,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.021728902090331292,
+          0.029827374590240874
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3246880054473877,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3338912010192871,
+        "pairs": [
+          [
+            0.33334400653839114,
+            0.32452480792999266
+          ],
+          [
+            0.3338912010192871,
+            0.3267904043197632
+          ],
+          [
+            0.3342144012451172,
+            0.32453439235687254
+          ],
+          [
+            0.3340512037277222,
+            0.3246880054473877
+          ],
+          [
+            0.33381760120391846,
+            0.3249504089355469
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.0283447353074171
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.0784478373390134,
+          0.0848566101696242
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.1220128059387207,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.13186880350112914,
+        "pairs": [
+          [
+            0.13204799890518187,
+            0.1220128059387207
+          ],
+          [
+            0.13186880350112914,
+            0.12172479629516601
+          ],
+          [
+            0.13218239545822144,
+            0.12184319496154786
+          ],
+          [
+            0.13162239789962768,
+            0.1220479965209961
+          ],
+          [
+            0.13182719945907592,
+            0.12207679748535157
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.08077838622413536
+      }
+    },
+    {
+      "layer_id": 17,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.02646721068150315,
+          0.030857648722300235
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3248543977737427,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3341856002807617,
+        "pairs": [
+          [
+            0.3341856002807617,
+            0.324620795249939
+          ],
+          [
+            0.33396480083465574,
+            0.3253535985946655
+          ],
+          [
+            0.33368959426879885,
+            0.3248543977737427
+          ],
+          [
+            0.33471040725708007,
+            0.3246912002563477
+          ],
+          [
+            0.33600640296936035,
+            0.32629439830780027
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.028724260994976936
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.07424635454583095,
+          0.08587659037358697
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.12198400497436523,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.13203840255737304,
+        "pairs": [
+          [
+            0.1322111964225769,
+            0.12198400497436523
+          ],
+          [
+            0.13156479597091675,
+            0.12172479629516601
+          ],
+          [
+            0.13203840255737304,
+            0.12174400091171264
+          ],
+          [
+            0.1314911961555481,
+            0.12240320444107056
+          ],
+          [
+            0.13275840282440185,
+            0.12225919961929321
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.08242390127394761
+      }
+    },
+    {
+      "layer_id": 35,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.02619517472659849,
+          0.02869676596830839
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3246592044830322,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.33380799293518065,
+        "pairs": [
+          [
+            0.33380799293518065,
+            0.3244960069656372
+          ],
+          [
+            0.3338335990905762,
+            0.3253119945526123
+          ],
+          [
+            0.33396799564361573,
+            0.32469758987426756
+          ],
+          [
+            0.33350400924682616,
+            0.3246592044830322
+          ],
+          [
+            0.3336479902267456,
+            0.32452480792999266
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.028179667558529298
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          0.0755645416772357,
+          0.08565399626322634
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.12184319496154786,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.1316256046295166,
+        "pairs": [
+          [
+            0.1316256046295166,
+            0.1218783974647522
+          ],
+          [
+            0.13076800107955933,
+            0.12158080339431762
+          ],
+          [
+            0.13176319599151612,
+            0.12184959650039673
+          ],
+          [
+            0.13158719539642333,
+            0.12184319496154786
+          ],
+          [
+            0.13185919523239137,
+            0.12145600318908692
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.0802868774990344
+      }
+    }
+  ],
+  "actual_operators": [
+    {
+      "step": 0,
+      "operator": "vocabulary",
+      "control_ms": 1.5619651794433593,
+      "candidate_ms": 1.4294265747070312,
+      "throughput_gain": 0.09272152000076872,
+      "bootstrap_gain_ci95": [
+        0.0925351918575239,
+        0.09279107367135508
+      ]
+    },
+    {
+      "step": 0,
+      "operator": "argmax",
+      "control_ms": 0.17264991760253906,
+      "candidate_ms": 0.010357760190963745,
+      "throughput_gain": 15.668653687614942,
+      "bootstrap_gain_ci95": [
+        15.492331981513765,
+        15.827698985472349
+      ]
+    },
+    {
+      "step": 1,
+      "operator": "vocabulary",
+      "control_ms": 1.5621455383300782,
+      "candidate_ms": 1.4294493103027344,
+      "throughput_gain": 0.09283031379352713,
+      "bootstrap_gain_ci95": [
+        0.09267949016606924,
+        0.09285230345433026
+      ]
+    },
+    {
+      "step": 1,
+      "operator": "argmax",
+      "control_ms": 0.17275423049926758,
+      "candidate_ms": 0.010352959632873535,
+      "throughput_gain": 15.68645842592921,
+      "bootstrap_gain_ci95": [
+        15.584431787038085,
+        15.78878561510598
+      ]
+    },
+    {
+      "step": 8,
+      "operator": "vocabulary",
+      "control_ms": 1.5622848510742187,
+      "candidate_ms": 1.4294326782226563,
+      "throughput_gain": 0.09294048952116407,
+      "bootstrap_gain_ci95": [
+        0.09284686168743295,
+        0.09302925353964375
+      ]
+    },
+    {
+      "step": 8,
+      "operator": "argmax",
+      "control_ms": 0.17299936294555665,
+      "candidate_ms": 0.010345599651336669,
+      "throughput_gain": 15.722023737232558,
+      "bootstrap_gain_ci95": [
+        15.583257327204102,
+        15.825839782133148
+      ]
+    },
+    {
+      "step": 32,
+      "operator": "vocabulary",
+      "control_ms": 1.5625836181640624,
+      "candidate_ms": 1.429418182373047,
+      "throughput_gain": 0.09316058619734435,
+      "bootstrap_gain_ci95": [
+        0.09300482970936153,
+        0.09497276945696354
+      ]
+    },
+    {
+      "step": 32,
+      "operator": "argmax",
+      "control_ms": 0.17324159622192384,
+      "candidate_ms": 0.010396480560302734,
+      "throughput_gain": 15.66348484153557,
+      "bootstrap_gain_ci95": [
+        15.640972769447746,
+        15.937544214155427
+      ]
+    },
+    {
+      "step": 128,
+      "operator": "vocabulary",
+      "control_ms": 1.5620288085937497,
+      "candidate_ms": 1.429457244873047,
+      "throughput_gain": 0.09274258757734088,
+      "bootstrap_gain_ci95": [
+        0.09253789393263756,
+        0.09282509219388468
+      ]
+    },
+    {
+      "step": 128,
+      "operator": "argmax",
+      "control_ms": 0.17340927124023436,
+      "candidate_ms": 0.01031008005142212,
+      "throughput_gain": 15.819391350537106,
+      "bootstrap_gain_ci95": [
+        15.71871409399397,
+        15.864093795209165
+      ]
+    },
+    {
+      "step": 256,
+      "operator": "vocabulary",
+      "control_ms": 1.5623359680175781,
+      "candidate_ms": 1.4294790649414062,
+      "throughput_gain": 0.09294078264910977,
+      "bootstrap_gain_ci95": [
+        0.09284069363391878,
+        0.09322287280561548
+      ]
+    },
+    {
+      "step": 256,
+      "operator": "argmax",
+      "control_ms": 0.17368127822875976,
+      "candidate_ms": 0.010371840000152588,
+      "throughput_gain": 15.745464471704594,
+      "bootstrap_gain_ci95": [
+        15.657786668739323,
+        15.903989047080596
+      ]
+    },
+    {
+      "step": 511,
+      "operator": "vocabulary",
+      "control_ms": 1.5627801513671875,
+      "candidate_ms": 1.42951171875,
+      "throughput_gain": 0.09322654083152315,
+      "bootstrap_gain_ci95": [
+        0.09306850415233936,
+        0.09338322829496026
+      ]
+    },
+    {
+      "step": 511,
+      "operator": "argmax",
+      "control_ms": 0.1751798439025879,
+      "candidate_ms": 0.01046015977859497,
+      "throughput_gain": 15.74733920040736,
+      "bootstrap_gain_ci95": [
+        15.734540295665955,
+        15.947203299727477
+      ]
+    }
+  ],
+  "conditional_absolute_cost_transfer": {
+    "assumptions": "three sampled layer savings represent36 layers; seven head/argmax inputs represent512 tokens; costs transfer independently with no runtime interaction",
+    "source": "contemporary absolute component latency differences, not historical percentages",
+    "down_ms": 169.63330078125,
+    "vocabulary_ms": 68.02031249999993,
+    "argmax_ms": 83.37669921875,
+    "total_ms": 321.0303124999999,
+    "request_reference_ms": 10056.879115488053,
+    "required_for_three_percent_ms": 292.91880918897186,
+    "conditional_gain": 0.032974044584738404,
+    "interpretation": "admission scope only, not measured HTTP or a joint confidence bound"
+  },
+  "required_full_portfolio_extra_device_bytes": 1192935424,
+  "measured_http_gain": null,
+  "runtime_qualification_complete": false,
+  "next": "fixed five-arm runtime correctness then paired HTTP with fresh confirmation if borderline"
+}
