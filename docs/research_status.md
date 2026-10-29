@@ -6,8 +6,18 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [exact-dense dataflow audit](experiments/2026-10-28-exact-dataflow-plan.md)
+is now authorized and in progress. Inventory the qualified single-row compound
+runtime, then measure profiling-off/on HTTP pairs before recommending at most
+one separately approved structural experiment. Follow with a paper-only
+learned-drafter assessment. Preserve joint-only ownership, all defaults and the
+immutable 50.910426 HTTP checkpoint; the relative target remains 56.153149.
+No kernel, scheduling, training or drafter integration is authorized here.
+Prompt-copy stays an explicit copy-only research capability. The three tested
+CPU sources remain closed for general browser acceleration.
+
 The [bounded causal draft study](experiments/2026-10-28-draft-feasibility.md)
-is complete. **Stop for review.** Three fixed CPU sources were tested on
+is complete. Three fixed CPU sources were tested on
 13 disclosed traces and eight new precommitted held-out prompts, with causal
 access, five all-in CPU replays and joint rejection/coverage cost modeling.
 None qualifies for general browser acceleration: history lookup -10.32%,
