@@ -2,7 +2,16 @@
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod dataflow;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
+#[path = "../q8_execution_bench/ffn/reductions/data.rs"]
+#[allow(dead_code)]
+mod guarded_words;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod http;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
+#[path = "../q8_execution_bench/ffn/packet.rs"]
+mod packet;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
+mod portfolio_logits;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
 #[path = "../compare_ollama/protocol.rs"]
 #[allow(dead_code)]
@@ -38,6 +47,7 @@ mod run {
         Http,
         Load,
         Dataflow,
+        PortfolioLogits,
     }
 
     #[derive(Parser)]
@@ -179,6 +189,7 @@ mod run {
             Phase::Quality => super::quality::execute(&args, &mut report)?,
             Phase::Http => super::http::execute(&args, &mut report).await?,
             Phase::Dataflow => super::dataflow::execute(&args, &mut report).await?,
+            Phase::PortfolioLogits => super::portfolio_logits::execute(&args, &mut report)?,
             Phase::Load => {
                 let before = profile::snapshot();
                 let initial = CudaContext::total_device_bytes();
