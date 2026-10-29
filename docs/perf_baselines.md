@@ -2,6 +2,27 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-28: Exact Dataflow Audit Finds No New Kernel
+
+The [dataflow audit](experiments/2026-10-28-dataflow-findings.md) measures
+50.780194/50.251923 HTTP tok/s profiling off/on on the unchanged joint-only
+compound runtime. Five pairs show 1.05125% latency overhead, below the 3%
+attribution limit, with identical actual512 IDs, seven full-vocabulary vectors
+and 10,616,832 valid KV words. All138 compiled CUDA entries remain unchanged.
+
+Steady tokens use435 launches, zero allocations and no cross-stream waits.
+The roughly13 ms host synchronization overlaps GPU work; it is not additional
+removable CPU time. The sampled wall residual is0.835-0.905 ms/token, and
+complete FFN still costs about12.19 ms/token. Small residual, RoPE, embedding
+and argmax fusion boundaries individually lack sufficient scope. Larger
+FFN/normalization fusion would need unmeasured cross-block synchronization or
+duplicated work. No new speed kernel is recommended from this bounded audit.
+
+The immutable50.910426 reference and56.153149 target remain unchanged. These
+are profiler-overhead measurements, not another optimized runtime or a fresh
+Ollama comparison. Detailed buffer lifetimes, logical-load estimates, raw
+records, independent audits and limitations are linked in the report.
+
 ## 2026-10-28: Real Drafting Helps Literal Copy Only
 
 The [causal draft study](experiments/2026-10-28-draft-feasibility.md) rejects

@@ -7,23 +7,26 @@ against the current code, worktree, Git history, and linked raw results.
 ## Active Plan
 
 The [exact-dense dataflow audit](experiments/2026-10-28-exact-dataflow-plan.md)
-is now authorized and in progress. Inventory the qualified single-row compound
-runtime, then measure profiling-off/on HTTP pairs before recommending at most
-one separately approved structural experiment. Follow with a paper-only
+has completed its [measurement and avoided-work checkpoint](experiments/2026-10-28-dataflow-findings.md).
+Five off/on pairs measure50.780194/50.251923 HTTP tok/s and1.05125% latency
+perturbation. Actual512 IDs, sampled full logits and10,616,832 valid KV words
+are bit-identical; all138 compiled CUDA entries are unchanged. The audit does
+not justify a new speed kernel: small boundaries lack individual scope, while
+larger fusion has unmeasured synchronization/duplicate-work costs. Follow with a paper-only
 learned-drafter assessment. Preserve joint-only ownership, all defaults and the
 immutable 50.910426 HTTP checkpoint; the relative target remains 56.153149.
 No kernel, scheduling, training or drafter integration is authorized here.
 Prompt-copy stays an explicit copy-only research capability. The three tested
 CPU sources remain closed for general browser acceleration.
 
-The first diagnostic increment adds sampled host-relative enqueue/copy offsets
-and H2D call duration to the existing profiler, without changing CUDA kernels
-or device dependencies. Four profiler unit tests, three M40 hardware tests,
-the warning-as-error non-CUDA suite and CUDA/server all-target Clippy pass.
-Historical records remain readable with unknown offsets. Whole-model quality,
-compiled-kernel identity and paired HTTP attribution are still pending; no
-new performance result is claimed. Next: the joint-only measurement runner,
-source-derived buffer inventory, qualification and five off/on HTTP pairs.
+The diagnostic increment adds sampled host-relative offsets and H2D call
+duration, without changing device work. Tests pass: four profiler units,
+three profiler hardware cases, eight runner/protocol cases,25 affected CUDA
+regressions, non-CUDA warning-as-error tests and CUDA/server all-target Clippy.
+Historical records remain readable with unknown offsets. The independent
+audit rejects seven corrupt records. Raw evidence and retained executable
+are linked in the report. Next: primary-source learned-drafter assessment,
+then the goal completion audit and stop for review.
 
 The [bounded causal draft study](experiments/2026-10-28-draft-feasibility.md)
 is complete. Three fixed CPU sources were tested on

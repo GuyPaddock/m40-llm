@@ -1,0 +1,163 @@
+{
+   "exhaustive_paired_interval" : [
+      -0.0117215897524369,
+      -0.00961032855910249
+   ],
+   "http_off_tok_s" : 50.7801944048492,
+   "http_on_tok_s" : 50.2519228069154,
+   "http_timing_medians" : {
+      "0" : {
+         "decode_elapsed_ms" : 9536.765311,
+         "http_minus_generation_ms" : 44.2652839999992,
+         "http_ms" : 10082.671128,
+         "prefill_elapsed_ms" : 492.363007,
+         "total_elapsed_ms" : 10037.838041
+      },
+      "1" : {
+         "decode_elapsed_ms" : 9616.066756,
+         "http_minus_generation_ms" : 44.7479899999998,
+         "http_ms" : 10188.664859,
+         "prefill_elapsed_ms" : 524.921809,
+         "total_elapsed_ms" : 10142.453562
+      }
+   },
+   "is_passed" : true,
+   "latency_change" : 0.0105124653630375,
+   "primary_samples" : 15,
+   "primary_trials" : 10,
+   "scope" : "Host and device clocks separate; interval costs overlap; not removable work or measured DRAM traffic",
+   "steps" : [
+      {
+         "counters" : {
+            "cublas_calls" : 0,
+            "d2h_bytes" : 2180,
+            "d2h_copies" : 2,
+            "device_allocs" : 16,
+            "device_frees" : 17,
+            "h2d_bytes" : 8192,
+            "h2d_copies" : 1,
+            "launches" : 435,
+            "stream_syncs" : 2,
+            "stream_waits" : 0
+         },
+         "cpu_enqueue_sum_ms" : 1.816539,
+         "cpu_interval_union_ms" : 14.991475,
+         "generated_step" : 0,
+         "gpu_span_ms" : 27.3153279069811,
+         "gpu_union_ms" : 18.8824942186475,
+         "host" : {
+            "d2h_copy" : 0.030923,
+            "h2d_copy" : 0.012837,
+            "stream_synchronize" : 13.154992
+         },
+         "samples" : 5,
+         "stages" : {
+            "attention" : 0.638208,
+            "attn_norm" : 0.40592,
+            "attn_residual" : 0.152512,
+            "embedding" : 0.038624,
+            "ffn_norm" : 0.411264,
+            "greedy_argmax" : 0.259104,
+            "kv_append_rope_k" : 0.314752,
+            "lm_head" : 1.56576,
+            "mlp_down" : 4.769824,
+            "mlp_gate_up_swiglu" : 7.421376,
+            "mlp_residual" : 0.158016,
+            "out_project" : 1.019488,
+            "output_norm" : 0.01072,
+            "qkv_project" : 1.41104,
+            "rope_q" : 0.2952
+         },
+         "token_wall_ms" : 27.348173,
+         "wall_minus_gpu_union_ms" : 8.48315157935727
+      },
+      {
+         "counters" : {
+            "cublas_calls" : 0,
+            "d2h_bytes" : 2180,
+            "d2h_copies" : 2,
+            "device_allocs" : 0,
+            "device_frees" : 0,
+            "h2d_bytes" : 8192,
+            "h2d_copies" : 1,
+            "launches" : 435,
+            "stream_syncs" : 2,
+            "stream_waits" : 0
+         },
+         "cpu_enqueue_sum_ms" : 1.804277,
+         "cpu_interval_union_ms" : 15.115549,
+         "generated_step" : 255,
+         "gpu_span_ms" : 19.9155831346288,
+         "gpu_union_ms" : 19.0223512249067,
+         "host" : {
+            "d2h_copy" : 0.027803,
+            "h2d_copy" : 0.012321,
+            "stream_synchronize" : 13.252285
+         },
+         "samples" : 5,
+         "stages" : {
+            "attention" : 0.77904,
+            "attn_norm" : 0.401152,
+            "attn_residual" : 0.161024,
+            "embedding" : 0.031072,
+            "ffn_norm" : 0.404416,
+            "greedy_argmax" : 0.25952,
+            "kv_append_rope_k" : 0.320192,
+            "lm_head" : 1.56448,
+            "mlp_down" : 4.772544,
+            "mlp_gate_up_swiglu" : 7.417376,
+            "mlp_residual" : 0.164608,
+            "out_project" : 1.009824,
+            "output_norm" : 0.010656,
+            "qkv_project" : 1.393856,
+            "rope_q" : 0.29392
+         },
+         "token_wall_ms" : 19.956891,
+         "wall_minus_gpu_union_ms" : 0.90523566930479
+      },
+      {
+         "counters" : {
+            "cublas_calls" : 0,
+            "d2h_bytes" : 2180,
+            "d2h_copies" : 2,
+            "device_allocs" : 0,
+            "device_frees" : 0,
+            "h2d_bytes" : 8192,
+            "h2d_copies" : 1,
+            "launches" : 435,
+            "stream_syncs" : 2,
+            "stream_waits" : 0
+         },
+         "cpu_enqueue_sum_ms" : 1.71414,
+         "cpu_interval_union_ms" : 15.543931,
+         "generated_step" : 511,
+         "gpu_span_ms" : 19.9878404978663,
+         "gpu_union_ms" : 19.1823678119108,
+         "host" : {
+            "d2h_copy" : 0.022335,
+            "h2d_copy" : 0.011553,
+            "stream_synchronize" : 13.817984
+         },
+         "samples" : 5,
+         "stages" : {
+            "attention" : 0.972128,
+            "attn_norm" : 0.390528,
+            "attn_residual" : 0.160512,
+            "embedding" : 0.02848,
+            "ffn_norm" : 0.403744,
+            "greedy_argmax" : 0.259488,
+            "kv_append_rope_k" : 0.320192,
+            "lm_head" : 1.564448,
+            "mlp_down" : 4.763424,
+            "mlp_gate_up_swiglu" : 7.425376,
+            "mlp_residual" : 0.164608,
+            "out_project" : 1.009824,
+            "output_norm" : 0.010656,
+            "qkv_project" : 1.391072,
+            "rope_q" : 0.293184
+         },
+         "token_wall_ms" : 20.014976,
+         "wall_minus_gpu_union_ms" : 0.834957516846178
+      }
+   ]
+}
