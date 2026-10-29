@@ -42,7 +42,7 @@ impl Drop for ProfileSwitch {
     }
 }
 
-fn snapshot(model: &LoadedModel, length: u32) -> Result<Vec<u16>> {
+pub(super) fn snapshot(model: &LoadedModel, length: u32) -> Result<Vec<u16>> {
     let kv = model.kv_cache.as_ref().context("dense KV missing")?;
     ensure!(!kv.is_compressed(), "explicit dense required");
     let mut bits = Vec::with_capacity(36 * length as usize * 512);

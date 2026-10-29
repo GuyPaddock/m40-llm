@@ -11,6 +11,8 @@ mod http;
 #[path = "../q8_execution_bench/ffn/packet.rs"]
 mod packet;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
+mod portfolio;
+#[cfg(all(feature = "cuda", feature = "server", nvcc))]
 mod portfolio_logits;
 #[cfg(all(feature = "cuda", feature = "server", nvcc))]
 #[path = "../compare_ollama/protocol.rs"]
@@ -49,6 +51,8 @@ mod run {
         Dataflow,
         PortfolioLogits,
         PortfolioOperators,
+        PortfolioQuality,
+        PortfolioHttp,
     }
 
     #[derive(Parser)]
@@ -192,6 +196,8 @@ mod run {
             Phase::Dataflow => super::dataflow::execute(&args, &mut report).await?,
             Phase::PortfolioLogits => super::portfolio_logits::execute(&args, &mut report)?,
             Phase::PortfolioOperators => super::portfolio_logits::execute(&args, &mut report)?,
+            Phase::PortfolioQuality => super::portfolio::quality::execute(&args, &mut report)?,
+            Phase::PortfolioHttp => super::portfolio::http::execute(&args, &mut report).await?,
             Phase::Load => {
                 let before = profile::snapshot();
                 let initial = CudaContext::total_device_bytes();
