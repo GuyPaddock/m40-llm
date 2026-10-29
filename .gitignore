@@ -10,6 +10,8 @@ target/
 /local-artifacts/2026-10-29-portfolio-runtime/
 /local-artifacts/2026-10-29-ilp4/
 /local-artifacts/2026-10-29-compact-draft/
+/local-artifacts/2026-10-29-drafter-data/
+/scripts/drafter_data/__pycache__/
 
 
 # Local artifacts and logs
