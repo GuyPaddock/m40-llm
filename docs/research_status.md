@@ -14,7 +14,23 @@ to A4000 or back needs user confirmation for VM shutdown. Never use both GPUs.
 The drafter pilot cap is 72 aggregate GPU-hours, conditional on admission.
 Reuse the last same-model Ollama 43.194730 result; do not rerun merely to refresh
 the 56.153149 target. Reference 50.910426, joint-only and defaults stay fixed.
-Contract committed first; admissions and implementations remain pending.
+Initial paper admissions are complete, not runtime qualification:
+- [Compact draft training](experiments/2026-10-29-compact-draft-training.md)
+  admits one rank256 shared-vocabulary proposal-cost probe. Acceptance,
+  dataset manifest and training remain pending; no model weights downloaded.
+- [Exact portfolio](experiments/2026-10-29-exact-portfolio-admission.md)
+  selects down/vocabulary warp packets plus partitioned argmax. Conditional
+  scope is363ms/request, not a measured gain. Fixed-K is excluded from this
+  combination because its historical split-consumer gain does not establish
+  incremental compound work; norm and native-warp failures remain closed.
+- [Relaxed FFN probe](experiments/2026-10-29-relaxed-ffn-probe.md) freezes
+  four byte-position accumulation chains without changing layout or geometry.
+  It has not passed an operator, quality or HTTP gate.
+
+Next is the research-only exact-portfolio adapter and contemporary correctness/
+measurement, then the independent approximate probe and admitted draft-cost
+study. No new GPU measurements, runtime implementation or training yet;
+0/72 drafter GPU-hours consumed and no device switch requested.
 
 ## Preceding Checkpoints
 
