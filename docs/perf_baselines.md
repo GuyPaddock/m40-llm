@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: ILP4 Stops At Numerical Admission
+
+The [fixed ILP4 probe](experiments/2026-10-29-ilp4-decision.md) preserves all
+138 compiled CUDA controls and fits the resource cap at 40 registers with no
+spills. Its synthetic numerical gate stops before performance: the original
+control fails 101 dynamic-range SwiGLU values, while ILP4 passes. Signed, zero
+and cancellation cases pass both arms. The unchanged FP64 tolerance and input
+are retained; this is not evidence of an ILP4 speed or accuracy regression.
+
+No actual-layer performance, quality or HTTP trials were run. Guards, capture
+parity, stream dependencies, immutable owners and zero tracked teardown pass.
+Preserve the negative admission and code; no runtime selector or defaults
+change. The independent compact-drafter cost probe is next.
+
 ## 2026-10-29: Exact Portfolio Passes HTTP Gate
 
 The [fixed five-arm qualification](experiments/2026-10-29-portfolio-runtime.md)

@@ -82,8 +82,11 @@ portfolio or drafter during this experiment.
 
 ## Status
 
-Paper mechanism/resource contract complete; operator implementation and all
-hardware/quality/performance gates remain pending. No GPU hours consumed.
+Closed at [synthetic numerical admission](2026-10-29-ilp4-decision.md).
+The compiler/resource gate passes. The original control fails 101 dynamic-range
+SwiGLU values while ILP4 passes; no tolerance or fixture rescue is permitted.
+No actual-layer timing, runtime integration or HTTP claim follows. Code and
+evidence are preserved before separate removal. This is not an ILP4 speed loss.
 See [the approved track contract](2026-10-29-research-tracks-plan.md),
 [native-warp negative](2026-10-26-maxwell-native-warp-ffn-screen.md) and
 [current sampled dataflow](2026-10-28-dataflow-findings.md).

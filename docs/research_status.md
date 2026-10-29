@@ -67,9 +67,13 @@ gives 52.548523 versus 50.523256 tok/s, +4.008582%, interval
 positive sub-threshold results. Extra cold preparation is about 6.4 seconds.
 Defaults and immutable 50.910426 remain unchanged; 56.153149 is not reached.
 
-Next: the approved fixed ILP4 benchmark-only operator and separate 5%
-complete-FFN gate, then the compact drafter cost probe. No approximate
-qualification or training is complete. Do not expand the exact portfolio.
+The [ILP4 numerical admission](experiments/2026-10-29-ilp4-decision.md) stops
+before performance. Compiler/resource admission passes; on the new fixed
+dynamic-range fixture the original control fails 101 SwiGLU values and ILP4
+passes. This is not evidence of an ILP4 speed loss. Preserve the unchanged
+tolerance, code and evidence; no rescue, runtime selector or HTTP qualification.
+Next: the independent compact drafter cost probe. No approximate qualification
+or training is complete. Do not expand the exact portfolio.
 No new CUDA kernel was added for it.
 The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
