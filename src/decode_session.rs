@@ -107,6 +107,7 @@ pub struct DecodeSession {
     d_logits: Option<DeviceBuffer>,
     d_norm_hidden: Option<DeviceBuffer>,
     d_greedy_token: Option<DeviceBuffer>,
+    d_argmax_partials: Option<DeviceBuffer>,
     d_graph_position: Option<DeviceBuffer>,
     d_graph_seq_len: Option<DeviceBuffer>,
     exact_block_staging: Option<ExactBlockStagingWorkspace>,
@@ -200,6 +201,16 @@ impl DecodeSession {
             anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled() && sequence_id == 0,
                 "FFN capture requires sequence 0, M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
         }
+        if model.q8_execution.portfolio_arm().is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled()
+                && sequence_id == 0 && can_forward,
+                "portfolio research requires full forward, sequence 0, graph off and explicit dense KV");
+            #[cfg(feature = "server")]
+            anyhow::ensure!(
+                !crate::decode_batch::server_batch_decode_requested(),
+                "portfolio research does not support batched server scheduling"
+            );
+        }
         let gpu_profiler =
             DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
         if gpu_profiler.is_some() {
@@ -259,6 +270,20 @@ impl DecodeSession {
             }
             Err(_) => (None, None, None),
         };
+        // Equal scratch residency across all research arms, not only argmax-on.
+        let d_argmax_partials = if model.q8_execution.portfolio_arm().is_some() {
+            let vocab = model.map_lm_head()?.3;
+            let bytes = crate::cuda::CudaContext::argmax_f32_partitioned_scratch_bytes(
+                u32::try_from(vocab)?,
+            )?;
+            Some(DeviceBuffer::new_tagged(
+                &model.cuda,
+                bytes,
+                "decode_session:portfolio_argmax",
+            )?)
+        } else {
+            None
+        };
         let graph_params = if can_forward && decode_graph_enabled() {
             Some((
                 DeviceBuffer::new_tagged(
@@ -310,6 +335,7 @@ impl DecodeSession {
             d_logits,
             d_norm_hidden,
             d_greedy_token,
+            d_argmax_partials,
             d_graph_position,
             d_graph_seq_len,
             exact_block_staging,
@@ -1047,11 +1073,14 @@ impl DecodeSession {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("missing d_greedy_token scratch"))?;
         gpu_profile::set_layer(None);
-        let token = (*self.model).greedy_token_from_hidden_into(
+        let token = (*self.model).greedy_token_from_hidden_into_with_argmax_scratch(
             d_out as *const _,
             d_logits.as_mut_ptr(),
             self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
             d_token.as_mut_ptr(),
+            self.d_argmax_partials
+                .as_ref()
+                .map(|b| (b.as_mut_ptr(), b.bytes())),
         )?;
         timing::timing_log!(
             greedy_start.elapsed(),

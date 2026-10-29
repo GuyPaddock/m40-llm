@@ -192,7 +192,40 @@ impl LoadedModel {
         d_norm_hidden: Option<*mut c_void>,
         d_token_u32: *mut c_void,
     ) -> Result<u32> {
+        self.greedy_token_from_hidden_into_with_argmax_scratch(
+            d_hidden_f32,
+            d_logits,
+            d_norm_hidden,
+            d_token_u32,
+            None,
+        )
+    }
+
+    /// Same logits/greedy contract, with optional session-owned research scratch.
+    /// Missing scratch is an error when the partitioned consumer is selected.
+    ///
+    /// # Safety
+    /// All original hidden/logit/norm/token spans must be valid and disjoint.
+    /// Scratch, when selected, is a disjoint eight-byte-aligned device allocation
+    /// of the reported size, exclusive to this call until its stream completes.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn greedy_token_from_hidden_into_with_argmax_scratch(
+        &self,
+        d_hidden_f32: *const c_void,
+        d_logits: *mut c_void,
+        d_norm_hidden: Option<*mut c_void>,
+        d_token_u32: *mut c_void,
+        argmax_scratch: Option<(*mut c_void, usize)>,
+    ) -> Result<u32> {
         let argmax_start = std::time::Instant::now();
+        let has_partitioned_argmax = self
+            .q8_execution
+            .portfolio_arm()
+            .is_some_and(|arm| arm.has_partitioned_argmax());
+        anyhow::ensure!(
+            !has_partitioned_argmax || argmax_scratch.is_some(),
+            "partitioned argmax requires session-owned scratch; no silent fallback"
+        );
         if f16_lm_head_argmax_enabled() {
             let (name, lm, d_model, vocab, _) = self.map_lm_head()?;
             let d_w = self.tensor_device_ptr(&name, &lm)?;
@@ -366,8 +399,24 @@ impl LoadedModel {
         let (vocab, stream) =
             self.enqueue_logits_from_hidden_into(d_hidden_f32, d_logits, d_norm_hidden)?;
         let gpu_stage = GpuStageSpan::begin("greedy_argmax", stream)?;
-        self.cuda
-            .argmax_f32_async(d_logits as *const c_void, vocab as u32, d_token_u32, stream)?;
+        if has_partitioned_argmax {
+            let (scratch, bytes) = argmax_scratch.context("missing partitioned argmax scratch")?;
+            self.cuda.argmax_f32_partitioned_async(
+                d_logits,
+                vocab as u32,
+                scratch,
+                bytes,
+                d_token_u32,
+                stream,
+            )?;
+        } else {
+            self.cuda.argmax_f32_async(
+                d_logits as *const c_void,
+                vocab as u32,
+                d_token_u32,
+                stream,
+            )?;
+        }
         gpu_stage.finish()?;
         self.cuda.synchronize_stream(stream)?;
         let mut token = 0u32;

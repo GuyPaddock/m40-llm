@@ -11,7 +11,11 @@ mod ffn_task_pair;
 #[cfg(feature = "cuda")]
 pub use ffn_task_pair::DeviceQ8FfnTaskPair;
 pub use ffn_task_pair::{HostQ8FfnTaskPair, Q8FfnTaskPairKey};
+mod portfolio;
 mod warp_packet;
+pub use portfolio::{Q8PortfolioArm, Q8PortfolioStats, Q8PortfolioTensorStats};
+#[cfg(feature = "cuda")]
+mod portfolio_device;
 #[cfg(feature = "cuda")]
 pub use warp_packet::DeviceQ8WarpPacket;
 pub use warp_packet::{HostQ8WarpPacket, Q8WarpPacketKey};

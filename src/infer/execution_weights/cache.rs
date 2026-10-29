@@ -45,6 +45,7 @@ pub struct Q8ExecutionCache {
     sources: HashMap<usize, (Q8SourceIdentity, ProjectionFamily)>,
     stats: Q8ExecutionStats,
     ffn_pairs: super::ffn_pairs::FfnPairCache,
+    portfolio: Option<super::portfolio_device::PortfolioCache>,
 }
 
 impl Q8ExecutionCache {
@@ -54,6 +55,7 @@ impl Q8ExecutionCache {
             sources: HashMap::new(),
             stats: Q8ExecutionStats::empty(),
             ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
+            portfolio: None,
         }
     }
 
@@ -193,6 +195,7 @@ impl Q8ExecutionCache {
                 .collect(),
             stats,
             ffn_pairs: super::ffn_pairs::FfnPairCache::default(),
+            portfolio: None,
         };
         for (identity, family, pointer) in entries {
             if ownership == crate::infer::Q8FfnOwnership::JointOnly
@@ -259,6 +262,77 @@ impl Q8ExecutionCache {
 
     pub fn stats(&self) -> Q8ExecutionStats {
         self.stats.clone()
+    }
+
+    pub fn portfolio_stats(&self) -> Option<super::Q8PortfolioStats> {
+        self.portfolio.as_ref().map(|p| p.stats())
+    }
+
+    pub fn portfolio_arm(&self) -> Option<super::Q8PortfolioArm> {
+        self.portfolio.as_ref().map(|p| p.arm())
+    }
+
+    /// Debug readback only; caller must have completed every cache consumer.
+    pub fn verify_portfolio_payloads(&self) -> Result<()> {
+        self.portfolio
+            .as_ref()
+            .context("portfolio not prepared")?
+            .verify_payloads()
+    }
+
+    fn prepare_portfolio(
+        &mut self,
+        ctx: &CudaContext,
+        weights: &[u8],
+        sources: &[*const c_void],
+        arm: super::Q8PortfolioArm,
+    ) -> Result<()> {
+        ensure!(
+            self.portfolio.is_none(),
+            "portfolio already prepared; arm is immutable"
+        );
+        ensure!(
+            self.stats.mode == Q8ExecutionMode::Split && self.ffn_pairs.stats().is_enabled,
+            "portfolio requires original split down/head and joint compound weights"
+        );
+        let plans = sources
+            .iter()
+            .enumerate()
+            .map(|(index, source)| {
+                let (identity, family) = self
+                    .sources
+                    .get(&(*source as usize))
+                    .context("missing portfolio source")?;
+                let is_vocabulary = index + 1 == sources.len();
+                ensure!(
+                    *family
+                        == if is_vocabulary {
+                            ProjectionFamily::Vocabulary
+                        } else {
+                            ProjectionFamily::Down
+                        },
+                    "portfolio source family mismatch"
+                );
+                ensure!(
+                    self.tensors.contains_key(&(*source as usize)),
+                    "portfolio must retain original prepared owner"
+                );
+                Ok(super::portfolio_device::PortfolioPlan {
+                    pointer: *source as usize,
+                    source: identity.clone(),
+                    is_vocabulary,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.portfolio = Some(super::portfolio_device::PortfolioCache::prepare(
+            ctx,
+            weights,
+            &plans,
+            self.ffn_pair_stats().combined_prepared_bytes,
+            self.stats.budget_bytes,
+            arm,
+        )?);
+        Ok(())
     }
 
     /// Logical source coverage is not a count of resident split allocations.
@@ -457,6 +531,11 @@ impl Q8ExecutionCache {
         k: i32,
         stream: CudaStream,
     ) -> Result<bool> {
+        if let Some(portfolio) = &self.portfolio {
+            if portfolio.try_project(source, input, output, m, n, k, stream)? {
+                return Ok(true);
+            }
+        }
         let Some(entry) = self.tensors.get(&(source as usize)) else {
             return Ok(false);
         };
@@ -477,6 +556,27 @@ impl Q8ExecutionCache {
 }
 
 impl crate::infer::LoadedModel {
+    /// Research-only installation before sharing the model or creating sessions.
+    /// All arms retain all packet owners; ordinary loading never invokes this.
+    pub fn prepare_q8_portfolio(&mut self, arm: super::Q8PortfolioArm) -> Result<()> {
+        ensure!(
+            self.q8_ffn.kernel() == crate::infer::Q8FfnKernel::JointSharedScales
+                && self.q8_ffn.ownership() == crate::infer::Q8FfnOwnership::JointOnly,
+            "portfolio requires joint-shared-scales-128 with joint-only ownership"
+        );
+        let props = self.cuda.current_device_props()?;
+        ensure!(
+            props.major == 5 && props.minor == 2,
+            "portfolio research requires sm_52"
+        );
+        let mut sources = (0..self.model_config.block_count as usize)
+            .map(|layer| Ok(self.map_standard_layer(layer)?.w_down.dptr.cast_const()))
+            .collect::<Result<Vec<_>>>()?;
+        sources.push(self.map_lm_head()?.1.dptr.cast_const());
+        self.q8_execution
+            .prepare_portfolio(&self.cuda, &self.host_weights, &sources, arm)
+    }
+
     pub fn q8_ffn_pair_stats(&self) -> super::Q8FfnPairStats {
         self.q8_execution.ffn_pair_stats()
     }

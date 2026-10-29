@@ -47,10 +47,20 @@ Four-row layer35 FFN remains inconclusive and is not admitted.
 The conservative contemporary absolute-cost transfer is321.030ms/request,
 conditional3.297%, not a measured HTTP gain or joint confidence interval.
 
-Next: implement the fixed five runtime arms, validate full simultaneous
-1,192,935,424-byte packet residency and ownership/quality/compiled controls,
-then paired HTTP with fresh confirmation when borderline. No combined
-runtime qualification or training is complete. No new kernel was added.
+The fixed five-arm research adapter now retains identical packet owners and
+session argmax scratch in every arm. Selection is immutable and model-local;
+ordinary loading/defaults never install it. Only single-row down/head dispatch
+changes. Multi-row prefix projections retain the original consumers.
+Synthetic Qwen/head128 tests pass exact logits, greedy IDs and valid KV bits,
+stream routing, dispatch, warm allocation checks and teardown with cuBLAS on
+and off. Budget/upload failures leave no partial owners. The attention grid,
+affected compound/logit/packet tests, non-CUDA warning-as-error suite, Clippy
+and formatting pass. This is adapter coverage, not full-model qualification.
+
+Next: validate full simultaneous 1,192,935,424-byte packet residency and
+ownership/quality/compiled controls, then paired HTTP with fresh confirmation
+when borderline. No combined runtime qualification or training is complete.
+No new kernel was added.
 The attached approval additionally requires review after drafter cost and
 after a small training pilot; teacher generation needs a reviewed manifest.
 0/72 drafter GPU-hours consumed; no device switch requested.
