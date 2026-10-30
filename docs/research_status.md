@@ -6,11 +6,22 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The current authorization is **R0 CPU-only**. The user accepted V2 manifest
-preparation and the short-context protocol at `2060504` for planning, not GPU
-calibration. No teacher generation, training, learned evaluation or GPU switch
-is authorized while admission is blocked. Historical GPU permissions below
-do not override this restriction.
+The current authorization is **paper-only isolation-policy review**, using
+retained evidence only. No further source searches, sampling, teacher
+generation, training, learned evaluation or GPU switch is authorized. The
+accepted V2 short-context protocol at `2060504` remains planning evidence,
+not GPU calibration authorization. Historical permissions below do not
+override this restriction.
+
+The [V3 isolation amendment proposal v1](experiments/2026-10-30-v3-isolation-policy-v1.md)
+is inactive and awaiting review. It separates unseen examples of known tasks
+from task-transfer evaluation, proposes a narrow reviewed generic-instruction
+registry, and preserves document/passage/entity-instance/code/answer and
+substantive example-template isolation. Under that proposed objective DocRED
+could become a provisional extraction lead alongside SQuAD QA, CommitPackFT
+code and UltraChat prose. No source, quota, license or semantic audit is
+admitted; existing samples do not prove full independent-group capacity.
+All prior negative decisions remain valid under their original contracts.
 
 The [original-source comparison](experiments/2026-10-30-original-source-comparison.md)
 also stops without a viable four-family V3 combination. It CPU-tokenized 673
