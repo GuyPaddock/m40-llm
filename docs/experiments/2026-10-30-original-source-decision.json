@@ -1,0 +1,39 @@
+{
+  "kind": "review_only_original_source_comparison",
+  "supersedes_immutable_evidence": false,
+  "is_active_specification": false,
+  "is_r1_admitted": false,
+  "is_bulk_acquisition_authorized": false,
+  "has_viable_four_family_combination": false,
+  "additional_gpu_hours": 0,
+  "target_gguf_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "natural_token_range": [65,447],
+  "quotas_per_family": {"train":256,"calibration":48,"held_out":96},
+  "held_out_independent_groups_per_family": 16,
+  "provisional_sources": {
+    "programming_code": "bigcode/commitpackft Python; prior provisional status unchanged",
+    "prose_conversation": "HuggingFaceH4/ultrachat_200k first-user SFT; prior provisional status unchanged",
+    "grounded_qa": "rajpurkar/squad at 7b6d24c440a36b6815f21b70d25016731768db1f; census, semantic isolation and license review pending",
+    "extraction_classification": null
+  },
+  "observed_bounds": {
+    "ncbi_fixed_sciriff_template_test_documents": 100,
+    "ncbi_observed_distinct_test_documents_over_447": 14,
+    "ncbi_fixed_adapter_eligible_test_upper_bound": 86,
+    "ncbi_substantive_template_components": 1,
+    "docred_substantive_template_components": 1,
+    "squad_sample_eligible_train_articles": 9,
+    "squad_sample_eligible_validation_articles": 11
+  },
+  "limitations": [
+    "No population census or admitted independent-group capacity",
+    "Nonrandom prefixes and article-ordered row-group samples",
+    "PubMedQA CV fold membership unresolved, original test preserved",
+    "SQuAD/DocRED native titles are not Wikipedia page revision IDs",
+    "Literal benchmark checks do not provide semantic clearance",
+    "License labels do not override upstream text rights",
+    "Original/SciRIFF PubMedQA views are the same documents, not extra capacity"
+  ],
+  "stop_reason": "No credible extraction/classification source under unchanged substantive-template isolation; NCBI additionally cannot meet held-out quota with the fixed adapter",
+  "next_action": "Return for source-selection review; do not expand search, acquire corpora, alter quotas/splits/templates or begin GPU work"
+}

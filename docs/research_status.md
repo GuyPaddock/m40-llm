@@ -12,6 +12,20 @@ calibration. No teacher generation, training, learned evaluation or GPU switch
 is authorized while admission is blocked. Historical GPU permissions below
 do not override this restriction.
 
+The [original-source comparison](experiments/2026-10-30-original-source-comparison.md)
+also stops without a viable four-family V3 combination. It CPU-tokenized 673
+input variants from bounded original PubMedQA, NCBI, SQuAD and DocRED samples.
+SQuAD is the preferred provisional grounded-QA lead; CommitPackFT/UltraChat
+remain the code/prose leads. No source is cleared for quotas, rights or
+semantic isolation. NCBI retains native PMIDs but its fixed SciRIFF template
+leaves at most 86 eligible test documents versus 96 required, and creates a
+shared substantive dependency across splits. DocRED lengths are suitable but
+its one extraction task also fails unchanged template independence. QASA's
+inspected SciRIFF chain supplies test data only. The extraction family remains
+unfilled; no split merging, quota transfer or corpus expansion. Tooling
+`a179e6f` passes 39 CPU tests. Return the review-only recommendation; no bulk
+acquisition or GPU execution follows. Earlier evidence remains immutable.
+
 The subsequent authorized [bounded HF feasibility study](experiments/2026-10-30-hf-dataset-feasibility.md)
 is complete. It inspected 760 primary and 239 conditional fallback inputs at
 pinned revisions with the original Qwen Q8_0 tokenizer, entirely on CPU.
