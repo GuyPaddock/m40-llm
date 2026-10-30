@@ -115,7 +115,18 @@ Pinned sources, per-row counts, local token ledger and independent audit are
 retained. Three conversion, four capacity and seven Qwen tokenizer tests pass;
 the audit rejects five corruptions. No teacher, training, evaluation, GPU
 switch or runtime change occurred. GPU usage remains0.005923/72 hours.
-The conditional pilot is not admitted; stop for a revised user direction.
+The conditional pilot is not admitted.
+
+The user authorized a [paper-only short-prompt amendment](experiments/2026-10-29-short-prompt-amendment.md).
+The review draft proposes natural1-64-token MBPP eligibility without changing
+Dolly ranges, source partitions, quotas, isolation, architecture or training.
+Existing cost lookup clamps positions below65 to its first measured sample;
+that is not short-context evidence. The draft defines future position1-65
+serial/verifier/rejection measurements, boundary tests and natural-prompt
+checks, with at most0.25 GPU-hour taken from the existing one-hour pilot
+evaluation cap. Original specification, admission failure and measured
+artifacts remain unchanged. No new GPU work is authorized or performed;
+review this amendment before versioning the specification or resuming admission.
 
 ## Preceding Checkpoints
 
