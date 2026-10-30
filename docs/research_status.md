@@ -6,6 +6,30 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The current authorization is **R0 CPU-only**. The user accepted V2 manifest
+preparation and the short-context protocol at `2060504` for planning, not GPU
+calibration. No teacher generation, training, learned evaluation or GPU switch
+is authorized while admission is blocked. Historical GPU permissions below
+do not override this restriction.
+
+The [October 30 readiness report](experiments/2026-10-30-drafter-r0-readiness.md)
+stops before R1. A bounded 16-record Dolly grounded-QA probe recovered two
+complete historical Wikipedia passage matches; fourteen remain unresolved,
+including twelve rate-limited requests. The verified document pool is too
+small to establish quotas; the 16-record sample does not prove corpus-wide
+grounded-QA impossibility. No invented source IDs or training admission.
+The full CPU census also proves a separate quota failure: only 18 of 4,451
+Dolly prose/open-QA prompts meet the unchanged 65-447-token range, versus400
+required. More grounded-QA recovery alone cannot repair that failure.
+MBPP span/AST/literal exclusion checks and partial manual review leave row
+upper bounds317/73/436 and group upper bounds310/72/420. Complex-scope and
+semantic isolation audits remain incomplete; these are not admitted counts.
+Tools `fdf8515`/`1da88f8`, 26 passing CPU tests, source/response hashes and
+per-record quarantine evidence are retained. All original27 and V2 sixteen
+checksum entries pass. Stop for data-specification review; do not silently
+change Dolly eligibility, quotas or corpus. Rank256, schedule, phase/pilot
+caps, runtime defaults and GPU usage0.005923/72 remain unchanged.
+
 The user-approved [bounded research tracks](experiments/2026-10-29-research-tracks-plan.md)
 supersede the previous wait-for-a-lead instruction. Assess frozen-target
 training, an exact portfolio of positive sub-threshold work, and one opt-in
