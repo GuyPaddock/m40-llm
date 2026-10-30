@@ -126,7 +126,23 @@ serial/verifier/rejection measurements, boundary tests and natural-prompt
 checks, with at most0.25 GPU-hour taken from the existing one-hour pilot
 evaluation cap. Original specification, admission failure and measured
 artifacts remain unchanged. No new GPU work is authorized or performed;
-review this amendment before versioning the specification or resuming admission.
+The user subsequently approved CPU-only preparation under a separately
+versioned specification; the original amendment remains historical.
+
+The [v2 CPU checkpoint](experiments/2026-10-29-drafter-v2-checkpoint.md) implements
+that authorization without GPU work. Specification/protocol commit `28195c2`
+preserves the original artifacts and separates correctness1-65 from13 timing
+positions plus5 interpolation checks. Tool commit `5d69cb6` binds all964 MBPP
+rows to original source/tokenizer evidence.41 cross-partition components
+quarantine105 rows, leaving upper bounds334/76/449 versus quotas256/48/96.
+Those are not full template/exclusion passes. All1773 Dolly grounded-QA
+contexts lack reviewed upstream-document mappings and remain quarantined.
+The complete15975-row source candidate/quarantine ledger exists locally;
+an admitted selected training manifest does not. Twelve CPU tests and the
+independent consistency audit pass. All27 original evidence checksums match.
+Review the [frozen calibration protocol](experiments/2026-10-29-short-context-calibration-v2.md)
+and resolve provenance/template/exclusion blockers before GPU admission.
+No teacher/training/switch/default change occurred; usage and caps are unchanged.
 
 ## Preceding Checkpoints
 
