@@ -12,6 +12,22 @@ calibration. No teacher generation, training, learned evaluation or GPU switch
 is authorized while admission is blocked. Historical GPU permissions below
 do not override this restriction.
 
+The subsequent authorized [bounded HF feasibility study](experiments/2026-10-30-hf-dataset-feasibility.md)
+is complete. It inspected 760 primary and 239 conditional fallback inputs at
+pinned revisions with the original Qwen Q8_0 tokenizer, entirely on CPU.
+CommitPackFT Python and UltraChat first-user prompts are the preferred code
+and prose leads, not admitted sources. SciRIFF still lacks verified document
+maps and template-disjoint capacity; its component labels do not clear paper
+text rights. FLAN/TableGPT samples do not resolve both remaining families.
+The [V3 source proposal](experiments/2026-10-30-v3-source-proposal.json) retains
+four families and fixed 256/48/96 quotas, but is review-only. No complete
+realized manifest or independent-group capacity has been established. Primary
+samples have zero literal benchmark hits, not semantic clearance; fallback
+samples have length evidence only. Tooling `72b756e` has 31 passing CPU tests.
+Stop for source/provenance review before any bulk acquisition or GPU work.
+Original failures, architecture, budgets, schedule and runtime defaults remain
+unchanged. The prior R0 failure below remains valid for its original sources.
+
 The [October 30 readiness report](experiments/2026-10-30-drafter-r0-readiness.md)
 stops before R1. A bounded 16-record Dolly grounded-QA probe recovered two
 complete historical Wikipedia passage matches; fourteen remain unresolved,

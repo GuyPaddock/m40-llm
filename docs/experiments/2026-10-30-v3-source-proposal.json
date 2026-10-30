@@ -1,0 +1,75 @@
+{
+  "kind": "review_only_v3_source_proposal",
+  "is_active_specification": false,
+  "is_acquisition_authorized": false,
+  "is_r1_admitted": false,
+  "has_realized_manifest": false,
+  "decision": "conditional_three_source_design_not_ready_for_bulk_acquisition",
+  "target_gguf_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "tokenizer_identity": "Embedded tokenizer from the hash-verified original target GGUF",
+  "prompt_format": "QwenChat",
+  "system_message": null,
+  "add_bos": false,
+  "proposed_natural_prompt_token_range": [65, 447],
+  "source_answers_are_teacher_labels": false,
+  "teacher": "Frozen target runtime only; no generation authorized",
+  "quotas_per_family": {"train": 256, "calibration": 48, "held_out": 96},
+  "totals": {"train": 1024, "calibration": 192, "held_out": 384},
+  "minimum_held_out_independent_groups_per_family": 16,
+  "minimum_held_out_prompts_per_existing_context_bucket": 32,
+  "context_buckets": [[65,127],[128,255],[256,447]],
+  "max_generated_tokens": 128,
+  "families": [
+    {
+      "family": "prose_conversation",
+      "source": "HuggingFaceH4/ultrachat_200k",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "input": "First-user prompt only; omit assistant messages and later turns",
+      "split_plan": "Group train_sft into train/calibration; test_sft is held-out only; cross-split groups quarantined",
+      "status": "preferred_lead_capacity_and_generated_content_rights_pending"
+    },
+    {
+      "family": "programming_code",
+      "source": "bigcode/commitpackft",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "subset": "python",
+      "input": "subject + two newlines + File: old_file + newline + old_contents",
+      "split_plan": "New research partitions of upstream train by connected repository/fork/commit/template groups",
+      "status": "preferred_lead_file_rights_and_full_group_census_pending",
+      "license_labels_for_review": ["mit","apache-2.0","bsd-2-clause","bsd-3-clause","isc","cc0-1.0","unlicense"],
+      "label_allowlist_is_not_license_clearance": true
+    },
+    {
+      "family": "grounded_qa",
+      "source": "allenai/SciRIFF",
+      "revision": "eddf83df1ab4acf1ead5b81898dd4c7e7450050e",
+      "config": "4096",
+      "components_for_provenance_review_only": ["pubmedqa_qa","qasa_abstractive_qa"],
+      "status": "blocked_no_approved_document_map_or_template_disjoint_capacity",
+      "input": "Unchanged input field; no shortening, paraphrasing or substituted context"
+    },
+    {
+      "family": "extraction_classification",
+      "source": "allenai/SciRIFF",
+      "revision": "eddf83df1ab4acf1ead5b81898dd4c7e7450050e",
+      "config": "4096",
+      "components_for_provenance_review_only": ["annotated_materials_syntheses_events","anat_em_ner","ncbi_ner","nlmchem_ner","nlmgene_ner"],
+      "status": "blocked_component_text_rights_document_maps_and_template_capacity_pending",
+      "input": "Unchanged input field; repeated substantive task templates remain grouped"
+    }
+  ],
+  "fallbacks": [
+    {"source":"ai2-adapt-dev/flan_v2_converted","revision":"20f17e144dfdfe2d20f12f140ace5b95c31577c0","status":"not_recommended_as_drop_in; component IDs/licensing and benchmark isolation unresolved"},
+    {"source":"LipengCS/Table-GPT","revision":"25754c7a072dffca92e18c56f33832936f53495a","status":"reserve extraction lead only; TableQuestion is test-only, source-table rights unresolved"}
+  ],
+  "unchanged_constraints": [
+    "Original V1/V2 specifications and failed admissions remain immutable",
+    "Group and exclude before quota selection; no corpus or quota rescue",
+    "No relaxation of shared-32-token, shingle, substantive-template, document or benchmark isolation",
+    "All 36 frozen target layers and rank-256 three-head architecture unchanged",
+    "Four-epoch schedule and exact-output contracts unchanged",
+    "72 aggregate GPU hours and non-transferable 4/20/40/8 parent, 2/2/1 pilot caps unchanged",
+    "No GPU calibration, teacher generation, training, learned evaluation, device switching or runtime changes"
+  ],
+  "next_review": "Resolve the two grounded/extraction family blockers before adopting V3 or authorizing a bounded census. If strict isolation cannot provide the fixed quotas, stop; do not silently alter templates, split rules or corpus."
+}
