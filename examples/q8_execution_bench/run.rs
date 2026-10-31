@@ -90,6 +90,9 @@ struct Args {
         conflicts_with = "ffn_q4_channels_correctness_only"
     )]
     ffn_q4_channels_baselines: bool,
+    /// Measure rotation, top-80 coordinate selection and ternary channel scores.
+    #[arg(long, requires = "ffn_q4_channels", conflicts_with_all = ["ffn_q4_channels_baselines", "ffn_q4_channels_correctness_only"])]
+    ffn_ternary_screen: bool,
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
@@ -713,6 +716,7 @@ mod argument_tests {
         assert!(parse(&["--ffn-q4-channels"]).is_err());
         assert!(parse(&["--ffn-q4-channels-correctness-only"]).is_err());
         assert!(parse(&["--ffn-q4-channels-baselines"]).is_err());
+        assert!(parse(&["--ffn-ternary-screen"]).is_err());
         let valid = [
             "--ffn-inputs",
             "input.json",
@@ -721,6 +725,19 @@ mod argument_tests {
             "--ffn-q4-channels",
         ];
         assert!(parse(&valid).unwrap().ffn_q4_channels);
+        assert!(
+            parse(&[valid.as_slice(), &["--ffn-ternary-screen"]].concat())
+                .unwrap()
+                .ffn_ternary_screen
+        );
+        for conflict in [
+            "--ffn-q4-channels-baselines",
+            "--ffn-q4-channels-correctness-only",
+        ] {
+            assert!(
+                parse(&[valid.as_slice(), &["--ffn-ternary-screen", conflict]].concat()).is_err()
+            );
+        }
         assert!(
             parse(&[valid.as_slice(), &["--ffn-q4-channels-baselines"]].concat())
                 .unwrap()

@@ -99,3 +99,35 @@ cargo fmt --all -- --check
 
 This checkpoint has no CUDA timing, channel top-k, recovery or model-quality
 result. The next unit implements the fixed two-kernel cost probe.
+
+## Source-bound benchmark
+
+The `q8_execution_bench` option `--ffn-q4-channels --ffn-ternary-screen`
+requires the retained capture and report, their exact environment, batch one,
+five initial samples, a clean source commit and a release binary. It conflicts
+with oracle correctness-only and stronger-baseline modes. Use ten iterations
+per timed sample. Each layer consumes its first eight distinct input rows.
+
+Each sketch is fitted from the same hashed Q4-derived source as the earlier
+oracle. Down-column norms use FP64 accumulation over those Q4 values, then
+FP32 storage. The benchmark reports both encodings, all immutable-plane hashes,
+setup/upload time, scratch/input/output bytes, retained model/prepared weights,
+and peak tracked residency. The 150.88/56.89-microsecond preliminary budgets
+use the rounded conservative values in the stronger-reference report.
+
+Every row checks all output planes and coordinate selection before timing,
+warms for one GPU second, then takes five samples, extending once to ten for
+variation above 5%. It repeats the reference and bit-stability checks after
+timing. Layer completion requires unchanged immutable hashes and full cleanup
+of probe allocations. Logical code/scale payload is labeled separately from
+unavailable measured DRAM traffic.
+
+Only the two screening kernels and their submission/completion costs enter
+this boundary. No combined FFN residency or performance result follows until
+selection, recovery and exact sparse execution are measured together.
+
+The implemented benchmark passes 65 CPU example tests and CUDA/server
+all-target Clippy, plus formatting. Twenty existing hardware tests ignored by
+the CPU example invocation are not counted as passes. Logs are retained as
+`2026-10-31-ternary-bench-{tests,clippy}.log.gz`. Hardware cost observations
+must come from a subsequent clean release build.

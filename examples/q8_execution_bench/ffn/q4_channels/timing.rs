@@ -4,14 +4,14 @@ use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::fs::File;
 
-fn median(values: &[f64]) -> f64 {
+pub(super) fn median(values: &[f64]) -> f64 {
     let mut sorted = values.to_vec();
     sorted.sort_by(f64::total_cmp);
     let n = sorted.len();
     (sorted[(n - 1) / 2] + sorted[n / 2]) * 0.5
 }
 
-fn variation(times: &[f64]) -> f64 {
+pub(super) fn variation(times: &[f64]) -> f64 {
     let rates: Vec<_> = times.iter().map(|t| 1.0 / t).collect();
     let middle = median(&rates);
     median(&rates.iter().map(|v| (v - middle).abs()).collect::<Vec<_>>()) / middle

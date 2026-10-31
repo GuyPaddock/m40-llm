@@ -1,6 +1,7 @@
 mod baselines;
 mod pipeline;
 mod reference;
+mod ternary;
 mod timing;
 
 use super::{
@@ -90,8 +91,8 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "Q4 channel screen requires five initial pairs and rows 1 or 1,2,4,8"
     );
     ensure!(
-        !args.ffn_q4_channels_baselines || args.rows == [1],
-        "stronger Q4 baselines require batch one"
+        !(args.ffn_q4_channels_baselines || args.ffn_ternary_screen) || args.rows == [1],
+        "stronger Q4 baselines and ternary screening require batch one"
     );
     ensure!(
         command_output("git", &["status", "--porcelain"])?.is_empty(),
@@ -116,6 +117,24 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         Q8ExecutionConfig::parse("split", Some("6144"), Some("down,vocabulary"))?,
     )?;
     inputs.validate_model(&model)?;
+    if args.ffn_ternary_screen {
+        write_record(
+            &mut output,
+            json!({"kind":"ternary_screen_manifest","schema_version":1,
+            "revision":command_output("git", &["rev-parse","HEAD"])?,"build_profile":"release",
+            "executable_sha256":file_sha256(&std::env::current_exe()?)?,"model_sha256":inputs.artifact.plan.model_sha256,
+            "fixture_sha256":inputs.artifact_sha256,"capture_report_sha256":inputs.report_sha256,
+            "capture_execution":inputs.manifest["execution_configuration"],"model_setup_ms":setup.elapsed().as_secs_f64()*1000.0,
+            "gpu_before":gpu,"original_weights":model.weights_len,"prepared_q8_weights":model.q8_execution_stats(),
+            "timing_boundary":"signed rotation, per-block top-80 coordinates, all-channel ternary gate/up, SwiGLU and norm scores; two kernels",
+            "excludes":"channel top-k, sparse exact FFN, recovery, uploads, allocation and reference checks",
+            "overhead_point_budgets_us":{"retain10":150.88,"retain20":56.89},
+            "interpretation":"preliminary cost bound, not a complete-FFN speedup or model-quality result",
+            "rustc":command_output("rustc", &["--version"])?,"nvcc":command_output("nvcc", &["--version"])?,
+            "counter_availability":"no measured DRAM or dynamic instruction counters"}),
+        )?;
+        return ternary::benchmark(args, &model, &inputs, &mut output);
+    }
     let k = inputs.artifact.plan.d_model;
     let h = inputs.artifact.plan.hidden_dim;
     write_record(
