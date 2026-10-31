@@ -11,6 +11,11 @@ pins upstream PR 31398 and confirms that local Q8_1 gate/up already shares one
 quantized activation. Next compare staged and fused sign/rotation/quantization
 in an isolated fixture with the same consumer. There is no new timing or
 runtime promotion; the selected unrotated Qwen path has no rotation to remove.
+The [fixed experiment](experiments/2026-10-31-rotated-preparation-protocol.md)
+now specifies staged/fused FP32-plus-Q8_1 production, invocation ownership,
+retained rows at both widths and a matched 256-channel consumer. Existing
+Q8_1 row restrictions stay intact through flattened encoding and per-row
+consumption. Implementation and measurements remain pending.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
