@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Lossless KV rejects runtime integration
+
+The [complete lossless comparison](experiments/2026-10-31-lossless-kv-decision.md)
+at clean `941d485` finishes twelve cases, 288 groups and 1,455 alternating
+pairs. Fused reconstruction is 7.074–8.511 times slower than matched dense
+attention and passes none of its 48 speed gates. Native attention is also
+faster in every case. The full CPU cache-replacement append path takes
+198.49–561.62 times the native append/attention latency.
+
+Batching wins 36 comparisons against serial compressed execution, covering
+batches 2/4/8; it does not establish a codec benefit. All 240 arm/batch and
+48 append checks pass, with exact source reconstruction and matched output
+bits. Maximum FP64 error is `4.269011991020477e-6`. Post-process M40 residency
+is zero. The 4.574% KV representation saving remains valid; model throughput
+and quality are unmeasured. Keep the experiment isolated and defaults unchanged.
+
 ## 2026-10-31: Lossless FP16 capture saves 4.574%
 
 The [complete capture](experiments/2026-10-31-lossless-capture-results.md)

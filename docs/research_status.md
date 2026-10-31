@@ -6,6 +6,23 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The bounded lossless-KV study is **complete, with no runtime integration**.
+The [final decision](experiments/2026-10-31-lossless-kv-decision.md) retains all
+288 comparison groups and 1,455 alternating pairs from clean `941d485`.
+Fused reconstruction loses all 48 matched-dense comparisons, taking
+7.074–8.511 times the control latency across the grid. CPU cache replacement
+plus attention is 198.49–561.62 times slower than native append/attention.
+Batching improves the compressed kernel itself at batches 2/4/8, but never
+beats either dense control. The 4.574% representation saving does not pay
+for those execution costs. All 240 arm/batch and 48 append checks pass;
+tracked teardown and the external post-process zero-MiB check pass.
+No model tokens, model-level speedup, runtime integration or default change.
+
+The nine-topic goal remains active with seven bounded studies complete.
+Quantized-KV qualification and DualPace pricing remain. Quantized-KV's serial
+qualification started only after this timing run exited and released M40.
+The evidence trail below records the lossless work leading to this decision.
+
 The [lossless FP16 source/design audit](experiments/2026-10-31-lossless-kv-audit.md)
 fixes one 512-value exponent-offset format, including raw exceptional blocks
 and full directory overhead. The [CPU codec](experiments/2026-10-31-lossless-kv-codec.md)
@@ -29,12 +46,11 @@ now pass on M40; supported affected correctness checks also pass with cuBLAS
 enabled and disabled.
 The [CPU fixture unit and paired runner](experiments/2026-10-31-lossless-attention-runner.md)
 now exist. Six CPU fixture tests pass, and the GPU runner's ignored hardware
-test now passes with all fourteen runner tests. The pending runner includes
+test passed with all fourteen initial runner tests. The runner includes
 native and matched
 attention controls, active-batch-only reconstruction and full CPU replacement
-append costs. Full real-input GPU qualification, measurements and the final
-decision remain outstanding. The GPU runner is committed separately after the
-consumer, ready for clean release execution.
+append costs. The GPU runner is committed separately after the consumer.
+Full real-input qualification and measurements are complete in the decision above.
 The capture and initial qualification sessions have both exited successfully.
 Regression commands are terminal. A release-only timing benchmark rejected a
 debug build, and an existing cuBLAS-only FP32 SGEMM test rejected the disabled
@@ -53,14 +69,13 @@ now passes all twelve cases, 240 arm/batch checks and 48 append checks.
 Maximum absolute FP64 error is `4.269011991020477e-6`; matched outputs and
 reconstructed source words remain bit-exact. All cases restore tracked bytes,
 and the external post-process M40 query reports zero MiB with no compute
-process. The frozen paired timing grid is now admitted; measurements and the
-lossless branch decision remain outstanding.
-The overall nine-topic goal remains active with six bounded studies complete.
+process. The subsequent frozen paired timing grid completed successfully;
+the negative performance decision is recorded above.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`lossless-kv`](experiments/2026-10-30-lossless-kv-protocol.md).
-Its CPU format and capture tool are qualified; real-input attention timings are pending.
+Its CPU format, capture tool and real-input comparisons are complete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

@@ -8,7 +8,7 @@ including hardware append/history checks, with cuBLAS enabled and disabled.
 The first real-input release attempt failed exact output admission; the
 [rounding correction](2026-10-31-lossless-rounding-correction.md) records the
 cause and focused regression. Full-grid requalification and measurements
-remain pending.
+are now complete in the [negative decision](2026-10-31-lossless-kv-decision.md).
 
 ## CPU fixture unit
 
@@ -129,9 +129,9 @@ target/release/examples/lossless_attention_bench \
   --benchmark --iterations 10 --output NEW_TIMINGS.jsonl
 ```
 
-Full capture audit and initial serial hardware tests pass. Real-input release
+Full capture audit and serial hardware tests pass. Real-input release
 qualification, controlled timings, result analysis and the branch decision
-remain required. The
+are complete in the [final report](2026-10-31-lossless-kv-decision.md). The
 [validation checksum manifest](2026-10-31-lossless-attention-runner.sha256)
 retains CPU and compile-only logs. The prior 225-test non-CUDA suite remains
 recorded in the consumer checkpoint; it was not relabeled as GPU coverage.

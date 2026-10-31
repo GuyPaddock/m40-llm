@@ -4,7 +4,8 @@ The CUDA decoder and matched attention consumers now pass their
 [hardware validation](2026-10-31-lossless-consumer-validation.md), including
 cuBLAS-enabled/disabled execution and affected supported regressions.
 CUDA/server all-target Clippy and the 225-test non-CUDA suite pass.
-Real-input release qualification and timing remain pending.
+Real-input release qualification and timing are complete in the
+[negative integration decision](2026-10-31-lossless-kv-decision.md).
 
 ## Storage evidence and admission
 
