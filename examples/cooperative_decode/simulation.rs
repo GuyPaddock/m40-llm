@@ -152,10 +152,10 @@ pub fn simulate(trace: &Trace, mode: Mode) -> Result<ResultTrace> {
                                     0,
                                 );
                             }
-                        } else {
+                        } else if stage.cpu.duration_ns > 0 {
                             append(Resource::Cpu, "local", stage.cpu.duration_ns, 0);
                         }
-                    } else {
+                    } else if stage.gpu.duration_ns > 0 {
                         append(Resource::Gpu, "main", stage.gpu.duration_ns, 0);
                     }
                 }

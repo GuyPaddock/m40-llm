@@ -19,7 +19,7 @@ use std::{
 
 #[derive(Parser)]
 struct Args {
-    /// Explicit post-prefill arrivals and per-token stage costs, schema 1/2.
+    /// Explicit post-prefill arrivals and per-token stage costs, schema 1/2/3.
     #[arg(long)]
     trace: PathBuf,
     /// New JSONL report; existing results are never overwritten.

@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[serde(deny_unknown_fields)]
 pub struct Trace {
     pub schema_version: u32,
-    /// Schema 2 explicitly prices either serialized copies or an admitted
+    /// Schemas 2/3 explicitly price either serialized copies or an admitted
     /// overlap path. Schema 1 retains its original overlap assumption.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub has_copy_compute_overlap: Option<bool>,
@@ -90,11 +90,11 @@ impl Trace {
     }
 
     pub fn validate(&self) -> Result<()> {
-        ensure!(matches!(self.schema_version, 1 | 2), "unsupported schema");
+        ensure!(matches!(self.schema_version, 1..=3), "unsupported schema");
         ensure!(
             (self.schema_version == 1 && self.has_copy_compute_overlap.is_none())
-                || (self.schema_version == 2 && self.has_copy_compute_overlap.is_some()),
-            "schema 2 requires an explicit copy/compute overlap policy; schema 1 keeps its legacy policy"
+                || (self.schema_version >= 2 && self.has_copy_compute_overlap.is_some()),
+            "schemas 2/3 require an explicit copy/compute overlap policy; schema 1 keeps its legacy policy"
         );
         ensure!(
             !self.description.trim().is_empty(),
@@ -140,17 +140,30 @@ impl Trace {
                 "invalid profile"
             );
             let mut names = BTreeSet::new();
+            ensure!(
+                stages.iter().any(|stage| stage.cpu.duration_ns > 0)
+                    && stages.iter().any(|stage| stage.gpu.duration_ns > 0),
+                "a token profile must contain positive work on each processor"
+            );
             for stage in stages {
                 ensure!(
                     !stage.name.is_empty() && names.insert(&stage.name),
                     "duplicate/empty stage"
                 );
-                self.validate_cost(&stage.cpu)?;
-                self.validate_cost(&stage.gpu)?;
+                self.validate_stage_cost(&stage.cpu)?;
+                self.validate_stage_cost(&stage.gpu)?;
+                ensure!(
+                    stage.cpu.duration_ns > 0 || stage.gpu.duration_ns > 0,
+                    "omit a stage with no work on either processor"
+                );
                 if let Some(assist) = &stage.assist {
+                    ensure!(
+                        stage.cpu.duration_ns > 0 && stage.gpu.duration_ns > 0,
+                        "assistance requires positive CPU and GPU work"
+                    );
                     self.validate_cost(&assist.h2d)?;
                     self.validate_cost(&assist.d2h)?;
-                    if self.schema_version == 2 && assist.synchronization.duration_ns == 0 {
+                    if self.schema_version >= 2 && assist.synchronization.duration_ns == 0 {
                         ensure!(
                             self.evidence.contains_key(&assist.synchronization.evidence),
                             "missing included-synchronization cost evidence"
@@ -201,6 +214,21 @@ impl Trace {
         }
         ensure!(step_count <= 200_000, "trace exceeds 200000-step bound");
         Ok(())
+    }
+
+    fn validate_stage_cost(&self, cost: &Cost) -> Result<()> {
+        if self.schema_version == 3 && cost.duration_ns == 0 {
+            ensure!(
+                matches!(
+                    self.evidence.get(&cost.evidence),
+                    Some(Evidence::Assumption { .. })
+                ),
+                "omitted processor work requires explicit assumption evidence"
+            );
+            Ok(())
+        } else {
+            self.validate_cost(cost)
+        }
     }
 
     fn validate_cost(&self, cost: &Cost) -> Result<()> {

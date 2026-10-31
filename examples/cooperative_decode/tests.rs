@@ -68,6 +68,95 @@ fn request(id: &str, is_cpu_resident: bool, ready_ns: u64, tokens: usize) -> Req
     }
 }
 
+/// An explicitly omitted processor stage creates no service or queue interval.
+/// The other processor retains its work, and assistance still charges copies,
+/// submission ordering and worker occupancy without fabricated nanoseconds.
+#[test]
+fn test_omitted_processor_stages_preserve_completion_costs() {
+    for (cpu_prefix, gpu_prefix, independent, assisted) in
+        [(0, 10, [20, 20], [34, 14]), (4, 0, [10, 24], [10, 24])]
+    {
+        let mut trace = fixture();
+        trace.schema_version = 3;
+        trace.has_copy_compute_overlap = Some(false);
+        let stages = trace.profiles.get_mut("token").unwrap();
+        stages[0].cpu.duration_ns = cpu_prefix;
+        stages[0].gpu.duration_ns = gpu_prefix;
+        stages[1]
+            .assist
+            .as_mut()
+            .unwrap()
+            .synchronization
+            .duration_ns = 0;
+        let gpu = simulate(&trace, Mode::GpuOnly).unwrap();
+        assert_eq!(gpu.elapsed_ns, 2 * (gpu_prefix + 10));
+        for (mode, expected) in [(Mode::Independent, independent), (Mode::Assisted, assisted)] {
+            let result = simulate(&trace, mode).unwrap();
+            for (request, completion) in result.requests.iter().zip(expected) {
+                assert_eq!(request.completion_ns, [completion]);
+            }
+            assert!(result.intervals.iter().all(|i| i.end_ns > i.start_ns));
+            for resource in [Resource::Cpu, Resource::Gpu] {
+                let is_omitted = match resource {
+                    Resource::Cpu => cpu_prefix == 0,
+                    Resource::Gpu => gpu_prefix == 0,
+                    Resource::Copy => unreachable!(),
+                };
+                if is_omitted {
+                    assert!(!result
+                        .intervals
+                        .iter()
+                        .any(|i| i.stage == "prefix" && i.resource == resource));
+                }
+            }
+        }
+    }
+}
+
+/// Zero work is a schema-3 modeling assumption, never a measured duration.
+/// Legacy traces, all-empty processor tokens, fully empty stages and assists
+/// without work reject before scheduling instead of creating plausible results.
+#[test]
+fn test_omitted_work_requires_explicit_nonempty_assumptions() {
+    for schema_version in [1, 2] {
+        let mut trace = fixture();
+        trace.schema_version = schema_version;
+        trace.has_copy_compute_overlap = (schema_version == 2).then_some(false);
+        trace.profiles.get_mut("token").unwrap()[0].cpu.duration_ns = 0;
+        assert!(trace.validate().is_err());
+    }
+    let mut trace = fixture();
+    trace.schema_version = 3;
+    trace.has_copy_compute_overlap = Some(false);
+    trace.profiles.get_mut("token").unwrap()[0].cpu.duration_ns = 0;
+    assert!(trace.validate().is_ok());
+    trace.has_copy_compute_overlap = None;
+    assert!(trace.validate().is_err());
+    trace.has_copy_compute_overlap = Some(false);
+    trace.profiles.get_mut("token").unwrap()[0].cpu.evidence = "missing".into();
+    assert!(trace.validate().is_err());
+    trace.evidence.insert(
+        "measured".into(),
+        Evidence::Artifact {
+            description: "An artifact must not masquerade as measured zero work".into(),
+            path: "cost.json".into(),
+            sha256: "0".repeat(64),
+        },
+    );
+    trace.profiles.get_mut("token").unwrap()[0].cpu.evidence = "measured".into();
+    assert!(trace.validate().is_err());
+    trace.profiles.get_mut("token").unwrap()[0].cpu.evidence = "hand_calculation".into();
+    trace.profiles.get_mut("token").unwrap()[0].gpu.duration_ns = 0;
+    assert!(trace.validate().is_err());
+    trace.profiles.get_mut("token").unwrap()[0].gpu.duration_ns = 10;
+    trace.profiles.get_mut("token").unwrap()[1].gpu.duration_ns = 0;
+    assert!(trace.validate().is_err());
+    trace.profiles.get_mut("token").unwrap()[1].gpu.duration_ns = 10;
+    trace.profiles.get_mut("token").unwrap()[1].cpu.duration_ns = 0;
+    trace.profiles.get_mut("token").unwrap()[1].assist = None;
+    assert!(trace.validate().is_err());
+}
+
 /// Independent engines overlap work; GPU-only serializes both complete tokens.
 #[test]
 fn test_independent_engines_and_single_token_latency() {

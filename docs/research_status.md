@@ -40,6 +40,11 @@ ShiftAdd control audit extracts 72 Q8 GPU cost series and confirms all 36 CPU
 input cases and nine tensor identities match. Ten data admission/rejection
 checks pass. These are reused isolated projection measurements; complete CPU
 decoding, transfer prices and sourced scheduling outcomes remain unmeasured.
+The [schema-3 omitted-work extension](experiments/2026-10-31-dualpace-omitted-work.md)
+now supports the frozen sensitivity grid's zero-missing-work cases. Zero CPU
+or GPU service requires assumption evidence and creates no interval; measured
+durations remain positive. Thirteen CPU simulator tests, non-CUDA all-target
+Clippy and a hand-calculated CLI fixture pass. Older trace behavior is preserved.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
