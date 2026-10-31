@@ -15,14 +15,22 @@ The [encoder and CPU reference](experiments/2026-10-31-shiftadd-encoding.md)
 now pass seven behavioral checks, with 227 passing non-CUDA tests and clean
 CPU all-target Clippy. Offline fitting uses FP64 arithmetic and the pinned
 format; it is not byte-identical reproduction of upstream FP32 fitting.
-Next implement the FP32 sign-add CUDA consumer and verify guards, streams,
-ownership and FP64 numerical bounds. No model-weight fit, timing,
-model-quality result or runtime integration exists yet.
+The [FP32 sign-add CUDA consumer](experiments/2026-10-31-shiftadd-cuda.md)
+now passes three explicit M40 checks with cuBLAS on/off and in release.
+The direct grid checks 4,140 values; chained streams check 12,528 more.
+Guards, immutable reads, independent workspaces, input reuse, rejected spans
+and tracked cleanup pass. Release maximum numerical error is 0.007359363
+of the FP64 reduction bound. The release kernel uses 40 registers and no
+stack, shared or local memory. Existing supported regressions pass; the
+unsupported head4/default-compressed-KV smoke failure is retained separately.
+Next implement the source-bound Qwen projection benchmark with matched Q4/Q8
+controls. No model-weight fit, timing, model-quality result or runtime
+integration exists yet.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`shiftadd`](experiments/2026-10-30-shiftadd-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+Its encoder and CUDA consumer are qualified; projection measurements are pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

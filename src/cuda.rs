@@ -42,6 +42,8 @@ mod q8_warp_packet;
 #[cfg(feature = "cuda")]
 mod q8_weight_read;
 #[cfg(feature = "cuda")]
+mod shiftadd;
+#[cfg(feature = "cuda")]
 pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
 
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
@@ -646,6 +648,16 @@ mod ffi {
             output: *mut c_void,
             n: i32,
             k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemv_f32xsa4_128_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weights: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            output_width: i32,
+            input_width: i32,
             stream_kind: u32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async(

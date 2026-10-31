@@ -179,6 +179,10 @@ int m40llm_qkv_f32xq8_separate_packed_warp_async(M40llmCudaContext* ctx, const v
 int m40llm_gemm_f32xq8_separate_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int n, int k, uint32_t stream_kind) {
     (void)ctx; (void)input; (void)scales; (void)values; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
 }
+int m40llm_gemv_f32xsa4_128_async(M40llmCudaContext* ctx, const void* input, const void* weights, void* output, int rows, int output_width, int input_width, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weights; (void)output; (void)rows;
+    (void)output_width; (void)input_width; (void)stream_kind; return -99;
+}
 int m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, int n, int k, uint32_t stream_kind) {
     (void)ctx; (void)input; (void)weight; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
 }
