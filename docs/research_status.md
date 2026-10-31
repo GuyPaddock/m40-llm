@@ -47,8 +47,14 @@ The [rounding diagnosis and correction](experiments/2026-10-31-lossless-rounding
 identify `Fused`, batch one, word 97. Generated packed code contracts a
 different accumulator product and splits the denominator FMA. Explicit FP32
 rounding now matches the dense operation order. The real-case replay, two
-CUDA tests and fifteen runner tests pass with cuBLAS on and off. Full-grid
-release requalification remains required before timing.
+CUDA tests and fifteen runner tests pass with cuBLAS on and off. The clean
+`fe213e1` [full release grid](experiments/2026-10-31-lossless-release-admission.md)
+now passes all twelve cases, 240 arm/batch checks and 48 append checks.
+Maximum absolute FP64 error is `4.269011991020477e-6`; matched outputs and
+reconstructed source words remain bit-exact. All cases restore tracked bytes,
+and the external post-process M40 query reports zero MiB with no compute
+process. The frozen paired timing grid is now admitted; measurements and the
+lossless branch decision remain outstanding.
 The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan

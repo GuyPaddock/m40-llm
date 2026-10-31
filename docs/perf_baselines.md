@@ -17,7 +17,10 @@ attention and append checks pass. Supported affected regressions pass with
 cuBLAS enabled and disabled; complete release attention/append comparisons
 remain pending. The clean `464ec29` release grid
 [fails the first real-input output-bit check](experiments/2026-10-31-lossless-release-failure.md)
-before timing. Runtime defaults are unchanged.
+before timing. After the explicit rounding correction, the clean `fe213e1`
+[release admission](experiments/2026-10-31-lossless-release-admission.md)
+passes all twelve cases, 240 arm/batch and 48 append checks. Paired timings
+remain pending. Runtime defaults are unchanged.
 
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 

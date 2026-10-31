@@ -1,0 +1,21 @@
+{
+  "revision": "fe213e18d7667e2f79cfac9dd3df9524b07519cb",
+  "executable_sha256": "907c56d455e12af82d99828e142cb4fe3cae1b73c575ad401d86f212b8e26b88",
+  "artifact_sha256": "da01d6328aef717902edbc93c215f0468f2bc9d789211effbc1b61b1569d1242",
+  "cases": 12,
+  "arm_batch_checks": 240,
+  "append_checks": 48,
+  "maximum_absolute_fp64_error": 0.000004269011991020477,
+  "complete": {
+    "cases": 12,
+    "generated_token_count": 0,
+    "is_complete": true,
+    "is_model_speedup_measured": false,
+    "kind": "lossless_attention_complete",
+    "stop_reason": "fixed_context_grid_complete"
+  },
+  "has_exact_reconstruction": true,
+  "has_matched_output_bits": true,
+  "has_tracked_cleanup": true,
+  "is_timing_measured": false
+}
