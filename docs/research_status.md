@@ -23,9 +23,12 @@ and tracked cleanup pass. Release maximum numerical error is 0.007359363
 of the FP64 reduction bound. The release kernel uses 40 registers and no
 stack, shared or local memory. Existing supported regressions pass; the
 unsupported head4/default-compressed-KV smoke failure is retained separately.
-Next implement the source-bound Qwen projection benchmark with matched Q4/Q8
-controls. No model-weight fit, timing, model-quality result or runtime
-integration exists yet.
+The [source-bound projection benchmark](experiments/2026-10-31-shiftadd-benchmark.md)
+now implements the [frozen comparison](experiments/2026-10-31-shiftadd-projection-protocol.md)
+with native Q4/Q8 and prepared Q8 controls. Its CPU example suite passes 65
+tests, the non-CUDA suite passes 230, and CUDA/server Clippy passes. Next run
+the clean release screen on the M40. No model-weight fit, timing,
+model-quality result or runtime integration exists yet.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns

@@ -14,6 +14,7 @@ mod prepared_read;
 mod projection;
 mod reductions;
 mod reuse;
+mod shiftadd;
 mod task_pair;
 mod validation;
 mod warmup;
@@ -45,6 +46,9 @@ fn validate_rows(args: &Args) -> Result<()> {
 }
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_shiftadd {
+        return shiftadd::benchmark(args);
+    }
     if args.ffn_four_row_reuse {
         return four_row::benchmark(args);
     }
