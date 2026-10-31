@@ -127,3 +127,37 @@ timings, result analysis and the branch decision remain required. The
 [validation checksum manifest](2026-10-31-lossless-attention-runner.sha256)
 retains CPU and compile-only logs. The prior 225-test non-CUDA suite remains
 recorded in the consumer checkpoint; it was not relabeled as GPU coverage.
+
+## Queued qualification
+
+At October 31, 22:13 UTC, capture session `95030`, host PID `318282`, remains
+live with five of eight sequences captured. Its partial report contains 60
+streams, 240 compression rows, 15 readbacks and five sequence records. The M40
+shows only that capture process. No pending consumer hardware test has run.
+
+Session `68704` now owns the next GPU slot. Its
+[retained queue script](2026-10-31-lossless-qualification-queue.sh) waits for the
+existing capture PID to retire. It then checks the frozen source hashes, all
+96 streams, 384 compression rows, 24 readbacks, eight sequences, completion,
+tracked cleanup and the 201,326,592-byte artifact's digest. It requires an idle
+M40 before CPU fixture admission and before each hardware test.
+
+The CPU fixture inspection reconstructs all twelve real layer/context cases.
+The job then runs `lossless_kv_cuda` followed by the `lossless_attention_bench`
+example tests with `--include-ignored --test-threads=1`. Every failure stops the
+queue. It performs no real-grid performance measurement and makes no commits.
+Review its logs before the affected regression suites, code commits and clean
+release comparisons.
+
+The running copy and fresh outputs are under
+`/tmp/lossless-qualification-20261031-01/`: `queue.log`, `capture-summary.json`,
+`fixture-inspection.jsonl`, `fixture-inspection.log`, `kernel-tests.log` and
+`runner-tests.log`. Later files appear only when their phase starts. Missing
+outputs while the capture is live are not a failed qualification. Poll the
+existing sessions; do not start a duplicate queue or overlap its GPU work.
+
+The [source manifest](2026-10-31-lossless-qualification-source.sha256) pins the
+pending implementation and tests. The
+[queue checksum manifest](2026-10-31-lossless-qualification-queue.sha256)
+preserves the exact launch script and capture-summary program. These records
+document queued work, not passing hardware evidence.

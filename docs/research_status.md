@@ -14,7 +14,7 @@ passes exhaustive FP16 bit-pattern round trips and five behavioral tests;
 [model-quality capture extension](experiments/2026-10-31-lossless-kv-capture.md)
 now passes five checks, including explicit M40 raw-word readback and cleanup;
 12 non-CUDA example tests and CUDA/server Clippy pass. The clean `82a118a`
-release capture is running, with three of eight sequences complete at this
+release capture is running, with five of eight sequences complete at this
 checkpoint. Do not restart or overlap it. One completed real prefix saves
 7,608 bytes after metadata and reconstructs exactly; the full 384-row
 compression grid still requires completion and audit.
@@ -27,6 +27,10 @@ test compiles and links. The pending runner includes native and matched
 attention controls, active-batch-only reconstruction and full CPU replacement
 append costs. GPU checks, real-input qualification, measurements and the final
 decision remain outstanding; the consumer and GPU runner are uncommitted.
+The first hardware qualification is queued behind the live capture, with full
+artifact/hash admission and an idle-GPU check before execution. See the
+[queue checkpoint](experiments/2026-10-31-lossless-attention-runner.md#queued-qualification).
+It reserves the next GPU slot; do not start another GPU job when capture ends.
 The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan
