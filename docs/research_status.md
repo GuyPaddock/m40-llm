@@ -40,7 +40,11 @@ Regression commands are terminal. A release-only timing benchmark rejected a
 debug build, and an existing cuBLAS-only FP32 SGEMM test rejected the disabled
 configuration. Both failures are retained; optional model diagnostics did not
 run. Supported correctness checks completed separately. External M40 allocation
-returned to zero. The next hardware work is the clean release comparison grid.
+returned to zero after those regressions. The clean `464ec29` release grid
+[failed its first real-input validation](experiments/2026-10-31-lossless-release-failure.md)
+at layer 0, 1,024 tokens: matched prototype output bits differ. No timings ran.
+Preserve that failure and identify the arm, batch and differing output words
+before correcting the consumer or requalifying the complete grid.
 The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan
