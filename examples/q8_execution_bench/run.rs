@@ -77,6 +77,9 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Isolated staged/fused rotated activation producer and matched consumer.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_four_row_reuse","ffn_f32_compound","ffn_layer_reuse","ffn_f32_shared_scales","ffn_f32_role_parallel","ffn_payload_entropy","ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_compound_control","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute","sparse_inputs"])]
+    ffn_rotated_preparation: bool,
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
@@ -884,6 +887,51 @@ mod argument_tests {
         ] {
             assert!(
                 parse(&[capture.as_slice(), &["--ffn-f32-task-pairs", other]].concat()).is_err()
+            );
+        }
+    }
+
+    /// Rotated preparation stays opt-in, requires retained inputs, and cannot
+    /// share a run with unrelated projection or activation experiments.
+    #[test]
+    fn test_rotated_preparation_requires_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let capture = [
+            "--ffn-inputs",
+            "inputs.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+        ];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_rotated_preparation);
+        assert!(parse(&["--ffn-rotated-preparation"]).is_err());
+        let selected = parse(
+            &[
+                capture.as_slice(),
+                &[
+                    "--ffn-rotated-preparation",
+                    "--rows",
+                    "1,2,4,8",
+                    "--iterations",
+                    "100",
+                ],
+            ]
+            .concat(),
+        )
+        .unwrap();
+        assert!(selected.ffn_rotated_preparation);
+        assert_eq!(selected.rows, [1, 2, 4, 8]);
+        assert_eq!(selected.iterations, 100);
+        for other in [
+            "--ffn-q81",
+            "--ffn-four-row-reuse",
+            "--ffn-f32-compound",
+            "--prepared-warp-packet",
+            "--sparse-inputs",
+        ] {
+            assert!(
+                parse(&[capture.as_slice(), &["--ffn-rotated-preparation", other]].concat())
+                    .is_err()
             );
         }
     }

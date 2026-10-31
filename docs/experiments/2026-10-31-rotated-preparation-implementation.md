@@ -110,3 +110,43 @@ consumer release comparison from the
 [fixed protocol](2026-10-31-rotated-preparation-protocol.md), with retained
 inputs and matched 256-channel rotated weight fixtures. No performance,
 whole-model accuracy or runtime integration claim follows from these tests.
+
+## Source-bound benchmark unit
+
+`q8_execution_bench --ffn-rotated-preparation` is exclusive with other modes,
+requires the retained capture and exact environment, and checks clean release
+source before loading the model. It fixes rows `1,2,4,8`, five pairs and
+100 operations per sample. The higher iteration count is fixed before timing
+to reduce event-timing noise for short producer operations.
+
+Each of 24 layer/width/row cases compares preparation alone and preparation
+plus the same 256-channel Q8_1 consumer, for 48 comparisons. Both arms use the
+decode stream, with the consumer enqueued after preparation on that stream.
+Warm each arm and boundary for at least one GPU second. Warmup uses batches
+of 256 operations and a maximum of 4096 batches so short operations can reach
+the target without an unbounded loop. Warmup samples never enter primary pairs.
+
+The timing callback reuses the established alternating-order and bootstrap
+protocol, with this topic's 3% complete-operation floor. Extend five pairs to
+ten only when throughput MAD/median exceeds 5%; continued instability fails.
+Collect one fresh twenty-pair confirmation near the gain gate or when the
+point estimate clears it but the lower confidence bound does not. Report both
+phases. Preparation-only results are diagnostic.
+
+The benchmark fits matched rotated Q8_0 weight slices from the original Q8
+source, recording source rows, hashes, fit error, preparation and upload costs.
+It checks all eight retained inputs are distinct at each width. Before and
+after timing, both paths must pass dense FP64 Walsh checks, CPU Q8_1 encoding,
+the encoded-consumer numerical check, and exact canonical/encoded/output bit
+comparisons. Input and scratch guards, immutable signs/weights and allocation
+cleanup are checked separately. All owners stay resident in both arms.
+
+Logical traffic counts describe the signed scratch write/read and canonical
+quantizer read removed by fusion, 12 bytes per activation element. The canonical
+and encoded output writes remain. No measured DRAM or sector claim follows
+from that count. All model, kernel and consumer qualifications remain unchanged.
+
+The benchmark unit passes 66 CPU example tests, CUDA/server all-target Clippy
+and formatting. Twenty existing ignored hardware tests are not counted as
+passes. Logs are `2026-10-31-rotated-benchmark-tests.log.gz` and
+`2026-10-31-rotated-benchmark-clippy.log.gz`. Release measurements are pending.

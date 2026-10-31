@@ -21,14 +21,19 @@ Walsh checks and exact Q8_1, staged/fused and consumer bits. The unchanged
 Q8_1 tests, forward/ownership, runtime and attention regressions, CUDA/server
 Clippy, warning-free non-CUDA suite and formatting pass. Initial build and
 added consumer-reference failures are preserved with their corrections.
-Next implement and measure the retained-input producer/consumer comparison;
-there is no performance or runtime integration claim yet.
+The exclusive `--ffn-rotated-preparation` benchmark now implements the fixed
+24-case retained-input comparison, with 48 preparation/complete comparisons,
+source and encoding hashes, before/after numerical/bit checks, equal residency
+and the 3% complete-operation gate. Its 66 CPU example tests, all-target
+CUDA/server Clippy and formatting pass; twenty old ignored hardware tests
+are not counted as passes. Next build clean release and run the serial M40
+grid. There is no performance or runtime integration claim yet.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`activation-preparation`](experiments/2026-10-30-activation-preparation-protocol.md).
-Its scoped protocol and producer implementation are recorded; the source-bound
-benchmark and measurements remain pending.
+Its scoped protocol, producer and source-bound benchmark are recorded;
+measurements remain pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
