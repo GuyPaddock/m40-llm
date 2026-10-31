@@ -1,4 +1,5 @@
 // cuda/stub.c - stubbed CUDA FFI for environments without NVCC/CUDA
+// Selected-channel research kernels are unavailable in stub builds.
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,18 @@ typedef struct M40llmCudaContext { int device_id; } M40llmCudaContext;
 typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
+
+int m40llm_q4_selected_ffn_async(
+    M40llmCudaContext* ctx, const void* input, const void* gate,
+    const void* up, const void* down, const void* scales, const void* codes,
+    const void* indices, void* hidden, void* partial, void* output,
+    int rows, int k, int h, int count, int packed, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)down;
+    (void)scales; (void)codes; (void)indices; (void)hidden;
+    (void)partial; (void)output; (void)rows; (void)k; (void)h;
+    (void)count; (void)packed; (void)stream_kind;
+    return -1;
+}
 
 int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* output,
     int rows, int columns, int padded_columns) {

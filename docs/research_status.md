@@ -11,9 +11,17 @@ in independent worktrees based on `0eee578`. This branch owns
 [`channel-selection`](experiments/2026-10-30-channel-selection-protocol.md).
 Its scoped protocol and [host Q4 layout checkpoint](experiments/2026-10-30-channel-host-layout.md)
 are recorded. The lossless channel-oriented host packer passes all three
-new tests and the 223-test warning-free non-CUDA suite. CUDA consumers,
-source-bound Q4 fixtures and complete-FFN timings are next; no speed or
-model-quality claim is established. Build directories are isolated disk-backed
+new tests and the 223-test warning-free non-CUDA suite. Source-bound Q4
+fixtures and complete-FFN timings are next; no speed or
+model-quality claim is established. The
+[selected-channel CUDA primitive](experiments/2026-10-30-q4-selected-cuda.md)
+now passes both new hardware tests with cuBLAS on/off, Q4 projection checks,
+compound forward/ownership and the attention grid. It uses a supplied immutable
+selection, three FP32 kernels and native/repacked down layouts with identical
+accumulation. Real-model fixtures and performance screening remain pending.
+A legacy tiny forward fixture fails at KV configuration on both base and this
+branch; explicit-dense compound forward coverage passes.
+Build directories are isolated disk-backed
 symlinks after the first full build exhausted /tmp.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
