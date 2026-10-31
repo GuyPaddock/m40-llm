@@ -1,0 +1,8 @@
+ffdcc8f7d4a46d3fd493efccabe359cebbeb6d9bec810a8b21c1b29e3a88389f  src/lossless_kv/codec.rs
+57aa7a7ae3be110a17c4def7015775c57d55b79954765203b0d3073e569b0508  src/lossless_kv/mod.rs
+75a009f5438a49b98501ace5a9c5f033600d1fe05454a96e185a6793230c0507  src/lossless_kv/tests.rs
+b86b27c7d799f3be78466c2e423ac47f4dccd7a613e4525ab84314da5e0f106c  src/lib.rs
+cc785d505d53147f0286ba3ab2a82d362d0160dabb1976e814b14baafb2097a8  docs/experiments/2026-10-31-lossless-kv-codec-clippy.log.gz
+7fbd2764d96894709e67be91bd04321d438204aed5fe761b73f6c97c76a108e9  docs/experiments/2026-10-31-lossless-kv-codec-noncuda-initial.log.gz
+bbbdac02b9047f690c2839e4b2b4fe5248177763edb3ecaee3e5f4c205b73129  docs/experiments/2026-10-31-lossless-kv-codec-noncuda.log.gz
+0f6f0e5ba81463bc23294728b542341b0ffeada21a261c2f17f42b1adb077e5b  docs/experiments/2026-10-31-lossless-kv-codec-tests.log.gz

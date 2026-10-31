@@ -6,10 +6,20 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [lossless FP16 source/design audit](experiments/2026-10-31-lossless-kv-audit.md)
+fixes one 512-value exponent-offset format, including raw exceptional blocks
+and full directory overhead. The [CPU codec](experiments/2026-10-31-lossless-kv-codec.md)
+passes exhaustive FP16 bit-pattern round trips and five behavioral tests;
+225 non-CUDA tests and CUDA/server Clippy pass. No real-cache compression
+measurement or GPU codec exists yet. Next extend `model_quality` to capture
+eight disjoint 8192-token documentation inputs at layers 0/17/35, then measure
+net storage for 1K/2K/4K/8K prefixes before conditional CUDA attention work.
+The overall nine-topic goal remains active with five bounded studies complete.
+
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`lossless-kv`](experiments/2026-10-30-lossless-kv-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+Its CPU format is qualified; real-cache capture and measurements are pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

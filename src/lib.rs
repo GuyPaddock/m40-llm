@@ -19,6 +19,7 @@ pub mod gguf_ext;
 pub mod gpu_profile;
 pub mod kv_compression;
 pub mod kv_selection;
+pub mod lossless_kv;
 pub mod model;
 pub mod profile;
 pub mod sampling;
