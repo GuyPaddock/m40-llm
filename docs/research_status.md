@@ -15,6 +15,14 @@ Q8-direct controls support head64 only; the selected Qwen model uses head128.
 The matched context-grid benchmark and a head128 staged reference remain
 pending. Historical quality failures are retained, and no fresh timing or
 runtime change is claimed. GPU execution waits for the lossless-KV capture.
+The [staged-reference implementation checkpoint](experiments/2026-10-31-quantized-kv-staging.md)
+records an uncommitted head128 comparison control. It compiles and passes
+Clippy and all 220 non-CUDA tests; its ignored hardware test and affected
+regressions are built but await the serial GPU slot. This is not qualification.
+The [CPU fixture reader](experiments/2026-10-31-quantized-kv-fixtures.md)
+passes four integrity/layout tests and CPU Clippy. It admits only a complete,
+hash-verified capture and labels synthetic queries and head64 slices explicitly.
+The real capture and paired operator timing remain pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
