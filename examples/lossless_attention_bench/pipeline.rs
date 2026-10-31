@@ -525,7 +525,18 @@ impl Case {
                     maximum = maximum.max(error);
                 }
                 if !matches!(arm, Arm::Native) {
-                    ensure!(actual == staged, "matched prototype output bits differ");
+                    if let Some((index, (word, expected))) = actual
+                        .chunks_exact(4)
+                        .zip(staged.chunks_exact(4))
+                        .enumerate()
+                        .find(|(_, (word, expected))| word != expected)
+                    {
+                        let actual_bits = u32::from_le_bytes(word.try_into().unwrap());
+                        let expected_bits = u32::from_le_bytes(expected.try_into().unwrap());
+                        anyhow::bail!(
+                            "matched prototype output bits differ arm={arm:?} batch={batch} word={index} actual=0x{actual_bits:08x} staged=0x{expected_bits:08x} max_fp64_error={maximum}"
+                        );
+                    }
                 }
                 ensure!(
                     self.read_arm(arm, batch)? == actual,
@@ -546,5 +557,35 @@ impl Drop for Case {
     fn drop(&mut self) {
         let _ = self.ctx.synchronize_stream(CudaStream::Prefill);
         let _ = self.ctx.synchronize_stream(CudaStream::Decode);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capture::Capture;
+    use std::path::PathBuf;
+
+    /// Replay the first failing real capture case against every consumer and
+    /// active batch. Missing input artifacts are errors, never skipped passes.
+    #[test]
+    #[ignore = "requires M40 and LOSSLESS_CAPTURE_REPORT/LOSSLESS_KV_INPUTS; run serially"]
+    fn test_real_capture_preserves_matched_output_bits() -> Result<()> {
+        let report = PathBuf::from(std::env::var("LOSSLESS_CAPTURE_REPORT")?);
+        let artifact = PathBuf::from(std::env::var("LOSSLESS_KV_INPUTS")?);
+        let mut capture = Capture::open(&report, &artifact)?;
+        crate::benchmark::check_gpu_processes()?;
+        let ctx = CudaContext::new_m40()?;
+        let baseline = CudaContext::total_device_bytes();
+        let sample = capture.read_layer(0, 1024, DIMENSION)?;
+        let case = Case::new(&ctx, Fixture::from_sample(&sample, 1024)?)?;
+        let result = case.validate()?;
+        println!("{result}");
+        drop(case);
+        ensure!(
+            CudaContext::total_device_bytes() == baseline,
+            "device storage leaked"
+        );
+        Ok(())
     }
 }

@@ -1,0 +1,14 @@
+99ef172ee21b9fb2ba6a8abf8a36a9d1e2997ca88ae39bcc8eb7f7c5a6532beb  docs/experiments/2026-10-31-lossless-rounding-affected.log.gz
+7733625339bd6f4a0f88c2ddad78459cf65f6f5c5ebc840add7f9d297a5c705b  docs/experiments/2026-10-31-lossless-rounding-clippy.log.gz
+a0d1e223ceac4dfe39f6d546734ecd82b3eaf0584c4761f112b7ddc42be737b8  docs/experiments/2026-10-31-lossless-rounding-cpu.log.gz
+9e88014054c63ef447fb5c8a5bb585dd799a8fd2adddc9ee9e321d48098721e8  docs/experiments/2026-10-31-lossless-rounding-format-failure.log.gz
+be1593c4c0f197e344cb4b07c1a7b647bde001956feabb84f396240db883de70  docs/experiments/2026-10-31-lossless-rounding-off.log.gz
+9d2dac97b705f22e1fb0269fc6fbcb83823e73524bc6600eb8c7663a2faf0a40  docs/experiments/2026-10-31-lossless-rounding-ownership.log.gz
+6a483c8d8a44954729f28c23892a7afead723fc53447e3f1a734587493ca6dec  docs/experiments/2026-10-31-lossless-rounding-qualification.log.gz
+99ca4e5a16a1cc6c5e93ec78f34881cfa26a0dae08998275f49d7a87f5dabc79  docs/experiments/2026-10-31-lossless-rounding-tests-01.log.gz
+395dbe76285372db5b3c6a0d8d06df6bd939f1d6e040683a5a7578d8da1ad2fd  docs/experiments/2026-10-31-lossless-rounding-qualification.sh
+15d35975eff74058e94790a55a0dd58813d3637d0392d3158ce7d16419cba6a4  docs/experiments/2026-10-31-lossless-real-diagnostic.log.gz
+e4eba172b3dab09eb23d1c1aa01dfa6963af931fe46e8ae481e932709b216491  docs/experiments/2026-10-31-lossless-dense-before.ptx.gz
+ea3e95c987613e62f5d010c0db7fb10b18644c072e98c8faf3ac2360edeeaf66  docs/experiments/2026-10-31-lossless-dense-before.sass.gz
+fd1d5892f6925c7880b3a1127bff873d094cf261ff3ae0da720d25474e8f024f  docs/experiments/2026-10-31-lossless-packed-before.ptx.gz
+7759e2c89104cfb304292494c08b2ed70d2f13864a2c9e4dba49093ab8a7d4b2  docs/experiments/2026-10-31-lossless-packed-before.sass.gz

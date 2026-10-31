@@ -85,8 +85,8 @@ __global__ void lossless_attention_partition_kernel(
         float dot = 0.0f;
         #pragma unroll
         for (int c = 0; c < Dimension / 32; ++c) {
-            dot += q[c] * lossless_attention_read<IsPacked>(
-                keys, stream, token * Dimension + lane + c * 32, length * Dimension);
+            dot = __fmaf_rn(q[c], lossless_attention_read<IsPacked>(
+                keys, stream, token * Dimension + lane + c * 32, length * Dimension), dot);
         }
         #pragma unroll
         for (int delta = 16; delta > 0; delta >>= 1)
@@ -95,11 +95,15 @@ __global__ void lossless_attention_partition_kernel(
         const float next_maximum = fmaxf(maximum, score);
         const float old_weight = expf(maximum - next_maximum);
         const float weight = expf(score - next_maximum);
-        denominator = denominator * old_weight + weight;
+        // Packed-reader branches otherwise let NVCC split this FMA and
+        // contract the opposite accumulator product. Freeze the dense
+        // reference's rounding order in both storage specializations.
+        denominator = __fmaf_rn(denominator, old_weight, weight);
         #pragma unroll
         for (int c = 0; c < Dimension / 32; ++c) {
-            acc[c] = acc[c] * old_weight + weight * lossless_attention_read<IsPacked>(
-                values, stream, token * Dimension + lane + c * 32, length * Dimension);
+            const float contribution = __fmul_rn(weight, lossless_attention_read<IsPacked>(
+                values, stream, token * Dimension + lane + c * 32, length * Dimension));
+            acc[c] = __fmaf_rn(acc[c], old_weight, contribution);
         }
         maximum = next_maximum;
     }

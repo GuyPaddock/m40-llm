@@ -5,7 +5,10 @@ layer/context cases. It rejects partial, misidentified or corrupted inputs,
 preserves original FP16 bits when converting token-major capture views to head
 streams, and reports all encoded bytes. The runner's fourteen tests pass,
 including hardware append/history checks, with cuBLAS enabled and disabled.
-Real-input release qualification and measurements remain pending.
+The first real-input release attempt failed exact output admission; the
+[rounding correction](2026-10-31-lossless-rounding-correction.md) records the
+cause and focused regression. Full-grid requalification and measurements
+remain pending.
 
 ## CPU fixture unit
 
@@ -110,6 +113,8 @@ performance observations. Capture and initial hardware qualification have comple
 
 ```bash
 # Reproduction only; require an idle GPU before each command:
+export LOSSLESS_CAPTURE_REPORT=COMPLETE_CAPTURE.jsonl
+export LOSSLESS_KV_INPUTS=COMPLETE_CAPTURE.bin
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test lossless_kv_cuda \
   --example lossless_attention_bench -- --include-ignored --test-threads=1
 # Run affected regressions from the consumer checkpoint, then commit the
