@@ -9,7 +9,12 @@ against the current code, worktree, Git history, and linked raw results.
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`quantized-kv`](experiments/2026-10-30-quantized-kv-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+The [source audit](experiments/2026-10-31-quantized-kv-audit.md) confirms that
+direct Q8 and mixed FP16-K/Q4-V consumption already exist. Staged and
+Q8-direct controls support head64 only; the selected Qwen model uses head128.
+The matched context-grid benchmark and a head128 staged reference remain
+pending. Historical quality failures are retained, and no fresh timing or
+runtime change is claimed. GPU execution waits for the lossless-KV capture.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
