@@ -1,0 +1,14 @@
+d76b71ad358b9f7d702220c27ce981f9fb2cfa0c3bd7ddb7f5e4565d81e5d8af  docs/experiments/2026-10-31-graph-state-clippy-final.log.gz
+cf6c250e0da0d5255b1be3da2a0e4d87da059c44b0ee9049475ae9eb0ecfd7bf  docs/experiments/2026-10-31-graph-state-clippy.log.gz
+e3fb22472e4ea969fac07beb5a5600c5c22a2de0b67fcf987292cfe4480ed1fd  docs/experiments/2026-10-31-graph-state-final-capture_cancellation.log.gz
+4cb6b3e91dd59eff1f27ccb853e91ece9e19d6c4673c98853170908242f37167  docs/experiments/2026-10-31-graph-state-final-compatibility.log.gz
+1eafe74f5bd52cd6db2a219c62ca386369450a8d2ca0842249393376f95dd0fe  docs/experiments/2026-10-31-graph-state-final-first_launch_rejection.log.gz
+01818449fc734895b728792dacdc392d3727dc2661f639fa58ed039e9ac71ce0  docs/experiments/2026-10-31-graph-state-final-later_launch_rejection.log.gz
+d4bdc69b03b08fdf46348c7155c07dee09f7afb846b21f6f45b8f4d2fcfbaa51  docs/experiments/2026-10-31-graph-state-final-sequences.log.gz
+2caec0abe691ff3d413a62b46cf0b9d271a6e468eb9d5b570994a6f907d44a24  docs/experiments/2026-10-31-graph-state-native-capture_cancellation.log.gz
+afc750970acb6db66bdfee2fa548a6eceff92a6aef20c7f6662d4e3e32add05a  docs/experiments/2026-10-31-graph-state-native-first_launch_rejection.log.gz
+07f461c29cf67e7b206366d8d1635a8755068e7cec69c6781bf1918ab3710ece  docs/experiments/2026-10-31-graph-state-native-isolated.log.gz
+ae70a0196eace29bd52a97d79f90e2a1d33395dd504fcdb12ac409594fae8dd6  docs/experiments/2026-10-31-graph-state-native-later_launch_rejection.log.gz
+fca22dca246907d735aa74a2c61cf30fca3a0b3e1de461665bf9f36db103071d  docs/experiments/2026-10-31-graph-state-native-sequences.log.gz
+bef1d7db1ed706b9798a6e0f35fb59664e2c496165bfd974e260baf9e777ac2f  docs/experiments/2026-10-31-graph-state-native-tests.log.gz
+0e017baab8a34fc3af52e15b46a68ce431cebcbb128d2bdfc853302b1cef6806  docs/experiments/2026-10-31-graph-state-noncuda.log.gz
