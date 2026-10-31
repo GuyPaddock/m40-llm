@@ -13,11 +13,16 @@ passes exhaustive FP16 bit-pattern round trips and five behavioral tests;
 225 non-CUDA tests and CUDA/server Clippy pass. The
 [model-quality capture extension](experiments/2026-10-31-lossless-kv-capture.md)
 now passes five checks, including explicit M40 raw-word readback and cleanup;
-12 non-CUDA example tests and CUDA/server Clippy pass. Next build clean
-release source and capture eight disjoint 8192-token documentation inputs at
-layers 0/17/35, then measure net storage for 1K/2K/4K/8K prefixes. No full-model
-capture, real-cache compression result or GPU codec exists yet.
-The overall nine-topic goal remains active with five bounded studies complete.
+12 non-CUDA example tests and CUDA/server Clippy pass. The clean `82a118a`
+release capture is running, with three of eight sequences complete at this
+checkpoint. Do not restart or overlap it. One completed real prefix saves
+7,608 bytes after metadata and reconstructs exactly; the full 384-row
+compression grid still requires completion and audit.
+The [CUDA consumer and frozen comparison](experiments/2026-10-31-lossless-kv-consumer.md)
+are implemented in the worktree. CUDA/server all-target Clippy, compile/link
+of the hardware tests and 225 non-CUDA tests pass. GPU checks remain unrun.
+The paired runner, append pricing and final decision remain outstanding.
+The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
