@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31 Soft MTP compatibility assessment
+
+The [bounded assessment](experiments/2026-10-31-soft-mtp-result.md) completes
+the Soft-MTP topic without a new runtime or training experiment. Its shared
+NTP/MTP output projection is incompatible with a direct application to the
+current independent rank256 vocabulary head. Retained CPU audits and the cost
+model reproduce byte-identically; five recurrence behavioral cases and all
+30 original artifact checksum entries pass. The 1.5380845ms synthetic proposal
+median remains cost evidence only. The stronger historical HTTP scenario
+requires 92.5948% equal conditional acceptance at full eligibility, which has
+not been measured for a learned drafter. DSpark PR 31372's inspected source
+does not establish the description's probabilistic-drafting claim. No new
+GPU measurement, teacher generation, training or default promotion.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)

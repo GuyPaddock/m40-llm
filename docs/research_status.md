@@ -9,7 +9,14 @@ against the current code, worktree, Git history, and linked raw results.
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`soft-mtp`](experiments/2026-10-30-soft-mtp-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+The [Soft-MTP assessment](experiments/2026-10-31-soft-mtp-result.md) completes
+this bounded topic. The paper's shared NTP/MTP vocabulary projection does not
+match the independent rank256 drafter. Replayed cost evidence remains
+byte-identical, with five recurrence tests and all 30 retained artifact checks
+passing. About 92.6% equal conditional acceptance is still required under the
+stronger historical HTTP scenario; learned acceptance remains unmeasured.
+The inspected DSpark source does not establish its PR description's
+probabilistic-drafting claim. No training, GPU run or runtime change follows.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
