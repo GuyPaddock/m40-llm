@@ -16,8 +16,11 @@ AMX. The [cooperative simulator](experiments/2026-10-31-dualpace-simulator.md)
 now implements explicit ownership, stage-boundary assistance, transfer queues
 and finish-peak memory admission. Nine behavioral tests, 220 non-CUDA regressions,
 Clippy and CLI integrity checks pass. Its retained example is synthetic, not a
-hardware feasibility result. AVX2 primitive measurements, serial transfer costs
-and the priced prerequisite report remain pending; the branch is incomplete.
+hardware feasibility result. The [single-core Q8 probe](experiments/2026-10-31-dualpace-projection-probe.md)
+now implements scalar/AVX2 projection and pinned retained-input admission.
+Five new correctness tests, including AVX2 execution, and seven shared protocol
+tests pass. Actual Qwen validation, CPU timings, serial transfer costs and the
+priced prerequisite report remain pending; the branch is incomplete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
