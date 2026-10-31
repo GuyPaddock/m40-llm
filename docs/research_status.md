@@ -12,8 +12,14 @@ in independent worktrees based on `0eee578`. This branch owns
 The [source audit](experiments/2026-10-31-ffn-fusion-audit.md) pins the merged
 upstream revision and confirms existing single-row Q4 and qualified Q8 fusion.
 The remaining candidate is fused multi-row Q4 gate/up/SwiGLU with its down
-consumer unchanged, compared against both existing dense paths. Implementation
-and new measurements remain pending; historical gains are not new results.
+consumer unchanged, compared against both existing dense paths. The
+[fixed multi-row CUDA probe](experiments/2026-10-31-ffn-fusion-implementation.md)
+now passes two M40 tests with cuBLAS on/off, including bitwise parity with
+repeated single-row launches and FP64 numerical checks. Native Q4 projection,
+compound forward/ownership and attention regressions, non-CUDA tests and
+all-target CUDA/server Clippy pass. Shared Q4 fixture encoding was transferred
+as `85485b8`. Next implement and run the source-bound complete-FFN comparison;
+there is no new performance claim or runtime dispatch change.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

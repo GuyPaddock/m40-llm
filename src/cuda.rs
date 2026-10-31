@@ -26,6 +26,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "cuda")]
 mod decode_reductions;
 #[cfg(feature = "cuda")]
+mod q4_ffn;
+#[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
 mod q8_ffn_task_pair;
@@ -702,6 +704,17 @@ mod ffi {
             Nk: i32,
             Nv: i32,
             Kdim: i32,
+        ) -> i32;
+        pub fn m40llm_q4_fused_rows_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            h: i32,
+            k: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
             ctx: *mut M40llmCudaContext,

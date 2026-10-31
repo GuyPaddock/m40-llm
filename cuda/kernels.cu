@@ -7516,6 +7516,9 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const unsigned char* __restrict__ W_up,
         float* __restrict__ C,
         int H, int K) {
+        // A one-row launch retains the original addressing and accumulation.
+        A += static_cast<size_t>(blockIdx.y) * K;
+        C += static_cast<size_t>(blockIdx.y) * H;
         const int col = blockIdx.x;
         const int tid = threadIdx.x;
         if (col >= H) return;
@@ -8014,6 +8017,22 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -3;
         }
         return 0;
+    }
+
+    int m40llm_q4_fused_rows_async(
+        M40llmCudaContext* ctx, const void* input, const void* gate,
+        const void* up, void* output, int rows, int h, int k, uint32_t stream_kind) {
+        if (!ctx || !input || !gate || !up || !output) return -1;
+        if ((rows != 1 && rows != 2 && rows != 4 && rows != 8) ||
+            h <= 0 || k <= 0 || k % 32) return -2;
+        const cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        const int threads = q8_decode_threads_for_k(k);
+        mlp_gate_up_swiglu_f32xq4_0_gguf_decode_kernel<<<
+            dim3(h, rows), threads, static_cast<size_t>(threads) * 2 * sizeof(float), stream>>>(
+            static_cast<const float*>(input), static_cast<const unsigned char*>(gate),
+            static_cast<const unsigned char*>(up), static_cast<float*>(output), h, k);
+        return cudaPeekAtLastError() == cudaSuccess ? 0 : -4;
     }
 
     int m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(
