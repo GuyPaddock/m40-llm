@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "observed_utc": "2026-10-31T22:28:14Z",
+  "gpu": {
+    "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+    "capacity_bytes": 24159191040
+  },
+  "nodes": [
+    {
+      "numa_node": 0,
+      "capacity_bytes": 67405328384
+    },
+    {
+      "numa_node": 1,
+      "capacity_bytes": 67629023232
+    }
+  ],
+  "raw_inventory": {
+    "node0": "Node 0 MemTotal:       65825516 kB\nNode 0 MemFree:         1701484 kB\nNode 0 MemUsed:        64124032 kB\nNode 0 SwapCached:            0 kB\nNode 0 Active:         30311764 kB\nNode 0 Inactive:       12862600 kB\nNode 0 Active(anon):   16297360 kB\nNode 0 Inactive(anon):  5505552 kB\nNode 0 Active(file):   14014404 kB\nNode 0 Inactive(file):  7357048 kB\nNode 0 Unevictable:        3044 kB\nNode 0 Mlocked:               0 kB\nNode 0 Dirty:                40 kB\nNode 0 Writeback:             0 kB\nNode 0 FilePages:      35641360 kB\nNode 0 Mapped:           461720 kB\nNode 0 AnonPages:       7535736 kB\nNode 0 Shmem:          14270556 kB\nNode 0 KernelStack:       51208 kB\nNode 0 PageTables:        61172 kB\nNode 0 SecPageTables:      2144 kB\nNode 0 NFS_Unstable:          0 kB\nNode 0 Bounce:                0 kB\nNode 0 WritebackTmp:          0 kB\nNode 0 KReclaimable:    1425628 kB\nNode 0 Slab:            5044052 kB\nNode 0 SReclaimable:    1425628 kB\nNode 0 SUnreclaim:      3618424 kB\nNode 0 HugePages_Total:    72\nNode 0 HugePages_Free:      1\nNode 0 HugePages_Surp:     72\n",
+    "node1": "Node 1 MemTotal:       66043968 kB\nNode 1 MemFree:          677016 kB\nNode 1 MemUsed:        65366952 kB\nNode 1 SwapCached:            0 kB\nNode 1 Active:          3598628 kB\nNode 1 Inactive:        4976520 kB\nNode 1 Active(anon):     543188 kB\nNode 1 Inactive(anon):   796248 kB\nNode 1 Active(file):    3055440 kB\nNode 1 Inactive(file):  4180272 kB\nNode 1 Unevictable:      663248 kB\nNode 1 Mlocked:          663288 kB\nNode 1 Dirty:                 0 kB\nNode 1 Writeback:             0 kB\nNode 1 FilePages:       7712136 kB\nNode 1 Mapped:            98128 kB\nNode 1 AnonPages:       1525224 kB\nNode 1 Shmem:            389580 kB\nNode 1 KernelStack:       13880 kB\nNode 1 PageTables:        15684 kB\nNode 1 SecPageTables:      7080 kB\nNode 1 NFS_Unstable:          0 kB\nNode 1 Bounce:                0 kB\nNode 1 WritebackTmp:          0 kB\nNode 1 KReclaimable:     359460 kB\nNode 1 Slab:             979224 kB\nNode 1 SReclaimable:     359460 kB\nNode 1 SUnreclaim:       619764 kB\nNode 1 HugePages_Total: 24576\nNode 1 HugePages_Free:      0\nNode 1 HugePages_Surp:      0\n",
+    "gpu": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, 23040\n"
+  },
+  "source_commands": [
+    "cat /sys/devices/system/node/node{0,1}/meminfo",
+    "nvidia-smi -i GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852 --query-gpu=uuid,memory.total --format=csv,noheader,nounits"
+  ],
+  "is_performance_measurement": false
+}

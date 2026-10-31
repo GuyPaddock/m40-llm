@@ -45,6 +45,13 @@ now supports the frozen sensitivity grid's zero-missing-work cases. Zero CPU
 or GPU service requires assumption evidence and creates no interval; measured
 durations remain positive. Thirteen CPU simulator tests, non-CUDA all-target
 Clippy and a hand-calculated CLI fixture pass. Older trace behavior is preserved.
+The [scenario builder](experiments/2026-10-31-dualpace-scenario-builder.md)
+now generates the frozen 54 inputs per NUMA placement with copied, hashed
+source evidence. Synthetic checks run all 162 node-0 scheduling modes,
+verify node-1 placement and portable evidence, and reject ten invalid reports
+plus source tampering and output overwrite. Physical capacity inventory is
+retained separately from allocation availability. Actual CPU/transfer timing,
+the sourced 108-input simulation and final decision remain pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
