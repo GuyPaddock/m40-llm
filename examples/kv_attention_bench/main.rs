@@ -1,6 +1,9 @@
 //! Quantized-attention fixture admission and paired operator research.
 
 mod capture;
+// The CPU oracle is also compiled for inspection-only builds.
+#[allow(dead_code)]
+mod reference;
 
 use anyhow::{ensure, Result};
 use clap::Parser;
