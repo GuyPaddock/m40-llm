@@ -9,3 +9,4 @@ pub mod quantized_fixture;
 pub mod scoring;
 #[cfg(feature = "cuda")]
 pub mod teacher_forced;
+pub mod ternary_screen;
