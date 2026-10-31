@@ -1,0 +1,669 @@
+{
+  "counts": {
+    "lossless_kv_capture_complete": 1,
+    "lossless_kv_capture_manifest": 1,
+    "lossless_kv_compression": 384,
+    "lossless_kv_readback": 24,
+    "lossless_kv_sequence": 8,
+    "lossless_kv_stream": 96
+  },
+  "complete": {
+    "artifact": "target/lossless-kv-inputs-01.bin",
+    "artifact_bytes": 201326592,
+    "artifact_sha256": "da01d6328aef717902edbc93c215f0468f2bc9d789211effbc1b61b1569d1242",
+    "gpu_after": {
+      "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 65, 1113 MHz, 3004 MHz, 106 MiB",
+      "processes": "318282, target/release/examples/model_quality, 102 MiB"
+    },
+    "is_complete": true,
+    "kind": "lossless_kv_capture_complete",
+    "tracked_device_bytes_after": 0,
+    "tracked_device_bytes_before": 0
+  },
+  "footprints": [
+    {
+      "context_tokens": 1024,
+      "batch": 1,
+      "totals": {
+        "streams": 12,
+        "original_bytes": 3145728,
+        "encoded_bytes": 3000032,
+        "metadata_bytes": 24672,
+        "raw_blocks": 410,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          2662
+        ],
+        "exceptional_words": 127,
+        "net_saved_bytes": 145696,
+        "net_saved_fraction": 0.046315511067708336
+      }
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 2,
+      "totals": {
+        "streams": 24,
+        "original_bytes": 6291456,
+        "encoded_bytes": 6004224,
+        "metadata_bytes": 49344,
+        "raw_blocks": 885,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          5259
+        ],
+        "exceptional_words": 256,
+        "net_saved_bytes": 287232,
+        "net_saved_fraction": 0.045654296875
+      }
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 4,
+      "totals": {
+        "streams": 48,
+        "original_bytes": 12582912,
+        "encoded_bytes": 12006464,
+        "metadata_bytes": 98688,
+        "raw_blocks": 1739,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          10549
+        ],
+        "exceptional_words": 504,
+        "net_saved_bytes": 576448,
+        "net_saved_fraction": 0.045811971028645836
+      }
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 8,
+      "totals": {
+        "streams": 96,
+        "original_bytes": 25165824,
+        "encoded_bytes": 24013696,
+        "metadata_bytes": 197376,
+        "raw_blocks": 3491,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          1,
+          21084
+        ],
+        "exceptional_words": 1002,
+        "net_saved_bytes": 1152128,
+        "net_saved_fraction": 0.045781453450520836
+      }
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 1,
+      "totals": {
+        "streams": 12,
+        "original_bytes": 6291456,
+        "encoded_bytes": 6001504,
+        "metadata_bytes": 49248,
+        "raw_blocks": 844,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          5300
+        ],
+        "exceptional_words": 247,
+        "net_saved_bytes": 289952,
+        "net_saved_fraction": 0.046086629231770836
+      }
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 2,
+      "totals": {
+        "streams": 24,
+        "original_bytes": 12582912,
+        "encoded_bytes": 12007808,
+        "metadata_bytes": 98496,
+        "raw_blocks": 1763,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          10525
+        ],
+        "exceptional_words": 529,
+        "net_saved_bytes": 575104,
+        "net_saved_fraction": 0.045705159505208336
+      }
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 4,
+      "totals": {
+        "streams": 48,
+        "original_bytes": 25165824,
+        "encoded_bytes": 24011904,
+        "metadata_bytes": 196992,
+        "raw_blocks": 3468,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          21108
+        ],
+        "exceptional_words": 1014,
+        "net_saved_bytes": 1153920,
+        "net_saved_fraction": 0.0458526611328125
+      }
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 8,
+      "totals": {
+        "streams": 96,
+        "original_bytes": 50331648,
+        "encoded_bytes": 48027264,
+        "metadata_bytes": 393984,
+        "raw_blocks": 6992,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          2,
+          42158
+        ],
+        "exceptional_words": 2038,
+        "net_saved_bytes": 2304384,
+        "net_saved_fraction": 0.04578399658203125
+      }
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 1,
+      "totals": {
+        "streams": 12,
+        "original_bytes": 12582912,
+        "encoded_bytes": 12004896,
+        "metadata_bytes": 98400,
+        "raw_blocks": 1719,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          10569
+        ],
+        "exceptional_words": 474,
+        "net_saved_bytes": 578016,
+        "net_saved_fraction": 0.04593658447265625
+      }
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 2,
+      "totals": {
+        "streams": 24,
+        "original_bytes": 25165824,
+        "encoded_bytes": 24014080,
+        "metadata_bytes": 196800,
+        "raw_blocks": 3505,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          0,
+          21071
+        ],
+        "exceptional_words": 1031,
+        "net_saved_bytes": 1151744,
+        "net_saved_fraction": 0.045766194661458336
+      }
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 4,
+      "totals": {
+        "streams": 48,
+        "original_bytes": 50331648,
+        "encoded_bytes": 48026752,
+        "metadata_bytes": 393600,
+        "raw_blocks": 6989,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          1,
+          42162
+        ],
+        "exceptional_words": 2019,
+        "net_saved_bytes": 2304896,
+        "net_saved_fraction": 0.045794169108072914
+      }
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 8,
+      "totals": {
+        "streams": 96,
+        "original_bytes": 100663296,
+        "encoded_bytes": 96057728,
+        "metadata_bytes": 787200,
+        "raw_blocks": 14046,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          4,
+          84254
+        ],
+        "exceptional_words": 4069,
+        "net_saved_bytes": 4605568,
+        "net_saved_fraction": 0.04575220743815104
+      }
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 1,
+      "totals": {
+        "streams": 12,
+        "original_bytes": 25165824,
+        "encoded_bytes": 24010464,
+        "metadata_bytes": 196704,
+        "raw_blocks": 3451,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          1,
+          21124
+        ],
+        "exceptional_words": 992,
+        "net_saved_bytes": 1155360,
+        "net_saved_fraction": 0.045909881591796875
+      }
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 2,
+      "totals": {
+        "streams": 24,
+        "original_bytes": 50331648,
+        "encoded_bytes": 48028096,
+        "metadata_bytes": 393408,
+        "raw_blocks": 7013,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          1,
+          42138
+        ],
+        "exceptional_words": 2057,
+        "net_saved_bytes": 2303552,
+        "net_saved_fraction": 0.04576746622721354
+      }
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 4,
+      "totals": {
+        "streams": 48,
+        "original_bytes": 100663296,
+        "encoded_bytes": 96051968,
+        "metadata_bytes": 786816,
+        "raw_blocks": 13964,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          6,
+          84334
+        ],
+        "exceptional_words": 4018,
+        "net_saved_bytes": 4611328,
+        "net_saved_fraction": 0.045809427897135414
+      }
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 8,
+      "totals": {
+        "streams": 96,
+        "original_bytes": 201326592,
+        "encoded_bytes": 192117184,
+        "metadata_bytes": 1573632,
+        "raw_blocks": 28137,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          14,
+          168457
+        ],
+        "exceptional_words": 8150,
+        "net_saved_bytes": 9209408,
+        "net_saved_fraction": 0.04574362436930338
+      }
+    }
+  ],
+  "by_role": [
+    {
+      "role": "key",
+      "totals": {
+        "streams": 48,
+        "original_bytes": 100663296,
+        "encoded_bytes": 96485632,
+        "metadata_bytes": 786816,
+        "raw_blocks": 20735,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          1,
+          77568
+        ],
+        "exceptional_words": 1922,
+        "net_saved_bytes": 4177664,
+        "net_saved_fraction": 0.041501363118489586
+      }
+    },
+    {
+      "role": "value",
+      "totals": {
+        "streams": 48,
+        "original_bytes": 100663296,
+        "encoded_bytes": 95631552,
+        "metadata_bytes": 786816,
+        "raw_blocks": 7402,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          13,
+          90889
+        ],
+        "exceptional_words": 6228,
+        "net_saved_bytes": 5031744,
+        "net_saved_fraction": 0.04998588562011719
+      }
+    }
+  ],
+  "by_layer": [
+    {
+      "layer": 0,
+      "totals": {
+        "streams": 32,
+        "original_bytes": 67108864,
+        "encoded_bytes": 64718464,
+        "metadata_bytes": 524544,
+        "raw_blocks": 19993,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          3,
+          45540
+        ],
+        "exceptional_words": 4778,
+        "net_saved_bytes": 2390400,
+        "net_saved_fraction": 0.03561973571777344
+      }
+    },
+    {
+      "layer": 17,
+      "totals": {
+        "streams": 32,
+        "original_bytes": 67108864,
+        "encoded_bytes": 63684288,
+        "metadata_bytes": 524544,
+        "raw_blocks": 3834,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          3,
+          61699
+        ],
+        "exceptional_words": 1812,
+        "net_saved_bytes": 3424576,
+        "net_saved_fraction": 0.05103015899658203
+      }
+    },
+    {
+      "layer": 35,
+      "totals": {
+        "streams": 32,
+        "original_bytes": 67108864,
+        "encoded_bytes": 63714432,
+        "metadata_bytes": 524544,
+        "raw_blocks": 4310,
+        "packed_blocks_by_width": [
+          0,
+          0,
+          0,
+          8,
+          61218
+        ],
+        "exceptional_words": 1560,
+        "net_saved_bytes": 3394432,
+        "net_saved_fraction": 0.05058097839355469
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "sequence": 0,
+      "input_processing_ms": 1262504.951903,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 1,
+      "input_processing_ms": 1263627.9887799998,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 2,
+      "input_processing_ms": 1263398.176123,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 3,
+      "input_processing_ms": 1263736.405714,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 4,
+      "input_processing_ms": 1263548.663743,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 5,
+      "input_processing_ms": 1263624.109171,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 6,
+      "input_processing_ms": 1263524.414636,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    },
+    {
+      "sequence": 7,
+      "input_processing_ms": 1263836.510265,
+      "processed_input_tokens": 8192,
+      "generated_token_count": 0,
+      "stop_reason": "fixed input consumed; no free generation"
+    }
+  ],
+  "device_footprints": [
+    {
+      "context_tokens": 1024,
+      "batch": 1,
+      "original_bytes": 3145728,
+      "encoded_bytes": 3000032,
+      "directory_bytes": 96,
+      "saved_bytes": 145600,
+      "saved_fraction": 0.046284993489583336
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 2,
+      "original_bytes": 6291456,
+      "encoded_bytes": 6004224,
+      "directory_bytes": 192,
+      "saved_bytes": 287040,
+      "saved_fraction": 0.045623779296875
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 4,
+      "original_bytes": 12582912,
+      "encoded_bytes": 12006464,
+      "directory_bytes": 384,
+      "saved_bytes": 576064,
+      "saved_fraction": 0.045781453450520836
+    },
+    {
+      "context_tokens": 1024,
+      "batch": 8,
+      "original_bytes": 25165824,
+      "encoded_bytes": 24013696,
+      "directory_bytes": 768,
+      "saved_bytes": 1151360,
+      "saved_fraction": 0.045750935872395836
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 1,
+      "original_bytes": 6291456,
+      "encoded_bytes": 6001504,
+      "directory_bytes": 96,
+      "saved_bytes": 289856,
+      "saved_fraction": 0.046071370442708336
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 2,
+      "original_bytes": 12582912,
+      "encoded_bytes": 12007808,
+      "directory_bytes": 192,
+      "saved_bytes": 574912,
+      "saved_fraction": 0.045689900716145836
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 4,
+      "original_bytes": 25165824,
+      "encoded_bytes": 24011904,
+      "directory_bytes": 384,
+      "saved_bytes": 1153536,
+      "saved_fraction": 0.04583740234375
+    },
+    {
+      "context_tokens": 2048,
+      "batch": 8,
+      "original_bytes": 50331648,
+      "encoded_bytes": 48027264,
+      "directory_bytes": 768,
+      "saved_bytes": 2303616,
+      "saved_fraction": 0.04576873779296875
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 1,
+      "original_bytes": 12582912,
+      "encoded_bytes": 12004896,
+      "directory_bytes": 96,
+      "saved_bytes": 577920,
+      "saved_fraction": 0.045928955078125
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 2,
+      "original_bytes": 25165824,
+      "encoded_bytes": 24014080,
+      "directory_bytes": 192,
+      "saved_bytes": 1151552,
+      "saved_fraction": 0.045758565266927086
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 4,
+      "original_bytes": 50331648,
+      "encoded_bytes": 48026752,
+      "directory_bytes": 384,
+      "saved_bytes": 2304512,
+      "saved_fraction": 0.045786539713541664
+    },
+    {
+      "context_tokens": 4096,
+      "batch": 8,
+      "original_bytes": 100663296,
+      "encoded_bytes": 96057728,
+      "directory_bytes": 768,
+      "saved_bytes": 4604800,
+      "saved_fraction": 0.04574457804361979
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 1,
+      "original_bytes": 25165824,
+      "encoded_bytes": 24010464,
+      "directory_bytes": 96,
+      "saved_bytes": 1155264,
+      "saved_fraction": 0.04590606689453125
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 2,
+      "original_bytes": 50331648,
+      "encoded_bytes": 48028096,
+      "directory_bytes": 192,
+      "saved_bytes": 2303360,
+      "saved_fraction": 0.045763651529947914
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 4,
+      "original_bytes": 100663296,
+      "encoded_bytes": 96051968,
+      "directory_bytes": 384,
+      "saved_bytes": 4610944,
+      "saved_fraction": 0.04580561319986979
+    },
+    {
+      "context_tokens": 8192,
+      "batch": 8,
+      "original_bytes": 201326592,
+      "encoded_bytes": 192117184,
+      "directory_bytes": 768,
+      "saved_bytes": 9208640,
+      "saved_fraction": 0.04573980967203776
+    }
+  ]
+}

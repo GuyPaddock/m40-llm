@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Lossless FP16 capture saves 4.574%
+
+The [complete capture](experiments/2026-10-31-lossless-capture-results.md)
+contains eight disjoint 8K input sequences and sampled layers 0/17/35.
+All 384 prefix compression measurements reconstruct exact FP16 bits. At
+8K/batch eight, original storage is 201,326,592 bytes; encoded streams plus
+device pointer directories occupy 192,117,952 bytes. The 9,208,640-byte saving
+is 4.574%. It excludes retained original copies and attention workspace.
+
+Full-file hash admission and twelve CPU fixtures pass. The capture generates
+zero model tokens and establishes storage savings only. Initial CUDA decoder,
+attention and append checks pass. Supported affected regressions pass with
+cuBLAS enabled and disabled; complete release attention/append comparisons
+remain pending. Runtime defaults are unchanged.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)

@@ -14,29 +14,36 @@ passes exhaustive FP16 bit-pattern round trips and five behavioral tests;
 [model-quality capture extension](experiments/2026-10-31-lossless-kv-capture.md)
 now passes five checks, including explicit M40 raw-word readback and cleanup;
 12 non-CUDA example tests and CUDA/server Clippy pass. The clean `82a118a`
-release capture is running, with five of eight sequences complete at this
-checkpoint. Do not restart or overlap it. One completed real prefix saves
-7,608 bytes after metadata and reconstructs exactly; the full 384-row
-compression grid still requires completion and audit.
+release capture is complete. The [capture results](experiments/2026-10-31-lossless-capture-results.md)
+admit all eight sequences, 96 streams and 384 bit-exact compression rows.
+The full artifact hash and twelve CPU layer/context fixtures pass. At 8K
+context, batch eight and the three sampled layers, encoded KV plus pointer
+directories saves 9,208,640 bytes, or 4.574%, against original FP16 storage.
+The binary is preserved outside Cargo build outputs. No speed claim follows.
 The [CUDA consumer and frozen comparison](experiments/2026-10-31-lossless-kv-consumer.md)
 are implemented in the worktree. CUDA/server all-target Clippy, compile/link
-of the hardware tests and 225 non-CUDA tests pass. GPU checks remain unrun.
+of the hardware tests and 225 non-CUDA tests pass. Both initial CUDA tests
+now pass on M40; supported affected correctness checks also pass with cuBLAS
+enabled and disabled.
 The [CPU fixture unit and paired runner](experiments/2026-10-31-lossless-attention-runner.md)
 now exist. Six CPU fixture tests pass, and the GPU runner's ignored hardware
-test compiles and links. The pending runner includes native and matched
+test now passes with all fourteen runner tests. The pending runner includes
+native and matched
 attention controls, active-batch-only reconstruction and full CPU replacement
-append costs. GPU checks, real-input qualification, measurements and the final
+append costs. Full real-input GPU qualification, measurements and the final
 decision remain outstanding; the consumer and GPU runner are uncommitted.
-The first hardware qualification is queued behind the live capture, with full
-artifact/hash admission and an idle-GPU check before execution. See the
-[queue checkpoint](experiments/2026-10-31-lossless-attention-runner.md#queued-qualification).
-It reserves the next GPU slot; do not start another GPU job when capture ends.
+The capture and initial qualification sessions have both exited successfully.
+Regression commands are terminal. A release-only timing benchmark rejected a
+debug build, and an existing cuBLAS-only FP32 SGEMM test rejected the disabled
+configuration. Both failures are retained; optional model diagnostics did not
+run. Supported correctness checks completed separately. External M40 allocation
+returned to zero. The next hardware work is the clean release comparison grid.
 The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`lossless-kv`](experiments/2026-10-30-lossless-kv-protocol.md).
-Its CPU format and capture tool are qualified; real-model measurements are pending.
+Its CPU format and capture tool are qualified; real-input attention timings are pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
