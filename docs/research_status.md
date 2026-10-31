@@ -27,7 +27,14 @@ error. Its three tests, full non-CUDA suite and non-CUDA Clippy pass.
 The [source-bound channel benchmark](experiments/2026-10-30-q4-channel-benchmark.md)
 now connects that encoder to the retained activations, independent FP64 masked
 references, both existing dense controls and the two selected layouts.
-Real-model hardware validation and primary timings remain pending.
+The [real-model Q4 screen](experiments/2026-10-31-q4-channel-screen.md)
+now completes all 216 cases and 810 FP64-reference checks in both correctness
+and timing runs. Repacked execution passes every complete-FFN comparison;
+batch-one 20% retention measures 0.2518–0.2580 ms versus matched native Q4
+1.5282–1.5334 ms. Selection/recovery and model quality remain unmeasured.
+Packed 100% execution is itself about 33% faster than native Q4. Next pair
+10%/20% importance selection against packed full retention and the qualified
+Q8 compound/packet path before setting a predictor budget. No runtime promotion.
 Build directories are isolated disk-backed
 symlinks after the first full build exhausted /tmp.
 Follow the protocol's gates and serial M40 execution requirement. Keep the

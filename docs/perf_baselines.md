@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Supplied-index Q4 FFN Screen Passes
+
+The [216-case real-model screen](experiments/2026-10-31-q4-channel-screen.md)
+passes numerical and ownership checks for native and repacked channel execution.
+Repacked complete FFN passes all cases against the applicable existing dense
+Q4 controls. At batch one and 20% retention it measures 0.2518–0.2580 ms versus
+1.5282–1.5334 ms, or 5.92–6.08x. Native-storage selection at that budget takes
+0.7570–0.7958 ms. Full-retention repacked execution already improves about 33%,
+so the sparse gain cannot be attributed entirely to skipped channels.
+
+All 756 comparisons and 3,815 timing pairs remain in the raw report, including
+two unstable native-storage full-retention comparisons. Screening/recovery,
+model quality and whole-model performance are unmeasured. The qualified Q8
+runtime is a substantially stronger reference than native Q4; fresh packed-full
+and Q8 comparisons are the next gate. Runtime defaults remain unchanged.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
