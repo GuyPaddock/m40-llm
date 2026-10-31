@@ -1,0 +1,36 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=37 layouts=37 prepared_bytes=1192935424 source_bytes=3279519744 total_weight_payload_bytes=4472455168 budget_bytes=6442450944 peak_setup_host_payload_bytes=6895608736 preparation_ms=9517.395
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[stage-profile pair 0] off=35.753 on=35.459 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[stage-profile pair 1] off=35.667 on=35.425 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[stage-profile pair 2] off=35.627 on=35.391 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[stage-profile pair 3] off=35.646 on=35.371 HTTP E2E tok/s
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[server] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[server] full-layer forward enabled layers=36
+[stage-profile pair 4] off=35.615 on=35.373 HTTP E2E tok/s
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+Stage-profile comparison and token-ID parity complete: /tmp/m40-q8-native-order-profile-http.jsonl

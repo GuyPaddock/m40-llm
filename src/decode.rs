@@ -6,6 +6,15 @@ use anyhow::{anyhow, Result};
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::Tokenizer;
 
+pub mod ngram;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StopReason {
+    Stop,
+    Length,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct StoppingCriteria {
     pub max_tokens: Option<usize>,
@@ -39,17 +48,22 @@ impl StoppingCriteria {
     /// - max_tokens: if present and generated_len >= max_tokens
     /// - eos_id: if present and the last generated id equals eos_id
     pub fn should_stop(&self, generated: &[u32]) -> bool {
-        if let Some(mt) = self.max_tokens {
-            if generated.len() >= mt {
-                return true;
-            }
-        }
+        self.stop_reason(generated).is_some()
+    }
+
+    /// A sampled stop token takes precedence over a simultaneous token limit.
+    pub fn stop_reason(&self, generated: &[u32]) -> Option<StopReason> {
         if let Some(&last) = generated.last() {
             if self.stop_ids.contains(&last) {
-                return true;
+                return Some(StopReason::Stop);
             }
         }
-        false
+        if let Some(mt) = self.max_tokens {
+            if generated.len() >= mt {
+                return Some(StopReason::Length);
+            }
+        }
+        None
     }
 }
 

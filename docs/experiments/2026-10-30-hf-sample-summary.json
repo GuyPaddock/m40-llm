@@ -1,0 +1,124 @@
+{
+  "additional_gpu_hours": 0,
+  "benchmark_literal_overlap": {},
+  "exclusion_inventory_sha256": "28251ae83ab7ed789c3eb3a66ade150da1a27a644db5e6020940e3e6c695796e",
+  "has_complete_semantic_clearance": false,
+  "has_full_corpus_census": false,
+  "inputs_sha256": "c72f6c3f059055c0bfccd04019dcb1dbea72928e3c924cecfa6412ba571ed8f2",
+  "is_r1_admitted": false,
+  "kind": "bounded_dataset_feasibility_sample",
+  "lengths": [
+    {
+      "buckets": {
+        "1-64": 1,
+        "128-255": 56,
+        "256-447": 60,
+        "448-1000000": 0,
+        "65-127": 11
+      },
+      "max": 398,
+      "median": 245.5,
+      "min": 63,
+      "p90_nearest_rank": 332,
+      "provisional_groups_1_447": 125,
+      "provisional_groups_65_447": 124,
+      "rows": 128,
+      "source": "commitpack",
+      "split": "python"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 9,
+        "256-447": 29,
+        "448-1000000": 77,
+        "65-127": 13
+      },
+      "max": 3507,
+      "median": 570.5,
+      "min": 82,
+      "p90_nearest_rank": 2125,
+      "provisional_groups_1_447": 12,
+      "provisional_groups_65_447": 12,
+      "rows": 128,
+      "source": "sciriff",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 1,
+        "256-447": 15,
+        "448-1000000": 110,
+        "65-127": 0
+      },
+      "max": 3091,
+      "median": 722.0,
+      "min": 148,
+      "p90_nearest_rank": 1420,
+      "provisional_groups_1_447": 2,
+      "provisional_groups_65_447": 2,
+      "rows": 126,
+      "source": "sciriff",
+      "split": "train"
+    },
+    {
+      "buckets": {
+        "1-64": 0,
+        "128-255": 3,
+        "256-447": 18,
+        "448-1000000": 105,
+        "65-127": 0
+      },
+      "max": 3333,
+      "median": 743.0,
+      "min": 222,
+      "p90_nearest_rank": 2246,
+      "provisional_groups_1_447": 8,
+      "provisional_groups_65_447": 8,
+      "rows": 126,
+      "source": "sciriff",
+      "split": "validation"
+    },
+    {
+      "buckets": {
+        "1-64": 44,
+        "128-255": 14,
+        "256-447": 9,
+        "448-1000000": 12,
+        "65-127": 47
+      },
+      "max": 1200,
+      "median": 88.5,
+      "min": 12,
+      "p90_nearest_rank": 432,
+      "provisional_groups_1_447": 114,
+      "provisional_groups_65_447": 70,
+      "rows": 126,
+      "source": "ultrachat",
+      "split": "test"
+    },
+    {
+      "buckets": {
+        "1-64": 37,
+        "128-255": 13,
+        "256-447": 14,
+        "448-1000000": 17,
+        "65-127": 45
+      },
+      "max": 1270,
+      "median": 97.0,
+      "min": 17,
+      "p90_nearest_rank": 591,
+      "provisional_groups_1_447": 109,
+      "provisional_groups_65_447": 72,
+      "rows": 126,
+      "source": "ultrachat",
+      "split": "train"
+    }
+  ],
+  "tokens_sha256": "82999981c7185dc2e59131f73982b051f6ed269fcd7dd919d26a938a89229a99",
+  "shared_span_pairs": 10715,
+  "sample_count": 760,
+  "full_sample_report": "local-artifacts/2026-10-30-hf-feasibility/sample-report.json"
+}

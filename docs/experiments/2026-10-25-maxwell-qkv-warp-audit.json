@@ -1,0 +1,305 @@
+{
+  "is_complete": true,
+  "source": "499d2dea3988ec4418856c6d779cec75d991cd85",
+  "executable": "04aab98908b357e522b4aaefecf96a0969459b37eef2919ee796af5b0dc4a04b",
+  "pairs": 30,
+  "primary_intervals": 60,
+  "gpu_boundary_samples": 60,
+  "validation_records": 6,
+  "all_qkv_control_bits_equal": true,
+  "no_timed_allocation_copy_sync": true,
+  "tracked_device_bytes_after": 0,
+  "stage_micro_gate_passed": true,
+  "standalone_runtime_integration_allowed": false,
+  "screens": [
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 0,
+      "optimistic_profile_weighted_e2e_gain": 0.02613118960122729,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.23003913869163117,
+          0.3192232446988059
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.05405120253562927,
+        "control_median_ms": 0.0690559983253479,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.06915199756622314,
+            0.05400000214576721
+          ],
+          [
+            0.06842560172080994,
+            0.05562880039215088
+          ],
+          [
+            0.0690559983253479,
+            0.054028797149658206
+          ],
+          [
+            0.06833919882774353,
+            0.055174398422241214
+          ],
+          [
+            0.07130560278892517,
+            0.05405120253562927
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.2776033665454125
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 0,
+      "optimistic_profile_weighted_e2e_gain": 0.025348947718171866,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.2549893231135949,
+          0.27619898579301005
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21767680644989013,
+        "control_median_ms": 0.2758687973022461,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.2775007963180542,
+            0.21744320392608643
+          ],
+          [
+            0.27473599910736085,
+            0.21803839206695558
+          ],
+          [
+            0.2758687973022461,
+            0.21724801063537597
+          ],
+          [
+            0.2748768091201782,
+            0.21902720928192138
+          ],
+          [
+            0.27588160037994386,
+            0.21767680644989013
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.26733206813079535
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 17,
+      "optimistic_profile_weighted_e2e_gain": 0.025912760913522792,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.24850695536249967,
+          0.27874878446373597
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.05401279926300049,
+        "control_median_ms": 0.06885120272636414,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.06906880140304565,
+            0.05401279926300049
+          ],
+          [
+            0.06823040246963501,
+            0.05464959740638733
+          ],
+          [
+            0.06895679831504822,
+            0.0539359986782074
+          ],
+          [
+            0.06837120056152343,
+            0.05472639799118042
+          ],
+          [
+            0.06885120272636414,
+            0.05398399829864502
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.2747201342243366
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 17,
+      "optimistic_profile_weighted_e2e_gain": 0.0251333132752789,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.23627642391882842,
+          0.2662909360077006
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21774721145629883,
+        "control_median_ms": 0.2753472089767456,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.2753504037857056,
+            0.2174463987350464
+          ],
+          [
+            0.27479360103607176,
+            0.2222752094268799
+          ],
+          [
+            0.27540159225463867,
+            0.21759359836578368
+          ],
+          [
+            0.27514240741729734,
+            0.21924800872802735
+          ],
+          [
+            0.2753472089767456,
+            0.21774721145629883
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.26452691235500336
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 35,
+      "optimistic_profile_weighted_e2e_gain": 0.026038430324843986,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.21115654918711968,
+          0.3096524958116762
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.05395519733428955,
+        "control_median_ms": 0.06886720061302185,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.07055360078811646,
+            0.05387200117111206
+          ],
+          [
+            0.06829760074615479,
+            0.056390398740768434
+          ],
+          [
+            0.06886720061302185,
+            0.05386880040168762
+          ],
+          [
+            0.06848639845848084,
+            0.054655998945236206
+          ],
+          [
+            0.06910079717636108,
+            0.05395519733428955
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.2763775134829398
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "qkv_warp_screen",
+      "layer_id": 35,
+      "optimistic_profile_weighted_e2e_gain": 0.02533834616939501,
+      "result": {
+        "bootstrap_gain_ci95": [
+          0.2615698723372384,
+          0.27053615945737364
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.21733438968658447,
+        "control_median_ms": 0.27540481090545654,
+        "interpretation": "complete fused QKV micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+        "pairs": [
+          [
+            0.27540481090545654,
+            0.21724801063537597
+          ],
+          [
+            0.27469120025634763,
+            0.21773760318756102
+          ],
+          [
+            0.2755392074584961,
+            0.2171488046646118
+          ],
+          [
+            0.27483839988708497,
+            0.21782400608062744
+          ],
+          [
+            0.27613120079040526,
+            0.21733438968658447
+          ]
+        ],
+        "passes_micro_screen": true,
+        "throughput_gain": 0.26719389095584356
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "memory": [
+    {
+      "rows": 1,
+      "scratch_bytes": [
+        18688
+      ],
+      "tracked_device_bytes": [
+        4472473856
+      ]
+    },
+    {
+      "rows": 4,
+      "scratch_bytes": [
+        73984
+      ],
+      "tracked_device_bytes": [
+        4472529152
+      ]
+    }
+  ],
+  "max_cpu_errors": [
+    {
+      "projection": "q",
+      "max_abs": 9.002848191386192E-7,
+      "max_mean_abs": 1.076057468245848E-7
+    },
+    {
+      "projection": "k",
+      "max_abs": 0.000003848488532298688,
+      "max_mean_abs": 1.3265913460032593E-7
+    },
+    {
+      "projection": "v",
+      "max_abs": 0.0000011767969478881923,
+      "max_mean_abs": 1.4148572560638076E-7
+    }
+  ]
+}

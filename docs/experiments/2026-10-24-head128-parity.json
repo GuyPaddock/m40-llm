@@ -1,0 +1,1 @@
+{"comparisons":256,"elements_per_comparison":2048,"max_abs_diff_vs_cpu":3.606081008911133e-6,"max_abs_diff_vs_legacy":3.1739473342895508e-6,"mean_abs_diff_vs_cpu":9.253690830910967e-9,"mean_abs_diff_vs_legacy":9.257033914262659e-9}

@@ -1,0 +1,18 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.20s
+     Running tests/q8_generation_canary.rs (target/debug/deps/q8_generation_canary-a239b1873565bbfd)
+
+running 1 test
+test q8_0_real_model_generation_canary ... [q8-canary] model=/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d arch=qwen2 layers=36 d_model=2048 q_heads=16 kv_heads=2 head_dim=128 context=32768 context_bound=256 weights_bytes=3279519744 dense_kv_bytes_at_bound=9437184 q8_projection_tensors=252/252 dtype_counts={"F32": 181, "Q8_0": 253} supported=true
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[q8-execution] mode=Split tensors=253 layouts=253 prepared_bytes=3278553088 source_bytes=3279519744 total_weight_payload_bytes=6558072832 budget_bytes=6442450944 peak_setup_host_payload_bytes=6895608736 preparation_ms=29991.514
+[q8_generation_canary] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[q8_generation_canary] full-layer forward enabled layers=36
+[q8-canary] prepared_qkv_launches=756
+[q8-canary] prepared_mlp_launches=756
+[q8-canary] output="4" prompt_tokens=20 total_tokens=22 prefill_ms=13818 decode_ms=696 total_ms=15637 q8_projection_launches=3045
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 52.92s

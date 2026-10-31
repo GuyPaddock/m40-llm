@@ -1,0 +1,6 @@
+047e042f2af7c6592e4001f2e5f2718107cab7b7f6684e9ae14e46aaf9ba06e8  docs/experiments/2026-10-25-maxwell-runtime-packed128-http.jsonl
+117c7c859d25e02cdb2a8ce8b9d18d386d9c162767a3ae434570caedf28728ba  docs/experiments/2026-10-25-maxwell-runtime-packed128-http-audit.json
+c35652c17fc94e2ce1088c1f2eb6ddcd94cb504c78b8d5c5d881e4931cb4300e  docs/experiments/2026-10-25-maxwell-runtime-packed128-http.log.gz
+b3ef81bc23ee1f07d332f24c8cd273213592aa7ca7455bbc53fbf0eee35c6813  docs/experiments/2026-10-25-maxwell-runtime-packed128-ollama.log.gz
+f2bd28e258d0cb72bec32ba488cae0f88a699dd42aab158e615d9253ce9080ff  docs/experiments/2026-10-25-maxwell-runtime-parity-on.log.gz
+ab872739e04cb1467d007d0e3c517f67d0d018882d42152ed351e95ef481d5e1  docs/experiments/2026-10-25-maxwell-runtime-parity-off.log.gz

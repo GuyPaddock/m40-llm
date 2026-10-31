@@ -12,6 +12,20 @@ typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
 
+int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* output,
+    int rows, int columns, int padded_columns) {
+    (void)ctx; (void)input; (void)output; (void)rows; (void)columns; (void)padded_columns;
+    return -99;
+}
+
+int m40llm_ffn_q8_1_async(M40llmCudaContext* ctx, const void* input, const void* gate,
+    const void* up, void* output, void* gate_output, void* up_output, int rows,
+    int hidden, int columns, int padded_columns, int threads) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output; (void)gate_output;
+    (void)up_output; (void)rows; (void)hidden; (void)columns; (void)padded_columns; (void)threads;
+    return -99;
+}
+
 int m40llm_current_device_props(char* name_buf, size_t buf_len, int* major, int* minor, int* device_id) {
     if (name_buf && buf_len) {
         const char* name = "stub";
@@ -41,6 +55,9 @@ int m40llm_memcpy_d2h(M40llmCudaContext* ctx, void* dst_host, const void* src_de
 int m40llm_memcpy_d2d_async(M40llmCudaContext* ctx, void* dst_device, const void* src_device, size_t bytes, uint32_t stream_kind) {
     (void)ctx; (void)dst_device; (void)src_device; (void)bytes; (void)stream_kind; return -1;
 }
+int m40llm_argmax_f32_partitioned_async(M40llmCudaContext* ctx, const void* values, uint32_t len, void* scratch, size_t scratch_bytes, void* output, uint32_t stream_kind) {
+    (void)ctx; (void)values; (void)len; (void)scratch; (void)scratch_bytes; (void)output; (void)stream_kind; return -1;
+}
 int m40llm_argmax_f32_async(M40llmCudaContext* ctx, const void* d_values_f32, uint32_t len, void* d_out_u32, uint32_t stream_kind) {
     (void)ctx; (void)d_values_f32; (void)len; (void)d_out_u32; (void)stream_kind; return -1;
 }
@@ -62,8 +79,124 @@ int m40llm_qkv_f32xf16_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A
 int m40llm_mlp_gate_up_swiglu_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_q8_0, const void* d_W_up_q8_0, void* d_C_f32, int H, int K) {
     (void)ctx; (void)d_A_f32; (void)d_W_gate_q8_0; (void)d_W_up_q8_0; (void)d_C_f32; (void)H; (void)K; return -1;
 }
+int m40llm_ffn_q8_f32_ablation_async(M40llmCudaContext* ctx, const void* input, const void* gate, const void* up, void* output, int rows, int hidden, int k, int variant) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output;
+    (void)rows; (void)hidden; (void)k; (void)variant; return -99;
+}
+int m40llm_ffn_q8_split_shared_scales_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_role_parallel_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_native_warp_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_persistent_tiles_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_f32x8_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_weight_checksum_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_weight_checksum_ordered_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k, int is_transposed) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)hidden; (void)k; (void)is_transposed; return -1;
+}
+int m40llm_ffn_q8_weight_checksum_pitched_async(M40llmCudaContext* ctx, const void* const* scales, const void* const* values, void* output, int rows, int hidden, int k, int column_gap) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)hidden; (void)k; (void)column_gap; return -1;
+}
+int m40llm_q8_separate_weight_checksum_async(M40llmCudaContext* ctx, const void* scales, const void* values, void* output, int rows, int n, int k, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)scales; (void)values; (void)output;
+    (void)rows; (void)n; (void)k; (void)threads; (void)stream_kind; return -1;
+}
+int m40llm_gemm_f32xq8_warp_packet_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* packets, void* output, int rows, int n, int k, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)packets; (void)output;
+    (void)rows; (void)n; (void)k; (void)threads; (void)stream_kind; return -1;
+}
+int m40llm_ffn_q8_task_pair_packet_async(M40llmCudaContext* ctx, const void* input, const void* gate_scales, const void* up_scales, const void* packets, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)gate_scales; (void)up_scales; (void)packets; (void)output; (void)gate_output; (void)up_output;
+    (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_cohorts_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_virtual_warp_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_byte_permute_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_weight_cg_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+int m40llm_ffn_q8_split_unfused_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -1;
+}
+
+int m40llm_ffn_q8_split_f32_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_ffn_q8_split_f32_two_columns_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_ffn_q8_joint_f32_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_ffn_q8_split_f32_k2048_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_ffn_q8_f32_factored_capture_async(M40llmCudaContext* ctx, const void* input, const void* gate, const void* up, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_ffn_q8_f32_coalesced_capture_async(M40llmCudaContext* ctx, const void* input, const void* gate, const void* up, void* output, void* gate_output, void* up_output, int rows, int hidden, int k) {
+    (void)ctx; (void)input; (void)gate; (void)up; (void)output;
+    (void)gate_output; (void)up_output; (void)rows; (void)hidden; (void)k; return -99;
+}
+int m40llm_qkv_f32xq8_separate_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)biases;
+    (void)outputs; (void)widths; (void)k; (void)stream_kind; return -1;
+}
+int m40llm_gemm_f32xq8_separate_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int n, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
+}
+int m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, int n, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weight; (void)output; (void)n; (void)k; (void)stream_kind; return -1;
+}
+int m40llm_qkv_f32xq8_0_gguf_packed_warp_async(M40llmCudaContext* ctx, const void* input, const void* const* weights, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weights; (void)biases; (void)outputs; (void)widths; (void)k; (void)stream_kind; return -1;
+}
+int m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, int n, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weight; (void)output; (void)n; (void)k; (void)stream_kind; return -99;
+}
+int m40llm_qkv_f32xq8_0_gguf_warp_async(M40llmCudaContext* ctx, const void* input, const void* const* weights, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weights; (void)biases; (void)outputs; (void)widths; (void)k; (void)stream_kind; return -99;
+}
 int m40llm_qkv_f32xq8_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_Wq_q8_0, const void* d_Wk_q8_0, const void* d_Wv_q8_0, const void* d_bq_f32, const void* d_bk_f32, const void* d_bv_f32, void* d_Q_f32, void* d_K_f32, void* d_V_f32, int Nq, int Nk, int Nv, int Kdim) {
     (void)ctx; (void)d_A_f32; (void)d_Wq_q8_0; (void)d_Wk_q8_0; (void)d_Wv_q8_0; (void)d_bq_f32; (void)d_bk_f32; (void)d_bv_f32; (void)d_Q_f32; (void)d_K_f32; (void)d_V_f32; (void)Nq; (void)Nk; (void)Nv; (void)Kdim; return -1;
+}
+int m40llm_qkv_f32xq8_separate_async(M40llmCudaContext* ctx, const void* input, const void* const* scales, const void* const* values, const void* const* biases, void* const* outputs, const int* widths, int k, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)biases;
+    (void)outputs; (void)widths; (void)k; (void)stream_kind; return -1;
 }
 int m40llm_mlp_gate_up_swiglu_f32xq4_0_gguf_decode_async(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_W_gate_q4_0, const void* d_W_up_q4_0, void* d_C_f32, int H, int K) {
     (void)ctx; (void)d_A_f32; (void)d_W_gate_q4_0; (void)d_W_up_q4_0; (void)d_C_f32; (void)H; (void)K; return -1;
@@ -110,6 +243,40 @@ int m40llm_gemm_f32xf16_f32(M40llmCudaContext* ctx, const void* d_A_f32, const v
 
 int m40llm_gemm_f32xf16_gguf_f32(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_f16, void* d_C_f32, int M, int N, int K) {
     (void)ctx; (void)d_A_f32; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
+}
+
+int m40llm_gemm_f32xq8_separate_f32_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int M, int N, int K, int columns, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)M; (void)N; (void)K; (void)columns; (void)threads; (void)stream_kind;
+    return -1;
+}
+
+int m40llm_gemm_f32xq8_separate_warp_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int M, int N, int K, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)M; (void)N; (void)K; (void)threads; (void)stream_kind;
+    return -1;
+}
+
+int m40llm_gemm_f32xq8_separate_packed_activation_async(M40llmCudaContext* ctx, const void* input, const void* scales, const void* values, void* output, int M, int N, int K, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)scales; (void)values; (void)output;
+    (void)M; (void)N; (void)K; (void)threads; (void)stream_kind;
+    return -1;
+}
+
+int m40llm_select_sparse_inputs_f32_async(M40llmCudaContext* ctx, const void* input, void* indices, void* values, void* count, int K, float threshold, void* totals) {
+    (void)ctx; (void)input; (void)indices; (void)values; (void)count;
+    (void)K; (void)threshold; (void)totals; return -1;
+}
+
+int m40llm_project_sparse_inputs_q8_async(M40llmCudaContext* ctx, const void* indices, const void* values, const void* count, const void* tiles, void* output, int N, int K, int columns, int threads) {
+    (void)ctx; (void)indices; (void)values; (void)count; (void)tiles;
+    (void)output; (void)N; (void)K; (void)columns; (void)threads; return -1;
+}
+
+int m40llm_gemm_f32xq8_tiled_f32_async(M40llmCudaContext* ctx, const void* input, const void* tiles, void* output, int M, int N, int K, int columns, int threads, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)tiles; (void)output;
+    (void)M; (void)N; (void)K; (void)columns; (void)threads; (void)stream_kind;
+    return -1;
 }
 
 int m40llm_gemm_f32xq8_0_gguf_f32(M40llmCudaContext* ctx, const void* d_A_f32, const void* d_B_q8_0, void* d_C_f32, int M, int N, int K) {
@@ -167,6 +334,17 @@ int m40llm_materialize_gguf_f16_to_f32_colmajor_nt(M40llmCudaContext* ctx, const
     (void)ctx; (void)d_B_f16; (void)d_B_f32_colmajor_nt; (void)N; (void)K; return -1;
 }
 
+int m40llm_dequantize_q8_0_to_f32_colmajor_async(M40llmCudaContext* ctx,
+    const void* source, void* output, size_t capacity_bytes, int input_dim, int output_dim) {
+    (void)ctx; (void)source; (void)output; (void)capacity_bytes; (void)input_dim; (void)output_dim;
+    return -99;
+}
+
+int m40llm_kvcache_debug_read_length(M40llmCudaContext* ctx, M40llmKVCache* kv,
+    uint32_t seq_id, uint32_t* out_length) {
+    (void)ctx; (void)kv; (void)seq_id; (void)out_length; return -99;
+}
+
 
 int m40llm_gemm_f16xf16_f32(M40llmCudaContext* ctx, const void* d_A_f16, const void* d_B_f16, void* d_C_f32, int M, int N, int K) {
     (void)ctx; (void)d_A_f16; (void)d_B_f16; (void)d_C_f32; (void)M; (void)N; (void)K; return -1;
@@ -181,6 +359,9 @@ int m40llm_rms_norm_f32_async(M40llmCudaContext* ctx, const void* d_in, void* d_
 
 int m40llm_rms_norm_f32_weighted(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
     (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
+}
+int m40llm_rms_norm_f32_weighted_warp_async(M40llmCudaContext* ctx, const void* input, const void* weight, void* output, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)weight; (void)output; (void)rows; (void)dim; (void)eps; (void)weight_dtype; (void)stream_kind; return -1;
 }
 int m40llm_rms_norm_f32_weighted_async(M40llmCudaContext* ctx, const void* d_in, const void* d_weight, void* d_out, uint32_t rows, uint32_t dim, float eps, uint32_t weight_dtype) {
     (void)ctx; (void)d_in; (void)d_weight; (void)d_out; (void)rows; (void)dim; (void)eps; (void)weight_dtype; return -1;
@@ -291,6 +472,15 @@ int m40llm_attention_last_token_f32_gqa(
     void* out_dev_f32) {
     (void)ctx; (void)kv; (void)seq_id; (void)q_dev_f32; (void)q_heads; (void)seq_len; (void)out_dev_f32; return -1;
 }
+int m40llm_attention_head128_parallel_async(
+    M40llmCudaContext* ctx, const M40llmKVCache* kv, uint32_t seq_id,
+    const void* q, uint32_t q_heads, uint32_t seq_len, uint32_t partitions,
+    uint32_t threads, void* partials, size_t partial_bytes, void* out) {
+    (void)ctx; (void)kv; (void)seq_id; (void)q; (void)q_heads; (void)seq_len;
+    (void)partitions; (void)threads; (void)partials; (void)partial_bytes; (void)out;
+    return -1;
+}
+
 int m40llm_attention_last_token_f32_gqa_async(
     M40llmCudaContext* ctx,
     const M40llmKVCache* kv,

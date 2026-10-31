@@ -1,0 +1,26 @@
+[
+  {
+    "repository": "thunlp/docred",
+    "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+    "card_license": [
+      "mit"
+    ]
+  },
+  {
+    "repository": "bigbio/ncbi_disease",
+    "revision": "b96b632b1c1c245b5cb21faaeec8bdac3b67553e",
+    "card_license": "cc0-1.0"
+  },
+  {
+    "repository": "qiaojin/PubMedQA",
+    "revision": "9001f2853fb87cab8d220904e0de81ac6973b318",
+    "card_license": [
+      "mit"
+    ]
+  },
+  {
+    "repository": "rajpurkar/squad",
+    "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+    "card_license": "cc-by-sa-4.0"
+  }
+]

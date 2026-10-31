@@ -1,0 +1,10 @@
+{
+  "is_passed": true,
+  "trials": 5,
+  "complete_decisions": 1000,
+  "median_ms": 1.5380845,
+  "p95_ms": 1.5555975,
+  "no_timed_device_allocation": true,
+  "cleanup_bytes": 0,
+  "scope": "synthetic proposal cost, not learned acceptance or measured HTTP"
+}

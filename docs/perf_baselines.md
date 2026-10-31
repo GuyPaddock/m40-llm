@@ -2,6 +2,2045 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-29: Drafter Data Gate Stops Before GPU Work
+
+The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
+finds zero MBPP prompts meeting the frozen65-447-token range. All964 approved
+source rows were checked with the real Qwen ChatML tokenizer; longest prompts
+are58 train,36 calibration and55 held-out tokens. Required quotas remain
+256/48/96. No grouping or exclusion pass can increase these upper bounds.
+
+R1 is not admitted. No teacher generation, training, acceptance evaluation or
+GPU switch ran; additional GPU-hours are zero. The1.538085ms cost result still
+stands, but learned acceptance and projected gains remain unmeasured. This
+is a data-specification stop, not a neural-drafter performance or quality failure.
+Keep the specification, immutable runtime reference and earlier evidence intact.
+
+## 2026-10-29: Compact Draft Proposal Cost Passes
+
+The [fixed rank256 cost probe](experiments/2026-10-29-compact-draft-cost.md)
+measures **1.538085ms median**, **1.555598ms p95** across1000 complete decisions,
+below the unchanged3.884ms admission cap. It uses existing cuBLAS/SiLU/argmax,
+synthetic untrained parameters and a resident qualified joint-only Qwen target.
+Additional device storage is163,728,908 bytes; no per-decision allocation or
+upload occurs. Full-vocabulary FP64 checks, owner integrity and cleanup pass.
+
+This is not learned acceptance or measured HTTP performance. The preserved
+target-cost recurrence requires about92.59% equal conditional acceptance at
+full eligibility to project56.153149 HTTP tok/s with this proposal cost.
+Cost alone does not establish that the model can reach that acceptance.
+No teacher data, training, new CUDA kernel, device switch or runtime promotion
+follows automatically. Stop for data/licensing/split and small-pilot review.
+
+## 2026-10-29: ILP4 Stops At Numerical Admission
+
+The [fixed ILP4 probe](experiments/2026-10-29-ilp4-decision.md) preserves all
+138 compiled CUDA controls and fits the resource cap at 40 registers with no
+spills. Its synthetic numerical gate stops before performance: the original
+control fails 101 dynamic-range SwiGLU values, while ILP4 passes. Signed, zero
+and cancellation cases pass both arms. The unchanged FP64 tolerance and input
+are retained; this is not evidence of an ILP4 speed or accuracy regression.
+
+No actual-layer performance, quality or HTTP trials were run. Guards, capture
+parity, stream dependencies, immutable owners and zero tracked teardown pass.
+Preserve the negative admission and code; no runtime selector or defaults
+change. The independent compact-drafter cost probe is next.
+
+## 2026-10-29: Exact Portfolio Passes HTTP Gate
+
+The [fixed five-arm qualification](experiments/2026-10-29-portfolio-runtime.md)
+passes exact outputs, full-logit/KV comparisons, ownership and the combined
+HTTP gate. Twenty fresh combined pairs measure **50.523256 -> 52.548523 HTTP
+tok/s, +4.008582%**, paired 95% interval **[3.933599%, 4.057069%]**.
+The five-pair screen triggered confirmation; the two cohorts are not pooled.
+Standalone final gains are down 2.198257%, vocabulary 0.738016%, and argmax
+1.355204%. These are separately measured, not summed into the combined claim.
+
+All five arms preserve the actual 512 IDs, seven sampled full-vocabulary
+vectors, 10,616,832 valid KV words and twelve frozen task outputs. All 138
+compiled CUDA entries are unchanged; teardown returns tracked bytes to zero.
+Equal retained packets cost 1,192,935,424 extra device bytes and about 6.4 s
+additional cold preparation. This is an opt-in research configuration.
+
+The immutable **50.910426** reference is untouched. The new candidate is
+3.217606% above that historical median, not a paired 4.01% gain over it.
+Neither 53.06 nor **56.153149 HTTP tok/s** is reached. No fresh Ollama run,
+A4000 switch or default change occurred. Raw timings, resource costs,
+correctness evidence and independent audits are linked in the report.
+
+## 2026-10-29: Exact Portfolio Operator Checkpoint
+
+The [contemporary packet/argmax screen](experiments/2026-10-29-portfolio-operator-checkpoint.md)
+uses the qualified compound control and actual Qwen output-normalized hidden
+states. All512 greedy IDs and seven sampled full-vocabulary vectors match;
+both argmax implementations agree and tracked allocations return to zero.
+Five paired operator trials give single-row complete FFN gains2.82-2.87%
+at layers0/17/35, actual vocabulary gains9.27-9.32%, and argmax latency about
+0.173 to0.0104ms. Four-row layer35 FFN remains inconclusive.
+
+The contemporary absolute-cost transfer estimates321.030ms/request,
+conditional3.297%, only28.112ms beyond the3% threshold. This is an admission
+budget, not measured HTTP throughput; full runtime correctness, extra
+1,192,935,424-byte residency and fixed five-arm HTTP qualification remain.
+The immutable50.910426 reference and defaults are unchanged. No fresh
+Ollama comparison, training or approximate-numerics result is claimed.
+
+## 2026-10-28: Exact Dataflow Audit Finds No New Kernel
+
+The [dataflow audit](experiments/2026-10-28-dataflow-findings.md) measures
+50.780194/50.251923 HTTP tok/s profiling off/on on the unchanged joint-only
+compound runtime. Five pairs show 1.05125% latency overhead, below the 3%
+attribution limit, with identical actual512 IDs, seven full-vocabulary vectors
+and 10,616,832 valid KV words. All138 compiled CUDA entries remain unchanged.
+
+Steady tokens use435 launches, zero allocations and no cross-stream waits.
+The roughly13 ms host synchronization overlaps GPU work; it is not additional
+removable CPU time. The sampled wall residual is0.835-0.905 ms/token, and
+complete FFN still costs about12.19 ms/token. Small residual, RoPE, embedding
+and argmax fusion boundaries individually lack sufficient scope. Larger
+FFN/normalization fusion would need unmeasured cross-block synchronization or
+duplicated work. No new speed kernel is recommended from this bounded audit.
+
+The immutable50.910426 reference and56.153149 target remain unchanged. These
+are profiler-overhead measurements, not another optimized runtime or a fresh
+Ollama comparison. Detailed buffer lifetimes, logical-load estimates, raw
+records, independent audits and limitations are linked in the report.
+
+The follow-up [learned-drafter paper assessment](experiments/2026-10-28-learned-draft-feasibility.md)
+is complete. It adds no performance measurement: all neural costs and
+acceptance remain unmeasured. Existing verifier scenarios require about 92.03%
+conditional acceptance at 1 ms all-in proposal cost for the historical-overhead
+HTTP target. No compatible learned artifact and measured cost/acceptance pair
+is qualified, so implementation remains deferred. See the
+[completion audit](experiments/2026-10-28-dataflow-completion.md).
+
+## 2026-10-28: Real Drafting Helps Literal Copy Only
+
+The [causal draft study](experiments/2026-10-28-draft-feasibility.md) rejects
+general browser acceleration for all three fixed CPU sources. Projected
+resident gains are -10.32% history lookup, -0.12% prompt-copy and -31.21%
+online backoff. Cheap proposals do not compensate for poor acceptance/coverage.
+The historical negative n-gram gate remains valid; neural sources are unmeasured.
+
+The conditional research-only prompt-copy drafter is implemented with the
+existing direct verifier. It uses real causal prompt spans, not oracle drafts.
+[Five paired release trials per copy case](experiments/2026-10-28-draft-live-measurement.md)
+give **29.064->32.783 resident tok/s, +12.7955%**, interval
+[12.6511%,12.8623%], for 132 prompt/52 output tokens; and
+**15.628->16.671 tok/s, +6.6723%**, interval [6.6499%,6.8529%], for
+393 prompt/68 output tokens. Actual IDs/counts/natural stops match. Setup,
+prefill, source/miss/history work, target transactions and teardown are charged.
+No extension or confirmation condition is met.
+
+All 21 preflight cases preserve 1,544 full-vocabulary vectors and 85,948,416
+valid KV words bit-identically; 13 natural rejections clear 516,096 suffix words.
+Tests/audits pass, target cuBLAS/allocations are zero, teardown is zero and all
+138 CUDA entries plus 113 prior checksums are unchanged. This is **specialized
+resident copy throughput**, not browser512 HTTP or a new Ollama comparison.
+The immutable **50.910426 HTTP tok/s**, joint-only preference and original
+HTTP goals remain unchanged. No general drafter/default promotion follows.
+
+## 2026-10-28: Fully Direct Four-Row Target Passes
+
+The [bounded direct verifier](experiments/2026-10-28-direct-verifier-measurement.md)
+passes complete resident-generation feasibility, **65.799057 versus 51.767457
+tok/s**, +27.1051%, paired 95% interval [26.8683%,27.2526%]. Five alternating
+release pairs retain the same 512 actual IDs, length stop and dense KV state.
+Session setup, packed prompt, target/commit, serial tails and teardown are
+charged. Median request is 7,781.267 versus 9,890.383 ms. Complete batch cost
+is 57.820 ms, replacing the earlier 60.17-60.43 ms hypothetical assembly.
+Twenty early-prefix rejection/correction observations cost about 75.8-76.0 ms.
+No statistical extension or confirmation condition is met.
+
+All 511 full-vocabulary comparisons and 10,616,832 valid KV words are bitwise
+equal; all rejection/partial/drop/ownership checks and twelve frozen task
+outputs pass. All 138 existing CUDA entries and prepared payloads are unchanged.
+Target cuBLAS/allocations are zero; model teardown returns tracked bytes to 0.
+Raw records, independent audits, logs and retained measured executable/source
+are linked in the report. Original SGEMM-verifier rejection remains valid.
+
+This is **perfect-draft resident throughput, not HTTP or real-drafter throughput**.
+The [measured acceptance assessment](experiments/2026-10-28-direct-verifier-feasibility.md)
+supports a separately reviewed acceptance/cost study only. A hypothetical 1 ms
+drafter needs about 86.9% conditional guess acceptance for the resident 3%
+screen and 92.0% for the historical-overhead HTTP target scenario. No drafter,
+generation integration or default change follows. Preserve the immutable
+**50.910426 HTTP tok/s**, joint-only preference and **56.153149** target.
+The authorized experiment is complete; stop for review.
+
+## 2026-10-28: Fixed Four-Row Reader Clears FFN Gate
+
+The [single authorized shared-read operator](experiments/2026-10-28-four-row-operator.md)
+passes exact intermediate/down parity and preserves all 137 original CUDA
+controls. Complete four-row FFN latency is 0.918-0.920 ms versus 1.334-1.337
+for four one-row compound calls and 1.314-1.316 for independent-row dispatch.
+That is **45.2-45.3% / 43.0-43.1% throughput gain**, respectively, with positive
+paired bounds at layers 0/17/35. All arms use four original one-row prepared
+down calls. Five trials suffice under the unchanged extension rules; maximum
+variation is 0.0578%. Candidate resources are 36 registers, 4608 dynamic shared
+bytes and no reported local/stack storage. Final tracked teardown is zero.
+
+This is **not an HTTP or full-verifier gain**. The
+[updated assessment](experiments/2026-10-28-four-row-feasibility.md) still
+rejects patching the SGEMM verifier, modeled at 111.9 ms/batch. A different
+fully direct assembly is conditionally plausible, but assembled execution and
+real drafter acceptance remain unmeasured. No runtime selector, neural drafter
+or default changes were made. Keep the immutable **50.910426 HTTP tok/s**
+checkpoint, joint-only preference and **56.153149** target. Stop for review.
+
+## 2026-10-28: Direct-Q8 Feasibility, No New Speed Claim
+
+The [bounded assessment](experiments/2026-10-27-direct-q8-feasibility.md)
+profiles the existing rejected verifier, not a new reader. Release batch
+medians at widths 2/4/8 are 172.870/176.050/200.030 ms. At four rows,
+conversion and SGEMM event spans total 88.759/54.474 ms respectively.
+All 30 full observations and 40 rejection cycles pass their bounded output,
+prefix-state, ownership and cleanup checks. Instrumentation stays within 3%.
+
+The model supports reviewing one fixed four-row joint gate/up operator probe,
+not implementing a speculative decoder. Even an assumed halving of gate/up
+time needs roughly 89.2% conditional draft acceptance for a modeled 3% gain,
+or 94.2% for the 56.153149 target with optimistic 0.25 ms drafting and 1 ms
+extra batch cost. These are scenarios, **not measured throughput or acceptance**.
+The previous n-gram rejection remains closed. No CUDA kernel, defaults,
+reference artifacts or model semantics changed. The immutable qualified
+reference stays **50.910426 HTTP tok/s**; stop for proposal review.
+
+## 2026-10-27: Prefer Joint-Only Compound Ownership
+
+The user authorized joint-only as the preferred ownership for the opt-in
+compound FFN, following the storage qualification below. Compound selection
+now omits redundant split gate/up planes unless `retain-split` is explicitly
+requested. Native FFN, global preparation and KV defaults are unchanged.
+Historical benchmark choices explicitly preserve retained ownership.
+
+This is a configuration promotion, **not a new timing result**. The verified
+1,724,645,376-byte saving and neutral 50.863/50.893 HTTP tok/s comparison remain
+the supporting evidence. No performance claim, acceptance rule, measured
+artifact or immutable 50.910426 reference is revised. See the
+[preferred settings](q8_execution_weights.md#opt-in-runtime-preparation).
+The [configuration validation](experiments/2026-10-27-preferred-joint-ownership.md)
+records the focused checks; it adds no timing samples to the existing comparison.
+
+## 2026-10-27: Joint-Only Saves 1.606 GiB, Timing Neutral
+
+The independent opt-in ownership change saves exactly **1,724,645,376 device
+bytes**. Original uploaded GGUF remains; logical sources stay at 109 while
+physical split owners fall from 109 to 37, plus the same 36 joint pairs. Joint
+payloads, seven full-vocabulary samples, all 512 actual IDs and twelve frozen
+outputs match. See [ownership, quality and measurement evidence](experiments/2026-10-27-joint-only-ownership.md).
+
+Five alternating release HTTP pairs give **50.863 retained-split versus
+50.893 joint-only tok/s**, +0.059%, paired 95% interval -0.059% to +0.325%.
+Storage non-regression passes; this is **not a demonstrated speedup**. Median
+prefill/decode is 488.868/9531.999 ms versus 485.956/9528.324 ms. Weight residency
+falls from 7,921,745,920 to 6,197,100,544 B; cold tracked device high-water matches
+those values, excluding separate KV/library storage. Host RSS is essentially
+unchanged. Full memory scopes, cold observations and 28 corruption controls
+are in the linked report.
+
+Default ownership stays `retain-split`; `joint-only` requires explicit opt-in
+with the qualified compound consumer. The no-old adapter was rejected and
+removed after preserving its code. Both approved experiments are complete.
+The immutable **50.910426 HTTP tok/s** reference, **56.153149** target,
+measured artifacts and runtime defaults remain unchanged. No new kernel
+search, compatibility GPU testing or performance promotion follows.
+
+## 2026-10-27: No-Old Adapter Fails Exact Cache Gate
+
+The bounded borrowed-recent head128 adapter passes 88 layout and 140
+primitive/rollover cases, but changes one valid FP16 K word and one V word
+at the two-layer Qwen fixture's second prefix token. Greedy IDs match and
+maximum logit error is only 5.59e-9; the bit-identical KV gate nevertheless
+fails. See [evidence and stop decision](experiments/2026-10-27-no-old-screen.md).
+
+Preserve rejected code `db04697` before separate removal. No resident or
+HTTP timing, real-model actual512 qualification or new speed claim follows.
+The immutable 50.910426 HTTP tok/s compound reference and 56.153149 target
+are unchanged. Joint-only ownership remains a separate authorized task.
+
+## 2026-10-27: Qualified Compound Remains FFN-Dominated
+
+Five profiling-off/on release pairs retain exact 512 IDs and completed quality
+at **50.878/50.379 HTTP tok/s**, a 0.980% instrumentation throughput loss.
+This is attribution, not another optimization or replacement for qualified
+**50.910 versus 43.195 HTTP tok/s**. See [costs, audits and remaining scope](experiments/2026-10-27-maxwell-compound-stage-profile.md).
+
+Middle sampled gate/up/SwiGLU costs 7.421 ms and prepared down 4.761 ms,
+together about 64.3% of captured stage time; attention is 0.780 ms. Meeting
+the stronger unchanged target 56.153 HTTP tok/s requires another 938.958 ms
+per request. If savings came only from FFN, the optimistic equivalent is
+15.05% lower FFN latency. This admits no new kernel or geometry search, does
+not establish hardware saturation and does not reopen closed experiments.
+Defaults and the negative perfect-drafter stop remain unchanged.
+
+## 2026-10-27: Compound FFN Qualifies In Full Generation
+
+Twenty fresh paired release HTTP trials give **50.799 versus 49.221 tok/s**,
+**+3.205%**, paired 95% interval **+3.156% to +3.303%**, clearing the unchanged
+3% gate after a borderline five-pair screen. Actual 512 IDs, sampled full
+logits and all twelve frozen task outputs match; seven dense-valid tasks
+have no regression. See [quality, timing, memory and raw evidence](experiments/2026-10-27-maxwell-compound-runtime.md).
+
+Separate fresh official pairs give **50.910 versus 43.195 HTTP tok/s**,
+**+17.863%**. Both original targets remain unmet: 53.06 and 56.153 HTTP tok/s.
+This qualifies the fixed compound as an opt-in configuration, not a default
+change. All 109 original prepared identities and all 137 compiled CUDA entries
+are unchanged. The 36 extra joint pairs cost 1,724,645,376 bytes, bringing
+candidate weight payload to 7,921,745,920 bytes; no new hot allocation or sync.
+Split remains the control, and the negative perfect-drafter study stays closed.
+
+## 2026-10-27: Perfect-Drafter Verification Is Slower
+
+Five contemporaneous release trials with exact actual512 IDs give resident
+complete-generation throughput **49.92 tok/s serial**, **11.59 at K2**,
+**21.90 at K4**, **37.81 at K8**. All paired gain intervals are negative;
+even a free perfect drafter loses. See [scope, costs, memory, rollback and stop decision](experiments/2026-10-27-maxwell-exact-verification-screen.md).
+
+The study uses real batched projections, absolute causal dense FP16 KV,
+exclusive session transactions and 511 target rows plus the prompt's cached
+first token. Seventy rejection/rollback/correction cycles pass, but all
+drafter cost/acceptance budgets remain negative. Stop without EAGLE or a
+neural drafter. No new kernel/batch-length search, default or server changes.
+
+This is the existing temporary-dequantization/SGEMM verifier, **not** an
+optimal-verifier or hardware-ceiling proof. It is also **not HTTP E2E**:
+retain the qualified **49.146 HTTP tok/s**, both original unmet targets and
+all runtime defaults. The compound FFN's separate passing microbenchmark
+remains eligible for actual-generation/HTTP qualification, not yet promoted.
+
+## 2026-10-27: Fixed Compound FFN Passes Its Micro Gate
+
+Twenty fresh four-arm confirmation pairs show **5.43-5.55% complete one-row
+FFN gain over qualified split**, and **0.58-0.67% incremental over joint-only**,
+with positive paired bounds at frozen layers0/17/35. All checked gate/up,
+SwiGLU and down bits match. See [raw trials, resources, memory and gates](experiments/2026-10-27-maxwell-compound-ffn-screen.md).
+
+The user's single exception combines joint packing and shared-scale reuse
+without changing geometry or FP32 arithmetic. Both existing weight pairs
+remain resident, 95,813,632 bytes total. One new consumer uses 32 registers,
+no reported stack/local storage, 1536 dynamic shared bytes and two barriers;
+all 135 original CUDA entries retain identical words. Numerical/ownership,
+CUDA on/off, regressions, non-CUDA warnings, Clippy and raw-record audits pass.
+
+Keep `c629471` benchmark-only. This passes the >=5% admission gate, **not**
+HTTP/actual512 qualification. Do not add the individual gains or claim E2E
+improvement. Preserve **49.146 HTTP tok/s**, both unmet original targets and
+all runtime defaults. The next requested study is exact multi-token
+verification with a perfect-drafter upper bound, not EAGLE integration.
+
+## 2026-10-26: Input-Channel Coding Misses Byte Feasibility
+
+A fixed CPU-only scan of original layer0/17/35 gate/up weights finds only
+**0.41-1.88% optimistic stored-byte saving** when conditioned on input channel,
+after literal scales, code lengths and index costs. Even omitting all
+codebook/index storage gives only **4.07-5.54%**, below the 10% size gate.
+See [source counts, independent recount and stop decision](experiments/2026-10-26-maxwell-channel-entropy.md).
+
+No encoder, decoder, CUDA kernel, actual compression or speedup is produced.
+Full-model/tensor hashes, 15 scanner checks, sampled independent channel
+counts and twelve corruption controls pass. The initial AWK orchestration
+failure is retained separately, not pooled. Qualified **49.146 vs 43.106
+HTTP tok/s**, both original targets and runtime/defaults remain unchanged.
+
+## 2026-10-26: Unchanged FFN Has Mixed SM-Clock Sensitivity
+
+Five outer process pairs at observed **1113/822 MHz SM**, memory fixed at
+3004 MHz, increase one-row latency **6.60-6.79% gate/up**, **13.13-13.31%
+prepared down**, **9.00-9.11% complete FFN** and **4.73-4.78% checksum**.
+All intervals are positive. See [all pairs, numerics, restored policy and limits](experiments/2026-10-26-maxwell-sm-clock.md).
+
+This is a diagnostic, not a new implementation, clock recommendation or
+HTTP result. All work/identities and isolation checks pass; original
+application clocks, boost/default and persistence are restored and
+independently verified. Sensitivity does not identify pure arithmetic or
+DRAM time, establish saturation or reopen closed probes. Preserve qualified
+**49.146 versus 43.106 HTTP tok/s**, both original targets unmet/defaults
+unchanged. New candidates still need sufficient avoided-work evidence.
+
+## 2026-10-26: Remaining Prefix Work Has Small E2E Scope
+
+Five release profiling-off/on pairs preserve actual512 IDs, ordinary CUDA
+work and 109 prepared identities. New prefix groups total **106.794 ms**,
+including **54.584 ms packed attention** and **47.560 ms RoPE/KV**.
+Even eliminating every new group gives only **1.029% optimistic HTTP scope**;
+including the existing bias group gives **1.446%**, below the unchanged
+3% floor. See [coverage, perturbation, raw pairs and audit](experiments/2026-10-26-maxwell-prefill-nongemm.md).
+
+Instrumentation increases latency **1.800%**. Host-call time overlaps GPU
+work and must not be counted as exclusive CPU savings. No prefix rewrite,
+new throughput qualification or hardware-ceiling claim follows. Preserve
+**49.146 vs 43.106 HTTP tok/s** and both unmet targets. The next candidate
+must explain expensive reader work avoided and account for all storage,
+conversion and reuse costs before implementation and complete-FFN testing.
+
+## 2026-10-26: Activity-Only Collector Fails Joint Calibration
+
+Five warmed resident/native 16-token off/on pairs per engine preserve IDs
+and dispatch. M40 decode changes **288.019 to 292.570 ms, +1.580%**, but
+every on-capture drops 7520 of 107,520 activities. Official native changes
+**336.464 to 355.330 ms, +5.607%**, interval **[4.622%, 7.430%]**, despite
+complete captures. Both therefore fail the prescribed attribution checkpoint.
+See [all pairs, accounting, native admission failure and limits](experiments/2026-10-26-maxwell-activity-calibration.md).
+
+These are collector costs, not new HTTP throughput or an engine comparison.
+Do not call capped M40 timing a successful low-overhead capture. No cap,
+model, runtime/default or qualification target is changed; the exact track
+remains **49.146 vs 43.106 HTTP tok/s**, both goals unmet.
+
+## 2026-10-26: Official Runner GPU Activities Are Available
+
+The external observer now captures concurrent-kernel timestamps on M40.
+A bounded official Ollama request has 18,486 correlated activities, no drops
+or invalid clocks, and verified fresh 65-ID prompt state. Startup and prefill
+are excluded from its fifteen decode forwards. Median summed GPU execution
+is **21.075 ms**, including **13.926 ms FFN** and **0.584 ms all activation
+quantization**. See [stages, exact-clock audit and limitations](experiments/2026-10-26-maxwell-kernel-activity.md).
+
+The heavily instrumented median decode interval is **44.539 ms**. Do not use
+its host gaps, cold-request wall time or unmatched clock/context conditions
+for speed/engine comparisons. No runtime/default/precision change follows.
+Qualified **49.146 vs 43.106 HTTP tok/s** and both unmet targets are unchanged.
+
+## 2026-10-26: Layer-Reuse Order Has Small Tested Effects
+
+Grouped versus alternating execution of identical frozen layer work changes
+complete-FFN median latency **-0.006% to -0.060%**. All nine stage intervals
+cross zero and lie within +/-0.45%, below the fixed +/-3% diagnostic scope.
+Output bits and work counts match. See [actual pairs, memory and audit](experiments/2026-10-26-maxwell-layer-reuse-screen.md).
+
+The benchmark adds no CUDA/inference code and preserves all 135 original
+kernel entries. It checks temporal reuse for three pairs, not actual cache
+traffic, the full 36-layer dependency chain or production throughput. No
+closed candidate is reopened. Qualified exact status remains **49.146 HTTP
+tok/s** versus **43.106 official Ollama**, both targets unmet/defaults unchanged.
+
+## 2026-10-26: CUB Read Reference Misses The Diagnostic Gate
+
+Public-library segmented checksums over the original gate/up planes
+regress one-row throughput **22.87-23.01%** and four-row **29.28-29.31%**,
+with negative paired intervals. All exact source-derived sums and guards
+pass. See [fixed library scope, raw pairs and audit](experiments/2026-10-26-maxwell-cub-read-screen.md).
+The implementation and result commits remain available; the rejected
+adapter is removed from the active build after measurements were committed.
+
+The compiled-code check caught six RoPE changes from global host feature
+flags before timing. Isolating CUB restores all **100,400 original words /
+135 entries**. No inference, policy search or runtime promotion follows;
+this does not establish DRAM saturation or a measured stall mechanism.
+Qualified exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and defaults unchanged.
+
+## 2026-10-26: Legacy PC-Sampling Setup Is Unsupported
+
+A standalone fixed-MID capability check returns **27 /
+CUPTI_ERROR_NOT_SUPPORTED** during PC-sampling configuration. This is a
+separate API from unavailable event/metric groups. Context cleanup succeeds,
+the GPU is empty afterward and no kernel/sample/timing trial occurs. See
+[raw statuses, provenance, audit and scope](experiments/2026-10-26-maxwell-pc-sampling-capability.md).
+
+No permission retry, collector or SDK/driver change follows. Stalls,
+occupancy and physical traffic remain unmeasured. This is not a throughput
+result or evidence that closed kernel candidates should be reopened.
+Qualified exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and runtime/defaults unchanged.
+
+## 2026-10-26: Actual Official MMVQ JIT Confirms Offline Evidence
+
+An isolated four-token official Ollama diagnostic captures actual loaded
+sm_52 code. The selected one-token Q8 MMVQ **matches M01 offline words exactly**:
+48 registers, 384 static shared bytes, no stack/local storage, one barrier
+and five shuffle sites. Exact canonical 65-ID prompt/cache checks pass;
+6330 matched driver/runtime pairs and 16 module images complete cleanly.
+See [actual JIT code, raw request and scope](experiments/2026-10-26-maxwell-ollama-jit-inspection.md).
+
+This resolves the selected M01 compiled-code caveat, not a performance gap
+or new baseline. Counts include startup/warmup; four output tokens and
+observer-perturbed durations cannot support TPS or per-stage claims. No
+runtime promotion follows. Qualified exact status stays **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both original targets remain unmet and
+defaults unchanged.
+
+## 2026-10-26: Driver JIT Matches Native Projection Code
+
+Untimed loaded-module capture finds **identical gate/up and prepared
+down/head encoded words** under native loading and forced PTX JIT. The whole
+project module's 100,400 words across 135 disassembled entries and resource
+reports match, despite different ELF container bytes. See
+[actual loaded-code evidence and compatibility checks](experiments/2026-10-26-maxwell-driver-jit-inspection.md).
+
+No new timing matrix or runtime compiler selector follows. Global forced
+JIT fails the cuBLAS-enabled context; a no-model API probe records CUDA
+initialization success and cuBLAS creation status 3. Explicit cuBLAS-disabled
+primitive tests pass under both modes. This is not an OOM diagnosis, a
+performance result or capture of Ollama's actual JIT cubin. Qualified exact
+status stays **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Disabled Forward Diagnostics CPU Scope
+
+Five CPU-only release pairs measure **246.311 ms per nominal 512-token
+replay**, **481.08 us per nominal token**, for the existing disabled forward
+logging wrapper around 396 layer operations. The observed cost is **2.3643%**
+of the qualified HTTP interval, not an inference bound or E2E speedup.
+See [scope, raw CPU pairs and audit](experiments/2026-10-26-maxwell-disabled-diagnostics-cost.md).
+
+Keep `a592deb` test-only: it misses the prespecified 3% standalone-cost
+threshold before accounting for CPU/GPU overlap. No runtime fast path or
+environment cache follows. Coverage, checksums, zero device/counter changes
+and ten corruption controls pass. Qualified exact status remains
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both original
+targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Shared FFN Scales Help Below The Gate
+
+Staging original FP16 scales once per CTA in shared FP32 preserves gate/up,
+SwiGLU and complete-down bits and improves complete one-row FFN throughput
+**1.99-2.19%**. All paired lower bounds are positive, but every upper bound
+is below **2.34%**, short of the unchanged 5% gate. Four-row gains are
+0.53-2.47% and cannot bypass the one-row decision. See
+[raw pairs, compiler evidence and independent audit](experiments/2026-10-26-maxwell-shared-scales-ffn-screen.md).
+
+Keep `78716e1` benchmark-only without runtime selection, staging/geometry,
+register or cache tuning. Registers remain 32 with no spills; shared storage
+grows 1024 to 1536 bytes and barriers one to two at K=2048. Original control
+instructions, prepared identities and global allocation are unchanged.
+Twelve corruption controls and relevant regressions pass. Qualified exact
+status remains **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Fixed Column Visitation Transpose Regresses
+
+One fixed checksum-only transpose of CTA-to-column ownership regresses
+one-row read throughput **3.33-3.36% versus same-kernel sequential** and
+**2.44-2.50% versus original reader**, with negative paired intervals.
+Four-row comparisons also regress. Dispatch-index tags and normalized
+source checks pass; original reader/gate-up/down instruction words and
+allocations remain unchanged. See
+[both controls, compiler evidence and audit](experiments/2026-10-26-maxwell-column-order-screen.md).
+
+Keep `034be32` diagnostic-only without an inference consumer or permutation,
+geometry, cache, layout or register rescue. This does not measure physical
+SM placement, partition behavior or DRAM traffic. Qualified exact status
+stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet and runtime defaults unchanged.
+
+## 2026-10-26: Synthetic Greedy Adapter Has Tiny CPU Cost
+
+Five paired CPU-only release replays of qualified actual512 IDs measure
+**6.072 ms/trace**, about **11.86 us/token**, for synthetic logits plus CPU
+greedy sampling after GPU token selection. The observed cost is about
+**0.0583%** of the qualified HTTP interval, not an E2E speedup forecast or
+rigorous bound. See [raw CPU pairs, scope and audit](experiments/2026-10-26-maxwell-greedy-adapter-scope.md).
+
+Keep `a2b8458` diagnostic-only; no runtime adapter change or GPU kernel is
+justified by this cost study. Actual IDs, zero device tracking, serial fixed
+pairs and all nine corruption controls pass. Exact status stays
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets remain
+unmet and runtime defaults unchanged.
+
+## 2026-10-26: Corrected Q8_1 Quality Remains Numerical-Only
+
+The plan audit found historical Q8_1 quality reports predated the sequential
+prefix ownership repair. Fresh release runs of the two unchanged geometries
+now preserve the corrected control's seven dense-valid task passes, but
+change the actual 512-token continuation at **step 60 for 128 threads** and
+**step 10 for 256 threads**, not historical step 42. Held-out PPL remains
+**39.612157 reference / 40.670991 / 40.776474**. See
+[raw outputs, reference-prefix logits, loss and independent audits](experiments/2026-10-26-maxwell-q81-corrected-quality.md).
+
+This is a quality evidence repair, not a paired timing or promotion result.
+Both cases use the corrected explicit native/sequential M08 control, not
+the current best runtime. Q8_1 stays numerical research only; defaults,
+qualified **49.146 HTTP tok/s** versus **43.106 official Ollama**, and both
+unmet exact-output targets remain unchanged.
+
+## 2026-10-26: Physical Gate/Up Roles Regress
+
+Separating gate and up into two physical 128-thread roles preserves original
+bits but regresses complete one-row FFN throughput **14.53-14.66%**, with
+negative paired intervals at all three layers. Four-row regressions are
+**10.88-14.29%**. Registers rise 32 to 40 despite one accumulator per thread;
+this is not a measured occupancy or traffic explanation. See
+[pairs, parity, compiler evidence and audited decision](experiments/2026-10-26-maxwell-role-parallel-ffn-screen.md).
+
+Keep `0d99dc8` benchmark-only without runtime integration or geometry,
+cache, register-cap or unroll rescue. Original control/prepared words and
+allocations remain unchanged. Exact status remains **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both targets remain unmet and defaults
+unchanged.
+
+## 2026-10-26: Indexed Lossless Byte Coding Misses Feasibility
+
+Actual gate/up payload entropy is **7.65-7.68 bits/byte**. A CPU-only
+Huffman size model with 1024-symbol aligned/indexed chunks saves only
+**2.37-2.69%**, before decoder costs; 32/256-symbol chunks increase storage.
+All six tensors miss the prespecified 10% byte-saving threshold. See
+[source counts, indexed costs and independent byte audit](experiments/2026-10-26-maxwell-ffn-entropy-study.md).
+
+Keep `fc7f377` offline-only; no CUDA decoder or generation format follows.
+This is not a universal compression bound, resident-VRAM prediction or
+throughput result. Qualified status remains **49.146 HTTP tok/s** versus
+**43.106 official Ollama**; both targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Native Warp FFN Association Regresses
+
+A native 32-partial FP32 output-warp mapping regresses complete one-row
+FFN throughput **4.72-4.77%**, with negative paired intervals at every
+layer. It removes shared publication/block-wide barriers, but needs **40
+registers**, versus 32 control and 56 closed 128-partial emulation. See
+[numerical drift, raw pairs, compiled resources and audit](experiments/2026-10-26-maxwell-native-warp-ffn-screen.md).
+
+Existing CPU bounds and capture parity pass; changed association is reported
+rather than claimed bit-identical. Keep `dd78a1a` benchmark-only, with no
+geometry/register rescue or runtime integration. Qualified status stays
+**49.146 HTTP tok/s** versus **43.106 official Ollama**; both original
+targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Fixed FFN Column Gap Regresses Reads
+
+A single 128-byte gap after payload columns regresses one-row read
+throughput **2.25-2.34%**, with negative paired intervals at every layer;
+four-row regressions are **2.32-2.35%**. Both arms execute the same pitched
+checksum kernel with unchanged scale planes and 32 registers. See
+[raw costs, compiler evidence and audit](experiments/2026-10-26-maxwell-ffn-column-gap-screen.md).
+
+Keep `2e96ce7` diagnostic-only. No inference consumer or gap-size/geometry
+rescue follows. This does not attribute cache/DRAM partition behavior or
+measure memory traffic. Qualified status remains **49.146 HTTP tok/s**
+versus **43.106 official Ollama**; both original targets remain unmet and
+runtime defaults unchanged.
+
+## 2026-10-26: Thread-Owned FFN Packets Miss The Gate
+
+Packing two original per-thread tasks into one payload preserves control
+bits but gains only **0.23-0.34%** complete one-row FFN throughput. All upper
+confidence bounds are below 0.62%, far short of 5%; one crosses zero.
+Four-row intervals all cross zero. See [raw pairs, compiler evidence and
+audit](experiments/2026-10-26-maxwell-ffn-task-pair-screen.md).
+
+The intended LDG128 payload is compiled with unchanged 32 registers and
+zero stack/local storage. Fewer load instructions do not establish lower
+DRAM traffic or a useful end-to-end gain. Preserve `65801ff` benchmark-only,
+with no runtime integration or geometry/register/cache rescue. Qualified
+status stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both
+original targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Warp Packets Improve Projections Below FFN Gate
+
+Lossless cross-column packets preserve control bits and improve isolated
+one-row down **7.52-7.61%**, but complete FFN gains only **2.46-2.62%**,
+below 5% with all interval upper bounds below 2.77%. Vocabulary improves
+**9.28%**, but its independent optimistic E2E scope is just **0.6823%**,
+below 3%. See [pairs, compiled loads, setup/memory and audit](experiments/2026-10-26-maxwell-warp-packet-screen.md).
+
+The intended two LDG128 payload/one packed-scale reads are realized with
+unchanged 40 registers and no stack/local storage. Keep `966ead2`
+benchmark-only; no runtime integration, geometry rescue or combining failed
+probes. Qualified status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Prepared Reads Retain Most Projection Cost
+
+Checksum-only original-mapping reads take **89.08-89.55%** of real one-row
+down time and **89.36%** of vocabulary time: approximately **0.117/0.131 ms**
+and **1.397/1.563 ms**. Real complete FFN stays near **0.352 ms**. See
+[all eight cases, compiled loads, memory and audit](experiments/2026-10-26-maxwell-prepared-read-screen.md).
+
+This is a surrogate, not DRAM timing, an inference lower bound or an
+optimization. Checksum uses 32 versus control's 40 registers; original
+control words remain unchanged. Keep `375c488` diagnostic-only. Next inspect
+lossless cross-column packet access before another arithmetic-only probe.
+Qualified status remains **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both targets remain unmet and defaults unchanged.
+
+## 2026-10-26: Gate/Up Read Cost Is Close To Real Work
+
+A checksum-only read of the actual gate/up planes takes **0.208 ms** versus
+**0.221 ms** for qualified one-row gate/up/SwiGLU, or **93.94-94.00%** of
+its latency. Complete real FFN remains **0.352 ms**; checksum is never used
+as an activation or fed to down. See [fixed mapping, raw intervals, compiled
+loads, memory and audit](experiments/2026-10-26-maxwell-ffn-read-screen.md).
+
+This surrogate removes inference arithmetic but changes output/resource
+work; it is not measured DRAM time, a rigorous lower bound or a speedup.
+It argues against another arithmetic-only probe on the same mapping without
+new evidence. Keep diagnostic `1001976` benchmark-only. Qualified status is
+still **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet and runtime defaults are unchanged.
+
+## 2026-10-26: Eight-Value FFN Gains Remain Below Gate
+
+Aligned eight-byte payload tasks improve complete one-row FFN throughput
+**2.00-2.03%**, with positive paired intervals but upper bounds below 2.35%,
+missing the unchanged 5% gate. Both kernels retain 32 registers and zero
+reported stack/local storage. See [drift, loads, pairs and audit](experiments/2026-10-26-maxwell-ffn-eight-screen.md).
+
+FP32 summation ownership changes; all existing CPU bounds pass, but this is
+not actual-model/token-equality evidence. Keep `45d0214` benchmark-only,
+without task-width/geometry rescue or combining rejected candidates.
+Qualified status remains **49.146 HTTP tok/s** versus **43.106 official
+Ollama**; both original targets and runtime defaults remain unchanged.
+
+## 2026-10-26: Physical FFN Cohorts Do Not Qualify
+
+Two independent physical 128-thread output groups per 256-thread CTA preserve
+control bits but regress complete one-row FFN throughput **0.49-0.52%**, with
+all paired intervals negative. Four-row results also miss 5%. See [pairs,
+unchanged control words, resources and audit](experiments/2026-10-26-maxwell-ffn-cohorts-screen.md).
+
+Registers rise 32 to 40; halving CTA count does not produce a measured gain.
+Keep `ac505bf` benchmark-only, without cohort/block/register rescue or runtime
+changes. Qualified status remains **49.146 HTTP tok/s** versus **43.106
+official Ollama**; both original targets remain unmet.
+
+## 2026-10-26: Exact Reduction Gains Have Limited Runtime Scope
+
+Partitioned argmax improves complete one-request latency from about 174 us
+to 10.7-11.3 us, **15.43-16.28x**, in ten fresh alternating pairs. Norm
+point gains are **10.84-22.44%**, but four of six one-row intervals cross
+zero. The initial five-pair run is separate, not pooled. See [raw pairs,
+SASS, scratch, validation and audit](experiments/2026-10-26-maxwell-decode-reductions-screen.md).
+
+Only argmax independently qualifies, yielding **1.2533% optimistic
+profile-weighted E2E scope**, below the fixed 3% gate. Keep `f8c00bf` /
+`125d3a3` and benchmark `61a48d9` experimental, without runtime integration,
+geometry rescue or default changes. Qualified status remains **49.146 HTTP
+tok/s** versus **43.106 official Ollama**, with both original targets unmet.
+
+## 2026-10-26: Split Attention Projection Storage Does Not Qualify
+
+The existing split representation preserves current packed QKV/output bits,
+but one-request QKV throughput regresses **0.78-2.12%**. Output's median
+gain is **2.02-2.49%**, below 5%, with intervals spanning zero and only
+**0.102-0.125% optimistic standalone E2E scope**. Neither stage qualifies.
+See [pairs, compiled loads, memory, warmup correction and audit](experiments/2026-10-26-maxwell-split-projection-screen.md).
+
+Aligned 64-bit payload loads replace four U16 reads, with unchanged 32/40
+registers and control instruction words. That does not establish a runtime
+gain. Keep `0b96c46` / `34a2427` benchmark-only, with no geometry rescue or
+default change. `5719ffc` fixes an insufficient untimed warmup budget and
+preserves the incomplete first output attempt separately. Qualified status
+stays **49.146 HTTP tok/s** versus **43.106 official Ollama**; both targets
+remain unmet.
+
+## 2026-10-26: Reusing FFN Blocks Regresses
+
+One fixed 192-block-per-row grid preserves qualified FP32 control bits,
+but reduces one-row complete-FFN throughput **9.79-9.85%** and four-row
+throughput **5.61-7.58%**, with all paired intervals negative. Gate/up
+alone grows from about **0.222 ms to 0.259-0.260 ms** at one row. Registers
+rise 32 to 48, and a second block barrier protects shared partial reuse.
+See [pairs, compiled instructions, memory and audit](experiments/2026-10-26-maxwell-persistent-tiles-screen.md).
+
+Keep `2c8f753` benchmark-only, with no block-cap/thread/register rescue or
+runtime integration. There is no new E2E claim or default change. Qualified
+status remains **49.146 HTTP tok/s** versus **43.106 official Ollama**;
+both original targets remain unmet.
+
+## 2026-10-26: Packed Prefill Projection Attribution
+
+Five release profiling-off/on pairs preserve actual 512 IDs and ordinary
+counters, measuring **49.390 / 48.707 HTTP tok/s**, a **1.3825%** diagnostic
+overhead. Prefix spans total **88.787 ms conversion**, **91.566 ms SGEMM**
+and **43.749 ms Q/K/V bias**, with **139.894 ms unattributed wall time**.
+They do not cover all prefill GPU work. See [coverage, timing boundaries,
+source comparison and raw evidence](experiments/2026-10-26-maxwell-prefill-attribution.md).
+
+Even eliminating the profiled conversion/SGEMM scope gives only a **1.771%**
+optimistic E2E estimate. Do not implement a new transpose/layout path on
+that evidence alone. The new profiler is opt-in; no backend or default
+changes. Qualified status stays **49.146 HTTP tok/s** versus **43.106
+official Ollama**; both original targets remain unmet.
+
+## 2026-10-26: Register-Owned FFN Warps Regress
+
+One fixed virtual-thread mapping removes shared publication and the block
+barrier while retaining the qualified FP32 tree and control bits. Complete
+one-row FFN throughput regresses **5.36-5.40%**, with negative paired
+intervals; four-row results regress **4.27-5.43%**. Registers rise 32 to 56
+without reported stack/local storage. See [raw pairs, compiled evidence,
+memory and audit](experiments/2026-10-26-maxwell-virtual-warp-screen.md).
+
+Keep `21ca349` benchmark-only. No geometry/register-cap rescue, runtime
+integration or default change follows. The pinned Maxwell MMVQ source
+uses four physical warps per output, not the unrelated independent-warp
+MoE mapping. Exact status stays **49.146 HTTP tok/s** versus **43.106
+official Ollama**, both original targets unmet.
+
+## 2026-10-26: Prepared Activation Loads Regress
+
+Two vector activation loads replace eight scalar sites and preserve control
+bits, but one-row complete FFN regresses **0.665-0.875%** with negative paired
+intervals. Vocabulary regresses **2.608% / 2.651%** at rows 1/4. None passes
+the 5% micro gate. See [all pairs, compiled evidence, memory and audit](experiments/2026-10-26-maxwell-prepared-activation-screen.md).
+
+Registers rise 40 to 46 without reported spills; no measured occupancy
+attribution follows. Keep `5579ea2` benchmark-only, without geometry or
+register-cap rescue, runtime integration or combining the earlier reduction
+candidate. Exact status stays **49.146 HTTP tok/s** versus **43.106 official
+Ollama**, both original targets unmet and defaults unchanged.
+
+## 2026-10-26: Packed Runtime Remains FFN Dominated
+
+Five profiling-off/on pairs preserve actual 512 IDs and show **1.0864%
+instrumentation overhead**. Middle-token event shares are **41.11% gate/up,
+24.37% down, 7.98% vocabulary, 7.09% QKV, 5.16% output and 3.98% attention**.
+See [events, complete coverage and source/instruction evidence](experiments/2026-10-26-maxwell-packed-stage-profile.md).
+
+Prepared projection SASS still contains eight scalar bounds-checked
+activation loads but already-packed weight loads. A [fixed activation-load
+probe](experiments/2026-10-26-maxwell-prepared-activation-hypothesis.md) will
+retain its original reduction, planes, FP32 math and geometry; this does
+not revive the below-gate reduction candidate. No optimization follows
+from profiling alone. Exact status stays **49.146 HTTP tok/s** versus
+**43.106 official Ollama**; both original targets and defaults are unchanged.
+
+## 2026-10-26: Compressed KV Does Not Stack As A Short-Context Speedup
+
+Five release resident-generation rounds with the optimized packed Q8
+runtime measure **49.104 tok/s dense**, **19.694 compressed defaults**,
+**20.217 window128/top8**, and **22.765 window128/top4**. All generate 512
+tokens. These are not HTTP measurements. See [full timing, memory, output,
+reproduction and audit](experiments/2026-10-26-maxwell-packed-kv-stack.md).
+
+Default window1024 contains the full prompt/continuation and preserves
+dense IDs, but allocates **58.887 MiB KV versus 36.000 MiB dense** at this
+1024-token allocation bound. Window128 reduces KV to **30.238 MiB**, with
+output divergence at generated steps 323/top8 and 196/top4 and visible
+repetition. This is not a long-context crossover or a new quality claim.
+Exact HTTP status remains **49.146 versus 43.106 tok/s**, both targets unmet;
+no defaults or policies change.
+
+## 2026-10-25: Packed Runtime Beats Fresh Ollama By 14.01%
+
+Five alternating release pairs measure **49.146449 versus 43.105570
+buffered HTTP tok/s**, **+14.014148%**, paired 95% interval
+**[13.974351%, 14.370487%]**. Actual 512 IDs, selected packed dispatch,
+all 109 prepared identities and verified prompt-cache resets pass. See
+[setup, timings, memory, raw evidence and audit](experiments/2026-10-25-maxwell-packed-projection-ollama-http.md).
+
+M40 prompt/decode medians are 498.880 / 9,870.478 ms; official Ollama's
+are 229.589 / 11,643.652 ms with differing timing boundaries. This keeps
+the exact packed QKV/output combination opt-in without new defaults.
+Both original goals remain unmet: **53.06** and **56.037 HTTP tok/s** for
+1.30x this fresh official median. Next re-profile the selected runtime
+before choosing another independent bounded exact optimization.
+
+## 2026-10-25: Packed Projections Confirm 4.02% HTTP Gain
+
+Twenty fresh alternating pairs measure **49.082435 versus 47.186286 HTTP
+tok/s**, **+4.018433%**, paired 95% interval **[3.802092%, 4.143568%]**.
+The initial five-pair 3.918% result triggered borderline confirmation and
+is not pooled into the headline. Actual 512 IDs, HTTP smokes, all 109
+prepared identities and selected dispatch pass. See [timing, memory,
+reproduction and independent audit](experiments/2026-10-25-maxwell-packed-projection-incremental-http.md).
+
+This retains the opt-in packed QKV/output combination without new defaults.
+Prompt/decode medians are 501.079 / 9,883.993 ms. No new weight/scratch is
+added. Ollama is an untimed oracle here; fresh cross-engine timing is next.
+Both original goals remain unmet, and this result does not imply a new
+Ollama-relative percentage.
+
+## 2026-10-25: Packed QKV/Output Passes Runtime Quality
+
+The explicit packed-load projection combination preserves all **512 actual
+IDs**, twelve frozen task outputs and all 109 prepared identities against
+the qualified warp/split-FFN/SGEMM control. Seven dense-valid tasks have
+zero regressions; five dense-failed cases remain inconclusive. Seven
+sampled full-vocabulary logit comparisons have zero max/mean difference.
+See [source, reproduction, memory, validation and audit](experiments/2026-10-25-maxwell-packed-projection-runtime-quality.md).
+
+This passes the prerequisite for controlled HTTP timing, not a performance
+or default-promotion gate. Selected dispatch is verified and all other
+enqueue counters match. Qualified **47.379 HTTP tok/s**, both unmet
+original targets and runtime defaults remain unchanged until paired timing.
+
+## 2026-10-25: Packed Native QKV/Output Loads Pass Screens
+
+Fixed packed loads preserve qualified warp-control bits and improve
+one-request **QKV throughput 46.87-51.97%** and **output projection
+40.02-46.78%**, with positive paired intervals. Register usage remains
+32/40 without reported spills; no additional weight preparation is needed.
+See [complete pairs, instructions, validation and audits](experiments/2026-10-25-maxwell-packed-projection-screen.md).
+
+Both independent stage gates pass; their combined optimistic current-profile
+scope is **5.23-5.33%**, not measured E2E speed. `8b7b20c` permits an explicit
+combined runtime-quality experiment, followed by incremental HTTP and fresh
+Ollama checks. Actual inputs are frozen FFN surrogates, so generated-token
+quality is still required. Qualified **47.379 HTTP tok/s**, both original
+unmet targets and runtime defaults remain unchanged.
+
+## 2026-10-25: Exact Byte Conversion Is Near Neutral
+
+Exact byte permutation removes signed byte-to-float instructions while
+retaining qualified fused bits and 32 registers, but complete one-row FFN
+gains only **0.138-0.295%**. All intervals span zero, far below the 5% gate;
+four-row results are also neutral. Keep `d5a3350` benchmark-only with no
+conversion or geometry rescue. See [pairs, exhaustive byte coverage,
+instructions and audit](experiments/2026-10-25-maxwell-byte-ffn-screen.md).
+
+The independent compiled-code follow-up finds scalar weight/activation
+loads still present in qualified QKV/output kernels, motivating a bounded
+alignment-safe load-vectorization comparison there. Qualified **47.379
+HTTP tok/s**, both original unmet targets and defaults are unchanged.
+
+## 2026-10-25: L2-Only FFN Weight Loads Miss The Gate
+
+One fixed cache-policy candidate preserves qualified fused bits but gains
+only **0.095-0.184% complete one-row FFN throughput**, well below 5%.
+Four-row gains are 1.40-4.68%, with a wide zero-spanning interval on layer 0;
+they do not qualify the single-token path. See [configuration, all paired
+results, emitted instructions and audit](experiments/2026-10-25-maxwell-cache-ffn-screen.md).
+
+Weight loads change from read-only to L2-only; activations remain read-only.
+The compiler raises registers from 32 to 40 with no reported spills. No
+cache-hit or bandwidth attribution follows. Keep `0cff8ab` benchmark-only
+without more cache-operator/geometry tuning. Qualified **47.379 HTTP tok/s**,
+both original unmet targets and runtime defaults are unchanged.
+
+## 2026-10-25: Fixed Unfused FFN Regresses
+
+One fixed separate gate/up/SwiGLU strategy preserves control bits but
+reduces complete one-row FFN throughput **14.14-14.27%**; four rows regress
+12.18-12.76%. All paired intervals are negative. Stop `286cb9a` benchmark-only
+without column/thread tuning or runtime wiring. See [configuration, all-launch timing, resources and audit](experiments/2026-10-25-maxwell-unfused-ffn-screen.md).
+
+The control retains 32 registers; the candidate projection uses 48 plus a
+17-register separate epilogue, with no reported spills. This does not
+quantify occupancy or explain Ollama's different Q8_1 pipeline. The current
+qualified **47.379 HTTP tok/s**, both unmet targets and defaults are unchanged.
+
+## 2026-10-25: Prepared Warp Finish Misses Runtime Gates
+
+The fixed prepared-down warp finish preserves control bits but gains only
+**2.44-2.60% complete one-row FFN throughput**, below the unchanged 5% gate.
+Isolated down gains 7.53-8.12%; those are not complete-FFN wins. Vocabulary
+gains **6.54%**, but its optimistic standalone profile-weighted E2E estimate
+is only **0.474%**, below 3%. See [pairs, instructions, tests and decision](experiments/2026-10-25-maxwell-prepared-warp-screen.md).
+
+Keep `8d1c15d` / `5218f41` benchmark-only without runtime integration or a
+geometry rescue. Control SASS, FP32 math, prepared planes and 40-register
+usage remain unchanged. The qualified runtime stays **47.379 HTTP tok/s**;
+both original targets remain unmet and defaults stay unchanged.
+
+## 2026-10-25: Qualified Projection Runtime Remains FFN Dominated
+
+Five profiling-off/on pairs preserve actual 512 IDs and measure **1.0095%
+instrumentation overhead**. Middle-token stage shares are **39.43% gate/up,
+23.33% prepared down, 7.68% vocabulary and 3.80% attention**. QKV/output
+now account for 9.24% / 6.64%. See [events, coverage audit and bounded next hypothesis](experiments/2026-10-25-maxwell-projection-stage-profile.md).
+
+The next probe is an original-tree warp finish for existing prepared
+projections, with fixed layout, math and geometry and unchanged qualified
+controls. No new candidate or speed claim follows from profiling. The
+authoritative selected result stays **47.379 HTTP tok/s** versus **43.097**
+official Ollama; both original goals and runtime defaults remain unchanged.
+
+## 2026-10-25: Projection Runtime Beats Fresh Ollama By 9.94%
+
+The corrected five-pair release comparison measures **47.378948 versus
+43.096583 buffered HTTP tok/s**, **+9.936669%**, with paired 95% interval
+**[9.878961%, 10.665805%]**. Actual 512 IDs, intended warp dispatch, all
+109 existing prepared identities and prompt-cache reset evidence pass.
+See [configuration, timing, memory, rejected attempt and audit](experiments/2026-10-25-maxwell-projection-ollama-http.md).
+
+M40 prompt/decode medians are 494.506 / 10,263.248 ms; official Ollama's
+are 229.761 / 11,644.989 ms, with differing phase boundaries. Only HTTP
+supports the cross-engine percentage. Both original goals remain unmet:
+**53.06** and **56.025558 tok/s** for 1.30x this fresh official median.
+Defaults remain unchanged. The benchmark primary-loader omission is fixed
+and its wrong-dispatch run preserved, not counted as candidate evidence.
+Next re-profile the qualified combined runtime before another bounded kernel
+hypothesis. This result uses explicit dense KV, not compressed top8.
+
+## 2026-10-25: Combined Projection Runtime Passes HTTP Gate
+
+Five alternating release HTTP pairs measure **47.322695 versus 44.949943
+tok/s, +5.278655%**, against the current split-FFN/SGEMM control. The paired
+95% gain interval is **[4.945304%, 5.864675%]**; variation is low and neither
+extension nor borderline confirmation is required. Actual 512 IDs, all
+HTTP smokes and completed quality remain equal. See [paired results,
+dispatch, memory and audit](experiments/2026-10-25-maxwell-projection-incremental-http.md).
+
+Both models retain all 109 prepared gate/up/down/vocabulary tensors with
+no new device-weight storage. This qualifies the explicit QKV/output warp
+combination experimentally, not a default or a fresh Ollama comparison.
+The original 53.06 and 1.30x-fresh-Ollama objectives remain unmet; official
+Ollama timing is the next gate.
+
+## 2026-10-25: Combined QKV/Output Runtime Preserves Quality
+
+The opt-in projection warp combination now preserves **512 actual generated
+IDs and all twelve frozen task outputs** against the current split-FFN/
+SGEMM control. Seven dense-valid tasks have zero regressions; five reference
+failures remain inconclusive. All seven sampled full-vocabulary logit
+comparisons have **zero max/mean difference** and top-10 overlap ten.
+See [actual dispatch, memory, tests and audit](experiments/2026-10-25-maxwell-projection-runtime-quality.md).
+
+All 109 prepared gate/up/down/vocabulary identities and capacities stay
+unchanged, with no added device weights or activation quantization. Each
+projection candidate executes 18,432 launches in the canonical run.
+The runtime is now eligible for paired HTTP timing, not yet an E2E claim.
+Defaults and the last qualified **45.075 HTTP tok/s** remain unchanged;
+both original throughput goals are still unmet.
+
+## 2026-10-25: Output Warp Finish Clears Combined Feasibility
+
+The fixed raw-Q8 four-column output kernel preserves original FP32 bits and
+improves one-request throughput **30.42-31.57%**, with positive paired
+intervals. Four independent requests gain 26.86-27.52%; this is not batched
+GEMM. Both kernels use 40 registers and 4096 dynamic shared bytes, with no
+reported spills. See [paired data, instruction hashes and ownership](experiments/2026-10-25-maxwell-output-warp-screen.md).
+
+The unchanged QKV peer plus output gives an optimistic profile-weighted
+whole-token estimate of **4.68-4.72%**, clearing the prespecified 3%
+feasibility gate. This authorizes a combined opt-in runtime experiment,
+not an E2E claim. No generation/default dispatch changed; actual-512 and
+frozen-quality checks must precede original HTTP gates. The last qualified
+runtime remains **45.075 HTTP tok/s**, with both original goals unmet.
+
+## 2026-10-25: Native QKV Warp Finish Passes Stage Gate
+
+One fixed raw-Q8/FP32 split4 kernel replaces nine reduction barriers with
+one publication and an original-tree warp finish. It preserves Q/K/V bits
+and real biases, with **27.47-27.76% one-request throughput gains** and
+positive paired intervals. Four distinct independent requests gain
+26.45-26.73%; this is not a batched GEMM. Registers stay at 32 with no
+reported spills. See [scope, paired data, exactness and ownership](experiments/2026-10-25-maxwell-qkv-warp-screen.md).
+
+The kernel passes the 5% complete-QKV gate, but the prespecified optimistic
+profile-weighted whole-token ceiling is only **2.59-2.61%**, below 3%.
+Keep `499d2de` as a positive benchmark candidate, without standalone runtime
+integration or an HTTP claim. A separately justified output-projection
+reduction experiment may support a future combined candidate; all actual-token
+quality and original HTTP gates remain. The last qualified runtime stays
+45.075 HTTP tok/s and both original goals remain unmet.
+
+## 2026-10-25: Fixed-Width FFN Misses Micro Gate
+
+One fixed K=2048 specialization removes 21 static pre-load address-product
+sites and the runtime loop from the qualified separate-plane kernel, with
+unchanged math, storage and 32-register usage. It preserves hidden/completed
+down bits but improves complete one-row FFN throughput only **1.24-1.32%**,
+far below the unchanged 5% gate. Four-row point gains are 0.73-1.12%.
+See [pairs, instructions, numerical/ownership evidence and decision](experiments/2026-10-25-maxwell-fixed-k-ffn-screen.md).
+
+Keep `deef80b` benchmark-only, with no runtime, width/unroll/geometry rescue
+or extra trials for this clear below-gate result. This is not an E2E gain.
+The last qualified runtime remains 45.075 HTTP tok/s and both original
+throughput goals remain unmet. The measured result argues against assuming
+static address/loop overhead explains most remaining FFN latency.
+
+## 2026-10-25: Joint Gate/Up Packing Misses Micro Gate
+
+One fixed lossless joint layout removes two global load instructions per
+four-value task while keeping one-column/128-thread FP32 arithmetic and
+the current split-plane control. Five pairs show 4.68-4.75% complete one-row
+FFN gains. A fresh **twenty-pair** confirmation shows **4.66-4.74%**, with
+all one-row upper confidence bounds below the unchanged 5% gate. Four-row
+confirmation gains are 3.19-3.49%. All control hidden/completed-down bits
+and numerical/ownership checks pass. Both kernels use 32 registers and no
+reported spills. See [paired results, emitted instructions, memory and the
+decision](experiments/2026-10-25-maxwell-joint-ffn-screen.md).
+
+This is a repeatable small kernel gain, not an E2E improvement or a qualified
+runtime candidate. Keep `8881763` benchmark-only; do not lower the gate or
+run a rescue layout/geometry sweep. Both arms retain 95,813,632 bytes of
+control plus joint preparation, not a memory saving. The qualified runtime
+remains 45.075 HTTP tok/s; both original targets remain unmet.
+
+## 2026-10-25: Two-Column Split FFN Regresses
+
+One fixed two-column/128-thread split-plane kernel preserves current
+one-column bits, but complete one-row throughput is **5.85-6.01% slower**;
+four-row work is **4.38-5.45% slower**, with negative paired intervals.
+Prepared storage and down are identical. Registers rise from 32 to 40,
+without reported spills; this does not establish a measured occupancy cause.
+See [paired results, ownership, SASS and the rejected gate](experiments/2026-10-25-maxwell-split-cols2-screen.md).
+
+Keep `414f2a5` benchmark-only, with no additional column tuning or runtime
+selection. The qualified one-column split/SGEMM runtime and both original
+unmet HTTP targets remain unchanged.
+
+## 2026-10-25: Qualified Split Runtime Stage Profile
+
+The selected split-plane FP32/SGEMM runtime preserves all actual 512 IDs with
+profiling off/on. Five paired requests show **0.986%** profiling overhead.
+Middle-token GPU spans remain **37.43% gate/up/SwiGLU, 22.31% down, 3.62%
+attention**; gate/up is 8.047 ms across 36 layers. These instrumented spans
+are not a new HTTP gain or measured bandwidth. See [samples, overhead,
+coverage and the fixed two-column follow-up](experiments/2026-10-25-maxwell-split-stage-profile.md).
+
+## 2026-10-25: Split-Plane FFN Passes HTTP Qualification
+
+Release Qwen2.5-3B Q8_0, dense context 1024, canonical 65 prompt IDs and
+512 actual generated tokens. The fixed FP32 split-plane FFN retains the
+qualified prepared down/vocabulary and dequant-SGEMM prefix.
+
+| Five alternating pairs | Control HTTP tok/s | Candidate HTTP tok/s | Gain | Paired 95% gain interval |
+| --- | ---: | ---: | ---: | ---: |
+| [Incremental vs packed128/SGEMM](experiments/2026-10-25-maxwell-split-incremental-http.md) | 41.204821 | 44.971790 | +9.142060% | +9.080723% to +9.295892% |
+| [Fresh official Ollama 0.40.11](experiments/2026-10-25-maxwell-split-ollama-http.md) | 43.119374 | 45.075177 | +4.535786% | +4.360502% to +4.637279% |
+
+All actual M40 IDs and timed outputs bind passing quality; both comparisons
+pass the fixed timing gate without trial extension. Every primary boundary
+records 1113/3004 MHz clocks, and every prompt cache reset is verified.
+Inference is serial; the owned Ollama server is stopped and the GPU ends empty.
+
+The measured Ollama gap is closed for this workload, but both original goals
+remain unmet: **53.06 tok/s** and **56.055187 tok/s** for 1.30x the fresh
+median. Retain the explicit experimental configuration, with no default change.
+Re-profile it before choosing another bounded exact-kernel experiment. The
+extra **1,724,645,376-byte** gate/up cache remains part of the memory cost.
+
+## 2026-10-25: Split-Plane Runtime Passes Exact Quality
+
+The opt-in split-plane/four-value FP32 FFN runtime now preserves **all 512
+actual browser IDs and all twelve task outputs** against the current
+packed128/SGEMM control, with zero regressions across seven dense-valid tasks.
+Top-10 logit overlap remains 10; maximum sampled drift is **0.004531**.
+Both arms retain all 252 prefill conversions/SGEMMs and the same enqueue counts.
+
+Actual gate/up preparation adds **1,724,645,376 bytes**, bringing source plus
+prepared weight payload to **6,197,100,544 bytes** before KV/workspace.
+See [ownership, complete quality, setup costs and audit](experiments/2026-10-25-maxwell-split-runtime-quality.md).
+This passes quality, not HTTP timing. No default change or new E2E throughput
+claim follows; incremental HTTP and fresh Ollama qualification are next.
+
+## 2026-10-25: Split-Plane Fused FFN Clears Micro Gate
+
+One fixed 128-thread/four-value FP32 kernel on existing split weight planes
+improves complete one-row FFN throughput **15.54-15.65%** over qualified
+packed128, with positive paired intervals at original layers 0/17/35.
+Four-row work gains **13.47-15.91%** independently. All numerical checks pass.
+
+The microbenchmark adds **47,906,816 device bytes** for the current layer's
+gate/up pair, retained for both arms. Packing/upload medians are **30.615 /
+7.950 ms**, outside primary timing. All-layer extra storage is an estimate,
+not measured runtime residency. See [paired trials, memory, setup, compiler
+evidence and runtime gate](experiments/2026-10-25-maxwell-split-ffn-screen.md).
+
+This qualifies one runtime prototype, not deployment or an HTTP speed claim.
+Actual 512-token/frozen-task quality and incremental HTTP qualification remain
+required. The existing runtime/defaults and both unmet E2E targets are unchanged.
+
+## 2026-10-25: Adjacent-Pair FFN Loads Miss The Gate
+
+A single fixed 128-thread FP32 mapping emits vector activation loads and
+reduces the predicted per-warp request footprint, but complete one-row FFN
+throughput gains only **1.84-1.98%**, below the 5% screen. Four-row gains are
+**0.70-1.70%** with confidence intervals crossing zero. All numerical checks
+pass. Keep it benchmark-only; the qualified HTTP runtime is unchanged.
+
+Legacy CUPTI counter groups are unsupported even with administrator access,
+so footprint estimates are not DRAM measurements. See [paired results,
+request-model limits and the next aligned-layout hypothesis](experiments/2026-10-25-maxwell-coalesced-ffn-screen.md).
+
+## 2026-10-25: FP32 Scale Factoring Does Not Qualify
+
+One fixed 128-thread experiment applies Q8 scales after eight-value FP32
+partial dot products. All numerical checks pass, but complete one-row FFN
+throughput is **0.07-0.28% slower** than the qualified packed/warp128 control.
+Four-row gains are only **1.59-2.96%**, below the 5% screen. Fewer static
+multiply sites and no spills do not establish a useful performance gain.
+
+Keep the code benchmark-only and preserve this negative result. No runtime
+integration or default change follows; the last qualified HTTP configuration
+and both unmet original targets are unchanged. See [paired trials, numerical
+errors, compiler evidence and audit](experiments/2026-10-25-maxwell-factored-ffn-screen.md).
+
+## 2026-10-25: Selected-Runtime Stage Profile
+
+The qualified FP32/128-plus-SGEMM runtime remains FFN dominated. Median
+middle-token event spans across 36 layers are **10.044 ms gate/up/SwiGLU
+(42.94%)**, **4.751 ms down (20.32%)** and **0.781 ms attention (3.34%)**.
+Five off/on profiling pairs preserve actual 512 IDs but lower measured
+throughput **3.79%**, so do not use instrumented rates as optimization gains.
+See [sampling, overhead, raw events and the bounded next experiment](experiments/2026-10-25-maxwell-selected-stage-profile.md).
+
+## 2026-10-25: Selected Runtime vs Fresh Ollama
+
+Five alternating release pairs measure the qualified FP32/128 plus SGEMM
+runtime at **41.331 HTTP tok/s** versus pinned official Ollama 0.40.11 at
+**42.946**, **3.761% slower**, paired interval **[-4.391%, -3.339%]**.
+Every primary request produces 512 actual tokens, cache resets are verified,
+and selected-runtime IDs match completed quality evidence. No extension is
+required for this clear negative comparison.
+
+Median HTTP is **12387.91 vs 11922.04 ms**, reported prompt **515.63 vs
+231.40 ms**, decode **11823.71 vs 11685.76 ms**. Phase boundaries differ;
+these medians are not additive causal attribution. Both original targets
+remain unmet: **53.06** and **55.829 tok/s** for 1.30x fresh Ollama.
+See [provenance, actual traces, limits and the next native-FFN experiment](experiments/2026-10-25-maxwell-selected-ollama-http.md).
+
+## 2026-10-25: Combined Corrected-Control Runtime Gain
+
+Five alternating release pairs qualify packed FP32/128 FFN plus SGEMM
+prefill at **41.360 vs 35.467 HTTP tok/s, +16.616%**, paired 95% interval
+**[16.439%, 16.708%]**. All actual 512 IDs and dense-valid quality match.
+Median prompt is **509 vs 1611 ms**, decode **11828 vs 12779 ms**, and
+HTTP **12379 vs 14436 ms**. This is measured combination performance,
+not multiplication of the independent gains. See [configuration, memory,
+raw evidence and audit](experiments/2026-10-25-maxwell-completed-combined-http.md).
+
+Runtime defaults remain unchanged. This candidate-pair result does not
+establish either original Ollama throughput target.
+
+## 2026-10-25: Corrected-Control Independent HTTP Gains
+
+Five alternating release pairs per case qualify FP32/128 at **38.382 vs
+35.537 HTTP tok/s, +8.003%** and SGEMM prefill at **38.416 vs 35.421,
++8.456%**. Both preserve all actual 512 IDs and dense-valid quality, with
+positive paired 95% intervals. Native packed prefill is correct but
+**10.085% slower**, so does not qualify. All comparisons use repaired
+sequential control, prepared down/vocabulary and dense context 1024.
+
+These renew independent timing gates, not a combined result or fresh
+Ollama-relative target claim. See [phase medians, intervals, memory, raw
+trials and audits](experiments/2026-10-25-maxwell-completed-http.md).
+
+## 2026-10-25: Corrected Packed-Prefill Quality
+
+Native packed and dequant SGEMM both pass fresh corrected-control quality:
+all 512 actual browser IDs and all twelve frozen task outputs match, with
+no dense-valid regressions. Single diagnostic prompt intervals are roughly
+3.21 s native packed / 0.48 s SGEMM versus 1.59 s sequential. These are not
+paired HTTP performance results. The former exact-output failure was caused
+by the unsafe sequential reference, not uniquely by SGEMM. Residual sampled
+logit drift remains measured. See [full results, dispatch and scratch accounting](experiments/2026-10-25-maxwell-completed-prefill-quality.md).
+
+## 2026-10-25: Sequential Prefill Ownership Repair
+
+Real Qwen attribution finds that the no-logits prefix loop reused its input
+before prior nonblocking consumers completed. Draining each prefix or
+computing a head at every prefix changes the old first token, with about
+9.96 max logit difference. A queued-work fixture reproduces the defect.
+
+After an explicit prefix completion boundary, session, drained and
+per-prefix-head execution match all sampled K/V and final hidden/logit bits.
+Native packed and SGEMM first-token/top-10 sets now match corrected sequential;
+residual prompt-logit max differences are 0.01069 / 0.01132. This does not
+prove full-continuation parity. Prior timing records remain historical;
+requalify quality and speed against the repaired control. See [matched
+before/after evidence and regression scope](experiments/2026-10-25-maxwell-prefill-drift-completed.md).
+
+The [first fresh quality checkpoint](experiments/2026-10-25-maxwell-completed-packed128-quality.md)
+now passes for packed FP32/128: all 512 IDs and twelve frozen task outputs
+match corrected native FFN, with zero dense-valid regressions. This renews
+its quality gate, not the historical HTTP gain. Packed prefill and fresh
+corrected-control timings remain pending.
+
+## 2026-10-25: Remaining Maxwell Runtime HTTP Screen
+
+The five remaining release comparisons preserve prepared down/vocabulary,
+dense KV/context 1024 and actual 512-token requests. Packed FP32/256 confirms
+only **+2.783%** after twenty fresh borderline pairs, below the 3% gate.
+Q8_1/128 and /256 gain **16.833% / 13.211%**, but change output and remain
+numerical research. Native packed prefill loses **10.224%**; temporary
+dequant SGEMM gains **8.071%**, but both fail exact-output equality at token 0.
+See [raw trials, phase medians, audits and limitations](experiments/2026-10-25-maxwell-runtime-http-screen.md).
+
+Subsequent prefill attribution finds sequential buffer-reuse ordering changes
+the reference output. Preserve these historical timings; corrected-control
+qualification is required before recommending a retained runtime. No default
+or original Ollama speed-target claim follows.
+
+## 2026-10-25: Packed FP32/128 Runtime HTTP Qualification
+
+Release `c79e919` compares the screened packed/warp FP32 128-thread FFN
+candidate against native FFN with prepared down/vocabulary fixed, sequential
+prefill, dense KV/context 1024 and the canonical 512-token workload. Five
+alternating HTTP pairs yield **38.493 versus 35.598 tok/s**, a **+8.133%** gain
+with 95% paired interval **[7.938%, 8.275%]**. All actual 512 IDs match, frozen
+dense-valid quality and HTTP smokes pass, and allocation/launch counts remain
+unchanged. The clear result passes the existing timing gate without extension.
+
+This is a qualified typed benchmark candidate, not a runtime-default change
+or fresh Ollama target claim. Failed packed-prefill gates remain separate;
+no combined exact-output result is claimed. See [configuration, phase medians,
+raw data, audits and validation](experiments/2026-10-25-maxwell-runtime-packed128-http.md).
+
+## 2026-10-25: Full-Model Maxwell Runtime Quality Gate
+
+Clean release `3d6833a` tests six independent runtime candidates against the
+qualified prepared down/vocabulary control on the actual 512-token browser
+workload and both frozen quality splits. Packed FP32/128 and /256 preserve
+all 512 IDs and all twelve task outputs, with no regressions across seven
+dense-valid tasks. Packed256 sampled logits are identical; packed128 has small
+nonzero drift. Both advance to controlled HTTP timing, not default promotion.
+
+Both Q8_1 geometries diverge at step 42 without dense-valid task regressions;
+held-out PPL increases from 39.61 to 40.67-40.78. Keep this numerical track
+separate from the exact-output goal. Native packed and SGEMM prefill match
+each other's 512 IDs but differ from sequential at token 0, with large prompt
+logit drift. SGEMM reduces the single diagnostic prompt interval from 1.57 s
+to 0.56 s, including all conversions and an 86 MiB temporary, but does not
+qualify as an exact-output improvement. No combined candidate or default is
+advanced. See [raw reports, scope and unresolved packed-path attribution](experiments/2026-10-25-maxwell-runtime-quality.md).
+
+## 2026-10-25: Bounded Q8 Prefill Runtime Checkpoint
+
+M07 adds opt-in, model-local `dequant-sgemm` packed-prefix prefill with one
+reusable temporary weight capped at 128 MiB. Qwen FFN capacity is 86 MiB;
+decode/vocabulary and prepared down/vocabulary payload remain unchanged.
+Fixture logits/KV, device lengths, Qwen bias/RoPE and allocation reuse pass.
+GPU-greedy now honors an explicit packed-prefix bound rather than bypassing it.
+
+An untimed real-Qwen smoke observes all 252 conversions and 252 SGEMM calls,
+with output `4`, matching native packed. Native sequential returns `2` in
+both parent `5d7472d` and the integration. Preserve that discrepancy; this is
+neither exact-output qualification nor a performance result. Full 512-token
+and task gates plus controlled E2E timing remain pending. See
+[runtime contract, source comparison and raw smoke evidence](q8_prefill.md).
+
+## 2026-10-25: Experimental FFN Runtime Checkpoint
+
+M06 now exposes model-local `native|packed-f32|q8-1` single-row FFN selection,
+keeping native as the default and prepared down/vocabulary unchanged. Q8_1
+reuses one activation buffer across layers/tokens; packed-prefix projections
+remain native. Release M40 regressions cover stream ordering, allocation
+cleanup/reuse, CPU references and packed256 fixture logits/KV bit equality.
+An independently reproduced older logits stream bug is fixed in `d211726`;
+the qualified control's Q8 decode-stream schedule does not change.
+
+This is a correctness/integration checkpoint, not a new throughput result.
+Full-model 512-token parity, Q8_1 quality and HTTP qualification are pending;
+the microbenchmark gains below are not promoted to E2E claims. See
+[the runtime contract, API migration and validation](experiments/2026-10-25-maxwell-ffn-runtime.md).
+
+## 2026-10-25: Quantization-Inclusive Q8_1 FFN Screen
+
+Clean release `6431295` completes M04's two fixed packed integer-dot
+experiments at real layer 0/17/35 shapes, rows 1/4, with prepared
+FP32-activation down/vocabulary unchanged. Five alternating pairs per case
+show one-row complete-FFN throughput gains of 27.26-27.41% at 128 threads
+and 21.50-21.71% at 256, with positive paired confidence bounds. Fresh
+activation quantization is included in every gate/up and complete iteration;
+its separate one-row cost is 0.00339-0.00359 ms.
+
+All quantized-input CPU-reference checks and exact encoded-byte checks pass.
+That is not original-FP32 output parity: sampled one-row completed-output
+drift reaches 0.538361 at layer 35. Full-model logits, 512-token continuation,
+dense-valid quality and held-out loss/perplexity remain unmeasured and required
+before recommendation. This numerical track cannot satisfy exact-output goals.
+
+All 60 pairs / 420 primary interval audits pass, with zero enqueue allocation,
+copy or sync and stable observed 1113/3004 MHz clocks. Q8_1 payload is 2304 /
+9216 bytes at rows 1/4, plus 32 guards, reused by both arms. M05's micro screen
+now advances packed/warp FP32 and Q8_1 candidates conditionally to runtime
+evaluation; losers are preserved. No generation defaults change and no E2E
+gain is claimed. See [the complete screen, M05 decision and raw evidence](experiments/2026-10-25-maxwell-q81-ffn-screen.md).
+
+## 2026-10-25: Bounded FP32 Q8 FFN Screen
+
+Clean release `bedea89` measures the five fixed M03 variants on real layer
+0/17/35 tensors and distinct frozen rows 1/4, keeping prepared down/vocabulary
+unchanged. Five alternating pairs per case give packed/warp256 complete-FFN
+throughput gains of 7.75/7.87/8.27%, with positive paired confidence bounds
+and native one-row hidden/completed-output bits preserved. Packed/warp128
+gains 12.18/12.52/12.63% but changes FP32 association; whole-model token
+parity is not established. Neither is a runtime recommendation yet.
+
+Packed/shared256 gains only 1.40-1.57% and fails the 5% screen. Scalar/warp256
+and scalar/shared256 regress versus native; implementations and measurements
+are preserved. Four-row fused candidates improve complete latency, including
+a fusion change versus the native two-projection/SwiGLU path, so those gains
+are not pure reduction/load ablations or decode throughput claims.
+
+All 36 numerical/guard validations pass. The 150 pairs contain 900 isolated
+primary intervals with no enqueue allocation, copy or sync. All 300 boundary
+samples show SM 1113 / memory 3004 MHz and only the benchmark PID; tracked
+payload returns zero to zero. No runtime defaults change. M04 Q8_1 and M07
+prefill remain independent next work; both original E2E targets remain unmet.
+See [the complete screen, losing variants and raw evidence](experiments/2026-10-25-maxwell-fp32-ffn-screen.md).
+
+## 2026-10-25: Warm Complete Q8 FFN Baseline
+
+M02 measures real layer 0/17/35 FFNs with frozen calibration inputs, genuine
+rows 1/4 and qualified prepared down/vocabulary unchanged. After bounded
+1000 ms active warmup, every primary clock sample is 1113 MHz SM / 3004 MHz
+memory. Five-trial one-row complete latency is 0.4566-0.4575 ms/layer:
+gate/up/SwiGLU 0.3267-0.3279 ms, down 0.1313-0.1315 ms. Rows4 complete is
+4.6711-4.7205 ms, dominated by 4.1415-4.1590 ms gate/up.
+
+All CPU references and guards pass; one-row SwiGLU matches frozen bits exactly.
+The 90 primary intervals add no enqueue allocation, copy or synchronization;
+tracked device bytes return zero to zero. The initial clock-ramp run is retained
+separately, not pooled or presented as an optimization. These are complete FFN
+microbenchmarks, not E2E speedups or measured bandwidth. M03 now has a real
+baseline; both original throughput goals remain unmet. See
+[the warm protocol, memory scope and raw evidence](experiments/2026-10-25-maxwell-ffn-baseline-warm.md).
+
+## 2026-10-25: Pinned Ollama Maxwell Dispatch
+
+M01 verifies actual launches from official Ollama 0.40.11, llama.cpp
+`b11845` / `9ff0d7e90`. The completed untimed M40 trace observes Q8_1
+quantization, unfused Q8 MMVQ with 128 threads, Q8-to-FP32 dequantization and
+Maxwell SGEMM. All 12,660 API records complete without drops/errors; driver
+and runtime domains duplicate the same 6330 launches. Whole-process counts
+include startup/warmup, not just the four generated tokens.
+
+Selected shipped sm_52 PTX reassembles offline to packed loads, signed integer
+operations, shuffles and one barrier with no spills. This is not the actual
+driver JIT cubin or measured occupancy. M40 native fused gate/up instead has
+byte loads and looped shared reduction. These differences justify the bounded
+FFN experiments, not a measured attribution of the speed gap. No runtime
+defaults change and no new throughput is claimed. See
+[the source/runtime table, provenance and raw evidence](experiments/2026-10-25-maxwell-q8-dispatch.md).
+
+## 2026-10-25: Qualified Q8 Stage Attribution
+
+Clean `1a5388c` profiles the qualified split down/vocabulary configuration
+without another kernel change. Five alternating HTTP pairs measure 35.646
+tok/s off versus 35.391 on, 0.717% instrumentation cost, with all 512 actual
+IDs equal and matching the qualified trace. Only measured sessions contribute
+to the stage medians; warmup and untimed companions are excluded.
+
+At generated step 255, gate/up/SwiGLU is 11.872 ms, down 4.774 ms, attention
+0.777 ms, and vocabulary plus argmax about 1.822 ms across all 36 layers.
+FFN is 65.96% of the 25.267 ms GPU interval union; attention is 3.07%.
+No sampled token allocates device memory; each records 435 launches and two
+completion synchronizations. Host waits overlap GPU execution, and first-use
+profile token wall is not normal CPU overhead.
+
+The next exact speed lever is native fused gate/up, with prefill still about
+1.58 s per request. No new tuning or speed claim follows from the profile.
+Both original throughput goals remain unmet. See
+[the complete attribution, perturbation and raw evidence](experiments/2026-10-25-q8-native-order-profile.md).
+
+## 2026-10-25: Native-Order Prepared Q8 HTTP Gain
+
+Clean release `dd8c5f6` qualifies split down/vocabulary preparation on the
+original 512-token browser workload. Five alternating pairs give 35.724705
+versus 31.962281 HTTP E2E tok/s, +11.771%, 95% paired bootstrap interval
+11.631-11.866%. All 512 actual generated IDs match; every request processes
+all 65 prompt tokens with fresh dense KV and stops at the length limit.
+All three dense-valid quality smokes pass.
+
+The existing 4-column/256-thread prepared-down launch restores native FP32
+reduction order. All 317 forced-prefix predictions now agree and twelve
+sampled hidden vectors match exactly, removing the historical token-310
+branch without changing kernels, storage or acceptance rules.
+
+Median prefill is 1672.089 -> 1576.200 ms, decode 14300.146 -> 12714.413 ms,
+client HTTP total 16018.882 -> 14331.819 ms. Candidate preparation adds
+1,192,935,424 device bytes and takes 9499.437 ms including hashing, outside
+warm timing. General preparation remains off; the project compressed-KV
+default is unchanged. Ollama is only an untimed oracle here, so this is not
+a fresh Ollama comparison. Both original exact speed goals remain unmet.
+See [the complete screen, causal check, audit and raw data](experiments/2026-10-25-q8-native-order-http.md).
+
+## 2026-10-25: Prepared Q8 Same-Prefix Branch Diagnostic
+
+Clean release `6ff0f63` reproduces C10A's down/vocabulary branch at generated
+step 310 on identical native prefixes. All 317 native predictions match the
+archive; only step 310 differs between models under forced native history.
+Both vocabulary heads choose 1008 on native hidden state and 5815 on prepared
+hidden state, localizing this branch to forward drift rather than the head.
+
+At that prefix, generic top-two margin is 0.000270844 native. Hidden-state
+change produces up to 0.004250050 generic-logit drift, while changing the head
+on the same hidden state changes logits by at most 3.815e-6. All sampled
+top-ten sets overlap 10/10. The result narrows the next check to prepared down
+reduction order; it neither proves harmless rounding nor promotes the old
++12.53% timing lead. This is untimed numerical evidence, not a new speed test.
+See [the full intervention, ranks, audit and raw data](experiments/2026-10-25-q8-prepared-prefix-drift.md).
+
+## 2026-10-25: Frozen Layer and Activation Composition
+
+C26 now includes the combined checkpoint on clean release `26a3a5d`, frozen
+mask `[8]` with existing activation targets 0/50/60%, both unchanged C19 splits.
+The zero control matches all 12 historical masked-native task traces and 203
+loss-token statistics. All references match the frozen full model, original
+layer routing is retained and skipped layer 8 accumulates zero counters.
+
+| Combination | Held-Out PPL | Held PPL Increase | Held Matched-Step Rate Gain | New Dense-Valid Failures Cal / Held |
+| --- | ---: | ---: | ---: | --- |
+| `[8]` + 0%, control | 40.984621 | +3.46% | +2.561% | 0 / 0 |
+| `[8]` + 50% | 44.293885 | +11.82% | +7.012% | 0 / 0 |
+| `[8]` + 60% | 50.199624 | +26.73% | +9.247% | 1 / 0 |
+
+The 60% combination answers `19` instead of `6` on the calibration config
+row, although both components pass independently. Keep combinations opt-in.
+Positive rows add the same 862,411,332 prepared bytes as C23, retaining all
+36 source down tensors and physical KV slots. Five pairs measure matched
+observed-prefix steps, not generated/HTTP throughput. No refitting, default
+promotion or additive speed claim occurs. See [the full report, audits and raw data](experiments/2026-10-25-combined-model-tradeoffs.md).
+
+## 2026-10-25: Modified-Model Tradeoff Checkpoint
+
+C26 compares the completed frozen-corpus studies without another fit or sweep.
+No model-changing path is promoted. Ranked `[8]` preserves dense-valid task
+passes but raises held-out PPL 3.46%, for +2.484% matched-step rate and, after
+export, 78.119 MiB weight / 1 MiB context-1024 KV savings. Activation targets
+50/60% give +4.325/+6.684% matched-step rate, but PPL rises 8.35/17.38% and
+requested device storage grows 862,411,332 bytes. Neither is HTTP throughput
+or unchanged-model quality. Compact-versus-masked timing is neutral.
+
+Sparse Q8 fails its decode gate; sparse pruning/Q4 and n-gram speculation
+remain postponed. No combined model or additive gain is inferred. The report
+retains ordinary generation times/counts, preparation boundaries and all
+13 source-report hashes. See [the full comparison](experiments/2026-10-25-modified-model-tradeoffs.md).
+The original exact objectives remain unmet at the latest qualified 31.937
+HTTP tok/s versus 43.163 Ollama. Another optimization round needs a new
+research decision, not a promotion of these approximate-model results.
+The later composition checkpoint above closes the combination gap in this
+initial individual-only report; its earlier measurements remain unchanged.
+
+## 2026-10-25: Compact Model Live Equivalence and Memory
+
+C25 is complete on clean `0dfff93`, release Qwen2.5-3B Q8_0, dense KV/context
+1024. The compact 35-layer artifact exactly reproduces C24's source masked
+at original layer 8: all 12 task traces, 951 task-prefix full-logit comparisons,
+203 passage tokens and paired-step predictions match. Independent audit also
+matches C24's frozen candidate. Held-out PPL remains 40.984621 versus 39.612159
+unchanged, retaining the 3.46% model-quality cost.
+
+Actual owned weight requests fall from 3,279,519,744 to 3,197,605,888 bytes,
+saving 78.119 MiB. Native dense KV payload capacity falls from 37,748,736 to
+36,700,160 bytes, saving 1 MiB at unchanged token capacity. Native KV is separate
+from the Rust allocation tracker; these are not driver peak-VRAM measurements.
+Five alternating pairs show only +0.047/+0.060% calibration/held-out rate
+change versus the masked source, far below the promotion threshold. Physical
+compaction reclaims memory, not another established compute speedup.
+
+Preparation remains 38.683 s for the one-shot CPU export; live preflight and
+load are recorded separately. No default or unchanged-engine speed claim
+changes. See [the complete report and raw evidence](experiments/2026-10-25-compact-layer8-live.md).
+
+## 2026-10-25: Compact Layer-8 Export Preparation
+
+C25's release CPU exporter constructs the separate 35-layer Qwen Q8_0 `[8]`
+artifact on clean `890b9c3`. Tensor-data storage decreases from 3,279,519,744
+to 3,197,605,888 bytes, 78.119 MiB or 2.498%. The source stays unchanged;
+the completed output has 422 tensors and passes descriptor/offset round-trip.
+Single-run preparation through publication takes 38.683 s, including three
+full-file hash passes and data fsync, not GPU inference or a cold-cache trial.
+
+This does not establish actual uploaded-weight/KV savings or masked-source
+inference equivalence; those remain the next C25 gates. C24's `[8]` held-out
+PPL cost of +3.46% still applies. No default or exact-engine speed claim
+changes. See [the checkpoint and raw export record](experiments/2026-10-25-compact-layer8-export-checkpoint.md).
+The later live-equivalence entry above completes those gates; this entry
+retains the original file-only measurement boundary.
+
+## 2026-10-25: Calibration-Ranked Layer Tradeoffs
+
+C24 is complete on clean `68f1b15`, release Qwen2.5-3B Q8_0, dense KV.
+All 99 calibration removal trials ran before held-out evaluation. Frozen
+original-ID masks are `[8]`, `[8,24]` and `[8,24,25]`; first/last layers stay.
+No mask is promoted and no resident weight/KV memory is reclaimed yet.
+
+| Mask | Held-Out Tasks | Held-Out Dense-Valid Regressions | Held-Out PPL | Held-Out Matched-Step Rate Gain |
+| --- | --- | ---: | ---: | ---: |
+| `[]`, control | 4/6 | 0 | 39.612159 | +0.017%, noise |
+| `[8]` | 5/6 | 0 | 40.984621 | +2.484% |
+| `[8,24]` | 3/6 | 1 | 46.184633 | +5.116% |
+| `[8,24,25]` | 4/6 | 1 | 49.373639 | +7.937% |
+
+Dense-failed tasks remain inconclusive even if a candidate passes. The
+one-layer mask preserves every dense-valid task but raises held-out PPL
+3.46%; larger masks add unclosed-JSON-fence regressions despite retaining
+the requested facts. Aggregate task counts alone hide those regressions.
+BI alone would not choose layer 8; it ranks 22nd by dense block influence.
+
+Five alternating pairs per split time identical observed prefixes, including
+greedy readback and final GPU completion, not generated/HTTP throughput.
+All reference traces and recorded loss statistics match C19. The empty
+control has zero full-vector logit drift; every applied positive mask exactly
+reproduces its frozen calibration loss. Requested per-model weight/KV bytes
+remain 3,279,519,744 / 37,748,736. Next is separate C25 compact export of the
+explicitly evaluated `[8]` candidate. Exact-engine goals remain unmet.
+See [the report, frozen artifact and complete raw pairs](experiments/2026-10-25-ranked-layer-tradeoffs.md).
+
+## 2026-10-25: Calibrated SwiGLU Quality Tradeoffs
+
+C23's frozen calibration/evaluation is complete on Qwen2.5-3B Q8_0, release
+M40, native-Q8 reference and explicit dense KV. Thresholds were frozen from
+110 generated-input rows per layer before evaluating both C19 splits. No
+threshold is promoted and ordinary runtime defaults are unchanged.
+
+| Target Sparsity | Held-Out Achieved | Held-Out Task Passes | Held-Out PPL | Matched-Step Rate Gain |
+| --- | ---: | --- | ---: | ---: |
+| 0%, native control | Not selected | 4/6 | 39.612159 | +0.059%, noise |
+| 25% | 23.80% | 4/6 | 40.025773 | -0.875% |
+| 40% | 37.76% | 3/6 | 40.582514 | +2.197% |
+| 50% | 47.06% | 4/6 | 42.920954 | +4.325% |
+| 60% | 56.61% | 4/6 | 46.495763 | +6.684% |
+
+Five alternating pairs per split time identical observed prefixes, including
+selection, remaining forward/logits, greedy readback and final GPU completion.
+These are not free-generated/HTTP TPS. Achieved sparsity weights each split's
+task and loss inputs, including prompt inputs, not decode alone. Dense-failed
+tasks remain inconclusive. The zero control exactly matches all C19 traces
+and full logits; all five reference runs match C19 as well.
+
+Target 40% repeats workshop JSON and hits the token limit. Targets 50/60% preserve
+dense-valid task passes but raise held-out PPL 8.35/17.38%; small task suites
+do not establish unchanged quality. Positive targets add 862,411,332 bytes of
+duplicate down weights, reusable scratch and counters. Application/setup costs
+about 10.3-10.5 s; these are approximate-model research results, not progress
+against the exact-engine speed objectives. Next is C24 layer ranking.
+See [the complete report, frozen artifact and raw pairs](experiments/2026-10-25-activation-quality.md).
+
+## 2026-10-25: Sparse SwiGLU Input Prerequisite
+
+C23's selected-input down projection passes a bounded isolated speed gate,
+independently of C21's rejected sparse-weight representation. Real Qwen2.5-3B
+Q8_0 down weights, synthetic inputs, release M40, five alternating pairs per
+cell and 100 repeated operations per event interval. Selection is included.
+
+| Achieved Input Sparsity | Native ms | Selection + Down ms | Paired Latency Change |
+| --- | ---: | ---: | ---: |
+| 0.79% | 0.172750 | 0.210915 | +22.16% |
+| 25.99% | 0.172651 | 0.167173 | -3.20% |
+| 40.16% | 0.172722 | 0.140674 | -18.55% |
+| 51.19% | 0.172701 | 0.120183 | -30.43% |
+| 60.64% | 0.172767 | 0.105122 | -39.14% |
+
+Width16/128 throughout the table; all four fixed geometries and twenty cells
+are retained. The marginal 25% row is not promoted. GPU/native matched-zero
+and FP64 checks pass, but no model threshold, quality or E2E gain is established.
+Activation thresholding is a model change, not unchanged-engine optimization.
+The extra tiled down tensor costs 23,953,408 bytes plus 88,068 bytes scratch;
+reduced requested value loads are not measured DRAM traffic. Final GPU use is
+0 MiB. See [the full report and raw pairs](experiments/2026-10-25-activation-input-sparsity.md).
+Next finish per-layer C19-calibration-only fitting and opt-in model evaluation.
+Runtime defaults and both unmet exact-engine speed objectives are unchanged.
+
+## 2026-10-25: Upload Ordering and Exact-Trace Check
+
+The pageable H2D/default-stream audit now has immediate-consumer regressions,
+completed weight/KV publication, and device-side legacy append lengths.
+Production explicit-position append remains enqueue-only. These correctness
+changes do not select a new kernel, attention mode or runtime default.
+
+| Runtime | Median HTTP tok/s | HTTP ms | Internal Prefill ms | Internal Decode ms |
+| --- | ---: | ---: | ---: | ---: |
+| m40-llm | 31.937 | 16031.497 | 1687.257 | 14298.087 |
+| Ollama 0.40.11 | 43.163 | 11862.091 | 229.988 | 11626.885 |
+
+Five alternating serial release pairs use unchanged Qwen2.5-3B Q8_0, dense
+KV, 65 identical prompt IDs, 512 actual generated tokens, verified fresh KV
+and length stops. All m40 generated IDs match C11. Values are independent
+medians with different internal prefill boundaries, not additive phases.
+m40 is 26.008% slower than Ollama by HTTP throughput, paired-bootstrap 95%
+interval [-26.515%, -25.984%]. The 53.06 and fresh 1.30x-Ollama 56.1115 tok/s
+targets remain unmet. Historical C11 and this run are not paired before/after
+timings; the small rate difference is not an upload-fix speed claim.
+
+Canonical ChatML arithmetic/OK/config smokes pass in default compressed top8
+and explicit dense mode. Existing user-only Auto failures are also retained,
+not counted as compressed regressions. Native/cuBLAS-on/off parity, both
+warning-as-error CI lanes and Clippy pass; GPU-less CI is not parity evidence.
+See the [full report, commands and raw results](experiments/2026-10-25-upload-ordering.md).
+Next is C23's retained input-layout prerequisite assessment; the negative
+sparse-Q8 decode gate and postponed C22/C27 decisions remain unchanged.
+
+## 2026-10-25: Fixed Sparse-Q8 Decode Screen
+
+C21's fixed 16-of-32 format passes scalar/matched-zero parity and reduces
+requested weight-buffer storage by 29.41%, from 34 to 24 bytes/block. It fails
+the decode speed gate: every tested single-row sparse configuration regresses.
+
+| Projection | Matched Dense ms | Best Sparse ms | Sparse/Dense Latency |
+| --- | ---: | ---: | ---: |
+| FFN gate | 0.227844 | 0.522788 | 2.29x |
+| FFN up | 0.201090 | 0.465030 | 2.31x |
+| FFN down | 0.173776 | 0.461760 | 2.66x |
+
+Release M40, actual layer-0 Qwen2.5-3B Q8_0 tensors, deterministic synthetic
+masks, same zeroed weights in the native control, five alternating serial
+pairs per geometry. Rows 1/4/16/64 and four sparse geometries are measured.
+Some multi-row gate/up gains do not offset down/decode regressions. There is
+no calibrated model, quality claim, E2E gain or changed default. C22 pruning
+and C27 sparse-Q4 remain gated off on this backend.
+
+The initial unfenced H2D setup caused an intermittent native-control mismatch;
+the final clean run fences/validates setup input and passes all 240 pairs.
+Aborted evidence is separate, never pooled. See the [full report and raw data](experiments/2026-10-25-sparse-q8-screen.md),
+including actual mask/scale/alignment bytes, packing cost and limitations.
+Working code is preserved in `6d02feb` before separate active-code removal.
+The separate runtime upload audit is recorded in the newer checkpoint above.
+
+## 2026-10-25: Diagnostic Layer-Mask Tradeoffs
+
+C20 adds opt-in model-local interior-layer skipping, preserving original tensor/
+KV IDs and all resident weights/KV capacity. The release empty-mask control
+exactly reproduces C19 generation and loss. Fixed central masks were declared
+before results; no mask is promoted and normal generation remains all-layers.
+
+| Skipped IDs | Held-Out Task Passes | Held-Out PPL | Matched-Step Rate Gain |
+| --- | --- | ---: | ---: |
+| None | 4/6 | 39.612159 | +0.137%, control floor |
+| 17 | 4/6 | 47.656541 | +2.564% |
+| 17,18 | 2/6 | 52.716052 | +5.181% |
+| 17,18,19 | 3/6 | 53.784796 | +7.870% |
+
+Five alternating pairs per split measure identical observed prefixes after
+eight warm tokens. These are greedy prediction steps, not free-generated or
+HTTP TPS. Free outputs differ in length; the two/three-layer workshop responses
+are slower overall despite less compute and also fail quality. One-layer task
+passes do not mean unchanged quality: held-out PPL rises 20.31%.
+
+All masks retain 3,279,519,744 uploaded weight bytes and 36 MiB dense KV per
+model. GPU use returns to zero. No model/KV compaction or exact-engine gain is
+claimed. See the [full quality/timing report and four raw artifacts](experiments/2026-10-25-layer-mask-sensitivity.md).
+Next is C21's sparse-Q8 format/kernel screen against matched-zero dense weights;
+layer ranking remains C24. Exact HTTP objectives remain unmet.
+
+## 2026-10-25: Frozen Model-Quality Reference
+
+C19 is complete without model or default changes. The release explicit-model
+runner evaluates both frozen splits against independent unchanged Qwen2.5-3B
+Q8_0 loads, using the selected native-Q8/C07 engine and explicit dense KV.
+All 12 generated traces match; all 203 teacher-forced token comparisons have
+zero full-vocabulary logit drift and top-ten overlap 10.
+
+| Split | Fixed-Rubric Passes | Scored Passage Tokens | Token-Weighted PPL |
+| --- | --- | ---: | ---: |
+| Calibration | 3/6 | 102 | 31.556848 |
+| Held-out | 4/6 | 101 | 39.612159 |
+
+The five dense-failed tasks remain inconclusive for pruning conclusions. Their
+raw obsolete-fact, integer-format/budget, and paragraph/lexical-rubric failures
+are retained; no answer, rubric, or budget was changed after observing results.
+Each model uploads 3,279,519,744 weight bytes and reserves 36 MiB dense KV, with
+zero prepared/materialized weight bytes. GPU use returns to 0 MiB after capture.
+
+See the [full report, task timing table, commands, and raw JSONL](experiments/2026-10-25-model-quality-dense-reference.md).
+Timings are one resident in-process quality observation per model/case, not
+HTTP E2E, paired benchmark medians, or a speed promotion. Loss timing includes
+full-logit readback and CPU scoring. Next is C20's separate model-changing
+layer-mask experiment; exact-engine speed goals remain unmet.
+
+## 2026-10-25: Offline N-Gram Feasibility Gate
+
+C11A's formal screen fails. The best **hypothetical** browser HTTP throughput
+gain is **4.949%**, below the fixed 10% threshold even with a 1.0x verifier and
+zero drafting/commit/rollback overhead. This is not a measured inference speedup.
+
+| Draft limit | Eligible / visited rounds | Accepted draft tokens | Optimistic E2E gain |
+| --- | --- | ---: | ---: |
+| 2 | 47 / 489 | 23 | +4.185% |
+| 4 | 45 / 487 | 26 | +4.566% |
+| 8 | 43 / 485 | 28 | +4.949% |
+| 16 | 43 / 485 | 28 | +4.949% |
+
+All 24 browser/regression studies replay exact reference IDs; future tokens
+never enter draft history. Non-CUDA release confirmation agrees with the
+CUDA-feature CPU path. The five frozen real-model regression traces are stable;
+arithmetic/OK/config return `4`/`OK`/`37`. Candidate8 rejects 33/43 proposals
+immediately, and candidate16 accepts no more tokens.
+
+Postpone C12-C17, record C18, then proceed to C19's separately evaluated model
+research. Keep measured native-Q8/C07 results and all defaults unchanged; do not
+relax the gate or tune another lookup policy here. See the [full study and raw
+artifacts](experiments/2026-10-25-ngram-feasibility.md) for position versus visited
+statistics, rejection histograms, CPU drafting observations, assumptions, and
+1.0/1.5/2.0/4.0x verifier-cost sensitivity.
+The [C18 unchanged-model audit](experiments/2026-10-25-unchanged-model-checkpoint.md)
+reconciles both unmet speed objectives and the conditional deferral. It adds
+no new timing measurement; C19's model-quality foundation is next.
+
+## 2026-10-25: Exact-Kernel Round Checkpoint
+
+C11's fresh five-pair release HTTP confirmation measures **31.850 tok/s**
+m40-llm versus **43.032 tok/s** Ollama 0.40.11. Median HTTP time is
+16.075/11.898 s; m40 internal prefill/decode is 1.683/14.348 s. All rows
+generate 512 tokens from the same 65 prompt IDs with verified fresh KV and
+length stops. Actual m40 IDs match the prior qualified trace after cleanup.
+
+The runtime-to-Ollama throughput difference is -25.985%, paired-bootstrap 95%
+interval [-26.118%, -25.305%]. No variation extension or borderline confirmation
+is triggered. Neither target is reached: 53.06 tok/s and the newly binding
+1.30x-Ollama target of 55.9416 tok/s. This is not another attention-promotion
+comparison; C07's original +33.98% paired result remains its promotion evidence.
+
+Keep native Q8 plus C07 split8/256 exact attention for the benchmark, preparation
+off. The failed prepared fused MLP and coalesced-lane tile mapping are now
+removed in separate commits after preservation. Remaining split/vector/cache
+paths stay opt-in research, not preferred generation. No global defaults change.
+
+See the [C11 keep/remove report and raw records](experiments/2026-10-25-exact-kernel-checkpoint.md)
+for the complete decisions, output/memory evidence, phase-boundary caveats,
+and remaining FFN/prefill costs. Next is C11A's offline n-gram feasibility gate,
+not another kernel-tuning round. All benchmark processes have been stopped.
+
+## 2026-10-25: Prepared Q8 Release HTTP Gate
+
+Three immutable family configurations complete C10A's bounded HTTP screen,
+with five serial native/prepared pairs each, dense KV, 65 shared prompt IDs,
+and 512 generated IDs. No candidate passes both timing and actual-ID parity.
+
+| Prepared families | Native HTTP tok/s | Prepared HTTP tok/s | Outcome |
+| --- | ---: | ---: | --- |
+| All | 31.946 | 11.433 | -64.21%; IDs match |
+| QKV/output/down/vocabulary, native MLP | 31.907 | 29.765 | -6.71%; IDs match |
+| Down/vocabulary only | 31.847 | 35.837 | +12.53%; IDs diverge at step 310 |
+
+The last row is a timing lead, **not a promoted exact-output result**. Its
+95% paired-bootstrap gain interval is [12.430%, 12.796%], but the generated
+continuation changes. All configurations remain opt-in; preparation stays off.
+The qualified selection remains C07's native Q8 plus split8/256 exact attention.
+Neither original speed target is met, and Ollama was an untimed oracle here.
+
+Canonical `4`/`OK`/`37` smokes pass for native and both reduced candidates.
+Initial user-only OK/config failures on the native reference are retained as
+inconclusive. Cold candidate loading is about 17.5-17.9 s; extra prepared
+weight payload is 3.279/1.554/1.193 GB, respectively. Combined-model host RSS
+and boundary device usage are not standalone candidate peak VRAM measurements.
+
+See the [release report and raw JSONL](experiments/2026-10-25-q8-prepared-http.md)
+for every paired result, actual token traces, confidence intervals, setup/memory
+accounting, smoke correction, and next keep/remove checkpoint. No further
+layout/geometry tuning was added, and benchmark processes were cleaned up.
+
+## 2026-10-24: Prepared Q8 Runtime Correctness Checkpoint
+
+C10A adds opt-in model-owned split/mixed layouts, prepared fused QKV/MLP, and
+device-only greedy vocabulary consumers. CUDA parity and real Qwen Q8 canaries
+pass; preparation remains off by default. Qwen split preparation adds **3,278,553,088 bytes**
+alongside **3,279,519,744 source bytes**, before KV/workspace.
+
+Do not infer an E2E win from this checkpoint. The **unoptimized, unpaired**
+correctness canaries record 10.698 s generation with prepared QKV/native MLP
+versus 15.637 s with both prepared. This is a negative signal for prepared MLP,
+not a controlled release verdict. Keep native fused MLP as an alternative for
+the later per-family release comparison. There is no new tuning round or
+default promotion. The selected HTTP result remains **31.852 tok/s**.
+
+See [configuration, limitations, and raw canary logs](q8_execution_weights.md#validation-and-next-work).
+
+## 2026-10-24: Input-Tiled Q8 Projection Experiment
+
+C10 completes the independent input-tiled layout screen within twelve
+configurations. Packing preserves every Q8 value/FP16 scale bit. Best vector
+decode medians are gate **0.141 ms**, down **0.161 ms**, vocabulary **1.661 ms**,
+versus GGUF **0.229/0.191/2.586 ms**. A split-plane compatibility refresh gives
+**0.140/0.142/1.623 ms**, so input tiling does not replace split planes globally.
+
+The vector mapping is more interesting for larger rows: rows=64 Q/down are
+**1.244/6.480 ms** versus native GGUF **6.736/20.430 ms**. These are isolated
+projection results, not full-model prefill or E2E improvements. A scale-reusing
+coalesced-lane mapping was slower and did not reduce compiler registers;
+its negative code/results are preserved. The twelve-case tuning budget is closed.
+
+Width4 adds 5.88% payload at aligned shapes; widths8/16 do not. Input-tiled
+preparation is slower than split planes, and caching beside source weights
+requires extra resident memory. Initial noisy K/V rows received one longer
+vector confirmation; no precise coalesced K/V gain is claimed. Across five
+datasets, all 2,460 measured intervals are serial, with one GPU compute PID
+at boundaries. CUDA/non-CUDA checks pass; runtime/KV defaults are unchanged.
+
+See the [full report and raw artifacts](experiments/2026-10-24-q8-input-tiled.md).
+Next: conditional C10A per-family integration and model/paired HTTP gates.
+The selected HTTP checkpoint remains 31.852 tok/s; both original targets
+remain unmet. Do not turn these projection ratios into generation speed claims.
+
+## 2026-10-24: Separate-Plane Q8 Projection Experiment
+
+C09's lossless separate-scale/value layout passes parity on real Qwen Q8_0
+tensors and synthetic tails. Four fixed configurations compare isolated
+projections, not full generation. Five-pair release medians with the best
+4-column/128-thread candidate are gate **0.139 vs 0.229 ms**, down
+**0.143 vs 0.191 ms**, and vocabulary **1.624 vs 2.584 ms**. A bounded 64-row
+check also improves Q/gate/down versus existing GGUF multi-row dispatch.
+
+Tiny K/V decode rows needed a longer ten-pair confirmation after the initial
+screen was noisy. Confirmed gains are around 14%, not the initial larger
+ratios. Raw negative/neutral configurations are retained. GPU event brackets
+may include host submission gaps, and boundary SM clocks differ from the
+sustained HTTP run. No inference or GPU tests overlap these microbenchmarks.
+
+Execution payload matches Q8_0 source bytes, but keeping both representations
+doubles tensor device payload; production cache integration must budget that
+duplication. A gate/down tensor takes about 15 ms to repack / 4 ms to upload;
+vocabulary about 206/51 ms, single setup observations. Compiler resources are
+28/45 registers, zero local/stack bytes, up to 4 KiB dynamic shared memory.
+
+Keep this as a candidate, with no runtime/default changes or E2E speed claim.
+Existing fused QKV/gate-up/argmax paths are not the isolated control. See the
+[experiment and raw records](experiments/2026-10-24-q8-separate-projections.md).
+Next: independent C10 input-tiled layout, then conditional C10A integration
+and HTTP gates. The 31.852 tok/s C07 checkpoint is still the selected HTTP
+result; neither unchanged-model target has been achieved.
+
+## 2026-10-24: Exact Parallel Head128 Attention
+
+C07's opt-in warp-parallel attention preserves full dense attention and compares
+one/two/four/eight context partitions with 128/256 threads, eight configurations
+in total. Split8/256 passes the five-pair release HTTP gate: **31.852 tok/s**
+versus **23.774 tok/s** for the current exact kernel, a **33.98% throughput gain**
+with 95% paired-bootstrap interval **[33.868%, 34.203%]**. All rows process the
+same 65 prompt IDs and 512 generated IDs with fresh dense KV and length stops;
+untimed companions match all 512 IDs. Inference and GPU tests never overlap.
+
+Median HTTP time falls from 21.536 s to 16.074 s; internal prefill is
+1.736/1.683 s and decode 19.762/14.338 s. Dense KV remains 36 MiB, with one
+65 KiB reusable FP32 partial workspace across layers/requests. No per-token
+allocation or extra synchronization is introduced. A separate single profiled
+CLI diagnostic measures middle/late attention at 0.791/0.973 ms across all 36
+layers, versus the earlier 11.421/20.387 ms baseline medians; FFN now accounts
+for about 64% of the diagnostic's middle GPU interval union.
+
+Select split8/256 for subsequent **opt-in benchmark** work, not as a global
+runtime default. This does not beat the controlled Ollama median of 43.035
+tok/s or reach either unchanged-model target. Numerical parity, real Qwen
+smokes, cuBLAS-on/off attention grids, forward/server regressions, non-CUDA
+tests, and Clippy pass. The initial user-only exact-OK smoke failed on the
+legacy reference; it is retained separately from the passing canonical ChatML
+smokes, not attributed to the new kernel.
+
+See the [full experiment](experiments/2026-10-24-head128-attention.md),
+[HTTP pairs](experiments/2026-10-24-head128-http.jsonl),
+[microbenchmark](experiments/2026-10-24-head128-micro.jsonl), and
+[raw stage events](experiments/2026-10-24-head128-stage-events.jsonl.gz).
+Next: typed benchmark execution weights and independent Q8 layout experiments.
+
+## 2026-10-24: Controlled Baseline and Bottleneck Checkpoint
+
+C06 reconciles the existing C03/C04/C05 records; it is not a new timing run.
+The warm HTTP baseline remains 23.735 tok/s m40-llm versus 43.035 Ollama,
+with 65 identical prompt IDs, 512 actual generated tokens, length stops,
+fresh prompt KV, and no concurrent inference. The binding unchanged-model
+target is now 55.945 E2E tok/s, requiring 2.357x current throughput. The
+original 53.06 target also remains in force; neither is reached.
+
+Actual tensors put 78.90% of parameters in FFN matrices. Sampled stage costs
+justify the bounded exact attention experiment and independent Q8 layout
+experiments: gate/up is the largest fixed cost, while attention grows strongly
+with context. Extrapolated Amdahl estimates suggest zero-cost FFN alone gives
+about 1.943x E2E and zero-cost attention alone about 1.381x; these are estimates,
+not measured whole-workload stage totals or predicted kernel improvements.
+
+No DRAM/occupancy counters are available on this stack. Matrix-bytes-times-rate
+estimates are 77.82 GB/s at current throughput and 183.42 GB/s at the refreshed
+target, not measured bandwidth. Dense sequential prefill, the first-capture
+profiling gap, and different cross-engine outputs remain explicit limitations.
+See the [checkpoint report](experiments/2026-10-24-qwen-baseline-checkpoint.md),
+[derived JSON](experiments/2026-10-24-qwen-baseline-checkpoint.json), and
+[reproducible calculations](experiments/2026-10-24-qwen-baseline-checkpoint.jq).
+Next: C07 exact head128 attention, then benchmark-only execution-weight views
+and the independent C09/C10 Q8 layout experiments. Runtime defaults do not change.
+
+## 2026-10-24: Maxwell Counter Availability
+
+C05 adds an optional standalone legacy CUPTI preflight, outside ordinary Cargo
+builds and inference. On the idle M40 with driver 580.159.04 and CUPTI 12.8.90,
+it enumerates 154 metric names, but event-domain enumeration and actual
+event-group creation both return `27 / CUPTI_ERROR_NOT_SUPPORTED`. Running as
+root produces the same result as UID 1000. This is not a successful counter
+collection, and catalog availability must not be reported as measured data.
+
+DRAM read/write bytes, achieved occupancy, SM efficiency, and load/store
+efficiency remain unavailable; raw values and kernel measurements are `null`.
+No profiling access setting, system CUDA installation, or driver was changed.
+The exact compatibility cause remains unresolved. See the
+[reproduction and limitations](maxwell_counters.md) and
+[raw user/root records](experiments/2026-10-24-maxwell-counter-preflight.jsonl).
+C06 can proceed using the buffered stage profile, without invented counters.
+
+## 2026-10-24: Buffered Qwen Decode Stage Profile
+
+The C04 profiler is opt-in, session-owned, and reuses CUDA events across sampled
+tokens. It inserts no stream waits and resolves timestamps with nonblocking
+queries after the existing logits completion boundary. CUDA tests preserve
+generated IDs and launch/sync/copy/allocation counts, including a two-stream
+dependency test. It is off during ordinary performance comparisons.
+
+Five alternating same-model HTTP pairs, with the C03 Q8 backend flags and shared
+65-token prompt, measured **23.780 tok/s off** versus **23.667 tok/s on**.
+The observed throughput reduction is 0.47%, not an optimization result. All
+rows generated 512 IDs, and untimed on/off companions matched token-for-token.
+No Ollama inference or GPU tests overlapped these timed requests.
+
+Median GPU-event spans, summed across 36 layers for each stage, from the five
+measured profiling sessions:
+
+| Stage | Step 0 / Position 64 | Step 255 / Position 319 | Step 511 / Position 575 |
+| --- | ---: | ---: | ---: |
+| Attention | 2.509 ms | 11.421 ms | 20.387 ms |
+| Gate/up/SwiGLU | 11.852 ms | 11.857 ms | 11.858 ms |
+| Down projection | 6.315 ms | 6.315 ms | 6.318 ms |
+| Vocabulary + greedy argmax | 3.438 ms | 3.432 ms | 3.434 ms |
+| QKV | 2.492 ms | 2.490 ms | 2.495 ms |
+| Attention output projection | 1.715 ms | 1.713 ms | 1.720 ms |
+| All measured interval union | 29.987 ms | 38.889 ms | 47.898 ms |
+
+At the middle sample, FFN gate/up plus down accounts for about 47% of measured
+GPU intervals; attention accounts for about 29%, rising to about 43% late.
+Gate/up is now the larger fixed FFN cost, not down alone. Both bounded exact
+attention work and independent Q8 layout experiments are justified; this is
+not evidence for more approximate KV policies.
+
+Each sampled token records 399 launches, no cuBLAS calls, one completion sync,
+zero stream waits, and no device allocations/frees. There is one 8192-byte H2D
+copy and two D2H copies totaling 2180 bytes. CPU call, synchronization, and GPU
+durations overlap; do not add them. The first capture's wall time is 97.55 ms
+versus 29.99 ms of measured GPU intervals, unlike reused middle/late captures.
+Do not interpret that first gap as ordinary model CPU cost; first-use profiler
+costs have not been isolated. No DRAM traffic/occupancy counters are claimed.
+
+See the [full profiling record](experiments/2026-10-24-qwen-stage-profile.md),
+[HTTP pair records](experiments/2026-10-24-qwen-profile-comparison.jsonl), and
+[compressed raw event JSONL](experiments/2026-10-24-qwen-stage-events.jsonl.gz).
+Next: C05 counter availability, then C06's final baseline/bottleneck checkpoint
+before selecting the bounded kernel experiments.
+
+## 2026-10-24: Controlled Qwen Q8_0 HTTP Baseline
+
+This is a new matched baseline, not a relabeling of the May measurements.
+The comparison uses the official prebuilt Ollama 0.40.11 release, verified on
+the M40 through its CUDA 12 backend with `sm_52` PTX. The installed 0.18.2
+binary was not replaced. Both engines load the same Qwen2.5-3B Q8_0 blob,
+SHA-256 `4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d`.
+
+Five alternating-order, resident-weight HTTP pairs used the same 65 prompt
+IDs, full dense FP16 KV, 1024-token context, greedy sampling, and 512 actual
+generated tokens with `length` stops. Each Ollama trial verified zero cached
+prompt tokens and 65 newly evaluated tokens from native runner logs. The RAM
+prompt cache was disabled; the replacement prompt shared no token prefix.
+Only the two benchmark processes held GPU allocations, and inference was
+sequential. Rust was release-optimized; existing CUDA 12.8 `-O3`/`sm_52`
+build flags were unchanged.
+
+| Runtime | HTTP E2E Median | Range | HTTP Wall Median | Internal Prefill Median | Internal Decode Median |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| m40-llm Q8_0 large-model | 23.735 tok/s | 23.715-23.776 | 21.571 s | 1.731 s | 19.794 s |
+| Ollama 0.40.11 Q8_0 | 43.035 tok/s | 43.001-43.108 | 11.897 s | 0.230 s | 11.661 s |
+
+The internal phase boundaries differ: m40-llm prefill includes admitted setup
+through first sampling, while Ollama reports native prompt evaluation time.
+Use the client HTTP columns for E2E comparison. The m40-llm final dense KV
+allocation is 37,748,736 bytes, or 36 MiB; the native Ollama log confirms the
+same FP16 KV capacity. No FP32 weight materialization is enabled.
+
+m40-llm reaches 55.15% of Ollama throughput in this checkpoint. Its paired
+bootstrap gain is -44.846%, with 95% interval [-44.894%, -44.793%]. MAD/median
+variation is 0.059% and 0.032%, respectively. Neither a ten-pair extension
+nor a borderline twenty-pair confirmation was indicated. Both unchanged-model
+targets remain unmet: at least 53.06 E2E tok/s and at least 1.30x the refreshed
+Ollama median, now **55.945 tok/s**. Do not compare this directly to the earlier
+44-token in-process 24.95 tok/s row as an optimization regression.
+
+The shared-prompt work also found an independent correctness issue: Raw/Auto
+Qwen ChatML generation inserted an extra BOS, consuming 66 IDs instead of 65.
+Commit `2f4d7ca` fixes it and tests token identity with real special IDs.
+The [rejected attempt](experiments/2026-10-24-qwen-ollama-invalid-bos.jsonl)
+is retained but supports no speed claim. The corrected run's untimed token
+traces reproduce each runtime's measured output. Both outputs are coherent
+but differ across engines; this is not proof of cross-engine logit equality.
+
+See the [protocol and full command](controlled_benchmark.md),
+[raw valid records](experiments/2026-10-24-qwen-ollama-controlled.jsonl), and
+[separate token traces](experiments/2026-10-24-qwen-ollama-token-traces.jsonl).
+The manifest pins runtime commit `2f4d7ca`, benchmark executable SHA-256, and
+the then-uncommitted benchmark-tool worktree. No kernel changed during this
+run. Next: buffered CUDA-event stage attribution before selecting kernels to
+optimize; these HTTP timings alone do not establish which stage dominates.
+
 ## 2026-05-25: Qwen2.5-3B E2E Ollama Comparison Checkpoint
 
 The active E2E goal uses this exact prompt with `max_tokens=512`:
@@ -134,8 +2173,12 @@ Implementation/diagnostic notes:
   to GPUs with native int8 dot instructions, but M40/sm_52 lacks `__dp4a`.
   A clean-room M40-only scalar-int8 Q8_1 prototype was correct but measured
   `7.289 ms` for a 1x2048x257 projection; the existing f32xQ8_0 decode kernel
-  measured `0.130 ms` for a larger 1x2048x2048 projection. This rules out a
-  direct Q8_1 activation port as the next path to the Ollama target on M40.
+  measured `0.130 ms` for a larger 1x2048x2048 projection. This rejects that
+  scalar prototype, not all packed/warp Q8_1 implementations. The shapes are
+  unmatched and do not isolate activation-quantization cost. The later
+  [pinned runtime audit](experiments/2026-10-25-maxwell-q8-dispatch.md) confirms
+  Ollama uses the scalar integer-dot fallback with a different packed/reduction
+  organization; any new implementation still needs matched complete-FFN tests.
 - `M40LLM_FUSED_RESIDUAL_NORM=1` was tested as an opt-in fusion of the
   post-attention residual add and weighted RMSNorm. It showed a small short-run
   probe improvement, but the full 512-token target run was neutral versus the

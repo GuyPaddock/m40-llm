@@ -8,10 +8,20 @@ Conventions:
 
 Files:
 
-- [01-machine_context_summary.md](./01-machine_context_summary.md)
-  - Summary: Single-file snapshot of project identity, dtype policy (FP16 storage, FP32 compute), pipeline, implemented pieces, and roadmap. Originally authored earlier; we will keep this file up-to-date and brief.
-  - Why useful: Primary on-ramp; should be read first when resuming.
-  - Relevance: High [Design] [Roadmap]
+- [Agent guidelines](../AGENTS.md)
+  - Summary: Current setup, validation, commit, and MemPalace working rules.
+  - Why useful: Start here, not the removed machine-context summary.
+  - Relevance: High [Docs]
+- [Research status](../docs/research_status.md)
+  - Summary: Active research plan, implementation checkpoint, and measured results.
+  - Why useful: Current task entrypoint; this folder's older plans do not set execution order.
+  - Relevance: High [Roadmap]
+- [Archived agent progress](../docs/archive/agent-progress-through-2026-10-24.md)
+  - Summary: Historical implementation and experiment narrative moved out of AGENTS.md.
+  - Relevance: Low [Historical]
+- [Archived task roadmap](../docs/archive/legacy-task-roadmap.md)
+  - Summary: Original reconciled task order, phase details, and task JSON; not maintained.
+  - Relevance: Low [Historical]
 - [docs/minimal_forward.md](../docs/minimal_forward.md)
   - Summary: What the minimal forward path runs today, assumptions/limits, and next steps.
   - Relevance: High [Docs] [Roadmap]
@@ -31,7 +41,7 @@ Files:
   - Why useful: Clarifies module boundaries and ABI expectations; helpful when adding kernels or FFI.
   - Relevance: High [Design] [CUDA] [Rust]
 
-- [03-project-skeleton.md](./03-project-skeleton.md)
+- `03-project-skeleton.md` (removed)
   - Summary: Early multi-file scaffold for a new repo (Cargo.toml, src layout, minimal gguf, server CLI). Predates current repository structure and is superseded by real code.
   - Why useful: Historical only; not needed for current codebase.
   - Relevance: Low (removed) [Historical]
@@ -66,7 +76,7 @@ Files:
   - Why useful: Redundant with code and updated summary, but harmless quick reference.
   - Relevance: Low‑Medium [Historical]
 
-- [10-rename-api.md](./10-rename-api.md)
+- `10-rename-api.md` (removed)
   - Summary: Discussion about renaming API from fastllm to m40llm.
   - Why useful: Historical only; decision settled and code reflects m40llm.
   - Relevance: Low (removed) [Historical]

@@ -3,6 +3,39 @@
 Most diagnostics are disabled by default because they are verbose or can change
 timing. Enable only the signal needed for a profiling or correctness run.
 
+## Buffered HTTP Metrics
+
+Send `"include_metrics":true` with a non-streaming `/generate` request:
+
+```json
+{"prompt":"Hello","max_tokens":8,"top_k":1,"include_metrics":true}
+```
+
+The response includes `output` and a `metrics` object with:
+
+- `prompt_tokens`: encoded prompt IDs, including chat-template/control tokens.
+- `generated_tokens`: sampled IDs, including EOS/EOT even when omitted from text.
+- `stop_reason`: `stop` for a sampled EOS/EOT, or `length` for the token limit.
+  A stop token at the limit reports `stop`.
+- `prefill_elapsed_ms`: generation admission through the first sampled token,
+  including tokenizer/session setup and first-token sampling. Zero if no token
+  was requested.
+- `decode_elapsed_ms`: first through last sampled token, including sampling and
+  host scheduling. Zero for fewer than two generated tokens.
+- `total_elapsed_ms`: admitted generation through output decoding and required
+  completion waits, before response serialization.
+
+These are request-owned wall times, not isolated GPU-stage measurements. Batched
+scheduler timings include time waiting for other admitted requests. Admission
+queueing, HTTP parsing/serialization, and transport are excluded; measure the
+whole HTTP request on the client for end-to-end throughput. The older quality
+harness timings that sum logits-call durations keep their existing boundaries.
+
+Metrics are opt-in; ordinary responses remain `{"output":"..."}`. Combining
+`include_metrics` with `stream=true` returns HTTP 400. Both serial generation and
+the CUDA buffered scheduler report actual sampled counts rather than
+re-tokenizing sanitized output.
+
 ## Device and Tensor Mapping
 
 - `M40LLM_FORCE_M40=1`: require a visible sm_52 device.
@@ -10,6 +43,63 @@ timing. Enable only the signal needed for a profiling or correctness run.
   during model load.
 
 See [`device_selection.md`](device_selection.md) for selection behavior.
+
+## Exact Head128 Attention Experiment
+
+For serialized dense-KV decode, opt in with:
+
+```bash
+M40LLM_ATTN_HEAD128_KERNEL=parallel \
+M40LLM_ATTN_HEAD128_PARTITIONS=8 \
+M40LLM_ATTN_HEAD128_THREADS=256 \
+  target/release/m40-llm generate /path/to/qwen.gguf "Your prompt" \
+  --kv-compress-mode off --top-k 1 --max-tokens 128
+```
+
+The kernel retains every causally valid KV position, FP16 K/V, FP32 dot/value
+accumulation, GQA head mapping, and existing absolute-position RoPE. It does
+not enable a recent window or compressed attention. `parallel` is opt-in;
+the prior `fast` kernel remains the runtime reference when the setting is unset.
+It does not replace packed scheduler attention or device-parameter graph paths.
+
+Partitions may be 1/2/4/8; threads may be 128/256. Defaults for an explicit
+`parallel` request are one partition and 128 threads. Unsupported launch choices,
+head dimensions, or lengths beyond 8192 fail when this dense path is invoked.
+The Rust explicit API is `KVCache::attention_head128_parallel_async`, and an
+optional `Head128AttentionWorkspace` owns the split-result buffer. The ordinary
+attention API caches one tracked RAII workspace per KV cache and reuses it on
+the same decode stream across layers/requests. It performs no per-call allocation
+after capacity is established. One partition needs no partial buffer or merge.
+
+At 16 query heads, split capacity is `16 * 8 * 130 * sizeof(f32) = 66,560`
+bytes. Each partition stores an FP32 max, exponential sum, and 128 weighted V
+components. The merge rescales partial sums around the global max. Workspace
+bytes are separate from KV payload bytes and exposed by
+`head128_attention_workspace_bytes()`; benchmark reports retain both.
+
+Run correctness and the separate release-only microbenchmark with hardware
+access. The optional real-model smoke never searches cache directories:
+
+```bash
+source scripts/dev-env.sh
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_HEAD128_GENERATION_MODEL=/path/to/Qwen2.5-3B-Q8_0.gguf \
+  cargo test --features cuda --test head128_attention_parallel \
+  -- --include-ignored --skip benchmark_head128_geometries --nocapture --test-threads=1
+
+M40LLM_ENABLE_NVCC=1 M40LLM_ENABLE_CUBLAS=1 \
+M40LLM_HEAD128_BENCH_REPORT=/tmp/head128-micro.jsonl \
+  cargo test --release --features cuda --test head128_attention_parallel \
+  benchmark_head128_geometries -- --ignored --nocapture --test-threads=1
+```
+
+The microbenchmark covers eight launch configurations, alternates order, and
+includes partition/merge launches and completion. It reuses hot KV without
+model-weight streaming, so it is not an E2E speed claim. Its fixture keeps the
+same maximum-capacity scratch resident for every row, including the reference;
+`active_partial_bytes` distinguishes used scratch from resident capacity.
+Use the paired HTTP mode in [controlled_benchmark.md](controlled_benchmark.md)
+before selecting a preferred benchmark configuration.
 
 ## Allocation and Copy Logs
 
@@ -21,6 +111,53 @@ Allocation tracking is also used by KV compression quality reports for final
 compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 
 ## Launch, Sync, and Timing Logs
+
+- `M40LLM_STAGE_PROFILE=1`: enable session-owned buffered CUDA-event profiling
+  for serialized one-token forward/logits work. Ordinary generation is unchanged
+  when unset. CUDA Graph capture and the queued batch scheduler are rejected
+  rather than producing incomplete stage attribution. Q/K/V must share one
+  producer stream, as must gate/up; incompatible mixed-stream projection groups
+  fail explicitly instead of being timed on the wrong stream.
+- `M40LLM_STAGE_PROFILE_TOKENS=0,255,511`: select zero-based generated-token
+  prediction steps; the default samples early, middle, and late in a 512-token
+  run. Step zero processes the final prompt token. Prefix prompt tokens are not
+  sampled. Select at most 32 distinct steps.
+- `M40LLM_STAGE_PROFILE_REPORT=/tmp/stages.jsonl`: append structured token
+  reports instead of printing `[gpu-stage-profile]` JSON to stderr. Each record
+  includes process/session IDs, absolute position, per-layer stage names,
+  producer stream, event offsets/duration, CPU call duration, launch/sync/copy/
+  allocation deltas, and named host stream-synchronization/H2D/D2H-copy durations.
+  New records also carry `cpu_start_ms` for stages and `start_ms` for host
+  operations, relative to the host scope start. Add the respective duration
+  to obtain the host interval end. Older records leave these fields absent;
+  missing offsets are unknown, not zero. Host offsets and CUDA event offsets
+  use different clock origins and must not be directly subtracted.
+- `M40LLM_STAGE_PROFILE_PREFILL=1`: also emit a distinct
+  `packed_prefill_gpu_profile` for the packed prefix, not generated-token rows.
+  Grouped spans cover embeddings, norms, bias, RoPE/KV append, attention,
+  residuals, SwiGLU and hidden/output copies alongside Q8 conversion/SGEMM.
+  They add no new stream dependencies or drains. The pool reserves at most
+  24 event pairs per layer plus 16 fixed pairs only when prefix profiling is
+  requested; ordinary token-only profiling retains its smaller pool.
+
+The event pool is allocated once per decode session and reused across sampled
+tokens. Markers add no stream waits. The collector uses nonblocking event
+queries only after the existing logits/argmax completion boundary; an
+unfinished timestamp is an error, not an implicit new synchronization.
+
+`gpu_stage_sum_ms` is not an elapsed total when streams overlap. Use
+`gpu_stage_union_ms` for the union of event intervals and inspect each stream's
+timeline. Event-delimited spans can include host enqueue gaps and synchronization
+already inside a wrapper; they are not isolated kernel-service times. CPU call,
+host wait/copy, and GPU durations overlap and must not be added. In particular,
+`wall_minus_gpu_union_ms` is the uncovered wall interval, not a precise estimate
+of CPU execution time. Cold initialization can inflate spans; use warm samples
+and compare profiled versus ordinary HTTP timings before interpreting shares.
+The first captured token has substantially more uncovered wall time in the
+current checkpoint; `event_pool_reused=false` identifies it. First-use event
+and collector costs have not been isolated from other host work. Use reused
+captures for steady host-cost analysis; do not label that first gap as ordinary
+model CPU overhead.
 
 - `M40LLM_LAUNCH_LOG=1`: log kernel launch and cuBLAS counter events.
 - `M40LLM_SYNC_LOG=1`: log stream synchronization counter events.
@@ -68,6 +205,9 @@ compressed KV, dense-equivalent KV, and temporary dense KV byte accounting.
 
 Use `docs/perf_baselines.md` to record repeatable benchmark results rather than
 leaving one-off timing notes in the README.
+For matched client-observed Qwen/Ollama timings, use the
+[controlled comparison](controlled_benchmark.md) instead of comparing the
+in-process throughput probe with an HTTP response's decode-only rate.
 
 ## GEMM and Materialization
 

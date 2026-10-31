@@ -1,0 +1,19 @@
+{
+  "source_revision": "3b9eb51806f277b9deeef2aab0c1f6b3f3dc7df0",
+  "ollama_sha256": "b0a4becfaf872e3ad5d2e9051244e0dfe55409f03d6e2cd9bd9c34400e201b4c",
+  "runner_sha256": "234b05b2138264f8fb263c3205e85f4c290e8afe5067e280a4f6f90cdac5696b",
+  "backend_sha256": "7a7b6696ffb43ca00f78504a0b2e76db0c6554320ed64e405559e3433580d9b3",
+  "observer_sha256": "cc155e8fdda002984c2354eac831a0d97be2d699b48244289072efe32a3bda26",
+  "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+  "server_pid": 3469761,
+  "runner_pid": 3470246,
+  "runner_port": 42173,
+  "loaded_mmvq_words_sha256": "9c27a7b45565707b1f4094d1d3c022bce84c238c54a9e3faf2b5f9830742f5cb",
+  "offline_mmvq_words_sha256": "9c27a7b45565707b1f4094d1d3c022bce84c238c54a9e3faf2b5f9830742f5cb",
+  "quantizer_words_sha256": "972c76d2c6c57d489d1d3bf9f71131795b12b7af22632efb3794bb8a8b3430f1",
+  "mmvq_word_count": 480,
+  "mmvq_xmad_sites": 102,
+  "mmvq_dp4a_sites": 0,
+  "is_timing_measurement": false,
+  "changes_runtime_defaults": false
+}

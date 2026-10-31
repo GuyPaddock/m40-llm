@@ -130,6 +130,18 @@ fn main() {
     println!("cargo:rerun-if-env-changed=M40LLM_ENABLE_CUBLAS");
     println!("cargo:rerun-if-env-changed=M40LLM_SYSROOT");
     println!("cargo:rerun-if-changed=cuda/kernels.cu");
+    println!("cargo:rerun-if-changed=cuda/q8_execution.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_ffn.cuh");
+    println!("cargo:rerun-if-changed=cuda/decode_reductions.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_unfused.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_separate_warp.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_separate_activation.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_output.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_projection_packed.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_projection_split.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_activation.cuh");
+    println!("cargo:rerun-if-changed=cuda/q8_prefill.cuh");
+    println!("cargo:rerun-if-changed=cuda/activation_sparsity.cuh");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

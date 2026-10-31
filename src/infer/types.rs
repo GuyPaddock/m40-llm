@@ -260,10 +260,29 @@ pub struct LoadedModel {
     pub gguf: GgufModel,
     pub cuda: CudaContext,
     pub kv_cache: Option<KVCache>,
+    /// Compute-skipping diagnostic; configure with set_diagnostic_layer_mask
+    /// before allocating KV. Public for in-memory model construction, like the
+    /// other model components; full-model entrypoints validate its layer count.
+    pub layer_mask: super::LayerMask,
+    /// Load-time, model-local FFN selection. In-memory fixtures must choose an
+    /// explicit native config; do not replace this after workspace/session use.
+    pub q8_ffn: super::Q8FfnConfig,
+    /// Load-time experimental prefill backend; native for in-memory references.
+    pub q8_prefill: super::q8_prefill::Q8PrefillBackend,
+    /// Owned load-time QKV/output selection; use native state in reference fixtures.
+    pub q8_attention_projection: super::Q8AttentionProjectionState,
     #[cfg(feature = "cuda")]
     pub forward_workspace: Mutex<Option<ForwardWorkspace>>,
     #[cfg(feature = "cuda")]
     pub materialized_weights: Mutex<HashMap<MaterializedWeightKey, MaterializedWeight>>,
+    #[cfg(feature = "cuda")]
+    pub q8_execution: super::execution_weights::Q8ExecutionCache,
+    #[cfg(feature = "cuda")]
+    pub activation_research: Option<super::activation_sparsity::ActivationResearch>,
+    #[cfg(feature = "cuda")]
+    pub layer_influence: Option<super::LayerInfluenceCapture>,
+    #[cfg(feature = "cuda")]
+    pub ffn_capture: Option<super::FfnCapture>,
     pub device_tensors: HashMap<String, DeviceTensorView>,
     pub weights_len: usize,
     #[cfg(feature = "cuda")]

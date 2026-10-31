@@ -1,0 +1,111 @@
+{
+  "passes_audit": true,
+  "geometry": 256,
+  "source": "33839478c35e20a59bf0a8f7930db66eb8109dda",
+  "executable": "bf581bbabe5eb0f21d30f9387c0d3bf398e65381c2ea6bae336852310cdf6b32",
+  "reference_matches_corrected_actual_ids": 512,
+  "candidate_actual_tokens": 512,
+  "first_divergence_step": 10,
+  "dense_valid_tasks": 7,
+  "dense_valid_regressions": 0,
+  "inconclusive_tasks": 5,
+  "changed_task_outputs": 2,
+  "prepared_identities_equal": 37,
+  "source_plus_prepared_bytes": 4472455168,
+  "dense_kv_bytes_per_model": 37748736,
+  "activation_scratch_bytes_from_runtime_log": 2304,
+  "quantizer_launches": 20736,
+  "ffn_launches": 20736,
+  "sampled_full_vocabulary_max_diff": 0.2908287048339844,
+  "sampled_full_vocabulary_mean_diff_max": 0.051494635436842774,
+  "sampled_top10_overlap_min": 9,
+  "divergence_probe": [
+    {
+      "actual_candidate_greedy_token_id": 504,
+      "actual_reference_greedy_token_id": 315,
+      "candidate": {
+        "nll": 1.3383520231063415,
+        "target_logit": 25.853235244750977,
+        "target_rank": 2,
+        "top_indices": [
+          504,
+          315,
+          3019,
+          304,
+          11,
+          429,
+          438,
+          448,
+          5916,
+          979
+        ]
+      },
+      "expected_actual_reference_token_id": 315,
+      "generated_step_zero_based": 10,
+      "kind": "q8_runtime_prefix_logits",
+      "max_abs_logit_diff": 0.16745781898498535,
+      "mean_abs_logit_diff": 0.02843448781420531,
+      "prefix_length": 75,
+      "reference": {
+        "nll": 1.3085494228741938,
+        "target_logit": 25.919527053833008,
+        "target_rank": 1,
+        "top_indices": [
+          315,
+          504,
+          3019,
+          304,
+          11,
+          429,
+          438,
+          448,
+          5916,
+          979
+        ]
+      },
+      "scope": "identical absolute reference prefix; generic full-vocabulary head diagnostic; not timing or sampled continuation",
+      "top10_overlap": 10
+    }
+  ],
+  "loss": [
+    {
+      "candidate": {
+        "mean_nll": 3.600319782422225,
+        "nll_sum": 367.23261780706696,
+        "perplexity": 36.60993978721935,
+        "perplexity_overflow": false,
+        "scored_tokens": 102
+      },
+      "kind": "q8_runtime_loss_summary",
+      "reference": {
+        "mean_nll": 3.45179054508411,
+        "nll_sum": 352.08263559857926,
+        "perplexity": 31.55684570743895,
+        "perplexity_overflow": false,
+        "scored_tokens": 102
+      },
+      "split": "calibration"
+    },
+    {
+      "candidate": {
+        "mean_nll": 3.7081052909130134,
+        "nll_sum": 374.5186343822144,
+        "perplexity": 40.776473733234006,
+        "perplexity_overflow": false,
+        "scored_tokens": 101
+      },
+      "kind": "q8_runtime_loss_summary",
+      "reference": {
+        "mean_nll": 3.6791360694497723,
+        "nll_sum": 371.592743014427,
+        "perplexity": 39.6121571328255,
+        "perplexity_overflow": false,
+        "scored_tokens": 101
+      },
+      "split": "held_out"
+    }
+  ],
+  "tracked_device_bytes_after": 0,
+  "exact_goal_eligible": false,
+  "recommendation": "numerical research only; not a speed claim or default change"
+}

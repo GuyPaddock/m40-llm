@@ -1,0 +1,68 @@
+{
+  "passes_audit": true,
+  "comparison_kind": "incremental",
+  "source": "69baad2719f2590775f9212654fadbf2d1d64815",
+  "executable_sha256": "63d616833d1f732b55a19d19c5a2bb8da495aab9bf2d9be4e7980f86d7378560",
+  "primary_pairs": 5,
+  "primary_requests": 10,
+  "gpu_boundary_samples": 20,
+  "observed_clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "completed_quality_and_actual_ids_bound": true,
+  "all_prompt_cache_resets_verified": true,
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.09080722595129309,
+      0.09295891923582222
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0014810447345127704,
+      "max": 45.10443735180946,
+      "median": 44.97178993443174,
+      "min": 44.905184701747736
+    },
+    "control": {
+      "mad_over_median": 0.0014229882229610446,
+      "max": 41.31052589311247,
+      "median": 41.204820504565284,
+      "min": 41.14618653025806
+    },
+    "gain": 0.09142060039914734,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03
+  },
+  "phase_medians": [
+    {
+      "label": "control",
+      "requests": 5,
+      "http_ms": 12425.730624,
+      "prefill_ms": 512.421241,
+      "decode_ms": 11867.080047
+    },
+    {
+      "label": "prepared",
+      "requests": 5,
+      "http_ms": 11384.914870999999,
+      "prefill_ms": 509.416599,
+      "decode_ms": 10823.459463
+    }
+  ],
+  "memory_scope": "requested prepared payload plus separate native dense KV; two M40 models only for incremental pairs, plus idle Ollama; no concurrent inference",
+  "prepared_weight_bytes": [
+    1192935424,
+    2917580800
+  ],
+  "dense_kv_bytes": 37748736,
+  "original_goal_achieved": false,
+  "changes_runtime_defaults": false
+}

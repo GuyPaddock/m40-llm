@@ -1,0 +1,9 @@
+{
+   "cases" : 63,
+   "cpu_trials_per_case" : 5,
+   "heldout_stable_cases" : 8,
+   "independently_reconstructed_proposals" : 621,
+   "independently_reconstructed_rounds" : 3543,
+   "is_passed" : true,
+   "scope" : "independent causal proposal and accounting audit, not measured GPU/HTTP throughput"
+}

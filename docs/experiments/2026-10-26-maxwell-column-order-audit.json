@@ -1,0 +1,1651 @@
+{
+  "passes_audit": true,
+  "source": "034be328bbfbb766c58ee82e1128a3c2cf545218",
+  "executable_sha256": "74331e5dfa4fe5572dac27a99b80acb0cca4e2f0ca83ede2a0b99e156a365363",
+  "pairs": 30,
+  "gpu_boundaries": 60,
+  "serial_primary_intervals": 180,
+  "validation_records": 6,
+  "tracked_device_bytes_after": 0,
+  "runtime_integration_allowed": false,
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.352294397354126,
+        "gate_up_swiglu": 0.2212575912475586,
+        "isolated_down": 0.13169920444488525,
+        "ordered_read_sequential": 0.20623679161071778,
+        "ordered_read_transpose32": 0.2133375883102417,
+        "weight_read_checksum": 0.2080064058303833
+      },
+      "checksum_fraction_of_real_gate_up": 0.940109691412355,
+      "real_gate_up_minus_checksum_ms": 0.013251185417175293,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3518656015396118,
+          "max_gpu_ms": 0.3523200035095215
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.22114880084991456,
+          "max_gpu_ms": 0.22142720222473145
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.1311776041984558,
+          "max_gpu_ms": 0.13565759658813475
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.20600318908691406,
+          "max_gpu_ms": 0.20638399124145507
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.21314558982849122,
+          "max_gpu_ms": 0.2149440050125122
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20739200115203857,
+          "max_gpu_ms": 0.2089184045791626
+        }
+      ]
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5947903633117675,
+        "gate_up_swiglu": 0.9819231986999511,
+        "isolated_down": 0.5807519912719726,
+        "ordered_read_sequential": 0.8078495979309082,
+        "ordered_read_transpose32": 0.8375967979431153,
+        "weight_read_checksum": 0.8162112236022949
+      },
+      "checksum_fraction_of_real_gate_up": 0.8312373357539001,
+      "real_gate_up_minus_checksum_ms": 0.16571197509765623,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5857376098632812,
+          "max_gpu_ms": 1.6004095077514648
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9713472366333008,
+          "max_gpu_ms": 0.9984319686889649
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5745632171630859,
+          "max_gpu_ms": 0.5882431983947753
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.8076288223266601,
+          "max_gpu_ms": 0.8080127716064454
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.8373727798461914,
+          "max_gpu_ms": 0.8376928329467773
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8152511596679688,
+          "max_gpu_ms": 0.8181119918823242
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35222721099853516,
+        "gate_up_swiglu": 0.22122559547424317,
+        "isolated_down": 0.13153599500656127,
+        "ordered_read_sequential": 0.20615360736846924,
+        "ordered_read_transpose32": 0.21332159042358398,
+        "weight_read_checksum": 0.20799360275268555
+      },
+      "checksum_fraction_of_real_gate_up": 0.940187785716241,
+      "real_gate_up_minus_checksum_ms": 0.013231992721557617,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3521440029144287,
+          "max_gpu_ms": 0.3530272006988525
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.2211967945098877,
+          "max_gpu_ms": 0.22127680778503417
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13137279748916625,
+          "max_gpu_ms": 0.1317728042602539
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.206060791015625,
+          "max_gpu_ms": 0.20635840892791749
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.21322240829467773,
+          "max_gpu_ms": 0.21341118812561036
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.20727360248565674,
+          "max_gpu_ms": 0.2089792013168335
+        }
+      ]
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5992511749267577,
+        "gate_up_swiglu": 0.9847616195678711,
+        "isolated_down": 0.587385606765747,
+        "ordered_read_sequential": 0.8079039573669433,
+        "ordered_read_transpose32": 0.8376064300537109,
+        "weight_read_checksum": 0.8159359931945801
+      },
+      "checksum_fraction_of_real_gate_up": 0.8285619351743477,
+      "real_gate_up_minus_checksum_ms": 0.16882562637329102,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5897600173950195,
+          "max_gpu_ms": 1.6023712158203125
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9743935585021972,
+          "max_gpu_ms": 1.0114912033081054
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5781407833099366,
+          "max_gpu_ms": 0.5949952125549316
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.807583999633789,
+          "max_gpu_ms": 0.8079680442810059
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.8372735977172852,
+          "max_gpu_ms": 0.8376447677612304
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8154975891113281,
+          "max_gpu_ms": 0.8175104141235352
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35206079483032227,
+        "gate_up_swiglu": 0.2213599920272827,
+        "isolated_down": 0.1314079999923706,
+        "ordered_read_sequential": 0.20614080429077147,
+        "ordered_read_transpose32": 0.21325759887695311,
+        "weight_read_checksum": 0.20805759429931642
+      },
+      "checksum_fraction_of_real_gate_up": 0.939906043516993,
+      "real_gate_up_minus_checksum_ms": 0.013302397727966292,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 0.3517791986465454,
+          "max_gpu_ms": 0.3529632091522217
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.2211519956588745,
+          "max_gpu_ms": 0.22145600318908693
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.13088639974594116,
+          "max_gpu_ms": 0.1320032000541687
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.20599679946899413,
+          "max_gpu_ms": 0.20631999969482423
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.21316800117492676,
+          "max_gpu_ms": 0.21336638927459717
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.2074592113494873,
+          "max_gpu_ms": 0.20899839401245118
+        }
+      ]
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5852959632873536,
+        "gate_up_swiglu": 0.9824224472045898,
+        "isolated_down": 0.5853663921356201,
+        "ordered_read_sequential": 0.8078399658203125,
+        "ordered_read_transpose32": 0.8376576423645019,
+        "weight_read_checksum": 0.8164704322814942
+      },
+      "checksum_fraction_of_real_gate_up": 0.8310787631173333,
+      "real_gate_up_minus_checksum_ms": 0.16595201492309564,
+      "stages": [
+        {
+          "stage": "complete",
+          "min_gpu_ms": 1.5386655807495118,
+          "max_gpu_ms": 1.5971712112426757
+        },
+        {
+          "stage": "gate_up_swiglu",
+          "min_gpu_ms": 0.9529472351074219,
+          "max_gpu_ms": 0.9836256027221679
+        },
+        {
+          "stage": "isolated_down",
+          "min_gpu_ms": 0.5718719959259033,
+          "max_gpu_ms": 0.5894656181335449
+        },
+        {
+          "stage": "ordered_read_sequential",
+          "min_gpu_ms": 0.8074943542480468,
+          "max_gpu_ms": 0.8078816413879395
+        },
+        {
+          "stage": "ordered_read_transpose32",
+          "min_gpu_ms": 0.8370911598205566,
+          "max_gpu_ms": 0.8388928413391114
+        },
+        {
+          "stage": "weight_read_checksum",
+          "min_gpu_ms": 0.8155936241149903,
+          "max_gpu_ms": 0.817136001586914
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.040256094984085555,
+              -0.032413517086291255
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.2133375883102417,
+            "control_median_ms": 0.20623679161071778,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.20629119873046875,
+                0.2149440050125122
+              ],
+              [
+                0.20600318908691406,
+                0.21338560581207275
+              ],
+              [
+                0.20638399124145507,
+                0.2133375883102417
+              ],
+              [
+                0.20613760948181153,
+                0.21329278945922853
+              ],
+              [
+                0.20623679161071778,
+                0.21314558982849122
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.033284320666444045
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.02808813948450073,
+              -0.02411114394739855
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.2133375883102417,
+            "control_median_ms": 0.2080064058303833,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.2089184045791626,
+                0.2149440050125122
+              ],
+              [
+                0.20739200115203857,
+                0.21338560581207275
+              ],
+              [
+                0.20808639526367187,
+                0.2133375883102417
+              ],
+              [
+                0.20764799118041993,
+                0.21329278945922853
+              ],
+              [
+                0.2080064058303833,
+                0.21314558982849122
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.024989419455260897
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 0,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.035863268535002324,
+              -0.035062052345598005
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8375967979431153,
+            "control_median_ms": 0.8078495979309082,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8078495979309082,
+                0.8375424385070801
+              ],
+              [
+                0.8076288223266601,
+                0.8376704216003418
+              ],
+              [
+                0.8080127716064454,
+                0.8373727798461914
+              ],
+              [
+                0.8078271865844726,
+                0.8376928329467773
+              ],
+              [
+                0.807868766784668,
+                0.8375967979431153
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.035514939986945104
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.02678985947613377,
+              -0.023199357705850354
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8375967979431153,
+            "control_median_ms": 0.8162112236022949,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8181119918823242,
+                0.8375424385070801
+              ],
+              [
+                0.8158687591552735,
+                0.8376704216003418
+              ],
+              [
+                0.8162112236022949,
+                0.8373727798461914
+              ],
+              [
+                0.8152511596679688,
+                0.8376928329467773
+              ],
+              [
+                0.8162848472595214,
+                0.8375967979431153
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.025532063151789575
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 0,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.03435557364555797,
+              -0.032191735482483
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.21332159042358398,
+            "control_median_ms": 0.20615360736846924,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.20615360736846924,
+                0.21341118812561036
+              ],
+              [
+                0.20609920024871825,
+                0.21332159042358398
+              ],
+              [
+                0.20635840892791749,
+                0.21322240829467773
+              ],
+              [
+                0.206060791015625,
+                0.21339199542999268
+              ],
+              [
+                0.20629758834838868,
+                0.21331520080566407
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.03360177017657506
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.02835150406444087,
+              -0.019900380132561013
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.21332159042358398,
+            "control_median_ms": 0.20799360275268555,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.20824320316314698,
+                0.21341118812561036
+              ],
+              [
+                0.20727360248565674,
+                0.21332159042358398
+              ],
+              [
+                0.2089792013168335,
+                0.21322240829467773
+              ],
+              [
+                0.20780479907989502,
+                0.21339199542999268
+              ],
+              [
+                0.20799360275268555,
+                0.21331520080566407
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.024976317025945938
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 17,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.03584312314555271,
+              -0.03500116749910298
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8376064300537109,
+            "control_median_ms": 0.8079039573669433,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8079680442810059,
+                0.8372735977172852
+              ],
+              [
+                0.8077471733093262,
+                0.8376031875610351
+              ],
+              [
+                0.8079039573669433,
+                0.8376447677612304
+              ],
+              [
+                0.807583999633789,
+                0.8376064300537109
+              ],
+              [
+                0.8079135894775391,
+                0.8376319885253907
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.03546113260479977
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.026395261723295427,
+              -0.02360421210895891
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8376064300537109,
+            "control_median_ms": 0.8159359931945801,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8175104141235352,
+                0.8372735977172852
+              ],
+              [
+                0.8158016204833984,
+                0.8376031875610351
+              ],
+              [
+                0.8159359931945801,
+                0.8376447677612304
+              ],
+              [
+                0.8154975891113281,
+                0.8376064300537109
+              ],
+              [
+                0.8164192199707031,
+                0.8376319885253907
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.02587186067535474
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 17,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.03404708411890345,
+              -0.0321249035613137
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.21325759887695311,
+            "control_median_ms": 0.20614080429077147,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.20631999969482423,
+                0.21316800117492676
+              ],
+              [
+                0.20599679946899413,
+                0.21325759887695311
+              ],
+              [
+                0.20614080429077147,
+                0.21336638927459717
+              ],
+              [
+                0.20602240562438964,
+                0.21325440406799318
+              ],
+              [
+                0.20615999698638915,
+                0.21332480907440185
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.03337182179514242
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.02718959398399401,
+              -0.019560192615654226
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.21325759887695311,
+            "control_median_ms": 0.20805759429931642,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.20899839401245118,
+                0.21316800117492676
+              ],
+              [
+                0.2074592113494873,
+                0.21325759887695311
+              ],
+              [
+                0.2083712100982666,
+                0.21336638927459717
+              ],
+              [
+                0.20760641098022461,
+                0.21325440406799318
+              ],
+              [
+                0.20805759429931642,
+                0.21332480907440185
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.024383677791650626
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 35,
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "comparisons": [
+        {
+          "control": "same_kernel_sequential",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.037016498399521036,
+              -0.03493622413667974
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8376576423645019,
+            "control_median_ms": 0.8078399658203125,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8077247619628907,
+                0.8377152442932129
+              ],
+              [
+                0.8078399658203125,
+                0.8388928413391114
+              ],
+              [
+                0.8078463554382325,
+                0.8370911598205566
+              ],
+              [
+                0.8074943542480468,
+                0.8376319885253907
+              ],
+              [
+                0.8078816413879395,
+                0.8376576423645019
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.035596495556372454
+          }
+        },
+        {
+          "control": "original_reader",
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.027594493174446177,
+              -0.024498840265648747
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.8376576423645019,
+            "control_median_ms": 0.8164704322814942,
+            "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+            "pairs": [
+              [
+                0.8165792465209961,
+                0.8377152442932129
+              ],
+              [
+                0.8157440185546875,
+                0.8388928413391114
+              ],
+              [
+                0.8164704322814942,
+                0.8370911598205566
+              ],
+              [
+                0.8155936241149903,
+                0.8376319885253907
+              ],
+              [
+                0.817136001586914,
+                0.8376576423645019
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.025293400324267856
+          }
+        }
+      ],
+      "kind": "ffn_read_order_screen",
+      "layer_id": 35,
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "preparation": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 8.187927,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 354574336,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 378527744,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 22.044456,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4520563136,
+        "tracked_bytes_before": 4472656320
+      },
+      "has_verified_dispatch_owner_tags": true
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 7.570197,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 354574336,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 378527744,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.0.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 27.808896999999998,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4521165248,
+        "tracked_bytes_before": 4473258432
+      },
+      "has_verified_dispatch_owner_tags": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 7.438141,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1091799040,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1115752448,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 29.231216,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4520563136,
+        "tracked_bytes_before": 4472656320
+      },
+      "has_verified_dispatch_owner_tags": true
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 7.8608519999999995,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1091799040,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1115752448,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.17.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 29.472924000000003,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4521165248,
+        "tracked_bytes_before": 4473258432
+      },
+      "has_verified_dispatch_owner_tags": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 7.845543999999999,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3221559296,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3245512704,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 28.282227,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4520563136,
+        "tracked_bytes_before": 4472656320
+      },
+      "has_verified_dispatch_owner_tags": true
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "preparation": {
+        "additional_prepared_bytes": 47906816,
+        "allocation_upload_ms": 7.400068,
+        "estimated_all_layers_extra_bytes": 1724645376,
+        "keys": [
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3221559296,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_gate.weight"
+            }
+          },
+          {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3245512704,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 11008
+              },
+              "tensor_name": "blk.35.ffn_up.weight"
+            }
+          }
+        ],
+        "layout": "SeparateScalesValues",
+        "packing_ms": 27.843188,
+        "planes": [
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          },
+          {
+            "planes": [
+              {
+                "bytes": 1409024,
+                "kind": "Scales"
+              },
+              {
+                "bytes": 22544384,
+                "kind": "Values"
+              }
+            ],
+            "resident_bytes": 23953408,
+            "source_bytes": 23953408,
+            "tile": null
+          }
+        ],
+        "retained_host_prepared_bytes": 47906816,
+        "scope": "one layer gate/up pair; both timing arms retain the same prepared pair; setup excluded from primary timings; full-model extra bytes are an estimate, not observed runtime residency",
+        "tracked_bytes_after": 4521165248,
+        "tracked_bytes_before": 4473258432
+      },
+      "has_verified_dispatch_owner_tags": true
+    }
+  ],
+  "passes_all_one_row_read_gates": false,
+  "interpretation": "fixed column-order surrogate read cost, not DRAM traffic, an inference bound or runtime qualification"
+}

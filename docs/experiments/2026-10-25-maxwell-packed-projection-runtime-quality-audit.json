@@ -1,0 +1,28 @@
+{
+  "passes_quality_audit": true,
+  "source": "43ea00a84c4e0d526347fbe40d843bc1a06dfcd8",
+  "executable": "e178fa4c5010f20c06bf78d91714cceab3a9db41d0b1d9529b0849a07cd3062d",
+  "scope": "packed QKV/output full-model quality against qualified warp/split-FFN/SGEMM; not HTTP timing",
+  "actual_browser_ids_equal": 512,
+  "task_outputs_equal": 12,
+  "dense_valid_tasks": 7,
+  "regressions": 0,
+  "sampled_full_vocabulary_logit_max_diff": 0,
+  "sampled_full_vocabulary_logit_mean_diff": 0,
+  "top10_overlap": 10,
+  "prepared_tensor_identities_equal": 109,
+  "additional_device_weight_bytes": 0,
+  "source_plus_prepared_bytes": 6197100544,
+  "kv_bytes_per_model": 37748736,
+  "temporary_prefill_bytes": 90177536,
+  "candidate_qkv_packed_launches": 18432,
+  "candidate_output_packed_launches": 18432,
+  "unchanged_other_dispatch": true,
+  "unchanged_enqueue_counters": true,
+  "tracked_device_bytes_after": 0,
+  "diagnostic_resident_generation_ms": [
+    10896.793754,
+    10465.656235999999
+  ],
+  "makes_http_or_default_claim": false
+}

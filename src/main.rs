@@ -232,6 +232,7 @@ async fn main() -> Result<()> {
                     reset_kv_cache: true,
                     kv_compression,
                     prompt_format: prompt_format.into(),
+                    prompt_prefill: m40_llm::generate::PromptPrefill::Environment,
                 },
             )?;
             print!("{}", generated.output);
@@ -354,6 +355,8 @@ async fn main() -> Result<()> {
                     } else {
                         1
                     };
+                anyhow::ensure!((loaded.q8_ffn.is_native() && loaded.q8_prefill.is_native()) || max_sequences==1,
+                    "experimental Q8 backends are single-request only; set M40LLM_SERVER_BATCH_DECODE=0 or select native Q8 backends");
                 let use_compressed_kv = matches!(
                     kv_compression.mode,
                     KvCompressMode::RecentOnly

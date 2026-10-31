@@ -1,0 +1,5 @@
+{
+  "content": "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n<|im_start|>user\nExplain everything that happens between the time a user types a web address into their browser and the time the page is fully loaded and displayed on their screen in as much detail as possible<|im_end|>\n<|im_start|>assistant\n",
+  "add_special": false,
+  "parse_special": true
+}

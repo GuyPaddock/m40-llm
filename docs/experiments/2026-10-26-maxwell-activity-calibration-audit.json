@@ -1,0 +1,238 @@
+{
+  "passes_integrity_audit": true,
+  "cases": 20,
+  "generations": 100,
+  "measured_generations": 20,
+  "pairs_per_engine": 5,
+  "summary": [
+    {
+      "engine": "m40",
+      "statistics": {
+        "decode_ms": {
+          "pairs": [
+            [
+              287.116866,
+              294.211461
+            ],
+            [
+              287.69619,
+              293.693891
+            ],
+            [
+              288.019332,
+              292.41314800000004
+            ],
+            [
+              289.67503300000004,
+              291.442388
+            ],
+            [
+              289.713307,
+              292.57021100000003
+            ]
+          ],
+          "off_median_ms": 288.019332,
+          "on_median_ms": 292.57021100000003,
+          "on_latency_change": 0.015800602578996292,
+          "paired_ci95": [
+            0.006101164403768067,
+            0.024709781417020515
+          ],
+          "off_variation": 0.0031333521737353515,
+          "on_variation": 0.0038407191086175852,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        },
+        "prefill_ms": {
+          "pairs": [
+            [
+              494.174757,
+              509.49168099999997
+            ],
+            [
+              586.562174,
+              506.972047
+            ],
+            [
+              521.0796250000001,
+              550.382297
+            ],
+            [
+              515.259581,
+              547.501092
+            ],
+            [
+              528.831276,
+              519.7347930000001
+            ]
+          ],
+          "off_median_ms": 521.0796250000001,
+          "on_median_ms": 519.7347930000001,
+          "on_latency_change": -0.0025808570043397427,
+          "paired_ci95": [
+            -0.13568915713954655,
+            0.06257333621516858
+          ],
+          "off_variation": 0.014876135293142431,
+          "on_variation": 0.024556266334088018,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        },
+        "total_ms": {
+          "pairs": [
+            [
+              781.304215,
+              803.728087
+            ],
+            [
+              874.2704369999999,
+              800.679705
+            ],
+            [
+              809.113627,
+              842.810284
+            ],
+            [
+              804.956125,
+              838.9568549999999
+            ],
+            [
+              818.566292,
+              812.32693
+            ]
+          ],
+          "off_median_ms": 809.113627,
+          "on_median_ms": 812.32693,
+          "on_latency_change": 0.003971386580045921,
+          "paired_ci95": [
+            -0.08417387673832544,
+            0.042239233846440793
+          ],
+          "off_variation": 0.01168274106944441,
+          "on_variation": 0.014338100301562002,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        }
+      },
+      "has_complete_captures": false,
+      "has_small_decode_overhead": true,
+      "has_stable_decode": true,
+      "passes_calibration": false,
+      "interpretation": "capped collector; timing cannot calibrate complete capture"
+    },
+    {
+      "engine": "native",
+      "statistics": {
+        "decode_ms": {
+          "pairs": [
+            [
+              334.173,
+              358.409
+            ],
+            [
+              335.14,
+              352.682
+            ],
+            [
+              336.464,
+              361.464
+            ],
+            [
+              338.116,
+              355.33
+            ],
+            [
+              339.001,
+              354.671
+            ]
+          ],
+          "off_median_ms": 336.464,
+          "on_median_ms": 355.33,
+          "on_latency_change": 0.056071377621379925,
+          "paired_ci95": [
+            0.04622405243642347,
+            0.07430215416805375
+          ],
+          "off_variation": 0.004909886347424945,
+          "on_variation": 0.007452227506824552,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        },
+        "prefill_ms": {
+          "pairs": [
+            [
+              228.976,
+              237.614
+            ],
+            [
+              229.446,
+              237.956
+            ],
+            [
+              229.913,
+              240.38
+            ],
+            [
+              229.695,
+              237.946
+            ],
+            [
+              229.834,
+              237.922
+            ]
+          ],
+          "off_median_ms": 229.695,
+          "on_median_ms": 237.946,
+          "on_latency_change": 0.03592154813992465,
+          "paired_ci95": [
+            0.035190615835777095,
+            0.045525916324870686
+          ],
+          "off_variation": 0.0009490846557392096,
+          "on_variation": 0.00010086322106696859,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        },
+        "total_ms": {
+          "pairs": [
+            [
+              563.149,
+              596.023
+            ],
+            [
+              564.586,
+              590.638
+            ],
+            [
+              566.377,
+              601.844
+            ],
+            [
+              567.8109999999999,
+              593.276
+            ],
+            [
+              568.835,
+              592.593
+            ]
+          ],
+          "off_median_ms": 566.377,
+          "on_median_ms": 593.276,
+          "on_latency_change": 0.047493100885099615,
+          "paired_ci95": [
+            0.04176606573083563,
+            0.06262083382623262
+          ],
+          "off_variation": 0.003162204679921572,
+          "on_variation": 0.004446497077245532,
+          "bootstrap": "all 3125 ordered paired resamples; percentile indices 78/3046"
+        }
+      },
+      "has_complete_captures": true,
+      "has_small_decode_overhead": false,
+      "has_stable_decode": true,
+      "passes_calibration": false,
+      "interpretation": "complete capture but decode overhead exceeds 3%"
+    }
+  ],
+  "passes_joint_calibration": false,
+  "has_quantitative_engine_stage_comparison": false,
+  "has_new_throughput_qualification": false,
+  "changes_runtime_defaults": false,
+  "scope": "resident/native 16-token observer cost, not HTTP or actual512 qualification"
+}

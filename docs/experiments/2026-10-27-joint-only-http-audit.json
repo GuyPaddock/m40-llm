@@ -1,0 +1,17 @@
+{
+  "is_http_audit_passed": true,
+  "revision": "3e7caeef90434e79a9fa394b306a6d19fe103306",
+  "executable_sha256": "3b9cb5785bc44c3cb0feca88a64f5869f8e22f6dd3c6a6c8499463277520f628",
+  "pairs": 5,
+  "phase": "screen",
+  "control_http_tok_per_sec": 50.862963024938956,
+  "candidate_http_tok_per_sec": 50.89317644943652,
+  "gain": 0.0005940162094517643,
+  "paired_ci95": [
+    -0.0005875222773964461,
+    0.0032532465861339066
+  ],
+  "meaningful_threshold": 0.03,
+  "requires_speedup": false,
+  "device_bytes_after": 0
+}

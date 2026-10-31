@@ -1,0 +1,4 @@
+ Function qkv_f32xq8_0_gguf_decode_warp_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0
+ Function qkv_f32xq8_0_gguf_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:416 TEXTURE:0 SURFACE:0 SAMPLER:0

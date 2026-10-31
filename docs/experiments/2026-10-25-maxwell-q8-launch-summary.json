@@ -1,0 +1,568 @@
+[
+  {
+    "name": "k_compute_batched_ptrs(void const*, void const*, char*, void const**, void**, long, long, long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, long, long)",
+    "count": 72,
+    "grids": [
+      [
+        1,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        16,
+        16,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "maxwell_sgemm_128x64_tn",
+    "count": 179,
+    "grids": [
+      [
+        1,
+        2,
+        16
+      ],
+      [
+        2,
+        2,
+        16
+      ],
+      [
+        16,
+        2,
+        4
+      ],
+      [
+        16,
+        2,
+        22
+      ]
+    ],
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "quantize_q8_1(float const*, void*, long, long, long, long, long, unsigned int, uint3)",
+    "count": 1269,
+    "grids": [
+      [
+        8,
+        1,
+        1
+      ],
+      [
+        8,
+        2,
+        1
+      ],
+      [
+        44,
+        1,
+        1
+      ],
+      [
+        44,
+        2,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "sgemm_32x32x32_NT_vec",
+    "count": 142,
+    "grids": [
+      [
+        12,
+        2,
+        1
+      ],
+      [
+        12,
+        86,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void convert_unary<__half, float>(void const*, float*, long, long, long, uint3, long, long, long)",
+    "count": 36,
+    "grids": [
+      [
+        1,
+        128,
+        2
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void convert_unary_cont_vec4<__half, float>(void const*, float*, long)",
+    "count": 36,
+    "grids": [
+      [
+        64,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void cpy_scalar<&(void _INTERNAL_3446f298_6_cpy_cu_bfba63e2::cpy_1_scalar<float, float>(char const*, char*))>(char const*, char*, long, long, long, long, long, long, long, long, long, long, long, long, long, long, long)",
+    "count": 108,
+    "grids": [
+      [
+        64,
+        1,
+        1
+      ],
+      [
+        2080,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void dequantize_block<32, 1, &_INTERNAL_a1126166_10_convert_cu_ecf17202::dequantize_q8_0, float>(void const*, float*, long, long, long, uint3, long, long, long)",
+    "count": 249,
+    "grids": [
+      [
+        1024,
+        1,
+        1
+      ],
+      [
+        8192,
+        1,
+        1
+      ],
+      [
+        44032,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void k_bin_bcast<&_INTERNAL_f6a4f1f9_11_binbcast_cu_6840010b::op_add, float, float, float, float const*>(float const*, float const*, float*, unsigned int, unsigned int, unsigned int, uint3, uint3, uint3, uint3, uint3, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, float const*)",
+    "count": 1080,
+    "grids": [
+      [
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        2,
+        1
+      ],
+      [
+        1,
+        65,
+        1
+      ],
+      [
+        8,
+        1,
+        1
+      ],
+      [
+        8,
+        2,
+        1
+      ],
+      [
+        8,
+        65,
+        1
+      ],
+      [
+        16,
+        1,
+        1
+      ],
+      [
+        520,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void k_get_rows_float<float, float>(float const*, int const*, float*, long, long, uint3, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long)",
+    "count": 12,
+    "grids": [
+      [
+        1,
+        8,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void k_set_rows<float, long, __half>(float const*, long const*, __half*, long, long, long, long, long, long, long, long, long, long, long, long, long, long, uint3, uint3, uint3, uint3, uint3)",
+    "count": 216,
+    "grids": [
+      [
+        1,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        1
+      ],
+      [
+        65,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_f<__half, float, 1, 128, false, false>(__half const*, float const*, int const*, ggml_cuda_mm_fusion_args_device, float*, int, uint3, int, int, int, uint3, int, int, int, uint3, int, int, int, int)",
+    "count": 108,
+    "grids": [
+      [
+        128,
+        16,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_f<__half, float, 1, 64, false, false>(__half const*, float const*, int const*, ggml_cuda_mm_fusion_args_device, float*, int, uint3, int, int, int, uint3, int, int, int, uint3, int, int, int, int)",
+    "count": 108,
+    "grids": [
+      [
+        256,
+        16,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_f<__half, float, 2, 128, false, false>(__half const*, float const*, int const*, ggml_cuda_mm_fusion_args_device, float*, int, uint3, int, int, int, uint3, int, int, int, uint3, int, int, int, int)",
+    "count": 72,
+    "grids": [
+      [
+        128,
+        16,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        128,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_f<__half, float, 2, 64, false, false>(__half const*, float const*, int const*, ggml_cuda_mm_fusion_args_device, float*, int, uint3, int, int, int, uint3, int, int, int, uint3, int, int, int, int)",
+    "count": 72,
+    "grids": [
+      [
+        256,
+        16,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        64,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_q<(ggml_type)8, 1, false, false, false>(void const*, void const*, int const*, ggml_cuda_mm_fusion_args_device, float*, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)",
+    "count": 771,
+    "grids": [
+      [
+        256,
+        1,
+        1
+      ],
+      [
+        2048,
+        1,
+        1
+      ],
+      [
+        11008,
+        1,
+        1
+      ],
+      [
+        151936,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        32,
+        4,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void mul_mat_vec_q<(ggml_type)8, 2, false, false, false>(void const*, void const*, int const*, ggml_cuda_mm_fusion_args_device, float*, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, uint3, unsigned int, unsigned int, unsigned int, unsigned int)",
+    "count": 498,
+    "grids": [
+      [
+        128,
+        1,
+        1
+      ],
+      [
+        1024,
+        1,
+        1
+      ],
+      [
+        5504,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        32,
+        4,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void rms_norm_f32<512, 1, true, true, false, false>(float const*, float*, int, int, int, long, long, long, float, float const*, long, long, long, uint3, uint3, uint3, uint3, float const*, long, long, long, uint3, uint3, uint3, uint3, float)",
+    "count": 438,
+    "grids": [
+      [
+        1,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        1
+      ],
+      [
+        65,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        512,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void rope_neox<true, false, float, __half>(float const*, __half*, int, int, int, int, int, int, int, int, int, int, int, int const*, float, float, float, rope_corr_dims, float, float const*, long const*, int, bool)",
+    "count": 216,
+    "grids": [
+      [
+        2,
+        1,
+        1
+      ],
+      [
+        4,
+        1,
+        1
+      ],
+      [
+        130,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        1,
+        256,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void rope_neox<true, false, float, float>(float const*, float*, int, int, int, int, int, int, int, int, int, int, int, int const*, float, float, float, rope_corr_dims, float, float const*, long const*, int, bool)",
+    "count": 216,
+    "grids": [
+      [
+        16,
+        1,
+        1
+      ],
+      [
+        32,
+        1,
+        1
+      ],
+      [
+        1040,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        1,
+        256,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void soft_max_f32<true, 256, 256, float>(float const*, float const*, float const*, float*, soft_max_params)",
+    "count": 216,
+    "grids": [
+      [
+        1,
+        16,
+        1
+      ],
+      [
+        2,
+        16,
+        1
+      ],
+      [
+        65,
+        16,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  },
+  {
+    "name": "void unary_gated_op_kernel<&_INTERNAL_055303e5_8_unary_cu_eb6d5366::op_silu, float>(float const*, float const*, float*, long, long, long, long)",
+    "count": 216,
+    "grids": [
+      [
+        43,
+        1,
+        1
+      ],
+      [
+        86,
+        1,
+        1
+      ],
+      [
+        2795,
+        1,
+        1
+      ]
+    ],
+    "blocks": [
+      [
+        256,
+        1,
+        1
+      ]
+    ]
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "passes_audit": true,
+  "observation_revision": "b266a7329468470957f596a955f3b8de8a21a6bd",
+  "complete_launch_records_per_successful_ffn_run": 1430,
+  "driver_launches_per_successful_run": 715,
+  "qualified_gate_launches_per_run": 36,
+  "project_disassembled_entries": 135,
+  "project_encoded_words": 100400,
+  "has_identical_native_and_jit_project_words": true,
+  "has_identical_resource_reports": true,
+  "has_forced_jit_cublas_ffn_coverage": false,
+  "cublas_probe_forced_status": 3,
+  "should_run_new_kernel_timing": false,
+  "should_enable_global_forced_jit": false,
+  "is_performance_claim": false,
+  "changes_runtime_defaults": false,
+  "scope": "untimed loaded-code observation and primitive tests, not full-model quality or HTTP"
+}

@@ -1,0 +1,12 @@
+10ad2b516555da0f4d05b2bdf15742217331f06d17b28e2e67b19f223d3d2e21  docs/experiments/2026-10-25-maxwell-byte-ffn-audit.jq
+685490b43e013368c5f0061025ca580a0c67aa1a130a554feff18ae11309dc4b  docs/experiments/2026-10-25-maxwell-byte-ffn-audit.json
+12ee5ab34ac559d9dff544ebed453e7cd15c40d95b32a27538f304d0c3496710  docs/experiments/2026-10-25-maxwell-byte-ffn-candidate.ptx.gz
+0eaf3c2b2851732c7933052b4356e73e2a0ca6322574059d906cbc3cc9597090  docs/experiments/2026-10-25-maxwell-byte-ffn-candidate.sass.gz
+14ba212cc797799b09e1240c3888493220291b34b6aae070351b85cdce9e51d7  docs/experiments/2026-10-25-maxwell-byte-ffn-control.sass.gz
+8e5218c7335dbc2e395a248c278509de176de03ba27638e17ec6a2dfc265c66c  docs/experiments/2026-10-25-maxwell-byte-ffn-hypothesis.md
+23c05d73a98170e7dd394e525beb1525607be6a3accf5b74c883ab5002c826c1  docs/experiments/2026-10-25-maxwell-byte-ffn-projection-followup.sass.gz
+04f3a5bfea7d4792251d92b4a7af6ad9c3853a245148ecf0813b7368ec692408  docs/experiments/2026-10-25-maxwell-byte-ffn-resources.txt
+8fbdd459b3c61e8b128264daf832c4b6b3e08e5f24ee7413146eb1a18da62126  docs/experiments/2026-10-25-maxwell-byte-ffn-screen.jsonl
+c912af33c3d77bcf988b43b72becd5fb23ae3eb81831c42ffef10b22595cccb1  docs/experiments/2026-10-25-maxwell-byte-ffn-screen.log.gz
+1796e4c229677e9a9892a449703ed3e55ceccaf048b4b89540274cc6141dfee4  docs/experiments/2026-10-25-maxwell-byte-ffn-screen.md
+65540050f24bf9b65d02b80c7c07e7ded2d149dc4725931abd2799683bbfef2b  docs/experiments/2026-10-25-maxwell-byte-ffn-validation.log.gz

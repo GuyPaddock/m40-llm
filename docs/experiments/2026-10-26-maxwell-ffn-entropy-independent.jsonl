@@ -1,0 +1,6 @@
+{"tensor":"blk.0.ffn_gate.weight","source_sha256":"44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa","independent_counts_match":true}
+{"tensor":"blk.0.ffn_up.weight","source_sha256":"0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c","independent_counts_match":true}
+{"tensor":"blk.17.ffn_gate.weight","source_sha256":"4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86","independent_counts_match":true}
+{"tensor":"blk.17.ffn_up.weight","source_sha256":"4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d","independent_counts_match":true}
+{"tensor":"blk.35.ffn_gate.weight","source_sha256":"f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a","independent_counts_match":true}
+{"tensor":"blk.35.ffn_up.weight","source_sha256":"a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c","independent_counts_match":true}

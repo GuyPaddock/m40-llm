@@ -1,0 +1,68 @@
+{
+  "passes_audit": true,
+  "comparison_kind": "ollama",
+  "source": "f93bb89767cb8d47b926903975ece5211d06d6cb",
+  "executable_sha256": "9540358f1eb1eee6c4658125f27387694125f8cf670e377b54bb3ee1c85a0e2e",
+  "primary_pairs": 5,
+  "primary_requests": 10,
+  "gpu_boundary_samples": 20,
+  "observed_clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "completed_quality_and_actual_ids_bound": true,
+  "all_prompt_cache_resets_verified": true,
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.043605021822073375,
+      0.046372787179511654
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.000540052479175382,
+      "max": 45.11155344279562,
+      "median": 45.07517678393216,
+      "min": 44.99959549714195
+    },
+    "control": {
+      "mad_over_median": 0.0004304193002682042,
+      "max": 43.14146857274749,
+      "median": 43.11937424235012,
+      "min": 43.07932596405829
+    },
+    "gain": 0.04535786003269804,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "phase_medians": [
+    {
+      "label": "m40-llm",
+      "requests": 5,
+      "http_ms": 11358.801818,
+      "prefill_ms": 500.863077,
+      "decode_ms": 10817.912067
+    },
+    {
+      "label": "ollama",
+      "requests": 5,
+      "http_ms": 11874.012761,
+      "prefill_ms": 230.624,
+      "decode_ms": 11638.291
+    }
+  ],
+  "memory_scope": "requested prepared payload plus separate native dense KV; two M40 models only for incremental pairs, plus idle Ollama; no concurrent inference",
+  "prepared_weight_bytes": [
+    2917580800
+  ],
+  "dense_kv_bytes": 37748736,
+  "original_goal_achieved": false,
+  "changes_runtime_defaults": false
+}

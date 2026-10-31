@@ -1,0 +1,366 @@
+{
+  "manifest": {
+    "build_profile": "release",
+    "control": "GGUF dispatch: decode split4/coltile4; multirow existing shared-activation/blockloop",
+    "created_unix_s": 1792895323,
+    "cuda_flags": [
+      "-O3",
+      "sm_52",
+      "compute_52"
+    ],
+    "executable_sha256": "dd61404c2210326acc9687738d0ecb4cc634475e3c042c5c3538bacd760c1427  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/target/release/examples/q8_execution_bench",
+    "execution_layout": "separate",
+    "gpu": {
+      "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P8, 31, 324 MHz, 405 MHz, 0 MiB, 0 %",
+      "processes": ""
+    },
+    "interpretation": "isolated lossless projection experiment, not end-to-end inference or measured DRAM traffic",
+    "kind": "manifest",
+    "model": "/mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Fri_Feb_21_20:23:50_PST_2025\nCuda compilation tools, release 12.8, V12.8.93\nBuild cuda_12.8.r12.8/compiler.35583870_0",
+    "requested_iterations": 10,
+    "revision": "a48d87bc6a57396ae4dc14128439066020358862",
+    "rows": [
+      1
+    ],
+    "tiled_access": "vector",
+    "timing": "CUDA events per repeated projection, preparation excluded; alternating serial baseline/candidate pairs",
+    "trials": 5,
+    "worktree": "M cuda/q8_execution.cuh\n M cuda/stub.c\n M examples/q8_execution_bench/run.rs\n M src/cuda.rs\n M src/infer/execution_weights/device.rs\n M src/infer/execution_weights/mod.rs\n M src/infer/execution_weights/tests.rs\n?? tests/q8_tiled_projection.rs"
+  },
+  "preparation": [
+    {
+      "benchmark_weight_device_bytes": 47906816,
+      "execution_layout": "SeparateScalesValues",
+      "execution_upload_ms": 2.8684119999999997,
+      "extra_resident_bytes": 0,
+      "host_peak_payload_bytes": 71860224,
+      "kind": "preparation",
+      "original_copy_ms": 15.417138,
+      "original_upload_ms": 3.912982,
+      "repack_ms": 14.269044,
+      "resident_execution_bytes": 23953408,
+      "source_bytes": 23953408,
+      "tensor": {
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_gate.weight",
+        "offset": 354574336,
+        "shape": [
+          2048,
+          11008
+        ]
+      }
+    },
+    {
+      "benchmark_weight_device_bytes": 47906816,
+      "execution_layout": "SeparateScalesValues",
+      "execution_upload_ms": 3.1132429999999998,
+      "extra_resident_bytes": 0,
+      "host_peak_payload_bytes": 71860224,
+      "kind": "preparation",
+      "original_copy_ms": 15.32058,
+      "original_upload_ms": 3.715636,
+      "repack_ms": 15.388191,
+      "resident_execution_bytes": 23953408,
+      "source_bytes": 23953408,
+      "tensor": {
+        "dtype": "Q8_0",
+        "name": "blk.0.ffn_down.weight",
+        "offset": 330620928,
+        "shape": [
+          11008,
+          2048
+        ]
+      }
+    },
+    {
+      "benchmark_weight_device_bytes": 661225472,
+      "execution_layout": "SeparateScalesValues",
+      "execution_upload_ms": 49.004368,
+      "extra_resident_bytes": 0,
+      "host_peak_payload_bytes": 991838208,
+      "kind": "preparation",
+      "original_copy_ms": 219.918107,
+      "original_upload_ms": 47.653996,
+      "repack_ms": 208.74690600000002,
+      "resident_execution_bytes": 330612736,
+      "source_bytes": 330612736,
+      "tensor": {
+        "dtype": "Q8_0",
+        "name": "token_embd.weight",
+        "offset": 0,
+        "shape": [
+          2048,
+          151936
+        ]
+      }
+    }
+  ],
+  "results": [
+    {
+      "tensor": "blk.0.ffn_down.weight",
+      "shape": {
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.19127360582351685,
+      "candidate_gpu_ms": 0.1967519998550415,
+      "baseline_mad_ratio": 0.0018402396281552696,
+      "candidate_mad_ratio": 0.0021631343308721558,
+      "speedup": 0.9721558406747536,
+      "paired_speedup_median": 0.9726925345267189,
+      "max_abs_diff": 5.364418029785156E-7,
+      "mean_abs_diff": 1.0086841939482838E-7,
+      "cpu_sample_max_abs_diff": 2.551823854446411E-7
+    },
+    {
+      "tensor": "blk.0.ffn_down.weight",
+      "shape": {
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.19056960344314575,
+      "candidate_gpu_ms": 0.21600000858306884,
+      "baseline_mad_ratio": 0.003123268617052329,
+      "candidate_mad_ratio": 0.0018370371547746537,
+      "speedup": 0.8822666475490295,
+      "paired_speedup_median": 0.8850464310445895,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 1.1734664440155029E-7
+    },
+    {
+      "tensor": "blk.0.ffn_down.weight",
+      "shape": {
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.19065279960632325,
+      "candidate_gpu_ms": 0.14215359687805176,
+      "baseline_mad_ratio": 0.0026015568198218446,
+      "candidate_mad_ratio": 0.0005627810760650015,
+      "speedup": 1.34117464343781,
+      "paired_speedup_median": 1.34117464343781,
+      "max_abs_diff": 5.364418029785156E-7,
+      "mean_abs_diff": 1.0086841939482838E-7,
+      "cpu_sample_max_abs_diff": 2.551823854446411E-7
+    },
+    {
+      "tensor": "blk.0.ffn_down.weight",
+      "shape": {
+        "input_dim": 11008,
+        "output_dim": 2048
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.19148160219192506,
+      "candidate_gpu_ms": 0.1431264042854309,
+      "baseline_mad_ratio": 0.003827016989298451,
+      "candidate_mad_ratio": 0.005321200605048399,
+      "speedup": 1.3378495962915509,
+      "paired_speedup_median": 1.335297161607637,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 1.1734664440155029E-7
+    },
+    {
+      "tensor": "blk.0.ffn_gate.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 11008
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.22867839336395263,
+      "candidate_gpu_ms": 0.17924799919128417,
+      "baseline_mad_ratio": 0.0013014693164247414,
+      "candidate_mad_ratio": 0.006908895553008258,
+      "speedup": 1.2757653887110834,
+      "paired_speedup_median": 1.2748085553851054,
+      "max_abs_diff": 2.384185791015625E-7,
+      "mean_abs_diff": 1.721271600704207E-8,
+      "cpu_sample_max_abs_diff": 3.3527612686157227E-8
+    },
+    {
+      "tensor": "blk.0.ffn_gate.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 11008
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.2282047986984253,
+      "candidate_gpu_ms": 0.2811039924621582,
+      "baseline_mad_ratio": 0.00018231011043813664,
+      "candidate_mad_ratio": 0.00038701121492857937,
+      "speedup": 0.8118162844277136,
+      "paired_speedup_median": 0.8121305880732845,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 2.60770320892334E-8
+    },
+    {
+      "tensor": "blk.0.ffn_gate.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 11008
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.22860159873962402,
+      "candidate_gpu_ms": 0.13961600065231322,
+      "baseline_mad_ratio": 0.0029115857060821692,
+      "candidate_mad_ratio": 0.005707045665501379,
+      "speedup": 1.6373595982663356,
+      "paired_speedup_median": 1.6373595982663356,
+      "max_abs_diff": 2.384185791015625E-7,
+      "mean_abs_diff": 1.721271600704207E-8,
+      "cpu_sample_max_abs_diff": 3.3527612686157227E-8
+    },
+    {
+      "tensor": "blk.0.ffn_gate.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 11008
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 0.2283328056335449,
+      "candidate_gpu_ms": 0.18377280235290527,
+      "baseline_mad_ratio": 0.00302715722673093,
+      "candidate_mad_ratio": 0.002490013609254873,
+      "speedup": 1.2424733296228978,
+      "paired_speedup_median": 1.2462710010355909,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 2.60770320892334E-8
+    },
+    {
+      "tensor": "token_embd.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 151936
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 2.5839040756225584,
+      "candidate_gpu_ms": 2.0108543395996095,
+      "baseline_mad_ratio": 0.0006353389755252792,
+      "candidate_mad_ratio": 0.0004423927605423406,
+      "speedup": 1.2849782426990966,
+      "paired_speedup_median": 1.2854098555402305,
+      "max_abs_diff": 1.7881393432617188E-7,
+      "mean_abs_diff": 1.5561305702033924E-8,
+      "cpu_sample_max_abs_diff": 2.7939677238464355E-8
+    },
+    {
+      "tensor": "token_embd.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 151936
+      },
+      "rows": 1,
+      "config": {
+        "columns": 1,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 2.5837888717651367,
+      "candidate_gpu_ms": 3.2457534790039064,
+      "baseline_mad_ratio": 0.0002018972435305221,
+      "candidate_mad_ratio": 8.967452496013017e-05,
+      "speedup": 0.7960520996061843,
+      "paired_speedup_median": 0.7962972696702846,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 3.725290298461914E-8
+    },
+    {
+      "tensor": "token_embd.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 151936
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 128
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 2.584339141845703,
+      "candidate_gpu_ms": 1.623151969909668,
+      "baseline_mad_ratio": 9.535491660869607e-05,
+      "candidate_mad_ratio": 0.0003528793391202531,
+      "speedup": 1.5921732467167122,
+      "paired_speedup_median": 1.5926622014053835,
+      "max_abs_diff": 1.7881393432617188E-7,
+      "mean_abs_diff": 1.5561305702033924E-8,
+      "cpu_sample_max_abs_diff": 2.7939677238464355E-8
+    },
+    {
+      "tensor": "token_embd.weight",
+      "shape": {
+        "input_dim": 2048,
+        "output_dim": 151936
+      },
+      "rows": 1,
+      "config": {
+        "columns": 4,
+        "threads": 256
+      },
+      "pairs": 5,
+      "baseline_gpu_ms": 2.58437442779541,
+      "candidate_gpu_ms": 2.071932792663574,
+      "baseline_mad_ratio": 4.5831729653382326e-05,
+      "candidate_mad_ratio": 0.00044021414181022044,
+      "speedup": 1.2473254137133793,
+      "paired_speedup_median": 1.2478084292246274,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0,
+      "cpu_sample_max_abs_diff": 3.725290298461914E-8
+    }
+  ]
+}

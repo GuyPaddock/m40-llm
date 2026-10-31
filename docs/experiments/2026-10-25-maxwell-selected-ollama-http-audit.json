@@ -1,0 +1,102 @@
+{
+  "source_revision": "b7d2e2413cd80cee6fcb93ff6793babb1d539961",
+  "benchmark_executable_sha256": "40d818d6488f6818fd1d08030154b6f440c0bd7614c1767306969ea9c682b898",
+  "primary_runtime_config": {
+    "ffn": "packed-f32-128",
+    "prefill": "dequant-sgemm"
+  },
+  "primary_phase": "screen",
+  "pairs": 5,
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      -0.043910287632125344,
+      -0.033389836035924936
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0012894318668089837,
+      "max": 41.407596122496784,
+      "median": 41.33061960811786,
+      "min": 41.03724112584082
+    },
+    "control": {
+      "mad_over_median": 0.0005492663312215199,
+      "max": 42.96925467565333,
+      "median": 42.94566606721073,
+      "min": 42.75831265690472
+    },
+    "gain": -0.037606739095984665,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": false,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "qualification": {
+    "actual_generated_tokens": 512,
+    "actual_ids_match_completed_quality": true,
+    "changes_runtime_defaults": false,
+    "kind": "selected_runtime_ollama_qualification",
+    "passes_completed_exact_quality": true,
+    "reaches_original_target": false,
+    "required_absolute_http_tps": 53.06,
+    "required_relative_http_tps": 55.82936588737395,
+    "runtime_config": {
+      "ffn": "packed-f32-128",
+      "prefill": "dequant-sgemm"
+    }
+  },
+  "actual_ids_match_completed_quality": true,
+  "all_primary_cache_resets_verified": true,
+  "outputs_stable_within_each_engine": true,
+  "scheduling_scope": "serial awaited HTTP requests; absolute client intervals recorded only for M40, Ollama has per-request runner-log byte ranges",
+  "observed_gpu_clocks": [
+    {
+      "sm_mhz": "1113",
+      "memory_mhz": "3004"
+    }
+  ],
+  "phase_medians": [
+    {
+      "runtime": "m40-llm",
+      "requests": 5,
+      "http_ms": 12387.910098,
+      "prompt_ms": 515.633408,
+      "decode_ms": 11823.707428
+    },
+    {
+      "runtime": "ollama",
+      "requests": 5,
+      "http_ms": 11922.041195,
+      "prompt_ms": 231.397,
+      "decode_ms": 11685.758
+    }
+  ],
+  "m40_counters": [
+    {
+      "cublas_calls": 252,
+      "d2h_bytes": 1255424,
+      "d2h_copies": 1088,
+      "device_allocs": 42,
+      "device_frees": 42,
+      "h2d_bytes": 4718608,
+      "h2d_copies": 580,
+      "launches": 237013,
+      "stream_syncs": 1097,
+      "stream_waits": 324
+    }
+  ],
+  "prepared_weight_bytes": [
+    1192935424
+  ],
+  "dense_kv_bytes": [
+    37748736
+  ],
+  "actual_prefill": {
+    "prefill_mode": "packed-prefix-dequant-sgemm",
+    "prefill_chunk_size": 128,
+    "q8_prefill_temporary_weight_bytes": 90177536
+  }
+}

@@ -1,0 +1,12 @@
+959259fb02b6fc9613f0f425f578f2fc0e9000659a25cac2964094cb259667f7  docs/experiments/2026-10-29-portfolio-runtime.md
+ff60522d14fdf91405217d84b17c305917c40f1be06e2c79f288297d022027b9  docs/experiments/2026-10-29-portfolio-runtime-quality.jsonl
+97d28326370a62a5cb581304c0363c9a47d913d62987763305f6db3eeefbbc4a  docs/experiments/2026-10-29-portfolio-runtime-http.jsonl
+3565b2a4c3826ffc92b1de060078e53f8eaac0f373151b9ee62b1e01c8cbd684  docs/experiments/2026-10-29-portfolio-quality-audit.jq
+db4b95736d9553bffa4fb89299894805b22aff9654fda3e11b584699f4b7eb66  docs/experiments/2026-10-29-portfolio-quality-audit.json
+17977dca5451939e035c5c50709eed6d67d86ba196ee71b33f00f229f7cea6a4  docs/experiments/2026-10-29-portfolio-http-audit.jq
+53048d7432b9e4c5ac636711514ea3436acab5429ab3d867eee245bb2c6dd496  docs/experiments/2026-10-29-portfolio-http-audit.json
+aabe39134a6e3ebcc5d2979b47dfe2d7fbb95e470143cc217c90654bc872c137  docs/experiments/2026-10-29-portfolio-compiled-audit.json
+c3dd70f4e731207c27cdb46e7a6c6f1f0bdc3e3cca64853a3595c205f106a3fb  local-artifacts/2026-10-29-portfolio-runtime/2026-10-29-portfolio-runtime-http.log
+f24db23d6468fcc44e90eae74977b3b12509badaf7681c1b284580d486ebfd32  local-artifacts/2026-10-29-portfolio-runtime/2026-10-29-portfolio-runtime-quality.log
+21cb3e53fe9c9a9f7d9bbcedc93da4e84fd4fb2fd50807b676815ab534f5ab46  local-artifacts/2026-10-29-portfolio-runtime/joint_only
+50a6244ff1d507ef75156b61d9ba998226dc78acc9eb3281dc846a5202ffc8d7  local-artifacts/2026-10-29-portfolio-runtime/portfolio-runtime-sass.txt

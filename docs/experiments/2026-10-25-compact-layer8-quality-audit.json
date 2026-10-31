@@ -1,0 +1,21 @@
+{
+  "kind": "compact_live_parity_audit",
+  "live_revision": "0dfff9306191a85a0441abd96d2ec7bffb690e0f",
+  "live_worktree": "",
+  "source_vs_compact_task_traces_match": true,
+  "current_masked_source_matches_frozen_C24_candidate_tasks": true,
+  "current_masked_source_matches_frozen_C24_candidate_loss_tokens": true,
+  "all_task_prefix_diagnostics_zero": true,
+  "task_prefix_diagnostic_count": 12,
+  "compared_task_prefixes": 951,
+  "all_passage_full_logit_differences_zero": true,
+  "passage_scored_tokens": 203,
+  "all_step_predictions_match": true,
+  "completion": {
+    "compact_equivalence_verified": true,
+    "device_bytes_after": 0,
+    "device_bytes_before": 0,
+    "is_complete": true,
+    "kind": "model_quality_complete"
+  }
+}

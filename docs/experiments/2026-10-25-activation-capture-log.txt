@@ -1,0 +1,21 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-chat-reminder: 21 generated IDs, at most 32 observed input rows
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-fact-depot: 11 generated IDs, at most 32 observed input rows
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-multi-delivery: 34 generated IDs, at most 32 observed input rows
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-config-retry: 2 generated IDs, at most 32 observed input rows
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-arithmetic-invoice: 16 generated IDs, at most 32 observed input rows
+[generate] mapped 36 standard layers d_model=2048 hidden_dim=11008
+[generate] full-layer forward enabled layers=36
+calibration cal-long-photo: 79 generated IDs, at most 32 observed input rows

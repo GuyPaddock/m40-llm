@@ -1,0 +1,5 @@
+7f3dea81a000-7f3dea856000 r--p 00000000 00:1e 1964395                    /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so
+7f3dea856000-7f3deb747000 r-xp 0003c000 00:1e 1964395                    /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so
+7f3deb747000-7f3e03fed000 r--p 00f2d000 00:1e 1964395                    /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so
+7f3e03fed000-7f3e03fef000 r--p 197d2000 00:1e 1964395                    /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so
+7f3e03fef000-7f3e03ff4000 rw-p 197d4000 00:1e 1964395                    /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/cuda_v12/libggml-cuda.so

@@ -1,0 +1,10 @@
+adc5c28a9d94d9a896badbc1268c81fbd37a23296154382842e814d5d3713ac2  docs/experiments/2026-10-26-maxwell-packed-stage-http.jsonl
+4eeec0020ed346341cfd816cc3ef28ae1e98ae88f2b7a6f24a378b75927b126c  docs/experiments/2026-10-26-maxwell-packed-stage-events.jsonl
+3ff95bf79269368145bf3044bb4d351ec826f11444b87cadafbfe7868e29177e  docs/experiments/2026-10-26-maxwell-packed-stage-audit.json
+3f095fc9e7054d929cbe387b4996b644fd7a3719cbd0817b3a9e300019fab24d  docs/experiments/2026-10-26-maxwell-packed-stage-http-audit.jq
+fa45aba1ed57e7e7b349d67862a194ad03cfc077cde9f26409b3cb426780a54a  docs/experiments/2026-10-26-maxwell-packed-stage-http-audit.json
+1ce8d20e405ddd484670327764a46969dd65622b08d3c6f8282690ad70af27fb  docs/experiments/2026-10-26-maxwell-packed-stage-prepared-control.sass.gz
+70a1c713963e28e0ff602cb56df3aec51eeea51ff4e2a5f8b30a1273eb36ae4b  docs/experiments/2026-10-26-maxwell-packed-stage-prepared-resources.txt
+09b77b1cbbb74bb2ecd4ad97ec4f767f49d64a327b992963b1c5f7c2ecd48dd0  docs/experiments/2026-10-26-maxwell-packed-stage-profile.log.gz
+4b2d953804d741be0491979db3da93149cf8d80d16d457963beb0f50dc8be9cc  docs/experiments/2026-10-26-maxwell-packed-stage-ollama.log.gz
+c5323ad802cccf47955c954e0079fa5ba8e3f7054c2183e995b3e794a943e135  docs/experiments/2026-10-25-maxwell-selected-stage-audit.jq

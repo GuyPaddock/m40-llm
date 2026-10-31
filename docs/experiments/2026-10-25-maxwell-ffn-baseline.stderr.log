@@ -1,0 +1,8 @@
+[cuda] upload_weights: 3279519744 bytes (total=3279519744) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=37 layouts=37 prepared_bytes=1192935424 source_bytes=3279519744 total_weight_payload_bytes=4472455168 budget_bytes=6442450944 peak_setup_host_payload_bytes=6895608736 preparation_ms=9521.337
+[q8_execution_bench] FFN layer=0 rows=1: validated 5 baseline trials
+[q8_execution_bench] FFN layer=0 rows=4: validated 5 baseline trials
+[q8_execution_bench] FFN layer=17 rows=1: validated 5 baseline trials
+[q8_execution_bench] FFN layer=17 rows=4: validated 5 baseline trials
+[q8_execution_bench] FFN layer=35 rows=1: validated 5 baseline trials
+[q8_execution_bench] FFN layer=35 rows=4: validated 5 baseline trials

@@ -1,0 +1,9 @@
+{
+   "confidence_scope" : "checks actual pairs, recorded seed/resample contract and interval range; bootstrap computed by existing Rust summarizer",
+   "correctness_only" : true,
+   "device_bytes_after" : 0,
+   "executable_sha256" : "a19efd16c9a46790776729dc4bc83e4713b6dd1a535569a7f36a1a994a8cebf1",
+   "is_audit_passed" : true,
+   "layers" : [],
+   "revision" : "cac4c290afe8ac0482f36d7c6d6b339faf090eb4"
+}

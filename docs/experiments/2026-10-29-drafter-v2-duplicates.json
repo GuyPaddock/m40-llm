@@ -1,0 +1,1421 @@
+{
+  "kind": "mbpp_v2_duplicate_witnesses",
+  "is_complete_template_audit": false,
+  "is_r1_admitted": false,
+  "edges": [
+    {
+      "left": 15,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 647
+    },
+    {
+      "left": 16,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 43
+    },
+    {
+      "left": 17,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 171
+    },
+    {
+      "left": 17,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 176
+    },
+    {
+      "left": 17,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 654
+    },
+    {
+      "left": 17,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 716
+    },
+    {
+      "left": 30,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 338
+    },
+    {
+      "left": 49,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 154
+    },
+    {
+      "left": 51,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 327
+    },
+    {
+      "left": 51,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 521
+    },
+    {
+      "left": 54,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 152
+    },
+    {
+      "left": 54,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 428
+    },
+    {
+      "left": 54,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 940
+    },
+    {
+      "left": 55,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 354
+    },
+    {
+      "left": 71,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 141
+    },
+    {
+      "left": 71,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 516
+    },
+    {
+      "left": 76,
+      "reasons": [
+        "exact_normalized_text",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 347
+    },
+    {
+      "left": 79,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 964
+    },
+    {
+      "left": 82,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 234
+    },
+    {
+      "left": 82,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 276
+    },
+    {
+      "left": 82,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 312
+    },
+    {
+      "left": 82,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 373
+    },
+    {
+      "left": 85,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 379
+    },
+    {
+      "left": 85,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 441
+    },
+    {
+      "left": 85,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 497
+    },
+    {
+      "left": 85,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 574
+    },
+    {
+      "left": 90,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 947
+    },
+    {
+      "left": 92,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 598
+    },
+    {
+      "left": 104,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 569
+    },
+    {
+      "left": 133,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 870
+    },
+    {
+      "left": 141,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 516
+    },
+    {
+      "left": 152,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 428
+    },
+    {
+      "left": 152,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 940
+    },
+    {
+      "left": 166,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 556
+    },
+    {
+      "left": 171,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 176
+    },
+    {
+      "left": 171,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 654
+    },
+    {
+      "left": 171,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 716
+    },
+    {
+      "left": 174,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 653
+    },
+    {
+      "left": 176,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 654
+    },
+    {
+      "left": 176,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 716
+    },
+    {
+      "left": 178,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 186
+    },
+    {
+      "left": 187,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 747
+    },
+    {
+      "left": 188,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 683
+    },
+    {
+      "left": 199,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 388
+    },
+    {
+      "left": 212,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 634
+    },
+    {
+      "left": 212,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 770
+    },
+    {
+      "left": 216,
+      "reasons": [
+        "exact_normalized_text",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 872
+    },
+    {
+      "left": 217,
+      "reasons": [
+        "exact_normalized_text",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 602
+    },
+    {
+      "left": 233,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 266
+    },
+    {
+      "left": 233,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 369
+    },
+    {
+      "left": 233,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 731
+    },
+    {
+      "left": 234,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 276
+    },
+    {
+      "left": 234,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 312
+    },
+    {
+      "left": 234,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 373
+    },
+    {
+      "left": 248,
+      "reasons": [
+        "exact_normalized_text",
+        "identical_parsed_solution",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 704
+    },
+    {
+      "left": 266,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 369
+    },
+    {
+      "left": 266,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 731
+    },
+    {
+      "left": 267,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 287
+    },
+    {
+      "left": 267,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 905
+    },
+    {
+      "left": 271,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 549
+    },
+    {
+      "left": 271,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 655
+    },
+    {
+      "left": 276,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 312
+    },
+    {
+      "left": 276,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 373
+    },
+    {
+      "left": 280,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 492
+    },
+    {
+      "left": 285,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 434
+    },
+    {
+      "left": 285,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 719
+    },
+    {
+      "left": 285,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 756
+    },
+    {
+      "left": 285,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 787
+    },
+    {
+      "left": 287,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 905
+    },
+    {
+      "left": 290,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 528
+    },
+    {
+      "left": 312,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 373
+    },
+    {
+      "left": 316,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 733
+    },
+    {
+      "left": 327,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 521
+    },
+    {
+      "left": 328,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 743
+    },
+    {
+      "left": 334,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 449
+    },
+    {
+      "left": 362,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 658
+    },
+    {
+      "left": 369,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 731
+    },
+    {
+      "left": 379,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 441
+    },
+    {
+      "left": 379,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 497
+    },
+    {
+      "left": 379,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 574
+    },
+    {
+      "left": 402,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 952
+    },
+    {
+      "left": 418,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 457
+    },
+    {
+      "left": 420,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 504
+    },
+    {
+      "left": 420,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 837
+    },
+    {
+      "left": 427,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 928
+    },
+    {
+      "left": 428,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 940
+    },
+    {
+      "left": 434,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 719
+    },
+    {
+      "left": 434,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 756
+    },
+    {
+      "left": 434,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 787
+    },
+    {
+      "left": 439,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 673
+    },
+    {
+      "left": 440,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 584
+    },
+    {
+      "left": 441,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 497
+    },
+    {
+      "left": 441,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 574
+    },
+    {
+      "left": 448,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 931
+    },
+    {
+      "left": 448,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 935
+    },
+    {
+      "left": 458,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 488
+    },
+    {
+      "left": 458,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 814
+    },
+    {
+      "left": 458,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 848
+    },
+    {
+      "left": 477,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 624
+    },
+    {
+      "left": 478,
+      "reasons": [
+        "identical_parsed_solution",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 495
+    },
+    {
+      "left": 488,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 814
+    },
+    {
+      "left": 488,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 848
+    },
+    {
+      "left": 497,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 574
+    },
+    {
+      "left": 504,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 837
+    },
+    {
+      "left": 505,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 632
+    },
+    {
+      "left": 534,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 607
+    },
+    {
+      "left": 542,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 732
+    },
+    {
+      "left": 549,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 655
+    },
+    {
+      "left": 585,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 795
+    },
+    {
+      "left": 591,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 625
+    },
+    {
+      "left": 595,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 699
+    },
+    {
+      "left": 634,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 770
+    },
+    {
+      "left": 654,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 716
+    },
+    {
+      "left": 693,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 892
+    },
+    {
+      "left": 719,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 756
+    },
+    {
+      "left": 719,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 787
+    },
+    {
+      "left": 719,
+      "reasons": [
+        "identical_parsed_solution",
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 930
+    },
+    {
+      "left": 756,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 787
+    },
+    {
+      "left": 756,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 930
+    },
+    {
+      "left": 758,
+      "reasons": [
+        "identical_parsed_solution"
+      ],
+      "right": 779
+    },
+    {
+      "left": 787,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 930
+    },
+    {
+      "left": 794,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 879
+    },
+    {
+      "left": 797,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 962
+    },
+    {
+      "left": 814,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 848
+    },
+    {
+      "left": 817,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 883
+    },
+    {
+      "left": 931,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 935
+    },
+    {
+      "left": 933,
+      "reasons": [
+        "five_word_jaccard_at_least_half"
+      ],
+      "right": 965
+    }
+  ],
+  "cross_partition_components": [
+    {
+      "group_id": "mbpp:15",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        15,
+        647
+      ]
+    },
+    {
+      "group_id": "mbpp:17",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        17,
+        171,
+        176,
+        654,
+        716
+      ]
+    },
+    {
+      "group_id": "mbpp:51",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        51,
+        327,
+        521
+      ]
+    },
+    {
+      "group_id": "mbpp:54",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        54,
+        152,
+        428,
+        940
+      ]
+    },
+    {
+      "group_id": "mbpp:71",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        71,
+        141,
+        516
+      ]
+    },
+    {
+      "group_id": "mbpp:79",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        79,
+        964
+      ]
+    },
+    {
+      "group_id": "mbpp:85",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        85,
+        379,
+        441,
+        497,
+        574
+      ]
+    },
+    {
+      "group_id": "mbpp:90",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        90,
+        947
+      ]
+    },
+    {
+      "group_id": "mbpp:92",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        92,
+        598
+      ]
+    },
+    {
+      "group_id": "mbpp:104",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        104,
+        569
+      ]
+    },
+    {
+      "group_id": "mbpp:133",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        133,
+        870
+      ]
+    },
+    {
+      "group_id": "mbpp:166",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        166,
+        556
+      ]
+    },
+    {
+      "group_id": "mbpp:174",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        174,
+        653
+      ]
+    },
+    {
+      "group_id": "mbpp:187",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        187,
+        747
+      ]
+    },
+    {
+      "group_id": "mbpp:188",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        188,
+        683
+      ]
+    },
+    {
+      "group_id": "mbpp:212",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        212,
+        634,
+        770
+      ]
+    },
+    {
+      "group_id": "mbpp:216",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        216,
+        872
+      ]
+    },
+    {
+      "group_id": "mbpp:217",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        217,
+        602
+      ]
+    },
+    {
+      "group_id": "mbpp:233",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        233,
+        266,
+        369,
+        731
+      ]
+    },
+    {
+      "group_id": "mbpp:248",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        248,
+        704
+      ]
+    },
+    {
+      "group_id": "mbpp:267",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        267,
+        287,
+        905
+      ]
+    },
+    {
+      "group_id": "mbpp:271",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        271,
+        549,
+        655
+      ]
+    },
+    {
+      "group_id": "mbpp:285",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        285,
+        434,
+        719,
+        756,
+        787,
+        930
+      ]
+    },
+    {
+      "group_id": "mbpp:290",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        290,
+        528
+      ]
+    },
+    {
+      "group_id": "mbpp:316",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        316,
+        733
+      ]
+    },
+    {
+      "group_id": "mbpp:328",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        328,
+        743
+      ]
+    },
+    {
+      "group_id": "mbpp:362",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        362,
+        658
+      ]
+    },
+    {
+      "group_id": "mbpp:402",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        402,
+        952
+      ]
+    },
+    {
+      "group_id": "mbpp:420",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        420,
+        504,
+        837
+      ]
+    },
+    {
+      "group_id": "mbpp:427",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        427,
+        928
+      ]
+    },
+    {
+      "group_id": "mbpp:439",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        439,
+        673
+      ]
+    },
+    {
+      "group_id": "mbpp:440",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "held_out"
+      ],
+      "task_ids": [
+        440,
+        584
+      ]
+    },
+    {
+      "group_id": "mbpp:448",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        448,
+        931,
+        935
+      ]
+    },
+    {
+      "group_id": "mbpp:458",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        458,
+        488,
+        814,
+        848
+      ]
+    },
+    {
+      "group_id": "mbpp:477",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        477,
+        624
+      ]
+    },
+    {
+      "group_id": "mbpp:505",
+      "is_cross_partition": true,
+      "source_splits": [
+        "held_out",
+        "train"
+      ],
+      "task_ids": [
+        505,
+        632
+      ]
+    },
+    {
+      "group_id": "mbpp:534",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "train"
+      ],
+      "task_ids": [
+        534,
+        607
+      ]
+    },
+    {
+      "group_id": "mbpp:542",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "train"
+      ],
+      "task_ids": [
+        542,
+        732
+      ]
+    },
+    {
+      "group_id": "mbpp:585",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "train"
+      ],
+      "task_ids": [
+        585,
+        795
+      ]
+    },
+    {
+      "group_id": "mbpp:591",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "train"
+      ],
+      "task_ids": [
+        591,
+        625
+      ]
+    },
+    {
+      "group_id": "mbpp:595",
+      "is_cross_partition": true,
+      "source_splits": [
+        "calibration",
+        "train"
+      ],
+      "task_ids": [
+        595,
+        699
+      ]
+    }
+  ]
+}

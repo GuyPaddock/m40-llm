@@ -1,0 +1,89 @@
+{
+  "passes_audit": true,
+  "source": "c44ab95af680441848b755870cc967d6418766bc",
+  "executable_sha256": "3efa3916d7309057f540cb7a1a60be381ed374a9f63fddb0f99b89d2755936ea",
+  "pairs": 5,
+  "gpu_boundaries": 20,
+  "primary_prefix_samples": 5,
+  "all_prefix_samples": 7,
+  "all_decode_samples": 21,
+  "profile_off": {
+    "mad_over_median": 0.0011808364428788896,
+    "max": 49.44862475633235,
+    "median": 49.39030288675884,
+    "min": 49.189179524076266
+  },
+  "profile_on": {
+    "mad_over_median": 0.0005175644411469805,
+    "max": 48.73809207279368,
+    "median": 48.707494325093165,
+    "min": 48.56078177448682
+  },
+  "throughput_change": -0.013824749429684702,
+  "actual_generated_ids_equal": 512,
+  "prefix_wall_ms": 363.25223,
+  "prefix_profiled_union_ms": 223.94495749473572,
+  "prefix_unattributed_wall_ms": 139.89425952384948,
+  "prefix_stages": [
+    {
+      "stage": "q8_prefill_dequantize",
+      "median_gpu_ms": 88.78735999999999,
+      "median_cpu_ms": 0.9416649999999999
+    },
+    {
+      "stage": "q8_prefill_sgemm",
+      "median_gpu_ms": 91.565504,
+      "median_cpu_ms": 1.7745050000000007
+    },
+    {
+      "stage": "qkv_bias",
+      "median_gpu_ms": 43.74886399999998,
+      "median_cpu_ms": 41.270635000000006
+    }
+  ],
+  "projection_families": [
+    {
+      "family": "down",
+      "conversion_ms": 26.296768000000004,
+      "sgemm_ms": 22.358592
+    },
+    {
+      "family": "gate",
+      "conversion_ms": 25.700959999999995,
+      "sgemm_ms": 26.799296000000002
+    },
+    {
+      "family": "k",
+      "conversion_ms": 0.833472,
+      "sgemm_ms": 2.2804159999999998
+    },
+    {
+      "family": "output",
+      "conversion_ms": 4.756063999999999,
+      "sgemm_ms": 5.651776
+    },
+    {
+      "family": "q",
+      "conversion_ms": 4.750399999999999,
+      "sgemm_ms": 5.524832000000001
+    },
+    {
+      "family": "up",
+      "conversion_ms": 25.646144,
+      "sgemm_ms": 26.778623999999997
+    },
+    {
+      "family": "v",
+      "conversion_ms": 0.8083840000000001,
+      "sgemm_ms": 2.215072
+    }
+  ],
+  "off_http_ms": 10366.407373,
+  "conversion_plus_sgemm_ms": 180.3760640000001,
+  "optimistic_elimination_throughput_gain": 0.01770817883120257,
+  "elimination_scope": "diagnostic optimistic estimate only; profiled spans are not unprofiled latency or a proven optimization",
+  "per_request_counts_unchanged": true,
+  "prepared_cache_unchanged": true,
+  "is_optimization_claim": false,
+  "changes_defaults": false
+}

@@ -23,6 +23,27 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "cuda")]
+mod decode_reductions;
+#[cfg(feature = "cuda")]
+mod q8_ffn;
+#[cfg(feature = "cuda")]
+mod q8_ffn_task_pair;
+#[cfg(feature = "cuda")]
+mod q8_output;
+#[cfg(feature = "cuda")]
+mod q8_prefill;
+#[cfg(feature = "cuda")]
+mod q8_qkv;
+#[cfg(feature = "cuda")]
+mod q8_split_projection;
+#[cfg(feature = "cuda")]
+mod q8_warp_packet;
+#[cfg(feature = "cuda")]
+mod q8_weight_read;
+#[cfg(feature = "cuda")]
+pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
+
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
 pub const ROPE_LAYOUT_NEOX: u32 = 1;
 
@@ -119,6 +140,15 @@ mod ffi {
             bytes: usize,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_argmax_f32_partitioned_async(
+            ctx: *mut M40llmCudaContext,
+            values: *const c_void,
+            len: u32,
+            scratch: *mut c_void,
+            scratch_bytes: usize,
+            output: *mut c_void,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_argmax_f32_async(
             ctx: *mut M40llmCudaContext,
             d_values_f32: *const c_void,
@@ -207,6 +237,12 @@ mod ffi {
             stop: *mut M40llmCudaEvent,
             elapsed_ms: *mut f32,
         ) -> i32;
+        pub fn m40llm_cuda_event_elapsed_ready(
+            ctx: *mut M40llmCudaContext,
+            start: *mut M40llmCudaEvent,
+            stop: *mut M40llmCudaEvent,
+            elapsed_ms: *mut f32,
+        ) -> i32;
         pub fn m40llm_cuda_event_destroy(event: *mut M40llmCudaEvent);
 
         pub fn m40llm_upload_weights(
@@ -288,6 +324,367 @@ mod ffi {
             d_C_f32: *mut c_void,
             H: i32,
             K: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_f32_ablation_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+            variant: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_f32_factored_capture_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_f32_coalesced_capture_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_quantize_q8_1_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            columns: i32,
+            padded_columns: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_weight_checksum_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_weight_checksum_ordered_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+            is_transposed: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_weight_checksum_pitched_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+            column_gap: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_task_pair_packet_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate_scales: *const c_void,
+            up_scales: *const c_void,
+            packets: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_shared_scales_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_role_parallel_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_native_warp_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_persistent_tiles_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_f32x8_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_cohorts_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_virtual_warp_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_byte_permute_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_weight_cg_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_unfused_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_f32_k2048_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_joint_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_joint_shared_scales_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_joint_four_rows_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_split_f32_two_columns_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            k: i32,
+        ) -> i32;
+        pub fn m40llm_ffn_q8_1_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            output: *mut c_void,
+            gate_output: *mut c_void,
+            up_output: *mut c_void,
+            rows: i32,
+            hidden: i32,
+            columns: i32,
+            padded_columns: i32,
+            threads: i32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_separate_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_separate_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const *const c_void,
+            values: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_coltile4_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            n: i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_coltile4_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weight: *const c_void,
+            output: *mut c_void,
+            n: i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_0_gguf_packed_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weights: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_0_gguf_coltile4_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weight: *const c_void,
+            output: *mut c_void,
+            n: i32,
+            k: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_qkv_f32xq8_0_gguf_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weights: *const *const c_void,
+            biases: *const *const c_void,
+            outputs: *const *mut c_void,
+            widths: *const i32,
+            k: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_qkv_f32xq8_0_gguf_decode_async(
             ctx: *mut M40llmCudaContext,
@@ -377,6 +774,100 @@ mod ffi {
             N: i32,
             K: i32,
         ) -> i32;
+        pub fn m40llm_select_sparse_inputs_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            indices: *mut c_void,
+            values: *mut c_void,
+            count: *mut c_void,
+            k: i32,
+            threshold: f32,
+            totals: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_project_sparse_inputs_q8_async(
+            ctx: *mut M40llmCudaContext,
+            indices: *const c_void,
+            values: *const c_void,
+            count: *const c_void,
+            tiles: *const c_void,
+            output: *mut c_void,
+            n: i32,
+            k: i32,
+            columns: i32,
+            threads: i32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_tiled_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            tiles: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            columns: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_f32_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            columns: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q8_separate_weight_checksum_async(
+            ctx: *mut M40llmCudaContext,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_warp_packet_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            packets: *const c_void,
+            output: *mut c_void,
+            rows: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_gemm_f32xq8_separate_packed_activation_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            scales: *const c_void,
+            values: *const c_void,
+            output: *mut c_void,
+            m: i32,
+            n: i32,
+            k: i32,
+            threads: i32,
+            stream_kind: u32,
+        ) -> i32;
         pub fn m40llm_gemm_f32xq8_0_gguf_f32(
             ctx: *mut M40llmCudaContext,
             d_A_f32: *const c_void,
@@ -459,6 +950,14 @@ mod ffi {
             K: i32,
             stream_kind: u32,
         ) -> i32;
+        pub fn m40llm_dequantize_q8_0_to_f32_colmajor_async(
+            ctx: *mut M40llmCudaContext,
+            source: *const c_void,
+            output: *mut c_void,
+            capacity_bytes: usize,
+            input_dim: i32,
+            output_dim: i32,
+        ) -> i32;
         pub fn m40llm_materialize_gguf_f16_to_f32_colmajor_nt(
             ctx: *mut M40llmCudaContext,
             d_B_f16: *const c_void,
@@ -484,6 +983,17 @@ mod ffi {
             rows: u32,
             dim: u32,
             eps: f32,
+        ) -> i32;
+        pub fn m40llm_rms_norm_f32_weighted_warp_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            weight: *const c_void,
+            output: *mut c_void,
+            rows: u32,
+            dim: u32,
+            eps: f32,
+            weight_dtype: u32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_rms_norm_f32_weighted_async(
             ctx: *mut M40llmCudaContext,
@@ -614,6 +1124,20 @@ mod ffi {
             rope_layout: u32,
         ) -> i32;
         pub fn m40llm_kvcache_reset(ctx: *mut M40llmCudaContext, kv: *mut M40llmKVCache) -> i32;
+        pub fn m40llm_kvcache_truncate_dense_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            first_slot: u32,
+            slots: u32,
+            new_len: u32,
+            old_len: u32,
+        ) -> i32;
+        pub fn m40llm_kvcache_debug_read_length(
+            ctx: *mut M40llmCudaContext,
+            kv: *mut M40llmKVCache,
+            seq_id: u32,
+            out_length: *mut u32,
+        ) -> i32;
         pub fn m40llm_kvcache_debug_read_token(
             ctx: *mut M40llmCudaContext,
             kv: *mut M40llmKVCache,
@@ -683,6 +1207,19 @@ mod ffi {
             seq_id: u32,
             d_q_f32: *const c_void,
             seq_len: u32,
+            d_out_f32: *mut c_void,
+        ) -> i32;
+        pub fn m40llm_attention_head128_parallel_async(
+            ctx: *mut M40llmCudaContext,
+            kv: *const M40llmKVCache,
+            seq_id: u32,
+            d_q_f32: *const c_void,
+            q_heads: u32,
+            seq_len: u32,
+            partitions: u32,
+            threads: u32,
+            d_partials: *mut c_void,
+            partial_bytes: usize,
             d_out_f32: *mut c_void,
         ) -> i32;
         pub fn m40llm_attention_last_token_f32_gqa_async(
@@ -994,6 +1531,11 @@ fn record_async_kernel(op: &'static str) {
 }
 
 #[cfg(feature = "cuda")]
+mod dense_attention;
+#[cfg(feature = "cuda")]
+pub use dense_attention::{Head128AttentionConfig, Head128AttentionWorkspace};
+
+#[cfg(feature = "cuda")]
 fn record_sync_gemm(op: &'static str) {
     if cfg!(have_cublas) {
         crate::profile::record_cublas_call(op);
@@ -1212,6 +1754,30 @@ unsafe impl Sync for CudaEvent {}
 
 #[cfg(feature = "cuda")]
 impl CudaEvent {
+    /// Query completed timestamps without waiting or changing either stream.
+    pub fn elapsed_ready(&self, stop: &CudaEvent) -> Result<Option<f32>> {
+        if !Arc::ptr_eq(&self.ctx.inner, &stop.ctx.inner) {
+            return Err(anyhow!(
+                "CUDA event timestamps belong to different contexts"
+            ));
+        }
+        let _g = self.ctx.inner.lock.lock().unwrap();
+        let mut elapsed_ms = 0.0;
+        let rc = unsafe {
+            ffi::m40llm_cuda_event_elapsed_ready(
+                self.ctx.inner.raw.as_ptr(),
+                self.raw.as_ptr(),
+                stop.raw.as_ptr(),
+                &mut elapsed_ms,
+            )
+        };
+        match rc {
+            0 => Ok(Some(elapsed_ms)),
+            1 => Ok(None),
+            _ => Err(anyhow!("m40llm_cuda_event_elapsed_ready failed: {rc}")),
+        }
+    }
+
     pub fn record(&self, stream: CudaStream) -> Result<()> {
         let _g = self.ctx.inner.lock.lock().unwrap();
         let rc = unsafe {
@@ -1544,6 +2110,43 @@ impl CudaContext {
     pub fn total_device_bytes() -> usize {
         TOTAL_DEVICE_BYTES.load(Ordering::SeqCst)
     }
+
+    /// Requested bytes in this context's successful, currently owned weight
+    /// upload. This excludes workspaces, KV and driver/library allocation overhead.
+    pub fn uploaded_weights_bytes(&self) -> Result<usize> {
+        #[cfg(feature = "cuda")]
+        {
+            let _guard = self
+                .inner
+                .lock
+                .lock()
+                .map_err(|_| anyhow!("poisoned CUDA context"))?;
+            let weights = self
+                .inner
+                .weights_ptr
+                .lock()
+                .map_err(|_| anyhow!("poisoned weight owner"))?;
+            let Some(pointer) = weights.as_ref() else {
+                return Ok(0);
+            };
+            let allocations = self
+                .inner
+                .alloc_map
+                .lock()
+                .map_err(|_| anyhow!("poisoned device allocation map"))?;
+            let allocation = allocations
+                .get(&pointer.as_ptr())
+                .ok_or_else(|| anyhow!("owned weight allocation is missing"))?;
+            anyhow::ensure!(
+                allocation.tag.as_deref() == Some("weights"),
+                "owned weight allocation has the wrong tag"
+            );
+            Ok(allocation.size)
+        }
+        #[cfg(not(feature = "cuda"))]
+        Ok(0)
+    }
+
     pub fn new(device_id: i32) -> Result<Self> {
         #[cfg(feature = "cuda")]
         {
@@ -1630,15 +2233,17 @@ impl CudaContext {
     pub fn synchronize_stream(&self, stream: CudaStream) -> Result<()> {
         #[cfg(feature = "cuda")]
         {
-            let _g = self.inner.lock.lock().unwrap();
-            let rc = unsafe {
-                ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
-            };
-            if rc != 0 {
-                return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
-            }
-            crate::profile::record_stream_sync("stream_synchronize");
-            Ok(())
+            crate::gpu_profile::measure_host("stream_synchronize", || {
+                let _g = self.inner.lock.lock().unwrap();
+                let rc = unsafe {
+                    ffi::m40llm_stream_synchronize(self.inner.raw.as_ptr(), stream.ffi_kind())
+                };
+                if rc != 0 {
+                    return Err(anyhow!("m40llm_stream_synchronize failed: {rc}"));
+                }
+                crate::profile::record_stream_sync("stream_synchronize");
+                Ok(())
+            })
         }
         #[cfg(not(feature = "cuda"))]
         {
@@ -1776,6 +2381,9 @@ impl CudaContext {
             ffi::m40llm_device_malloc(self.inner.raw.as_ptr(), bytes, &mut out as *mut _)
         };
         if rc != 0 || out.is_null() {
+            // Property queries take this mutex too. Release it before building
+            // the allocation error so OOM cannot deadlock cleanup/fallback.
+            drop(_g);
             let props = self.current_device_props().ok();
             return Err(anyhow!(
                 "m40llm_device_malloc failed: rc={rc}, bytes={bytes}, total_before={}{}",
@@ -1877,23 +2485,32 @@ impl CudaContext {
         }
         Ok(())
     }
+    /// Copy host bytes and finish the default-stream transfer before returning.
+    /// The destination is ready for either nonblocking consumer stream on success.
+    ///
     /// # Safety
-    /// `dst_device` must be a valid, writable device pointer to at least `bytes` bytes on this context's device.
-    /// `src_host` must be a valid, readable host pointer to at least `bytes` bytes.
+    /// `dst_device` must be writable for `bytes` on this context's device and
+    /// not in use by another stream. Finish its prior producers/consumers first;
+    /// this call does not wait for nonblocking streams. `src_host` must be
+    /// readable for `bytes` until this call returns.
     pub unsafe fn memcpy_h2d(
         &self,
         dst_device: *mut c_void,
         src_host: *const c_void,
         bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
-        }
-        crate::profile::record_h2d_copy("memcpy_h2d", bytes);
-        Ok(())
+        crate::gpu_profile::measure_host("h2d_copy", || {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_memcpy_h2d(self.inner.raw.as_ptr(), dst_device, src_host, bytes)
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_memcpy_h2d failed: {rc}"));
+            }
+            crate::profile::record_h2d_copy("memcpy_h2d", bytes);
+            crate::profile::record_stream_sync("memcpy_h2d_completion");
+            Ok(())
+        })
     }
     /// # Safety
     /// `dst_host` must be a valid, writable host pointer to at least `bytes` bytes.
@@ -1904,14 +2521,17 @@ impl CudaContext {
         src_device: *const c_void,
         bytes: usize,
     ) -> Result<()> {
-        let _g = self.inner.lock.lock().unwrap();
-        let rc =
-            unsafe { ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes) };
-        if rc != 0 {
-            return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
-        }
-        crate::profile::record_d2h_copy("memcpy_d2h", bytes);
-        Ok(())
+        crate::gpu_profile::measure_host("d2h_copy", || {
+            let _g = self.inner.lock.lock().unwrap();
+            let rc = unsafe {
+                ffi::m40llm_memcpy_d2h(self.inner.raw.as_ptr(), dst_host, src_device, bytes)
+            };
+            if rc != 0 {
+                return Err(anyhow!("m40llm_memcpy_d2h failed: {rc}"));
+            }
+            crate::profile::record_d2h_copy("memcpy_d2h", bytes);
+            Ok(())
+        })
     }
 
     /// # Safety
@@ -2163,6 +2783,7 @@ impl CudaContext {
             if kv.is_null() {
                 return Err(anyhow::anyhow!("m40llm_kvcache_create returned null"));
             }
+            crate::profile::record_stream_sync("kvcache_initialization");
             Ok(kv)
         }
 
@@ -2211,6 +2832,7 @@ impl CudaContext {
                     "m40llm_kvcache_create_compressed returned null"
                 ));
             }
+            crate::profile::record_stream_sync("kvcache_initialization");
             Ok(kv)
         }
 
@@ -2279,6 +2901,7 @@ impl CudaContext {
             TOTAL_DEVICE_BYTES.fetch_add(data.len(), Ordering::SeqCst);
             crate::profile::record_device_alloc("upload_weights", data.len());
             crate::profile::record_h2d_copy("upload_weights", data.len());
+            crate::profile::record_stream_sync("upload_weights_completion");
             if let Ok(mut map) = self.inner.alloc_map.lock() {
                 map.insert(
                     d_ptr,
@@ -2618,6 +3241,41 @@ impl CudaContext {
             let _ = (d_a_f32, d_w_gate_q8_0, d_w_up_q8_0, d_c_f32, h, k);
             Ok(())
         }
+    }
+
+    /// # Safety
+    /// All device spans belong to this context and outlive stream completion.
+    /// The three-element host arrays are consumed synchronously by the FFI.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn qkv_f32xq8_separate_async(
+        &self,
+        input: *const c_void,
+        scales: [*const c_void; 3],
+        values: [*const c_void; 3],
+        biases: [Option<*const c_void>; 3],
+        outputs: [*mut c_void; 3],
+        widths: [i32; 3],
+        k: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let biases = biases.map(|bias| bias.unwrap_or(std::ptr::null()));
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_qkv_f32xq8_separate_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales.as_ptr(),
+            values.as_ptr(),
+            biases.as_ptr(),
+            outputs.as_ptr(),
+            widths.as_ptr(),
+            k,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!("m40llm_qkv_f32xq8_separate_async failed: {rc}"));
+        }
+        record_async_kernel("qkv_f32xq8_separate");
+        Ok(())
     }
 
     /// # Safety
@@ -3309,6 +3967,157 @@ impl CudaContext {
     }
 
     /// # Safety
+    /// Validated input-tiled buffers must belong to this context and outlive
+    /// decode-stream completion. This is benchmark-only, with no implicit sync.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_tiled_f32_async(
+        &self,
+        input: *const c_void,
+        tiles: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        columns: i32,
+        threads: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_tiled_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            tiles,
+            output,
+            m,
+            n,
+            k,
+            columns,
+            threads,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!("m40llm_gemm_f32xq8_tiled_f32_async failed: {rc}"));
+        }
+        record_async_kernel("gemm_f32xq8_tiled_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Single-row input and K-sized index/value outputs belong to this context;
+    /// count holds one u32. All buffers survive ordered decode completion.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn select_sparse_inputs_f32_async(
+        &self,
+        input: *const c_void,
+        indices: *mut c_void,
+        values: *mut c_void,
+        count: *mut c_void,
+        k: i32,
+        threshold: f32,
+        totals: *mut c_void,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_select_sparse_inputs_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            indices,
+            values,
+            count,
+            k,
+            threshold,
+            totals,
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_select_sparse_inputs_f32_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("select_sparse_inputs_f32");
+        Ok(())
+    }
+
+    /// # Safety
+    /// Indices/count come from ordered sparse selection, with count <= K.
+    /// Tiled weights follow the given width; all buffers belong to this context
+    /// and survive decode completion. No raw malformed index lists are accepted.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn project_sparse_inputs_q8_async(
+        &self,
+        indices: *const c_void,
+        values: *const c_void,
+        count: *const c_void,
+        tiles: *const c_void,
+        output: *mut c_void,
+        n: i32,
+        k: i32,
+        columns: i32,
+        threads: i32,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_project_sparse_inputs_q8_async(
+            self.inner.raw.as_ptr(),
+            indices,
+            values,
+            count,
+            tiles,
+            output,
+            n,
+            k,
+            columns,
+            threads,
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_project_sparse_inputs_q8_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("project_sparse_inputs_q8");
+        Ok(())
+    }
+
+    /// Benchmark-only separate-plane projection on the decode stream.
+    ///
+    /// # Safety
+    /// Buffers must belong to this context and remain valid through completion.
+    /// Scale/value planes must follow the validated execution-weight layout.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_separate_f32_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        columns: i32,
+        threads: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_separate_f32_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            m,
+            n,
+            k,
+            columns,
+            threads,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_gemm_f32xq8_separate_f32_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("gemm_f32xq8_separate_f32");
+        Ok(())
+    }
+
+    /// # Safety
     /// `d_b_f32_colmajor_nt` must contain the transpose of a logical [k,n] GGUF
     /// weight, stored as column-major [n,k]. This computes row-major C = A * B.
     pub unsafe fn gemm_f32xf32_f32(
@@ -3464,6 +4273,87 @@ impl CudaContext {
             let _ = (d_b_f16, d_b_f32_colmajor_nt, n, k);
             Ok(())
         }
+    }
+
+    /// Fixed four-column separate-plane reduction experiment, without sync.
+    ///
+    /// # Safety
+    /// Validated planes and input/output spans belong to this context, are
+    /// properly ordered, and remain alive through completion on `stream`.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_separate_warp_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        threads: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_separate_warp_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            m,
+            n,
+            k,
+            threads,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_gemm_f32xq8_separate_warp_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("gemm_f32xq8_separate_warp");
+        Ok(())
+    }
+
+    /// Benchmark-only packed activation loads; no allocation, copy or sync.
+    ///
+    /// # Safety
+    /// Live, ordered spans belong to this context. Input is 16-byte aligned,
+    /// planes retain their native alignment, K is complete Q8 blocks, and
+    /// input/output do not overlap until the supplied stream drains.
+    #[cfg(feature = "cuda")]
+    pub(crate) unsafe fn gemm_f32xq8_separate_packed_activation_async(
+        &self,
+        input: *const c_void,
+        scales: *const c_void,
+        values: *const c_void,
+        output: *mut c_void,
+        m: i32,
+        n: i32,
+        k: i32,
+        threads: i32,
+        stream: CudaStream,
+    ) -> Result<()> {
+        let _guard = self.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_gemm_f32xq8_separate_packed_activation_async(
+            self.inner.raw.as_ptr(),
+            input,
+            scales,
+            values,
+            output,
+            m,
+            n,
+            k,
+            threads,
+            stream.ffi_kind(),
+        );
+        if rc != 0 {
+            return Err(anyhow!(
+                "m40llm_gemm_f32xq8_separate_packed_activation_async failed: {rc}"
+            ));
+        }
+        record_async_kernel("gemm_f32xq8_separate_packed_activation");
+        Ok(())
     }
 
     /// # Safety
@@ -4348,12 +5238,23 @@ impl CudaContext {
 #[cfg(feature = "cuda")]
 impl Drop for CudaContextInner {
     fn drop(&mut self) {
-        // Free tracked weights if present to avoid device memory leak
-        if let Ok(inner) = self.weights_ptr.get_mut() {
-            if let Some(ptr) = inner.take() {
-                unsafe {
-                    let _ = ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr());
+        let weights = self
+            .weights_ptr
+            .get_mut()
+            .unwrap_or_else(|error| error.into_inner());
+        if let Some(ptr) = weights.take() {
+            let rc = unsafe { ffi::m40llm_device_free(self.raw.as_ptr(), ptr.as_ptr()) };
+            if rc == 0 {
+                let allocations = self
+                    .alloc_map
+                    .get_mut()
+                    .unwrap_or_else(|error| error.into_inner());
+                if let Some(info) = allocations.remove(&ptr.as_ptr()) {
+                    TOTAL_DEVICE_BYTES.fetch_sub(info.size, Ordering::SeqCst);
                 }
+                crate::profile::record_device_free("context.weights");
+            } else {
+                eprintln!("[cuda] context weight cleanup failed: rc={rc}");
             }
         }
         // SAFETY: raw was constructed from a non-null FFI pointer and is only freed here when Arc count drops to 0
@@ -4408,6 +5309,58 @@ fn attention_group_name(group: u32) -> &'static str {
 }
 
 impl KVCache {
+    #[cfg(feature = "cuda")]
+    pub(crate) fn has_exclusive_storage(&self) -> bool {
+        Arc::strong_count(&self.inner) == 1
+    }
+
+    /// Zero a speculative suffix and publish shortened physical-slot lengths.
+    ///
+    /// # Safety
+    /// Dense KV belongs to ctx; caller exclusively owns these slots. Drain
+    /// all other producers/readers before enqueue, retain ownership until
+    /// decode completes, and supply the actual written upper bound old_len.
+    #[cfg(feature = "cuda")]
+    pub unsafe fn truncate_dense_async(
+        &self,
+        ctx: &CudaContext,
+        first_slot: u32,
+        slots: u32,
+        new_len: u32,
+        old_len: u32,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            !self.is_compressed()
+                && slots > 0
+                && slots <= 65535
+                && first_slot
+                    .checked_add(slots)
+                    .is_some_and(|end| end <= self.max_batch_size())
+                && new_len <= old_len
+                && old_len <= self.max_seq_len(),
+            "invalid dense KV truncation bounds or compressed cache"
+        );
+        let _guard = ctx.inner.lock.lock().unwrap();
+        let rc = ffi::m40llm_kvcache_truncate_dense_async(
+            ctx.inner.raw.as_ptr(),
+            self.inner.raw.as_ptr(),
+            first_slot,
+            slots,
+            new_len,
+            old_len,
+        );
+        anyhow::ensure!(rc == 0, "dense KV truncation failed: {rc}");
+        record_async_kernel("kvcache_truncate_dense");
+        Ok(())
+    }
+
+    #[cfg(feature = "cuda")]
+    /// Cloned cache handles share mutable native storage. Comparisons that
+    /// mutate two caches must reject aliases even when the handles differ.
+    pub fn has_same_storage(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     pub fn num_heads(&self) -> u32 {
         self.inner.num_heads
     }
@@ -4422,6 +5375,31 @@ impl KVCache {
     }
     pub fn is_compressed(&self) -> bool {
         self.inner.compressed
+    }
+
+    /// Drain both producer streams and read a physical layer/sequence slot's
+    /// device length. Debug-only host visibility, never a warm decode dependency.
+    #[cfg(feature = "cuda")]
+    pub fn debug_sequence_length(&self, ctx: &CudaContext, physical_slot: u32) -> Result<u32> {
+        anyhow::ensure!(
+            physical_slot < self.max_batch_size(),
+            "invalid KV debug slot"
+        );
+        let _guard = ctx.inner.lock.lock().unwrap();
+        let mut length = 0;
+        let rc = unsafe {
+            ffi::m40llm_kvcache_debug_read_length(
+                ctx.inner.raw.as_ptr(),
+                self.inner.raw.as_ptr(),
+                physical_slot,
+                &mut length,
+            )
+        };
+        anyhow::ensure!(rc == 0, "m40llm_kvcache_debug_read_length failed: {rc}");
+        crate::profile::record_stream_sync("kv_debug_length_decode");
+        crate::profile::record_stream_sync("kv_debug_length_prefill");
+        crate::profile::record_d2h_copy("kv_debug_length", 4);
+        Ok(length)
     }
 
     #[cfg(feature = "cuda")]
@@ -4758,6 +5736,8 @@ struct KVCacheInner {
     dense_equivalent_bytes: usize,
     #[cfg(feature = "cuda")]
     raw: NonNull<ffi::M40llmKVCache>,
+    #[cfg(feature = "cuda")]
+    head128_attention_workspace: Mutex<Option<Head128AttentionWorkspace>>,
     #[cfg(not(feature = "cuda"))]
     k: Mutex<Vec<half::f16>>, // length = max_seq_len * max_batch_size * elems_per_token
     #[cfg(not(feature = "cuda"))]
@@ -4814,6 +5794,7 @@ impl KVCache {
                         * std::mem::size_of::<half::f16>()
                         * 2,
                     raw: NonNull::new(raw).expect("non-null kv from ffi"),
+                    head128_attention_workspace: Mutex::new(None),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
                     #[cfg(not(feature = "cuda"))]
@@ -5023,6 +6004,7 @@ impl KVCache {
                     actual_bytes,
                     dense_equivalent_bytes,
                     raw: NonNull::new(raw).expect("non-null compressed kv from ffi"),
+                    head128_attention_workspace: Mutex::new(None),
                     #[cfg(not(feature = "cuda"))]
                     k: Mutex::new(Vec::new()),
                     #[cfg(not(feature = "cuda"))]
@@ -5143,7 +6125,9 @@ impl KVCache {
 impl KVCache {
     /// # Safety
     /// `k_dev` and `v_dev` must be valid device pointers containing one token's worth of K/V in f16 layout.
-    /// `seq_id` must be in range. Context must target same device as this cache.
+    /// `seq_id` must be in range and this must be dense KV on the same device.
+    /// Finish input/cache producers on other streams before calling. This legacy API
+    /// waits for decode length publication and finishes its default-stream copies.
     pub unsafe fn append_token(
         &self,
         ctx: &CudaContext,
@@ -5164,7 +6148,10 @@ impl KVCache {
         if rc != 0 {
             return Err(anyhow!("m40llm_kvcache_append_token failed: {rc}"));
         }
-        record_sync_kernel("kvcache_append_token");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
+        crate::profile::record_h2d_copy("kvcache_append_token_length", 4);
+        crate::profile::record_stream_sync("kvcache_append_token_completion");
         Ok(())
     }
 
@@ -5183,7 +6170,10 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues f32-to-f16 KV append on the decode stream. Callers must synchronize before reading from the cache.
+    /// Waits for decode length publication, then enqueues f32-to-f16 append.
+    /// Use explicit-position append for an enqueue-only path. Inputs must be
+    /// ready on this device and retained until decode completion; other-stream
+    /// input/cache producers must finish first. Dense cache only. Drain before reading KV.
     pub unsafe fn append_token_f32_async(
         &self,
         ctx: &CudaContext,
@@ -5207,6 +6197,8 @@ impl KVCache {
             ));
         }
         record_async_kernel("kvcache_append_token_f32");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
         Ok(())
     }
 
@@ -5231,8 +6223,9 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues fused K RoPE and f32-to-f16 KV append on the decode stream.
-    /// Callers must synchronize before reading from the cache.
+    /// Legacy length-aware append waits for decode length publication, then
+    /// enqueues fused K RoPE and FP16 storage. Finish other-stream input/cache
+    /// producers first, retain inputs and drain decode before reading KV.
     pub unsafe fn append_token_f32_rope_k_async(
         &self,
         ctx: &CudaContext,
@@ -5258,7 +6251,9 @@ impl KVCache {
     }
 
     /// # Safety
-    /// Enqueues fused K RoPE and KV append with an explicit rotary layout.
+    /// Waits for decode length publication, then enqueues K RoPE/KV append
+    /// into dense KV. Inputs must be ready and live through decode completion.
+    /// Explicit-position append remains the enqueue-only production API.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn append_token_f32_rope_k_layout_async(
         &self,
@@ -5291,6 +6286,8 @@ impl KVCache {
             ));
         }
         record_async_kernel("kvcache_append_token_f32_rope_k");
+        crate::profile::record_stream_sync("kvcache_legacy_length_read");
+        crate::profile::record_d2h_copy("kvcache_legacy_length_read", 4);
         Ok(())
     }
 
@@ -5487,6 +6484,10 @@ impl KVCache {
         seq_len: u32,
         d_out_f32: *mut c_void,
     ) -> Result<()> {
+        if let Some(config) = Head128AttentionConfig::from_env()? {
+            return self
+                .enqueue_head128_cached(ctx, seq_id, d_q_f32, q_heads, seq_len, d_out_f32, config);
+        }
         let diag = Q8DecodeEventDiag::start_dynamic(
             ctx,
             format!("attention_last_token_f32_gqa seq_len={seq_len}"),
@@ -6228,7 +7229,8 @@ impl Drop for KVCacheInner {
 #[cfg(feature = "cuda")]
 /// # Safety
 /// `out_k_f16` and `out_v_f16` must be valid pointers to write one token's K and V (num_heads*head_dim f16 each).
-/// `seq_id`/`token` must be within appended ranges; the context and cache must be on the same device.
+/// `seq_id`/`token` must be within allocated dense capacity; the context and
+/// cache must be on the same device and all producers must be finished.
 pub unsafe fn ffi_debug_read_kv_token(
     ctx: &CudaContext,
     kv: &KVCache,

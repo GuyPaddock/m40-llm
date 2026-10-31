@@ -1,0 +1,378 @@
+{
+  "passes_audit": true,
+  "primary_generations": 20,
+  "preflight_generations": 4,
+  "generated_ids_per_run": 512,
+  "correction_cycles": 70,
+  "gpu_boundaries": 180,
+  "tracked_device_bytes_after": 0,
+  "source": "885cc98acdede4bee913d94ee4592331e78c5bd5",
+  "executable_sha256": "6ef35663ed85ae60d621d1c43be7493343065b9a15ad1fda2d4d91f48ad0376d",
+  "summaries": [
+    {
+      "acceptance_curves": [
+        {
+          "expected_tokens_per_cycle": 1.0,
+          "max_drafter_ms_for_three_percent_gain": -172.94483815300285,
+          "max_drafter_ms_to_break_even": -172.38238792759296,
+          "per_token_acceptance_probability": 0.0,
+          "target_ms_per_cycle": 191.693179
+        },
+        {
+          "expected_tokens_per_cycle": 1.25,
+          "max_drafter_ms_for_three_percent_gain": -167.21650220056733,
+          "max_drafter_ms_to_break_even": -166.51343941880492,
+          "per_token_acceptance_probability": 0.25,
+          "target_ms_per_cycle": 190.65192825931373
+        },
+        {
+          "expected_tokens_per_cycle": 1.5,
+          "max_drafter_ms_for_three_percent_gain": -158.84798126675918,
+          "max_drafter_ms_to_break_even": -158.0043059286443,
+          "per_token_acceptance_probability": 0.5,
+          "target_ms_per_cycle": 186.97049253725487
+        },
+        {
+          "expected_tokens_per_cycle": 1.75,
+          "max_drafter_ms_for_three_percent_gain": -147.83927535157855,
+          "max_drafter_ms_to_break_even": -146.8549874571112,
+          "per_token_acceptance_probability": 0.75,
+          "target_ms_per_cycle": 180.64887183382353
+        },
+        {
+          "expected_tokens_per_cycle": 1.9,
+          "max_drafter_ms_for_three_percent_gain": -139.96676301141133,
+          "max_drafter_ms_to_break_even": -138.89810758313251,
+          "per_token_acceptance_probability": 0.9,
+          "target_ms_per_cycle": 175.58861062070588
+        },
+        {
+          "expected_tokens_per_cycle": 1.9500000000000002,
+          "max_drafter_ms_for_three_percent_gain": -137.1313774328458,
+          "max_drafter_ms_to_break_even": -136.03459949329647,
+          "per_token_acceptance_probability": 0.95,
+          "target_ms_per_cycle": 173.6906420844902
+        },
+        {
+          "expected_tokens_per_cycle": 2.0,
+          "max_drafter_ms_for_three_percent_gain": -134.19038445502534,
+          "max_drafter_ms_to_break_even": -133.0654840042055,
+          "per_token_acceptance_probability": 1.0,
+          "target_ms_per_cycle": 171.68706614901959
+        }
+      ],
+      "bootstrap_gain_ci95": [
+        -0.7684122172206664,
+        -0.766356002682592
+      ],
+      "candidate": {
+        "mad_over_median": 0.0014339257439368786,
+        "max": 11.642281227985656,
+        "median": 11.58549775859595,
+        "min": 11.568885015103577
+      },
+      "control": {
+        "mad_over_median": 0.0012246867586555227,
+        "max": 49.97719449836151,
+        "median": 49.91606295701384,
+        "min": 49.66045879050159
+      },
+      "curve_scope": "iid acceptance sensitivity, not observed drafter acceptance; rejection costs measured at 65-token prefix, full acceptance averaged across 511 rows",
+      "gain": -0.7679004097624241,
+      "has_real_drafter": false,
+      "is_http_claim": false,
+      "kind": "verification_summary",
+      "mean_full_verification_ms": 171.68706614901959,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": [
+        {
+          "candidate_tps": 11.642281227985656,
+          "control_tps": 49.97719449836151
+        },
+        {
+          "candidate_tps": 11.568885015103577,
+          "control_tps": 49.91606295701384
+        },
+        {
+          "candidate_tps": 11.569929807279578,
+          "control_tps": 49.95915444427345
+        },
+        {
+          "candidate_tps": 11.602868100429209,
+          "control_tps": 49.66045879050159
+        },
+        {
+          "candidate_tps": 11.58549775859595,
+          "control_tps": 49.75628990202997
+        }
+      ],
+      "passes_resident_screen": false,
+      "promotion_threshold": 0.03,
+      "rejection_cycle_ms_by_accepted_prefix": [
+        191.693179,
+        192.808546,
+        171.68706614901959
+      ],
+      "serial_mean_step_ms": 19.310791072407042,
+      "width": 2
+    },
+    {
+      "acceptance_curves": [
+        {
+          "expected_tokens_per_cycle": 1.0,
+          "max_drafter_ms_for_three_percent_gain": -179.96011115300286,
+          "max_drafter_ms_to_break_even": -179.39766092759294,
+          "per_token_acceptance_probability": 0.0,
+          "target_ms_per_cycle": 198.708452
+        },
+        {
+          "expected_tokens_per_cycle": 1.328125,
+          "max_drafter_ms_for_three_percent_gain": -173.84528906341237,
+          "max_drafter_ms_to_break_even": -173.09828485778982,
+          "per_token_acceptance_probability": 0.25,
+          "target_ms_per_cycle": 198.74542925083043
+        },
+        {
+          "expected_tokens_per_cycle": 1.875,
+          "max_drafter_ms_for_three_percent_gain": -162.73324805016776,
+          "max_drafter_ms_to_break_even": -161.67865387752417,
+          "per_token_acceptance_probability": 0.5,
+          "target_ms_per_cycle": 197.88638713828738
+        },
+        {
+          "expected_tokens_per_cycle": 2.734375,
+          "max_drafter_ms_for_three_percent_gain": -142.0932160325097,
+          "max_drafter_ms_to_break_even": -140.55526619740445,
+          "per_token_acceptance_probability": 0.75,
+          "target_ms_per_cycle": 193.35821053601745
+        },
+        {
+          "expected_tokens_per_cycle": 3.4390000000000005,
+          "max_drafter_ms_for_three_percent_gain": -122.57268264766267,
+          "max_drafter_ms_to_break_even": -120.63841632247798,
+          "per_token_acceptance_probability": 0.9,
+          "target_ms_per_cycle": 187.0482268204858
+        },
+        {
+          "expected_tokens_per_cycle": 3.7098750000000003,
+          "max_drafter_ms_for_three_percent_gain": -114.51980829065924,
+          "max_drafter_ms_to_break_even": -112.43318826066664,
+          "per_token_acceptance_probability": 0.95,
+          "target_ms_per_cycle": 184.07380929041273
+        },
+        {
+          "expected_tokens_per_cycle": 4.0,
+          "max_drafter_ms_for_three_percent_gain": -105.58278282460988,
+          "max_drafter_ms_to_break_even": -103.33298192297022,
+          "per_token_acceptance_probability": 1.0,
+          "target_ms_per_cycle": 180.5761462125984
+        }
+      ],
+      "bootstrap_gain_ci95": [
+        -0.5621264671464026,
+        -0.5568823795066663
+      ],
+      "candidate": {
+        "mad_over_median": 0.0009486914482371866,
+        "max": 22.00542433185432,
+        "median": 21.901216845475854,
+        "min": 21.875791454892518
+      },
+      "control": {
+        "mad_over_median": 0.0012246867586555227,
+        "max": 49.97719449836151,
+        "median": 49.91606295701384,
+        "min": 49.66045879050159
+      },
+      "curve_scope": "iid acceptance sensitivity, not observed drafter acceptance; rejection costs measured at 65-token prefix, full acceptance averaged across 511 rows",
+      "gain": -0.5612390972353629,
+      "has_real_drafter": false,
+      "is_http_claim": false,
+      "kind": "verification_summary",
+      "mean_full_verification_ms": 180.5761462125984,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": [
+        {
+          "candidate_tps": 21.901216845475854,
+          "control_tps": 49.97719449836151
+        },
+        {
+          "candidate_tps": 21.880439348348563,
+          "control_tps": 49.91606295701384
+        },
+        {
+          "candidate_tps": 21.875791454892518,
+          "control_tps": 49.95915444427345
+        },
+        {
+          "candidate_tps": 22.00542433185432,
+          "control_tps": 49.66045879050159
+        },
+        {
+          "candidate_tps": 21.90434508385826,
+          "control_tps": 49.75628990202997
+        }
+      ],
+      "passes_resident_screen": false,
+      "promotion_threshold": 0.03,
+      "rejection_cycle_ms_by_accepted_prefix": [
+        198.708452,
+        198.762551,
+        200.493971,
+        199.90028600000002,
+        180.5761462125984
+      ],
+      "serial_mean_step_ms": 19.310791072407042,
+      "width": 4
+    },
+    {
+      "acceptance_curves": [
+        {
+          "expected_tokens_per_cycle": 1.0,
+          "max_drafter_ms_for_three_percent_gain": -208.79898215300287,
+          "max_drafter_ms_to_break_even": -208.23653192759298,
+          "per_token_acceptance_probability": 0.0,
+          "target_ms_per_cycle": 227.547323
+        },
+        {
+          "expected_tokens_per_cycle": 1.33331298828125,
+          "max_drafter_ms_for_three_percent_gain": -202.48894351637887,
+          "max_drafter_ms_to_break_even": -201.7390213255781,
+          "per_token_acceptance_probability": 0.25,
+          "target_ms_per_cycle": 227.48634987640403
+        },
+        {
+          "expected_tokens_per_cycle": 1.9921875,
+          "max_drafter_ms_for_three_percent_gain": -190.1035964611224,
+          "max_drafter_ms_to_break_even": -188.9830901526886,
+          "per_token_acceptance_probability": 0.5,
+          "target_ms_per_cycle": 227.4538067422495
+        },
+        {
+          "expected_tokens_per_cycle": 3.59954833984375,
+          "max_drafter_ms_for_three_percent_gain": -157.90538683907351,
+          "max_drafter_ms_to_break_even": -155.8808200639545,
+          "per_token_acceptance_probability": 0.75,
+          "target_ms_per_cycle": 225.3909460097068
+        },
+        {
+          "expected_tokens_per_cycle": 5.695327900000001,
+          "max_drafter_ms_for_three_percent_gain": -111.61401485425343,
+          "max_drafter_ms_to_break_even": -108.41067639311505,
+          "per_token_acceptance_probability": 0.9,
+          "target_ms_per_cycle": 218.39196355886583
+        },
+        {
+          "expected_tokens_per_cycle": 6.731591374218751,
+          "max_drafter_ms_for_three_percent_gain": -87.30161261199498,
+          "max_drafter_ms_to_break_even": -83.51542752619821,
+          "per_token_acceptance_probability": 0.95,
+          "target_ms_per_cycle": 213.50778213855392
+        },
+        {
+          "expected_tokens_per_cycle": 8.0,
+          "max_drafter_ms_for_three_percent_gain": -56.499593239895916,
+          "max_drafter_ms_to_break_even": -51.9999914366166,
+          "per_token_acceptance_probability": 1.0,
+          "target_ms_per_cycle": 206.48632001587293
+        }
+      ],
+      "bootstrap_gain_ci95": [
+        -0.2449402620250195,
+        -0.23822809088029095
+      ],
+      "candidate": {
+        "mad_over_median": 0.002824033611931216,
+        "max": 38.05748045902058,
+        "median": 37.810009357597,
+        "min": 37.689609417065505
+      },
+      "control": {
+        "mad_over_median": 0.0012246867586555227,
+        "max": 49.97719449836151,
+        "median": 49.91606295701384,
+        "min": 49.66045879050159
+      },
+      "curve_scope": "iid acceptance sensitivity, not observed drafter acceptance; rejection costs measured at 65-token prefix, full acceptance averaged across 511 rows",
+      "gain": -0.24252821401083247,
+      "has_real_drafter": false,
+      "is_http_claim": false,
+      "kind": "verification_summary",
+      "mean_full_verification_ms": 206.48632001587293,
+      "needs_fresh_confirmation": false,
+      "needs_variation_extension": false,
+      "pairs": [
+        {
+          "candidate_tps": 37.810009357597,
+          "control_tps": 49.97719449836151
+        },
+        {
+          "candidate_tps": 37.689609417065505,
+          "control_tps": 49.91606295701384
+        },
+        {
+          "candidate_tps": 38.05748045902058,
+          "control_tps": 49.95915444427345
+        },
+        {
+          "candidate_tps": 37.82967611357262,
+          "control_tps": 49.66045879050159
+        },
+        {
+          "candidate_tps": 37.703232620303716,
+          "control_tps": 49.75628990202997
+        }
+      ],
+      "passes_resident_screen": false,
+      "promotion_threshold": 0.03,
+      "rejection_cycle_ms_by_accepted_prefix": [
+        227.547323,
+        226.80839,
+        229.360429,
+        226.93401,
+        227.904831,
+        226.48520299999998,
+        226.856373,
+        226.523808,
+        206.48632001587293
+      ],
+      "serial_mean_step_ms": 19.310791072407042,
+      "width": 8
+    }
+  ],
+  "medians": [
+    {
+      "width": 1,
+      "prefill_ms": 388.876152,
+      "decode_ms": 9867.814237999999,
+      "total_ms": 10257.219213,
+      "resident_tps": 49.91606295701384
+    },
+    {
+      "width": 2,
+      "prefill_ms": 389.49028699999997,
+      "decode_ms": 43800.725188000004,
+      "total_ms": 44193.18105,
+      "resident_tps": 11.58549775859595
+    },
+    {
+      "width": 4,
+      "prefill_ms": 386.081486,
+      "decode_ms": 22992.394751,
+      "total_ms": 23377.696482,
+      "resident_tps": 21.901216845475854
+    },
+    {
+      "width": 8,
+      "prefill_ms": 389.15380500000003,
+      "decode_ms": 13149.889735,
+      "total_ms": 13541.387815,
+      "resident_tps": 37.810009357597
+    }
+  ],
+  "pursue_eagle": false,
+  "is_http_claim": false,
+  "changes_runtime_defaults": false
+}

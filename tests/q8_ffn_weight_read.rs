@@ -1,0 +1,653 @@
+#![cfg(all(feature = "cuda", nvcc))]
+
+#[path = "common/cuda_test_scope.rs"]
+mod cuda_test_scope;
+
+use anyhow::Result;
+use m40_llm::{
+    cuda::{CudaContext, CudaStream, DeviceBuffer},
+    profile,
+};
+use std::ffi::c_void;
+
+const GUARD: u32 = 0x5a12_3498;
+
+fn check_prepared_case(
+    ctx: &CudaContext,
+    k: usize,
+    n: usize,
+    rows: usize,
+    threads: i32,
+    stream: CudaStream,
+) -> Result<()> {
+    let mut scales = Vec::new();
+    let mut values = Vec::new();
+    let mut expected = Vec::new();
+    for column in 0..n {
+        let mut sum = 0u32;
+        for block in 0..k / 32 {
+            let scale = if column % 3 == 0 {
+                0
+            } else {
+                (column + block) as u16 ^ 0xffa5
+            };
+            scales.extend(scale.to_le_bytes());
+            sum = sum.wrapping_add(u32::from(scale).wrapping_mul(4));
+            for word in 0..8 {
+                let payload = if column == 0 {
+                    u32::MAX
+                } else {
+                    u32::from_le_bytes(
+                        [0x80, 0x7f, 0, 0xff]
+                            .map(|v: u8| v.wrapping_add((column + block + word) as u8)),
+                    )
+                };
+                values.extend(payload.to_le_bytes());
+                sum = sum.wrapping_add(payload);
+            }
+        }
+        expected.push(sum);
+    }
+    let s = upload(ctx, &scales)?;
+    let v = upload(ctx, &values)?;
+    let guards: Vec<_> = vec![GUARD; rows * n + 16]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let output = upload(ctx, &guards)?;
+    let out = unsafe { output.as_mut_ptr().cast::<u32>().add(8).cast() };
+    for _ in 0..3 {
+        let producer = upload(ctx, &values)?;
+        let producer_stream = if stream == CudaStream::Decode {
+            CudaStream::Prefill
+        } else {
+            CudaStream::Decode
+        };
+        unsafe {
+            ctx.memcpy_d2d_async(
+                v.as_mut_ptr(),
+                producer.as_ptr(),
+                v.bytes(),
+                producer_stream,
+            )?;
+        }
+        ctx.stream_wait_for_stream(stream, producer_stream, "prepared_read_test_producer")?;
+        let resident = CudaContext::total_device_bytes();
+        let before = profile::snapshot();
+        unsafe {
+            ctx.projection_q8_weight_checksum_async(
+                s.as_ptr(),
+                v.as_ptr(),
+                out,
+                rows as i32,
+                n as i32,
+                k as i32,
+                threads,
+                stream,
+            )?;
+        }
+        let after = profile::snapshot();
+        let delta = profile::counter_delta(&before, &after);
+        assert_eq!(delta.launches, 1);
+        assert_eq!(
+            delta.device_allocs
+                + delta.device_frees
+                + delta.h2d_copies
+                + delta.d2h_copies
+                + delta.stream_syncs
+                + delta.stream_waits
+                + delta.cublas_calls,
+            0
+        );
+        assert_eq!(CudaContext::total_device_bytes(), resident);
+        ctx.synchronize_stream(stream)?;
+        let actual = download(ctx, &output)?;
+        let words: Vec<_> = actual
+            .chunks_exact(4)
+            .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+            .collect();
+        assert!(words[..8]
+            .iter()
+            .chain(&words[words.len() - 8..])
+            .all(|&v| v == GUARD));
+        assert!(words[8..words.len() - 8]
+            .iter()
+            .copied()
+            .eq((0..rows).flat_map(|_| expected.iter().copied())));
+    }
+    assert_eq!(download(ctx, &s)?, scales);
+    assert_eq!(download(ctx, &v)?, values);
+    Ok(())
+}
+
+fn upload(ctx: &CudaContext, bytes: &[u8]) -> Result<DeviceBuffer> {
+    let buffer = DeviceBuffer::new_tagged(ctx, bytes.len(), "ffn-read:test")?;
+    unsafe {
+        ctx.memcpy_h2d(buffer.as_mut_ptr(), bytes.as_ptr().cast(), bytes.len())?;
+    }
+    Ok(buffer)
+}
+
+fn download(ctx: &CudaContext, buffer: &DeviceBuffer) -> Result<Vec<u8>> {
+    let mut bytes = vec![0u8; buffer.bytes()];
+    unsafe {
+        ctx.memcpy_d2h(bytes.as_mut_ptr().cast(), buffer.as_ptr(), bytes.len())?;
+    }
+    Ok(bytes)
+}
+
+fn check_case(
+    ctx: &CudaContext,
+    k: usize,
+    hidden: usize,
+    rows: usize,
+    gap: Option<usize>,
+    order: Option<bool>,
+) -> Result<()> {
+    let mut hosts = Vec::new();
+    let mut expected = Vec::new();
+    for seed in [0usize, 3] {
+        let mut scales = Vec::new();
+        let mut values = Vec::new();
+        let mut sums = Vec::new();
+        for column in 0..hidden {
+            let mut sum = 0u32;
+            for block in 0..k / 32 {
+                let scale = if (column + block) % 3 == 0 {
+                    0
+                } else {
+                    0xf123u16.wrapping_add((column + block + seed) as u16)
+                };
+                scales.extend(scale.to_le_bytes());
+                for word in 0..8 {
+                    let payload = if column == 0 {
+                        u32::MAX
+                    } else {
+                        u32::from_le_bytes(
+                            [0x80, 0x7f, 0xff, 0]
+                                .map(|v: u8| v.wrapping_add((column + block + word + seed) as u8)),
+                        )
+                    };
+                    values.extend(payload.to_le_bytes());
+                    sum = sum.wrapping_add(payload).wrapping_add(u32::from(scale));
+                }
+            }
+            values.extend(std::iter::repeat_n(0xa5, gap.unwrap_or(0)));
+            sums.push(sum);
+        }
+        hosts.push((scales, values));
+        expected.push(sums);
+    }
+    let devices: Vec<_> = hosts
+        .iter()
+        .map(|(s, v)| Ok((upload(ctx, s)?, upload(ctx, v)?)))
+        .collect::<Result<_>>()?;
+    let scales = [devices[0].0.as_ptr(), devices[1].0.as_ptr()];
+    let values = [devices[0].1.as_ptr(), devices[1].1.as_ptr()];
+    let guard_bytes: Vec<_> = vec![GUARD; rows * hidden * 2 + 16]
+        .iter()
+        .flat_map(|v| v.to_le_bytes())
+        .collect();
+    let output = upload(ctx, &guard_bytes)?;
+    let out = unsafe { output.as_mut_ptr().cast::<u32>().add(8).cast() };
+    for repeat in 0..3 {
+        // Exercise a real asynchronous producer and explicit dependency before
+        // the measured enqueue, without relying on a synchronous upload.
+        let replacement: Vec<_> = hosts
+            .iter()
+            .map(|(_, v)| upload(ctx, v))
+            .collect::<Result<_>>()?;
+        for (index, source) in replacement.iter().enumerate() {
+            unsafe {
+                ctx.memcpy_d2d_async(
+                    values[index].cast_mut(),
+                    source.as_ptr(),
+                    source.bytes(),
+                    CudaStream::Prefill,
+                )?;
+            }
+        }
+        ctx.stream_wait_for_stream(
+            CudaStream::Decode,
+            CudaStream::Prefill,
+            "ffn_read_test_producer",
+        )?;
+        let resident = CudaContext::total_device_bytes();
+        let before = profile::snapshot();
+        unsafe {
+            if let Some(is_transposed) = order {
+                ctx.ffn_q8_weight_checksum_ordered_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    is_transposed,
+                )?;
+            } else if let Some(gap) = gap {
+                ctx.ffn_q8_weight_checksum_pitched_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                    gap as i32,
+                )?;
+            } else {
+                ctx.ffn_q8_weight_checksum_async(
+                    scales,
+                    values,
+                    out,
+                    rows as i32,
+                    hidden as i32,
+                    k as i32,
+                )?;
+            }
+        }
+        let after = profile::snapshot();
+        let delta = profile::counter_delta(&before, &after);
+        assert_eq!(delta.launches, 1);
+        if order.is_some() {
+            let operation = "ffn_q8_weight_checksum_ordered_128";
+            assert_eq!(
+                after.by_op.get(operation).map_or(0, |v| v.launches)
+                    - before.by_op.get(operation).map_or(0, |v| v.launches),
+                1
+            );
+        }
+        assert_eq!(
+            delta.device_allocs
+                + delta.device_frees
+                + delta.h2d_copies
+                + delta.d2h_copies
+                + delta.stream_syncs
+                + delta.stream_waits
+                + delta.cublas_calls,
+            0
+        );
+        assert_eq!(CudaContext::total_device_bytes(), resident);
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        let actual = download(ctx, &output)?;
+        let words: Vec<_> = actual
+            .chunks_exact(4)
+            .map(|v| u32::from_le_bytes(v.try_into().unwrap()))
+            .collect();
+        assert!(words[..8]
+            .iter()
+            .chain(&words[words.len() - 8..])
+            .all(|&v| v == GUARD));
+        for row in 0..rows {
+            for col in 0..hidden {
+                let owner = order.map_or(0, |is_transposed| {
+                    if is_transposed {
+                        (col % (hidden / 32)) * 32 + col / (hidden / 32)
+                    } else {
+                        col
+                    }
+                }) as u32;
+                assert_eq!(
+                    words[8 + (row * hidden + col) * 2],
+                    expected[0][col].wrapping_add(owner),
+                    "gate repeat {repeat}"
+                );
+                assert_eq!(
+                    words[9 + (row * hidden + col) * 2],
+                    expected[1][col].wrapping_add(owner),
+                    "up repeat {repeat}"
+                );
+            }
+        }
+    }
+    for (device, host) in devices.iter().zip(&hosts) {
+        assert_eq!(download(ctx, &device.0)?, host.0);
+        assert_eq!(download(ctx, &device.1)?, host.1);
+    }
+    Ok(())
+}
+
+/// Actual payload words and arbitrary scale bits produce exact modular CPU
+/// sums for short/long loops, odd widths and rows 1/4 without scratch churn.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_weight_reads_preserve_checksums_guards_and_ownership() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, hidden) in [(32, 1), (160, 7), (2048, 17)] {
+        for rows in [1, 4] {
+            check_case(&ctx, k, hidden, rows, None, None)?;
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Both pitches and the original kernel preserve identical modular sums,
+/// padding/guards, ordered producers, reuse and allocation ownership.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_pitched_weight_reads_ignore_gaps_and_preserve_ownership() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, n) in [(128, 1), (640, 7), (2048, 17)] {
+        for rows in [1, 4] {
+            for gap in [None, Some(0), Some(128)] {
+                check_case(&ctx, k, n, rows, gap, None)?;
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Logical transpose changes the physical CTA tag but not source checksums.
+/// Dynamic widths, wrapping, guards, ordered producers and reuse must hold.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_ordered_reads_preserve_tagged_checksums_and_ownership() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, n) in [(32, 32), (160, 64), (2048, 96), (4096, 128)] {
+        for rows in [1, 4] {
+            for order in [false, true] {
+                check_case(&ctx, k, n, rows, None, Some(order))?;
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Unsupported shapes and bad spans fail before enqueue, preserving live
+/// output data and allocation ownership for both logical column modes.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_ordered_reads_reject_invalid_spans_before_enqueue() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let plane = upload(&ctx, &[0x23; 512])?;
+        let output = upload(&ctx, &[0x45; 128])?;
+        let s = [plane.as_ptr(); 2];
+        let v = s;
+        let o = output.as_mut_ptr();
+        let before = profile::snapshot();
+        unsafe {
+            for order in [false, true] {
+                for (rows, n, k) in [
+                    (0, 32, 32),
+                    (2, 32, 32),
+                    (1, 0, 32),
+                    (1, 31, 32),
+                    (1, 33, 32),
+                    (1, 32, 0),
+                    (1, 32, 33),
+                    (1, 32, i32::MAX),
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, v, o, rows, n, k, order)
+                        .is_err());
+                }
+                for bad in [
+                    std::ptr::null(),
+                    plane.as_ptr().cast::<u8>().add(1).cast(),
+                    (usize::MAX - 3) as *const c_void,
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, [bad; 2], o, 1, 32, 32, order)
+                        .is_err());
+                }
+                assert!(ctx
+                    .ffn_q8_weight_checksum_ordered_async(
+                        [plane.as_ptr().cast::<u8>().add(1).cast(); 2],
+                        v,
+                        o,
+                        1,
+                        32,
+                        32,
+                        order
+                    )
+                    .is_err());
+                for out in [
+                    std::ptr::null_mut(),
+                    o.cast::<u8>().add(2).cast(),
+                    plane.as_mut_ptr().cast::<u8>().add(4).cast(),
+                    (usize::MAX - 3) as *mut c_void,
+                ] {
+                    assert!(ctx
+                        .ffn_q8_weight_checksum_ordered_async(s, v, out, 1, 32, 32, order)
+                        .is_err());
+                }
+            }
+        }
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()),
+            Default::default()
+        );
+        assert_eq!(download(&ctx, &plane)?, vec![0x23; 512]);
+        assert_eq!(download(&ctx, &output)?, vec![0x45; 128]);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Unsupported gaps, alignment/overflow errors and output aliasing in the
+/// padding itself fail before any work or mutation of live device storage.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_pitched_weight_reads_reject_invalid_full_spans() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let plane = upload(&ctx, &[0x23; 512])?;
+        let output = upload(&ctx, &[0x45; 128])?;
+        let s = [plane.as_ptr(); 2];
+        let v = s;
+        let o = output.as_mut_ptr();
+        let before = profile::snapshot();
+        unsafe {
+            for gap in [-1, 32, 64, 256, i32::MAX] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, o, 1, 1, 128, gap)
+                    .is_err());
+            }
+            for k in [0, 32, 160, i32::MAX] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, o, 1, 1, k, 128)
+                    .is_err());
+            }
+            for bad in [
+                std::ptr::null(),
+                plane.as_ptr().cast::<u8>().add(4).cast(),
+                (usize::MAX - 127) as *const c_void,
+            ] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, [bad; 2], o, 1, 1, 128, 128)
+                    .is_err());
+            }
+            for out in [
+                std::ptr::null_mut(),
+                o.cast::<u8>().add(2).cast(),
+                plane.as_mut_ptr().cast::<u8>().add(128).cast(),
+            ] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_pitched_async(s, v, out, 1, 1, 128, 128)
+                    .is_err());
+            }
+            assert!(ctx
+                .ffn_q8_weight_checksum_pitched_async(s, v, o, 2, 1, 128, 128)
+                .is_err());
+        }
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()),
+            Default::default()
+        );
+        assert_eq!(download(&ctx, &plane)?, vec![0x23; 512]);
+        assert_eq!(download(&ctx, &output)?, vec![0x45; 128]);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// Invalid dimensions, null/misaligned spans, partial overlap and address
+/// overflow fail before any CUDA work or output mutation.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_weight_reads_reject_invalid_spans_before_enqueue() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let plane = upload(&ctx, &[0x23; 512])?;
+        let output = upload(&ctx, &[0x45; 128])?;
+        let s = [plane.as_ptr(); 2];
+        let v = [plane.as_ptr(); 2];
+        let o = output.as_mut_ptr();
+        let before = profile::snapshot();
+        unsafe {
+            for threads in [0, 64, 129, 512] {
+                assert!(ctx
+                    .projection_q8_weight_checksum_async(
+                        plane.as_ptr(),
+                        plane.as_ptr(),
+                        o,
+                        1,
+                        1,
+                        32,
+                        threads,
+                        CudaStream::Decode
+                    )
+                    .is_err());
+            }
+            for (rows, n, k, scale, value, out) in [
+                (0, 1, 32, plane.as_ptr(), plane.as_ptr(), o),
+                (1, 0, 32, plane.as_ptr(), plane.as_ptr(), o),
+                (1, 1, 31, plane.as_ptr(), plane.as_ptr(), o),
+                (1, 1, 32, std::ptr::null(), plane.as_ptr(), o),
+                (
+                    1,
+                    1,
+                    32,
+                    plane.as_ptr(),
+                    plane.as_ptr().cast::<u8>().add(4).cast(),
+                    o,
+                ),
+                (
+                    1,
+                    1,
+                    32,
+                    plane.as_ptr(),
+                    plane.as_ptr(),
+                    plane.as_mut_ptr().cast::<u8>().add(4).cast(),
+                ),
+                (
+                    1,
+                    1,
+                    32,
+                    (usize::MAX - 1) as *const c_void,
+                    plane.as_ptr(),
+                    o,
+                ),
+            ] {
+                assert!(ctx
+                    .projection_q8_weight_checksum_async(
+                        scale,
+                        value,
+                        out,
+                        rows,
+                        n,
+                        k,
+                        128,
+                        CudaStream::Decode
+                    )
+                    .is_err());
+            }
+            for (r, h, k) in [(0, 1, 32), (2, 1, 32), (1, 0, 32), (1, 1, 0), (1, 1, 31)] {
+                assert!(ctx.ffn_q8_weight_checksum_async(s, v, o, r, h, k).is_err());
+            }
+            for offset in [1usize, 2] {
+                assert!(ctx
+                    .ffn_q8_weight_checksum_async(
+                        s,
+                        [plane.as_ptr().cast::<u8>().add(offset).cast(); 2],
+                        o,
+                        1,
+                        1,
+                        32
+                    )
+                    .is_err());
+            }
+            assert!(ctx
+                .ffn_q8_weight_checksum_async([std::ptr::null(); 2], v, o, 1, 1, 32)
+                .is_err());
+            assert!(ctx
+                .ffn_q8_weight_checksum_async(s, v, std::ptr::null_mut(), 1, 1, 32)
+                .is_err());
+            assert!(ctx
+                .ffn_q8_weight_checksum_async(
+                    s,
+                    v,
+                    plane.as_mut_ptr().cast::<u8>().add(4).cast(),
+                    1,
+                    1,
+                    32
+                )
+                .is_err());
+            assert!(ctx
+                .ffn_q8_weight_checksum_async(
+                    s,
+                    v,
+                    plane.as_mut_ptr().cast::<u8>().add(28).cast(),
+                    1,
+                    1,
+                    32
+                )
+                .is_err());
+            assert!(ctx
+                .ffn_q8_weight_checksum_async(
+                    [(usize::MAX - 1) as *const c_void; 2],
+                    v,
+                    o,
+                    1,
+                    1,
+                    32
+                )
+                .is_err());
+        }
+        assert_eq!(
+            profile::counter_delta(&before, &profile::snapshot()),
+            Default::default()
+        );
+        assert_eq!(download(&ctx, &output)?, vec![0x45; 128]);
+        assert_eq!(download(&ctx, &plane)?, vec![0x23; 512]);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}
+
+/// The prepared four-column/eight-value mapping checksums every word and
+/// scale exactly, including odd tails and inactive threads, on both streams.
+#[test]
+#[ignore = "requires M40 hardware; run with --include-ignored --test-threads=1"]
+fn test_prepared_weight_reads_preserve_checksums_and_stream_order() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    for (k, n) in [(32, 1), (160, 7), (11008, 9)] {
+        for rows in [1, 4] {
+            for threads in [128, 256] {
+                for stream in [CudaStream::Decode, CudaStream::Prefill] {
+                    check_prepared_case(&ctx, k, n, rows, threads, stream)?;
+                }
+            }
+        }
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}

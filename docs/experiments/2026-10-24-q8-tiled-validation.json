@@ -1,0 +1,34 @@
+{
+  "timing_pairs": 1230,
+  "measured_intervals": 2460,
+  "overlapping_intervals": 0,
+  "missing_timestamps": 0,
+  "reversed_or_empty_intervals": 0,
+  "gpu_process_counts": [
+    1
+  ],
+  "gpu_uuids": [
+    "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852"
+  ],
+  "pstates": [
+    "P0"
+  ],
+  "sm_clocks": [
+    "1063 MHz",
+    "1088 MHz",
+    "1113 MHz",
+    "949 MHz",
+    "986 MHz"
+  ],
+  "memory_clocks": [
+    "3004 MHz"
+  ],
+  "temperature_range_c": [
+    30,
+    39
+  ],
+  "tiled_launch_configurations": 12,
+  "max_abs_diff": 0.00001239776611328125,
+  "mean_abs_diff": 0.0000010363189630879788,
+  "cpu_sample_max_abs_diff": 8.754432201385498E-7
+}

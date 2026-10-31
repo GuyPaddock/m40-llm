@@ -1,0 +1,257 @@
+{
+  "profile_sessions": 7,
+  "primary_sessions": 5,
+  "primary_samples": 15,
+  "mapping": "first session is warmup, last is actual-ID replay; middle five follow the serial profile-on requests",
+  "by_step": [
+    {
+      "generated_step": 0,
+      "samples": 5,
+      "median_stage_sum_ms": 21.357120047323406,
+      "median_token_wall_ms": 29.881573000000003,
+      "stages": [
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_ms": 8.05984,
+          "median_share": 0.3777464507699783
+        },
+        {
+          "stage": "mlp_down",
+          "median_ms": 4.785536,
+          "median_share": 0.22424674262745836
+        },
+        {
+          "stage": "qkv_project",
+          "median_ms": 2.5223359999999992,
+          "median_share": 0.11787357070718436
+        },
+        {
+          "stage": "out_project",
+          "median_ms": 1.759968,
+          "median_share": 0.08260543276543306
+        },
+        {
+          "stage": "lm_head",
+          "median_ms": 1.56304,
+          "median_share": 0.073167887666689
+        },
+        {
+          "stage": "attention",
+          "median_ms": 0.6156160000000002,
+          "median_share": 0.028823577285174495
+        },
+        {
+          "stage": "ffn_norm",
+          "median_ms": 0.41574399999999995,
+          "median_share": 0.019484979903932814
+        },
+        {
+          "stage": "attn_norm",
+          "median_ms": 0.39519999999999994,
+          "median_share": 0.018511630769261295
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_ms": 0.3040960000000001,
+          "median_share": 0.014252290950359731
+        },
+        {
+          "stage": "rope_q",
+          "median_ms": 0.2912640000000001,
+          "median_share": 0.013681992200764449
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_ms": 0.259232,
+          "median_share": 0.012135214572266685
+        },
+        {
+          "stage": "mlp_residual",
+          "median_ms": 0.15961600000000004,
+          "median_share": 0.0074495015045641325
+        },
+        {
+          "stage": "attn_residual",
+          "median_ms": 0.15289600000000006,
+          "median_share": 0.007152391407162534
+        },
+        {
+          "stage": "embedding",
+          "median_ms": 0.039264,
+          "median_share": 0.001836986136851219
+        },
+        {
+          "stage": "output_norm",
+          "median_ms": 0.010624,
+          "median_share": 0.0004958369084834184
+        }
+      ]
+    },
+    {
+      "generated_step": 255,
+      "samples": 5,
+      "median_stage_sum_ms": 21.50345605891198,
+      "median_token_wall_ms": 22.479768,
+      "stages": [
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_ms": 8.047327999999998,
+          "median_share": 0.37429822603836715
+        },
+        {
+          "stage": "mlp_down",
+          "median_ms": 4.793696,
+          "median_share": 0.22306814248177667
+        },
+        {
+          "stage": "qkv_project",
+          "median_ms": 2.5221440000000004,
+          "median_share": 0.1171569703523974
+        },
+        {
+          "stage": "out_project",
+          "median_ms": 1.7734080000000003,
+          "median_share": 0.08246560353700216
+        },
+        {
+          "stage": "lm_head",
+          "median_ms": 1.563296,
+          "median_share": 0.07282531703176516
+        },
+        {
+          "stage": "attention",
+          "median_ms": 0.7793279999999999,
+          "median_share": 0.036243476298173885
+        },
+        {
+          "stage": "ffn_norm",
+          "median_ms": 0.40470400000000006,
+          "median_share": 0.01883858107480256
+        },
+        {
+          "stage": "attn_norm",
+          "median_ms": 0.389152,
+          "median_share": 0.018097183956563033
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_ms": 0.3036159999999999,
+          "median_share": 0.014135774229371945
+        },
+        {
+          "stage": "rope_q",
+          "median_ms": 0.29087999999999997,
+          "median_share": 0.013522663482714276
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_ms": 0.258816,
+          "median_share": 0.012027660220599118
+        },
+        {
+          "stage": "mlp_residual",
+          "median_ms": 0.15577600000000005,
+          "median_share": 0.0072442308609940685
+        },
+        {
+          "stage": "attn_residual",
+          "median_ms": 0.155104,
+          "median_share": 0.007212980070509087
+        },
+        {
+          "stage": "embedding",
+          "median_ms": 0.028992,
+          "median_share": 0.0013411274598848204
+        },
+        {
+          "stage": "output_norm",
+          "median_ms": 0.010592,
+          "median_share": 0.0004910838504782338
+        }
+      ]
+    },
+    {
+      "generated_step": 511,
+      "samples": 5,
+      "median_stage_sum_ms": 21.69334397558123,
+      "median_token_wall_ms": 22.580686,
+      "stages": [
+        {
+          "stage": "mlp_gate_up_swiglu",
+          "median_ms": 8.044352000000002,
+          "median_share": 0.37082120714330624
+        },
+        {
+          "stage": "mlp_down",
+          "median_ms": 4.7845759999999995,
+          "median_share": 0.22070904471223168
+        },
+        {
+          "stage": "qkv_project",
+          "median_ms": 2.5229760000000003,
+          "median_share": 0.11645593902996865
+        },
+        {
+          "stage": "out_project",
+          "median_ms": 1.7783039999999994,
+          "median_share": 0.08197253052272079
+        },
+        {
+          "stage": "lm_head",
+          "median_ms": 1.564032,
+          "median_share": 0.07198521361011888
+        },
+        {
+          "stage": "attention",
+          "median_ms": 0.985568,
+          "median_share": 0.04540776920088628
+        },
+        {
+          "stage": "ffn_norm",
+          "median_ms": 0.4046400000000002,
+          "median_share": 0.01867743932922332
+        },
+        {
+          "stage": "attn_norm",
+          "median_ms": 0.39574399999999993,
+          "median_share": 0.018232990736951216
+        },
+        {
+          "stage": "kv_append_rope_k",
+          "median_ms": 0.307616,
+          "median_share": 0.014157626379235982
+        },
+        {
+          "stage": "rope_q",
+          "median_ms": 0.29152000000000006,
+          "median_share": 0.013438223278446373
+        },
+        {
+          "stage": "greedy_argmax",
+          "median_ms": 0.258816,
+          "median_share": 0.01194112500601741
+        },
+        {
+          "stage": "mlp_residual",
+          "median_ms": 0.15654400000000002,
+          "median_share": 0.007212403225128599
+        },
+        {
+          "stage": "attn_residual",
+          "median_ms": 0.154368,
+          "median_share": 0.0071237335327032775
+        },
+        {
+          "stage": "embedding",
+          "median_ms": 0.029312,
+          "median_share": 0.0013529880921762398
+        },
+        {
+          "stage": "output_norm",
+          "median_ms": 0.010592,
+          "median_share": 0.0004882603628063391
+        }
+      ]
+    }
+  ]
+}

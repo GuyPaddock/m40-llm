@@ -1,0 +1,551 @@
+{
+  "passes_audit": true,
+  "source": "5579ea252839439c347fe6641ba9559ab6fef537",
+  "executable_sha256": "b49529e1c68382c0728d11d991f2a3764881a7ddf11c5cc4c8571c990477bcaa",
+  "primary_pairs": 40,
+  "gpu_boundaries": 80,
+  "serial_timed_intervals": 200,
+  "clocks": [
+    [
+      "P0",
+      "1113 MHz",
+      "3004 MHz"
+    ]
+  ],
+  "results": [
+    {
+      "family": "down",
+      "layer_id": 0,
+      "rows": 1,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.009564934354882593,
+          -0.006129171549517198
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.35422720909118655,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.35156800746917727,
+        "pairs": [
+          [
+            0.35142719745635986,
+            0.35417919158935546
+          ],
+          [
+            0.35156800746917727,
+            0.35496320724487307
+          ],
+          [
+            0.35155520439147947,
+            0.35422720909118655
+          ],
+          [
+            0.351855993270874,
+            0.35489280223846437
+          ],
+          [
+            0.35181119441986086,
+            0.3539808034896851
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.007507050711411445
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.016893747361890643,
+          0.0021999515041466466
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.13322240114212036,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.1318112015724182,
+        "pairs": [
+          [
+            0.13411519527435303,
+            0.1338207960128784
+          ],
+          [
+            0.13099839687347412,
+            0.13305920362472534
+          ],
+          [
+            0.1318112015724182,
+            0.13346560001373292
+          ],
+          [
+            0.13091200590133667,
+            0.13316160440444946
+          ],
+          [
+            0.13189120292663575,
+            0.13322240114212036
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.010592809899865774
+      }
+    },
+    {
+      "family": "down",
+      "layer_id": 0,
+      "rows": 4,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          0.001159902581563621,
+          0.03658412727474025
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5394911766052246,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5412768363952636,
+        "pairs": [
+          [
+            1.5388383865356445,
+            1.5270527839660644
+          ],
+          [
+            1.540774440765381,
+            1.537065601348877
+          ],
+          [
+            1.5412768363952636,
+            1.5394911766052246
+          ],
+          [
+            1.5982336044311523,
+            1.5418272018432617
+          ],
+          [
+            1.5947584152221679,
+            1.5740672111511231
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.001159902581563621
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.008783934817011674,
+          0.029773565925659495
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5585728168487549,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.5737535953521729,
+        "pairs": [
+          [
+            0.5543200016021729,
+            0.5550271987915039
+          ],
+          [
+            0.5571775913238526,
+            0.5585728168487549
+          ],
+          [
+            0.5737535953521729,
+            0.5571648120880127
+          ],
+          [
+            0.5934432029724122,
+            0.5793856143951416
+          ],
+          [
+            0.5831744194030761,
+            0.5883423805236816
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.02717779678048382
+      }
+    },
+    {
+      "family": "down",
+      "layer_id": 17,
+      "rows": 1,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.01027147763142311,
+          -0.0061037462889000915
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.3544255971908569,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3520672082901001,
+        "pairs": [
+          [
+            0.3518847942352295,
+            0.3544032096862793
+          ],
+          [
+            0.3527616024017334,
+            0.3549279928207397
+          ],
+          [
+            0.3521375894546509,
+            0.35434560775756835
+          ],
+          [
+            0.35181760787963867,
+            0.3554687976837158
+          ],
+          [
+            0.3520672082901001,
+            0.3544255971908569
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.0066541156153765435
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.013698281841826643,
+          -0.0016803064506956122
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.133296000957489,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.13188799619674682,
+        "pairs": [
+          [
+            0.13308160305023192,
+            0.13330559730529784
+          ],
+          [
+            0.13188799619674682,
+            0.1331552028656006
+          ],
+          [
+            0.13255679607391357,
+            0.1334175944328308
+          ],
+          [
+            0.131331205368042,
+            0.1331552028656006
+          ],
+          [
+            0.13177599906921386,
+            0.133296000957489
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.010562993267826726
+      }
+    },
+    {
+      "family": "down",
+      "layer_id": 17,
+      "rows": 4,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.013183695576789223,
+          0.07550575555293104
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5282303810119628,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5672800064086914,
+        "pairs": [
+          [
+            1.5686431884765626,
+            1.5895999908447265
+          ],
+          [
+            1.5672800064086914,
+            1.5800000190734864
+          ],
+          [
+            1.6170719146728516,
+            1.5035455703735352
+          ],
+          [
+            1.542246437072754,
+            1.5282303810119628
+          ],
+          [
+            1.5515968322753906,
+            1.507862377166748
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.02555218498592504
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.022717238452160005,
+          0.05181825114055427
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5659167766571045,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.5759776115417481,
+        "pairs": [
+          [
+            0.5759776115417481,
+            0.5893663883209228
+          ],
+          [
+            0.5867839813232422,
+            0.5823647975921631
+          ],
+          [
+            0.5952415943145752,
+            0.5659167766571045
+          ],
+          [
+            0.5618239879608155,
+            0.559062385559082
+          ],
+          [
+            0.5652416229248047,
+            0.5576255798339844
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.01777794067896954
+      }
+    },
+    {
+      "family": "down",
+      "layer_id": 35,
+      "rows": 1,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.013773225655300148,
+          -0.007971760477918699
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.355129599571228,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.3520224094390869,
+        "pairs": [
+          [
+            0.3517184019088745,
+            0.3547679901123047
+          ],
+          [
+            0.352345609664917,
+            0.35552000999450684
+          ],
+          [
+            0.3520224094390869,
+            0.35485119819641114
+          ],
+          [
+            0.35202879905700685,
+            0.355129599571228
+          ],
+          [
+            0.3517215967178345,
+            0.3566335916519165
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.008749454103213705
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.03226493635760819,
+          -0.010351709466373094
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.13384000062942505,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.13176640272140502,
+        "pairs": [
+          [
+            0.1324671983718872,
+            0.1338528037071228
+          ],
+          [
+            0.1311071991920471,
+            0.13547840118408203
+          ],
+          [
+            0.13176640272140502,
+            0.1338080048561096
+          ],
+          [
+            0.1310464024543762,
+            0.13351360559463502
+          ],
+          [
+            0.13188159465789795,
+            0.13384000062942505
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.015493110417425848
+      }
+    },
+    {
+      "family": "down",
+      "layer_id": 35,
+      "rows": 4,
+      "complete_ffn": {
+        "bootstrap_gain_ci95": [
+          -0.008774365078508928,
+          0.025885346330667636
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.5966464042663575,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 1.5929887771606446,
+        "pairs": [
+          [
+            1.5772192001342773,
+            1.5911808013916016
+          ],
+          [
+            1.612668800354004,
+            1.5719776153564453
+          ],
+          [
+            1.59335355758667,
+            1.6023199081420898
+          ],
+          [
+            1.5862655639648438,
+            1.5966464042663575
+          ],
+          [
+            1.5929887771606446,
+            1.597871971130371
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.002290818490518265
+      },
+      "isolated_projection": {
+        "bootstrap_gain_ci95": [
+          -0.00664272837916835,
+          0.00853377676199285
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.5872223854064942,
+        "interpretation": "complete-FFN screen only; neither runtime qualification nor E2E promotion",
+        "native_median_ms": 0.5890175819396972,
+        "pairs": [
+          [
+            0.5922336101531982,
+            0.5872223854064942
+          ],
+          [
+            0.582374382019043,
+            0.5862688064575196
+          ],
+          [
+            0.5890175819396972,
+            0.5885183811187744
+          ],
+          [
+            0.590934419631958,
+            0.5905568122863769
+          ],
+          [
+            0.5795743942260743,
+            0.5813951969146729
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": 0.00305709826092615
+      }
+    },
+    {
+      "family": "vocabulary",
+      "rows": 1,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.026902385748339697,
+          -0.025657369390854723
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.6052032470703126,
+        "interpretation": "complete vocabulary projection micro screen; not FFN or E2E throughput",
+        "native_median_ms": 1.5633376121520997,
+        "pairs": [
+          [
+            1.563481616973877,
+            1.6046527862548827
+          ],
+          [
+            1.5633376121520997,
+            1.6058784484863282
+          ],
+          [
+            1.563424015045166,
+            1.6052032470703126
+          ],
+          [
+            1.5632960319519043,
+            1.606515121459961
+          ],
+          [
+            1.563206386566162,
+            1.6049440383911133
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.02608120497801303
+      }
+    },
+    {
+      "family": "vocabulary",
+      "rows": 4,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.02671364008313193,
+          -0.026328090145033345
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 6.381999969482422,
+        "interpretation": "complete vocabulary projection micro screen; not FFN or E2E throughput",
+        "native_median_ms": 6.212828826904297,
+        "pairs": [
+          [
+            6.212931060791016,
+            6.382534408569336
+          ],
+          [
+            6.212828826904297,
+            6.381926345825195
+          ],
+          [
+            6.213145446777344,
+            6.381148910522461
+          ],
+          [
+            6.212777709960937,
+            6.382185745239258
+          ],
+          [
+            6.211513519287109,
+            6.381999969482422
+          ]
+        ],
+        "passes_micro_screen": false,
+        "throughput_gain": -0.026507543620662988
+      }
+    }
+  ],
+  "vocabulary_passes_micro_screen": false,
+  "no_feasibility_estimate_for_failed_candidates": true,
+  "all_one_row_down_cases_clear_complete_ffn_gate": false,
+  "runtime_integration_allowed": false,
+  "is_e2e_claim": false,
+  "changes_runtime_defaults": false
+}

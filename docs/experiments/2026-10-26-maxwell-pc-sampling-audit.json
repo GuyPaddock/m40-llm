@@ -1,0 +1,11 @@
+{
+  "passes_audit": true,
+  "scope": "untimed setup capability, no kernels or measured samples",
+  "configure_status": 27,
+  "configure_message": "CUPTI_ERROR_NOT_SUPPORTED",
+  "cleanup_status": 0,
+  "exit_code": 2,
+  "has_kernel_measurements": false,
+  "samples": null,
+  "changes_runtime_defaults": false
+}

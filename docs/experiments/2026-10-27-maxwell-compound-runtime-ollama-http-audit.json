@@ -1,0 +1,76 @@
+{
+  "passes_audit": true,
+  "mode": "ollama",
+  "source": "63240c52b64e06870922c8b6c0cbae8b0fe2e6f4",
+  "primary_pairs": 5,
+  "screen_requests": 10,
+  "fresh_confirmation_requests": 0,
+  "gpu_boundaries": 20,
+  "clocks": [
+    {
+      "pstate": "P0",
+      "sm_mhz": 1113,
+      "memory_mhz": 3004
+    }
+  ],
+  "compute_processes": [
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "589161",
+      "name": "target/release/examples/compare_ollama"
+    },
+    {
+      "uuid": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+      "pid": "589989",
+      "name": "/tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server"
+    }
+  ],
+  "comparison": {
+    "bootstrap_gain_ci95": [
+      0.1763936466111784,
+      0.18030232166991667
+    ],
+    "bootstrap_resamples": 10000,
+    "bootstrap_seed": 0,
+    "candidate": {
+      "mad_over_median": 0.0008739196705158037,
+      "max": 50.98284012198561,
+      "median": 50.91042598728391,
+      "min": 50.78254159376825
+    },
+    "control": {
+      "mad_over_median": 0.0004982123490337374,
+      "max": 43.267029530257645,
+      "median": 43.1947300161657,
+      "min": 43.167983557253
+    },
+    "gain": 0.17862586404014102,
+    "needs_fresh_confirmation": false,
+    "needs_variation_extension": false,
+    "pairs": 5,
+    "passes_promotion_gate": true,
+    "promotion_threshold": 0.03,
+    "reaches_original_target": false
+  },
+  "actual512_ids_bound": true,
+  "original_prepared_identities": 109,
+  "extra_candidate_joint_bytes": 1724645376,
+  "candidate_weight_payload_bytes": 7921745920,
+  "phase_medians": [
+    {
+      "label": "m40-llm",
+      "http_ms": 10056.879117999999,
+      "prefill_ms": 493.26209,
+      "decode_ms": 9523.230879
+    },
+    {
+      "label": "ollama",
+      "http_ms": 11853.29784,
+      "prefill_ms": 229.17,
+      "decode_ms": 11619.536
+    }
+  ],
+  "original_absolute_target": 53.06,
+  "original_relative_target": 56.15314902101541,
+  "changes_runtime_defaults": false
+}

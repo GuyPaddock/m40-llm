@@ -1,0 +1,32 @@
+[
+  {
+    "repository": "allenai/SciRIFF",
+    "revision": "eddf83df1ab4acf1ead5b81898dd4c7e7450050e",
+    "card_license": "odc-by"
+  },
+  {
+    "repository": "bigcode/commitpackft",
+    "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+    "card_license": "mit"
+  },
+  {
+    "repository": "HuggingFaceH4/ultrachat_200k",
+    "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+    "card_license": "mit"
+  },
+  {
+    "repository": "allenai/tulu-3-sft-mixture",
+    "revision": "b14afda60f1bbebe55d5d2fa1e4df5042f97f8be",
+    "card_license": "odc-by"
+  },
+  {
+    "repository": "LipengCS/Table-GPT",
+    "revision": "25754c7a072dffca92e18c56f33832936f53495a",
+    "card_license": "mit"
+  },
+  {
+    "repository": "ai2-adapt-dev/flan_v2_converted",
+    "revision": "20f17e144dfdfe2d20f12f140ace5b95c31577c0",
+    "card_license": null
+  }
+]

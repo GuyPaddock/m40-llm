@@ -1,0 +1,3 @@
+    PID    PPID COMMAND
+3469761  564507 /tmp/m40-llm-tools/ollama-0.40.11/bin/ollama serve
+3470246 3469761 /tmp/m40-llm-tools/ollama-0.40.11/lib/ollama/llama-server --model /mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d --port 42173 --host 127.0.0.1 --no-webui --offline -c 1024 -np 1 --log-verbosity 4 --no-log-prefix --no-log-timestamps --no-jinja --chat-template chatml --flash-attn off -b 512 -ub 512 -ngl 99 --context-shift --keep 4

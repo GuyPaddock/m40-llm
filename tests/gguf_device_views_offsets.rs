@@ -151,6 +151,7 @@ fn gguf_device_views_overflow_detected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject quantized payloads shorter than one complete storage block.
 #[test]
 fn gguf_device_views_quantized_overflow_detected() {
     // Quantized tensor should account for block size when validating payload length
@@ -170,7 +171,7 @@ fn gguf_device_views_quantized_overflow_detected() {
         write_le_u64(&mut f, 0);
 
         // Intentionally short: need 18 bytes for one block
-        f.write_all(&vec![0u8; 10]).unwrap();
+        f.write_all(&[0u8; 10]).unwrap();
         f.flush().unwrap();
     }
 
@@ -184,6 +185,7 @@ fn gguf_device_views_quantized_overflow_detected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Account for the full Q5_1 storage block when checking tensor bounds.
 #[test]
 fn gguf_device_views_q5_1_overflow_detected() {
     // Q5_1 uses 36-byte blocks; a short payload should be rejected
@@ -203,7 +205,7 @@ fn gguf_device_views_q5_1_overflow_detected() {
         write_le_u64(&mut f, 0);
 
         // Provide fewer than the required 36 bytes for one block
-        f.write_all(&vec![0u8; 24]).unwrap();
+        f.write_all(&[0u8; 24]).unwrap();
         f.flush().unwrap();
     }
 
@@ -217,6 +219,7 @@ fn gguf_device_views_q5_1_overflow_detected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject F32 tensor offsets that do not satisfy element alignment.
 #[test]
 fn gguf_device_views_misaligned_offset_rejected() {
     // F32 requires 4-byte alignment; put at offset 2 to force misalignment
@@ -236,7 +239,7 @@ fn gguf_device_views_misaligned_offset_rejected() {
         write_le_u64(&mut f, 2); // misaligned
 
         // Data region long enough but offset is misaligned
-        f.write_all(&vec![0u8; 8]).unwrap();
+        f.write_all(&[0u8; 8]).unwrap();
         f.flush().unwrap();
     }
 
@@ -250,6 +253,7 @@ fn gguf_device_views_misaligned_offset_rejected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject unsupported dtype identifiers instead of constructing device views.
 #[test]
 fn gguf_device_views_unknown_dtype_rejected() {
     // Unknown dtype should surface a clear error
@@ -267,7 +271,7 @@ fn gguf_device_views_unknown_dtype_rejected() {
         write_le_u64(&mut f, 0);
 
         // Supply some bytes; loader should fail before size checks
-        f.write_all(&vec![0u8; 16]).unwrap();
+        f.write_all(&[0u8; 16]).unwrap();
         f.flush().unwrap();
     }
 
@@ -281,6 +285,7 @@ fn gguf_device_views_unknown_dtype_rejected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject tensor starts outside the available weight payload.
 #[test]
 fn gguf_device_views_offset_beyond_end_rejected() {
     // Quantized dtype should still require both offset < data_len and full block fit
@@ -300,7 +305,7 @@ fn gguf_device_views_offset_beyond_end_rejected() {
         write_le_u64(&mut f, 4); // offset exactly at end of 4-byte data region
 
         // Provide 4 bytes only; offset==len should be rejected
-        f.write_all(&vec![0u8; 4]).unwrap();
+        f.write_all(&[0u8; 4]).unwrap();
         f.flush().unwrap();
     }
 
@@ -314,6 +319,7 @@ fn gguf_device_views_offset_beyond_end_rejected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Reject F16 tensor offsets that are not aligned to two bytes.
 #[test]
 fn gguf_device_views_f16_misaligned_offset_rejected() {
     // F16 requires 2-byte alignment; put at offset 1 to force misalignment
@@ -333,7 +339,7 @@ fn gguf_device_views_f16_misaligned_offset_rejected() {
         write_le_u64(&mut f, 1); // misaligned for F16
 
         // Data region long enough but offset is misaligned
-        f.write_all(&vec![0u8; 4]).unwrap();
+        f.write_all(&[0u8; 4]).unwrap();
         f.flush().unwrap();
     }
 
@@ -347,6 +353,7 @@ fn gguf_device_views_f16_misaligned_offset_rejected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Include each tensor's offset when validating its ending byte position.
 #[test]
 fn gguf_device_views_end_overflow_from_offset_rejected() {
     // Provide buffer length that is insufficient when starting from non-zero offset
@@ -367,7 +374,7 @@ fn gguf_device_views_end_overflow_from_offset_rejected() {
         write_le_u64(&mut f, offset);
 
         // Only 10 bytes in data region => overflow relative to offset
-        f.write_all(&vec![0u8; 10]).unwrap();
+        f.write_all(&[0u8; 10]).unwrap();
         f.flush().unwrap();
     }
 
@@ -381,6 +388,7 @@ fn gguf_device_views_end_overflow_from_offset_rejected() {
     let _ = std::fs::remove_file(&path);
 }
 
+/// Include quantized block sizes and offsets when validating tensor bounds.
 #[test]
 fn gguf_device_views_quantized_offset_overflow_rejected() {
     // Use a larger quantized block type to ensure offset + block size check
@@ -401,7 +409,7 @@ fn gguf_device_views_quantized_offset_overflow_rejected() {
         write_le_u64(&mut f, offset);
 
         // Provide less than offset + required 292 bytes
-        f.write_all(&vec![0u8; 200]).unwrap();
+        f.write_all(&[0u8; 200]).unwrap();
         f.flush().unwrap();
     }
 

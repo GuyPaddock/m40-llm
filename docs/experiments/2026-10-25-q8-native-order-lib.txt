@@ -1,0 +1,26 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.27s
+     Running unittests src/lib.rs (target/debug/deps/m40_llm-a01475ebb6730b26)
+
+running 17 tests
+test infer::execution_weights::cache::tests::test_invalid_preparation_plans_do_not_upload ... ok
+test infer::execution_weights::cache::tests::test_partial_cache_preparation_failure_releases_prior_tensors ... ok
+test infer::execution_weights::device::tests::test_partial_device_allocation_failure_frees_uploaded_plane ... ok
+test infer::execution_weights::runtime::tests::test_execution_config_rejects_invalid_modes_and_budgets ... ok
+test infer::execution_weights::runtime::tests::test_layout_policy_preserves_projection_families_and_bounds ... ok
+test infer::execution_weights::tests::test_execution_keys_separate_model_tensor_shape_offset_and_layout ... ok
+test infer::execution_weights::tests::test_gguf_sources_reject_unsupported_shapes_and_dtypes ... ok
+test infer::execution_weights::tests::test_input_tiles_preserve_bytes_and_zero_padding ... ok
+test infer::execution_weights::tests::test_invalid_plans_and_host_regions_are_rejected ... ok
+test infer::execution_weights::tests::test_layout_plans_account_for_tails_alignment_and_planes ... ok
+test infer::execution_weights::tests::test_partial_allocation_failure_releases_prior_planes ... ok
+test infer::execution_weights::tests::test_partial_upload_failure_releases_all_allocated_planes ... ok
+test infer::execution_weights::tests::test_prepared_buffers_own_data_and_release_all_planes ... ok
+test infer::execution_weights::tests::test_separate_launch_accepts_only_fixed_experiment_configs ... ok
+test infer::execution_weights::tests::test_separate_planes_preserve_every_source_byte ... ok
+test infer::execution_weights::tests::test_source_view_bounds_and_lossless_column_copy ... ok
+test infer::execution_weights::tests::test_tiled_launch_accepts_only_retained_vector_configs ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.15s

@@ -1,0 +1,564 @@
+{
+  "passes_audit": true,
+  "primary_intervals": 120,
+  "stages": [
+    {
+      "stage": "qkv_split",
+      "source": "5719ffcbfbcf57c91acad67c691120ffc95ecc01",
+      "executable": "517829832eea508f4c71f10e442a817306ef3886e90b8657c7c36f48970f43eb",
+      "pairs": 30,
+      "validation_cases": 6,
+      "gpu_boundary_samples": 60,
+      "profile_fraction": 0.070945564817451,
+      "additional_prepared_bytes": 5570560,
+      "screens": [
+        {
+          "layer_id": 0,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.033458535119232025,
+              -0.001471892845813949
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.036959999799728395,
+            "control_median_ms": 0.036627200245857236,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.03690559864044189,
+                0.036959999799728395
+              ],
+              [
+                0.036236798763275145,
+                0.03749119937419891
+              ],
+              [
+                0.03665600121021271,
+                0.036934399604797365
+              ],
+              [
+                0.03618879914283753,
+                0.037436801195144656
+              ],
+              [
+                0.036627200245857236,
+                0.036908799409866334
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.009004316982534344
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.0006442054552621146
+        },
+        {
+          "layer_id": 0,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.025137167706401398,
+              -0.007106040752050458
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.14790079593658448,
+            "control_median_ms": 0.14619200229644774,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.14665600061416625,
+                0.147705602645874
+              ],
+              [
+                0.14595520496368408,
+                0.14833279848098754
+              ],
+              [
+                0.1463647961616516,
+                0.14790079593658448
+              ],
+              [
+                0.14557119607925414,
+                0.14932479858398437
+              ],
+              [
+                0.14619200229644774,
+                0.14770879745483398
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.011553647357445018
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.0008285739228860445
+        },
+        {
+          "layer_id": 17,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.04075560346658336,
+              0.012199374906730842
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.036985599994659425,
+            "control_median_ms": 0.036697599291801455,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.03712320029735565,
+                0.03696959912776947
+              ],
+              [
+                0.036160001158714296,
+                0.03764480054378509
+              ],
+              [
+                0.036697599291801455,
+                0.03688960075378418
+              ],
+              [
+                0.03607679903507233,
+                0.03760960102081299
+              ],
+              [
+                0.037436801195144656,
+                0.036985599994659425
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.007786833332420029
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.00055646698926759
+        },
+        {
+          "layer_id": 17,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.02408114125499783,
+              -0.009413105538044086
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.14787839651107787,
+            "control_median_ms": 0.14614720344543458,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.14648640155792236,
+                0.14787839651107787
+              ],
+              [
+                0.14564800262451172,
+                0.14906879663467407
+              ],
+              [
+                0.1463744044303894,
+                0.14778879880905152
+              ],
+              [
+                0.14563519954681398,
+                0.14922879934310912
+              ],
+              [
+                0.14614720344543458,
+                0.1478271961212158
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.011706869336479464
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.0008396831186768816
+        },
+        {
+          "layer_id": 35,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.06595322958932492,
+              0.0007813987790190602
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.03752320110797882,
+            "control_median_ms": 0.03672640025615692,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.03674240112304687,
+                0.03752320110797882
+              ],
+              [
+                0.036099201440811156,
+                0.03752639889717102
+              ],
+              [
+                0.03672640025615692,
+                0.036748799681663516
+              ],
+              [
+                0.0360287994146347,
+                0.03857280015945434
+              ],
+              [
+                0.036883199214935304,
+                0.03685440123081207
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.02123488477246327
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.001536840237443271
+        },
+        {
+          "layer_id": 35,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.025034712841253026,
+              -0.009450742130915568
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.14850879907608033,
+            "control_median_ms": 0.14625920057296754,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.14625920057296754,
+                0.1485535979270935
+              ],
+              [
+                0.14570879936218262,
+                0.14850879907608033
+              ],
+              [
+                0.1463744044303894,
+                0.1478271961212158
+              ],
+              [
+                0.14630719423294067,
+                0.15006400346755983
+              ],
+              [
+                0.14623359441757203,
+                0.14762879610061647
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": -0.015147913908860944
+          },
+          "optimistic_profile_weighted_e2e_gain": -0.0010900173805659108
+        }
+      ],
+      "max_cpu_error": 0.000003848488532298688
+    },
+    {
+      "stage": "output_split",
+      "source": "5719ffcbfbcf57c91acad67c691120ffc95ecc01",
+      "executable": "517829832eea508f4c71f10e442a817306ef3886e90b8657c7c36f48970f43eb",
+      "pairs": 30,
+      "validation_cases": 6,
+      "gpu_boundary_samples": 60,
+      "profile_fraction": 0.05158930127407999,
+      "additional_prepared_bytes": 4456448,
+      "screens": [
+        {
+          "layer_id": 0,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.021857978512315746,
+              0.05822244645497299
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.026169601082801818,
+            "control_median_ms": 0.026697599887847902,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.027510398626327516,
+                0.025996801257133485
+              ],
+              [
+                0.026348799467086792,
+                0.02693760097026825
+              ],
+              [
+                0.026697599887847902,
+                0.026169601082801818
+              ],
+              [
+                0.02611519992351532,
+                0.026464000344276428
+              ],
+              [
+                0.026800000667572023,
+                0.025968000292778015
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.02017603567496007
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.0010213243694658924
+        },
+        {
+          "layer_id": 0,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              0.010331827957427375,
+              0.044862153069431754
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.10454080104827881,
+            "control_median_ms": 0.10702400207519532,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.10733439922332763,
+                0.10437120199203491
+              ],
+              [
+                0.10639359951019287,
+                0.1053056001663208
+              ],
+              [
+                0.10903680324554443,
+                0.1043552041053772
+              ],
+              [
+                0.1065440058708191,
+                0.10514559745788574
+              ],
+              [
+                0.10702400207519532,
+                0.10454080104827881
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.02375341495393468
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.001198423993169273
+        },
+        {
+          "layer_id": 17,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.008590366349517375,
+              0.034009400300105685
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.026041600108146667,
+            "control_median_ms": 0.026633599400520326,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.02683199942111969,
+                0.026041600108146667
+              ],
+              [
+                0.02622080147266388,
+                0.026447999477386474
+              ],
+              [
+                0.0267551988363266,
+                0.02587519884109497
+              ],
+              [
+                0.026256000995635985,
+                0.026332798600196838
+              ],
+              [
+                0.026633599400520326,
+                0.02595840096473694
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.02273283092878997
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.0011480194943440658
+        },
+        {
+          "layer_id": 17,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              0.009687683923792267,
+              0.02896989789712956
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.10460799932479858,
+            "control_median_ms": 0.10671360492706299,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.10740799903869629,
+                0.10438400506973267
+              ],
+              [
+                0.10605759620666504,
+                0.10504000186920166
+              ],
+              [
+                0.10671360492706299,
+                0.10447039604187011
+              ],
+              [
+                0.1062816023826599,
+                0.10520960092544555
+              ],
+              [
+                0.10718079805374145,
+                0.10460799932479858
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.02012853334214615
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.001018964813917389
+        },
+        {
+          "layer_id": 35,
+          "rows": 1,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.004359857548360102,
+              0.05375279532322397
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.026118400692939758,
+            "control_median_ms": 0.026767998933792114,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.027225598692893982,
+                0.025836798548698425
+              ],
+              [
+                0.026307201385498045,
+                0.026422399282455444
+              ],
+              [
+                0.026767998933792114,
+                0.026118400692939758
+              ],
+              [
+                0.026265600323677064,
+                0.02637760043144226
+              ],
+              [
+                0.02736639976501465,
+                0.025987198948860167
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.02487128704737085
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.0012535239534521292
+        },
+        {
+          "layer_id": 35,
+          "rows": 4,
+          "result": {
+            "bootstrap_gain_ci95": [
+              -0.0012937308022252791,
+              0.028377021256764
+            ],
+            "bootstrap_resamples": 10000,
+            "bootstrap_seed": 0,
+            "candidate_median_ms": 0.10474239587783814,
+            "control_median_ms": 0.10645760297775268,
+            "interpretation": "complete native projection micro screen; not FFN, full generation, measured bandwidth or E2E qualification",
+            "pairs": [
+              [
+                0.1078495979309082,
+                0.10487359762191772
+              ],
+              [
+                0.10619200468063354,
+                0.10474239587783814
+              ],
+              [
+                0.10706880092620849,
+                0.10443520545959473
+              ],
+              [
+                0.10622400045394897,
+                0.10636160373687745
+              ],
+              [
+                0.10645760297775268,
+                0.1041983962059021
+              ]
+            ],
+            "passes_micro_screen": false,
+            "throughput_gain": 0.01637548086941809
+          },
+          "optimistic_profile_weighted_e2e_gain": 0.0008318799536788379
+        }
+      ],
+      "max_cpu_error": 0.0000011851883057190093
+    }
+  ],
+  "control_bits_equal": true,
+  "qualified_prepared_cache_unchanged": true,
+  "tracked_device_bytes_after": 0,
+  "scope": "fresh common-source screens only; initial QKV not pooled; incomplete output has no primary pairs",
+  "bootstrap_scope": "seeded benchmark intervals recorded; raw medians/gains and possible resample bounds independently checked",
+  "combined": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "independent_stages_pass": false,
+      "optimistic_combined_e2e_gain": null,
+      "permits_runtime_quality": false
+    }
+  ],
+  "permits_runtime_quality": false,
+  "measured_http_gain": null,
+  "defaults_changed": false
+}

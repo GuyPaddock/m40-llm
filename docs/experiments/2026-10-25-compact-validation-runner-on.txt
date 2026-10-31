@@ -1,0 +1,26 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.57s
+     Running unittests examples/model_quality/main.rs (target/debug/examples/model_quality-dc44eca642ae934c)
+
+running 16 tests
+test activations::tests::test_model_research_execution_identity_and_sequential_preflight ... ok
+test argument_tests::test_compact_comparison_arguments_reject_other_transforms ... ok
+test argument_tests::test_layer_ranking_arguments_are_explicit_and_exclusive ... ok
+test compact::tests::test_compact_logit_gate_rejects_hidden_non_top_drift ... ok
+test compact::tests::test_compact_preflight_binds_actual_export_and_source_mask ... ok
+test compact::tests::test_compact_preflight_rejects_stale_or_altered_export_records ... ok
+test compact::tests::test_real_compact_model_matches_masked_source_logits_and_allocations ... ok
+test layers::tests::test_ranked_variant_identity_and_frozen_mask_preflight ... ok
+test layers::tests::test_ranking_mask_trials_reset_state_and_preserve_source_allocation ... ok
+test records::tests::test_quality_conclusions_require_passing_reference ... ok
+test records::tests::test_report_keeps_rows_and_refuses_overwrite ... ok
+test run::tests::test_preflight_rejects_truncation_and_tokenizer_mismatch ... ok
+test step_timing::tests::test_paired_step_records_preserve_scope ... ok
+test step_timing::tests::test_paired_steps_require_the_declared_reference_mask ... ok
+test step_timing::tests::test_step_trace_forces_prefixes_and_resets ... ok
+test tasks::tests::test_task_records_use_explicit_dense_reference ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 122.09s
+

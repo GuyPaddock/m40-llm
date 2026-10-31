@@ -476,6 +476,7 @@ impl LoadedModel {
     }
 
     pub fn validate_standard_layers(&self) -> Result<(usize, usize)> {
+        self.layer_mask.validate(self.model_config.block_count)?;
         let layer_count = self.model_config.block_count as usize;
         if layer_count == 0 {
             anyhow::bail!("model_config.block_count must be > 0");

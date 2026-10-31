@@ -1,0 +1,333 @@
+{
+  "passes_audit": true,
+  "source": "dfb64513f9a48e56db32c5838e492537ceaf5637",
+  "executable_sha256": "5e6f775b1f993225d1e7a4b68fe667a60453bd0af01aebdcbdd12fc02a557fcd",
+  "pairs": 30,
+  "serial_primary_intervals": 150,
+  "gpu_boundaries": 60,
+  "tracked_device_bytes_after": 0,
+  "runtime_integration_allowed": false,
+  "screens": [
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 0,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.23057652820297858,
+          -0.22690313811809137
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.2695775985717773,
+        "control_median_ms": 0.20792639255523682,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.20838398933410646,
+            0.26979520320892336
+          ],
+          [
+            0.2075040102005005,
+            0.2695647954940796
+          ],
+          [
+            0.20792639255523682,
+            0.2694144010543823
+          ],
+          [
+            0.20744640827178956,
+            0.26961278915405273
+          ],
+          [
+            0.20840959548950194,
+            0.2695775985717773
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.22869558280498348
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 0,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.2933520382067112,
+          -0.2918664157203854
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.1542624473571776,
+        "control_median_ms": 0.8161791801452637,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.8173855781555176,
+            1.1542816162109375
+          ],
+          [
+            0.8158176422119141,
+            1.153983974456787
+          ],
+          [
+            0.8161791801452637,
+            1.1542624473571776
+          ],
+          [
+            0.815833568572998,
+            1.1545120239257813
+          ],
+          [
+            0.8166912078857422,
+            1.1535936355590821
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.29289982359384226
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 17,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.2326905034682828,
+          -0.22467559841516993
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.2700000047683716,
+        "control_median_ms": 0.20792000293731688,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.20933759212493896,
+            0.2700000047683716
+          ],
+          [
+            0.2075551986694336,
+            0.270470404624939
+          ],
+          [
+            0.20810561180114745,
+            0.2698240041732788
+          ],
+          [
+            0.20744640827178956,
+            0.2698879957199097
+          ],
+          [
+            0.20792000293731688,
+            0.2709728002548218
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.22992592864697203
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 17,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.29359580333038415,
+          -0.2874188088466355
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.1545344352722169,
+        "control_median_ms": 0.8161664009094238,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.8161664009094238,
+            1.1545151710510253
+          ],
+          [
+            0.8155679702758789,
+            1.1545344352722169
+          ],
+          [
+            0.8231167793273926,
+            1.1551199913024903
+          ],
+          [
+            0.8155679702758789,
+            1.1542752265930176
+          ],
+          [
+            0.8169919967651367,
+            1.1563936233520509
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.2930774726377151
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 35,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.2317931207898255,
+          -0.2282429888316876
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 0.26998400688171387,
+        "control_median_ms": 0.20785601139068605,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.20814719200134277,
+            0.269705605506897
+          ],
+          [
+            0.20743680000305176,
+            0.26998400688171387
+          ],
+          [
+            0.20798399448394775,
+            0.26998400688171387
+          ],
+          [
+            0.20759038925170897,
+            0.27022719383239746
+          ],
+          [
+            0.20785601139068605,
+            0.26981439590454104
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.23011731772040667
+      },
+      "rows": 1,
+      "runtime_integration_allowed": false
+    },
+    {
+      "kind": "ffn_read_cub_screen",
+      "layer_id": 35,
+      "one_row_read_gain_gate_percent": 10,
+      "result": {
+        "bootstrap_gain_ci95": [
+          -0.2943950140950926,
+          -0.29181625000846667
+        ],
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 0,
+        "candidate_median_ms": 1.1551520347595214,
+        "control_median_ms": 0.81692476272583,
+        "interpretation": "library checksum reference only; not FFN or measured DRAM cost",
+        "pairs": [
+          [
+            0.81692476272583,
+            1.1554176330566406
+          ],
+          [
+            0.8160832405090332,
+            1.1551520347595214
+          ],
+          [
+            0.8176383972167969,
+            1.1545568466186524
+          ],
+          [
+            0.8168383598327636,
+            1.1546175956726075
+          ],
+          [
+            0.8174495697021484,
+            1.1585087776184082
+          ]
+        ],
+        "passes_read_screen": false,
+        "throughput_gain": -0.2927989233071846
+      },
+      "rows": 4,
+      "runtime_integration_allowed": false
+    }
+  ],
+  "cases": [
+    {
+      "layer_id": 0,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35193920135498047,
+        "cub_segmented_read_checksum": 0.2695775985717773,
+        "gate_up_swiglu": 0.22131199836730958,
+        "isolated_down": 0.13141440153121947,
+        "weight_read_checksum": 0.20792639255523682
+      }
+    },
+    {
+      "layer_id": 0,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5294048309326171,
+        "cub_segmented_read_checksum": 1.1542624473571776,
+        "gate_up_swiglu": 0.9890591621398925,
+        "isolated_down": 0.5704063892364502,
+        "weight_read_checksum": 0.8161791801452637
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.3523583889007568,
+        "cub_segmented_read_checksum": 0.2700000047683716,
+        "gate_up_swiglu": 0.22114880084991456,
+        "isolated_down": 0.1315775990486145,
+        "weight_read_checksum": 0.20792000293731688
+      }
+    },
+    {
+      "layer_id": 17,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5120608329772949,
+        "cub_segmented_read_checksum": 1.1545344352722169,
+        "gate_up_swiglu": 0.9701248168945312,
+        "isolated_down": 0.5539648056030273,
+        "weight_read_checksum": 0.8161664009094238
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 1,
+      "median_gpu_ms": {
+        "complete": 0.35195839405059814,
+        "cub_segmented_read_checksum": 0.26998400688171387,
+        "gate_up_swiglu": 0.2211456060409546,
+        "isolated_down": 0.13143680095672608,
+        "weight_read_checksum": 0.20785601139068605
+      }
+    },
+    {
+      "layer_id": 35,
+      "rows": 4,
+      "median_gpu_ms": {
+        "complete": 1.5314047813415528,
+        "cub_segmented_read_checksum": 1.1551520347595214,
+        "gate_up_swiglu": 0.9754464149475097,
+        "isolated_down": 0.5586751937866211,
+        "weight_read_checksum": 0.81692476272583
+      }
+    }
+  ],
+  "interpretation": "source-equivalent integer read reference, not inference or measured DRAM cost"
+}

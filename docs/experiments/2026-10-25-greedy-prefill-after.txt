@@ -1,0 +1,15 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-m07-parent-cDC8Sb)
+    Finished `release` profile [optimized] target(s) in 10.52s
+     Running tests/greedy_packed_prefill.rs (target/release/deps/greedy_packed_prefill-444b5ad8b3f8413c)
+
+running 1 test
+test test_gpu_greedy_honors_explicit_packed_prefix_bound ... [cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.340
+[generate] mapped 2 standard layers d_model=64 hidden_dim=128
+[generate] mapped 2 standard layers d_model=64 hidden_dim=128
+[generate] packed prefix prefill enabled layers=2
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s

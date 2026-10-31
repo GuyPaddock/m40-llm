@@ -5,6 +5,8 @@ use crate::cuda::{
     CudaContext, CudaEvent, CudaGraphExec, CudaStream, DeviceBuffer, ExactBlockStagingWorkspace,
 };
 #[cfg(feature = "cuda")]
+use crate::gpu_profile::{self, DecodeGpuProfiler, GpuStageSpan};
+#[cfg(feature = "cuda")]
 use crate::infer::LoadedModel;
 #[cfg(feature = "cuda")]
 use crate::timing;
@@ -105,6 +107,7 @@ pub struct DecodeSession {
     d_logits: Option<DeviceBuffer>,
     d_norm_hidden: Option<DeviceBuffer>,
     d_greedy_token: Option<DeviceBuffer>,
+    d_argmax_partials: Option<DeviceBuffer>,
     d_graph_position: Option<DeviceBuffer>,
     d_graph_seq_len: Option<DeviceBuffer>,
     exact_block_staging: Option<ExactBlockStagingWorkspace>,
@@ -115,7 +118,9 @@ pub struct DecodeSession {
     step: usize,
     logged_full_forward: bool,
     last_prefill_sync_diag: Option<PrefillSyncDiagTimings>,
+    last_prefill_weight_bytes: Option<usize>,
     last_forward_sync_diag: Option<PrefillSyncDiagTimings>,
+    gpu_profiler: Option<DecodeGpuProfiler>,
 }
 
 #[cfg(feature = "cuda")]
@@ -178,6 +183,44 @@ impl DecodeSession {
         d_x_tag: &'static str,
         d_out_tag: &'static str,
     ) -> Result<Self> {
+        anyhow::ensure!(
+            (model.q8_ffn.is_native() && model.q8_prefill.is_native()) || !decode_graph_enabled(),
+            "experimental Q8 backends require M40LLM_DECODE_GRAPH=0; graph capture is not validated"
+        );
+        anyhow::ensure!(!model.layer_mask.has_skipped_layers() || !decode_graph_enabled(),
+            "diagnostic layer masks require M40LLM_DECODE_GRAPH=0; masked graph replay is not validated");
+        if model.activation_research.is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled(),
+                "activation research requires M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
+        }
+        if model.layer_influence.is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled(),
+                "layer influence capture requires M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
+        }
+        if model.ffn_capture.is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled() && sequence_id == 0,
+                "FFN capture requires sequence 0, M40LLM_DECODE_GRAPH=0 and explicit dense --kv-compress-mode off");
+        }
+        if model.q8_execution.portfolio_arm().is_some() {
+            anyhow::ensure!(!decode_graph_enabled() && !kv_compression.mode.is_enabled()
+                && sequence_id == 0 && can_forward,
+                "portfolio research requires full forward, sequence 0, graph off and explicit dense KV");
+            #[cfg(feature = "server")]
+            anyhow::ensure!(
+                !crate::decode_batch::server_batch_decode_requested(),
+                "portfolio research does not support batched server scheduling"
+            );
+        }
+        let gpu_profiler =
+            DecodeGpuProfiler::from_env(&model.cuda, model.model_config.block_count)?;
+        if gpu_profiler.is_some() {
+            anyhow::ensure!(
+                !decode_graph_enabled(),
+                "stage profiling does not support CUDA Graph capture; set M40LLM_DECODE_GRAPH=0"
+            );
+            #[cfg(feature = "server")]
+            anyhow::ensure!(!crate::decode_batch::server_batch_decode_requested(), "stage profiling currently requires serialized generation, not the batched scheduler");
+        }
         if can_forward && !model.kv_cache_can_address_layer_sequence(0, sequence_id) {
             anyhow::bail!(
                 "decode session sequence_id {sequence_id} is not addressable by KV cache"
@@ -226,6 +269,20 @@ impl DecodeSession {
                 (Some(d_logits), d_norm_hidden, Some(d_greedy_token))
             }
             Err(_) => (None, None, None),
+        };
+        // Equal scratch residency across all research arms, not only argmax-on.
+        let d_argmax_partials = if model.q8_execution.portfolio_arm().is_some() {
+            let vocab = model.map_lm_head()?.3;
+            let bytes = crate::cuda::CudaContext::argmax_f32_partitioned_scratch_bytes(
+                u32::try_from(vocab)?,
+            )?;
+            Some(DeviceBuffer::new_tagged(
+                &model.cuda,
+                bytes,
+                "decode_session:portfolio_argmax",
+            )?)
+        } else {
+            None
         };
         let graph_params = if can_forward && decode_graph_enabled() {
             Some((
@@ -278,6 +335,7 @@ impl DecodeSession {
             d_logits,
             d_norm_hidden,
             d_greedy_token,
+            d_argmax_partials,
             d_graph_position,
             d_graph_seq_len,
             exact_block_staging,
@@ -288,7 +346,9 @@ impl DecodeSession {
             step: 0,
             logged_full_forward: false,
             last_prefill_sync_diag: None,
+            last_prefill_weight_bytes: None,
             last_forward_sync_diag: None,
+            gpu_profiler,
         })
     }
 
@@ -363,6 +423,9 @@ impl DecodeSession {
     pub unsafe fn load_next_unprocessed_token(&mut self, ids: &[u32]) -> Result<Option<usize>> {
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -412,9 +475,17 @@ impl DecodeSession {
     pub fn logits_for_packed_prefix_then_ids(
         &mut self,
         ids: &[u32],
-        mut on_token_logits: impl FnMut(&[f32]),
+        on_token_logits: impl FnMut(&[f32]),
     ) -> Result<Vec<f32>> {
+        self.prefill_packed_prefix_ids(ids)?;
+        self.logits_for_ids(ids, on_token_logits)
+    }
+
+    /// Prefill all but the final prompt token at original absolute positions.
+    /// The final token remains on the caller's normal logits or GPU-greedy path.
+    pub fn prefill_packed_prefix_ids(&mut self, ids: &[u32]) -> Result<()> {
         self.last_prefill_sync_diag = None;
+        self.last_prefill_weight_bytes = None;
         if !self.can_forward {
             anyhow::bail!("packed prefill requires full-layer forward");
         }
@@ -428,7 +499,7 @@ impl DecodeSession {
             );
         }
         if ids.len() == 1 {
-            return self.logits_for_ids(ids, on_token_logits);
+            return Ok(());
         }
         let d_out = self
             .d_out
@@ -437,6 +508,12 @@ impl DecodeSession {
             .as_mut_ptr();
         let prefix_len = ids.len() - 1;
         let prefill_start = std::time::Instant::now();
+        let prefill_profile = self
+            .gpu_profiler
+            .as_mut()
+            .map(|profiler| profiler.begin_prefill(prefix_len))
+            .transpose()?
+            .flatten();
         let sync_diag = PrefillSyncDiag::start(
             &self.model().cuda,
             format!("{}.packed_prefill.ids_len_{}", self.log_prefix, ids.len()),
@@ -451,6 +528,12 @@ impl DecodeSession {
                 },
             ])
         }?;
+        if let Some(scope) = prefill_profile {
+            self.gpu_profiler
+                .as_mut()
+                .expect("active prefill profiler")
+                .finish_prefill(scope, prefix_len)?;
+        }
         if let Some(sync_diag) = sync_diag {
             self.last_prefill_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
         }
@@ -468,7 +551,19 @@ impl DecodeSession {
             self.logged_full_forward = true;
         }
         self.processed_len = prefix_len;
-        self.logits_for_ids(ids, |logits| on_token_logits(logits))
+        let capacity = {
+            let guard = self
+                .model()
+                .forward_workspace
+                .lock()
+                .map_err(|_| anyhow::anyhow!("poisoned prefill workspace"))?;
+            guard
+                .as_ref()
+                .and_then(|workspace| workspace.ptrs().q8_prefill_weight)
+                .map(|view| view.bytes)
+        };
+        self.last_prefill_weight_bytes = capacity;
+        Ok(())
     }
 
     pub fn logits_for_compressed_chunked_prefill_ids(
@@ -542,6 +637,8 @@ impl DecodeSession {
         ids: &[u32],
         mut on_token_logits: impl FnMut(&[f32]),
     ) -> Result<(Vec<f32>, usize)> {
+        anyhow::ensure!(!self.model().layer_mask.has_skipped_layers(),
+            "masked packed-then-compress prefill is not supported; use sequential or packed-prefix prefill");
         self.last_prefill_sync_diag = None;
         if !self.can_forward {
             anyhow::bail!("packed-then-compress prefill requires full-layer forward");
@@ -639,6 +736,12 @@ impl DecodeSession {
         self.last_prefill_sync_diag
     }
 
+    /// Actual temporary projection-weight capacity used by the last packed
+    /// prefix, retained for reporting after one-row decode releases that scratch.
+    pub fn prefill_temporary_weight_bytes(&self) -> Option<usize> {
+        self.last_prefill_weight_bytes
+    }
+
     pub fn forward_sync_diag_timings(&self) -> Option<PrefillSyncDiagTimings> {
         self.last_forward_sync_diag
     }
@@ -670,6 +773,9 @@ impl DecodeSession {
         }
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -688,7 +794,19 @@ impl DecodeSession {
                 eprintln!("[{}] token id {}", self.log_prefix, tok_id);
             }
 
+            let scope = self
+                .gpu_profiler
+                .as_mut()
+                .map(|profiler| profiler.begin_for_ids(ids.len(), token_idx))
+                .transpose()?
+                .flatten();
             let token_logits = unsafe { self.logits_for_token(tok_id, token_idx, start)? };
+            if let Some(scope) = scope {
+                self.gpu_profiler
+                    .as_mut()
+                    .expect("active profiler")
+                    .finish_token(scope)?;
+            }
             on_token_logits(&token_logits);
             timing::timing_log!(
                 token_start.elapsed(),
@@ -719,6 +837,9 @@ impl DecodeSession {
         }
         if self.processed_len > ids.len() {
             self.processed_len = 0;
+            if let Some(profiler) = self.gpu_profiler.as_mut() {
+                profiler.reset_prompt();
+            }
             if self.model().kv_cache.is_some() {
                 self.model().reset_kv_cache()?;
             }
@@ -734,6 +855,12 @@ impl DecodeSession {
         for (token_idx, &tok_id_u32) in ids.iter().enumerate().skip(start) {
             let token_start = std::time::Instant::now();
             let tok_id = tok_id_u32 as u64;
+            let scope = self
+                .gpu_profiler
+                .as_mut()
+                .map(|profiler| profiler.begin_for_ids(ids.len(), token_idx))
+                .transpose()?
+                .flatten();
             if token_idx == final_idx {
                 next = Some(unsafe { self.greedy_token_for_token(tok_id, token_idx, start)? });
             } else if self.can_forward {
@@ -747,6 +874,12 @@ impl DecodeSession {
                     .max_by(|a, b| f32::total_cmp(&a.1, &b.1))
                     .ok_or_else(|| anyhow::anyhow!("empty logits"))?;
                 next = Some(idx as u32);
+            }
+            if let Some(scope) = scope {
+                self.gpu_profiler
+                    .as_mut()
+                    .expect("active profiler")
+                    .finish_token(scope)?;
             }
             timing::timing_log!(
                 token_start.elapsed(),
@@ -774,7 +907,9 @@ impl DecodeSession {
         start: usize,
     ) -> Result<Vec<f32>> {
         let embed_start = std::time::Instant::now();
+        let gpu_stage = GpuStageSpan::begin("embedding", CudaStream::Decode)?;
         (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        gpu_stage.finish()?;
         timing::timing_log!(
             embed_start.elapsed(),
             "{}.token.{token_idx}.embedding_load",
@@ -825,6 +960,7 @@ impl DecodeSession {
             if let Some(sync_diag) = forward_sync_diag {
                 self.last_forward_sync_diag = Some(sync_diag.finish(&self.model().cuda)?);
             }
+            gpu_profile::set_layer(None);
             let logits = match self.d_logits.as_ref() {
                 Some(d_logits) => (*self.model).logits_from_hidden_into(
                     d_out as *const _,
@@ -865,7 +1001,9 @@ impl DecodeSession {
         start: usize,
     ) -> Result<u32> {
         let embed_start = std::time::Instant::now();
+        let gpu_stage = GpuStageSpan::begin("embedding", CudaStream::Decode)?;
         (*self.model).load_token_embedding_to_f32(tok_id, self.d_x.as_mut_ptr())?;
+        gpu_stage.finish()?;
         timing::timing_log!(
             embed_start.elapsed(),
             "{}.token.{token_idx}.embedding_load",
@@ -934,11 +1072,15 @@ impl DecodeSession {
             .d_greedy_token
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("missing d_greedy_token scratch"))?;
-        let token = (*self.model).greedy_token_from_hidden_into(
+        gpu_profile::set_layer(None);
+        let token = (*self.model).greedy_token_from_hidden_into_with_argmax_scratch(
             d_out as *const _,
             d_logits.as_mut_ptr(),
             self.d_norm_hidden.as_ref().map(DeviceBuffer::as_mut_ptr),
             d_token.as_mut_ptr(),
+            self.d_argmax_partials
+                .as_ref()
+                .map(|b| (b.as_mut_ptr(), b.bytes())),
         )?;
         timing::timing_log!(
             greedy_start.elapsed(),
@@ -968,6 +1110,9 @@ impl DecodeSession {
             .expect("d_out allocated when full forward is enabled")
             .as_mut_ptr();
         let _layers = self.forward_with_optional_graph(token_idx, d_out)?;
+        // No logits readback follows a prefix token. Finish its consumers
+        // before the next default-stream embedding upload overwrites d_x.
+        self.model().cuda.synchronize_stream(CudaStream::Decode)?;
         timing::timing_log!(
             forward_start.elapsed(),
             "{}.token.{token_idx}.forward_all_layers",
@@ -1094,7 +1239,7 @@ impl DecodeSession {
                 });
             }
             self.last_forward_used_graph = true;
-            Ok((*self.model).model_config.block_count as usize)
+            (*self.model).active_layer_count()
         } else {
             let _kv_runtime_guard =
                 crate::kv_compression::ScopedRuntimeConfig::new(self.kv_compression.clone());

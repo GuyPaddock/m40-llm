@@ -1,0 +1,22 @@
+
+Fatbin ptx code:
+================
+arch = sm_52
+code version = [8,7]
+host = linux
+compile_size = 64bit
+compressed
+ptxasOptions =
+
+Fatbin elf code:
+================
+arch = sm_52
+code version = [1,7]
+host = linux
+compile_size = 64bit
+
+Resource usage:
+ Common:
+  GLOBAL:24 CONSTANT[4]:8
+ Function mlp_gate_up_swiglu_f32xq8_0_gguf_decode_split4_kernel:
+  REG:32 STACK:0 SHARED:0 LOCAL:0 CONSTANT[2]:28 CONSTANT[0]:360 TEXTURE:0 SURFACE:0 SAMPLER:0
