@@ -19,6 +19,8 @@ mod fixture;
 #[cfg(all(feature = "cuda", nvcc))]
 mod layers;
 #[cfg(all(feature = "cuda", nvcc))]
+mod lossless_capture;
+#[cfg(all(feature = "cuda", nvcc))]
 mod prefill_drift;
 #[cfg(all(feature = "cuda", nvcc))]
 mod prepared_drift;
@@ -73,6 +75,9 @@ impl SplitChoice {
     about = "Explicit model-variant quality, loss, and resident generation timing; not HTTP throughput"
 )]
 struct Args {
+    /// Capture fixed dense FP16 KV fixtures and evaluate the lossless CPU codec.
+    #[arg(long, conflicts_with_all=["q8_runtime_candidate","should_diagnose_prefill","capture_ffn_inputs","q8_prefix_drift","compact_export_report","skip_layers","rank_layers","layer_ranking","remove_layer_count","capture_activations","activation_calibration","activation_target","step_timing_trials"])]
+    capture_lossless_kv: Option<PathBuf>,
     #[arg(long)]
     reference_model: PathBuf,
     #[arg(long)]

@@ -1,0 +1,10 @@
+4666504f780987f1a8bdcc53f96f3969d19ea72d96a72817841df7c099dffa25  examples/model_quality/main.rs
+87ba1392f0fd79ec96cffad0b5d38bcf9385da12a23527eec4daac4baabeb2e6  examples/model_quality/run.rs
+91fb39365ebbd092aa52621bf33fc6923b8490b62b71fa31b561b1c503063ea1  examples/model_quality/lossless_capture/mod.rs
+76c1298452baad1ed1a21c04e69c35291bc96544ac33a51033bb861e8d8b5122  examples/model_quality/lossless_capture/snapshot.rs
+f463a65ea9188d11f86530c408a2f47519bad2fcb8b1662dacd1b1b6becd449f  examples/model_quality/lossless_capture/tests.rs
+ab7a51e5469d327a06d440260f28fa6bbd4ff55ef321dac07cdb6bd4aca6f025  docs/experiments/2026-10-31-lossless-kv-capture-clippy-final.log.gz
+27323adec7aada9eefb4d522a0d32cc3d982e2c8c75e2e3c17e9f31698ac369d  docs/experiments/2026-10-31-lossless-kv-capture-clippy.log.gz
+27da4027a16097f81860f08b92dee4b7510905c3253ac0d72329175cf8ef428d  docs/experiments/2026-10-31-lossless-kv-capture-noncuda-example.log.gz
+32fe006526be52722710299848ee3f4c226a24d71ac20182ea048f40a4c6cbb0  docs/experiments/2026-10-31-lossless-kv-capture-order-final.log.gz
+d901bd2f654830d247fbec264e74fd6636a396e7de53d492c363c1bcdc3ef062  docs/experiments/2026-10-31-lossless-kv-capture-tests.log.gz

@@ -231,6 +231,9 @@ pub(super) fn validate_inputs(
 }
 
 pub fn evaluate(args: Args) -> Result<()> {
+    if args.capture_lossless_kv.is_some() {
+        return super::lossless_capture::capture(&args);
+    }
     if args.should_diagnose_prefill {
         return super::prefill_drift::diagnose(args);
     }
