@@ -6,6 +6,27 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [ShiftAdd result](experiments/2026-10-31-shiftadd-result.md) closes this
+bounded candidate without integration. Clean release source `2c8e985` completes
+36 cases, 108 comparisons and 540 pairs, all stable. ShiftAdd beats native
+Q4 in all 36 comparisons but loses to native and prepared Q8 in all 72.
+Its 4.1667% payload saving comes with 1.705 to 1.870 times Q4's weight MSE
+and 1.797 to 38.020 times its captured-projection MSE. Neither frozen
+advancement route passes. All 8,663,040 before/after encoded-reference output
+checks, guards, immutable storage, dispatch and cleanup checks pass. This
+is a projection result for the FP32 sign-add consumer, not a model-quality
+result or a rejection of all ShiftAdd variants. Conditional FFN/integration
+and model-quality work stops. Defaults remain unchanged.
+
+Five of nine bounded topic investigations are now complete across the
+independent branches: channel selection, FFN fusion, activation preparation,
+legacy graphs and ShiftAdd. The overall plan remains active. Next inspect
+the lossless FP16 KV protocol and retained real-cache capture paths in
+`research/1030-lossless-kv`; the other remaining topics are quantized KV,
+Soft-MTP and DualPace. All benchmark/build processes have exited.
+
+### ShiftAdd implementation evidence
+
 The [October 31 ShiftAdd audit](experiments/2026-10-31-shiftadd-audit.md)
 pins upstream `93a0b5111eb71c90f302f1268f1535f83e2e1f13` and retains licensed
 source excerpts. SA4_128 stores 256 weights in 138 bytes, a calculated
@@ -26,14 +47,13 @@ unsupported head4/default-compressed-KV smoke failure is retained separately.
 The [source-bound projection benchmark](experiments/2026-10-31-shiftadd-benchmark.md)
 now implements the [frozen comparison](experiments/2026-10-31-shiftadd-projection-protocol.md)
 with native Q4/Q8 and prepared Q8 controls. Its CPU example suite passes 65
-tests, the non-CUDA suite passes 230, and CUDA/server Clippy passes. Next run
-the clean release screen on the M40. No model-weight fit, timing,
-model-quality result or runtime integration exists yet.
+tests, the non-CUDA suite passes 230, and CUDA/server Clippy passes. The
+completed release measurements and admission decision are linked above.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`shiftadd`](experiments/2026-10-30-shiftadd-protocol.md).
-Its encoder and CUDA consumer are qualified; projection measurements are pending.
+Its encoder, CUDA consumer and controlled projection study are complete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

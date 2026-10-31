@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: ShiftAdd stops after projection screen
+
+The [bounded SA4_128 experiment](experiments/2026-10-31-shiftadd-result.md)
+completes 36 source-bound Qwen cases and 108 comparisons with 540 stable pairs.
+Throughput improves 27.11% to 125.85% over native Q4, but falls 48.80% to
+61.08% versus native Q8 and 69.42% to 73.82% versus prepared Q8. These are
+complete projection timings, not fused-FFN or whole-model results.
+
+The 4.1667% weight-payload saving versus Q4 accompanies higher fit error in
+all nine tensors and all 36 captured-input cases. Neither frozen latency nor
+memory/error admission route passes, so dependent integration and model
+quality work stops. Source `2c8e985`, raw events, arithmetic validation,
+preparation/residency costs, SASS and the reproducible summary are retained.
+All 8,663,040 output checks and cleanup pass. No runtime defaults change.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
