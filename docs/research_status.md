@@ -26,14 +26,21 @@ The exclusive `--ffn-rotated-preparation` benchmark now implements the fixed
 source and encoding hashes, before/after numerical/bit checks, equal residency
 and the 3% complete-operation gate. Its 66 CPU example tests, all-target
 CUDA/server Clippy and formatting pass; twenty old ignored hardware tests
-are not counted as passes. Next build clean release and run the serial M40
-grid. There is no performance or runtime integration claim yet.
+are not counted as passes. The
+[completed release result](experiments/2026-10-31-rotated-preparation-result.md)
+now closes this bounded topic as a positive isolated experiment with a missing
+rotated-model prerequisite. All 24 complete-operation cases pass the 3% gate,
+including three fresh twenty-pair confirmations. Savings are 5.24 to 9.88 us
+per batch with the fixed 256-channel consumer. All before/after numerical,
+exact bit, guard, immutable and cleanup checks pass. This is not a whole-model
+speedup; the selected Qwen has no eligible rotation and runtime dispatch stays
+unchanged. The next independent topic is legacy graphs.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`activation-preparation`](experiments/2026-10-30-activation-preparation-protocol.md).
-Its scoped protocol, producer and source-bound benchmark are recorded;
-measurements remain pending.
+Its scoped protocol, producer, source-bound benchmark and measured decision
+are recorded. No runtime integration follows without the stated prerequisites.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

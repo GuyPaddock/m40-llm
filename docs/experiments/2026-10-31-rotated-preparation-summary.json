@@ -1,0 +1,2683 @@
+{
+  "manifest": {
+    "revision": "0749dcfa38f97d017d364d30d51b7547690d4e39",
+    "executable_sha256": "f1668d9ea3a8c1d5355836e8dcd8ca74d887f59cbf916305231071f254c74f0f",
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "fixture_sha256": "eb51828ef778189567ae01fdd910659025c92ae6f5b2d76c989c314e650d0687",
+    "capture_report_sha256": "d9e55963e5872bbc48cfb3a1f7ac217429974d0a48237aabaaab207f5fc95801",
+    "model_setup_ms": 27236.054297,
+    "build_profile": "release",
+    "timing_boundary": "prepare or prepare plus consumer on decode stream; launches included; setup/copies/diagnostic synchronization excluded"
+  },
+  "completion": [
+    {
+      "cases": 24,
+      "comparisons": 48,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 55, 1113 MHz, 3004 MHz, 106 MiB, 98 %",
+        "processes": "149178, target/release/examples/q8_execution_bench, 102 MiB"
+      },
+      "is_complete": true,
+      "kind": "rotated_preparation_complete"
+    }
+  ],
+  "counts": [
+    {
+      "kind": "rotated_preparation_case_complete",
+      "count": 24
+    },
+    {
+      "kind": "rotated_preparation_comparison",
+      "count": 48
+    },
+    {
+      "kind": "rotated_preparation_complete",
+      "count": 1
+    },
+    {
+      "kind": "rotated_preparation_correctness",
+      "count": 24
+    },
+    {
+      "kind": "rotated_preparation_manifest",
+      "count": 1
+    },
+    {
+      "kind": "rotated_preparation_pair",
+      "count": 300
+    },
+    {
+      "kind": "rotated_preparation_warmup",
+      "count": 96
+    },
+    {
+      "kind": "rotated_preparation_weights",
+      "count": 6
+    },
+    {
+      "kind": "rotated_preparation_width_complete",
+      "count": 6
+    }
+  ],
+  "all_numerical_checks_passed": true,
+  "all_canonical_bits_equal": true,
+  "all_encoded_bytes_equal": true,
+  "all_consumer_bits_equal": true,
+  "all_case_ownership_passed": true,
+  "all_width_ownership_passed": true,
+  "maximum_rotation_error": 0.0000020633819950433008,
+  "maximum_output_error": 0.000011350415996425056,
+  "maximum_output_bound_fraction": 0.002705401692633612,
+  "maximum_throughput_variation": 0.030714230326284408,
+  "extended_screens": 0,
+  "confirmations": 3,
+  "all_comparisons_stable": true,
+  "all_comparisons_passed": true,
+  "scratch_bytes": [
+    28224,
+    1164352
+  ],
+  "peak_tracked_device_bytes": 4479618880,
+  "weight_preparation": [
+    {
+      "columns": 2048,
+      "kind": "rotated_preparation_weights",
+      "layer": 0,
+      "prepare_ms": 183.676893,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "1b3c4b167c9bfa12b314ad8887ad1e4c2066e3d6fe7fca4f8be9ce71ee6f73ee",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0006518568843603134,
+            "mean_squared_error": 2.0563772556594414E-8,
+            "rotated_f32_sha256": "c739aa51ba50e6d7e23e5a612ed5078e87b5b52e7ad803426461a1707a224538",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "2f3d63c4e1278f5b889e767dd170a84c2799f502785ea8f26868d66b8018a766"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 354574336,
+            "dtype": "Q8_0",
+            "name": "blk.0.ffn_gate.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa"
+          }
+        },
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "37c65a67169163bf39e5f68fb56b553d3949623836c5960408960e59070cca41",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0004298500716686249,
+            "mean_squared_error": 1.5863417185147405E-8,
+            "rotated_f32_sha256": "d5c2872d04d3ba2b39ff940f13f5be2d76c7338afa1ed0c8b9420da629039fa8",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "a4f93b2b22df2b0244409dd9c177619a259b402e910d9b1cf73c9c3f4ea896c7"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 378527744,
+            "dtype": "Q8_0",
+            "name": "blk.0.ffn_up.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c"
+          }
+        }
+      ],
+      "upload_ms": 0.557841,
+      "weight_bytes": 1114112
+    },
+    {
+      "columns": 11008,
+      "kind": "rotated_preparation_weights",
+      "layer": 0,
+      "prepare_ms": 354.680728,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "188f95c07f0094d74422f3f25106dec2381acf3c0135327466fca78feeb24c71",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0005051959306001663,
+            "mean_squared_error": 1.803393185937016E-8,
+            "rotated_f32_sha256": "dd6a620fda4e0271cd0b448b03b34b10e4596c005bd110c34b3b170f6687f7cd",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "35c7e5aae22e1cb6752c3d76e9398ee79bf94f61b6d8b0d659c345fb20979de3"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 330620928,
+            "dtype": "Q8_0",
+            "name": "blk.0.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6"
+          }
+        },
+        {
+          "first_row": 256,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "88889446bc1ba2728b7764498d56a9706af55df66fc193998b7df29d6f0ecee3",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0005227047950029373,
+            "mean_squared_error": 1.8019189426451378E-8,
+            "rotated_f32_sha256": "0c9de7825686d08df383dec07ae756d4094cc0f70b092da1e8bbccee228e62bc",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "b2ef6f84bf4e34263bfeb9f68ff437da922fd546d4db9205d6b9d8b1e180fe58"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 330620928,
+            "dtype": "Q8_0",
+            "name": "blk.0.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6"
+          }
+        }
+      ],
+      "upload_ms": 1.447474,
+      "weight_bytes": 5988352
+    },
+    {
+      "columns": 2048,
+      "kind": "rotated_preparation_weights",
+      "layer": 17,
+      "prepare_ms": 182.54773999999998,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "29b2327f7d62326dcd8d4b8a416c28c973d0e05cf24635e116b36c3d5811c0f4",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0006284322589635849,
+            "mean_squared_error": 1.883115794084968E-8,
+            "rotated_f32_sha256": "07f0c6023dd54f11e2d92e718350b1e0936767f76c8cd43aa29e75c92b0965a0",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "eab2d675bf918299830aad5e5e4950e05684410c52e486cd7ce19baacc2972b9"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 1091799040,
+            "dtype": "Q8_0",
+            "name": "blk.17.ffn_gate.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86"
+          }
+        },
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "61e608cd4df68a0e4a6f7842ac225909bec66fabbf1c907f20bd0525d5872fb6",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0008288425742648542,
+            "mean_squared_error": 2.03376120998689E-8,
+            "rotated_f32_sha256": "918e1a0168176b401ed44d6b2623fd7bd41b38bcd5f889393dc98ea9d3284069",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "eb36c336c6080471b4a67b001e7c8bd89cc63d525d6b30d479b1651dc4323aa4"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 1115752448,
+            "dtype": "Q8_0",
+            "name": "blk.17.ffn_up.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d"
+          }
+        }
+      ],
+      "upload_ms": 0.6305189999999999,
+      "weight_bytes": 1114112
+    },
+    {
+      "columns": 11008,
+      "kind": "rotated_preparation_weights",
+      "layer": 17,
+      "prepare_ms": 346.662333,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "4834dc44e9c60ae7d8b79f7745db48202d6914c441381832e4819b316280c001",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0004964806139469147,
+            "mean_squared_error": 1.8820559061660007E-8,
+            "rotated_f32_sha256": "b0df3f66c6f6d112c2f9609cd802c15e8b32fe25a658885cbc0e64ed23af9357",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "c7d2995df07fd814a37adc6cfc3141e76c91a186c8d7e09e9fc3c6bf53cccf9a"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 1067845632,
+            "dtype": "Q8_0",
+            "name": "blk.17.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989"
+          }
+        },
+        {
+          "first_row": 256,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "f69ac97780c469698a84601c7cb31729737ef3497fed6baccdc7889a975f48dd",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.000554598867893219,
+            "mean_squared_error": 1.8824908022281237E-8,
+            "rotated_f32_sha256": "6e9cc5231b10878b2a4c2c1a633d7fd0819dbdc7ac744e3b9ed6cd8dd6147353",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "3e00c6e0285d6733fa6d1b9dd45003124dd44e43e966f4b91894b7cb128c6ed1"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 1067845632,
+            "dtype": "Q8_0",
+            "name": "blk.17.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989"
+          }
+        }
+      ],
+      "upload_ms": 1.3850399999999998,
+      "weight_bytes": 5988352
+    },
+    {
+      "columns": 2048,
+      "kind": "rotated_preparation_weights",
+      "layer": 35,
+      "prepare_ms": 183.79220800000002,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "f5e8a304c63ebed0f94ebe473ae287a043a52456e9c9f8f691c2439897222d2e",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0005589127540588379,
+            "mean_squared_error": 1.975632402878249E-8,
+            "rotated_f32_sha256": "3e2203feef9096a904b821f42d47fd50c0625b60c5fc000f32003877fbe57a47",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "ae9a0f9093de06a5b0fa49d36c63846660d15056ddbe7fabc99c9fab65104031"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 3221559296,
+            "dtype": "Q8_0",
+            "name": "blk.35.ffn_gate.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a"
+          }
+        },
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 557056,
+            "encoded_sha256": "360df9c03e8c72cba6f50dbf74fecba1586c9d05490afb106052e6e98628fc65",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0006313938647508621,
+            "mean_squared_error": 2.132681573211379E-8,
+            "rotated_f32_sha256": "7c8b2ec035403b7c97f725ac9273594382c064b40432258e86a95434b905cc5b",
+            "sign_sha256": "b8b6374dd1f972665a317b099e78ca7ee8511ee7885f26235a0cb11a2ed06aaf",
+            "source_bytes": 557056,
+            "source_sha256": "056560e4e8277075832e4b8e272d3b0654d751971aa462222e04ee7367fbe4ed"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 3245512704,
+            "dtype": "Q8_0",
+            "name": "blk.35.ffn_up.weight",
+            "shape": [
+              2048,
+              11008
+            ],
+            "source_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c"
+          }
+        }
+      ],
+      "upload_ms": 0.5752700000000001,
+      "weight_bytes": 1114112
+    },
+    {
+      "columns": 11008,
+      "kind": "rotated_preparation_weights",
+      "layer": 35,
+      "prepare_ms": 344.856735,
+      "residency_policy": "original/prepared model plus both rotated weights and all diagnostic buffers retained in both arms",
+      "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+      "source_and_fit": [
+        {
+          "first_row": 0,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "901b09c12533370ba79d5d4b01a9f2d8395663ba328acf49149ef9fd717a72cd",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0006943284533917904,
+            "mean_squared_error": 1.7339772698325102E-8,
+            "rotated_f32_sha256": "fcd1b192787dac97a8cfabae14b54c8970054adb74a94b7b60a1f2d6d0cc5b6b",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "aeeda820ba28dc12f946b30fbe3c6addd59270e53419a2801e05a02f555f1eff"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 3197605888,
+            "dtype": "Q8_0",
+            "name": "blk.35.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132"
+          }
+        },
+        {
+          "first_row": 256,
+          "fit": {
+            "encoded_bytes": 2994176,
+            "encoded_sha256": "bbc0421cefa3b5493bb9f8f25413955de6f630315f258020022e7959507beff2",
+            "encoding": "q8-walsh128-f32-absmax127-v1",
+            "max_abs_error": 0.0006167739629745483,
+            "mean_squared_error": 1.7107024568094453E-8,
+            "rotated_f32_sha256": "8a8ea4ddeddcef649891f0ed890e58dd55b02f1a2cce6ec5579f38ada383d5a8",
+            "sign_sha256": "48a3f0d275de18be0a44f16e49fd9e244c952a1bd4c18d6d5832d198cb2dce63",
+            "source_bytes": 2994176,
+            "source_sha256": "3e57215b3f47f15222253c980510109702ade9dfffb17274222c035d16a7060f"
+          },
+          "rows": 256,
+          "source": {
+            "byte_offset": 3197605888,
+            "dtype": "Q8_0",
+            "name": "blk.35.ffn_down.weight",
+            "shape": [
+              11008,
+              2048
+            ],
+            "source_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132"
+          }
+        }
+      ],
+      "upload_ms": 1.510894,
+      "weight_bytes": 5988352
+    }
+  ],
+  "comparisons": [
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010180799961090089,
+        "candidate_median_ms": 0.0049209600687026974,
+        "throughput_gain": 1.0688645749921788,
+        "bootstrap_gain_ci95": [
+          1.0196256371587995,
+          1.110587792198292
+        ],
+        "required_gain": 0.031189204254800054,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.01700127959251404,
+        "candidate_median_ms": 0.011639360189437866,
+        "throughput_gain": 0.460671318337742,
+        "bootstrap_gain_ci95": [
+          0.440272337605881,
+          0.4800987487905317
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010198719501495361,
+        "candidate_median_ms": 0.005029119849205017,
+        "throughput_gain": 1.0279332780481525,
+        "bootstrap_gain_ci95": [
+          0.9267299457484786,
+          1.1378850490959191
+        ],
+        "required_gain": 0.061428460652568816,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.02454848051071167,
+        "candidate_median_ms": 0.01894912004470825,
+        "throughput_gain": 0.29549448485166474,
+        "bootstrap_gain_ci95": [
+          0.2776432085040932,
+          0.2971812794503861
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010571520328521728,
+        "candidate_median_ms": 0.00515712022781372,
+        "throughput_gain": 1.04988828290384,
+        "bootstrap_gain_ci95": [
+          1.0235309696074832,
+          1.0869751990475405
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.038881280422210694,
+        "candidate_median_ms": 0.03311455965042114,
+        "throughput_gain": 0.17414457062593658,
+        "bootstrap_gain_ci95": [
+          0.16249045215030633,
+          0.1793062315019902
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.011094720363616943,
+        "candidate_median_ms": 0.0054249602556228635,
+        "throughput_gain": 1.0451247273410869,
+        "bootstrap_gain_ci95": [
+          0.990331886861854,
+          1.0920098098799502
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 0,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.06760863780975342,
+        "candidate_median_ms": 0.06174367904663086,
+        "throughput_gain": 0.09498881267980708,
+        "bootstrap_gain_ci95": [
+          0.09090955414563506,
+          0.10111628472207435
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010652799606323243,
+        "candidate_median_ms": 0.005228480100631714,
+        "throughput_gain": 1.0374562781708119,
+        "bootstrap_gain_ci95": [
+          1.0207477621240653,
+          1.0924085892731288
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.04762879848480225,
+        "candidate_median_ms": 0.04171008110046387,
+        "throughput_gain": 0.14190136360757521,
+        "bootstrap_gain_ci95": [
+          0.13470791311062902,
+          0.14599650571682576
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.011643199920654297,
+        "candidate_median_ms": 0.005706239938735962,
+        "throughput_gain": 1.0404329375664987,
+        "bootstrap_gain_ci95": [
+          0.9887954195380242,
+          1.043297636207304
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.08494624137878418,
+        "candidate_median_ms": 0.07849279880523681,
+        "throughput_gain": 0.08221700170942059,
+        "bootstrap_gain_ci95": [
+          0.07771621795413486,
+          0.0825789085789046
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.014183039665222169,
+        "candidate_median_ms": 0.007362239956855774,
+        "throughput_gain": 0.9264571310277403,
+        "bootstrap_gain_ci95": [
+          0.8762120342278086,
+          0.9422184569502541
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.16016576766967774,
+        "candidate_median_ms": 0.15270848274230958,
+        "throughput_gain": 0.048833468799189594,
+        "bootstrap_gain_ci95": [
+          0.046680608901617626,
+          0.04963678204295685
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.020084159374237062,
+        "candidate_median_ms": 0.011745280027389527,
+        "throughput_gain": 0.7099770569455646,
+        "bootstrap_gain_ci95": [
+          0.7003341031989667,
+          0.7245192681854982
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 0,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 20,
+      "summary": {
+        "native_median_ms": 0.3124615955352783,
+        "candidate_median_ms": 0.3026347255706787,
+        "throughput_gain": 0.03247105878569956,
+        "bootstrap_gain_ci95": [
+          0.032115058445330025,
+          0.032971900113276
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010031039714813233,
+        "candidate_median_ms": 0.004841600060462952,
+        "throughput_gain": 1.0718439337292285,
+        "bootstrap_gain_ci95": [
+          1.0080535176888685,
+          1.1362943856095375
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.01704416036605835,
+        "candidate_median_ms": 0.0116428804397583,
+        "throughput_gain": 0.4639126850307309,
+        "bootstrap_gain_ci95": [
+          0.45425070423688574,
+          0.48200286276026016
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010069119930267333,
+        "candidate_median_ms": 0.00490880012512207,
+        "throughput_gain": 1.0512385254261982,
+        "bootstrap_gain_ci95": [
+          1.030267711320552,
+          1.0958929525474765
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.0244815993309021,
+        "candidate_median_ms": 0.019113919734954833,
+        "throughput_gain": 0.28082568465174895,
+        "bootstrap_gain_ci95": [
+          0.2713752587370215,
+          0.2884400879067601
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010445120334625245,
+        "candidate_median_ms": 0.005151680111885071,
+        "throughput_gain": 1.0275172580160903,
+        "bootstrap_gain_ci95": [
+          0.9912604784387828,
+          1.0928114755053975
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.03867039918899536,
+        "candidate_median_ms": 0.03305216073989868,
+        "throughput_gain": 0.16998097320501837,
+        "bootstrap_gain_ci95": [
+          0.16771992416949155,
+          0.1777360314060057
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010980160236358642,
+        "candidate_median_ms": 0.0054707199335098265,
+        "throughput_gain": 1.0070777465872114,
+        "bootstrap_gain_ci95": [
+          0.9277465337595108,
+          1.039950993343571
+        ],
+        "required_gain": 0.03222944753440284,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 17,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.06730368137359619,
+        "candidate_median_ms": 0.061607041358947755,
+        "throughput_gain": 0.09246735257837635,
+        "bootstrap_gain_ci95": [
+          0.08114065753774335,
+          0.09845934010042079
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010723839998245239,
+        "candidate_median_ms": 0.005148159861564636,
+        "throughput_gain": 1.083043317731403,
+        "bootstrap_gain_ci95": [
+          1.0298000651869375,
+          1.149179494832746
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.04797120094299316,
+        "candidate_median_ms": 0.04170720100402832,
+        "throughput_gain": 0.1501898901909009,
+        "bootstrap_gain_ci95": [
+          0.13857967887865774,
+          0.16957837723631752
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.011470400094985962,
+        "candidate_median_ms": 0.005736960172653198,
+        "throughput_gain": 0.9993863910129244,
+        "bootstrap_gain_ci95": [
+          0.930028151847005,
+          1.0510455650658752
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.08494272232055664,
+        "candidate_median_ms": 0.07846208095550537,
+        "throughput_gain": 0.08259583847548391,
+        "bootstrap_gain_ci95": [
+          0.07758792390651181,
+          0.08644676901325754
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.01407871961593628,
+        "candidate_median_ms": 0.007432640194892883,
+        "throughput_gain": 0.8941747813394831,
+        "bootstrap_gain_ci95": [
+          0.8821217893357483,
+          0.9005371363871979
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.1600979232788086,
+        "candidate_median_ms": 0.15285887718200683,
+        "throughput_gain": 0.04735770817014662,
+        "bootstrap_gain_ci95": [
+          0.04509412697209236,
+          0.0480464849456419
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.020166079998016357,
+        "candidate_median_ms": 0.011784640550613403,
+        "throughput_gain": 0.7112172332627227,
+        "bootstrap_gain_ci95": [
+          0.6908616057005601,
+          0.7305508689190914
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 17,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 20,
+      "summary": {
+        "native_median_ms": 0.312564001083374,
+        "candidate_median_ms": 0.30275551795959477,
+        "throughput_gain": 0.03239737194513581,
+        "bootstrap_gain_ci95": [
+          0.03176601572213822,
+          0.03282163515605108
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010103039741516114,
+        "candidate_median_ms": 0.004987840056419373,
+        "throughput_gain": 1.025534024194191,
+        "bootstrap_gain_ci95": [
+          0.9698871195033134,
+          1.1983018450806746
+        ],
+        "required_gain": 0.03211784543875824,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.017081279754638672,
+        "candidate_median_ms": 0.01157472014427185,
+        "throughput_gain": 0.47574019429678693,
+        "bootstrap_gain_ci95": [
+          0.4638491306573518,
+          0.4824205365212526
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010237120389938355,
+        "candidate_median_ms": 0.004913919866085053,
+        "throughput_gain": 1.0832900553777907,
+        "bootstrap_gain_ci95": [
+          1.0318443518825196,
+          1.1527091292600686
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.02434943914413452,
+        "candidate_median_ms": 0.019113279581069946,
+        "throughput_gain": 0.2739540088269592,
+        "bootstrap_gain_ci95": [
+          0.27165171923398224,
+          0.28388143578781344
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010531200170516968,
+        "candidate_median_ms": 0.0051654398441314696,
+        "throughput_gain": 1.0387809147524223,
+        "bootstrap_gain_ci95": [
+          1.0267274318599724,
+          1.1046955799574665
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.03888319969177246,
+        "candidate_median_ms": 0.03316544055938721,
+        "throughput_gain": 0.17240112104486682,
+        "bootstrap_gain_ci95": [
+          0.16661542526808004,
+          0.17551759471953532
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.010983359813690186,
+        "candidate_median_ms": 0.005527679920196533,
+        "throughput_gain": 0.9869746389547966,
+        "bootstrap_gain_ci95": [
+          0.9583767706127773,
+          1.021995360703551
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 2048,
+        "layer": 35,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.06768832206726075,
+        "candidate_median_ms": 0.06171103954315185,
+        "throughput_gain": 0.09685920976795792,
+        "bootstrap_gain_ci95": [
+          0.0886480001927532,
+          0.09970799496160287
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.01081503987312317,
+        "candidate_median_ms": 0.005093439817428589,
+        "throughput_gain": 1.1233273113616793,
+        "bootstrap_gain_ci95": [
+          1.0643099881415976,
+          1.1360181543838803
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 1,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.04768576145172119,
+        "candidate_median_ms": 0.04185056209564209,
+        "throughput_gain": 0.13942941417952226,
+        "bootstrap_gain_ci95": [
+          0.13144361988387554,
+          0.14456767857710506
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.01148192048072815,
+        "candidate_median_ms": 0.005878400206565857,
+        "throughput_gain": 0.9532389897345646,
+        "bootstrap_gain_ci95": [
+          0.8837837736460683,
+          1.0451114338441854
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 2,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.0852451229095459,
+        "candidate_median_ms": 0.07852159976959229,
+        "throughput_gain": 0.08562641565738094,
+        "bootstrap_gain_ci95": [
+          0.08176525864915796,
+          0.08941237211754571
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.014085439443588256,
+        "candidate_median_ms": 0.007383999824523926,
+        "throughput_gain": 0.907562266836375,
+        "bootstrap_gain_ci95": [
+          0.8961273980762077,
+          0.9603512967134056
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 4,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.1599184036254883,
+        "candidate_median_ms": 0.1529593563079834,
+        "throughput_gain": 0.04549605519712596,
+        "bootstrap_gain_ci95": [
+          0.04403708896908287,
+          0.04778596196069884
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "prepare"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 0,
+      "summary": {
+        "native_median_ms": 0.020159358978271483,
+        "candidate_median_ms": 0.011807359457015991,
+        "throughput_gain": 0.7073554042002757,
+        "bootstrap_gain_ci95": [
+          0.6958720905742939,
+          0.7276998640050512
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    },
+    {
+      "case": {
+        "columns": 11008,
+        "layer": 35,
+        "rows": 8,
+        "source_rows": [
+          {
+            "absolute_position": 86,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 87,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 88,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 89,
+            "task_id": "cal-chat-reminder"
+          },
+          {
+            "absolute_position": 73,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 74,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 75,
+            "task_id": "cal-fact-depot"
+          },
+          {
+            "absolute_position": 76,
+            "task_id": "cal-fact-depot"
+          }
+        ],
+        "stage": "complete"
+      },
+      "passed": true,
+      "screen_pairs": 5,
+      "confirmation_pairs": 20,
+      "summary": {
+        "native_median_ms": 0.31266719818115235,
+        "candidate_median_ms": 0.30278767585754396,
+        "throughput_gain": 0.03262854835695661,
+        "bootstrap_gain_ci95": [
+          0.03192062524082706,
+          0.03315275137447382
+        ],
+        "required_gain": 0.03,
+        "is_stable": true
+      }
+    }
+  ],
+  "by_shape": [
+    {
+      "stage": "complete",
+      "columns": 2048,
+      "rows": 1,
+      "control_ms": [
+        0.01700127959251404,
+        0.017081279754638672
+      ],
+      "candidate_ms": [
+        0.01157472014427185,
+        0.0116428804397583
+      ],
+      "gain": [
+        0.460671318337742,
+        0.47574019429678693
+      ],
+      "saved_ms": [
+        0.005361919403076173,
+        0.0055065596103668225
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 2048,
+      "rows": 2,
+      "control_ms": [
+        0.02434943914413452,
+        0.02454848051071167
+      ],
+      "candidate_ms": [
+        0.01894912004470825,
+        0.019113919734954833
+      ],
+      "gain": [
+        0.2739540088269592,
+        0.29549448485166474
+      ],
+      "saved_ms": [
+        0.005236159563064575,
+        0.0055993604660034176
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 2048,
+      "rows": 4,
+      "control_ms": [
+        0.03867039918899536,
+        0.03888319969177246
+      ],
+      "candidate_ms": [
+        0.03305216073989868,
+        0.03316544055938721
+      ],
+      "gain": [
+        0.16998097320501837,
+        0.17414457062593658
+      ],
+      "saved_ms": [
+        0.005618238449096681,
+        0.005766720771789552
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 2048,
+      "rows": 8,
+      "control_ms": [
+        0.06730368137359619,
+        0.06768832206726075
+      ],
+      "candidate_ms": [
+        0.061607041358947755,
+        0.06174367904663086
+      ],
+      "gain": [
+        0.09246735257837635,
+        0.09685920976795792
+      ],
+      "saved_ms": [
+        0.005696640014648431,
+        0.005977282524108896
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 11008,
+      "rows": 1,
+      "control_ms": [
+        0.04762879848480225,
+        0.04797120094299316
+      ],
+      "candidate_ms": [
+        0.04170720100402832,
+        0.04185056209564209
+      ],
+      "gain": [
+        0.13942941417952226,
+        0.1501898901909009
+      ],
+      "saved_ms": [
+        0.005835199356079096,
+        0.006263999938964843
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 11008,
+      "rows": 2,
+      "control_ms": [
+        0.08494272232055664,
+        0.0852451229095459
+      ],
+      "candidate_ms": [
+        0.07846208095550537,
+        0.07852159976959229
+      ],
+      "gain": [
+        0.08221700170942059,
+        0.08562641565738094
+      ],
+      "saved_ms": [
+        0.006453442573547366,
+        0.006723523139953613
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 11008,
+      "rows": 4,
+      "control_ms": [
+        0.1599184036254883,
+        0.16016576766967774
+      ],
+      "candidate_ms": [
+        0.15270848274230958,
+        0.1529593563079834
+      ],
+      "gain": [
+        0.04549605519712596,
+        0.048833468799189594
+      ],
+      "saved_ms": [
+        0.0069590473175048795,
+        0.007457284927368163
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "complete",
+      "columns": 11008,
+      "rows": 8,
+      "control_ms": [
+        0.3124615955352783,
+        0.31266719818115235
+      ],
+      "candidate_ms": [
+        0.3026347255706787,
+        0.30278767585754396
+      ],
+      "gain": [
+        0.03239737194513581,
+        0.03262854835695661
+      ],
+      "saved_ms": [
+        0.009808483123779244,
+        0.009879522323608392
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 2048,
+      "rows": 1,
+      "control_ms": [
+        0.010031039714813233,
+        0.010180799961090089
+      ],
+      "candidate_ms": [
+        0.004841600060462952,
+        0.004987840056419373
+      ],
+      "gain": [
+        1.025534024194191,
+        1.0718439337292285
+      ],
+      "saved_ms": [
+        0.005115199685096741,
+        0.005259839892387391
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 2048,
+      "rows": 2,
+      "control_ms": [
+        0.010069119930267333,
+        0.010237120389938355
+      ],
+      "candidate_ms": [
+        0.00490880012512207,
+        0.005029119849205017
+      ],
+      "gain": [
+        1.0279332780481525,
+        1.0832900553777907
+      ],
+      "saved_ms": [
+        0.005160319805145263,
+        0.005323200523853302
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 2048,
+      "rows": 4,
+      "control_ms": [
+        0.010445120334625245,
+        0.010571520328521728
+      ],
+      "candidate_ms": [
+        0.005151680111885071,
+        0.0051654398441314696
+      ],
+      "gain": [
+        1.0275172580160903,
+        1.04988828290384
+      ],
+      "saved_ms": [
+        0.0052934402227401735,
+        0.005414400100708008
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 2048,
+      "rows": 8,
+      "control_ms": [
+        0.010980160236358642,
+        0.011094720363616943
+      ],
+      "candidate_ms": [
+        0.0054249602556228635,
+        0.005527679920196533
+      ],
+      "gain": [
+        0.9869746389547966,
+        1.0451247273410869
+      ],
+      "saved_ms": [
+        0.005455679893493653,
+        0.005669760107994079
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 11008,
+      "rows": 1,
+      "control_ms": [
+        0.010652799606323243,
+        0.01081503987312317
+      ],
+      "candidate_ms": [
+        0.005093439817428589,
+        0.005228480100631714
+      ],
+      "gain": [
+        1.0374562781708119,
+        1.1233273113616793
+      ],
+      "saved_ms": [
+        0.005424319505691529,
+        0.00572160005569458
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 11008,
+      "rows": 2,
+      "control_ms": [
+        0.011470400094985962,
+        0.011643199920654297
+      ],
+      "candidate_ms": [
+        0.005706239938735962,
+        0.005878400206565857
+      ],
+      "gain": [
+        0.9532389897345646,
+        1.0404329375664987
+      ],
+      "saved_ms": [
+        0.0056035202741622925,
+        0.005936959981918335
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 11008,
+      "rows": 4,
+      "control_ms": [
+        0.01407871961593628,
+        0.014183039665222169
+      ],
+      "candidate_ms": [
+        0.007362239956855774,
+        0.007432640194892883
+      ],
+      "gain": [
+        0.8941747813394831,
+        0.9264571310277403
+      ],
+      "saved_ms": [
+        0.006646079421043396,
+        0.006820799708366395
+      ],
+      "all_passed": true
+    },
+    {
+      "stage": "prepare",
+      "columns": 11008,
+      "rows": 8,
+      "control_ms": [
+        0.020084159374237062,
+        0.020166079998016357
+      ],
+      "candidate_ms": [
+        0.011745280027389527,
+        0.011807359457015991
+      ],
+      "gain": [
+        0.7073554042002757,
+        0.7112172332627227
+      ],
+      "saved_ms": [
+        0.008338879346847535,
+        0.008381439447402954
+      ],
+      "all_passed": true
+    }
+  ]
+}

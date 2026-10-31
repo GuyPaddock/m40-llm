@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Rotated preparation passes its isolated gate
+
+The [source-bound result](experiments/2026-10-31-rotated-preparation-result.md)
+from clean release `0749dcf` completes 24 layer/width/row cases and 48 paired
+comparisons on M40. All complete producer-plus-256-channel-consumer cases
+pass the 3% gate with positive paired bounds; the three near-gate cases pass
+fresh twenty-pair confirmations. There are 300 pairs, no variation extensions
+and exact staged/fused canonical, encoded and consumer output bits throughout.
+
+Complete-operation savings are 5.24 to 9.88 us per row batch. Relative gains
+range from 3.24% to 47.57% for this fixed small consumer. The current unrotated
+Qwen path has no eligible rotation, and its Q8_1 sharing already exists.
+Close the bounded experiment with a priced compatible-model prerequisite;
+keep runtime dispatch unchanged. These are not full-FFN or model decoding gains.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
