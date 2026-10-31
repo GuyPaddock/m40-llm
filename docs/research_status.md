@@ -9,32 +9,29 @@ against the current code, worktree, Git history, and linked raw results.
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`channel-selection`](experiments/2026-10-30-channel-selection-protocol.md).
-Its scoped protocol and [host Q4 layout checkpoint](experiments/2026-10-30-channel-host-layout.md)
-are recorded. The lossless channel-oriented host packer passes all three
-new tests and the 223-test warning-free non-CUDA suite. Source-bound Q4
-fixtures and complete-FFN timings are next; no speed or
-model-quality claim is established. The
-[selected-channel CUDA primitive](experiments/2026-10-30-q4-selected-cuda.md)
-now passes both new hardware tests with cuBLAS on/off, Q4 projection checks,
-compound forward/ownership and the attention grid. It uses a supplied immutable
-selection, three FP32 kernels and native/repacked down layouts with identical
-accumulation. Real-model fixtures and performance screening remain pending.
-A legacy tiny forward fixture fails at KV configuration on both base and this
-branch; explicit-dense compound forward coverage passes.
-The [shared Q4 fixture encoder](experiments/2026-10-30-q4-fixture-encoding.md)
-is committed at `300e847`, with source/output hashes and measured quantization
-error. Its three tests, full non-CUDA suite and non-CUDA Clippy pass.
-The [source-bound channel benchmark](experiments/2026-10-30-q4-channel-benchmark.md)
-now connects that encoder to the retained activations, independent FP64 masked
-references, both existing dense controls and the two selected layouts.
+
+The [stronger-reference follow-up](experiments/2026-10-31-q4-stronger-baselines.md)
+passes all twelve comparisons. Against qualified Q8, supplied-index 10%
+retention improves 2.050 to 2.086x and 20% improves 1.287 to 1.302x. The tightest
+remaining overhead budgets for a 5% FFN gain are 150.88 and 56.89 microseconds,
+respectively. Next implement a bounded ternary screening-cost probe before
+recovery. Quantization/pruning drift is recorded; sequence quality remains open.
+No runtime promotion or whole-model speed claim follows.
+
 The [real-model Q4 screen](experiments/2026-10-31-q4-channel-screen.md)
-now completes all 216 cases and 810 FP64-reference checks in both correctness
+completed all 216 cases and 810 FP64-reference checks in both correctness
 and timing runs. Repacked execution passes every complete-FFN comparison;
-batch-one 20% retention measures 0.2518–0.2580 ms versus matched native Q4
-1.5282–1.5334 ms. Selection/recovery and model quality remain unmeasured.
-Packed 100% execution is itself about 33% faster than native Q4. Next pair
-10%/20% importance selection against packed full retention and the qualified
-Q8 compound/packet path before setting a predictor budget. No runtime promotion.
+batch-one 20% retention measures 0.2518 to 0.2580 ms versus matched native Q4
+1.5282 to 1.5334 ms. Packed 100% execution is itself about 33% faster than
+native Q4, which motivated the completed stronger-reference follow-up.
+
+The [host packer](experiments/2026-10-30-channel-host-layout.md),
+[CUDA kernels](experiments/2026-10-30-q4-selected-cuda.md) and
+[shared fixture encoder](experiments/2026-10-30-q4-fixture-encoding.md)
+have numerical, ownership, cuBLAS on/off and regression evidence in their
+checkpoints. The latest benchmark passes 65 CPU tests and CUDA/server
+all-target Clippy. A legacy tiny forward fixture fails at KV configuration
+on both base and this branch; explicit-dense compound forward coverage passes.
 Build directories are isolated disk-backed
 symlinks after the first full build exhausted /tmp.
 Follow the protocol's gates and serial M40 execution requirement. Keep the

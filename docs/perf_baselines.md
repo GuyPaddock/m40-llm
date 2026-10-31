@@ -2,6 +2,20 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Sparse Q4 Beats Stronger FFN References
+
+The [twelve paired follow-up comparisons](experiments/2026-10-31-q4-stronger-baselines.md)
+all pass. Batch-one supplied-index Q4 at 10% retention takes 0.1557 to 0.1584 ms
+against qualified compound/packet Q8 at about 0.3245 ms, improving 2.050 to
+2.086x. At 20%, Q4 takes 0.2493 to 0.2523 ms, improving 1.287 to 1.302x.
+Packed full-retention Q4 is also paired separately, isolating the incremental
+sparsity benefit. Numerical and ownership checks pass.
+
+To preserve a 5% FFN gain, the tightest measured point-estimate overhead budgets
+are 150.88 microseconds at 10% and 56.89 at 20%. Screening, selection and recovery
+must fit together. Output drift is visible; model quality and whole-model
+performance remain unmeasured. No runtime/default promotion follows.
+
 ## 2026-10-31: Supplied-index Q4 FFN Screen Passes
 
 The [216-case real-model screen](experiments/2026-10-31-q4-channel-screen.md)
