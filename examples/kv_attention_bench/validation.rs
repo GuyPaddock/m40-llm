@@ -84,10 +84,33 @@ pub fn validate(case: &Case, sample: &LayerSample) -> Result<Value> {
                 "selected token count differs sequence={seq} head={head}"
             );
             let actual = &positions[head * s.capacity()..head * s.capacity() + selected.len()];
-            ensure!(
-                actual.iter().zip(&selected).all(|(&a, &b)| a as usize == b),
-                "selected positions differ sequence={seq} head={head}"
-            );
+            if !actual.iter().zip(&selected).all(|(&a, &b)| a as usize == b) {
+                let score_blocks = |positions: &[usize]| {
+                    positions
+                        .iter()
+                        .copied()
+                        .filter(|&token| token < s.old_len() && token.is_multiple_of(s.block))
+                        .map(|token| {
+                            let end = (token + s.block).min(s.old_len());
+                            let kv_head = head / (s.query_heads / s.kv_heads);
+                            let mut score = 0.0_f64;
+                            for position in token..end {
+                                for channel in 0..s.head_dim {
+                                    score += f64::from(query[head * s.head_dim + channel])
+                                        * f64::from(
+                                            reconstructed.selection_keys[position * s.kv_width()
+                                                + kv_head * s.head_dim
+                                                + channel],
+                                        );
+                                }
+                            }
+                            (token / s.block, score / (end - token) as f64)
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let actual_positions: Vec<_> = actual.iter().map(|&v| v as usize).collect();
+                anyhow::bail!("selected positions differ sequence={seq} head={head} actual_blocks_fp64={:?} expected_blocks_fp64={:?}", score_blocks(&actual_positions), score_blocks(&selected));
+            }
             for value in actual {
                 position_bytes.extend_from_slice(&value.to_le_bytes());
             }
@@ -194,7 +217,53 @@ pub fn validate(case: &Case, sample: &LayerSample) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capture::Capture;
     use crate::reference::Shape;
+    use m40_llm::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
+    use std::path::PathBuf;
+
+    /// Replay the first layer in release-grid order so prior cache allocation
+    /// lifetimes precede the 8K Q8 failure. Retain the frozen position reference;
+    /// missing artifacts fail rather than silently skipping admission.
+    #[test]
+    #[ignore = "requires M40 and KV_CAPTURE_REPORT/KV_INPUTS; run serially"]
+    fn test_real_capture_preserves_selected_positions() -> Result<()> {
+        crate::benchmark::validate_environment()?;
+        let report = PathBuf::from(std::env::var("KV_CAPTURE_REPORT")?);
+        let artifact = PathBuf::from(std::env::var("KV_INPUTS")?);
+        let mut capture = Capture::open(&report, &artifact)?;
+        let ctx = CudaContext::new_m40()?;
+        let _dense_reference = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+        let before = CudaContext::total_device_bytes();
+        for length in crate::capture::CONTEXTS {
+            for head_dim in [64, 128] {
+                let sample = capture.read_layer(0, length, head_dim)?;
+                for backing in [Backing::Q8, Backing::Mixed] {
+                    if backing == Backing::Q8 && head_dim == 128 {
+                        continue;
+                    }
+                    let shape = Shape {
+                        length,
+                        head_dim,
+                        query_heads: 16,
+                        kv_heads: 2,
+                        recent: 1024,
+                        block: 32,
+                        top: 8,
+                    };
+                    let case = Case::new(&ctx, shape, backing, &sample)?;
+                    validate(&case, &sample)?;
+                    drop(case);
+                    ensure!(
+                        CudaContext::total_device_bytes() == before,
+                        "device storage leaked"
+                    );
+                    println!("validated length={length} head_dim={head_dim} backing={backing:?}");
+                }
+            }
+        }
+        Ok(())
+    }
 
     /// Exercise staged/direct/dense and mixed batched consumers on eight
     /// distinct sequences, including short recent-only and wrapped old caches.
