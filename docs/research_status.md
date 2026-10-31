@@ -19,7 +19,9 @@ Clippy and CLI integrity checks pass. Its retained example is synthetic, not a
 hardware feasibility result. The [single-core Q8 probe](experiments/2026-10-31-dualpace-projection-probe.md)
 now implements scalar/AVX2 projection and pinned retained-input admission.
 Five new correctness tests, including AVX2 execution, and seven shared protocol
-tests pass. Actual Qwen validation, CPU timings, serial transfer costs and the
+tests pass. [Actual Qwen validation](experiments/2026-10-31-dualpace-cpu-validation.md)
+passes all 36 cases and 1,082,880 outputs per implementation, with no timing
+pairs or generated model tokens. CPU timings, serial transfer costs and the
 priced prerequisite report remain pending; the branch is incomplete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.

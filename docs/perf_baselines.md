@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: CPU Q8 Projection Numerical Admission
+
+The [DualPace CPU probe](experiments/2026-10-31-dualpace-cpu-validation.md)
+passes all 36 real-Qwen cases for scalar and AVX2 projection at `bf8dc96`.
+Each implementation checks 1,082,880 outputs against an independent FP64 sum.
+Maximum error/tolerance ratios are 0.2499331672 and 0.0374773183 respectively.
+The run uses one pinned CPU 15 thread with NUMA memory binding 0 and the
+original Q8 weights plus retained distinct FFN inputs.
+
+This is numerical admission only: zero timing pairs and zero generated model
+tokens. CPU timing, transfers and the sourced cooperative scheduling decision
+remain pending. A complete CPU decoder is still a prerequisite; no model or
+server performance claim follows. Raw records, setup accounting, input/source
+identities and a reproducible audit accompany the report.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)

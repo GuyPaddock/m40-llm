@@ -1,0 +1,14 @@
+{
+  "source_revision": "bf8dc96e718c6705078b7fe8a6e18433f7b877b9",
+  "executable_sha256": "07f47ffd5009beeb58ed67c91e2a2ade558902dc07334ff3982f10093f88459d",
+  "cases": 36,
+  "output_elements_per_implementation": 1082880,
+  "scalar_max_absolute_error": 0.000996087424596226,
+  "avx2_max_absolute_error": 0.00014867753466774047,
+  "scalar_max_tolerance_ratio": 0.24993316718791797,
+  "avx2_max_tolerance_ratio": 0.03747731831043379,
+  "timed_pairs": 0,
+  "generated_token_count": 0,
+  "is_complete": true,
+  "is_performance_measured": false
+}

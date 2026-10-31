@@ -92,8 +92,9 @@ endpoints, signed and zero scales, distinct batch rows, repeatability, output
 guards, malformed payloads, invalid-call output preservation and numerical
 admission. Non-CUDA
 all-target Clippy passes after removing a duplicate conditional allow attribute;
-the initial failed lint log is retained. Actual Qwen fixture validation and
-timed results are pending. No GPU code or production dispatch changed.
+the initial failed lint log is retained. [Actual Qwen validation](2026-10-31-dualpace-cpu-validation.md)
+passes all 36 cases and 1,082,880 outputs per implementation. Timed results are
+pending. No GPU code or production dispatch changed.
 
 The release AVX2 function's disassembly contains `vpmovsxbd`, `vcvtdq2ps`,
 `vmulps` and `vaddps`, with no `vfmadd` or ZMM operand in that function. This
