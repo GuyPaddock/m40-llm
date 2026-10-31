@@ -37,7 +37,7 @@ hash-verified capture and labels synthetic queries and head64 slices explicitly.
 The [CPU attention reference](experiments/2026-10-31-quantized-kv-reference.md)
 adds five passing quantization/selection/FP64 tests, for nine CPU example tests.
 The [paired benchmark implementation](experiments/2026-10-31-quantized-kv-benchmark.md)
-now passes hardware qualification and is ready for its separate commit after
+now passes hardware qualification and is committed separately after
 the staged control correction. CUDA/server all-target Clippy passes.
 It verifies shared encoded inputs and
 staged reconstruction, includes selection, separates batched dispatch gains,

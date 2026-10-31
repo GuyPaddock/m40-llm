@@ -1,8 +1,11 @@
 # Quantized KV operator benchmark implementation checkpoint
 
-Status: implemented in the worktree and compiled, with hardware verification
-pending. The CUDA benchmark and staged head128 control remain uncommitted until
-their serial M40 checks run. No operator, model-speed or quality result is claimed.
+Status: all seventeen runner tests pass on M40, with cuBLAS enabled and
+disabled. The [qualification record](2026-10-31-quantized-kv-zero-reference.md)
+retains affected runtime tests and the corrected staged-reference oracle.
+The runner is committed separately after that correction. Full real-input
+release admission and paired measurements remain pending. No operator,
+model-speed or quality result is claimed.
 
 The [admitted capture reader](2026-10-31-quantized-kv-fixtures.md) supplies layers
 0/17/35, contexts 1K/2K/4K/8K, eight distinct sequences, 16 query heads and two
@@ -36,7 +39,7 @@ recent-only length5 and wrapped/partial-block length23. Eight distinct sequence
 fixtures exercise batches1/2/4/8, GQA, serial and batched direct consumers. The
 separate [staged-control test](2026-10-31-quantized-kv-staging.md) covers reset
 lifetimes, physical layer/sequence slots and guard regions around staging.
-Both tests still require actual hardware execution.
+Both tests now pass on hardware with cuBLAS enabled and disabled.
 
 ## Comparisons and timing
 

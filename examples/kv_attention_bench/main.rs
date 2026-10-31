@@ -1,9 +1,15 @@
 //! Quantized-attention fixture admission and paired operator research.
 
+#[cfg(all(feature = "cuda", nvcc))]
+mod benchmark;
 mod capture;
+#[cfg(all(feature = "cuda", nvcc))]
+mod pipeline;
 // The CPU oracle is also compiled for inspection-only builds.
 #[allow(dead_code)]
 mod reference;
+#[cfg(all(feature = "cuda", nvcc))]
+mod validation;
 
 use anyhow::{ensure, Result};
 use clap::Parser;
@@ -19,14 +25,29 @@ struct Args {
     /// Raw FP16 words belonging to the capture report.
     #[arg(long)]
     kv_inputs: PathBuf,
-    /// New fixture-inspection report. This mode does not access a GPU.
+    /// New report. Default inspection mode does not access a GPU.
     #[arg(long)]
     output: PathBuf,
+    /// Run the serial M40 operator comparison; requires a clean release build.
+    #[arg(long)]
+    benchmark: bool,
+    /// Validate the complete GPU grid without timing pairs.
+    #[arg(long, requires = "benchmark")]
+    correctness_only: bool,
+    /// Complete operations per timing interval.
+    #[arg(long, default_value_t = 10)]
+    iterations: usize,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
     ensure!(!args.output.exists(), "output must be new");
+    if args.benchmark {
+        #[cfg(all(feature = "cuda", nvcc))]
+        return benchmark::run(&args);
+        #[cfg(not(all(feature = "cuda", nvcc)))]
+        anyhow::bail!("GPU benchmarking requires --features cuda and NVCC");
+    }
     let mut capture = capture::Capture::open(&args.capture_report, &args.kv_inputs)?;
     let mut output = OpenOptions::new()
         .create_new(true)
