@@ -77,6 +77,12 @@ fn configurations(layout: Q8ExecutionLayout) -> Result<Vec<ProjectionLaunch>> {
 
 #[derive(Parser)]
 struct Args {
+    /// Supplied-index Q4 complete-FFN screen from the retained real-model capture.
+    #[arg(long, requires="ffn_inputs", conflicts_with_all=["ffn_four_row_reuse","ffn_f32_compound","ffn_layer_reuse","ffn_f32_shared_scales","ffn_f32_role_parallel","ffn_payload_entropy","ffn_f32_native_warp","ffn_f32_task_pairs","prepared_warp_packet","prepared_compound_control","prepared_weight_read","ffn_weight_read","ffn_f32_eight_values","ffn_f32_cohorts","decode_reductions","qkv_f32_split","output_f32_split","ffn_f32_persistent_tiles","ffn_f32_virtual_warp","prepared_f32_packed_activation","prepared_f32_warp","qkv_f32_packed","output_f32_packed","qkv_f32_warp","output_f32_warp","qkv_warp_report","ffn_f32_ablation","ffn_q81","ffn_f32_factored_scales","ffn_f32_coalesced_pairs","ffn_f32_split_planes","ffn_f32_split_two_columns","ffn_f32_joint","ffn_f32_fixed_k","ffn_f32_unfused","ffn_f32_weight_cg","ffn_f32_byte_permute"])]
+    ffn_q4_channels: bool,
+    /// Validate every real Q4 case without collecting primary timing pairs.
+    #[arg(long, requires = "ffn_q4_channels")]
+    ffn_q4_channels_correctness_only: bool,
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
@@ -690,6 +696,33 @@ pub fn benchmark() -> Result<()> {
 #[cfg(test)]
 mod argument_tests {
     use super::*;
+
+    /// Q4 research needs capture provenance and cannot silently override another mode.
+    #[test]
+    fn test_q4_channels_requires_exclusive_capture() {
+        let base = ["bench", "--model", "model.gguf", "--output", "out.jsonl"];
+        let parse = |extra: &[&str]| Args::try_parse_from([base.as_slice(), extra].concat());
+        assert!(!parse(&[]).unwrap().ffn_q4_channels);
+        assert!(parse(&["--ffn-q4-channels"]).is_err());
+        assert!(parse(&["--ffn-q4-channels-correctness-only"]).is_err());
+        let valid = [
+            "--ffn-inputs",
+            "input.json",
+            "--ffn-capture-report",
+            "capture.jsonl",
+            "--ffn-q4-channels",
+        ];
+        assert!(parse(&valid).unwrap().ffn_q4_channels);
+        for conflict in [
+            "--ffn-four-row-reuse",
+            "--ffn-q81",
+            "--ffn-f32-compound",
+            "--prepared-warp-packet",
+            "--decode-reductions",
+        ] {
+            assert!(parse(&[valid.as_slice(), &[conflict]].concat()).is_err());
+        }
+    }
 
     /// Offline payload analysis requires frozen provenance and cannot select
     /// a CUDA timing experiment or become an implicit inference mode.

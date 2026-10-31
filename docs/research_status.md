@@ -21,6 +21,13 @@ selection, three FP32 kernels and native/repacked down layouts with identical
 accumulation. Real-model fixtures and performance screening remain pending.
 A legacy tiny forward fixture fails at KV configuration on both base and this
 branch; explicit-dense compound forward coverage passes.
+The [shared Q4 fixture encoder](experiments/2026-10-30-q4-fixture-encoding.md)
+is committed at `300e847`, with source/output hashes and measured quantization
+error. Its three tests, full non-CUDA suite and non-CUDA Clippy pass.
+The [source-bound channel benchmark](experiments/2026-10-30-q4-channel-benchmark.md)
+now connects that encoder to the retained activations, independent FP64 masked
+references, both existing dense controls and the two selected layouts.
+Real-model hardware validation and primary timings remain pending.
 Build directories are isolated disk-backed
 symlinks after the first full build exhausted /tmp.
 Follow the protocol's gates and serial M40 execution requirement. Keep the

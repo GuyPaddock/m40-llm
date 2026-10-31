@@ -12,6 +12,7 @@ mod prepared;
 mod prepared_projection;
 mod prepared_read;
 mod projection;
+mod q4_channels;
 mod reductions;
 mod reuse;
 mod task_pair;
@@ -45,6 +46,9 @@ fn validate_rows(args: &Args) -> Result<()> {
 }
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_q4_channels {
+        return q4_channels::benchmark(args);
+    }
     if args.ffn_four_row_reuse {
         return four_row::benchmark(args);
     }
