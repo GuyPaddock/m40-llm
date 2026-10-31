@@ -1,7 +1,13 @@
 //! Full-context lossless FP16 attention and append-cost research.
 
+#[cfg(all(feature = "cuda", nvcc))]
+mod append;
+#[cfg(all(feature = "cuda", nvcc))]
+mod benchmark;
 mod capture;
 mod fixture;
+#[cfg(all(feature = "cuda", nvcc))]
+mod pipeline;
 
 use anyhow::{ensure, Result};
 use clap::Parser;
@@ -20,11 +26,26 @@ struct Args {
     /// New JSONL report; default mode inspects CPU fixtures only.
     #[arg(long)]
     output: PathBuf,
+    /// Run the frozen M40 attention and append comparison grid.
+    #[arg(long)]
+    benchmark: bool,
+    /// Run all hardware correctness checks, omitting timing pairs.
+    #[arg(long, requires = "benchmark")]
+    correctness_only: bool,
+    /// Attention-only complete operations per timing interval.
+    #[arg(long, default_value_t = 10)]
+    iterations: usize,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
     ensure!(!args.output.exists(), "output must be new");
+    if args.benchmark {
+        #[cfg(all(feature = "cuda", nvcc))]
+        return benchmark::run(&args);
+        #[cfg(not(all(feature = "cuda", nvcc)))]
+        anyhow::bail!("GPU comparison requires --features cuda and NVCC");
+    }
     let mut capture = capture::Capture::open(&args.capture_report, &args.kv_inputs)?;
     let mut output = OpenOptions::new()
         .write(true)

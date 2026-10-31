@@ -1,10 +1,11 @@
 # Lossless attention fixture admission and runner checkpoint
 
-The CPU fixture tool is ready for a complete capture. It rejects partial,
-misidentified or corrupted inputs, preserves original FP16 bits when converting
-token-major capture views to head streams, and reports all encoded bytes.
-Its six CPU tests pass. The GPU consumer and paired runner are implemented in
-the worktree and compile; hardware qualification and measurements remain pending.
+The CPU fixture tool admits the complete eight-sequence capture and all twelve
+layer/context cases. It rejects partial, misidentified or corrupted inputs,
+preserves original FP16 bits when converting token-major capture views to head
+streams, and reports all encoded bytes. The runner's fourteen tests pass,
+including hardware append/history checks, with cuBLAS enabled and disabled.
+Real-input release qualification and measurements remain pending.
 
 ## CPU fixture unit
 
@@ -29,7 +30,7 @@ fixture tests add two cases. These tests require no model or GPU.
 
 The standalone committed entry point inspects twelve layer/context cases
 using layers 0/17/35 and contexts 1K/2K/4K/8K. It requires a complete capture;
-the ongoing partial capture has not been admitted. Its reports include input
+the [full capture](2026-10-31-lossless-capture-results.md) now passes. Reports include input
 hashes, encoded stream statistics and the extra device pointer directories.
 Queries remain deterministic synthetic vectors, not captured model queries.
 
@@ -43,13 +44,14 @@ cargo run --release --no-default-features --example lossless_attention_bench -- 
   --output NEW_INSPECTION.jsonl
 ```
 
-## Pending GPU runner
+## GPU runner
 
-`pipeline.rs`, `benchmark.rs`, `append.rs` and the GPU CLI additions remain
-uncommitted alongside the CUDA consumer. They implement the
-[frozen comparison](2026-10-31-lossless-kv-consumer.md). Both the kernel hardware
-test and the runner's ignored append test compile and link. CUDA/server
-all-target Clippy passes. These are compile checks, not hardware passes.
+`pipeline.rs`, `benchmark.rs`, `append.rs` and the GPU CLI additions implement
+the [frozen comparison](2026-10-31-lossless-kv-consumer.md). They are committed
+separately after the consumer. Kernel and append hardware tests execute and
+pass; CUDA/server all-target Clippy also passes. The
+[validation record](2026-10-31-lossless-consumer-validation.md) distinguishes
+supported regression passes from command failures and optional skipped diagnostics.
 
 Each case retains eight distinct captured sequences and shared guarded query,
 output, staging and partial buffers. The device codec supports decoding a
@@ -104,10 +106,10 @@ The runner requires a clean release build, a full hash-verified capture and
 the selected M40. It rejects attention/logging overrides and other GPU compute
 processes before context creation and between comparisons. Correctness-only
 mode executes all numerical and append checks without collecting paired
-performance observations. The M40 capture currently retains exclusive access.
+performance observations. Capture and initial hardware qualification have completed.
 
 ```bash
-# After the current capture completes and the GPU is idle:
+# Reproduction only; require an idle GPU before each command:
 M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test lossless_kv_cuda \
   --example lossless_attention_bench -- --include-ignored --test-threads=1
 # Run affected regressions from the consumer checkpoint, then commit the
@@ -122,20 +124,21 @@ target/release/examples/lossless_attention_bench \
   --benchmark --iterations 10 --output NEW_TIMINGS.jsonl
 ```
 
-Full capture audit, serial hardware tests, real-input qualification, controlled
-timings, result analysis and the branch decision remain required. The
+Full capture audit and initial serial hardware tests pass. Real-input release
+qualification, controlled timings, result analysis and the branch decision
+remain required. The
 [validation checksum manifest](2026-10-31-lossless-attention-runner.sha256)
 retains CPU and compile-only logs. The prior 225-test non-CUDA suite remains
 recorded in the consumer checkpoint; it was not relabeled as GPU coverage.
 
 ## Queued qualification
 
-At October 31, 22:13 UTC, capture session `95030`, host PID `318282`, remains
-live with five of eight sequences captured. Its partial report contains 60
-streams, 240 compression rows, 15 readbacks and five sequence records. The M40
-shows only that capture process. No pending consumer hardware test has run.
+This section preserves the original queue contract. Capture `95030` and
+qualification `68704` are now terminal with exit code zero. The
+[completed logs](2026-10-31-lossless-initial-qualification.sha256) establish
+passing execution. No GPU slot remains reserved by either session.
 
-Session `68704` now owns the next GPU slot. Its
+Session `68704` reserved the next GPU slot after capture. Its
 [retained queue script](2026-10-31-lossless-qualification-queue.sh) waits for the
 existing capture PID to retire. It then checks the frozen source hashes, all
 96 streams, 384 compression rows, 24 readbacks, eight sequences, completion,
@@ -149,12 +152,11 @@ queue. It performs no real-grid performance measurement and makes no commits.
 Review its logs before the affected regression suites, code commits and clean
 release comparisons.
 
-The running copy and fresh outputs are under
+The executed copy and outputs are under
 `/tmp/lossless-qualification-20261031-01/`: `queue.log`, `capture-summary.json`,
 `fixture-inspection.jsonl`, `fixture-inspection.log`, `kernel-tests.log` and
-`runner-tests.log`. Later files appear only when their phase starts. Missing
-outputs while the capture is live are not a failed qualification. Poll the
-existing sessions; do not start a duplicate queue or overlap its GPU work.
+`runner-tests.log`. All phases completed and the logs are now retained in the
+repository. Do not restart the capture or qualification merely to refresh them.
 
 The [source manifest](2026-10-31-lossless-qualification-source.sha256) pins the
 pending implementation and tests. The

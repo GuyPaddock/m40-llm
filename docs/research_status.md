@@ -33,7 +33,8 @@ test now passes with all fourteen runner tests. The pending runner includes
 native and matched
 attention controls, active-batch-only reconstruction and full CPU replacement
 append costs. Full real-input GPU qualification, measurements and the final
-decision remain outstanding; the GPU runner is still uncommitted.
+decision remain outstanding. The GPU runner is committed separately after the
+consumer, ready for clean release execution.
 The capture and initial qualification sessions have both exited successfully.
 Regression commands are terminal. A release-only timing benchmark rejected a
 debug build, and an existing cuBLAS-only FP32 SGEMM test rejected the disabled
