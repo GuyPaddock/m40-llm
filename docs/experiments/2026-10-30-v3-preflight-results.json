@@ -1,0 +1,373 @@
+{
+  "allocation": [
+    {
+      "components": 4,
+      "cpu_seconds": 0.013999589999997397,
+      "has_feasible_witness": true,
+      "process_peak_rss_kib": 1745788,
+      "reason": "complete lexicographic optimum",
+      "requirements": {
+        "heldout_buckets": [
+          1,
+          1,
+          1
+        ],
+        "heldout_groups": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "quotas": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "states": 4145,
+      "status": "feasible"
+    },
+    {
+      "components": 8,
+      "cpu_seconds": 0.13743807799997398,
+      "has_feasible_witness": true,
+      "process_peak_rss_kib": 1745788,
+      "reason": "incomplete canonical solve",
+      "requirements": {
+        "heldout_buckets": [
+          1,
+          1,
+          1
+        ],
+        "heldout_groups": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "quotas": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "states": 50000,
+      "status": "unknown"
+    },
+    {
+      "components": 12,
+      "cpu_seconds": 0.15558733100002087,
+      "has_feasible_witness": true,
+      "process_peak_rss_kib": 1745788,
+      "reason": "incomplete canonical solve",
+      "requirements": {
+        "heldout_buckets": [
+          1,
+          1,
+          1
+        ],
+        "heldout_groups": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "quotas": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ]
+      },
+      "states": 50000,
+      "status": "unknown"
+    },
+    {
+      "components": 1000,
+      "cpu_seconds": 0.003999407999998539,
+      "has_feasible_witness": false,
+      "process_peak_rss_kib": 1745788,
+      "reason": "reference solver component limit; scalable solver required",
+      "requirements": {
+        "heldout_buckets": [
+          32,
+          32,
+          32
+        ],
+        "heldout_groups": [
+          16,
+          16,
+          16,
+          16
+        ],
+        "quotas": [
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ]
+        ]
+      },
+      "states": 0,
+      "status": "unknown"
+    },
+    {
+      "components": 390220,
+      "cpu_seconds": 1.8519622700000014,
+      "has_feasible_witness": false,
+      "process_peak_rss_kib": 1745788,
+      "reason": "reference solver component limit; scalable solver required",
+      "requirements": {
+        "heldout_buckets": [
+          32,
+          32,
+          32
+        ],
+        "heldout_groups": [
+          16,
+          16,
+          16,
+          16
+        ],
+        "quotas": [
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ],
+          [
+            256,
+            48,
+            96
+          ]
+        ]
+      },
+      "states": 0,
+      "status": "unknown"
+    },
+    {
+      "case": "hash_shortfall",
+      "hash_roles": [
+        0,
+        0
+      ],
+      "result": {
+        "reason": "complete lexicographic optimum",
+        "states": 45,
+        "status": "feasible",
+        "witness": {
+          "component_ids": [
+            "g1",
+            "g0"
+          ],
+          "counts": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              2,
+              0,
+              0
+            ]
+          ],
+          "departures": 1,
+          "roles": [
+            1,
+            0
+          ]
+        }
+      }
+    }
+  ],
+  "full_census_recommendation": "no-go pending scalable canonical solver, matching stress coverage and independent review",
+  "gpu_hours": 0,
+  "grouping_scale": {
+    "components": 3049,
+    "cpu_seconds": 0.9523050740000087,
+    "edges": 387171,
+    "process_peak_rss_kib": 1745788,
+    "quarantined_components": 382,
+    "scope": "synthetic union only; not identity discovery or semantic review",
+    "vertices": 390220
+  },
+  "has_network_acquisition": false,
+  "is_full_census": false,
+  "is_training_manifest": false,
+  "matching_scale": [
+    {
+      "candidate_checks": 0,
+      "completed_rows": 1000,
+      "cpu_seconds": 5.254582674000002,
+      "database_bytes": 22118400,
+      "expected_rows": 1000,
+      "label": "synthetic-1000-256-common0",
+      "matches": 0,
+      "postings": 353000,
+      "process_peak_rss_kib": 1745788,
+      "reason": null,
+      "status": "complete",
+      "synthetic_width": 256,
+      "wall_seconds": 5.262031670194119
+    },
+    {
+      "candidate_checks": 0,
+      "completed_rows": 10000,
+      "cpu_seconds": 103.245611282,
+      "database_bytes": 225882112,
+      "expected_rows": 10000,
+      "label": "synthetic-10000-256-common0",
+      "matches": 0,
+      "postings": 3530000,
+      "process_peak_rss_kib": 1745788,
+      "reason": null,
+      "status": "complete",
+      "synthetic_width": 256,
+      "wall_seconds": 103.32312178425491
+    },
+    {
+      "candidate_checks": 19900,
+      "completed_rows": 200,
+      "cpu_seconds": 8.808757059000015,
+      "database_bytes": 4304896,
+      "expected_rows": 2000,
+      "label": "synthetic-2000-256-common1",
+      "matches": 0,
+      "postings": 70600,
+      "process_peak_rss_kib": 1745788,
+      "reason": "candidate budget exhausted; no frequent keys dropped",
+      "status": "unknown",
+      "synthetic_width": 256,
+      "wall_seconds": 8.84664730494842
+    },
+    {
+      "candidate_checks": 0,
+      "completed_rows": 390220,
+      "cpu_seconds": 10.774113282999991,
+      "database_bytes": 30826496,
+      "expected_rows": 390220,
+      "label": "synthetic-390220-1-common0",
+      "matches": 0,
+      "postings": 390220,
+      "process_peak_rss_kib": 1745788,
+      "reason": null,
+      "status": "complete",
+      "synthetic_width": 1,
+      "wall_seconds": 10.779899626038969
+    }
+  ],
+  "peak_rss_kib": 1745788,
+  "python": "3.11.14",
+  "registry": {
+    "has_identical_prompt_bytes": true,
+    "independent_second_reviewer": null,
+    "is_exemption_active": false,
+    "registry_sha256": "b8c250e9a15ec5e53c8970094adb5c14b7190f6de10694a636dd3966deda100b",
+    "source_counts": {
+      "commitpackft-python": 128,
+      "docred-original": 214,
+      "squad-original": 252,
+      "ultrachat-first-user-sft": 252
+    },
+    "token_lengths": "unchanged prior evidence; same prompt bytes and tokenizer",
+    "tokenizer_rerun": false,
+    "ultrachat_first_user_consistency": "unverified: retained projection lacks messages",
+    "user_candidate_approval": true,
+    "verified_spans": 846
+  },
+  "retained_exhaustive_oracle": {
+    "compared_pairs": 357435,
+    "matching_pairs": 22
+  },
+  "retained_matching": {
+    "candidate_checks": 23515,
+    "completed_rows": 846,
+    "cpu_seconds": 11.820234478,
+    "database_bytes": 13053952,
+    "expected_rows": 846,
+    "matches": 22,
+    "postings": 212630,
+    "process_peak_rss_kib": 1745788,
+    "reason": null,
+    "status": "complete",
+    "wall_seconds": 11.825946238357574
+  },
+  "sqlite": "3.50.4",
+  "total_cpu_seconds": 149.091090504
+}

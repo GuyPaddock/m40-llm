@@ -6,9 +6,10 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The current authorization is **paper-only V3 census and registry planning**,
-using retained evidence only. No further source searches, sampling, acquisition,
-teacher generation, training, learned evaluation or GPU switch is authorized. The
+The current authorization is **CPU-only V3 implementation preflight**,
+using retained evidence and synthetic fixtures only. No further source searches,
+sampling, acquisition, teacher generation, training, learned evaluation or GPU
+switch is authorized. The
 accepted V2 short-context protocol at `2060504` remains planning evidence,
 not GPU calibration authorization. Historical permissions below do not
 override this restriction.
@@ -21,11 +22,28 @@ apply; task-family transfer requires separate authorization.
 
 The [frozen census protocol v1](experiments/2026-10-30-v3-census-protocol-v1.md)
 and [exact-byte registry v1](experiments/2026-10-30-v3-generic-instruction-registry-v1.json)
-are review-only. Four source-bound adapter spans await entry review; UltraChat
-has no exemption. The protocol distinguishes source/isolation capacity failures
-from hash-allocation shortfalls and proposes one quota-aware alternative before
-selection. No allocator, registry exemption or census has been implemented or
-run. Acquisition and GPU work remain blocked pending separate authorization.
+remain immutable review artifacts. The user approved the four candidates and
+quota-aware methodology, subject to independent second review and validation.
+UltraChat has no exemption; no exemption has been activated.
+
+The [CPU preflight decision](experiments/2026-10-30-v3-preflight.md) is **no-go
+for complete-source acquisition with the current implementation**. All 55 CPU
+tests pass. Registry replay preserves 846 original prompt byte strings and
+verifies 846 structural spans. Indexed raw matching reproduces the 22 matches
+in a 357,435-pair exhaustive retained-input check. Synthetic 390,220-vertex
+grouping completes, but repeated-header candidates exhaust their probe cap
+after 200 records. The exact integer reference finds feasible witnesses but
+does not finish canonical tie-breaking at eight/twelve synthetic components;
+population-scale solves remain unknown, not quota failures.
+
+Implementation commits `d64e76b`, `f427d8d`, `919a5f2` and probe `58cbfc3`
+retain raw evidence and explicit incomplete-work results. Total measured probe
+CPU time is 149.091 seconds, peak process RSS 1.665 GiB. Independent registry
+review, normalized-offset integration, a scalable canonical solver, common-key
+matching selectivity and credible eight-hour human review remain blockers.
+UltraChat's retained projection lacks messages, so first-user consistency is
+unverified. No selected source manifest or full census was produced.
+Acquisition and GPU work remain blocked pending separate authorization.
 DocRED, SQuAD, CommitPackFT Python and UltraChat SFT remain provisional; native
 population metadata and bounded samples do not establish independent-group
 capacity or rights clearance. All prior negative decisions remain valid under
