@@ -6,10 +6,9 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The current authorization is **CPU-only V3 implementation preflight**,
-using retained evidence and synthetic fixtures only. No further source searches,
-sampling, acquisition, teacher generation, training, learned evaluation or GPU
-switch is authorized. The
+The authorized **bounded CPU-only V3 engineering follow-up is complete**.
+Stop for review; no further implementation search, source sampling, acquisition,
+teacher generation, training, learned evaluation or GPU switch follows. The
 accepted V2 short-context protocol at `2060504` remains planning evidence,
 not GPU calibration authorization. Historical permissions below do not
 override this restriction.
@@ -26,7 +25,30 @@ remain immutable review artifacts. The user approved the four candidates and
 quota-aware methodology, subject to independent second review and validation.
 UltraChat has no exemption; no exemption has been activated.
 
-The [CPU preflight decision](experiments/2026-10-30-v3-preflight.md) is **no-go
+The [October 31 engineering results](experiments/2026-10-31-v3-engineering-results.md)
+retain a **no-go for full acquisition under the current implementation and review
+allowance**. One global-frequency index preserves all 22 retained overlaps and
+all 19,900 common-passage pairs while avoiding false candidates in a 10,000-row
+header probe. The population probe stops after staging 240,451/390,220 synthetic
+records; matching has not begun, so zero pairs means unknown, not clearance.
+One CP-SAT implementation produces checked canonical results at 3,200 components;
+11,776/79,803 yield checked zero-departure witnesses without canonical completion.
+The 390,220-component case hits its 4 GiB address-space limit without a witness.
+No timeout is interpreted as source insufficiency.
+
+All 64 CPU tests pass. Ten probes consume 1,169.041 measured CPU seconds; peak
+process RSS is 3.631 GiB. Implementation, independent serialized audits and the
+frozen probe plan are separate commits `df9a4dc`, `324d09a`, `80e9a16`, `ee552df`.
+The [staged review proposal](experiments/2026-10-31-v3-staged-review.md), `e32009c`,
+keeps unselected dependency links blocking and rejects an unsupported eight-hour
+admission claim. At assumed 2-10 minutes per selected example, content inspection
+alone costs 53.3-266.7 hours; actual human throughput remains unmeasured. A narrow
+count-tie-break alternative is proposed for review only, not implemented.
+No registry, source pin, quota, length rule, target, GPU budget or runtime default
+changed. No selected source manifest or census was produced. Independent human
+review, normalized offsets, rights, semantic and benchmark coverage remain open.
+
+The earlier [CPU preflight decision](experiments/2026-10-30-v3-preflight.md) is **no-go
 for complete-source acquisition with the current implementation**. All 55 CPU
 tests pass. Registry replay preserves 846 original prompt byte strings and
 verifies 846 structural spans. Indexed raw matching reproduces the 22 matches

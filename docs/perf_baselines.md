@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: V3 CPU Engineering Stops Before Census
+
+The [bounded engineering follow-up](experiments/2026-10-31-v3-engineering-results.md)
+passes all 64 CPU tests and preserves retained raw matches. Global-frequency
+indexing avoids false candidates in the 10,000-row shared-header probe, but the
+390,220-row attempt reaches its 600 CPU-second deadline during staging.
+CP-SAT completes exact canonical allocation at 3,200 synthetic components;
+larger cases stop with incomplete canonical work or a memory limit, not a
+dataset quota failure. Ten probes use 1,169.041 measured CPU seconds with
+3.631 GiB peak process RSS. These are not full-census performance estimates.
+
+The eight-reviewer-hour admission assumption remains unsupported. Preserve the
+negative results and stop for review before acquisition, another infrastructure
+design, calibration or training. No GPU work, runtime or performance-reference
+change occurred; learned drafter acceptance remains unmeasured.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)

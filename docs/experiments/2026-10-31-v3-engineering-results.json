@@ -1,0 +1,332 @@
+{
+  "probe_count": 10,
+  "total_cpu_seconds": 1169.0414134250002,
+  "total_wall_seconds": 1177.78399927821,
+  "peak_rss_kib": 3807720,
+  "probes": [
+    {
+      "kind": "matching",
+      "case": "copied200",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 2.384620817,
+      "wall_seconds": 2.3989992570132017,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "status": "complete",
+        "reason": null,
+        "intended_records": 200,
+        "staged_records": 200,
+        "persisted_records": 200,
+        "synthetic_width": 64,
+        "staging_cpu_seconds": 0.08125849700000004,
+        "index_cpu_seconds": 2.375962801,
+        "candidate_checks": 19900,
+        "raw_matching_pairs": 19900,
+        "postings": 13200,
+        "frequency_keys": 460,
+        "database_bytes": 2486272,
+        "database_sha256": "940df380b8cff86e45112e7c821cc757260cfead3b056ec56784a7692bed368e"
+      }
+    },
+    {
+      "kind": "solver",
+      "case": "fixed72",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 0.043330835999999984,
+      "wall_seconds": 0.044032452162355185,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "components": 72,
+        "result": {
+          "feasibility": "feasible",
+          "is_minimum_departure": true,
+          "is_canonical": true,
+          "reason": "canonical optimum verified",
+          "solver_status": "OPTIMAL",
+          "solve_calls": 9,
+          "cpu_seconds": 0.04000097699999999,
+          "wall_seconds": 0.04027330782264471
+        },
+        "has_checked_witness": true,
+        "departures": 0,
+        "independent_audit": {
+          "problem_sha256": "03bf195bbe7926e4b7d17d0255b4437d586749a1fbf6caea82b7082ec7f756de",
+          "result_sha256": "bca634407f53e007afc18a844b786582899c34966ca4e3b4f0bd62d26ba3d64d",
+          "is_witness_feasible": true,
+          "canonical_check": "unique fixed-role all-capacity solution",
+          "is_independent_human_review": false
+        }
+      }
+    },
+    {
+      "kind": "matching",
+      "case": "header10k",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 248.096101858,
+      "wall_seconds": 248.37486060382798,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "status": "complete",
+        "reason": null,
+        "intended_records": 10000,
+        "staged_records": 10000,
+        "persisted_records": 10000,
+        "synthetic_width": 256,
+        "staging_cpu_seconds": 50.996566983,
+        "index_cpu_seconds": 247.156265181,
+        "candidate_checks": 0,
+        "raw_matching_pairs": 0,
+        "postings": 3530000,
+        "frequency_keys": 2360016,
+        "database_bytes": 326135808,
+        "database_sha256": "38f9f72a5cf62e83f450f19ca09a85c84fe6ff647b28227ddc55d6db042c7560"
+      }
+    },
+    {
+      "kind": "matching",
+      "case": "header2k",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 23.84861853,
+      "wall_seconds": 23.875796211883426,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "status": "complete",
+        "reason": null,
+        "intended_records": 2000,
+        "staged_records": 2000,
+        "persisted_records": 2000,
+        "synthetic_width": 256,
+        "staging_cpu_seconds": 4.131389494,
+        "index_cpu_seconds": 23.679887927,
+        "candidate_checks": 0,
+        "raw_matching_pairs": 0,
+        "postings": 706000,
+        "frequency_keys": 472016,
+        "database_bytes": 64749568,
+        "database_sha256": "5cbce4e4a0a6fbf62987080199424508e7517ffe6f4cbd755c90ba6421e3973d"
+      }
+    },
+    {
+      "kind": "solver",
+      "case": "large",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 94.472528177,
+      "wall_seconds": 94.47567756893113,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "components": 79803,
+        "result": {
+          "feasibility": "feasible",
+          "is_minimum_departure": true,
+          "is_canonical": false,
+          "reason": "checked feasible; canonical objective incomplete",
+          "solver_status": "UNKNOWN",
+          "solve_calls": 2,
+          "cpu_seconds": 90.458351361,
+          "wall_seconds": 90.46079943329096
+        },
+        "has_checked_witness": true,
+        "departures": 0,
+        "independent_audit": {
+          "problem_sha256": "4716dc611a31ccd49e532027a3714387ef54c8619e6fce7d282e714f13828afd",
+          "result_sha256": "a1b9ad2f785d9cafb41792eb805663e7ad32de0ea543140d18f5d5dd734265b9",
+          "is_witness_feasible": true,
+          "canonical_check": "not independently replayed",
+          "is_independent_human_review": false
+        }
+      }
+    },
+    {
+      "kind": "solver",
+      "case": "medium",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 90.766327124,
+      "wall_seconds": 90.78218371327966,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "components": 11776,
+        "result": {
+          "feasibility": "feasible",
+          "is_minimum_departure": true,
+          "is_canonical": false,
+          "reason": "checked feasible; canonical objective incomplete",
+          "solver_status": "UNKNOWN",
+          "solve_calls": 91,
+          "cpu_seconds": 90.101529272,
+          "wall_seconds": 90.11709615122527
+        },
+        "has_checked_witness": true,
+        "departures": 0,
+        "independent_audit": {
+          "problem_sha256": "7ab6ebadd0102f3d7e55d9b9eb60b1afc78625507e446451cf251f4f33447aee",
+          "result_sha256": "10512b64a0393b4cba187e9d0b53cfa2118d22fb2d8c632a42207bd32ff58155",
+          "is_witness_feasible": true,
+          "canonical_check": "not independently replayed",
+          "is_independent_human_review": false
+        }
+      }
+    },
+    {
+      "kind": "matching",
+      "case": "population",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 602.960519537,
+      "wall_seconds": 611.3394302031957,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "status": "unknown",
+        "reason": "frequency index CPU/wall budget exhausted",
+        "intended_records": 390220,
+        "staged_records": 240451,
+        "persisted_records": 240451,
+        "synthetic_width": 64,
+        "staging_cpu_seconds": null,
+        "index_cpu_seconds": 600.8975964110001,
+        "candidate_checks": 0,
+        "raw_matching_pairs": 0,
+        "postings": 0,
+        "frequency_keys": 10579860,
+        "database_bytes": 778211328,
+        "database_sha256": "8675a6f0fc22456815562501b7a668adbcfc016e5275dd4aa5f6c580a6f9aed4"
+      }
+    },
+    {
+      "kind": "matching",
+      "case": "retained",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 10.029896076,
+      "wall_seconds": 10.047880443744361,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "status": "complete",
+        "reason": null,
+        "intended_records": 846,
+        "staged_records": 846,
+        "persisted_records": 846,
+        "synthetic_width": null,
+        "staging_cpu_seconds": 0.8688642150000001,
+        "index_cpu_seconds": 4.584027404,
+        "candidate_checks": 22,
+        "raw_matching_pairs": 22,
+        "postings": 212630,
+        "frequency_keys": 118841,
+        "database_bytes": 18141184,
+        "database_sha256": "40a6f41aa655dce8cc318868222866d8468f47a402c522de577eae5d2e3bb3fb",
+        "independent_oracle": {
+          "compared_pairs": 357435,
+          "matching_pairs": 22
+        }
+      }
+    },
+    {
+      "kind": "solver",
+      "case": "small",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 13.558683828,
+      "wall_seconds": 13.55974482698366,
+      "peak_rss_kib": 1745788,
+      "measurement": {
+        "components": 3200,
+        "result": {
+          "feasibility": "feasible",
+          "is_minimum_departure": true,
+          "is_canonical": true,
+          "reason": "canonical optimum verified",
+          "solver_status": "OPTIMAL",
+          "solve_calls": 80,
+          "cpu_seconds": 13.425739464000001,
+          "wall_seconds": 13.425343652721494
+        },
+        "has_checked_witness": true,
+        "departures": 0,
+        "independent_audit": {
+          "problem_sha256": "0a13a72c385822e51cb177bf2ab558198b255cef291c5b46a26c6f0d08e522b0",
+          "result_sha256": "cecac8d61bf88a5119a43507d36ad2037da80f29b6ddc199013b24a0b50978b3",
+          "is_witness_feasible": true,
+          "canonical_check": "not independently replayed",
+          "is_independent_human_review": false
+        }
+      }
+    },
+    {
+      "kind": "solver",
+      "case": "upper",
+      "python": "3.11.14",
+      "ortools": "9.14.6206",
+      "sqlite": "3.50.4",
+      "is_census_admitted": false,
+      "gpu_hours": 0,
+      "has_acquisition": false,
+      "cpu_seconds": 82.880786642,
+      "wall_seconds": 82.88539399718866,
+      "peak_rss_kib": 3807720,
+      "measurement": {
+        "components": 390220,
+        "result": {
+          "feasibility": "unknown",
+          "is_minimum_departure": false,
+          "is_canonical": false,
+          "reason": "memory limit; canonical objective incomplete",
+          "solver_status": "NOT_RUN",
+          "solve_calls": 1,
+          "cpu_seconds": 70.40450869,
+          "wall_seconds": 70.40681806812063
+        },
+        "has_checked_witness": false,
+        "departures": null,
+        "independent_audit": {
+          "problem_sha256": "717849c5dfd2f7237f24b728384f96ea26c1a13d3bed8eb6304b5ffb5a37d94e",
+          "result_sha256": "7441eb35eb1378b73145f6f29710842e4856c1ce20c7546c7847d84c69fb970c",
+          "is_witness_feasible": false,
+          "canonical_check": "not independently replayed",
+          "is_independent_human_review": false
+        }
+      }
+    }
+  ]
+}
