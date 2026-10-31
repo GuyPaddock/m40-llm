@@ -52,6 +52,11 @@ verify node-1 placement and portable evidence, and reject ten invalid reports
 plus source tampering and output overwrite. Physical capacity inventory is
 retained separately from allocation availability. Actual CPU/transfer timing,
 the sourced 108-input simulation and final decision remain pending.
+The [result summarizer](experiments/2026-10-31-dualpace-summary.md) now derives
+per-declared-owner first-decode and inter-token latencies, resource queueing
+and local assistance savings. Four synthetic positive cases and four malformed
+report cases pass. Capacity rejections remain visible; a rejected GPU-only
+baseline yields no throughput ratio. No measured feasibility outcome follows.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

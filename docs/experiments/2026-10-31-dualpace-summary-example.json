@@ -1,0 +1,329 @@
+{
+  "schema_version": 1,
+  "is_simulation": true,
+  "is_serving_measurement": false,
+  "generated_token_count": 0,
+  "trace_sha256": "d3fa20d98252065d380b9af871a80a54a42b86d34833db26648a8a7642e95f4e",
+  "executable_sha256": "1824407e662a54ef2c514df343cfe0334bdcfe5cb651e696c4e27cfcd7d26427",
+  "description": "Synthetic omitted-CPU-prefix fixture; not hardware measurements",
+  "cpu_numa_node": 0,
+  "timing_scope": "decode-ready through last simulated token; prefill and initial KV migration excluded",
+  "evidence": {
+    "hand_calculation": {
+      "description": "Synthetic durations and byte counts for checking event ordering; not a feasibility estimate.",
+      "kind": "assumption"
+    },
+    "synchronization_included": {
+      "description": "Completed transfer costs already include synchronization in this hand calculation",
+      "kind": "assumption"
+    }
+  },
+  "local_assistance": [
+    {
+      "profile": "token",
+      "stage": "dense",
+      "cpu_ns": 20,
+      "gpu_ns": 10,
+      "h2d_ns": 2,
+      "d2h_ns": 2,
+      "synchronization_ns": 0,
+      "saving_before_queueing_ns": 6
+    }
+  ],
+  "modes": [
+    {
+      "copy_busy_ns": 0,
+      "cpu_compute_busy_ns": 0,
+      "cpu_worker_occupied_ns": 0,
+      "elapsed_ns": 40,
+      "first_decode_latency": {
+        "p50_ns": 20,
+        "p95_ns": 40,
+        "p99_ns": 40,
+        "samples": 2
+      },
+      "gpu_busy_ns": 40,
+      "gpu_reserved_bytes": 500,
+      "host_reserved_bytes": 100,
+      "inter_token_latency": null,
+      "mode": "gpu_only",
+      "simulated_tokens": 2,
+      "simulated_tokens_per_second": 50000000.0,
+      "transfer_bytes": 0,
+      "is_admitted": true,
+      "throughput_ratio_to_gpu_only": 1,
+      "queueing": [
+        {
+          "resource": "gpu",
+          "intervals": 4,
+          "total_wait_ns": 20,
+          "wait_distribution": {
+            "samples": 4,
+            "p50_ns": 0,
+            "p95_ns": 20,
+            "p99_ns": 20
+          }
+        }
+      ],
+      "by_declared_owner": [
+        {
+          "owner": "gpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 20,
+            "p95_ns": 20,
+            "p99_ns": 20
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "gpu",
+              "intervals": 2,
+              "total_wait_ns": 0,
+              "wait_distribution": {
+                "samples": 2,
+                "p50_ns": 0,
+                "p95_ns": 0,
+                "p99_ns": 0
+              }
+            }
+          ]
+        },
+        {
+          "owner": "cpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 40,
+            "p95_ns": 40,
+            "p99_ns": 40
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "gpu",
+              "intervals": 2,
+              "total_wait_ns": 20,
+              "wait_distribution": {
+                "samples": 2,
+                "p50_ns": 0,
+                "p95_ns": 20,
+                "p99_ns": 20
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "copy_busy_ns": 0,
+      "cpu_compute_busy_ns": 20,
+      "cpu_worker_occupied_ns": 20,
+      "elapsed_ns": 20,
+      "first_decode_latency": {
+        "p50_ns": 20,
+        "p95_ns": 20,
+        "p99_ns": 20,
+        "samples": 2
+      },
+      "gpu_busy_ns": 20,
+      "gpu_reserved_bytes": 300,
+      "host_reserved_bytes": 300,
+      "inter_token_latency": null,
+      "mode": "independent",
+      "simulated_tokens": 2,
+      "simulated_tokens_per_second": 100000000.0,
+      "transfer_bytes": 0,
+      "is_admitted": true,
+      "throughput_ratio_to_gpu_only": 2,
+      "queueing": [
+        {
+          "resource": "cpu",
+          "intervals": 1,
+          "total_wait_ns": 0,
+          "wait_distribution": {
+            "samples": 1,
+            "p50_ns": 0,
+            "p95_ns": 0,
+            "p99_ns": 0
+          }
+        },
+        {
+          "resource": "gpu",
+          "intervals": 2,
+          "total_wait_ns": 0,
+          "wait_distribution": {
+            "samples": 2,
+            "p50_ns": 0,
+            "p95_ns": 0,
+            "p99_ns": 0
+          }
+        }
+      ],
+      "by_declared_owner": [
+        {
+          "owner": "gpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 20,
+            "p95_ns": 20,
+            "p99_ns": 20
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "gpu",
+              "intervals": 2,
+              "total_wait_ns": 0,
+              "wait_distribution": {
+                "samples": 2,
+                "p50_ns": 0,
+                "p95_ns": 0,
+                "p99_ns": 0
+              }
+            }
+          ]
+        },
+        {
+          "owner": "cpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 20,
+            "p95_ns": 20,
+            "p99_ns": 20
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "cpu",
+              "intervals": 1,
+              "total_wait_ns": 0,
+              "wait_distribution": {
+                "samples": 1,
+                "p50_ns": 0,
+                "p95_ns": 0,
+                "p99_ns": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "copy_busy_ns": 4,
+      "cpu_compute_busy_ns": 0,
+      "cpu_worker_occupied_ns": 14,
+      "elapsed_ns": 34,
+      "first_decode_latency": {
+        "p50_ns": 14,
+        "p95_ns": 34,
+        "p99_ns": 34,
+        "samples": 2
+      },
+      "gpu_busy_ns": 30,
+      "gpu_reserved_bytes": 300,
+      "host_reserved_bytes": 300,
+      "inter_token_latency": null,
+      "mode": "assisted",
+      "simulated_tokens": 2,
+      "simulated_tokens_per_second": 58823529.4117647,
+      "transfer_bytes": 32,
+      "is_admitted": true,
+      "throughput_ratio_to_gpu_only": 1.1764705882352942,
+      "queueing": [
+        {
+          "resource": "copy",
+          "intervals": 2,
+          "total_wait_ns": 0,
+          "wait_distribution": {
+            "samples": 2,
+            "p50_ns": 0,
+            "p95_ns": 0,
+            "p99_ns": 0
+          }
+        },
+        {
+          "resource": "gpu",
+          "intervals": 3,
+          "total_wait_ns": 14,
+          "wait_distribution": {
+            "samples": 3,
+            "p50_ns": 0,
+            "p95_ns": 14,
+            "p99_ns": 14
+          }
+        }
+      ],
+      "by_declared_owner": [
+        {
+          "owner": "gpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 34,
+            "p95_ns": 34,
+            "p99_ns": 34
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "gpu",
+              "intervals": 2,
+              "total_wait_ns": 14,
+              "wait_distribution": {
+                "samples": 2,
+                "p50_ns": 0,
+                "p95_ns": 14,
+                "p99_ns": 14
+              }
+            }
+          ]
+        },
+        {
+          "owner": "cpu",
+          "requests": 1,
+          "simulated_tokens": 1,
+          "first_decode_latency": {
+            "samples": 1,
+            "p50_ns": 14,
+            "p95_ns": 14,
+            "p99_ns": 14
+          },
+          "inter_token_latency": null,
+          "queueing": [
+            {
+              "resource": "copy",
+              "intervals": 2,
+              "total_wait_ns": 0,
+              "wait_distribution": {
+                "samples": 2,
+                "p50_ns": 0,
+                "p95_ns": 0,
+                "p99_ns": 0
+              }
+            },
+            {
+              "resource": "gpu",
+              "intervals": 1,
+              "total_wait_ns": 0,
+              "wait_distribution": {
+                "samples": 1,
+                "p50_ns": 0,
+                "p95_ns": 0,
+                "p99_ns": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
