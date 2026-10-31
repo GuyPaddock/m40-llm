@@ -1,7 +1,9 @@
 # Quantized KV staged reference checkpoint
 
-Status: implementation in progress on top of `8072811`; hardware validation
-is pending. This is not a qualified attention or performance result.
+Status: the first release hardware execution
+[fails exact reconstructed V bytes](2026-10-31-quantized-kv-initial-failure.md).
+The staged implementation and failing test are preserved before diagnosis.
+This is not a qualified attention or performance result.
 
 The mixed staged C ABI accepts head128 through a new compile-time
 specialization. Its gather and attention kernels retain a head64

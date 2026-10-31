@@ -3354,7 +3354,11 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void gather_block_select_exact_q8_old_head64_kernel(
+    // Keep the existing head64 specialization while adding the research
+    // head128 staged control. Runtime backend admission remains unchanged.
+    extern "C++" {
+    template <uint32_t head_dim>
+    __global__ void gather_block_select_exact_quantized_old_kernel(
         const __half* __restrict__ K,
         const __half* __restrict__ V,
         const __half* __restrict__ recent_k,
@@ -3382,23 +3386,22 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         __half* __restrict__ staged_v,
         uint32_t* __restrict__ staged_positions,
         uint32_t* __restrict__ staged_counts) {
-        extern __shared__ float shmem[];
+        extern __shared__ float quantized_gather_shared[];
         const uint32_t qh_idx = blockIdx.x;
         const uint32_t tid = threadIdx.x;
         if (qh_idx >= q_heads) return;
 
         const uint32_t group = q_heads / kv_heads;
         const uint32_t kvh_idx = qh_idx / group;
-        const uint32_t head_dim = 64;
         const size_t elems_per_token = (size_t)kv_heads * (size_t)head_dim;
-        const float inv_sqrt = 0.125f;
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
         const float* qh = Q + (size_t)qh_idx * (size_t)head_dim;
         const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
         const uint32_t recent_start = old_len;
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
         const uint32_t top_n = top_blocks < old_blocks ? top_blocks : old_blocks;
 
-        float* token_slots = shmem;
+        float* token_slots = quantized_gather_shared;
         float* reduce = token_slots + selected_capacity;
 
         float selected_scores[64];
@@ -3521,7 +3524,8 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         }
     }
 
-    __global__ void attention_last_token_gqa_staged_exact_head64_kernel(
+    template <uint32_t head_dim>
+    __global__ void attention_last_token_gqa_staged_exact_kernel(
         const __half* __restrict__ staged_k,
         const __half* __restrict__ staged_v,
         const uint32_t* __restrict__ staged_counts,
@@ -3529,17 +3533,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         uint32_t q_heads,
         const float* __restrict__ Q,
         float* __restrict__ Out) {
-        extern __shared__ float shmem[];
+        extern __shared__ float staged_attention_shared[];
         const uint32_t qh_idx = blockIdx.x;
         const uint32_t tid = threadIdx.x;
         if (qh_idx >= q_heads) return;
 
-        const uint32_t head_dim = 64;
-        const float inv_sqrt = 0.125f;
+        const float inv_sqrt = head_dim == 64u ? 0.125f : 0.08838834764831845f;
         const float* qh = Q + (size_t)qh_idx * head_dim;
         const uint32_t selected_count = staged_counts[qh_idx];
         if (selected_count == 0 || selected_count > selected_capacity) return;
-        float* scores = shmem;
+        float* scores = staged_attention_shared;
         float* reduce = scores + selected_capacity;
 
         float max_score_local = -1e30f;
@@ -3590,6 +3593,49 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             out_h[d] = acc;
         }
     }
+
+    template <uint32_t head_dim>
+    static int launch_mixed_staged_attention(
+        M40llmCudaContext* ctx,
+        const M40llmKVCache* kv,
+        uint32_t seq_id,
+        const void* q_dev_f32,
+        uint32_t q_heads,
+        uint32_t seq_len,
+        uint32_t recent_window,
+        uint32_t block_size,
+        uint32_t selected_old_blocks,
+        uint32_t selected_capacity,
+        void* staged_k_dev,
+        void* staged_v_dev,
+        void* staged_positions_dev,
+        void* staged_counts_dev,
+        void* out_dev_f32) {
+        const int threads = 128;
+        const size_t shmem = ((size_t)selected_capacity + threads) * sizeof(float);
+        gather_block_select_exact_quantized_old_kernel<head_dim><<<q_heads, threads, shmem, ctx->decode_stream>>>(
+            kv->d_fp16_old_k, nullptr,
+            kv->compressed ? kv->d_recent_k : nullptr,
+            kv->compressed ? kv->d_recent_v : nullptr,
+            nullptr, nullptr, nullptr, nullptr, kv->d_q4_old_v, kv->d_q4_old_v_scale,
+            kv->max_seq_len, q_heads, kv->num_heads, seq_id,
+            reinterpret_cast<const float*>(q_dev_f32), seq_len, recent_window,
+            block_size, selected_old_blocks, selected_capacity,
+            selected_block_order_from_env(), 1u, 2u,
+            reinterpret_cast<__half*>(staged_k_dev),
+            reinterpret_cast<__half*>(staged_v_dev),
+            reinterpret_cast<uint32_t*>(staged_positions_dev),
+            reinterpret_cast<uint32_t*>(staged_counts_dev));
+        if (cudaGetLastError() != cudaSuccess) return -12;
+        attention_last_token_gqa_staged_exact_kernel<head_dim><<<q_heads, threads, shmem, ctx->decode_stream>>>(
+            reinterpret_cast<const __half*>(staged_k_dev),
+            reinterpret_cast<const __half*>(staged_v_dev),
+            reinterpret_cast<const uint32_t*>(staged_counts_dev),
+            selected_capacity, q_heads, reinterpret_cast<const float*>(q_dev_f32),
+            reinterpret_cast<float*>(out_dev_f32));
+        return cudaGetLastError() == cudaSuccess ? 0 : -13;
+    }
+    } // extern "C++"
 
     __global__ void attention_last_token_gqa_block_select_exact_q8_direct_head64_kernel(
         const __half* __restrict__ K,
@@ -5642,7 +5688,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) return -12;
 
         const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
-        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+        attention_last_token_gqa_staged_exact_kernel<64><<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
             staged_k,
             staged_v,
             staged_counts,
@@ -5701,7 +5747,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         const int blocks = (int)q_heads;
         const int threads = 128;
         const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
-        gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
+        gather_block_select_exact_quantized_old_kernel<64><<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
             reinterpret_cast<const __half*>(kv->d_k),
             reinterpret_cast<const __half*>(kv->d_v),
             kv->compressed ? kv->d_recent_k : nullptr,
@@ -5733,7 +5779,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (err != cudaSuccess) return -12;
 
         const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
-        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
+        attention_last_token_gqa_staged_exact_kernel<64><<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
             staged_k,
             staged_v,
             staged_counts,
@@ -5769,7 +5815,7 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (seq_id >= kv->max_batch_size) return -2;
         if (seq_len == 0 || seq_len > kv->max_seq_len) return -3;
         if (q_heads == 0 || kv->num_heads == 0 || q_heads % kv->num_heads != 0) return -4;
-        if (kv->head_dim != 64) return -5;
+        if (kv->head_dim != 64 && kv->head_dim != 128) return -5;
         if (recent_window == 0 || block_size == 0 || top_blocks == 0 || top_blocks > 64) return -6;
         const uint32_t old_len = seq_len > recent_window ? seq_len - recent_window : 0;
         const uint32_t old_blocks = old_len == 0 ? 0 : (old_len + block_size - 1) / block_size;
@@ -5780,56 +5826,16 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
         if (selected_capacity == 0 || selected_capacity > seq_len) return -7;
         if (selected_capacity > staged_capacity_tokens) return -15;
 
-        __half* staged_k = reinterpret_cast<__half*>(staged_k_dev);
-        __half* staged_v = reinterpret_cast<__half*>(staged_v_dev);
-        uint32_t* staged_positions = reinterpret_cast<uint32_t*>(staged_positions_dev);
-        uint32_t* staged_counts = reinterpret_cast<uint32_t*>(staged_counts_dev);
-        const int blocks = (int)q_heads;
-        const int threads = 128;
-        const size_t gather_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
-        gather_block_select_exact_q8_old_head64_kernel<<<blocks, threads, gather_shmem, ctx->decode_stream>>>(
-            kv->d_fp16_old_k,
-            nullptr,
-            kv->compressed ? kv->d_recent_k : nullptr,
-            kv->compressed ? kv->d_recent_v : nullptr,
-            nullptr,
-            nullptr,
-            nullptr,
-            nullptr,
-            kv->d_q4_old_v,
-            kv->d_q4_old_v_scale,
-            kv->max_seq_len,
-            q_heads,
-            kv->num_heads,
-            seq_id,
-            reinterpret_cast<const float*>(q_dev_f32),
-            seq_len,
-            recent_window,
-            block_size,
-            selected_old_blocks,
-            selected_capacity,
-            selected_block_order_from_env(),
-            1u,
-            2u,
-            staged_k,
-            staged_v,
-            staged_positions,
-            staged_counts);
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) return -12;
-
-        const size_t attention_shmem = ((size_t)selected_capacity + (size_t)threads) * sizeof(float);
-        attention_last_token_gqa_staged_exact_head64_kernel<<<blocks, threads, attention_shmem, ctx->decode_stream>>>(
-            staged_k,
-            staged_v,
-            staged_counts,
-            selected_capacity,
-            q_heads,
-            reinterpret_cast<const float*>(q_dev_f32),
-            reinterpret_cast<float*>(out_dev_f32));
-        err = cudaGetLastError();
-        if (err != cudaSuccess) return -13;
-        return 0;
+        if (kv->head_dim == 128) {
+            return launch_mixed_staged_attention<128>(
+                ctx, kv, seq_id, q_dev_f32, q_heads, seq_len, recent_window,
+                block_size, selected_old_blocks, selected_capacity, staged_k_dev,
+                staged_v_dev, staged_positions_dev, staged_counts_dev, out_dev_f32);
+        }
+        return launch_mixed_staged_attention<64>(
+            ctx, kv, seq_id, q_dev_f32, q_heads, seq_len, recent_window,
+            block_size, selected_old_blocks, selected_capacity, staged_k_dev,
+            staged_v_dev, staged_positions_dev, staged_counts_dev, out_dev_f32);
     }
 
     int m40llm_attention_last_token_f32_gqa_block_select_exact_q8_old_direct_async(

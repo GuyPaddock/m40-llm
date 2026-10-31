@@ -6777,7 +6777,11 @@ impl KVCache {
 
     /// # Safety
     /// Enqueues staged exact block-select GQA attention using FP16 old K,
-    /// q4 old V, and FP16 recent KV.
+    /// q4 old V, and FP16 recent KV. Supports head dimensions 64 and 128 for
+    /// low-level research comparisons; runtime backend admission is unchanged.
+    /// Query/output and staging pointers must belong to this context and fit
+    /// their full shapes. Producers must complete or precede this call on the
+    /// decode stream; keep all allocations alive until that stream completes.
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn attention_last_token_f32_gqa_block_select_exact_staged_fp16_k_q4_v_old_with_buffers_async(
         &self,

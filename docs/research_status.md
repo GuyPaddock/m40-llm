@@ -6,6 +6,15 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [first staged-reference hardware run](experiments/2026-10-31-quantized-kv-initial-failure.md)
+fails exact reconstructed V bytes after a successful release build. The
+runner, affected regressions and cuBLAS-disabled checks have not run.
+Preserve this implementation and diagnose the differing token and bits before
+correcting the kernel or CPU reference. No numerical gate is relaxed.
+The complete lossless capture is available; that independent topic is now
+complete with a negative integration decision. Seven of nine studies are
+complete; quantized KV and DualPace remain active.
+
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`quantized-kv`](experiments/2026-10-30-quantized-kv-protocol.md).
