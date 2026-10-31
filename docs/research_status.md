@@ -9,7 +9,11 @@ against the current code, worktree, Git history, and linked raw results.
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`ffn-fusion`](experiments/2026-10-30-ffn-fusion-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+The [source audit](experiments/2026-10-31-ffn-fusion-audit.md) pins the merged
+upstream revision and confirms existing single-row Q4 and qualified Q8 fusion.
+The remaining candidate is fused multi-row Q4 gate/up/SwiGLU with its down
+consumer unchanged, compared against both existing dense paths. Implementation
+and new measurements remain pending; historical gains are not new results.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
