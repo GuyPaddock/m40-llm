@@ -8,8 +8,16 @@ against the current code, worktree, Git history, and linked raw results.
 
 The clean `c9f6066` [real-input release](experiments/2026-10-31-quantized-kv-release-failure.md)
 passes nine cases, then fails selection admission for layer 0, 8K, Q8/head64,
-sequence 0, query head 0. No timings run. Diagnose actual/expected block IDs
-and scores while retaining the original exact-position gate.
+sequence 0, query head 0. The [second standalone failure](experiments/2026-10-31-quantized-kv-release-second-failure.md)
+at `2cbbc28` occurs at 2K with a substantial omitted-block score difference.
+Both failed releases and passing test-executable diagnostics remain preserved.
+The [Q8 reduction barrier correction](experiments/2026-10-31-quantized-kv-barrier.md)
+prevents shared scratch reuse before all warps read the K maximum. Both
+affected kernels contain the race in base `0eee578`; the correction changes
+no quantization arithmetic or selector semantics. Two staged and nineteen
+runner tests pass with cuBLAS on/off, including a distinct-scale regression
+and real first-layer replay. Affected runtime checks, Clippy and formatting
+pass. Standalone full-grid requalification remains required before timing.
 
 The [first staged-reference failure](experiments/2026-10-31-quantized-kv-initial-failure.md)
 is preserved at `ebc5d5f`. The [CPU oracle correction](experiments/2026-10-31-quantized-kv-zero-reference.md)

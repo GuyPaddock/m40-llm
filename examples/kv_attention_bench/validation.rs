@@ -222,6 +222,74 @@ mod tests {
     use m40_llm::kv_compression::{KvCompressionConfig, ScopedRuntimeConfig};
     use std::path::PathBuf;
 
+    /// Distinct K/V magnitudes expose shared-reduction reuse across warps.
+    /// Check every old token after streaming eviction across repeated owners.
+    #[test]
+    #[ignore = "requires serial M40 hardware"]
+    fn test_q8_eviction_preserves_distinct_key_value_scales() -> Result<()> {
+        crate::benchmark::validate_environment()?;
+        let ctx = CudaContext::new_m40()?;
+        let before = CudaContext::total_device_bytes();
+        let shape = Shape {
+            length: 129,
+            head_dim: 64,
+            query_heads: 4,
+            kv_heads: 2,
+            recent: 1,
+            block: 32,
+            top: 4,
+        };
+        for generation in 0..4 {
+            let mut sample = LayerSample {
+                keys: Vec::new(),
+                values: Vec::new(),
+                queries: Vec::new(),
+            };
+            for sequence in 0..8 {
+                sample.keys.push(
+                    (0..shape.length)
+                        .flat_map(|token| {
+                            (0..shape.kv_width()).map(move |channel| {
+                                f16::from_f32(
+                                    8.0 + (token / 32) as f32 * 4.0
+                                        + ((channel * 17 + sequence * 7 + generation * 11) % 61)
+                                            as f32
+                                            / 16.0,
+                                )
+                                .to_f32()
+                            })
+                        })
+                        .collect(),
+                );
+                sample.values.push(
+                    (0..shape.length * shape.kv_width())
+                        .map(|index| {
+                            f16::from_f32(
+                                ((index * 13 + sequence * 17 + generation * 7) % 97) as f32
+                                    / 65536.0
+                                    - 0.0007,
+                            )
+                            .to_f32()
+                        })
+                        .collect(),
+                );
+                sample.queries.push(
+                    (0..shape.query_width())
+                        .map(|index| 0.001 + (index % 7) as f32 / 65536.0)
+                        .collect(),
+                );
+            }
+            let case = Case::new(&ctx, shape, Backing::Q8, &sample)?;
+            validate(&case, &sample)?;
+            drop(case);
+            ensure!(
+                CudaContext::total_device_bytes() == before,
+                "device storage leaked"
+            );
+        }
+        Ok(())
+    }
+
     /// Replay the first layer in release-grid order so prior cache allocation
     /// lifetimes precede the 8K Q8 failure. Retain the frozen position reference;
     /// missing artifacts fail rather than silently skipping admission.

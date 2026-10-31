@@ -1,0 +1,7 @@
+c0f0c252f518c434b2619a2e26e8c2e81cdc3813297247cbddfb538f303b8aab  docs/experiments/2026-10-31-quantized-kv-barrier-affected.log.gz
+64b98f652fe54e087f27da893e4fc1900e6fcab9b4c8a8eefc4f9ccbd1dc7ad5  docs/experiments/2026-10-31-quantized-kv-barrier-clippy.log.gz
+fdb21ba3ff25b9aebe5f4683f8941b9b75a8cc53ce294a42bfd3c0bf053b37a1  docs/experiments/2026-10-31-quantized-kv-barrier-off.log.gz
+df6c6e9f42a198a92d978767f23b31f2edd0d6f24ab5fa627355431c6619fe7d  docs/experiments/2026-10-31-quantized-kv-barrier-qualification.log.gz
+32c63e1009184af62f4dc78689501df8fe6ee4e1034e0e9d8f39f3b83f78a743  docs/experiments/2026-10-31-quantized-kv-barrier-tests.log.gz
+609b3fb1d019df919c86f9fb5d1e653d68d3e0b1699f0e915dec55e4fbf360cd  docs/experiments/2026-10-31-quantized-kv-barrier-qualification.sh
+35740c2a3842f7a55a99167b5586f13b1d863e03c9094edd936d1f76b5b2c4f9  docs/experiments/2026-10-31-quantized-kv-barrier-source.sha256
