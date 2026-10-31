@@ -6,6 +6,15 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The user has authorized execution of the October 30 nine-topic research plan
+in independent worktrees based on `0eee578`. This branch owns
+[`legacy-graphs`](experiments/2026-10-30-legacy-graphs-protocol.md).
+Its scoped protocol is recorded; implementation and measurements are pending.
+Follow the protocol's gates and serial M40 execution requirement. Keep the
+separate drafter checkpoint below intact; this work does not admit training.
+
+### Separate drafter checkpoint
+
 The current authorization is **paper-only isolation-policy review**, using
 retained evidence only. No further source searches, sampling, teacher
 generation, training, learned evaluation or GPU switch is authorized. The
