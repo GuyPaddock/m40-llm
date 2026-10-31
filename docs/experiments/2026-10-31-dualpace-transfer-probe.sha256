@@ -1,0 +1,5 @@
+396dcf9e5e74bea696117e4814f2737b0d60328cf890211e16a2b6db5024c4a3  docs/experiments/2026-10-31-dualpace-transfer-build.log.gz
+9db8a7b852df187afd9b7e8c56296aa28d84749ec9db32b740657f0ef091ded8  docs/experiments/2026-10-31-dualpace-transfer-cpu-tests.log.gz
+352622a3b53405743ba38d63614611e81632c20c79b524014c27e7aa72137055  docs/experiments/2026-10-31-dualpace-transfer-cuda-clippy.log.gz
+f88457f3981baaf430125f965447c1d83fc1c24aa22b91f238b563e96736693f  docs/experiments/2026-10-31-dualpace-transfer-final-clippy.log.gz
+626e03d3d3d2f4cce5693c3067909cdd4ed01ccdb8e9fe62e728b12fb2e2ad73  docs/experiments/2026-10-31-dualpace-transfer-noncuda-clippy.log.gz

@@ -1,5 +1,7 @@
 //! Bounded single-core Q8 projection costs for cooperative decode research.
 
+#[path = "../common/cpu_placement.rs"]
+mod cpu_placement;
 mod fixture;
 mod kernel;
 #[cfg_attr(all(feature = "cuda", feature = "server", nvcc), allow(dead_code))]
@@ -9,7 +11,7 @@ mod protocol;
 mod tests;
 mod timing;
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Result};
 use clap::Parser;
 use fixture::Fixture;
 use m40_llm::evaluation::identity::{file_sha256, sha256};
@@ -66,47 +68,6 @@ fn command(program: &str, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
-fn placement(args: &Args) -> Result<Value> {
-    let status = fs::read_to_string("/proc/self/status")?;
-    let affinity = status
-        .lines()
-        .find_map(|line| line.strip_prefix("Cpus_allowed_list:"))
-        .context("CPU affinity unavailable")?
-        .trim();
-    ensure!(
-        affinity == args.cpu.to_string(),
-        "pin exactly --cpu with numactl before running"
-    );
-    let nodes = command("numactl", &["--show"])?;
-    let policy = nodes
-        .lines()
-        .find_map(|line| line.strip_prefix("policy:"))
-        .unwrap_or("")
-        .trim();
-    let memory = nodes
-        .lines()
-        .find_map(|line| line.strip_prefix("membind:"))
-        .unwrap_or("")
-        .trim();
-    ensure!(
-        policy == "bind" && memory == args.numa_node.to_string(),
-        "bind memory to --numa-node before running"
-    );
-    let cpus = fs::read_to_string(format!(
-        "/sys/devices/system/node/node{}/cpulist",
-        args.numa_node
-    ))?;
-    ensure!(cpus.trim().split(',').any(|part| {
-        let (first, last) = part.split_once('-').unwrap_or((part, part));
-        matches!((first.parse::<usize>(), last.parse::<usize>()), (Ok(a), Ok(b)) if a <= args.cpu && args.cpu <= b)
-    }), "CPU and memory must be on the same NUMA node");
-    Ok(
-        json!({"cpu":args.cpu,"threads":1,"numa_node":args.numa_node,"numactl":nodes,
-        "status":status,"lscpu":command("lscpu", &["-J"])?,
-        "thread_siblings":fs::read_to_string(format!("/sys/devices/system/cpu/cpu{}/topology/thread_siblings_list",args.cpu))?}),
-    )
-}
-
 fn main() -> Result<()> {
     let args = Args::parse();
     ensure!(kernel::has_avx2(), "AVX2 is required");
@@ -122,7 +83,7 @@ fn main() -> Result<()> {
         command("git", &["status", "--porcelain"])?.is_empty(),
         "commit source before real-fixture runs"
     );
-    let placement = placement(&args)?;
+    let placement = cpu_placement::inspect(args.cpu, args.numa_node)?;
     ensure!(!args.output.exists(), "output must be new");
     let setup = Instant::now();
     let mut fixture = Fixture::load(&args.model, &args.ffn_inputs, &args.capture_report)?;

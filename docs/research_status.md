@@ -26,6 +26,13 @@ adds schema-2 resource exclusion and explicit included-synchronization costs;
 eleven simulator tests and non-CUDA all-target Clippy pass. Legacy traces retain
 their original overlap behavior. CPU timings, serial transfer costs and the
 priced prerequisite report remain pending; the branch is incomplete.
+The [transfer probe](experiments/2026-10-31-dualpace-transfer-probe.md) now exists
+in the worktree. It measures thirteen representative sizes, completed host
+copies, two-copy stream handoffs and idle synchronization, with guarded byte
+checks. The hardware test compiles and links; GPU execution remains pending.
+Both probes share the original CPU/NUMA admission checks. Twelve CPU/protocol
+tests and non-CUDA/CUDA-server all-target Clippy pass. No new timing result
+or scheduler change follows from these implementation checks.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
