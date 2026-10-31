@@ -4,7 +4,7 @@ mod cuda_env;
 #[path = "common/guarded_bytes.rs"]
 mod guarded_bytes;
 
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use guarded_bytes::GuardedBytes;
 use half::f16;
 use m40_llm::cuda::{
@@ -96,13 +96,31 @@ impl TokenHistory {
                     1.0 / 7.0
                 };
                 for value in head {
-                    let code = (*value / scale).round_ties_even().clamp(-7.0, 7.0);
-                    *value = f16::from_f32(code * scale).to_f32();
+                    let code = (*value / scale).round_ties_even().clamp(-7.0, 7.0) as i32;
+                    *value = f16::from_f32(code as f32 * scale).to_f32();
                 }
             }
         }
         values
     }
+}
+
+/// Integer Q4 zero reconstructs positive zero even from a negative input;
+/// unquantized recent FP16 history must retain its original negative-zero bits.
+#[test]
+fn test_reference_distinguishes_integer_and_recent_zero() {
+    let mut history = TokenHistory {
+        keys: Vec::new(),
+        values: vec![vec![0.0; KV_HEADS * 64]; RECENT + 1],
+    };
+    history.values[0][0] = 7.0;
+    history.values[0][1] = -0.01;
+    history.values[0][2] = -0.0;
+    history.values[1][0] = -0.0;
+    let reconstructed = history.reconstruct_values(64, RECENT + 1);
+    assert_eq!(reconstructed[0][1].to_bits(), 0.0_f32.to_bits());
+    assert_eq!(reconstructed[0][2].to_bits(), 0.0_f32.to_bits());
+    assert_eq!(reconstructed[1][0].to_bits(), (-0.0_f32).to_bits());
 }
 
 fn encode_floats(values: &[f32]) -> Vec<u8> {
@@ -321,7 +339,12 @@ fn check_attention(
                 capacity,
                 &keys,
                 &values,
-            )?;
+            )
+            .with_context(|| {
+                format!(
+                    "staging head_dim={head_dim} slot={slot} length={length} identity={identity}"
+                )
+            })?;
             let expected = calculate_attention(history, &reconstructed, &query, head, &selected);
             for (channel, expected) in expected.iter().enumerate() {
                 let index = head * head_dim + channel;
@@ -381,12 +404,10 @@ fn check_selected_values(
                         .to_bits()
                         .to_le_bytes()
             );
-            ensure!(
-                &values[offset..offset + 2]
-                    == f16::from_f32(reconstructed[token][source])
-                        .to_bits()
-                        .to_le_bytes()
-            );
+            let actual = u16::from_le_bytes(values[offset..offset + 2].try_into().unwrap());
+            let expected = f16::from_f32(reconstructed[token][source]).to_bits();
+            ensure!(actual == expected,
+                "staged V differs head={head} token={token} channel={channel} actual=0x{actual:04x} expected=0x{expected:04x} source={}", history.values[token][source]);
         }
     }
     Ok(())

@@ -6,11 +6,13 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The [first staged-reference hardware run](experiments/2026-10-31-quantized-kv-initial-failure.md)
-fails exact reconstructed V bytes after a successful release build. The
-runner, affected regressions and cuBLAS-disabled checks have not run.
-Preserve this implementation and diagnose the differing token and bits before
-correcting the kernel or CPU reference. No numerical gate is relaxed.
+The [first staged-reference failure](experiments/2026-10-31-quantized-kv-initial-failure.md)
+is preserved at `ebc5d5f`. The [CPU oracle correction](experiments/2026-10-31-quantized-kv-zero-reference.md)
+converts rounded Q4 codes to integers so zero reconstructs with the correct
+positive sign. Both staged tests and all seventeen runner tests pass with
+cuBLAS enabled and disabled. The 48 executed affected regressions pass;
+one optional model diagnostic does not run. Exact-byte assertions and CUDA
+arithmetic are unchanged. Final M40 residency is zero with no compute process.
 The complete lossless capture is available; that independent topic is now
 complete with a negative integration decision. Seven of nine studies are
 complete; quantized KV and DualPace remain active.
@@ -21,24 +23,26 @@ in independent worktrees based on `0eee578`. This branch owns
 The [source audit](experiments/2026-10-31-quantized-kv-audit.md) confirms that
 direct Q8 and mixed FP16-K/Q4-V consumption already exist. Staged and
 Q8-direct controls support head64 only; the selected Qwen model uses head128.
-Matched context-grid results and a hardware-validated head128 staged reference
-remain pending. Historical quality failures are retained, and no fresh timing or
-runtime change is claimed. GPU execution waits for the lossless-KV capture.
+The head128 staged reference is now hardware validated. Matched real-input
+context-grid results remain pending. Historical quality failures are retained;
+no fresh timing or runtime change is claimed. The full lossless capture is ready.
 The [staged-reference implementation checkpoint](experiments/2026-10-31-quantized-kv-staging.md)
-records an uncommitted head128 comparison control. It compiles and passes
-Clippy and all 220 non-CUDA tests; its ignored hardware test and affected
-regressions are built but await the serial GPU slot. This is not qualification.
+records the head128 comparison control. The initial failed implementation is
+committed separately from its oracle correction. Its ignored hardware test
+and affected regressions pass. Earlier 220 non-CUDA tests remain valid;
+fresh CUDA/server all-target Clippy, formatting and nine CPU fixture tests pass.
 The [CPU fixture reader](experiments/2026-10-31-quantized-kv-fixtures.md)
 passes four integrity/layout tests and CPU Clippy. It admits only a complete,
 hash-verified capture and labels synthetic queries and head64 slices explicitly.
 The [CPU attention reference](experiments/2026-10-31-quantized-kv-reference.md)
 adds five passing quantization/selection/FP64 tests, for nine CPU example tests.
 The [paired benchmark implementation](experiments/2026-10-31-quantized-kv-benchmark.md)
-now exists uncommitted alongside the staged control. CUDA/server all-target
-Clippy and compile/link checks pass. It verifies shared encoded inputs and
+now passes hardware qualification and is ready for its separate commit after
+the staged control correction. CUDA/server all-target Clippy passes.
+It verifies shared encoded inputs and
 staged reconstruction, includes selection, separates batched dispatch gains,
-and checks timed outputs outside the timing interval. Hardware tests, the full
-real capture and paired operator results remain pending.
+and checks timed outputs outside the timing interval. Full real-input release
+qualification and paired operator results remain pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

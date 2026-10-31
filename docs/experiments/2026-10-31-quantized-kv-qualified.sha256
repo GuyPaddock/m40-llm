@@ -1,0 +1,9 @@
+f0706378d90b01ca5a53120e094d54d3bf107f6097355421925c18ac6f351c09  docs/experiments/2026-10-31-quantized-kv-qualified-affected.log.gz
+5a8e73b030af3052ac756469e44b98df5a6b7e7be78d2107501d6672c32e79a2  docs/experiments/2026-10-31-quantized-kv-qualified-clippy.log.gz
+0fefd0dba0af3bd783773451ef3f1a33e8ce9b92398808cc5439272c091cfd23  docs/experiments/2026-10-31-quantized-kv-qualified-cpu.log.gz
+8bba7b4e8b2b1c0ba143eb9a02ddd1f27e721ec9e22ebb24aa21c4c66d88909f  docs/experiments/2026-10-31-quantized-kv-qualified-cublas-off.log.gz
+dddbe8d59f1351303b0c9919f237eddb41e0043aa4ba789c50f920f57770c92c  docs/experiments/2026-10-31-quantized-kv-qualified-initial.log.gz
+505ba4031af14d4a79b23d3f762340c038bd74801ec190ccf7011a9090f23916  docs/experiments/2026-10-31-quantized-kv-qualified-queue.log.gz
+04d7d6d33812a377886378eb9663e272b632a06a45b14f6de9c950cb4ff38312  docs/experiments/2026-10-31-quantized-kv-qualified-source.sha256
+d1dbc9a83aa844de66a05b05685ab2573a9dc3885a2e01b219a1a13c6304adb7  docs/experiments/2026-10-31-quantized-kv-qualified.sh
+c6fd1af27a32a19c295e719459d6d8cf92a279837ad771cf7e4acbc75c185dfc  docs/experiments/2026-10-31-quantized-kv-zero-diagnostic.log.gz
