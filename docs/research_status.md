@@ -21,7 +21,9 @@ context, batch eight and the three sampled layers, encoded KV plus pointer
 directories saves 9,208,640 bytes, or 4.574%, against original FP16 storage.
 The binary is preserved outside Cargo build outputs. No speed claim follows.
 The [CUDA consumer and frozen comparison](experiments/2026-10-31-lossless-kv-consumer.md)
-are implemented in the worktree. CUDA/server all-target Clippy, compile/link
+now have [hardware validation](experiments/2026-10-31-lossless-consumer-validation.md).
+The consumer and tests form a separate commit from the dependent runner.
+CUDA/server all-target Clippy, compile/link
 of the hardware tests and 225 non-CUDA tests pass. Both initial CUDA tests
 now pass on M40; supported affected correctness checks also pass with cuBLAS
 enabled and disabled.
@@ -31,7 +33,7 @@ test now passes with all fourteen runner tests. The pending runner includes
 native and matched
 attention controls, active-batch-only reconstruction and full CPU replacement
 append costs. Full real-input GPU qualification, measurements and the final
-decision remain outstanding; the consumer and GPU runner are uncommitted.
+decision remain outstanding; the GPU runner is still uncommitted.
 The capture and initial qualification sessions have both exited successfully.
 Regression commands are terminal. A release-only timing benchmark rejected a
 debug build, and an existing cuBLAS-only FP32 SGEMM test rejected the disabled

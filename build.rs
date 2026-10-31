@@ -142,6 +142,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/q8_activation.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_prefill.cuh");
     println!("cargo:rerun-if-changed=cuda/activation_sparsity.cuh");
+    println!("cargo:rerun-if-changed=cuda/lossless_kv.cuh");
     println!("cargo:rerun-if-changed=cuda/stub.c");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));

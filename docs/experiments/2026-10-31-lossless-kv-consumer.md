@@ -1,18 +1,18 @@
 # Lossless FP16 consumer and comparison protocol
 
-The CUDA decoder and matched attention consumers are implemented in the
-worktree. CUDA/server all-target Clippy and the ignored hardware test's
-compile/link check pass. The 225-test non-CUDA suite passes. Hardware numerical,
-ownership and timing checks remain pending while the original capture runs.
-This checkpoint does not qualify the CUDA implementation.
+The CUDA decoder and matched attention consumers now pass their
+[hardware validation](2026-10-31-lossless-consumer-validation.md), including
+cuBLAS-enabled/disabled execution and affected supported regressions.
+CUDA/server all-target Clippy and the 225-test non-CUDA suite pass.
+Real-input release qualification and timing remain pending.
 
 ## Storage evidence and admission
 
-The ongoing capture at `82a118a` has completed three of eight sequences at
-this checkpoint. Its partial report has 36 streams, 144 compression records,
-nine layer readbacks and three sequence completions. It has no completion
-record. The full 96-stream, 384-compression-record grid still requires audit.
-Do not restart this capture or run another GPU process alongside it.
+The [complete capture](2026-10-31-lossless-capture-results.md) at `82a118a`
+now admits all eight sequences, 96 streams and 384 compression records.
+All prefixes reconstruct exactly. The earlier partial evidence below remains
+preserved; the complete result establishes 4.574% device-representation savings
+at 8K/batch eight across the three sampled layers.
 
 One completed real prefix already establishes that storage savings are
 possible with the fixed FP16 format. Sequence zero, layer zero, key head zero
@@ -123,11 +123,11 @@ M40LLM_ENABLE_CUBLAS=1 cargo test --features cuda --test lossless_kv_cuda \
   -- --include-ignored --test-threads=1
 ```
 
-Run the affected attention, forward, projection/MLP and transfer/ownership
-checks serially, including cuBLAS enabled/disabled parity. Preserve failures
-before removing any experiment. The CUDA consumer and tests remain uncommitted
-pending those hardware checks. The real-input paired runner, append pricing,
-full capture audit and decision report are still required.
+Affected attention, forward, projection/MLP and transfer/ownership checks have
+run serially, including supported cuBLAS-enabled/disabled coverage. The
+validation report retains the two broad-command failures and optional skipped
+diagnostics separately. Full capture audit passes. The dependent runner,
+real-input release grid, append pricing and decision report remain required.
 
 The [checksummed validation logs](2026-10-31-lossless-kv-consumer.sha256)
 retain the initial missing CUDA constants include, a

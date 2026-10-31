@@ -25,6 +25,10 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "cuda")]
 mod decode_reductions;
+#[cfg(all(feature = "cuda", nvcc))]
+mod lossless_kv;
+#[cfg(all(feature = "cuda", nvcc))]
+pub use lossless_kv::{LosslessKvAttentionShape, LosslessKvDevice};
 #[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]

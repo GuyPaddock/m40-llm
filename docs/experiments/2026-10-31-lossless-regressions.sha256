@@ -1,0 +1,10 @@
+f472d528a68266431cc984e8416833e49e6c4fb979ff5bcfebbe20472f6d5f7a  docs/experiments/2026-10-31-lossless-regressions-01.sh
+d2d6fde2e0b3ed3bad79ea019e03e7ca8db8975e2e4c657e7dedf80778c90d23  docs/experiments/2026-10-31-lossless-regressions-02.sh
+ff25a24c33964fa94520dd00def7361f83b42a6e5efdf9e3838c7db1f769d1d0  docs/experiments/2026-10-31-lossless-regressions-03.sh
+71cd8a242121048741e061556b2970398784f8749391b02ad7a2f3ffef7c492d  docs/experiments/2026-10-31-lossless-regressions-01.log.gz
+dfec7f41735b08f3d3eb9089f450c6852d2a6cee6f560aaab8869987b530f6f4  docs/experiments/2026-10-31-lossless-regressions-02.log.gz
+9ae423e3a6f1474ff2fa966168103fa3f1c8fc2fdb5b582d43b4e796883cc759  docs/experiments/2026-10-31-lossless-regressions-03.log.gz
+96ac20524ec2ce9038b7e811cf9fe1c936f30d4efc1944e106980da7a9de4765  docs/experiments/2026-10-31-lossless-regressions-off-initial.log.gz
+9ea667a7ab7dfa36279850e4118d19e4fab52d47ec4e3de93de7b082aa69c2c3  docs/experiments/2026-10-31-lossless-regressions-off-remaining.log.gz
+1fb1827b96992dfdd7c1365b076450faa65548a9a7cb90508264eb64e456c069  docs/experiments/2026-10-31-lossless-regressions-on-initial.log.gz
+95e30804f6330e8a6b3e8b2f12550f298b1f4b99131291fe60fd1b1d8ca9d62b  docs/experiments/2026-10-31-lossless-regressions-on-remaining.log.gz
