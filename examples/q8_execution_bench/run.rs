@@ -83,6 +83,13 @@ struct Args {
     /// Validate every real Q4 case without collecting primary timing pairs.
     #[arg(long, requires = "ffn_q4_channels")]
     ffn_q4_channels_correctness_only: bool,
+    /// Pair frozen batch-one 10/20% selections against packed full Q4 and qualified Q8.
+    #[arg(
+        long,
+        requires = "ffn_q4_channels",
+        conflicts_with = "ffn_q4_channels_correctness_only"
+    )]
+    ffn_q4_channels_baselines: bool,
     /// Fixed fully direct target prototype, not speculative generation.
     #[arg(long, conflicts_with_all=["direct_q8_feasibility","verification_trace","ffn_inputs","sparse_inputs"])]
     direct_four_row_verifier: bool,
@@ -705,6 +712,7 @@ mod argument_tests {
         assert!(!parse(&[]).unwrap().ffn_q4_channels);
         assert!(parse(&["--ffn-q4-channels"]).is_err());
         assert!(parse(&["--ffn-q4-channels-correctness-only"]).is_err());
+        assert!(parse(&["--ffn-q4-channels-baselines"]).is_err());
         let valid = [
             "--ffn-inputs",
             "input.json",
@@ -713,6 +721,22 @@ mod argument_tests {
             "--ffn-q4-channels",
         ];
         assert!(parse(&valid).unwrap().ffn_q4_channels);
+        assert!(
+            parse(&[valid.as_slice(), &["--ffn-q4-channels-baselines"]].concat())
+                .unwrap()
+                .ffn_q4_channels_baselines
+        );
+        assert!(parse(
+            &[
+                valid.as_slice(),
+                &[
+                    "--ffn-q4-channels-baselines",
+                    "--ffn-q4-channels-correctness-only"
+                ]
+            ]
+            .concat()
+        )
+        .is_err());
         for conflict in [
             "--ffn-four-row-reuse",
             "--ffn-q81",

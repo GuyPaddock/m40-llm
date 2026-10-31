@@ -1,3 +1,4 @@
+mod baselines;
 mod pipeline;
 mod reference;
 mod timing;
@@ -89,6 +90,10 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "Q4 channel screen requires five initial pairs and rows 1 or 1,2,4,8"
     );
     ensure!(
+        !args.ffn_q4_channels_baselines || args.rows == [1],
+        "stronger Q4 baselines require batch one"
+    );
+    ensure!(
         command_output("git", &["status", "--porcelain"])?.is_empty(),
         "Q4 channel experiment requires a clean source commit"
     );
@@ -115,12 +120,12 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
     let h = inputs.artifact.plan.hidden_dim;
     write_record(
         &mut output,
-        json!({"kind":"q4_channel_manifest","schema_version":1,
+        json!({"kind":if args.ffn_q4_channels_baselines {"q4_channel_baselines_manifest"} else {"q4_channel_manifest"},"schema_version":1,
         "revision":command_output("git", &["rev-parse","HEAD"])?,"worktree":"","build_profile":"release",
         "executable_sha256":file_sha256(&std::env::current_exe()?)?,"model_sha256":inputs.artifact.plan.model_sha256,
         "fixture_sha256":inputs.artifact_sha256,"capture_report_sha256":inputs.report_sha256,
         "capture_execution":inputs.manifest["execution_configuration"],"model_setup_ms":setup.elapsed().as_secs_f64()*1000.0,
-        "gpu_before":gpu,"rows":args.rows,"retained_percent":[10,20,40,60,80,100],
+        "gpu_before":gpu,"rows":args.rows,"retained_percent":if args.ffn_q4_channels_baselines {json!([10,20])} else {json!([10,20,40,60,80,100])},
         "k":k,"h":h,"original_weights":model.weights_len,"prepared_q8_weights":model.q8_execution_stats(),
         "correctness_only":args.ffn_q4_channels_correctness_only,
         "selector":"supplied indices; exact Q4 hidden magnitude for importance; all selection and CPU oracle costs excluded",
@@ -129,6 +134,9 @@ pub(super) fn benchmark(args: &Args) -> Result<()> {
         "rustc":command_output("rustc", &["--version"])?,"nvcc":command_output("nvcc", &["--version"])?,
         "counter_availability":"DRAM and dynamic instruction counters unavailable; sector estimates only"}),
     )?;
+    if args.ffn_q4_channels_baselines {
+        return baselines::benchmark(args, &model, &inputs, &mut output);
+    }
     let baseline_bytes = CudaContext::total_device_bytes();
     let mut cases = 0;
     for layer in &inputs.artifact.layers {

@@ -39,12 +39,10 @@ fn summary(pairs: &[(f64, f64)]) -> Result<Value> {
 
 fn collect(
     output: &mut File,
-    pipeline: &Pipeline<'_>,
-    args: &Args,
-    arms: [Arm; 2],
     case: &Value,
     pairs: &mut Vec<(f64, f64)>,
     phase: (&str, usize),
+    sample: &mut impl FnMut(usize) -> Result<Value>,
 ) -> Result<()> {
     let (phase, total) = phase;
     while pairs.len() < total {
@@ -56,7 +54,7 @@ fn collect(
         };
         let mut times = [Value::Null, Value::Null];
         for slot in order {
-            times[slot] = pipeline.time(arms[slot], args.iterations)?;
+            times[slot] = sample(slot)?;
         }
         let a = times[0]["gpu_ms"]
             .as_f64()
@@ -80,41 +78,29 @@ pub(super) fn compare(
     arms: [Arm; 2],
     case: &Value,
 ) -> Result<()> {
+    compare_samples(output, case, json!(arms), |slot| {
+        pipeline.time(arms[slot], args.iterations)
+    })
+}
+
+/// Share pair ordering, variation and confirmation rules across Q4/Q8 controls.
+pub(super) fn compare_samples(
+    output: &mut File,
+    case: &Value,
+    arms: Value,
+    mut sample: impl FnMut(usize) -> Result<Value>,
+) -> Result<()> {
     let before = inspect_gpu()?;
     let mut pairs = Vec::new();
-    collect(
-        output,
-        pipeline,
-        args,
-        arms,
-        case,
-        &mut pairs,
-        ("screen", 5),
-    )?;
+    collect(output, case, &mut pairs, ("screen", 5), &mut sample)?;
     if summary(&pairs)?["is_stable"] == false {
-        collect(
-            output,
-            pipeline,
-            args,
-            arms,
-            case,
-            &mut pairs,
-            ("screen", 10),
-        )?;
+        collect(output, case, &mut pairs, ("screen", 10), &mut sample)?;
     }
     let screen = summary(&pairs)?;
     let mut confirmation = Value::Null;
     if screen["needs_confirmation"] == true {
         let mut fresh = Vec::new();
-        collect(
-            output,
-            pipeline,
-            args,
-            arms,
-            case,
-            &mut fresh,
-            ("confirmation", 20),
-        )?;
+        collect(output, case, &mut fresh, ("confirmation", 20), &mut sample)?;
         confirmation = summary(&fresh)?;
     }
     let decision = if confirmation.is_null() {
@@ -134,6 +120,29 @@ pub(super) fn compare(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Extending a screen preserves arm identity and continues alternating order.
+    #[test]
+    fn test_pair_callback_order_and_failure() -> Result<()> {
+        let mut output = std::fs::OpenOptions::new().write(true).open("/dev/null")?;
+        let mut order = Vec::new();
+        let mut pairs = Vec::new();
+        let case = json!({"test":"callback"});
+        let mut sample = |slot| {
+            order.push(slot);
+            Ok(json!({"gpu_ms":if slot == 0 {10.0} else {1.0}}))
+        };
+        collect(&mut output, &case, &mut pairs, ("screen", 3), &mut sample)?;
+        collect(&mut output, &case, &mut pairs, ("screen", 5), &mut sample)?;
+        assert_eq!(order, [0, 1, 1, 0, 0, 1, 1, 0, 0, 1]);
+        assert_eq!(pairs, [(10.0, 1.0); 5]);
+        let failure = collect(&mut output, &case, &mut pairs, ("screen", 6), &mut |_| {
+            anyhow::bail!("sample failed")
+        });
+        assert!(failure.is_err());
+        assert_eq!(pairs.len(), 5);
+        Ok(())
+    }
 
     /// Strong gains pass, borderline gains request one fresh confirmation, noisy pairs fail.
     #[test]
