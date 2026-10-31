@@ -6,21 +6,28 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The [October 31 graph audit](experiments/2026-10-31-legacy-graphs-audit.md)
-pins PR 30727, maps native-only local restrictions and identifies historical
-slow-replay evidence. Next validate native dense graph behavior and compare
-complete token cost before any compound extension. The
-[existing compatibility tests](experiments/2026-10-31-legacy-graphs-compatibility.md)
-now pass all four explicit M40/cuBLAS graph checks. These tiny FP16 fixtures
-establish capture/replay and diagnostic dependencies, not native-Q8 sequence
-parity or performance. Next add native Q8 growing-prefix, sequence/KV-state,
-session-lifetime and capture/launch-failure checks before timing. No runtime
-restriction or default has changed.
+The bounded legacy-graphs investigation ends with an unmet exact-state
+prerequisite. The [native Q8 qualification](experiments/2026-10-31-native-graph-state.md)
+at `a45cfcf` preserves four failed exact-FP16-cache checks. All 128 token
+comparisons pass numerical logits, greedy IDs, callbacks, sequence lengths
+and tracked cleanup. Maximum logit error is 3.7718564e-8; maximum KV error is
+6.1035156e-5. Graph attention uses scalar reduction, while ordinary native
+head128 attention uses the fast warp-reduction path. An execution-only graph
+comparison requires matching attention dispatch first. No performance or
+compound-extension experiment follows this failed state gate.
+
+Real capture cancellation and pre-submission rejection preserve the tested
+fallback sequence at position zero; the other sequence continues graph
+replay. This does not establish asynchronous-device-fault recovery. The four
+existing graph compatibility tests still pass, as do 220 warning-free
+non-CUDA checks, CUDA/server all-target Clippy and formatting. Failed research
+tests remain ignored and explicitly runnable. No production graph restriction,
+kernel, or runtime default changed. Next topic: ShiftAdd in its own worktree.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`legacy-graphs`](experiments/2026-10-30-legacy-graphs-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+Its scoped protocol, qualification code and negative state result are recorded.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

@@ -2,6 +2,24 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Graph Replay Stops at Exact Cache Gate
+
+The [native graph state report](experiments/2026-10-31-native-graph-state.md),
+implementation `a45cfcf`, retains four failed research checks on the M40.
+Across 128 token comparisons, logits remain within 3.7718564e-8 and greedy
+IDs, callbacks, layer/sequence lengths and tracked allocation cleanup agree.
+FP16 cache entries differ by up to 6.1035156e-5. Counts include repeatedly
+checked retained positions, not unique errors. Capture cancellation and
+pre-submission launch rejection exercise real fallback; asynchronous faults
+are outside the test contract.
+
+Graph attention dispatch differs from ordinary head128 attention. Matching
+that dispatch is a prerequisite for an execution-only graph comparison.
+The bounded study stops before timing or extending compound capture. There
+is no new performance result or default change. Existing compatibility tests
+pass 4/4, non-CUDA tests pass 220, and CUDA/server Clippy passes; the four
+exact-cache failures remain failures with raw logs and source retained.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
