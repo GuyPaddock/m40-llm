@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [October 31 preparation audit](experiments/2026-10-31-activation-preparation-audit.md)
+pins upstream PR 31398 and confirms that local Q8_1 gate/up already shares one
+quantized activation. Next compare staged and fused sign/rotation/quantization
+in an isolated fixture with the same consumer. There is no new timing or
+runtime promotion; the selected unrotated Qwen path has no rotation to remove.
+
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`activation-preparation`](experiments/2026-10-30-activation-preparation-protocol.md).
