@@ -1,0 +1,336 @@
+Pinned ShiftAdd source excerpts
+Revision: 93a0b5111eb71c90f302f1268f1535f83e2e1f13
+Repository: https://github.com/ranery/llama.cpp
+Retrieved through GitHub connector on 2026-10-31.
+Full upstream license follows and applies to the excerpts below.
+
+MIT License
+
+Copyright (c) 2023-2026 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+SOURCE: ggml/src/ggml-common.h
+URL: https://github.com/ranery/llama.cpp/blob/93a0b5111eb71c90f302f1268f1535f83e2e1f13/ggml/src/ggml-common.h
+
+// ShiftAdd / binary-coding quantization (BCQ): w_j = sum_p d*a[g*Q+p] * (bit_{p,j} ? +1 : -1), g = j/G.
+// A mat-vec is Q sign-add passes over the activations plus one scale per (group, plane).
+#define QK_SA 256
+#define GGML_SA_BLOCK(NAME, Q, G)                                   \
+typedef struct {                                                   \
+    uint8_t   qs[(Q)*QK_SA/8]; /* bit-planes, plane-major */        \
+    uint8_t   a[(Q)*(QK_SA/(G))]; /* alpha codes, a[g*Q + p] */     \
+    uint8_t   d[2];            /* fp16 super-block scale, byte-stored so odd sizes stay unpadded */ \
+} NAME;                                                            \
+static_assert(sizeof(NAME) == (Q)*QK_SA/8 + (Q)*(QK_SA/(G)) + 2, "wrong " #NAME " size/padding");
+
+#define QI_SA (QK_SA / 32)
+#define QR_SA 1
+#define SA2_Q 2
+#define SA2_G 64
+#define SA3_Q 3
+#define SA3_G 64
+#define SA4_Q 4
+#define SA4_G 64
+#define SA2_128_Q 2
+#define SA2_128_G 128
+#define SA3_128_Q 3
+#define SA3_128_G 128
+#define SA4_128_Q 4
+#define SA4_128_G 128
+#define SA2_256_Q 2
+#define SA2_256_G 256
+#define SA3_256_Q 3
+#define SA3_256_G 256
+#define SA4_256_Q 4
+#define SA4_256_G 256
+#define SA5_Q 5
+#define SA5_G 64
+#define SA5_128_Q 5
+#define SA5_128_G 128
+#define SA5_256_Q 5
+#define SA5_256_G 256
+#define SA6_Q 6
+#define SA6_G 64
+#define SA6_128_Q 6
+#define SA6_128_G 128
+#define SA6_256_Q 6
+#define SA6_256_G 256
+GGML_SA_BLOCK(block_sa2, SA2_Q, SA2_G)
+GGML_SA_BLOCK(block_sa3, SA3_Q, SA3_G)
+GGML_SA_BLOCK(block_sa4, SA4_Q, SA4_G)
+GGML_SA_BLOCK(block_sa2_128, SA2_128_Q, SA2_128_G)
+GGML_SA_BLOCK(block_sa3_128, SA3_128_Q, SA3_128_G)
+GGML_SA_BLOCK(block_sa4_128, SA4_128_Q, SA4_128_G)
+GGML_SA_BLOCK(block_sa2_256, SA2_256_Q, SA2_256_G)
+GGML_SA_BLOCK(block_sa3_256, SA3_256_Q, SA3_256_G)
+GGML_SA_BLOCK(block_sa4_256, SA4_256_Q, SA4_256_G)
+GGML_SA_BLOCK(block_sa5, SA5_Q, SA5_G)
+GGML_SA_BLOCK(block_sa5_128, SA5_128_Q, SA5_128_G)
+GGML_SA_BLOCK(block_sa5_256, SA5_256_Q, SA5_256_G)
+GGML_SA_BLOCK(block_sa6, SA6_Q, SA6_G)
+GGML_SA_BLOCK(block_sa6_128, SA6_128_Q, SA6_128_G)
+GGML_SA_BLOCK(block_sa6_256, SA6_256_Q, SA6_256_G)
+
+
+SOURCE: ggml/src/ggml-quants.c
+URL: https://github.com/ranery/llama.cpp/blob/93a0b5111eb71c90f302f1268f1535f83e2e1f13/ggml/src/ggml-quants.c
+
+// ====================== ShiftAdd / BCQ (sa2 .. sa6, group 64 / 128 / 256) ======================
+// Generic over Q (bit-planes) and G (alpha group size); block layout: qs[Q*32] | a[Q*256/G] | d.
+
+static void sa_dequant_row(const uint8_t * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k, int Q, int G) {
+    assert(k % QK_SA == 0);
+    const int ng = QK_SA / G;
+    const size_t bs = Q*QK_SA/8 + Q*ng + sizeof(ggml_half);
+    const int64_t nb = k / QK_SA;
+    for (int64_t i = 0; i < nb; ++i) {
+        const uint8_t * qs = x + i*bs;
+        const uint8_t * a  = qs + Q*QK_SA/8;
+        ggml_half dh; memcpy(&dh, a + Q*ng, sizeof(dh));
+        const float d = GGML_FP16_TO_FP32(dh);
+        for (int j = 0; j < QK_SA; ++j) {
+            const int g = j / G;
+            float v = 0.0f;
+            for (int p = 0; p < Q; ++p) {
+                const float al = d * a[g*Q + p];
+                v += ((qs[p*32 + j/8] >> (j%8)) & 1) ? al : -al;
+            }
+            y[i*QK_SA + j] = v;
+        }
+    }
+}
+
+// nearest of the 2^Q levels sum_p +-alpha_p; returns code with bit p set for +alpha_p
+static inline int sa_nearest(float w, const float * alpha, int Q) {
+    int best = 0; float bestd = INFINITY;
+    for (int c = 0; c < (1 << Q); ++c) {
+        float v = 0.0f;
+        for (int p = 0; p < Q; ++p) v += ((c >> p) & 1) ? alpha[p] : -alpha[p];
+        const float dd = fabsf(w - v);
+        if (dd < bestd) { bestd = dd; best = c; }
+    }
+    return best;
+}
+
+// greedy BCQ init + alternating LS refinement for one group of n weights (optional importance)
+static void sa_fit_group(const float * w, const float * imp, int n, int Q, float * alpha, float * r) {
+    float sw = 0.0f;
+    for (int j = 0; j < n; ++j) { r[j] = w[j]; sw += imp ? imp[j] : 1.0f; }
+    if (sw <= 0.0f) sw = 1.0f;
+    for (int p = 0; p < Q; ++p) {
+        float s = 0.0f;
+        for (int j = 0; j < n; ++j) s += (imp ? imp[j] : 1.0f) * fabsf(r[j]);
+        alpha[p] = s / sw;
+        for (int j = 0; j < n; ++j) r[j] -= r[j] >= 0 ? alpha[p] : -alpha[p];
+    }
+    for (int it = 0; it < 4; ++it) {
+        float A[8][9] = {{0}};
+        for (int j = 0; j < n; ++j) {
+            const int c = sa_nearest(w[j], alpha, Q);
+            const float h = imp ? imp[j] : 1.0f;
+            float b[8];
+            for (int p = 0; p < Q; ++p) b[p] = ((c >> p) & 1) ? 1.0f : -1.0f;
+            for (int p = 0; p < Q; ++p) {
+                for (int q = 0; q < Q; ++q) A[p][q] += h*b[p]*b[q];
+                A[p][Q] += h*b[p]*w[j];
+            }
+        }
+        // Gaussian elimination with partial pivoting
+        bool ok = true;
+        for (int p = 0; p < Q && ok; ++p) {
+            int piv = p;
+            for (int q = p + 1; q < Q; ++q) if (fabsf(A[q][p]) > fabsf(A[piv][p])) piv = q;
+            if (fabsf(A[piv][p]) < 1e-20f) { ok = false; break; }
+            if (piv != p) for (int c = 0; c <= Q; ++c) { float t = A[p][c]; A[p][c] = A[piv][c]; A[piv][c] = t; }
+            for (int q = 0; q < Q; ++q) {
+                if (q == p) continue;
+                const float f = A[q][p] / A[p][p];
+                for (int c = p; c <= Q; ++c) A[q][c] -= f*A[p][c];
+            }
+        }
+        if (!ok) break;
+        for (int p = 0; p < Q; ++p) alpha[p] = fabsf(A[p][Q] / A[p][p]);
+        // sort descending (sign folded into the bit-planes)
+        for (int p = 0; p < Q; ++p) for (int q = p + 1; q < Q; ++q)
+            if (alpha[q] > alpha[p]) { float t = alpha[p]; alpha[p] = alpha[q]; alpha[q] = t; }
+    }
+}
+
+static void sa_quant_row(const float * GGML_RESTRICT x, uint8_t * GGML_RESTRICT y, int64_t k, int Q, int G, const float * imp) {
+    assert(k % QK_SA == 0);
+    const int ng = QK_SA / G;
+    const size_t bs = Q*QK_SA/8 + Q*ng + sizeof(ggml_half);
+    const int64_t nb = k / QK_SA;
+    float alpha[8*8];
+    float r[QK_SA];
+    for (int64_t i = 0; i < nb; ++i) {
+        const float * xb = x + i*QK_SA;
+        uint8_t * qs = y + i*bs;
+        uint8_t * a  = qs + Q*QK_SA/8;
+        float amax = 0.0f;
+        for (int g = 0; g < ng; ++g) {
+            sa_fit_group(xb + g*G, imp ? imp + g*G : NULL, G, Q, alpha + g*Q, r);
+            for (int p = 0; p < Q; ++p) amax = MAX(amax, alpha[g*Q + p]);
+        }
+        const float d = amax / 255.0f;
+        const ggml_half dh = GGML_FP32_TO_FP16(d);
+        memcpy(a + Q*ng, &dh, sizeof(dh));
+        const float dq = GGML_FP16_TO_FP32(dh);
+        const float id = dq > 0 ? 1.0f/dq : 0.0f;
+        memset(qs, 0, Q*QK_SA/8);
+        for (int g = 0; g < ng; ++g) {
+            float aq[8];
+            for (int p = 0; p < Q; ++p) {
+                const int c = MIN(255, MAX(0, (int) nearbyintf(alpha[g*Q + p]*id)));
+                a[g*Q + p] = (uint8_t) c;
+                aq[p] = dq*c;
+            }
+            for (int j = g*G; j < (g + 1)*G; ++j) {
+                const int c = sa_nearest(xb[j], aq, Q);
+                for (int p = 0; p < Q; ++p) if ((c >> p) & 1) qs[p*32 + j/8] |= (uint8_t)(1 << (j%8));
+            }
+        }
+    }
+}
+
+#define GGML_SA_IMPL(name, TYPE, Q, G)                                                                                  \
+void quantize_row_##name##_ref(const float * GGML_RESTRICT x, block_##name * GGML_RESTRICT y, int64_t k) {             \
+    sa_quant_row(x, (uint8_t *) y, k, Q, G, NULL);                                                                      \
+}                                                                                                                       \
+void dequantize_row_##name(const block_##name * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {                 \
+    sa_dequant_row((const uint8_t *) x, y, k, Q, G);                                                                    \
+}                                                                                                                       \
+size_t quantize_##name(const float * GGML_RESTRICT src, void * GGML_RESTRICT dst, int64_t nrow, int64_t n_per_row,     \
+                       const float * quant_weights) {                                                                   \
+    const size_t row_size = ggml_row_size(TYPE, n_per_row);                                                             \
+    char * qrow = (char *) dst;                                                                                         \
+    for (int64_t row = 0; row < nrow; ++row) {                                                                          \
+        sa_quant_row(src + row*n_per_row, (uint8_t *) qrow, n_per_row, Q, G, quant_weights);                            \
+        qrow += row_size;                                                                                               \
+    }                                                                                                                   \
+    return nrow * row_size;                                                                                             \
+}
+
+GGML_SA_IMPL(sa2, GGML_TYPE_SA2, SA2_Q, SA2_G)
+GGML_SA_IMPL(sa3, GGML_TYPE_SA3, SA3_Q, SA3_G)
+GGML_SA_IMPL(sa4, GGML_TYPE_SA4, SA4_Q, SA4_G)
+GGML_SA_IMPL(sa2_128, GGML_TYPE_SA2_128, SA2_128_Q, SA2_128_G)
+GGML_SA_IMPL(sa3_128, GGML_TYPE_SA3_128, SA3_128_Q, SA3_128_G)
+GGML_SA_IMPL(sa4_128, GGML_TYPE_SA4_128, SA4_128_Q, SA4_128_G)
+GGML_SA_IMPL(sa2_256, GGML_TYPE_SA2_256, SA2_256_Q, SA2_256_G)
+GGML_SA_IMPL(sa3_256, GGML_TYPE_SA3_256, SA3_256_Q, SA3_256_G)
+GGML_SA_IMPL(sa4_256, GGML_TYPE_SA4_256, SA4_256_Q, SA4_256_G)
+GGML_SA_IMPL(sa5, GGML_TYPE_SA5, SA5_Q, SA5_G)
+GGML_SA_IMPL(sa5_128, GGML_TYPE_SA5_128, SA5_128_Q, SA5_128_G)
+GGML_SA_IMPL(sa5_256, GGML_TYPE_SA5_256, SA5_256_Q, SA5_256_G)
+GGML_SA_IMPL(sa6, GGML_TYPE_SA6, SA6_Q, SA6_G)
+GGML_SA_IMPL(sa6_128, GGML_TYPE_SA6_128, SA6_128_Q, SA6_128_G)
+GGML_SA_IMPL(sa6_256, GGML_TYPE_SA6_256, SA6_256_Q, SA6_256_G)
+
+
+SOURCE: ggml/src/ggml-cuda/vecdotq.cuh
+URL: https://github.com/ranery/llama.cpp/blob/93a0b5111eb71c90f302f1268f1535f83e2e1f13/ggml/src/ggml-cuda/vecdotq.cuh
+
+#define VDR_SA_Q8_1_MMVQ 1 // one chunk per thread was faster than two on A100
+#define VDR_SA_Q8_1_MMQ  VDR_Q8_0_Q8_1_MMQ
+
+template <int Q, int G, typename block_t>
+static __device__ __forceinline__ float vec_dot_sa_q8_1(
+    const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & kbx, const int & iqs) {
+
+    const block_t * bx = (const block_t *) vbq + kbx;
+
+    float acc = 0.0f;
+#pragma unroll
+    for (int c = 0; c < VDR_SA_Q8_1_MMVQ; ++c) {
+        const int ic = iqs + c;
+        const block_q8_1 * by = bq8_1 + ic;
+        int bits[Q];
+#pragma unroll
+        for (int p = 0; p < Q; ++p) {
+            bits[p] = sizeof(block_t) % 2 == 0 ? get_int_b2(bx->qs, p*8 + ic) : get_int_b1(bx->qs, p*8 + ic);
+        }
+        int sumi[Q];
+#pragma unroll
+        for (int p = 0; p < Q; ++p) {
+            sumi[p] = 0;
+        }
+#pragma unroll
+        for (int k = 0; k < 8; ++k) {
+            const int u = get_int_b4(by->qs, k);
+#pragma unroll
+            for (int p = 0; p < Q; ++p) {
+                const int m = (((bits[p] >> (4*k)) & 0xF) * 0x00204081) & 0x01010101;
+                sumi[p] = ggml_cuda_dp4a(m, u, sumi[p]);
+            }
+        }
+        const float2 ds = __half22float2(by->ds);
+        const int g = ic*32 / G;
+#pragma unroll
+        for (int p = 0; p < Q; ++p) {
+            acc += (float) bx->a[g*Q + p] * (2.0f*ds.x*sumi[p] - ds.y);
+        }
+    }
+    return ggml_cuda_sa_d(bx) * acc;
+}
+
+
+SOURCE: ggml/src/ggml-cuda/common.cuh
+URL: https://github.com/ranery/llama.cpp/blob/93a0b5111eb71c90f302f1268f1535f83e2e1f13/ggml/src/ggml-cuda/common.cuh
+
+static __device__ __forceinline__ int ggml_cuda_dp4a(const int a, const int b, int c) {
+#if defined(GGML_USE_HIP)
+#if defined(CDNA) || defined(RDNA2) || defined(__gfx906__)
+    c = __builtin_amdgcn_sdot4(a, b, c, false);
+#elif defined(RDNA3) || defined(RDNA4)
+    c = __builtin_amdgcn_sudot4( true, a, true, b, c, false);
+#elif defined(RDNA1) || defined(__gfx900__)
+    int tmp1;
+    int tmp2;
+    asm("\n \
+        v_mul_i32_i24 %1, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_0 src1_sel:BYTE_0 \n \
+        v_mul_i32_i24 %2, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_1 src1_sel:BYTE_1 \n \
+        v_add3_u32 %0, %1, %2, %0 \n \
+        v_mul_i32_i24 %1, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_2 src1_sel:BYTE_2 \n \
+        v_mul_i32_i24 %2, sext(%3), sext(%4) dst_sel:DWORD dst_unused:UNUSED_PAD src0_sel:BYTE_3 src1_sel:BYTE_3 \n \
+        v_add3_u32 %0, %1, %2, %0 \n \
+        "
+        : "+v"(c), "=&v"(tmp1), "=&v"(tmp2)
+        : "v"(a), "v"(b)
+    );
+#else
+    const int8x4_t va = reinterpret_cast<const int8x4_t&>(a);
+    const int8x4_t vb = reinterpret_cast<const int8x4_t&>(b);
+    c += va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2] + va[3] * vb[3];
+#endif
+    return c;
+
+#else // defined(GGML_USE_HIP)
+
+#if __CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)
+    return __dp4a(a, b, c);
+#else // __CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)
+    const int8_t * a8 = (const int8_t *) &a;
+    const int8_t * b8 = (const int8_t *) &b;
+    return c + a8[0]*b8[0] + a8[1]*b8[1] + a8[2]*b8[2] + a8[3]*b8[3];
+#endif // __CUDA_ARCH__ >= GGML_CUDA_CC_DP4A || defined(GGML_USE_MUSA)
+
+#endif // defined(GGML_USE_HIP)
+}

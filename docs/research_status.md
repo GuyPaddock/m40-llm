@@ -6,6 +6,16 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [October 31 ShiftAdd audit](experiments/2026-10-31-shiftadd-audit.md)
+pins upstream `93a0b5111eb71c90f302f1268f1535f83e2e1f13` and retains licensed
+source excerpts. SA4_128 stores 256 weights in 138 bytes, a calculated
+4.1667% payload saving against Q4_0. Upstream CUDA consumes Q8_1 activations
+and provides a scalar packed-integer fallback below native DP4A support.
+The first local candidate will consume FP32 inputs with sign-add reductions
+to isolate weight representation error. Next implement and validate the
+experiment-only encoder/reference before its CUDA consumer. No ShiftAdd
+fit, timing, model-quality result or runtime integration exists yet.
+
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`shiftadd`](experiments/2026-10-30-shiftadd-protocol.md).
