@@ -9,8 +9,13 @@ against the current code, worktree, Git history, and linked raw results.
 The [October 31 graph audit](experiments/2026-10-31-legacy-graphs-audit.md)
 pins PR 30727, maps native-only local restrictions and identifies historical
 slow-replay evidence. Next validate native dense graph behavior and compare
-complete token cost before any compound extension. No hardware experiment or
-default change follows from the audit alone.
+complete token cost before any compound extension. The
+[existing compatibility tests](experiments/2026-10-31-legacy-graphs-compatibility.md)
+now pass all four explicit M40/cuBLAS graph checks. These tiny FP16 fixtures
+establish capture/replay and diagnostic dependencies, not native-Q8 sequence
+parity or performance. Next add native Q8 growing-prefix, sequence/KV-state,
+session-lifetime and capture/launch-failure checks before timing. No runtime
+restriction or default has changed.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
