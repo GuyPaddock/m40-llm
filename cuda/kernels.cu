@@ -42,6 +42,7 @@ struct M40llmCudaContext {
 #include "q8_execution.cuh"
 #include "q8_ffn.cuh"
 #include "q4_channels.cuh"
+#include "ternary_screen.cuh"
 #include "decode_reductions.cuh"
 #include "q8_unfused.cuh"
 #include "q8_separate_warp.cuh"
@@ -8015,6 +8016,30 @@ extern "C" int m40llm_rms_norm_f32_weighted_async(
             return -3;
         }
         return 0;
+    }
+
+    int m40llm_ternary_screen_async(
+        M40llmCudaContext* ctx, const void* input, const void* signs,
+        const void* gate_scales, const void* gate_codes,
+        const void* up_scales, const void* up_codes, const void* norms,
+        void* rotated, void* coordinates, void* output,
+        int k, int h, uint32_t stream_kind) {
+        if (!ctx || !input || !signs || !gate_scales || !gate_codes ||
+            !up_scales || !up_codes || !norms || !rotated || !coordinates || !output) return -1;
+        if (k <= 0 || k % 128 || h <= 0 || h > INT_MAX - 31) return -2;
+        const cudaStream_t stream = select_stream(ctx, stream_kind);
+        if (!stream) return -3;
+        using namespace m40llm_ternary_screen;
+        rotate_select<<<k / width, width, 0, stream>>>(
+            static_cast<const float*>(input), static_cast<const signed char*>(signs),
+            static_cast<float*>(rotated), static_cast<unsigned char*>(coordinates));
+        if (cudaPeekAtLastError() != cudaSuccess) return -4;
+        score_channels<<<(h + 31) / 32, 256, 0, stream>>>(
+            static_cast<const float*>(rotated), static_cast<const unsigned char*>(coordinates),
+            static_cast<const __half*>(gate_scales), static_cast<const unsigned char*>(gate_codes),
+            static_cast<const __half*>(up_scales), static_cast<const unsigned char*>(up_codes),
+            static_cast<const float*>(norms), static_cast<float*>(output), k, h);
+        return cudaPeekAtLastError() == cudaSuccess ? 0 : -5;
     }
 
     int m40llm_q4_selected_ffn_async(

@@ -30,6 +30,10 @@ mod q4_channels;
 #[cfg(feature = "cuda")]
 pub use q4_channels::{DeviceQ4SelectedFfn, Q4DownLayout};
 #[cfg(feature = "cuda")]
+mod ternary_screen;
+#[cfg(feature = "cuda")]
+pub use ternary_screen::DeviceTernaryScreen;
+#[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
 mod q8_ffn_task_pair;
@@ -846,6 +850,22 @@ mod ffi {
             n: i32,
             k: i32,
             threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_ternary_screen_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            signs: *const c_void,
+            gate_scales: *const c_void,
+            gate_codes: *const c_void,
+            up_scales: *const c_void,
+            up_codes: *const c_void,
+            norms: *const c_void,
+            rotated: *mut c_void,
+            coordinates: *mut c_void,
+            output: *mut c_void,
+            k: i32,
+            h: i32,
             stream_kind: u32,
         ) -> i32;
         pub fn m40llm_q4_selected_ffn_async(

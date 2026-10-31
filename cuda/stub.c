@@ -13,6 +13,17 @@ typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
 
+int m40llm_ternary_screen_async(
+    M40llmCudaContext* ctx, const void* input, const void* signs,
+    const void* gate_scales, const void* gate_codes,
+    const void* up_scales, const void* up_codes, const void* norms,
+    void* rotated, void* coordinates, void* output, int k, int h, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)signs; (void)gate_scales; (void)gate_codes;
+    (void)up_scales; (void)up_codes; (void)norms; (void)rotated;
+    (void)coordinates; (void)output; (void)k; (void)h; (void)stream_kind;
+    return -1;
+}
+
 int m40llm_q4_selected_ffn_async(
     M40llmCudaContext* ctx, const void* input, const void* gate,
     const void* up, const void* down, const void* scales, const void* codes,

@@ -17,8 +17,11 @@ remaining overhead budgets for a 5% FFN gain are 150.88 and 56.89 microseconds,
 respectively. The [bounded ternary protocol](experiments/2026-10-31-ternary-screen-protocol.md)
 now has a host encoder and independent Walsh/projection references. Four new
 behavioral tests, the warning-as-error non-CUDA suite, all-target non-CUDA
-Clippy and formatting pass. Next implement its fixed CUDA screening-cost
-probe before recovery. Quantization/pruning drift is recorded; sequence quality remains open.
+Clippy and formatting pass. The [fixed CUDA screen](experiments/2026-10-31-ternary-cuda.md)
+passes both hardware tests with cuBLAS on/off, affected projection/forward/
+ownership/attention regressions and CUDA/server all-target Clippy. Next measure
+its complete cost on retained inputs before channel top-k or recovery.
+Quantization/pruning drift is recorded; sequence quality remains open.
 No runtime promotion or whole-model speed claim follows.
 
 The [real-model Q4 screen](experiments/2026-10-31-q4-channel-screen.md)
