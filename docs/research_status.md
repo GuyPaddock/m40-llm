@@ -21,7 +21,12 @@ compression grid still requires completion and audit.
 The [CUDA consumer and frozen comparison](experiments/2026-10-31-lossless-kv-consumer.md)
 are implemented in the worktree. CUDA/server all-target Clippy, compile/link
 of the hardware tests and 225 non-CUDA tests pass. GPU checks remain unrun.
-The paired runner, append pricing and final decision remain outstanding.
+The [CPU fixture unit and paired runner](experiments/2026-10-31-lossless-attention-runner.md)
+now exist. Six CPU fixture tests pass, and the GPU runner's ignored hardware
+test compiles and links. The pending runner includes native and matched
+attention controls, active-batch-only reconstruction and full CPU replacement
+append costs. GPU checks, real-input qualification, measurements and the final
+decision remain outstanding; the consumer and GPU runner are uncommitted.
 The overall nine-topic goal remains active with six bounded studies complete.
 
 The user has authorized execution of the October 30 nine-topic research plan
