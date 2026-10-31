@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The [October 31 graph audit](experiments/2026-10-31-legacy-graphs-audit.md)
+pins PR 30727, maps native-only local restrictions and identifies historical
+slow-replay evidence. Next validate native dense graph behavior and compare
+complete token cost before any compound extension. No hardware experiment or
+default change follows from the audit alone.
+
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`legacy-graphs`](experiments/2026-10-30-legacy-graphs-protocol.md).
