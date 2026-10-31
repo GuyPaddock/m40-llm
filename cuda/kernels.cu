@@ -49,6 +49,7 @@ struct M40llmCudaContext {
 #include "q8_projection_packed.cuh"
 #include "q8_projection_split.cuh"
 #include "q8_activation.cuh"
+#include "rotated_activation.cuh"
 #include "q8_prefill.cuh"
 #include "activation_sparsity.cuh"
 

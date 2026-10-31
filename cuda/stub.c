@@ -12,6 +12,14 @@ typedef struct M40llmCudaGraphExec { int _stub; } M40llmCudaGraphExec;
 typedef struct M40llmKVCache { int _stub; } M40llmKVCache;
 typedef struct M40llmAttentionTelemetry { int _stub; } M40llmAttentionTelemetry;
 
+int m40llm_prepare_rotated_q8_1_async(M40llmCudaContext* ctx, const void* input,
+    const void* signs, void* signed_input, void* rotated, void* quantized,
+    int rows, int columns, int is_fused, uint32_t stream_kind) {
+    (void)ctx; (void)input; (void)signs; (void)signed_input; (void)rotated;
+    (void)quantized; (void)rows; (void)columns; (void)is_fused; (void)stream_kind;
+    return -99;
+}
+
 int m40llm_quantize_q8_1_async(M40llmCudaContext* ctx, const void* input, void* output,
     int rows, int columns, int padded_columns) {
     (void)ctx; (void)input; (void)output; (void)rows; (void)columns; (void)padded_columns;

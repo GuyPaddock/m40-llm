@@ -15,12 +15,20 @@ The [fixed experiment](experiments/2026-10-31-rotated-preparation-protocol.md)
 now specifies staged/fused FP32-plus-Q8_1 production, invocation ownership,
 retained rows at both widths and a matched 256-channel consumer. Existing
 Q8_1 row restrictions stay intact through flattened encoding and per-row
-consumption. Implementation and measurements remain pending.
+consumption. The [owned CUDA producer](experiments/2026-10-31-rotated-preparation-implementation.md)
+now passes three new M40 tests with cuBLAS on/off, including independent FP64
+Walsh checks and exact Q8_1, staged/fused and consumer bits. The unchanged
+Q8_1 tests, forward/ownership, runtime and attention regressions, CUDA/server
+Clippy, warning-free non-CUDA suite and formatting pass. Initial build and
+added consumer-reference failures are preserved with their corrections.
+Next implement and measure the retained-input producer/consumer comparison;
+there is no performance or runtime integration claim yet.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`activation-preparation`](experiments/2026-10-30-activation-preparation-protocol.md).
-Its scoped protocol is recorded; implementation and measurements are pending.
+Its scoped protocol and producer implementation are recorded; the source-bound
+benchmark and measurements remain pending.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

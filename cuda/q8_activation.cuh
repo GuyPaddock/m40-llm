@@ -15,14 +15,8 @@ struct alignas(4) Block {
 };
 static_assert(sizeof(Block) == 36, "Q8_1 activation storage must be 36 bytes");
 
-__global__ void quantize(const float* __restrict__ input, Block* __restrict__ output,
-                         int columns, int padded_columns) {
-    const int position = blockIdx.x * blockDim.x + threadIdx.x;
-    // Complete 32-lane warps are either active or inactive under this bound.
-    if (position >= padded_columns) return;
-    const int row = blockIdx.y;
-    const int lane = position % 32;
-    const float value = position < columns ? input[static_cast<size_t>(row)*columns+position] : 0.0f;
+// Every lane of a complete warp participates, with one shared output block.
+__device__ __forceinline__ void encode_value(float value, int lane, Block& block) {
     float maximum = fabsf(value);
     float sum = value;
     #pragma unroll
@@ -32,9 +26,19 @@ __global__ void quantize(const float* __restrict__ input, Block* __restrict__ ou
     }
     const float scale = maximum / 127.0f;
     const int8_t q = maximum == 0.0f ? 0 : static_cast<int8_t>(roundf(value / scale));
-    Block& block = output[static_cast<size_t>(row)*(padded_columns/32)+position/32];
     block.qs[lane] = q;
     if (lane == 0) block.ds = __floats2half2_rn(scale, sum);
+}
+
+__global__ void quantize(const float* __restrict__ input, Block* __restrict__ output,
+                         int columns, int padded_columns) {
+    const int position = blockIdx.x * blockDim.x + threadIdx.x;
+    // Complete 32-lane warps are either active or inactive under this bound.
+    if (position >= padded_columns) return;
+    const int row = blockIdx.y;
+    const float value = position < columns ? input[static_cast<size_t>(row)*columns+position] : 0.0f;
+    Block& block = output[static_cast<size_t>(row)*(padded_columns/32)+position/32];
+    encode_value(value, position % 32, block);
 }
 
 // Packed access and signed dot are adapted from pinned vecdotq.cuh::get_int_b2

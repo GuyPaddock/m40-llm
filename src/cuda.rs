@@ -42,7 +42,11 @@ mod q8_warp_packet;
 #[cfg(feature = "cuda")]
 mod q8_weight_read;
 #[cfg(feature = "cuda")]
+mod rotated_activation;
+#[cfg(feature = "cuda")]
 pub use q8_ffn::{Q8FfnFp32Variant, Q8FfnQ81Launch};
+#[cfg(feature = "cuda")]
+pub use rotated_activation::{DeviceRotatedActivation, RotatedPreparation};
 
 pub const ROPE_LAYOUT_ADJACENT: u32 = 0;
 pub const ROPE_LAYOUT_NEOX: u32 = 1;
@@ -359,6 +363,18 @@ mod ffi {
             rows: i32,
             hidden: i32,
             k: i32,
+        ) -> i32;
+        pub fn m40llm_prepare_rotated_q8_1_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            signs: *const c_void,
+            signed_input: *mut c_void,
+            rotated: *mut c_void,
+            quantized: *mut c_void,
+            rows: i32,
+            columns: i32,
+            is_fused: i32,
+            stream_kind: u32,
         ) -> i32;
         pub fn m40llm_quantize_q8_1_async(
             ctx: *mut M40llmCudaContext,

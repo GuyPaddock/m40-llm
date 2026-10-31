@@ -140,6 +140,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cuda/q8_projection_packed.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_projection_split.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_activation.cuh");
+    println!("cargo:rerun-if-changed=cuda/rotated_activation.cuh");
     println!("cargo:rerun-if-changed=cuda/q8_prefill.cuh");
     println!("cargo:rerun-if-changed=cuda/activation_sparsity.cuh");
     println!("cargo:rerun-if-changed=cuda/stub.c");
