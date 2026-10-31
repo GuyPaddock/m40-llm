@@ -18,8 +18,10 @@ now passes two M40 tests with cuBLAS on/off, including bitwise parity with
 repeated single-row launches and FP64 numerical checks. Native Q4 projection,
 compound forward/ownership and attention regressions, non-CUDA tests and
 all-target CUDA/server Clippy pass. Shared Q4 fixture encoding was transferred
-as `85485b8`. Next implement and run the source-bound complete-FFN comparison;
-there is no new performance claim or runtime dispatch change.
+as `85485b8`. The source-bound `--ffn-q4-fusion` comparison now passes 63 CPU
+tests, Clippy and formatting. Next run its clean release grid of twelve cases,
+with all three complete controls and separate gate/up diagnostics. There is no
+new performance claim or runtime dispatch change.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

@@ -70,3 +70,40 @@ M40LLM_ENABLE_CUBLAS=1 cargo clippy --features cuda,server --all-targets \
 
 Raw logs use `2026-10-31-q4-fusion-` with `on`, `off`, `regression`, `clippy`
 and `noncuda` suffixes, followed by `.log.gz`, beside this checkpoint.
+
+## Source-bound timing implementation
+
+`q8_execution_bench --ffn-q4-fusion` requires the frozen capture/report and
+environment, a clean release source, `--rows 1,2,4,8 --trials 5 --iterations 10`.
+The same three derived native Q4 matrices and all diagnostic activation buffers
+remain resident in every arm. The four arms are:
+
+| Arm | Gate/up/SwiGLU | Down |
+| --- | --- | --- |
+| `serial_down` | Existing fused single-row calls | Existing single-row calls |
+| `serial_gate_batched_down` | Existing fused single-row calls | Existing block-loop batch |
+| `unfused_batched` | Two block-loop projections and SwiGLU | Same block-loop batch |
+| `fused_rows` | One new multi-row fused call | Same block-loop batch |
+
+Each of twelve layer/row cases first checks all hidden and complete FFN
+outputs against scalar FP64 reconstruction. New fused hidden bits must match
+existing single-row fusion, and complete output bits must match the serial
+gate/up control using the same down consumer. Repeat the checks after timing,
+verify input guards and immutable weights, then release each layer's owners.
+
+Warm each complete arm for at least one GPU second. Measure the candidate
+against all three complete controls and against the two distinct gate/up
+controls, giving 36 complete and 24 gate/up comparisons. The callback timing
+code reuses the channel branch's alternating order and 5/10/20 rules, with the
+existing FFN bootstrap summary. Gate/up rows are diagnostic; only complete
+results against the strongest control can qualify a candidate. Required
+cross-stream dependencies, GPU events and host submission/completion remain
+inside their stated boundaries.
+
+The benchmark passes 63 CPU example tests, CUDA/server all-target Clippy and
+formatting. Twenty pre-existing ignored hardware tests are not counted as
+passes. The first CPU reference test used exact equality for a closed form
+with different FP64 association; its 2.2e-16 difference now uses a 1e-14 host
+test tolerance. CUDA tolerances and bit-parity requirements are unchanged.
+Initial and passing logs are preserved as `2026-10-31-q4-fusion-bench-*.log.gz`.
+Hardware timings remain pending at this checkpoint.

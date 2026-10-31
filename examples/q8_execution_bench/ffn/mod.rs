@@ -6,12 +6,14 @@ mod fixture;
 mod four_row;
 mod joint;
 mod packet;
+mod paired_timing;
 mod payload_entropy;
 mod pipeline;
 mod prepared;
 mod prepared_projection;
 mod prepared_read;
 mod projection;
+mod q4_fusion;
 mod reductions;
 mod reuse;
 mod task_pair;
@@ -45,6 +47,9 @@ fn validate_rows(args: &Args) -> Result<()> {
 }
 
 pub(super) fn benchmark(args: &Args) -> Result<()> {
+    if args.ffn_q4_fusion {
+        return q4_fusion::benchmark(args);
+    }
     if args.ffn_four_row_reuse {
         return four_row::benchmark(args);
     }
