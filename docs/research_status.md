@@ -17,7 +17,14 @@ affected kernels contain the race in base `0eee578`; the correction changes
 no quantization arithmetic or selector semantics. Two staged and nineteen
 runner tests pass with cuBLAS on/off, including a distinct-scale regression
 and real first-layer replay. Affected runtime checks, Clippy and formatting
-pass. Standalone full-grid requalification remains required before timing.
+pass. The fresh clean `1e445a5`
+[standalone grid](experiments/2026-10-31-quantized-kv-release-admission.md)
+now passes all 36 real-input cases with exact selected positions and staged
+KV reconstruction. Maximum FP64 error is `2.0414530030876676e-5`; matched
+staged/direct and batched/serial paths have zero observed numerical difference.
+All tracked storage is released and final external M40 residency is zero.
+The frozen 384-group paired cost grid is admitted; no model-quality conclusion
+or runtime default change follows.
 
 The [first staged-reference failure](experiments/2026-10-31-quantized-kv-initial-failure.md)
 is preserved at `ebc5d5f`. The [CPU oracle correction](experiments/2026-10-31-quantized-kv-zero-reference.md)

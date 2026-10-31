@@ -1,0 +1,24 @@
+{
+  "revision": "1e445a5fc9bbad6358d759590ef4ff2a6247d5ad",
+  "executable_sha256": "f91040717c3ab9ab2cc7c971dee39eacaf189ea1d769b6aeb42160f7be40bb33",
+  "artifact_sha256": "da01d6328aef717902edbc93c215f0468f2bc9d789211effbc1b61b1569d1242",
+  "cases": 36,
+  "maximum_staged_fp64_error": 0.000010475234504703224,
+  "maximum_direct_fp64_error": 0.000010475234504703224,
+  "maximum_dense_fp64_error": 0.000020414530030876676,
+  "maximum_staged_direct_error": 0.0,
+  "maximum_batched_serial_error": 0.0,
+  "maximum_selection_approximation": 1.6747894128815721,
+  "maximum_quantization_approximation": 0.019369109227968778,
+  "complete": {
+    "cases": 36,
+    "generated_token_count": 0,
+    "is_complete": true,
+    "is_model_performance_measured": false,
+    "kind": "kv_attention_benchmark_complete",
+    "stop_reason": "fixed_context_format_grid_complete",
+    "tracked_device_bytes_after": 0
+  },
+  "is_timing_measured": false,
+  "is_model_quality_measured": false
+}

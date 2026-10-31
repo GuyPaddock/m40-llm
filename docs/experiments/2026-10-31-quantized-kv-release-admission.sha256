@@ -1,0 +1,6 @@
+e289169f53e78116aa2f5cf2f98afb678105e3ca6da428b594a5d01cf0be6658  docs/experiments/2026-10-31-quantized-kv-release-correctness-build.log.gz
+293b6e2803ae38b5f5f29efdf258de084be886dcfd5fdde1865a72a83157e80b  docs/experiments/2026-10-31-quantized-kv-release-correctness-queue.log.gz
+5803670b18baa66832a148deb0a561da304ecd5858387693371d4e4c380a21c1  docs/experiments/2026-10-31-quantized-kv-release-correctness.jsonl.gz
+468f0c0d54ec6546e9df71a3839a6fbd0517b423e6a9dc498159afcb85543ecd  docs/experiments/2026-10-31-quantized-kv-release-correctness.sh
+01dce4d1bf6c9a20678b49420d34a0ecc121cad8b0e4245068c527570b61e875  docs/experiments/2026-10-31-quantized-kv-release-admission.json
+9d2aa4881de368a39e03bfd966d8b7d47b4671b476f20e42deec4811c2b8dbc3  docs/experiments/2026-10-31-quantized-kv-release-admission.jq
