@@ -6,6 +6,11 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The clean `c9f6066` [real-input release](experiments/2026-10-31-quantized-kv-release-failure.md)
+passes nine cases, then fails selection admission for layer 0, 8K, Q8/head64,
+sequence 0, query head 0. No timings run. Diagnose actual/expected block IDs
+and scores while retaining the original exact-position gate.
+
 The [first staged-reference failure](experiments/2026-10-31-quantized-kv-initial-failure.md)
 is preserved at `ebc5d5f`. The [CPU oracle correction](experiments/2026-10-31-quantized-kv-zero-reference.md)
 converts rounded Q4 codes to integers so zero reconstructs with the correct
