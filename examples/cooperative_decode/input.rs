@@ -6,6 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 #[serde(deny_unknown_fields)]
 pub struct Trace {
     pub schema_version: u32,
+    /// Schema 2 explicitly prices either serialized copies or an admitted
+    /// overlap path. Schema 1 retains its original overlap assumption.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_copy_compute_overlap: Option<bool>,
     pub description: String,
     pub cpu_threads: usize,
     pub cpu_numa_node: usize,
@@ -81,8 +85,17 @@ pub struct Request {
 }
 
 impl Trace {
+    pub fn has_effective_copy_compute_overlap(&self) -> bool {
+        self.has_copy_compute_overlap.unwrap_or(true)
+    }
+
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.schema_version == 1, "unsupported schema");
+        ensure!(matches!(self.schema_version, 1 | 2), "unsupported schema");
+        ensure!(
+            (self.schema_version == 1 && self.has_copy_compute_overlap.is_none())
+                || (self.schema_version == 2 && self.has_copy_compute_overlap.is_some()),
+            "schema 2 requires an explicit copy/compute overlap policy; schema 1 keeps its legacy policy"
+        );
         ensure!(
             !self.description.trim().is_empty(),
             "missing trace description"
@@ -137,7 +150,14 @@ impl Trace {
                 if let Some(assist) = &stage.assist {
                     self.validate_cost(&assist.h2d)?;
                     self.validate_cost(&assist.d2h)?;
-                    self.validate_cost(&assist.synchronization)?;
+                    if self.schema_version == 2 && assist.synchronization.duration_ns == 0 {
+                        ensure!(
+                            self.evidence.contains_key(&assist.synchronization.evidence),
+                            "missing included-synchronization cost evidence"
+                        );
+                    } else {
+                        self.validate_cost(&assist.synchronization)?;
+                    }
                     ensure!(
                         assist.h2d_bytes > 0 && assist.d2h_bytes > 0,
                         "empty assist transfer"

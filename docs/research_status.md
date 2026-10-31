@@ -21,7 +21,10 @@ now implements scalar/AVX2 projection and pinned retained-input admission.
 Five new correctness tests, including AVX2 execution, and seven shared protocol
 tests pass. [Actual Qwen validation](experiments/2026-10-31-dualpace-cpu-validation.md)
 passes all 36 cases and 1,082,880 outputs per implementation, with no timing
-pairs or generated model tokens. CPU timings, serial transfer costs and the
+pairs or generated model tokens. The [serialized-copy extension](experiments/2026-10-31-dualpace-copy-policy.md)
+adds schema-2 resource exclusion and explicit included-synchronization costs;
+eleven simulator tests and non-CUDA all-target Clippy pass. Legacy traces retain
+their original overlap behavior. CPU timings, serial transfer costs and the
 priced prerequisite report remain pending; the branch is incomplete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.

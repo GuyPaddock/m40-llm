@@ -144,12 +144,14 @@ pub fn simulate(trace: &Trace, mode: Mode) -> Result<ResultTrace> {
                                 assist.d2h.duration_ns,
                                 assist.d2h_bytes,
                             );
-                            append(
-                                Resource::Cpu,
-                                "synchronize",
-                                assist.synchronization.duration_ns,
-                                0,
-                            );
+                            if assist.synchronization.duration_ns > 0 {
+                                append(
+                                    Resource::Cpu,
+                                    "synchronize",
+                                    assist.synchronization.duration_ns,
+                                    0,
+                                );
+                            }
                         } else {
                             append(Resource::Cpu, "local", stage.cpu.duration_ns, 0);
                         }
@@ -218,7 +220,21 @@ pub fn simulate(trace: &Trace, mode: Mode) -> Result<ResultTrace> {
         acquire_request(&mut active_cpu, true, &mut states, now);
         acquire_request(&mut active_gpu, false, &mut states, now);
 
-        for resource in [Resource::Cpu, Resource::Gpu, Resource::Copy] {
+        let has_overlap = trace.has_effective_copy_compute_overlap();
+        let resources = if has_overlap {
+            [Resource::Cpu, Resource::Gpu, Resource::Copy]
+        } else {
+            // A ready assist copy gets the next shared GPU/copy boundary;
+            // do not starve it behind the GPU main request's remaining stages.
+            [Resource::Cpu, Resource::Copy, Resource::Gpu]
+        };
+        for resource in resources {
+            if !has_overlap
+                && ((resource == Resource::Gpu && running[Resource::Copy.index()].is_some())
+                    || (resource == Resource::Copy && running[Resource::Gpu.index()].is_some()))
+            {
+                continue;
+            }
             let slot = &mut running[resource.index()];
             if slot.is_some() {
                 continue;

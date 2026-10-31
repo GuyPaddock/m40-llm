@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "description": "Synthetic serialized-copy scheduling fixture; not hardware measurements",
+  "cpu_threads": 1,
+  "cpu_numa_node": 0,
+  "memory": {
+    "host_capacity_bytes": 1000,
+    "gpu_capacity_bytes": 1000,
+    "host_fixed_bytes": 100,
+    "gpu_fixed_bytes": 100
+  },
+  "evidence": {
+    "hand_calculation": {
+      "kind": "assumption",
+      "description": "Synthetic durations and byte counts for checking event ordering; not a feasibility estimate."
+    },
+    "synchronization_included": {
+      "kind": "assumption",
+      "description": "Completed transfer costs already include synchronization in this hand calculation"
+    }
+  },
+  "profiles": {
+    "token": [
+      {
+        "name": "prefix",
+        "cpu": {
+          "duration_ns": 4,
+          "evidence": "hand_calculation"
+        },
+        "gpu": {
+          "duration_ns": 10,
+          "evidence": "hand_calculation"
+        },
+        "assist": null
+      },
+      {
+        "name": "dense",
+        "cpu": {
+          "duration_ns": 20,
+          "evidence": "hand_calculation"
+        },
+        "gpu": {
+          "duration_ns": 10,
+          "evidence": "hand_calculation"
+        },
+        "assist": {
+          "h2d": {
+            "duration_ns": 2,
+            "evidence": "hand_calculation"
+          },
+          "d2h": {
+            "duration_ns": 2,
+            "evidence": "hand_calculation"
+          },
+          "synchronization": {
+            "duration_ns": 0,
+            "evidence": "synchronization_included"
+          },
+          "h2d_bytes": 16,
+          "d2h_bytes": 16
+        }
+      }
+    ]
+  },
+  "requests": [
+    {
+      "id": "gpu",
+      "ready_ns": 0,
+      "is_cpu_resident": false,
+      "host_peak_kv_bytes": 200,
+      "gpu_peak_kv_bytes": 200,
+      "token_profiles": [
+        "token"
+      ]
+    },
+    {
+      "id": "cpu",
+      "ready_ns": 0,
+      "is_cpu_resident": true,
+      "host_peak_kv_bytes": 200,
+      "gpu_peak_kv_bytes": 200,
+      "token_profiles": [
+        "token"
+      ]
+    }
+  ],
+  "has_copy_compute_overlap": false
+}

@@ -14,6 +14,7 @@ fn cost(duration_ns: u64) -> Cost {
 fn fixture() -> Trace {
     Trace {
         schema_version: 1,
+        has_copy_compute_overlap: None,
         description: "Synthetic event-order fixture; not hardware measurements".into(),
         cpu_threads: 1,
         cpu_numa_node: 0,
@@ -117,6 +118,80 @@ fn test_nonpreemptive_assist_delays_gpu_main() {
     assert_eq!(result.copy_busy_ns, 4);
     assert_eq!(result.transfer_bytes, 32);
     assert_eq!(result.gpu_busy_ns, 30);
+}
+
+/// Blocking transfer profiles forbid all GPU/copy overlap and still give
+/// assistance priority at stage boundaries. Already-included synchronization
+/// costs zero extra time rather than adding a fabricated nanosecond.
+#[test]
+fn test_serialized_copy_profile_preserves_assist_priority() {
+    let mut trace = fixture();
+    trace.schema_version = 2;
+    trace.has_copy_compute_overlap = Some(false);
+    trace.profiles.get_mut("token").unwrap()[1]
+        .assist
+        .as_mut()
+        .unwrap()
+        .synchronization
+        .duration_ns = 0;
+    let result = simulate(&trace, Mode::Assisted).unwrap();
+    assert_eq!(result.requests[0].completion_ns, [34]);
+    assert_eq!(result.requests[1].completion_ns, [24]);
+    assert_eq!(result.cpu_compute_busy_ns, 4);
+    assert_eq!(result.cpu_worker_occupied_ns, 24);
+    assert_eq!(result.copy_busy_ns, 4);
+    for copy in result
+        .intervals
+        .iter()
+        .filter(|v| v.resource == Resource::Copy)
+    {
+        for gpu in result
+            .intervals
+            .iter()
+            .filter(|v| v.resource == Resource::Gpu)
+        {
+            assert!(copy.end_ns <= gpu.start_ns || gpu.end_ns <= copy.start_ns);
+        }
+    }
+    let first_copy = result
+        .intervals
+        .iter()
+        .find(|v| v.operation == "h2d")
+        .unwrap();
+    assert_eq!(
+        (
+            first_copy.start_ns,
+            first_copy.end_ns,
+            first_copy.queue_wait_ns
+        ),
+        (10, 12, 6)
+    );
+    assert!(!result
+        .intervals
+        .iter()
+        .any(|v| v.operation == "synchronize"));
+}
+
+/// New profiles must declare overlap, and only synchronization may be free
+/// when its service is already included in measured completed-operation costs.
+#[test]
+fn test_transfer_policy_requires_explicit_schema_two() {
+    let mut trace = fixture();
+    trace.schema_version = 2;
+    assert!(trace.validate().is_err());
+    trace.has_copy_compute_overlap = Some(true);
+    assert!(trace.validate().is_ok());
+    assert_eq!(simulate(&trace, Mode::Assisted).unwrap().elapsed_ns, 30);
+    trace.schema_version = 1;
+    assert!(trace.validate().is_err());
+    trace.schema_version = 2;
+    trace.profiles.get_mut("token").unwrap()[1]
+        .assist
+        .as_mut()
+        .unwrap()
+        .h2d
+        .duration_ns = 0;
+    assert!(trace.validate().is_err());
 }
 
 /// Simultaneous copy and native-stage completion makes the assist eligible

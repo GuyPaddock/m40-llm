@@ -19,7 +19,7 @@ use std::{
 
 #[derive(Parser)]
 struct Args {
-    /// Explicit post-prefill arrivals and per-token stage costs, schema 1.
+    /// Explicit post-prefill arrivals and per-token stage costs, schema 1/2.
     #[arg(long)]
     trace: PathBuf,
     /// New JSONL report; existing results are never overwritten.
@@ -61,6 +61,7 @@ fn main() -> Result<()> {
         "is_simulation":true,"is_serving_measurement":false,"generated_token_count":0,
         "has_assumed_costs":trace.evidence.values().any(|value| matches!(value, Evidence::Assumption { .. })),
         "is_model_correctness_evaluated":false,
+        "has_copy_compute_overlap":trace.has_effective_copy_compute_overlap(),
         "timing_scope":"decode-ready through last simulated token; prefill and initial KV migration excluded",
         "cost_scope":"declared component costs; artifact integrity checked, values not automatically extracted",
         "quantiles":"nearest-rank, pooled within-request intervals; excludes first-token latency"}),
