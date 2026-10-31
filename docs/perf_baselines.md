@@ -1,5 +1,25 @@
 # Performance Baselines
 
+## 2026-10-31: Ternary screening cost rejects both sparse budgets
+
+The [fixed ternary screen](experiments/2026-10-31-ternary-screen-result.md)
+at clean release source `327aa32` passes numerical/ownership checks on 24
+captured cases but costs 507.70 to 513.70 microseconds, before channel top-k,
+exact sparse FFN or recovery. Five samples per row, 120 total, are stable;
+no extension is needed. Both frozen overhead budgets, 150.88 microseconds at
+10% retention and 56.89 at 20%, fail. Stop this implementation's dependent
+recovery/runtime work. The bounded channel-selection branch has a negative
+screening decision, with the successful supplied-index experiment preserved.
+This is not a combined-pipeline or whole-model performance claim.
+
+Each layer's immutable screen payload is 12,022,784 bytes; guarded scratch is
+9,600 bytes and guarded I/O 184,448 bytes. Peak tracked residency is
+4,484,672,000 bytes with the original model/prepared Q8 weights retained.
+All four output planes, coordinate order, post-timing bits, immutable hashes
+and cleanup pass. Maximum recorded plane error is 0.000012251. No quality,
+default, training or teacher-generation change follows. Raw data, summary,
+protocol and validation logs are linked from the result report.
+
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
 ## 2026-10-31: Sparse Q4 Beats Stronger FFN References

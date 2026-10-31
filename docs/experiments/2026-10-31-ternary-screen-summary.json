@@ -1,0 +1,3001 @@
+{
+  "manifest": {
+    "build_profile": "release",
+    "capture_execution": {
+      "allocated_context_tokens": 1024,
+      "capture_host_payload_budget_bytes": 33554432,
+      "environment": {
+        "CUDA_VISIBLE_DEVICES": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852",
+        "M40LLM_ATTN_HEAD128_KERNEL": "parallel",
+        "M40LLM_ATTN_HEAD128_PARTITIONS": "8",
+        "M40LLM_ATTN_HEAD128_THREADS": "256",
+        "M40LLM_CUDA_GREEDY_ARGMAX": "1",
+        "M40LLM_DECODE_GRAPH": "0",
+        "M40LLM_ENABLE_CUBLAS": "1",
+        "M40LLM_ENABLE_NVCC": "1",
+        "M40LLM_FUSED_Q8_MLP_SWIGLU": "1",
+        "M40LLM_FUSED_Q8_QKV": "1",
+        "M40LLM_MATERIALIZE_F32_WEIGHTS": "0",
+        "M40LLM_PROJECTION_BACKEND": "large-model",
+        "M40LLM_Q8_DECODE_COL_TILE": "4",
+        "M40LLM_Q8_DECODE_SPLIT_QBLOCK": "4",
+        "M40LLM_Q8_DECODE_STREAM": "decode",
+        "M40LLM_Q8_EXECUTION_WEIGHTS": "off",
+        "M40LLM_Q8_LM_HEAD_ARGMAX": "1",
+        "M40LLM_Q8_LM_HEAD_ARGMAX_SHARED_A": "1",
+        "M40LLM_Q8_MLP_GATE_UP_SPLIT_QBLOCK": "4",
+        "M40LLM_SYSROOT": "/mnt/array-fastest/home/guyep/.local/share/mamba/envs/m40-rustfmt/x86_64-conda-linux-gnu/sysroot"
+      },
+      "kv_mode": "off",
+      "max_generated_input_rows_per_task": 4,
+      "prefill_mode": "sequential",
+      "prepared_weights": {
+        "budget_mib": 6144,
+        "families": [
+          "down",
+          "vocabulary"
+        ],
+        "mode": "split",
+        "single_row_down_columns": 4,
+        "single_row_down_threads": 256
+      },
+      "sampling": "greedy top_k=1 seed=0; actual natural stopping",
+      "source_layer_ids": [
+        0,
+        17,
+        35
+      ],
+      "task_template": "canonical Qwen system+user ChatML"
+    },
+    "capture_report_sha256": "d9e55963e5872bbc48cfb3a1f7ac217429974d0a48237aabaaab207f5fc95801",
+    "counter_availability": "no measured DRAM or dynamic instruction counters",
+    "excludes": "channel top-k, sparse exact FFN, recovery, uploads, allocation and reference checks",
+    "executable_sha256": "1cf1fff02637d0224b64e3e4924c961ec276b5109182c5a637ed2c6556abf7f3",
+    "fixture_sha256": "eb51828ef778189567ae01fdd910659025c92ae6f5b2d76c989c314e650d0687",
+    "gpu_before": {
+      "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P8, 30, 324 MHz, 405 MHz, 0 MiB, 0 %",
+      "processes": ""
+    },
+    "interpretation": "preliminary cost bound, not a complete-FFN speedup or model-quality result",
+    "kind": "ternary_screen_manifest",
+    "model_setup_ms": 25760.704394,
+    "model_sha256": "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d",
+    "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\nBuilt on Fri_Feb_21_20:23:50_PST_2025\nCuda compilation tools, release 12.8, V12.8.93\nBuild cuda_12.8.r12.8/compiler.35583870_0",
+    "original_weights": 3279519744,
+    "overhead_point_budgets_us": {
+      "retain10": 150.88,
+      "retain20": 56.89
+    },
+    "prepared_q8_weights": {
+      "budget_bytes": 6442450944,
+      "estimated_bytes": 1192935424,
+      "families": [
+        "down",
+        "vocabulary"
+      ],
+      "has_prepared_vocabulary": true,
+      "mode": "split",
+      "model_hash_elapsed_ms": 9074.885174000001,
+      "peak_setup_host_payload_bytes": 6895608736,
+      "preparation_elapsed_ms": 9675.1028,
+      "resident_bytes": 1192935424,
+      "single_row_down_split_launch": {
+        "columns": 4,
+        "threads": 256
+      },
+      "source_weights_bytes": 3279519744,
+      "tensors": [
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 0,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 2048,
+                "output_dim": 151936
+              },
+              "tensor_name": "token_embd.weight"
+            }
+          },
+          "resident_bytes": 330612736,
+          "source_bytes": 330612736
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 330620928,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.0.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 412534784,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.1.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 494448640,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.10.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 576362496,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.11.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 658276352,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.12.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 740190208,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.13.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 822104064,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.14.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 904017920,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.15.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 985931776,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.16.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1067845632,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.17.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1149759488,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.18.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1231673344,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.19.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1313587200,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.2.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1395501056,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.20.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1535375360,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.3.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1617289216,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.4.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1699203072,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.5.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1781116928,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.6.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1863030784,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.7.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 1944944640,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.8.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2026858496,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.9.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2108764160,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.21.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2132725760,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.22.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2214639616,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.23.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2296553472,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.24.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2378467328,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.25.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2460381184,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.26.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2542295040,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.27.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2624208896,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.28.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2706122752,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.29.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2788036608,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.30.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2869950464,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.31.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 2951864320,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.32.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3033778176,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.33.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3115692032,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.34.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        },
+        {
+          "key": {
+            "layout": "SeparateScalesValues",
+            "source": {
+              "byte_offset": 3197605888,
+              "dtype": "Q8_0",
+              "model_sha256": [
+                68,
+                32,
+                204,
+                176,
+                241,
+                217,
+                225,
+                40,
+                17,
+                208,
+                74,
+                226,
+                162,
+                142,
+                200,
+                129,
+                70,
+                147,
+                5,
+                248,
+                19,
+                198,
+                45,
+                134,
+                193,
+                14,
+                89,
+                94,
+                248,
+                224,
+                17,
+                29
+              ],
+              "shape": {
+                "input_dim": 11008,
+                "output_dim": 2048
+              },
+              "tensor_name": "blk.35.ffn_down.weight"
+            }
+          },
+          "resident_bytes": 23953408,
+          "source_bytes": 23953408
+        }
+      ],
+      "total_weight_payload_bytes": 4472455168
+    },
+    "revision": "327aa324e9b50125943dfaba98a2f9bc997f3c37",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "schema_version": 1,
+    "timing_boundary": "signed rotation, per-block top-80 coordinates, all-channel ternary gate/up, SwiGLU and norm scores; two kernels"
+  },
+  "complete": {
+    "gpu_after": {
+      "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 44, 1113 MHz, 3004 MHz, 4384 MiB, 0 %",
+      "processes": "46349, target/release/examples/q8_execution_bench, 4378 MiB"
+    },
+    "is_complete": true,
+    "kind": "ternary_screen_complete",
+    "observations": 24,
+    "revision_after": "327aa324e9b50125943dfaba98a2f9bc997f3c37"
+  },
+  "sample_count": 120,
+  "correctness_count": 24,
+  "peak_tracked_device_bytes": 4484672000,
+  "maximum_plane_error": 0.000012250527191781657,
+  "observations": [
+    {
+      "case": {
+        "layer": 0,
+        "row": 0,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 86,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 35, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 512.505578994751,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -361.625578994751,
+      "remaining_20_percent_point_budget_us": -455.615578994751,
+      "samples": 5,
+      "throughput_mad_over_median": 0.00026225656230041857
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 1,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 87,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 36, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.12158393859863,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.24158393859864,
+      "remaining_20_percent_point_budget_us": -453.23158393859865,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0008336640375025057
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 2,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 88,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 508.81919860839844,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -357.93919860839844,
+      "remaining_20_percent_point_budget_us": -451.92919860839845,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0014296871524673961
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 3,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 89,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 37, 1113 MHz, 3004 MHz, 4395 MiB, 2 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 508.5216045379639,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -357.64160453796393,
+      "remaining_20_percent_point_budget_us": -451.63160453796394,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0004280524747492913
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 4,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 73,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 38, 1113 MHz, 3004 MHz, 4395 MiB, 8 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 512.3904228210449,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -361.5104228210449,
+      "remaining_20_percent_point_budget_us": -455.50042282104494,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0005748907391006749
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 5,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 74,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 38, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 507.8815937042236,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -357.0015937042236,
+      "remaining_20_percent_point_budget_us": -450.9915937042236,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0002960334057836695
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 6,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 75,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 38, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 509.4655990600586,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -358.5855990600586,
+      "remaining_20_percent_point_budget_us": -452.5755990600586,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0011231006365670505
+    },
+    {
+      "case": {
+        "layer": 0,
+        "row": 7,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 76,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 39, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.98241806030273,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -360.10241806030274,
+      "remaining_20_percent_point_budget_us": -454.09241806030275,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0019263286576800907
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 0,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 86,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 39, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 509.8847866058349,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.0047866058349,
+      "remaining_20_percent_point_budget_us": -452.9947866058349,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0016228091469632038
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 1,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 87,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 40, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.5567932128906,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.67679321289063,
+      "remaining_20_percent_point_budget_us": -453.66679321289064,
+      "samples": 5,
+      "throughput_mad_over_median": 0.00019430042133304133
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 2,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 88,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 40, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 513.6960029602051,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -362.8160029602051,
+      "remaining_20_percent_point_budget_us": -456.8060029602051,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0006847632659663386
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 3,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 89,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 41, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 509.5104217529297,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -358.6304217529297,
+      "remaining_20_percent_point_budget_us": -452.6204217529297,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0017679899872027921
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 4,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 73,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 41, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.4447841644287,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.5647841644287,
+      "remaining_20_percent_point_budget_us": -453.5547841644287,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0010270806431879418
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 5,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 74,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 41, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.0800037384033,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.2000037384033,
+      "remaining_20_percent_point_budget_us": -453.19000373840333,
+      "samples": 5,
+      "throughput_mad_over_median": 0.004024959007046116
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 6,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 75,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 42, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.4224205017089,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.54242050170893,
+      "remaining_20_percent_point_budget_us": -453.53242050170894,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0007466099644475682
+    },
+    {
+      "case": {
+        "layer": 17,
+        "row": 7,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 76,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 42, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.82239151000977,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.94239151000977,
+      "remaining_20_percent_point_budget_us": -453.9323915100098,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0014449735575990425
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 0,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 86,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 42, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 512.0960235595703,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -361.2160235595703,
+      "remaining_20_percent_point_budget_us": -455.2060235595703,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0006369647832453865
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 1,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 87,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 43, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 507.88798332214355,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -357.00798332214356,
+      "remaining_20_percent_point_budget_us": -450.99798332214357,
+      "samples": 5,
+      "throughput_mad_over_median": 0.000990165353667066
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 2,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 88,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 43, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 512.5120162963867,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -361.6320162963867,
+      "remaining_20_percent_point_budget_us": -455.62201629638673,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0007486838532048954
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 3,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 89,
+          "task_id": "cal-chat-reminder"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 43, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 507.696008682251,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -356.816008682251,
+      "remaining_20_percent_point_budget_us": -450.806008682251,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0009948619597364317
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 4,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 73,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 44, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 511.24482154846197,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -360.364821548462,
+      "remaining_20_percent_point_budget_us": -454.354821548462,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0006764770144815008
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 5,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 74,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 44, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 507.9967975616455,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -357.1167975616455,
+      "remaining_20_percent_point_budget_us": -451.1067975616455,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0009710489301549746
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 6,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 75,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 44, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 511.6864204406738,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -360.80642044067383,
+      "remaining_20_percent_point_budget_us": -454.79642044067384,
+      "samples": 5,
+      "throughput_mad_over_median": 0.0007935293002453299
+    },
+    {
+      "case": {
+        "layer": 35,
+        "row": 7,
+        "rows": 1,
+        "source_row": {
+          "absolute_position": 76,
+          "task_id": "cal-fact-depot"
+        }
+      },
+      "fits_10_percent_point_budget": false,
+      "fits_20_percent_point_budget": false,
+      "gpu_after": {
+        "device": "GPU-e590a24b-e805-dbcd-2e8b-b991dfe1f852, Tesla M40 24GB, 580.159.04, P0, 45, 1113 MHz, 3004 MHz, 4395 MiB, 0 %",
+        "processes": "46349, target/release/examples/q8_execution_bench, 4390 MiB"
+      },
+      "interpretation": "screen-only preliminary observation; excludes channel top-k, recovery and exact selected FFN",
+      "is_stable": true,
+      "kind": "ternary_screen_observation",
+      "median_gpu_us": 510.31680107116694,
+      "ownership_passed": true,
+      "remaining_10_percent_point_budget_us": -359.43680107116694,
+      "remaining_20_percent_point_budget_us": -453.42680107116695,
+      "samples": 5,
+      "throughput_mad_over_median": 0.00026973896166187833
+    }
+  ],
+  "layer_summary": [
+    {
+      "layer": 0,
+      "median_gpu_us_range": [
+        507.8815937042236,
+        512.505578994751
+      ],
+      "maximum_throughput_variation": 0.0019263286576800907,
+      "all_stable": true,
+      "extensions": 0,
+      "fits_10_percent": 0,
+      "fits_20_percent": 0
+    },
+    {
+      "layer": 17,
+      "median_gpu_us_range": [
+        509.5104217529297,
+        513.6960029602051
+      ],
+      "maximum_throughput_variation": 0.004024959007046116,
+      "all_stable": true,
+      "extensions": 0,
+      "fits_10_percent": 0,
+      "fits_20_percent": 0
+    },
+    {
+      "layer": 35,
+      "median_gpu_us_range": [
+        507.696008682251,
+        512.5120162963867
+      ],
+      "maximum_throughput_variation": 0.0009948619597364317,
+      "all_stable": true,
+      "extensions": 0,
+      "fits_10_percent": 0,
+      "fits_20_percent": 0
+    }
+  ],
+  "host_sample_ranges": {
+    "enqueue_ms": [
+      0.0048765,
+      0.0094278
+    ],
+    "enqueue_and_completion_ms": [
+      0.5053203,
+      0.5317836
+    ]
+  },
+  "layer_encodings": [
+    {
+      "encoding_ms": 3739.6901510000002,
+      "gate_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "102647227ec32d5a98e6dd5a04f987e4d7967e6e27c3e47560c80f32f1b11d0b",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.16206445759407395,
+        "mean_squared_error": 0.00013534014866102562,
+        "scales_bytes": 352256,
+        "scales_sha256": "8bb64cf5c495fd4ccc74eb619c7e9467f4f248c0fbfee6bb988e3353136beb17",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "e59f96b640dd931576aece849f1a914296bf02e0ec59ab19dd7a4357873a0a83",
+        "zero_codes": 10304083
+      },
+      "immutable_bytes": 12022784,
+      "immutable_sha256": [
+        "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "8bb64cf5c495fd4ccc74eb619c7e9467f4f248c0fbfee6bb988e3353136beb17",
+        "102647227ec32d5a98e6dd5a04f987e4d7967e6e27c3e47560c80f32f1b11d0b",
+        "94d1430ce585f040353ef9e0aad79e1dcd00ae40ef2c43a0ed1b11725b9c21d6",
+        "cdd25312bb5eddf00c4bf882e41ac2a181df758a8ebea497dc306e02e860bd04",
+        "df4c6ca2ab6f55efc948e119dc078c40f07b49377909843ba31ccb40c54c05e6"
+      ],
+      "kind": "ternary_screen_layer",
+      "layer": 0,
+      "q4_encoding": [
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.040294647216796875,
+          "mean_squared_error": 0.000007057207248601056,
+          "q4_bytes": 12681216,
+          "q4_sha256": "e59f96b640dd931576aece849f1a914296bf02e0ec59ab19dd7a4357873a0a83",
+          "source_bytes": 23953408,
+          "source_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.02561187744140625,
+          "mean_squared_error": 0.000005472082259514696,
+          "q4_bytes": 12681216,
+          "q4_sha256": "cc5e57cbec94703fdb400d24e05196e7830edc1eb848ce1b907baf3f8547bcf7",
+          "source_bytes": 23953408,
+          "source_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.028100967407226562,
+          "mean_squared_error": 0.000006323710977454591,
+          "q4_bytes": 12681216,
+          "q4_sha256": "af52ae816b36a65f9c9d420752220a48d2dbf7b54524a58bb335aa0fd8350369",
+          "source_bytes": 23953408,
+          "source_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6",
+          "values": 22544384
+        }
+      ],
+      "residency_policy": "original model and prepared Q8 down/vocabulary retained; one layer screening owner; no sparse FFN or recovery owner",
+      "scale_logical_bytes": 704512,
+      "selected_code_logical_bytes": 7045120,
+      "source": {
+        "down": {
+          "byte_offset": 330620928,
+          "dtype": "Q8_0",
+          "name": "blk.0.ffn_down.weight",
+          "shape": [
+            11008,
+            2048
+          ],
+          "source_sha256": "c3f3fdc38b0f2acc383336dbaed77ae0ed81112533f2547efd2e6f92f0c4dca6"
+        },
+        "gate": {
+          "byte_offset": 354574336,
+          "dtype": "Q8_0",
+          "name": "blk.0.ffn_gate.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "44b0448bc2d0bce7304a52358f2d8d1b745a78d493785d0794d7aece3b916caa"
+        },
+        "layer_id": 0,
+        "up": {
+          "byte_offset": 378527744,
+          "dtype": "Q8_0",
+          "name": "blk.0.ffn_up.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "0d1297d157c12969878744422516a2ce5efc2185a281430f9e4cac4daac9f55c"
+        }
+      },
+      "tracked_device_bytes": 4484487552,
+      "traffic_interpretation": "unique selected code and scale payload; excludes reloads/sector effects; not measured DRAM",
+      "up_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "cdd25312bb5eddf00c4bf882e41ac2a181df758a8ebea497dc306e02e860bd04",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.10237840740452817,
+        "mean_squared_error": 0.00010476225181889665,
+        "scales_bytes": 352256,
+        "scales_sha256": "94d1430ce585f040353ef9e0aad79e1dcd00ae40ef2c43a0ed1b11725b9c21d6",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "cc5e57cbec94703fdb400d24e05196e7830edc1eb848ce1b907baf3f8547bcf7",
+        "zero_codes": 10303540
+      },
+      "upload_ms": 2.613909,
+      "workspace_bytes": 9600
+    },
+    {
+      "encoding_ms": 3719.38366,
+      "gate_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "b0b69521a020b5f81fef964070ddf03ebb2aa235a719a93af8f530970449889c",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.26829490871175743,
+        "mean_squared_error": 0.0001295838628305356,
+        "scales_bytes": 352256,
+        "scales_sha256": "2a4d7601664a51495781768d6c97884b44349315951e4cfc44c9c0565f67e727",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "738eddc9be5b17140358314e8f931d9642d710764f5038598aed7dc8e468e78b",
+        "zero_codes": 10299227
+      },
+      "immutable_bytes": 12022784,
+      "immutable_sha256": [
+        "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "2a4d7601664a51495781768d6c97884b44349315951e4cfc44c9c0565f67e727",
+        "b0b69521a020b5f81fef964070ddf03ebb2aa235a719a93af8f530970449889c",
+        "a73ca7dcc200e9ca1a78ad6c31e54a2dca8bb3baa3f7a7778d6ed3448f15490a",
+        "b8c447ca0d7a44d2b3e9099ff385ff3646f8f7c1ac3cee031362066f06eabf38",
+        "d562107a3bac8e09d9cc063260b7fa53c7fe872a196f2b8bd477ed3de69e2917"
+      ],
+      "kind": "ternary_screen_layer",
+      "layer": 17,
+      "q4_encoding": [
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.037662506103515625,
+          "mean_squared_error": 0.000006846089457561553,
+          "q4_bytes": 12681216,
+          "q4_sha256": "738eddc9be5b17140358314e8f931d9642d710764f5038598aed7dc8e468e78b",
+          "source_bytes": 23953408,
+          "source_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.038761138916015625,
+          "mean_squared_error": 0.000006993690083324652,
+          "q4_bytes": 12681216,
+          "q4_sha256": "fbe0318d0e5ba8230155989302f21f2a4beab0eef67495aa4f011a7337803a02",
+          "source_bytes": 23953408,
+          "source_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.06118011474609375,
+          "mean_squared_error": 0.000006815694540690762,
+          "q4_bytes": 12681216,
+          "q4_sha256": "df77b90ccc70a04dc594e2014a02e1c619225d53071d45c94a652f748dc73d0d",
+          "source_bytes": 23953408,
+          "source_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989",
+          "values": 22544384
+        }
+      ],
+      "residency_policy": "original model and prepared Q8 down/vocabulary retained; one layer screening owner; no sparse FFN or recovery owner",
+      "scale_logical_bytes": 704512,
+      "selected_code_logical_bytes": 7045120,
+      "source": {
+        "down": {
+          "byte_offset": 1067845632,
+          "dtype": "Q8_0",
+          "name": "blk.17.ffn_down.weight",
+          "shape": [
+            11008,
+            2048
+          ],
+          "source_sha256": "750274a726d9b4498625afd23e51a1e1865afe8d8965a5e6a24ae9b297799989"
+        },
+        "gate": {
+          "byte_offset": 1091799040,
+          "dtype": "Q8_0",
+          "name": "blk.17.ffn_gate.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "4a5efbdc148ce4834fd94410cddfed52e0284ca898f236425e1f15d03be4cb86"
+        },
+        "layer_id": 17,
+        "up": {
+          "byte_offset": 1115752448,
+          "dtype": "Q8_0",
+          "name": "blk.17.ffn_up.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "4c3bbb685fec6bb01af6e556d5470886d768e506f25bc2dfd7fd166ba2dd1f6d"
+        }
+      },
+      "tracked_device_bytes": 4484487552,
+      "traffic_interpretation": "unique selected code and scale payload; excludes reloads/sector effects; not measured DRAM",
+      "up_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "b8c447ca0d7a44d2b3e9099ff385ff3646f8f7c1ac3cee031362066f06eabf38",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.22916344791415727,
+        "mean_squared_error": 0.00013244093180464386,
+        "scales_bytes": 352256,
+        "scales_sha256": "a73ca7dcc200e9ca1a78ad6c31e54a2dca8bb3baa3f7a7778d6ed3448f15490a",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "fbe0318d0e5ba8230155989302f21f2a4beab0eef67495aa4f011a7337803a02",
+        "zero_codes": 10301681
+      },
+      "upload_ms": 2.9072389999999997,
+      "workspace_bytes": 9600
+    },
+    {
+      "encoding_ms": 3722.476911,
+      "gate_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "d6a06a1c3ecc8bdd4994e7661ef9a8335feed4cf1beae55286fcb33991ef5308",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.15239150841939236,
+        "mean_squared_error": 0.00013158573891197662,
+        "scales_bytes": 352256,
+        "scales_sha256": "ae14e89b7110dbd8cf913968da106bb250cbd5b4c62b8cefe271fc2d47b6d247",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "4f44cc499850e341ff83b34d7ff299381cca43128617271c3ccb15927fa7a3cb",
+        "zero_codes": 10307673
+      },
+      "immutable_bytes": 12022784,
+      "immutable_sha256": [
+        "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "ae14e89b7110dbd8cf913968da106bb250cbd5b4c62b8cefe271fc2d47b6d247",
+        "d6a06a1c3ecc8bdd4994e7661ef9a8335feed4cf1beae55286fcb33991ef5308",
+        "93dc3e6afe75d37b6d5a178b58aab64cfc627743945449e16d0ede155aa17bbe",
+        "61736007b0540d04edde29b0f06c9b1ba61c55f24222d39f8d90ad3eafd012aa",
+        "9f8540cd354955ad5869dbdddb1cfdecb697cb01eee17c5e38ff4c4278179484"
+      ],
+      "kind": "ternary_screen_layer",
+      "layer": 35,
+      "q4_encoding": [
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.04447174072265625,
+          "mean_squared_error": 0.0000067056433646741975,
+          "q4_bytes": 12681216,
+          "q4_sha256": "4f44cc499850e341ff83b34d7ff299381cca43128617271c3ccb15927fa7a3cb",
+          "source_bytes": 23953408,
+          "source_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.04236602783203125,
+          "mean_squared_error": 0.000007160314498167091,
+          "q4_bytes": 12681216,
+          "q4_sha256": "41f8fb3bf99e8b80eb01a9bb9336c8bdcfa2f68d5db64509b93b6319dc2bb435",
+          "source_bytes": 23953408,
+          "source_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c",
+          "values": 22544384
+        },
+        {
+          "encoding": "q8-f32-q4-absmax7-v1",
+          "max_abs_error": 0.101348876953125,
+          "mean_squared_error": 0.0000063840430483033366,
+          "q4_bytes": 12681216,
+          "q4_sha256": "8fc3df11d38ffb002557e36f52a4fd897536d0dab555c482f685d4a768b24d76",
+          "source_bytes": 23953408,
+          "source_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132",
+          "values": 22544384
+        }
+      ],
+      "residency_policy": "original model and prepared Q8 down/vocabulary retained; one layer screening owner; no sparse FFN or recovery owner",
+      "scale_logical_bytes": 704512,
+      "selected_code_logical_bytes": 7045120,
+      "source": {
+        "down": {
+          "byte_offset": 3197605888,
+          "dtype": "Q8_0",
+          "name": "blk.35.ffn_down.weight",
+          "shape": [
+            11008,
+            2048
+          ],
+          "source_sha256": "3b5cff16ee8d836ff178d8dc38b38edcd15de41085ecdefba41b2c016fd53132"
+        },
+        "gate": {
+          "byte_offset": 3221559296,
+          "dtype": "Q8_0",
+          "name": "blk.35.ffn_gate.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "f5ae34585595d817ed33f8e14b58b7af4bf1de57f3a86c5fb48eac13f6853a5a"
+        },
+        "layer_id": 35,
+        "up": {
+          "byte_offset": 3245512704,
+          "dtype": "Q8_0",
+          "name": "blk.35.ffn_up.weight",
+          "shape": [
+            2048,
+            11008
+          ],
+          "source_sha256": "a9aed0b02ac0edecff644264ac754ae0242c89a25f3ccbefbfc2f0ba10785e5c"
+        }
+      },
+      "tracked_device_bytes": 4484487552,
+      "traffic_interpretation": "unique selected code and scale payload; excludes reloads/sector effects; not measured DRAM",
+      "up_sketch": {
+        "channels": 11008,
+        "codes_bytes": 5636096,
+        "codes_sha256": "61736007b0540d04edde29b0f06c9b1ba61c55f24222d39f8d90ad3eafd012aa",
+        "encoding": "q4-walsh128-ternary2-fp16-prefix-v1",
+        "input_dim": 2048,
+        "max_abs_error": 0.25107466971931786,
+        "mean_squared_error": 0.00014047339583570006,
+        "scales_bytes": 352256,
+        "scales_sha256": "93dc3e6afe75d37b6d5a178b58aab64cfc627743945449e16d0ede155aa17bbe",
+        "signs_sha256": "b0b57bf7041ae1c9df2c9b5a742371b76eae64197d5b5df74cf3ae88c95596a8",
+        "source_bytes": 12681216,
+        "source_sha256": "41f8fb3bf99e8b80eb01a9bb9336c8bdcfa2f68d5db64509b93b6319dc2bb435",
+        "zero_codes": 10302330
+      },
+      "upload_ms": 2.6064019999999997,
+      "workspace_bytes": 9600
+    }
+  ],
+  "layer_completions": [
+    {
+      "kind": "ternary_screen_layer_complete",
+      "layer": 0,
+      "ownership_passed": true
+    },
+    {
+      "kind": "ternary_screen_layer_complete",
+      "layer": 17,
+      "ownership_passed": true
+    },
+    {
+      "kind": "ternary_screen_layer_complete",
+      "layer": 35,
+      "ownership_passed": true
+    }
+  ]
+}

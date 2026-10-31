@@ -10,7 +10,17 @@ The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns
 [`channel-selection`](experiments/2026-10-30-channel-selection-protocol.md).
 
-The [stronger-reference follow-up](experiments/2026-10-31-q4-stronger-baselines.md)
+The bounded channel-selection exploration is complete with a
+[negative ternary screening result](experiments/2026-10-31-ternary-screen-result.md).
+All 24 captured cases pass correctness and ownership, but screen-only medians
+of 507.70 to 513.70 microseconds exceed both 150.88/56.89-microsecond budgets.
+All 120 samples are stable, with no extension. Stop channel top-k, recovery
+and runtime integration for this fixed implementation. Preserve the successful
+oracle kernels and failed predictor as separate evidence. No model-quality
+or whole-model claim follows. Next work belongs to the independent FFN-fusion
+branch; the nine-topic goal remains incomplete.
+
+The earlier [stronger-reference follow-up](experiments/2026-10-31-q4-stronger-baselines.md)
 passes all twelve comparisons. Against qualified Q8, supplied-index 10%
 retention improves 2.050 to 2.086x and 20% improves 1.287 to 1.302x. The tightest
 remaining overhead budgets for a 5% FFN gain are 150.88 and 56.89 microseconds,
@@ -21,8 +31,7 @@ Clippy and formatting pass. The [fixed CUDA screen](experiments/2026-10-31-terna
 passes both hardware tests with cuBLAS on/off, affected projection/forward/
 ownership/attention regressions and CUDA/server all-target Clippy. The
 source-bound `--ffn-ternary-screen` benchmark passes 65 CPU tests and Clippy;
-next run its clean release cost observations on retained inputs before channel
-top-k or recovery.
+its completed release observations above close dependent top-k/recovery work.
 Quantization/pruning drift is recorded; sequence quality remains open.
 No runtime promotion or whole-model speed claim follows.
 
