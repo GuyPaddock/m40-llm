@@ -33,6 +33,13 @@ checks. The hardware test compiles and links; GPU execution remains pending.
 Both probes share the original CPU/NUMA admission checks. Twelve CPU/protocol
 tests and non-CUDA/CUDA-server all-target Clippy pass. No new timing result
 or scheduler change follows from these implementation checks.
+The [cost scenario contract](experiments/2026-10-31-dualpace-cost-scenarios.md)
+now fixes three arrival traces, down-only assistance, both NUMA placements and
+native/prepared GPU paths, with explicit missing-work sensitivity. The retained
+ShiftAdd control audit extracts 72 Q8 GPU cost series and confirms all 36 CPU
+input cases and nine tensor identities match. Ten data admission/rejection
+checks pass. These are reused isolated projection measurements; complete CPU
+decoding, transfer prices and sourced scheduling outcomes remain unmeasured.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
