@@ -1,0 +1,115 @@
+{
+  "registry_id": "v3-generic-instructions-1",
+  "status": "frozen-review-proposal",
+  "is_active": false,
+  "approved_principle": "Unseen examples of known tasks may share reviewed generic instructions; source content and substantive examples remain isolated.",
+  "entry_approval": "Pending user review; the policy principle does not activate individual exemptions.",
+  "span_contract": {
+    "encoding": "UTF-8, no BOM, literal LF, no normalization before verification",
+    "coordinates": "Half-open byte and Unicode-scalar offsets in rendered user content before QwenChat wrapping",
+    "matching": "Require source revision, adapter digest, exact text digest and structural boundary to match; do not search and replace text inside payloads.",
+    "token_rule": "Only matches wholly inside approved spans can receive a generic-only disposition; a token or match crossing a payload boundary is not exempt.",
+    "raw_evidence": "Retain original text, full-content matches, content-only matches, offsets, decision and reviewer.",
+    "model_inputs": "Keep all registry text in actual inputs and natural token-length measurements.",
+    "transport": "Existing QwenChat transport handling is unchanged; embedded ChatML controls in source content remain quarantined.",
+    "unknown_text": "Unlisted instructions, examples, schemas and paraphrases remain unexempted. A registry revision requires review before row selection."
+  },
+  "sources": [
+    {
+      "source_id": "ultrachat-first-user-sft",
+      "repository": "HuggingFaceH4/ultrachat_200k",
+      "revision": "8049631c405ae6576f93f445c6b8166f76f5505a",
+      "adapter_path": "scripts/drafter_data/hf_sample_audit.py",
+      "adapter_sha256": "1d3410b9bf13c075c07045c03ea2779c25fc52ee68f433fcbdcd44ee81a0a01b",
+      "input_rule": "Use record.prompt unchanged; check its consistency with the first user message. Do not include assistant turns.",
+      "entries": [],
+      "reason": "No separately authored adapter instruction exists. Natural user instructions and quoted material are payload, not automatically generic."
+    },
+    {
+      "source_id": "commitpackft-python",
+      "repository": "bigcode/commitpackft",
+      "revision": "fc56fe33c030c6daa414c2b112c932b8eed085e6",
+      "adapter_path": "scripts/drafter_data/hf_sample_audit.py",
+      "adapter_sha256": "1d3410b9bf13c075c07045c03ea2779c25fc52ee68f433fcbdcd44ee81a0a01b",
+      "input_rule": "subject + '\n\nFile: ' + old_file + '\n' + old_contents",
+      "entries": [
+        {
+          "entry_id": "commitpack-file-delimiter-v1",
+          "task_schema": "code-edit-file-heading",
+          "text": "\n\nFile: ",
+          "utf8_bytes": 8,
+          "unicode_scalars": 8,
+          "sha256": "ce4ca9993ace179e7eb0dfe9b4b529891d656677cd508ac2166d6bf250677c9f",
+          "byte_start": "utf8_byte_length(subject)",
+          "character_start": "unicode_scalar_count(subject)",
+          "end_rule": "start + 8",
+          "rationale": "The adapter delimiter identifies a file field but supplies no filename, code, commit intent or solution. All of those remain payload.",
+          "reviewer_decision": "pending",
+          "second_review": "required before activation"
+        }
+      ]
+    },
+    {
+      "source_id": "squad-original",
+      "repository": "rajpurkar/squad",
+      "revision": "7b6d24c440a36b6815f21b70d25016731768db1f",
+      "adapter_path": "scripts/drafter_data/original_source_inputs.py",
+      "adapter_sha256": "9ff7018aa06e14b20ae4051531b173a38d73e24b6b99cacaba55337494752b54",
+      "input_rule": "'Context:\n' + context + '\n\nQuestion:\n' + question",
+      "entries": [
+        {
+          "entry_id": "squad-context-heading-v1",
+          "task_schema": "grounded-qa-context-heading",
+          "text": "Context:\n",
+          "utf8_bytes": 9,
+          "unicode_scalars": 9,
+          "sha256": "e502bc836b970d8aa3d9065387dccd967a82c24a54738e14debb49e82498a962",
+          "byte_start": "0",
+          "character_start": "0",
+          "end_rule": "9",
+          "rationale": "A field heading carries no article, passage, fact or answer. Context bytes remain fully subject to isolation.",
+          "reviewer_decision": "pending",
+          "second_review": "required before activation"
+        },
+        {
+          "entry_id": "squad-question-heading-v1",
+          "task_schema": "grounded-qa-question-heading",
+          "text": "\n\nQuestion:\n",
+          "utf8_bytes": 12,
+          "unicode_scalars": 12,
+          "sha256": "b3a80a2eb9a314914f538304b08158521b7ef252d517a79d4db2e9f6dabfe310",
+          "byte_start": "9 + utf8_byte_length(context)",
+          "character_start": "9 + unicode_scalar_count(context)",
+          "end_rule": "start + 12",
+          "rationale": "Only the adapter-inserted heading qualifies. Question wording, instantiated problem templates and identical strings inside the context remain payload.",
+          "reviewer_decision": "pending",
+          "second_review": "required before activation"
+        }
+      ]
+    },
+    {
+      "source_id": "docred-original",
+      "repository": "thunlp/docred",
+      "revision": "7985b4e0371e6c61a756feb41b7b27becf71c666",
+      "adapter_path": "scripts/drafter_data/original_source_inputs.py",
+      "adapter_sha256": "9ff7018aa06e14b20ae4051531b173a38d73e24b6b99cacaba55337494752b54",
+      "input_rule": "Registered prefix + newline-joined sentences, with source sentence tokens joined by one space; no gold entities or relations in the prompt",
+      "entries": [
+        {
+          "entry_id": "docred-extraction-request-v1",
+          "task_schema": "document-entity-relation-extraction",
+          "text": "Extract the entities and their relations from this document.\n\n",
+          "utf8_bytes": 62,
+          "unicode_scalars": 62,
+          "sha256": "7020e673dcb8b6b5d0dd75898e12bdefd86c922155b7339882a7291be6e8d930",
+          "byte_start": "0",
+          "character_start": "0",
+          "end_rule": "62",
+          "rationale": "The request names the known task without supplying any entity, relation instance, evidence sentence or demonstration. All source sentences and audit-only annotations retain their isolation obligations.",
+          "reviewer_decision": "pending",
+          "second_review": "required before activation"
+        }
+      ]
+    }
+  ]
+}
