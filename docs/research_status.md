@@ -12,7 +12,12 @@ in independent worktrees based on `0eee578`. This branch owns
 The [source audit and simulation contract](experiments/2026-10-31-dualpace-audit.md)
 finds no usable complete CPU decode path. A scalar single-layer reference exists,
 but full-layer execution requires CUDA buffers. The host exposes AVX2 and no
-AMX. Simulator, primitive measurements and priced prerequisite report are pending.
+AMX. The [cooperative simulator](experiments/2026-10-31-dualpace-simulator.md)
+now implements explicit ownership, stage-boundary assistance, transfer queues
+and finish-peak memory admission. Nine behavioral tests, 220 non-CUDA regressions,
+Clippy and CLI integrity checks pass. Its retained example is synthetic, not a
+hardware feasibility result. AVX2 primitive measurements, serial transfer costs
+and the priced prerequisite report remain pending; the branch is incomplete.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 
