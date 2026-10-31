@@ -11,10 +11,13 @@ pins upstream `93a0b5111eb71c90f302f1268f1535f83e2e1f13` and retains licensed
 source excerpts. SA4_128 stores 256 weights in 138 bytes, a calculated
 4.1667% payload saving against Q4_0. Upstream CUDA consumes Q8_1 activations
 and provides a scalar packed-integer fallback below native DP4A support.
-The first local candidate will consume FP32 inputs with sign-add reductions
-to isolate weight representation error. Next implement and validate the
-experiment-only encoder/reference before its CUDA consumer. No ShiftAdd
-fit, timing, model-quality result or runtime integration exists yet.
+The [encoder and CPU reference](experiments/2026-10-31-shiftadd-encoding.md)
+now pass seven behavioral checks, with 227 passing non-CUDA tests and clean
+CPU all-target Clippy. Offline fitting uses FP64 arithmetic and the pinned
+format; it is not byte-identical reproduction of upstream FP32 fitting.
+Next implement the FP32 sign-add CUDA consumer and verify guards, streams,
+ownership and FP64 numerical bounds. No model-weight fit, timing,
+model-quality result or runtime integration exists yet.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns

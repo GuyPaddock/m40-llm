@@ -1,0 +1,8 @@
+6111b38b8e40888583599ad057d2b084ce60c661ff0a4267f9bdb0f8fc93859e  src/lib.rs
+941badd0c9a21762d1ae35d60af83f25ef70aa59efa8ee72a88451d3329cf40e  src/shiftadd/mod.rs
+2fec427bc99c03b412a1477d88d03e6ba4911b4c3aeef232e5eff816d689542a  src/shiftadd/fit.rs
+ecb1b51bdc8eef92e11e0d95a1c4482c2aac619b9b7d7d72b62dcee2984317c2  src/shiftadd/tests.rs
+94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d  src/shiftadd/LICENSE.txt
+3bd9610ee7c41f6308e428d2477e7196f03598d63e213b853c4d77d172cf995f  docs/experiments/2026-10-31-shiftadd-encoder-clippy.log.gz
+f6ddf45c5bfd12b21459d12666b881db270e871fc3f0bc3d5d42c5f02adcbd19  docs/experiments/2026-10-31-shiftadd-encoder-noncuda.log.gz
+c1b2988b4d8c3c3072ac8e9afacd5e6364b7bf3ce6400d604a86c3427cfaede9  docs/experiments/2026-10-31-shiftadd-encoder-tests.log.gz

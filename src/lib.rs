@@ -24,6 +24,7 @@ pub mod profile;
 pub mod sampling;
 #[cfg(feature = "server")]
 pub mod server;
+pub mod shiftadd;
 pub(crate) mod timing;
 pub mod tokenizer;
 #[cfg(feature = "cuda")]
