@@ -19,9 +19,15 @@ repeated single-row launches and FP64 numerical checks. Native Q4 projection,
 compound forward/ownership and attention regressions, non-CUDA tests and
 all-target CUDA/server Clippy pass. Shared Q4 fixture encoding was transferred
 as `85485b8`. The source-bound `--ffn-q4-fusion` comparison now passes 63 CPU
-tests, Clippy and formatting. Next run its clean release grid of twelve cases,
-with all three complete controls and separate gate/up diagnostics. There is no
-new performance claim or runtime dispatch change.
+tests, Clippy and formatting. The
+[complete release grid](experiments/2026-10-31-q4-fusion-result.md) now closes
+this bounded topic with a negative integration decision. All twelve cases,
+60 comparisons and 300 pairs completed with numerical, bitwise and ownership
+checks passing. No complete case clears all three controls. Incremental gains
+against existing fusion with the same down consumer reach only 0.81%, below
+the 5% gate. All pairs are stable without extensions or confirmations. Preserve
+the experimental implementation and stop before runtime integration. The next
+independent topic is activation preparation; runtime dispatch remains unchanged.
 Follow the protocol's gates and serial M40 execution requirement. Keep the
 separate drafter checkpoint below intact; this work does not admit training.
 

@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Multi-row Q4 fusion fails the incremental gate
+
+The [fixed Q4 fusion result](experiments/2026-10-31-q4-fusion-result.md) records
+12 captured layer/row cases, 60 comparisons and 300 alternating timing pairs
+on the M40, release source `9aa906e`. All numerical, exact hidden/same-down
+output, guard, immutable-weight and ownership checks pass. All comparisons
+are stable; no extension or confirmation is triggered.
+
+Against existing serial fused gate/up with the same batched down consumer,
+complete-FFN throughput changes range from -1.137% to +0.809%. None clears
+the 5% gate. Larger gains against unfused projections or eight-row serial
+down do not establish incremental gate/up fusion value. Stop this candidate
+before runtime integration and preserve its implementation at `fa09568`.
+This closes the bounded fusion topic; it is not a model-quality or E2E claim.
+
 ## 2026-10-29: Drafter Data Gate Stops Before GPU Work
 
 The [CPU-only admission census](experiments/2026-10-29-drafter-data-admission-stop.md)
