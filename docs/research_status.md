@@ -11,6 +11,16 @@ quantized-KV quality](experiments/2026-10-31-kv-quality-plan.md). The fixed
 selector study and graph dispatch follow-up remain on their own branches.
 This work does not reopen the V3 data/training work below.
 
+KV quality inputs are frozen at `558203f`; the runner/script is verified and
+committed at `421df83`. The full release grid is running serially on the M40
+with partial records under `local-artifacts/qualified-references/kv-quality/run-01/`
+in the original repository. See the [runner checkpoint](experiments/2026-10-31-kv-quality-runner.md).
+Do not restart a live run, interpret partial rows as a complete quality result,
+or overlap another GPU experiment. Independent serialized audit and final
+quality report remain pending. The separate adaptive-drafting protocol is
+committed at `6713f1a` on `research/1031-adaptive-drafting`; CPU timing waits
+until this GPU workload ends.
+
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,

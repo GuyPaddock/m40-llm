@@ -20,7 +20,8 @@ All checks below completed before real-model inference:
   any prediction. Short inputs stayed within the existing forward tolerance;
   all tracked allocations were released.
 - CUDA/server all-targets Clippy with warnings denied, Rust formatting, shell
-  syntax, and Git whitespace checks passed.
+  syntax, and source/documentation whitespace checks passed. Raw Cargo logs
+  retain their trailing blank lines and trigger Git whitespace diagnostics.
 - Frozen input SHA-256 remains
   `e2e7ce56f0223bf929705dd49c33610ac01a0992837bb9c376bcea6dfc62b5de`.
 
@@ -40,3 +41,26 @@ The script records build, source, executable, device and process identities.
 It freezes process-local environment settings and refuses a busy M40. Failed
 runs retain their directory; use a distinct directory only after diagnosing a
 terminal failure. Never restart a live run after a polling timeout.
+
+## Execution checkpoint
+
+The verified runner and launch script are committed at `421df83`. The release
+grid started from that clean revision, with no other M40 compute process.
+Its retained directory is
+`local-artifacts/qualified-references/kv-quality/run-01/` in the original
+repository, containing source archive, executable, identities, logs and flushed
+JSONL results. This directory is intentionally ignored by Git while running.
+
+At this checkpoint the process is live, with six complete generations and
+one complete case including prefix comparisons. The first short case has
+identical generated IDs across all arms, but small nonzero matched-prefix
+logit differences despite having no old cache. Those are a no-old diagnostic,
+not a quantization effect. The long dense generation passes its rubric; the
+whole grid and its independent audit are still incomplete. These partial
+results do not establish model-quality preservation.
+
+Poll the existing process rather than restarting it. Finish and independently
+audit all 12 cases, 36 generations and 24 paired-prefix rows, then commit raw
+evidence and the final report. A provisional serialized audit lives at
+`/tmp/m40-kv-quality-audit-draft.jq`; its incomplete-report rejection is checked,
+but its full-report path still requires validation and corruption controls.
