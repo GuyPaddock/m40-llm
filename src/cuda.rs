@@ -26,6 +26,10 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "cuda")]
 mod decode_reductions;
 #[cfg(feature = "cuda")]
+mod q4_channels;
+#[cfg(feature = "cuda")]
+pub use q4_channels::{DeviceQ4SelectedFfn, Q4DownLayout};
+#[cfg(feature = "cuda")]
 mod q8_ffn;
 #[cfg(feature = "cuda")]
 mod q8_ffn_task_pair;
@@ -842,6 +846,25 @@ mod ffi {
             n: i32,
             k: i32,
             threads: i32,
+            stream_kind: u32,
+        ) -> i32;
+        pub fn m40llm_q4_selected_ffn_async(
+            ctx: *mut M40llmCudaContext,
+            input: *const c_void,
+            gate: *const c_void,
+            up: *const c_void,
+            down: *const c_void,
+            scales: *const c_void,
+            codes: *const c_void,
+            indices: *const c_void,
+            hidden: *mut c_void,
+            partial: *mut c_void,
+            output: *mut c_void,
+            rows: i32,
+            k: i32,
+            h: i32,
+            count: i32,
+            packed: i32,
             stream_kind: u32,
         ) -> i32;
         pub fn m40llm_gemm_f32xq8_warp_packet_async(

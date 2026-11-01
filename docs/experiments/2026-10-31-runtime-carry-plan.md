@@ -102,3 +102,20 @@ feature source manifest will include the later Q4 device addition separately.
 ShiftAdd, multi-row FFN fusion, rotated activation preparation, lossless KV and
 CPU/GPU scheduling remain on their original experimental branches. Their
 negative or conditional results do not authorize production dispatch.
+
+## Device component checkpoint
+
+The selected-Q4 device component now passes its fresh feature-branch checks.
+All seven imported implementation/build/test files match their `22ee0d3`
+Git blobs. The cuBLAS-enabled suite passes 20 tests, including selected FFN,
+attention parity, projection/MLP, compound forward/ownership and Q8 scale reuse.
+Both selected-FFN tests also pass with cuBLAS disabled. The complete non-CUDA
+suite passes 223 tests with warnings denied. CUDA/server all-target Clippy
+passes; NVCC reports only its existing architecture deprecation warning.
+No test skips, and the final GPU snapshot contains no compute processes.
+
+Fresh logs and source hashes are in
+[the feature manifest](2026-10-31-feature-q4-artifacts.sha256).
+These checks establish correctness of the carried research API. They add no
+performance claim or production dispatch. The historical checkpoints above
+record the earlier state; device integration is now complete.

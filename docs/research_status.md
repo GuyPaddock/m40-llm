@@ -11,7 +11,7 @@ synchronization fix and opt-in selected-Q4 components onto this feature branch.
 See the [integration plan](experiments/2026-10-31-runtime-carry-plan.md).
 The original nine topic branches remain independent records. Selector and
 graph investigations are retained on their follow-up branches; real-model KV
-quality is running, and tested adaptive CPU replay awaits its completion.
+quality has completed, and the adaptive CPU replay audit is running.
 No runtime default, acquisition, training or learned-drafter evaluation is
 authorized by this carry-forward work. The V3 stop below remains in force.
 
@@ -19,8 +19,9 @@ The exact Q4 host-packing component from `1e3a6d3` now passes all three CPU
 behavioral tests in this feature worktree; implementation/test blob identities
 match the research source. The Q8 synchronization fix now passes 26 affected
 CUDA checks with cuBLAS enabled and its regression with cuBLAS disabled, with
-no skips and an empty final GPU snapshot. The selected-Q4 device component is
-next. The independent KV grid and adaptive CPU timing have both terminated;
+no skips and an empty final GPU snapshot. The selected-Q4 device component
+now passes 20 affected CUDA checks, both selected-FFN checks with cuBLAS off,
+223 non-CUDA tests and CUDA/server Clippy. The independent KV grid and adaptive CPU timing have both terminated;
 their result audits are being completed on the respective research branches.
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
