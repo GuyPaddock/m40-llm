@@ -6,6 +6,13 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The separate October 31 runtime objective has opened the
+[hardware-adaptive drafting study](experiments/2026-10-31-adaptive-drafting-plan.md)
+on `research/1031-adaptive-drafting`. It uses existing target costs and causal
+prompt copying; no acquisition, training or learned-drafter evaluation follows.
+The independent KV-quality experiment is running on its own branch. Wait for
+that GPU workload to finish before timing CPU replay or starting GPU work.
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
