@@ -112,6 +112,8 @@ pub struct DecodeSession {
     d_graph_seq_len: Option<DeviceBuffer>,
     exact_block_staging: Option<ExactBlockStagingWorkspace>,
     decode_graph: Option<CudaGraphExec>,
+    #[cfg(all(test, nvcc))]
+    graph_test_failure: Option<graph_tests::GraphTestFailure>,
     graph_disabled: bool,
     last_forward_used_graph: bool,
     log_prefix: &'static str,
@@ -340,6 +342,8 @@ impl DecodeSession {
             d_graph_seq_len,
             exact_block_staging,
             decode_graph: None,
+            #[cfg(all(test, nvcc))]
+            graph_test_failure: None,
             graph_disabled: false,
             last_forward_used_graph: false,
             log_prefix,
@@ -1178,7 +1182,12 @@ impl DecodeSession {
                         d_seq_len.as_ptr() as *const u32,
                         d_out,
                     )
-                    .map(|_| ())
+                    .map(|_| ())?;
+                #[cfg(all(test, nvcc))]
+                if self.graph_test_failure == Some(graph_tests::GraphTestFailure::Capture) {
+                    anyhow::bail!("test rejection after recording graph operations");
+                }
+                Ok(())
             });
             match captured {
                 Ok(graph) => {
@@ -1200,8 +1209,18 @@ impl DecodeSession {
         }
 
         if let Some(graph) = &self.decode_graph {
-            let launch_result = if decode_graph_diagnostic_sync_enabled() {
-                graph
+            #[cfg(all(test, nvcc))]
+            let submission =
+                if self.graph_test_failure == Some(graph_tests::GraphTestFailure::Launch) {
+                    Err(anyhow::anyhow!("test rejection before graph submission"))
+                } else {
+                    Ok(())
+                };
+            #[cfg(not(all(test, nvcc)))]
+            let submission: Result<()> = Ok(());
+            let launch_result = submission.and_then(|()| {
+                if decode_graph_diagnostic_sync_enabled() {
+                    graph
                     .launch_timed_sync(CudaStream::Decode)
                     .map(|elapsed_ms| {
                         eprintln!(
@@ -1218,9 +1237,10 @@ impl DecodeSession {
                             }
                         }
                     })
-            } else {
-                graph.launch(CudaStream::Decode)
-            };
+                } else {
+                    graph.launch(CudaStream::Decode)
+                }
+            });
             if let Err(err) = launch_result {
                 eprintln!(
                     "[{}] disabling full-token decode CUDA graph after launch failure: {err:#}",
@@ -1307,3 +1327,6 @@ fn decode_graph_diag_max_ms() -> Option<f32> {
         .and_then(|value| value.parse::<f32>().ok())
         .filter(|value| *value > 0.0)
 }
+
+#[cfg(all(test, feature = "cuda", nvcc))]
+mod graph_tests;

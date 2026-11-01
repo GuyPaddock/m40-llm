@@ -1,0 +1,41 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.85s
+     Running tests/attention_graph_dispatch.rs (target/debug/deps/attention_graph_dispatch-cda0e4762bfb876d)
+
+running 1 test
+test test_graph_attention_short_dispatch ... dispatch mismatch head=64 kernel=native cache=off slot=0 length=2 elements=124
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=3 elements=253
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=31 elements=64
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=32 elements=181
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=33 elements=121
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=127 elements=256
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=128 elements=192
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=129 elements=256
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=3 elements=253
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=2 elements=167
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=3 elements=63
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=31 elements=177
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=32 elements=243
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=33 elements=256
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=127 elements=192
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=128 elements=187
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=129 elements=186
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=3 elements=63
+
+thread 'test_graph_attention_short_dispatch' (914121) panicked at tests/attention_graph_dispatch.rs:190:13:
+assertion `left == right` failed
+  left: 1
+ right: 129
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    test_graph_attention_short_dispatch
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 7.79s
+
+error: test failed, to rerun pass `--test attention_graph_dispatch`
