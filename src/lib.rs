@@ -2,6 +2,9 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(test)]
+extern crate self as m40_llm;
+
 pub mod cli;
 pub mod cuda;
 pub mod decode_batch;

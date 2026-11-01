@@ -1,0 +1,109 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running tests/attention_graph_dispatch.rs (target/debug/deps/attention_graph_dispatch-cda0e4762bfb876d)
+
+running 1 test
+test test_graph_attention_short_dispatch ... dispatch mismatch head=64 kernel=native cache=off slot=0 length=2 elements=86
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=3 elements=153
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=31 elements=224
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=32 elements=220
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=33 elements=240
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=127 elements=240
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=128 elements=243
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=129 elements=228
+dispatch mismatch head=64 kernel=native cache=off slot=0 length=3 elements=153
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=2 elements=36
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=3 elements=155
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=31 elements=237
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=32 elements=246
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=33 elements=234
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=127 elements=248
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=128 elements=239
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=129 elements=238
+dispatch mismatch head=64 kernel=native cache=off slot=2 length=3 elements=155
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=2 elements=86
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=3 elements=153
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=31 elements=224
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=32 elements=220
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=33 elements=240
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=127 elements=240
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=128 elements=243
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=129 elements=228
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=0 length=3 elements=153
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=2 elements=36
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=3 elements=155
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=31 elements=237
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=32 elements=246
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=33 elements=234
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=127 elements=248
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=128 elements=239
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=129 elements=238
+dispatch mismatch head=64 kernel=native cache=ldg_kv slot=2 length=3 elements=155
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=2 elements=270
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=3 elements=295
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=31 elements=468
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=32 elements=472
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=33 elements=476
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=127 elements=481
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=128 elements=475
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=129 elements=481
+dispatch mismatch head=128 kernel=native cache=off slot=0 length=3 elements=295
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=2 elements=244
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=3 elements=464
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=31 elements=493
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=32 elements=490
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=33 elements=488
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=127 elements=479
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=128 elements=473
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=129 elements=482
+dispatch mismatch head=128 kernel=native cache=off slot=2 length=3 elements=464
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=2 elements=155
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=3 elements=402
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=31 elements=489
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=32 elements=479
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=33 elements=463
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=127 elements=472
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=128 elements=486
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=129 elements=482
+dispatch mismatch head=128 kernel=shared cache=off slot=0 length=3 elements=402
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=2 elements=229
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=3 elements=478
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=31 elements=501
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=32 elements=477
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=33 elements=493
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=127 elements=478
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=128 elements=496
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=129 elements=489
+dispatch mismatch head=128 kernel=shared cache=off slot=2 length=3 elements=478
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=2 elements=338
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=3 elements=288
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=31 elements=481
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=32 elements=487
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=33 elements=460
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=127 elements=478
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=128 elements=478
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=129 elements=483
+dispatch mismatch head=128 kernel=warp32 cache=off slot=0 length=3 elements=288
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=2 elements=442
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=3 elements=458
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=31 elements=483
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=32 elements=474
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=33 elements=486
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=127 elements=469
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=128 elements=486
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=129 elements=483
+dispatch mismatch head=128 kernel=warp32 cache=off slot=2 length=3 elements=458
+graph dispatch capacity=129 comparisons=144 unequal_elements=30909 guards_inputs_cleanup=pass
+Error: graph dispatch must preserve exact FP32 outputs
+FAILED
+
+failures:
+
+failures:
+    test_graph_attention_short_dispatch
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 103.58s
+
+error: test failed, to rerun pass `--test attention_graph_dispatch`
