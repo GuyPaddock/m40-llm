@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The separate October 31 runtime follow-up is investigating [CUDA Graph dispatch
+parity](experiments/2026-10-31-graph-dispatch-plan.md) on an isolated branch.
+The completed selector study remains on `research/1031-selector-followup`.
+This runtime work does not reopen the V3 data/training work below.
+
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
