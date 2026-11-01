@@ -1,6 +1,7 @@
 148bdb50ded9781253ef0180e1d4d8f67bb84637ff2c94ddb92156fd0a168316  docs/experiments/2026-10-31-dualpace-build-scenarios.sh
-4c3aaa4ed0316b11bc190e7d8410f88fb40c35ea69724bc65a57c0feff50efb6  docs/experiments/2026-10-31-dualpace-scenarios.jq
+1317bcc99c69bdccf44a17d0bf4c55825c09bff5c2690a6bdffa66a00efb6ad7  docs/experiments/2026-10-31-dualpace-scenarios.jq
 33e0c142f7559d9efe3f4a5f8903f98e084a8589d68abd3e8dde8cb5eadcaace  docs/experiments/2026-10-31-dualpace-scenario-fixture.jq
-86295278766b8f0e8990c733c0ffca9861c23e28a13e6ee5d263cd57aa33300a  docs/experiments/2026-10-31-dualpace-scenarios-check.sh
+eb8295b7ef944a557f749e0aed846a67e390dcede7cd5dd342a4d6f7ed64b644  docs/experiments/2026-10-31-dualpace-scenarios-check.sh
 d29060ada8e2910806bb54ed571f07b9bdc9d80147afff76e1f32edaa8288b45  docs/experiments/2026-10-31-dualpace-capacity.json
 1364deb22f174bd21992199984767ea35e6d740abc7bc5e05efb143881d89c59  docs/experiments/2026-10-31-dualpace-scenarios-check.log.gz
+000cdf7b9f8c6a62948ce90f608e060591722e69553ec045c14f75e7ffee42fd  docs/experiments/2026-10-31-dualpace-placement-check.log.gz

@@ -13,7 +13,7 @@ probe, not a complete CPU model backend or an adoption recommendation.
 - Gate, up and down projections at layers 0/17/35; batches 1/2/4/8.
 - The first eight captured rows per layer, checked pairwise for distinct values.
 - One pinned logical CPU and one local bound NUMA node. Planned placements are
-  CPU 15/node 0 and CPU 31/node 1, checked for unrelated CPU load before timing.
+  CPU 15/node 0 and CPU 30/node 1, checked for unrelated CPU load before timing.
 - One scalar sequential FP32 control and one eight-lane AVX2 FP32 consumer.
   Neither uses a materialized FP32 weight cache or changes the Q8 representation.
 
@@ -80,7 +80,7 @@ numactl --physcpubind=15 --membind=0 \
 ```
 
 Use `--validate-only` for the complete 36-case numerical grid without recording
-timings. Repeat the measured command with CPU 31/node 1 and a fresh output.
+timings. Repeat the measured command with CPU 30/node 1 and a fresh output.
 Real-fixture runs require a clean worktree; timing additionally requires release.
 Keep timed hardware experiments serial with the active KV capture and later
 GPU transfer measurements. Do not promote a scalar comparison to a comparison

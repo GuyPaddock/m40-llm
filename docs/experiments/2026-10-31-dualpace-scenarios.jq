@@ -58,7 +58,7 @@ $cpu_manifest.placement as $placement |
 require($placement.threads == 1 and $transfer_manifest.placement.threads == 1
   and $placement.cpu == $transfer_manifest.placement.cpu
   and $placement.numa_node == $transfer_manifest.placement.numa_node
-  and ([$placement.cpu,$placement.numa_node] == [15,0] or [$placement.cpu,$placement.numa_node] == [31,1]);
+  and ([$placement.cpu,$placement.numa_node] == [15,0] or [$placement.cpu,$placement.numa_node] == [30,1]);
   "CPU and transfer placement differ from the frozen study") |
 require(.gpu.schema_version == 1 and .gpu.is_full_decode_profile == false
   and .gpu.source_manifest.model_sha256 == "4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d"

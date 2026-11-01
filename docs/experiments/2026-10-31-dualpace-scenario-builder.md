@@ -48,15 +48,18 @@ The [check script](2026-10-31-dualpace-scenarios-check.sh) passes:
 - Node-1 generation selects the second capacity and CPU placement. Moving
   the output directory preserves artifact resolution and simulation.
 - Existing output remains byte-identical after rejected overwrite.
-- Ten invalid reports reject without publishing output. They cover incomplete
+- Eleven invalid reports reject without publishing output. They cover obsolete
+  CPU 31 placement, incomplete
   or validation-only reports, mismatched placement or input bytes, failed
   arithmetic, zero costs, missing trials, unstable transfers, wrong transfer
   sizes and failed guards.
 - Altering a copied source artifact rejects before simulator output opens.
 
 The [checksum manifest](2026-10-31-dualpace-scenarios.sha256) retains the
-scripts, inventory and full check log. These CPU-only checks use the schema-3
-simulator from `68a3d0a`; no GPU workload or model generation ran.
+scripts, inventory and original check log. The
+[placement amendment](2026-10-31-dualpace-placement-amendment.md) also retains
+the successful current check log for CPU 30/node 1. These CPU-only checks use
+the schema-3 simulator; no GPU workload or model generation ran.
 
 ## Reproduction and next measurements
 

@@ -58,8 +58,8 @@ done < <(jq -r '.scenarios[].name' "$scenario_tmp/node0/scenarios.json")
 printf '%s\n' 'PASS: all 162 scheduling modes admit; known 172800/8640000ns makespans match'
 
 # Changing placement preserves the full grid and selects that node capacity.
-jq '.cpu |= map(if .kind == "cpu_projection_manifest" then .placement.cpu=31 | .placement.numa_node=1 else . end) |
-    .transfers |= map(if .kind == "cooperative_transfer_manifest" then .placement.cpu=31 | .placement.numa_node=1 else . end) |
+jq '.cpu |= map(if .kind == "cpu_projection_manifest" then .placement.cpu=30 | .placement.numa_node=1 else . end) |
+    .transfers |= map(if .kind == "cooperative_transfer_manifest" then .placement.cpu=30 | .placement.numa_node=1 else . end) |
     .capacity.nodes[1].capacity_bytes = 32000000000' "$scenario_tmp/original.json" > "$scenario_tmp/node1-input.json"
 write_inputs "$scenario_tmp/node1-input.json"
 build_scenarios "$scenario_tmp/node1"
@@ -96,6 +96,8 @@ expect_rejection() {
 expect_rejection 'incomplete CPU report' '.cpu |= map(select(.kind != "cpu_projection_complete"))'
 expect_rejection 'validation-only report' '.cpu[0].is_validation_only = true'
 expect_rejection 'mismatched NUMA placement' '.transfers[0].placement.numa_node = 1'
+# The amended node-1 placement must reject evidence from its unavailable predecessor.
+expect_rejection 'obsolete CPU 31 placement' '.cpu[0].placement = {threads:1,cpu:31,numa_node:1} | .transfers[0].placement = {threads:1,cpu:31,numa_node:1}'
 # Matching dimensions alone do not prove identical original weights or activations.
 expect_rejection 'different input bytes' '.cpu |= map(if .kind == "cpu_projection_validation" then .case.input_sha256 = "changed" else . end)'
 expect_rejection 'failed CPU arithmetic' '.cpu |= map(if .kind == "cpu_projection_validation" then .avx2.max_tolerance_ratio = 2 else . end)'

@@ -9,8 +9,11 @@ against the current code, worktree, Git history, and linked raw results.
 The [first pricing run](experiments/2026-10-31-dualpace-placement-stop.md)
 completes CPU 15/node 0: 36 cases, 180 pairs, all numerical checks and stable
 timing series. It then stops before node-1 execution because the environment
-excludes CPUs 31 and 63. No transfer phase ran. Preserve node 0 and amend
-the remaining placement to allowed CPU 30/node 1 before resuming.
+excludes CPUs 31 and 63. No transfer phase ran. The
+[placement amendment](experiments/2026-10-31-dualpace-placement-amendment.md)
+now requires allowed CPU 30/node 1. Scenario tests pass the changed placement
+and reject obsolete CPU 31 evidence. Resume the remaining CPU and transfer
+measurements, preserving node 0 without repetition.
 
 The user has authorized execution of the October 30 nine-topic research plan
 in independent worktrees based on `0eee578`. This branch owns

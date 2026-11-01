@@ -12,7 +12,7 @@ remains the next step.
 
 ## Scope and placement
 
-Use CPU 15 with node 0 memory, then CPU 31 with node 1 memory, in separate
+Use CPU 15 with node 0 memory, then CPU 30 with node 1 memory, in separate
 serial runs. `examples/common/cpu_placement.rs` now contains the original CPU
 projection probe's placement checks. Both probes require exactly one logical
 CPU, a bound local NUMA node and matching host inventory. Extraction preserves
@@ -105,7 +105,7 @@ numactl --physcpubind=15 --membind=0 \
   --cpu 15 --numa-node 0 --iterations 20 --output target/transfers-node0-timed-new.jsonl
 ```
 
-Repeat validation and timing with CPU 31/node 1 and new outputs. The executable
+Repeat validation and timing with CPU 30/node 1 and new outputs. The executable
 requires a clean worktree; timings require release. It rejects runtime/logging
 overrides, checks the selected M40 for other compute processes before creating
 its context and before each case, and verifies tracked cleanup. Inspect driver

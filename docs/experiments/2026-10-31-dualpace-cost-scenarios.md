@@ -37,8 +37,12 @@ results because the simulator schedules individual requests.
 
 ## Fixed scheduling workload
 
+The [placement amendment](2026-10-31-dualpace-placement-amendment.md) replaces
+unavailable CPU 31 with allowed CPU 30 before node-1 measurements. The original
+failed launch and completed node-0 evidence remain preserved.
+
 Use one CPU worker group with the measured single-core profile, first CPU
-15/node 0 and then CPU 31/node 1. These are separate runs and scenarios.
+15/node 0 and then CPU 30/node 1. These are separate runs and scenarios.
 No cross-socket parallel CPU throughput is inferred. Use schema 2 with copy
 and GPU compute serialized, because the transfer probe measures completed
 pageable APIs. CPU compute may proceed while the GPU runs, subject to the
