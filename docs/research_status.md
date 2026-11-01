@@ -20,9 +20,8 @@ carried from `2705ef2` without changes; all pass with warnings denied
 [Q4 CUDA carry-forward](experiments/2026-10-31-q4-carry-forward.md) from
 `1aaaddc` passes both M40 tests with cuBLAS on/off, 20 affected CUDA tests,
 CUDA/server Clippy and 223 non-CUDA tests. It remains an isolated research
-API with immutable selections, not dynamic runtime routing. The next research
-priority is causal channel-selection predictability across complete
-generations. The [fixed diagnostic protocol](experiments/2026-10-31-selector-predictability-protocol.md)
+API with immutable selections, not dynamic runtime routing. The
+[fixed diagnostic protocol](experiments/2026-10-31-selector-predictability-protocol.md)
 uses the six existing calibration prompts, causal dense-refresh histories and
 16-dimensional sketches. The [explicit complete-generation observer](experiments/2026-10-31-selector-capture-implementation.md)
 is implemented and passes collector, CLI, CUDA-enabled argument and M40
@@ -30,8 +29,14 @@ observer parity checks. The [clean release capture](experiments/2026-10-31-selec
 contains 128 generated IDs and 122 consumed-token rows at each of five layers;
 all six observer pairs match. The [CPU causal analyzer](experiments/2026-10-31-selector-analyzer-implementation.md)
 passes nine behavioral tests including end-to-end label-leakage mutation,
-plus warning-denied Clippy. Applying it to the real capture remains pending. These are
-dense trajectories, not sparse-generation quality or speed measurements.
+plus warning-denied Clippy. Its [completed fixed study](experiments/2026-10-31-selector-result.md)
+finds zero passing causal rows in 5,382 policy-row comparisons; all layers
+fail at 10%/20% retention. No causal row reaches 95% of oracle weighted mass.
+The independent index/recall/causality audit passes all 8,296 row records and
+476 summaries. Stop these fixed signals without tuning or a selector kernel.
+These are dense-trajectory diagnostics, not sparse-generation quality or
+speed measurements. Graph attention-dispatch parity, real-model quantized-KV
+quality and hardware-adaptive drafting remain separate pending investigations.
 The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.
 

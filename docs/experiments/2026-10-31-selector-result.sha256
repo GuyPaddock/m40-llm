@@ -1,0 +1,9 @@
+eb5d36eaa911b30e836e90dd6d082ab27d1302f9cfc4c858e0918114ed1df6b4  docs/experiments/2026-10-31-selector-row-metrics.jsonl.gz
+03475e16c1ec8ea9474dc5a5c1273515e6adf870b8e92829cfa74c1d3d059fb0  docs/experiments/2026-10-31-selector-summaries.jsonl.gz
+8c82cd0c66ac35965beae3488289e1e68286481a52f9a83c132fd54c125e6134  docs/experiments/2026-10-31-selector-analysis-build.log.gz
+74eaa18da73da7d59d9e20d08127d911a8570930db714275a2d69eba50835d8c  docs/experiments/2026-10-31-selector-analysis-run.log.gz
+3dd588feb707db5653819caff17599f15f8e8a9e61b7908ff052ed4cadaf5a1b  docs/experiments/2026-10-31-selector-negative.log.gz
+25c3761ff627f525d3083babf4a0d4a6f1054da235c78aec26032f58af7d2257  docs/experiments/2026-10-31-selector-audit.jq
+d991ab3c3f077d12eddf007fe34ca3900401525e57cee3ad20306446babed4af  docs/experiments/2026-10-31-selector-audit.json
+96c1ed3f2505c661fe440c7ff17c96d4bd49fe74b9452daa54c074e7bb382b99  docs/experiments/2026-10-31-selector-decision.jsonl
+1a445be5b367e7ee9e2a9ccb688661ed28b841952cc2957c231510d7869e64e2  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/selector-followup/analysis-01.jsonl

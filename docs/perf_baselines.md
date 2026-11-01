@@ -2,6 +2,23 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Fixed Causal Channel Signals Fail
+
+The [complete-generation predictability study](experiments/2026-10-31-selector-result.md)
+records 128 generated IDs and 122 consumed-token inputs at each of five layers,
+with every observer pair identical. Fixed first-token, refresh-history and
+16-dimensional sketch policies yield zero passing rows across 5,382 causal
+policy-row comparisons. Best mean recall spans 14.77%-49.52%; even the weighted
+mass criterion alone has no passing causal row. All target layers fail at
+both retained-channel fractions. These repeated policy evaluations are not
+independent samples and establish no sparse-model accuracy or latency result.
+
+Historical per-layer timings leave an estimated 147.13-151.12 microseconds
+at 10% retention and 53.14-57.26 at 20% after bootstrap and dense refreshes.
+Those budgets are unmeasured selector allowances, not a speedup. The fixed
+quality proxy fails first, so no selector kernel or tuning follows. Preserve
+the supplied-index Q4 execution result and all previous performance references.
+
 ## 2026-10-31: V3 CPU Engineering Stops Before Census
 
 The [bounded engineering follow-up](experiments/2026-10-31-v3-engineering-results.md)

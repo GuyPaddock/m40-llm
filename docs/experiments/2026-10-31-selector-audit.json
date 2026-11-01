@@ -1,0 +1,17 @@
+{
+  "is_valid": true,
+  "rows": 8296,
+  "summaries": 476,
+  "causal_sparse_rows": 5382,
+  "manifests": 1,
+  "completions": 1,
+  "checks": [
+    "sorted unique in-range indices",
+    "recomputed top-k recall",
+    "dense refresh schedule",
+    "prior dense label identity",
+    "summary recount",
+    "fixed screen gate"
+  ],
+  "limitation": "down-column norms and weighted contribution arithmetic are covered by analyzer behavioral tests, not independently recomputed here"
+}
