@@ -70,7 +70,7 @@ All three warning-free CPU tests pass on the actual feature worktree: every
 FP16 scale bit pattern/payload is preserved, selected values and odd-output
 padding are correct, and invalid sources are rejected. Formatting and source
 whitespace checks pass. See [the raw test log](2026-10-31-feature-q4-host.log).
-The selected-Q4 CUDA component is still pending.
+At this host checkpoint the CUDA component was pending; it is completed below.
 
 ## Q8 synchronization checkpoint
 
@@ -94,10 +94,11 @@ feature source manifest will include the later Q4 device addition separately.
   study. Its carry-forward source is distinct from the failed selector search.
 - CUDA Graph dispatch parity: `research/1031-graph-dispatch`, verified fix retained
   separately. Graphs remain opt-in; no graph performance promotion follows.
-- Real-model KV quality: `research/1031-kv-quality`, frozen grid still running at
-  this checkpoint. Complete output and independent audit are required.
-- Adaptive drafting: `research/1031-adaptive-drafting`, tested CPU replay at
-  `1892432`; timed study waits for the KV run to finish.
+- Real-model KV quality: `research/1031-kv-quality`, complete audited result
+  at `9da2390`. Both candidates preserve seven dense-passing cases; five dense
+  failures remain inconclusive. No memory or throughput benefit is claimed.
+- Adaptive drafting: `research/1031-adaptive-drafting`, complete audited result
+  at `115f765`. The broad gate fails; no live integration follows.
 
 ShiftAdd, multi-row FFN fusion, rotated activation preparation, lossless KV and
 CPU/GPU scheduling remain on their original experimental branches. Their

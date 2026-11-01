@@ -1,0 +1,14 @@
+f5d0a9e51fbe3e14303251c8ba639955455e150578af14cd0585d29d7d0a4fb3  docs/experiments/2026-10-31-runtime-followup-result.md
+0898d8422c20ff9bf754002a5608356a6edca70095f87633c1bcb2d1ad37cdbb  docs/experiments/2026-10-31-runtime-completion-audit.tsv
+0e79d930282b710ce40f916244925d0290284f4b0237d31d0b8ed82e9e79b363  docs/experiments/2026-10-31-runtime-final-branches.txt
+c99d268a98ef5dbb2241a6e2c645df9b03c5497f5ca70a34477b9c6305894057  docs/experiments/2026-10-31-feature-q4-artifacts.sha256
+88173ec46f48c4d7fb577d9ca35e1f20f34e76192117643e020f1875c55050f0  /tmp/m40-selector-followup/docs/experiments/2026-10-31-selector-result.md
+d991ab3c3f077d12eddf007fe34ca3900401525e57cee3ad20306446babed4af  /tmp/m40-selector-followup/docs/experiments/2026-10-31-selector-audit.json
+4a64354bd2d8b9cf7b62e2b7563a29de85d2e9d5fc9835bf359f6a1e25f86a21  /tmp/m40-graph-followup/docs/experiments/2026-10-31-graph-dispatch-result.md
+815b0b6fd41c9d19322f76f17187814b144a4044f67cf1901fc5c476eb82a4a8  /tmp/m40-graph-followup/docs/experiments/2026-10-31-graph-dispatch-artifacts.sha256
+5d9c70c3cc7ba56133ef837e00abecae1917c9a90c17a05306316fe7cd215d27  /tmp/m40-kv-quality/docs/experiments/2026-10-31-kv-quality-result.md
+c1b2342ac197f8a5728af45b0927510449b8956121a33fd813f7154902528a51  /tmp/m40-kv-quality/docs/experiments/2026-10-31-kv-quality-audit.json
+6b9e4ef72c71d6beb159dd9fe8cac2c30d23cdd71ef1c7940877a3245ee3f4bd  /tmp/m40-kv-quality/docs/experiments/2026-10-31-kv-quality-artifacts.sha256
+1471349b1e7d9e7471eb342ae71ac782e1f55d5b6de4e074b954ca5830229841  /tmp/m40-adaptive-drafting/docs/experiments/2026-10-31-adaptive-drafting-result.md
+7310a66e61957faedc7e12cdb26c39a6dba937c703fef81cc76d8ebc58bccd86  /tmp/m40-adaptive-drafting/docs/experiments/2026-10-31-adaptive-drafting-audit.json
+f5be70bdc6735eee56dd5b96610b77d7276037f9e69c186429bdc5e4bd55e096  /tmp/m40-adaptive-drafting/docs/experiments/2026-10-31-adaptive-drafting-artifacts.sha256

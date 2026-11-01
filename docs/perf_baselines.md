@@ -2,6 +2,22 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Runtime Research Follow-ups Complete
+
+The [final disposition](experiments/2026-10-31-runtime-followup-result.md)
+retains the original nine independent topic branches. Feature commits
+`3df1dd2`, `e930d21` and `9a68003` carry verified Q4 host/device components
+and the Q8 scale-synchronization correction. Fresh correctness checks pass,
+including 223 non-CUDA tests and CUDA/server Clippy; no new speed claim follows.
+
+The fixed cheap selectors fail their predictability gate. Graph parity passes
+on its separate branch. The real-model KV grid preserves seven dense-passing
+cases in both mixed arms, with five dense failures inconclusive and larger
+long-prefix differences. The adaptive controller fails the broad-workload
+gate despite retaining known specialized copy gains. All four reports retain
+raw evidence and independent audit limits. No production dispatch or default
+promotion follows from these experiments.
+
 ## 2026-10-31: Rank Counts Improve; Review Cost Unknown
 
 The [bounded CPU-only follow-ups](experiments/2026-10-31-v3-rank-review-results.md)

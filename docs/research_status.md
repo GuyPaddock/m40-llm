@@ -6,23 +6,25 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The separate October 31 runtime objective is carrying the verified Q8 scale
-synchronization fix and opt-in selected-Q4 components onto this feature branch.
-See the [integration plan](experiments/2026-10-31-runtime-carry-plan.md).
-The original nine topic branches remain independent records. Selector and
-graph investigations are retained on their follow-up branches; real-model KV
-quality has completed, and the adaptive CPU replay audit is running.
-No runtime default, acquisition, training or learned-drafter evaluation is
-authorized by this carry-forward work. The V3 stop below remains in force.
+The separate October 31 runtime research objective is complete. See the
+[final disposition and evidence review](experiments/2026-10-31-runtime-followup-result.md).
+The original nine branches remain independent records. Feature commits
+`3df1dd2`, `e930d21` and `9a68003` carry the Q4 host layout, Q8 synchronization
+fix and explicit selected-Q4 device API. Runtime source matches the qualified
+research source; defaults and production FFN dispatch are unchanged.
 
-The exact Q4 host-packing component from `1e3a6d3` now passes all three CPU
-behavioral tests in this feature worktree; implementation/test blob identities
-match the research source. The Q8 synchronization fix now passes 26 affected
-CUDA checks with cuBLAS enabled and its regression with cuBLAS disabled, with
-no skips and an empty final GPU snapshot. The selected-Q4 device component
-now passes 20 affected CUDA checks, both selected-FFN checks with cuBLAS off,
-223 non-CUDA tests and CUDA/server Clippy. The independent KV grid and adaptive CPU timing have both terminated;
-their result audits are being completed on the respective research branches.
+Fresh checks pass: Q8 26 cuBLAS-on checks plus its off regression; selected-Q4
+20 cuBLAS-on checks plus two off checks; 223 non-CUDA tests and CUDA/server
+Clippy. No skips are counted, and the final GPU snapshots are empty.
+
+The fixed cheap selector fails its predictability screen. Graph dispatch parity
+is repaired and verified on its separate branch. Both quantized-KV arms preserve
+seven dense-passing cases in the complete 36-generation quality grid; five
+dense failures remain inconclusive. Adaptive drafting fails its broad-workload
+gate, and its independent audit passes all 126 cases/630 trials. Each follow-up
+has a committed report and retained raw evidence. No runtime promotion, further
+selector search, live adaptive implementation, acquisition, training or learned
+evaluation follows. The separate V3 stop below remains in force.
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
