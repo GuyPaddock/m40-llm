@@ -6,6 +6,15 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The separate October 31 runtime objective is carrying the verified Q8 scale
+synchronization fix and opt-in selected-Q4 components onto this feature branch.
+See the [integration plan](experiments/2026-10-31-runtime-carry-plan.md).
+The original nine topic branches remain independent records. Selector and
+graph investigations are retained on their follow-up branches; real-model KV
+quality is running, and tested adaptive CPU replay awaits its completion.
+No runtime default, acquisition, training or learned-drafter evaluation is
+authorized by this carry-forward work. The V3 stop below remains in force.
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
