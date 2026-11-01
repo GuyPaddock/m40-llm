@@ -14,7 +14,10 @@ The [Q8 synchronization carry-forward](experiments/2026-10-31-q8-scale-carry-for
 passes the streaming regression with cuBLAS on/off, affected CUDA checks,
 CUDA/server Clippy and 220 warning-free non-CUDA tests. The unfixed negative
 control did not reproduce the intermittent race; the dormant bulk builder
-has compilation coverage only. Q4 carry-forward remains pending. The next research
+has compilation coverage only. Q4 host packing and its three CPU tests are
+carried from `2705ef2` without changes; all pass with warnings denied
+([log](experiments/2026-10-31-q4-host-carry.log.gz)). CUDA carry-forward remains
+pending. The next research
 priority is causal channel-selection predictability across complete
 generations. The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.

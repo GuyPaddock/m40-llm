@@ -17,6 +17,7 @@ mod load;
 mod logits;
 mod mapping;
 mod meta;
+pub mod q4_channels;
 pub mod q8_activation;
 mod q8_attention_projection;
 mod q8_ffn;
