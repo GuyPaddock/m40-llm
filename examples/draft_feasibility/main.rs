@@ -1,6 +1,9 @@
+mod adaptive_replay;
+mod adaptive_study;
 #[cfg(all(feature = "cuda", nvcc))]
 mod capture;
 mod cost;
+mod decision;
 #[cfg(all(feature = "cuda", nvcc))]
 mod live;
 mod records;
@@ -25,6 +28,12 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
+    Adaptive {
+        #[arg(long)]
+        heldout: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     Live {
         #[arg(long)]
         model: PathBuf,
@@ -51,6 +60,7 @@ enum Command {
 
 fn main() -> Result<()> {
     match Args::parse().command {
+        Command::Adaptive { heldout, output } => adaptive_study::run(&heldout, &output),
         Command::Live {
             model,
             heldout,

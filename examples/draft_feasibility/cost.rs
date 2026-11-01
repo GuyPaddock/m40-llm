@@ -1,4 +1,5 @@
 use super::{
+    decision::DecisionCosts,
     records::{self, Trace},
     replay::Replay,
 };
@@ -87,6 +88,31 @@ mod tests {
             .as_f64()
             .unwrap();
         assert!((actual - 60.1).abs() < 1e-8);
+    }
+
+    /// Scaling verifier work doubles batch and rollback cost but leaves the
+    /// required ordinary correction and useful serial work unchanged.
+    #[test]
+    fn test_hardware_scaling_preserves_serial_correction() -> Result<()> {
+        let model = model();
+        let costs = model.prepare_decision_costs(2.)?;
+        assert_eq!(costs.len(), 505);
+        assert_eq!(costs[0].serial_ms, [40., 60., 80., 80.]);
+        assert!((costs[0].candidate_ms[0] - 140.2).abs() < 1e-9);
+        assert_eq!(costs[0].candidate_ms[3], 120.);
+        let proposal = Some(Proposal {
+            guesses: [7, 8, 9],
+            match_start: None,
+            suffix_len: None,
+        });
+        let trace = trace(vec![1, 2, 99], "stop");
+        let projection = model.project_scaled(&trace, &[replay(proposal, 0, 2)], 2.)?;
+        let cost = projection["scenarios"][0]["model_samples"][0]["candidate_decode_model_ms"]
+            .as_f64()
+            .unwrap();
+        assert!((cost - 140.2).abs() < 1e-9);
+        assert!(model.prepare_decision_costs(f64::NAN).is_err());
+        Ok(())
     }
 }
 fn number(v: &Value, key: &str) -> f64 {
@@ -182,6 +208,16 @@ impl CostModel {
 
     /// Replay observed eligibility/rejection jointly, not an IID mean acceptance.
     pub fn project(&self, trace: &Trace, trials: &[Replay]) -> Result<Value> {
+        self.project_scaled(trace, trials, 1.)
+    }
+
+    /// Hypothetical scaling changes verifier work, not ordinary serial correction.
+    pub fn project_scaled(&self, trace: &Trace, trials: &[Replay], scale: f64) -> Result<Value> {
+        ensure!(
+            scale.is_finite() && scale > 0.,
+            "invalid verifier cost scale"
+        );
+        ensure!(!trials.is_empty(), "missing causal trials");
         let path = &trials[0];
         let cpu_ms = trials
             .iter()
@@ -208,7 +244,7 @@ impl CostModel {
                         if !(65..=569).contains(&r.absolute_position) {
                             extrapolated += 1;
                         }
-                        target += at_batch(direct, r.absolute_position) + extra;
+                        target += scale * (at_batch(direct, r.absolute_position) + extra);
                         if r.accepted_guesses < 3 {
                             let accepted = r.accepted_guesses + 1;
                             let reject = &self.rejection[accepted];
@@ -217,11 +253,12 @@ impl CostModel {
                                 - number(reject, "rollback_ms")
                                 - number(reject, "correction_ms"))
                             .max(0.);
-                            target += (number(reject, "target_ms")
-                                - direct["batch_ms"][0].as_f64().unwrap())
-                            .max(0.)
-                                + number(reject, "rollback_ms")
-                                + residual
+                            target += scale
+                                * ((number(reject, "target_ms")
+                                    - direct["batch_ms"][0].as_f64().unwrap())
+                                .max(0.)
+                                    + number(reject, "rollback_ms")
+                                    + residual)
                                 + if r.progress > accepted {
                                     number(reject, "correction_ms")
                                         .max(at_serial(control, r.absolute_position + accepted))
@@ -231,7 +268,8 @@ impl CostModel {
                         }
                     }
                 }
-                target += number(direct, "decode_other_ms") / 130. * path.rounds.len() as f64;
+                target +=
+                    scale * number(direct, "decode_other_ms") / 130. * path.rounds.len() as f64;
                 let construction_delta = (number(direct, "session_setup_ms")
                     + number(direct, "session_teardown_ms")
                     - number(control, "session_setup_ms")
@@ -287,10 +325,59 @@ impl CostModel {
         }
         Ok(
             json!({"scope":"actual causal visit path; measured old target samples, observed CPU cost, correction/rollback, finite tails; projections not measured E2E",
-            "is_http_measured":false,"historical_http_fixed_overhead_ms":self.historical_fixed_ms,
+            "is_http_measured":false,"verifier_cost_scale":scale,"historical_http_fixed_overhead_ms":self.historical_fixed_ms,
             "unmeasured_late_rejections":true,"new_prompt_prefill_anchor_available":trace.serial_fixed_ms.is_some(),
             "cpu_cost_charged":"maximum of five all-in replays including initialization and ineligible proposals",
             "scenarios":scenarios}),
         )
+    }
+
+    /// Calibrate a fixed table from all five measured pairs before replay.
+    /// No current trace or future acceptance enters the policy's hardware costs.
+    pub fn prepare_decision_costs(&self, scale: f64) -> Result<Vec<DecisionCosts>> {
+        ensure!(scale.is_finite() && scale > 0., "invalid verifier scale");
+        let mut table = Vec::new();
+        for position in 65..=569 {
+            let mut costs = DecisionCosts {
+                serial_ms: [0.; 4],
+                candidate_ms: [0.; 4],
+            };
+            for guesses in 0..4 {
+                let accepted = guesses + 1;
+                let progress = (accepted + usize::from(guesses < 3)).min(4);
+                let mut serial = Vec::new();
+                let mut candidate = Vec::new();
+                for (control, direct) in &self.pairs {
+                    serial.push(
+                        (0..progress)
+                            .map(|offset| at_serial(control, position + offset))
+                            .sum(),
+                    );
+                    let mut verifier =
+                        at_batch(direct, position) + number(direct, "decode_other_ms") / 130.;
+                    let mut correction = 0.;
+                    if guesses < 3 {
+                        let reject = &self.rejection[accepted];
+                        let residual = (number(reject, "elapsed_ms")
+                            - number(reject, "target_ms")
+                            - number(reject, "rollback_ms")
+                            - number(reject, "correction_ms"))
+                        .max(0.);
+                        verifier += (number(reject, "target_ms")
+                            - direct["batch_ms"][0].as_f64().unwrap())
+                        .max(0.)
+                            + number(reject, "rollback_ms")
+                            + residual;
+                        correction = number(reject, "correction_ms")
+                            .max(at_serial(control, position + accepted));
+                    }
+                    candidate.push(scale * verifier + correction);
+                }
+                costs.serial_ms[guesses] = median(serial);
+                costs.candidate_ms[guesses] = median(candidate);
+            }
+            table.push(costs);
+        }
+        Ok(table)
     }
 }

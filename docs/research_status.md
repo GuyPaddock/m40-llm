@@ -13,6 +13,16 @@ prompt copying; no acquisition, training or learned-drafter evaluation follows.
 The independent KV-quality experiment is running on its own branch. Wait for
 that GPU workload to finish before timing CPU replay or starting GPU work.
 
+The CPU adaptive replay implementation now passes 15 behavioral example tests,
+the full 220-test non-CUDA suite, and non-CUDA plus CUDA/server all-targets
+Clippy. It keeps the original prompt-copy source and finite cost model,
+adding measured-cost decisions, executed-outcome history and explicit hardware
+sensitivities. Independent Perl audit syntax is checked; its full positive and
+corruption tests require the pending study output. No new measured speed or
+acceptance result exists yet. Run the committed release `draft_feasibility
+adaptive` command after the KV-quality process terminates, then audit every
+trace/policy/scale and record the result without tuning the policy.
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
