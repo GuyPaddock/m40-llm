@@ -1,0 +1,166 @@
+   Compiling proc-macro2 v1.0.103
+   Compiling quote v1.0.42
+   Compiling unicode-ident v1.0.22
+   Compiling libc v0.2.178
+   Compiling cfg-if v1.0.4
+   Compiling stable_deref_trait v1.2.1
+   Compiling smallvec v1.15.1
+   Compiling find-msvc-tools v0.1.5
+   Compiling shlex v1.3.0
+   Compiling pin-project-lite v0.2.16
+   Compiling parking_lot_core v0.9.12
+   Compiling itoa v1.0.15
+   Compiling scopeguard v1.2.0
+   Compiling serde_core v1.0.228
+   Compiling bytes v1.11.0
+   Compiling zerocopy v0.8.31
+   Compiling memchr v2.7.6
+   Compiling litemap v0.8.1
+   Compiling futures-core v0.3.31
+   Compiling serde v1.0.228
+   Compiling writeable v0.6.2
+   Compiling once_cell v1.21.3
+   Compiling icu_properties_data v2.1.2
+   Compiling icu_normalizer_data v2.1.1
+   Compiling untrusted v0.9.0
+   Compiling fnv v1.0.7
+   Compiling futures-task v0.3.31
+   Compiling serde_json v1.0.145
+   Compiling pin-utils v0.1.0
+   Compiling hashbrown v0.16.1
+   Compiling rustls v0.21.12
+   Compiling ryu v1.0.21
+   Compiling utf8parse v0.2.2
+   Compiling futures-sink v0.3.31
+   Compiling equivalent v1.0.2
+   Compiling httparse v1.10.1
+   Compiling regex-syntax v0.8.8
+   Compiling log v0.4.29
+   Compiling anstyle v1.0.13
+   Compiling anstyle-query v1.1.5
+   Compiling percent-encoding v2.3.2
+   Compiling slab v0.4.11
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling try-lock v0.2.5
+   Compiling colorchoice v1.0.4
+   Compiling autocfg v1.5.0
+   Compiling utf8_iter v1.0.4
+   Compiling clap_lex v0.7.6
+   Compiling heck v0.5.0
+   Compiling strsim v0.11.1
+   Compiling httpdate v1.0.3
+   Compiling tower-service v0.3.3
+   Compiling thiserror v1.0.69
+   Compiling ciborium-io v0.2.2
+   Compiling base64 v0.21.7
+   Compiling option-ext v0.2.0
+   Compiling anyhow v1.0.100
+   Compiling twox-hash v2.1.2
+   Compiling either v1.15.0
+   Compiling webpki-roots v0.25.4
+   Compiling ipnet v2.11.0
+   Compiling sync_wrapper v0.1.2
+   Compiling encoding_rs v0.8.35
+   Compiling lock_api v0.4.14
+   Compiling mime v0.3.17
+   Compiling cast v0.3.0
+   Compiling same-file v1.0.6
+   Compiling cc v1.2.50
+   Compiling futures-channel v0.3.31
+   Compiling futures-util v0.3.31
+   Compiling want v0.3.1
+   Compiling base64 v0.22.1
+   Compiling rustc-hash v2.1.2
+   Compiling oorandom v11.1.5
+   Compiling tracing-core v0.1.36
+   Compiling anes v0.1.6
+   Compiling anstyle-parse v0.2.7
+   Compiling ruzstd v0.8.3
+   Compiling form_urlencoded v1.2.2
+   Compiling itertools v0.10.5
+   Compiling walkdir v2.5.0
+   Compiling anstream v0.6.21
+   Compiling num-traits v0.2.19
+   Compiling rustls-pemfile v1.0.4
+   Compiling clap_builder v4.5.53
+   Compiling aho-corasick v1.1.4
+   Compiling tracing v0.1.44
+   Compiling http v0.2.12
+   Compiling indexmap v2.12.1
+   Compiling syn v2.0.111
+   Compiling ring v0.17.14
+   Compiling m40-llm v0.1.0 (/tmp/m40-kv-quality)
+   Compiling getrandom v0.2.16
+   Compiling mio v1.1.1
+   Compiling signal-hook-registry v1.4.7
+   Compiling socket2 v0.6.1
+   Compiling socket2 v0.5.10
+   Compiling dirs-sys v0.4.1
+   Compiling is-terminal v0.4.17
+   Compiling rand_core v0.6.4
+   Compiling directories v5.0.1
+   Compiling http-body v0.4.6
+   Compiling parking_lot v0.12.5
+   Compiling criterion-plot v0.5.0
+   Compiling regex-automata v0.4.13
+   Compiling synstructure v0.13.2
+   Compiling regex v1.12.2
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+   Compiling zerovec-derive v0.11.2
+   Compiling displaydoc v0.2.5
+   Compiling zerocopy-derive v0.8.31
+   Compiling tokio-macros v2.6.0
+   Compiling serde_derive v1.0.228
+   Compiling clap_derive v4.5.49
+   Compiling thiserror-impl v1.0.69
+   Compiling tiktoken v3.1.4
+   Compiling tokio v1.48.0
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.1
+   Compiling zerovec v0.11.5
+   Compiling zerotrie v0.2.3
+   Compiling clap v4.5.53
+   Compiling tinystr v0.8.2
+   Compiling potential_utf v0.1.4
+   Compiling icu_collections v2.1.1
+   Compiling icu_locale_core v2.1.1
+   Compiling icu_provider v2.1.1
+   Compiling icu_properties v2.1.2
+   Compiling icu_normalizer v2.1.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling tinytemplate v1.2.1
+   Compiling half v2.7.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling ciborium-ll v0.2.2
+   Compiling rand_chacha v0.3.1
+   Compiling ciborium v0.2.2
+   Compiling rand v0.8.5
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling criterion v0.5.1
+   Compiling url v2.5.7
+   Compiling tokio-util v0.7.17
+   Compiling tokio-stream v0.1.17
+   Compiling h2 v0.3.27
+   Compiling sct v0.7.1
+   Compiling rustls-webpki v0.101.7
+   Compiling hyper v0.14.32
+   Compiling tokio-rustls v0.24.1
+   Compiling hyper-rustls v0.24.2
+   Compiling reqwest v0.11.27
+    Finished `release` profile [optimized] target(s) in 25.92s
+     Running `target/release/examples/kv_quality prepare --model /mnt/array-fastest/home/guyep/.ollama/models/blobs/sha256-4420ccb0f1d9e12811d04ae2a28ec881469305f813c62d86c10e595ef8e0111d --output docs/experiments/2026-10-31-kv-quality-inputs.json`
+held-chat-tour-short prompt_tokens=87 task_end=87 notes=0 maximum_consumed=134
+held-chat-tour-long prompt_tokens=2063 task_end=100 notes=102 maximum_consumed=2110
+held-fact-observatory-short prompt_tokens=69 task_end=69 notes=0 maximum_consumed=100
+held-fact-observatory-long prompt_tokens=2064 task_end=82 notes=103 maximum_consumed=2095
+held-multi-workshop-short prompt_tokens=110 task_end=110 notes=0 maximum_consumed=173
+held-multi-workshop-long prompt_tokens=2048 task_end=123 notes=100 maximum_consumed=2111
+held-config-cache-short prompt_tokens=74 task_end=74 notes=0 maximum_consumed=89
+held-config-cache-long prompt_tokens=2050 task_end=87 notes=102 maximum_consumed=2065
+held-arithmetic-crates-short prompt_tokens=58 task_end=58 notes=0 maximum_consumed=73
+held-arithmetic-crates-long prompt_tokens=2053 task_end=71 notes=103 maximum_consumed=2068
+held-long-garden-short prompt_tokens=71 task_end=71 notes=0 maximum_consumed=230
+held-long-garden-long prompt_tokens=2066 task_end=84 notes=103 maximum_consumed=2225
+manifest_sha256=e2e7ce56f0223bf929705dd49c33610ac01a0992837bb9c376bcea6dfc62b5de

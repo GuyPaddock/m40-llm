@@ -1,0 +1,5 @@
+e2e7ce56f0223bf929705dd49c33610ac01a0992837bb9c376bcea6dfc62b5de  docs/experiments/2026-10-31-kv-quality-inputs.json
+b087bcf9d35b66a798dfe49f0dee8935af6290c96140f04187377e2e1efc716a  examples/kv_quality/fixture.rs
+4040622f85369abe905769c1729ada10aec9ee2edfa0d9f3f340be580fa6e6ed  docs/experiments/2026-10-31-kv-quality-preparation-clippy.log
+421b39200c2cb49ce2655ba4e374907fbb0ff1509cfb5c620871e37eb49708f8  docs/experiments/2026-10-31-kv-quality-preparation-tests.log
+f397d3a9ce0dc2313dd07f892765a4aecc9bd7dd1941a8ca5f8d3286aaf84c83  docs/experiments/2026-10-31-kv-quality-preparation.log
