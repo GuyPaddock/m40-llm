@@ -1,0 +1,15 @@
+   Compiling m40-llm v0.1.0 (/tmp/m40-kv-quality)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.23s
+     Running unittests examples/kv_quality/main.rs (target/debug/examples/kv_quality-8ba981d59a18897d)
+
+running 7 tests
+test config::tests::test_cache_arms_preserve_the_frozen_comparison ... ok
+test metrics::tests::test_logit_comparison_matches_probability_contract ... ok
+test metrics::tests::test_repetition_reports_suffix_and_reused_fourgrams ... ok
+test metrics::tests::test_observation_steps_keep_natural_stops ... ok
+test fixture::tests::test_bounds_reject_incomplete_coverage_and_recent_tasks ... ok
+test fixture::tests::test_preparation_preserves_tasks_and_separates_contexts ... ok
+test fixture::tests::test_manifest_rejects_changed_evidence ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

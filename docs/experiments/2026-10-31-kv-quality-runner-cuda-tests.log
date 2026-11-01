@@ -1,0 +1,33 @@
+   Compiling m40-llm v0.1.0 (/tmp/m40-kv-quality)
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Finished `release` profile [optimized] target(s) in 30.92s
+     Running unittests examples/kv_quality/main.rs (target/release/examples/kv_quality-d9cd568b207bd150)
+
+running 10 tests
+test config::tests::test_cache_arms_preserve_the_frozen_comparison ... ok
+test evidence::tests::test_report_preserves_partial_rows_and_rejects_overwrite ... ok
+test fixture::tests::test_bounds_reject_incomplete_coverage_and_recent_tasks ... ok
+test fixture::tests::test_manifest_rejects_changed_evidence ... ok
+test fixture::tests::test_preparation_preserves_tasks_and_separates_contexts ... ok
+test hardware_tests::test_prefix_pipeline_preserves_coverage_and_causality ... [cuda] upload_weights: 1431552 bytes (total=1431552) tag=weights
+[q8-prefill] backend=dequant-sgemm temporary_weight_capacity_bytes=524288 budget_bytes=134217728 scope=single-prompt-packed-prefix decode=unchanged
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=365568 source_bytes=1431552 total_weight_payload_bytes=1797120 budget_bytes=6442450944 peak_setup_host_payload_bytes=3002368 preparation_ms=4.297
+[kv_quality] packed prefix prefill enabled layers=2
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=3145728 actual_allocated_bytes=3236360 recent_fp16_bytes=1048576 old_k_fp16_bytes=1572864 q4_old_v_payload_bytes=393216 q4_old_v_scale_bytes=24576 summary_index_bytes=197128 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=2
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=8 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=3145728 actual_allocated_bytes=3236360 recent_fp16_bytes=1048576 old_k_fp16_bytes=1572864 q4_old_v_payload_bytes=393216 q4_old_v_scale_bytes=24576 summary_index_bytes=197128 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=2
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=3145728 actual_allocated_bytes=3236360 recent_fp16_bytes=1048576 old_k_fp16_bytes=1572864 q4_old_v_payload_bytes=393216 q4_old_v_scale_bytes=24576 summary_index_bytes=197128 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=2
+[kv_quality] packed prefix prefill enabled layers=2
+[kv-compress] mode=BlockSelectExact selection_policy=topk top_blocks=64 exact_old_backing=fp16-k-q4-v exact_old_attention=fp16-k-q4-v-direct dense_equivalent_bytes=3145728 actual_allocated_bytes=3236360 recent_fp16_bytes=1048576 old_k_fp16_bytes=1572864 q4_old_v_payload_bytes=393216 q4_old_v_scale_bytes=24576 summary_index_bytes=197128 compression_ratio=1.029
+[kv_quality] packed prefix prefill enabled layers=2
+ok
+test metrics::tests::test_logit_comparison_matches_probability_contract ... ok
+test metrics::tests::test_observation_steps_keep_natural_stops ... ok
+test metrics::tests::test_repetition_reports_suffix_and_reused_fourgrams ... ok
+test run::tests::test_quality_requires_a_passing_dense_reference ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+

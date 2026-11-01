@@ -1,0 +1,4 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+    Checking m40-llm v0.1.0 (/tmp/m40-kv-quality)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
