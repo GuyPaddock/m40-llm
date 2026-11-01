@@ -6,10 +6,19 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The separate October 31 runtime follow-up is investigating [CUDA Graph dispatch
-parity](experiments/2026-10-31-graph-dispatch-plan.md) on an isolated branch.
-The completed selector study remains on `research/1031-selector-followup`.
-This runtime work does not reopen the V3 data/training work below.
+The separate October 31 [CUDA Graph dispatch follow-up](experiments/2026-10-31-graph-dispatch-result.md)
+passes its bounded correctness gates at `dbceae1`, on isolated branch
+`research/1031-graph-dispatch` based on `b9333e7`. The release grid has 228 exact
+output comparisons; all four native replay/fallback cases now have zero cache
+and logit differences. Parallel graph configuration is explicitly rejected.
+Graphs remain opt-in; setup cost, whole-model speed and server performance are
+unmeasured. The fix is local, not merged or pushed. Original branches are intact.
+
+The fixed causal-selector study remains closed with a negative result on
+`research/1031-selector-followup`, which also retains the Q8 barrier fix and
+opt-in sparse-Q4 components. Real-model quantized-KV quality and hardware-adaptive
+drafting are still pending in the user's broader runtime objective. This runtime
+work does not reopen the V3 data/training work below.
 
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.

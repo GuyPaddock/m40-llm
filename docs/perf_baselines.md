@@ -2,6 +2,25 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Graph Attention Dispatch Parity Passes
+
+The [bounded graph follow-up](experiments/2026-10-31-graph-dispatch-result.md),
+`dbceae1`, shares ordinary and device-length attention reductions. The debug
+native replay baseline reproduces 93 unequal FP16 cache comparisons. After the
+fix, all four replay/fallback cases have zero cache/logit differences in both
+debug and release, also in release with cuBLAS disabled. The release direct grid
+passes 228 exact output comparisons through cache capacities 129 and 8193,
+including the 8192-token dispatch boundary, input/cache preservation and guards.
+
+This is correctness evidence, not a performance result. The initial full direct
+debug run was cancelled after identifying NVCC `-G`; the identical release grid
+completed without changing cases or thresholds. Full release regression checks,
+220 CPU tests and Clippy pass, with one optional unconfigured real-model prefill
+diagnostic explicitly excluded from the validated count. No model throughput,
+graph setup amortization or HTTP speed is established. Graphs remain opt-in;
+unsupported parallel graph configuration is rejected. Original research branches
+remain unchanged, and this local follow-up is not merged or pushed.
+
 ## 2026-10-31: Rank Counts Improve; Review Cost Unknown
 
 The [bounded CPU-only follow-ups](experiments/2026-10-31-v3-rank-review-results.md)
