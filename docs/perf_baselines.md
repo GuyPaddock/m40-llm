@@ -8602,3 +8602,20 @@ Notes:
 
 - The two GEMM benchmark paths currently have nearly identical latency, especially at larger shapes.
 - Treat these as pre-optimization baselines only; they do not yet represent end-to-end token latency.
+
+## 2026-10-31: Direct quantized KV avoids staging cost
+
+The [complete quantized-KV study](experiments/2026-10-31-quantized-kv-decision.md)
+passes all 144 matched staged/direct comparisons over layers 0/17/35,
+contexts 1K/2K/4K/8K, batches 1/2/4/8, Q8/head64 and mixed/head64/head128.
+Direct latency is 3.53% to 20.40% lower. All 384 groups complete in 2,340
+pairs, including 21 fresh confirmations, without unresolved timing errors.
+Mixed-cache batched dispatch separately passes 78/96 groups; 144 full-context
+dense comparisons change token coverage and carry no adoption gate.
+
+Selected positions and staged reconstruction are exact; maximum FP64 error
+is `2.0414530030876676e-5`. Tracked allocations and external residency return
+to zero. Retained selection/quantization approximation errors are separate
+from consumer parity. The branch also preserves the pre-existing Q8 shared
+reduction race fix and both earlier standalone failures. No model tokens,
+model-quality gain, complete-model speedup or runtime-default change is claimed.

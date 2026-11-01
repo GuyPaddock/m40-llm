@@ -1,0 +1,7 @@
+7c75c956ddeac9ccd1603d78b10f44fd3a1c630c3e0d9dee7b468dbffca4b3cc  docs/experiments/2026-10-31-quantized-kv-timings.sh
+ea8ec114f7c55ef60295f05a0af6510a0adc0c9b06ca5ab2366577a6312b3c8f  docs/experiments/2026-10-31-quantized-kv-timings-build.log.gz
+920424ac17c254c6e485f82a5212927aadb2f4f1791d3ac0dc79984a4e96b941  docs/experiments/2026-10-31-quantized-kv-timings-queue.log.gz
+262ce6b64a6d0a9621d2d07f444d09d9a99ba0953733757d13cf344363274132  docs/experiments/2026-10-31-quantized-kv-timings.jsonl.gz
+59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2  docs/experiments/2026-10-31-quantized-kv-timings.log.gz
+7edbb053f87065b8413d8468fded37a12b867e14817e4778fab6242380ac6355  docs/experiments/2026-10-31-quantized-kv-timing-summary.jq
+b89129c8b829726b183bbbf8d711749cf3c5c5083284e375c8e3e158f687f3ec  docs/experiments/2026-10-31-quantized-kv-timing-summary.json

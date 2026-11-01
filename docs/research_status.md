@@ -6,65 +6,34 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The clean `c9f6066` [real-input release](experiments/2026-10-31-quantized-kv-release-failure.md)
-passes nine cases, then fails selection admission for layer 0, 8K, Q8/head64,
-sequence 0, query head 0. The [second standalone failure](experiments/2026-10-31-quantized-kv-release-second-failure.md)
-at `2cbbc28` occurs at 2K with a substantial omitted-block score difference.
-Both failed releases and passing test-executable diagnostics remain preserved.
-The [Q8 reduction barrier correction](experiments/2026-10-31-quantized-kv-barrier.md)
-prevents shared scratch reuse before all warps read the K maximum. Both
-affected kernels contain the race in base `0eee578`; the correction changes
-no quantization arithmetic or selector semantics. Two staged and nineteen
-runner tests pass with cuBLAS on/off, including a distinct-scale regression
-and real first-layer replay. Affected runtime checks, Clippy and formatting
-pass. The fresh clean `1e445a5`
-[standalone grid](experiments/2026-10-31-quantized-kv-release-admission.md)
-now passes all 36 real-input cases with exact selected positions and staged
-KV reconstruction. Maximum FP64 error is `2.0414530030876676e-5`; matched
-staged/direct and batched/serial paths have zero observed numerical difference.
-All tracked storage is released and final external M40 residency is zero.
-The frozen 384-group paired cost grid is admitted; no model-quality conclusion
-or runtime default change follows.
+The October 30 quantized-KV study is complete. The
+[final decision](experiments/2026-10-31-quantized-kv-decision.md) records all
+36 real-input cases and 384 comparison groups, with 2,340 paired samples and
+21 fresh confirmations. Every one of the 144 matched staged/direct groups
+passes the speed gate; direct latency falls by 3.53% to 20.40%. This measures
+an existing direct-consumption design. Mixed-cache batching passes all 72
+batch-2/4/8 groups and six of 24 batch-one groups. Dense-context costs retain
+different token coverage and have no adoption gate.
 
-The [first staged-reference failure](experiments/2026-10-31-quantized-kv-initial-failure.md)
-is preserved at `ebc5d5f`. The [CPU oracle correction](experiments/2026-10-31-quantized-kv-zero-reference.md)
-converts rounded Q4 codes to integers so zero reconstructs with the correct
-positive sign. Both staged tests and all seventeen runner tests pass with
-cuBLAS enabled and disabled. The 48 executed affected regressions pass;
-one optional model diagnostic does not run. Exact-byte assertions and CUDA
-arithmetic are unchanged. Final M40 residency is zero with no compute process.
-The complete lossless capture is available; that independent topic is now
-complete with a negative integration decision. Seven of nine studies are
-complete; quantized KV and DualPace remain active.
+Selected positions and staged words are exact. The largest FP64 error is
+`2.0414530030876676e-5`; matched consumers have zero observed numerical
+difference. No final timing error remains, tracked storage retires, and the
+external M40 returns to zero MiB. Zero model tokens were generated; numerical
+approximation diagnostics do not qualify long-generation model quality.
 
-The user has authorized execution of the October 30 nine-topic research plan
-in independent worktrees based on `0eee578`. This branch owns
-[`quantized-kv`](experiments/2026-10-30-quantized-kv-protocol.md).
-The [source audit](experiments/2026-10-31-quantized-kv-audit.md) confirms that
-direct Q8 and mixed FP16-K/Q4-V consumption already exist. Staged and
-Q8-direct controls support head64 only; the selected Qwen model uses head128.
-The head128 staged reference is now hardware validated. Matched real-input
-context-grid results remain pending. Historical quality failures are retained;
-no fresh timing or runtime change is claimed. The full lossless capture is ready.
-The [staged-reference implementation checkpoint](experiments/2026-10-31-quantized-kv-staging.md)
-records the head128 comparison control. The initial failed implementation is
-committed separately from its oracle correction. Its ignored hardware test
-and affected regressions pass. Earlier 220 non-CUDA tests remain valid;
-fresh CUDA/server all-target Clippy, formatting and nine CPU fixture tests pass.
-The [CPU fixture reader](experiments/2026-10-31-quantized-kv-fixtures.md)
-passes four integrity/layout tests and CPU Clippy. It admits only a complete,
-hash-verified capture and labels synthetic queries and head64 slices explicitly.
-The [CPU attention reference](experiments/2026-10-31-quantized-kv-reference.md)
-adds five passing quantization/selection/FP64 tests, for nine CPU example tests.
-The [paired benchmark implementation](experiments/2026-10-31-quantized-kv-benchmark.md)
-now passes hardware qualification and is committed separately after
-the staged control correction. CUDA/server all-target Clippy passes.
-It verifies shared encoded inputs and
-staged reconstruction, includes selection, separates batched dispatch gains,
-and checks timed outputs outside the timing interval. Full real-input release
-qualification and paired operator results remain pending.
-Follow the protocol's gates and serial M40 execution requirement. Keep the
-separate drafter checkpoint below intact; this work does not admit training.
+The [separate Q8 synchronization correction](experiments/2026-10-31-quantized-kv-barrier.md)
+at `1e445a5` fixes a pre-existing shared-reduction race exposed by two retained
+standalone failures. Stress, real-input replay, cuBLAS on/off and affected
+runtime tests pass. The bulk builder's matching barrier is compiled and
+inspected without a separate end-to-end hardware invocation. The
+[clean release admission](experiments/2026-10-31-quantized-kv-release-admission.md)
+passes before timing. Runtime defaults and selection semantics are unchanged.
+
+The authorized nine-topic plan uses independent worktrees based on `0eee578`.
+Eight topics are now complete; DualPace still needs component cost measurements,
+sourced simulations and its priced prerequisite decision. Its transfer probe
+has passed hardware qualification. The unrelated root and separate drafter
+work remain untouched; this task does not admit training.
 
 ### Separate drafter checkpoint
 
