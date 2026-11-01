@@ -282,3 +282,29 @@ fn test_native_q8_graph_first_launch_rejection() -> Result<()> {
 fn test_native_q8_graph_later_launch_rejection() -> Result<()> {
     compare_sessions(Some((GraphTestFailure::Launch, 3)))
 }
+
+/// Refuse graph sessions with parallel attention before allocating session
+/// buffers, because this opt-in backend cannot preserve device-length dispatch.
+#[test]
+#[ignore = "explicit serial M40 graph backend compatibility"]
+fn test_graph_session_rejects_parallel_attention() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _env = configure();
+    let _scope = ScopedRuntimeConfig::new(KvCompressionConfig::dense_reference());
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let model = build_model()?;
+        let resident = CudaContext::total_device_bytes();
+        let _kernel = EnvRestore::set("M40LLM_ATTN_HEAD128_KERNEL", "parallel");
+        let error = match create_session(&model, 0, true) {
+            Ok(_) => anyhow::bail!("parallel graph session unexpectedly admitted"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("parallel attention"));
+        assert_eq!(CudaContext::total_device_bytes(), resident);
+    }
+    ctx.synchronize_stream(CudaStream::Decode)?;
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}

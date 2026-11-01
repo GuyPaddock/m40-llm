@@ -244,3 +244,49 @@ fn test_graph_attention_short_dispatch() -> Result<()> {
 fn test_graph_attention_dispatch_boundary() -> Result<()> {
     compare_dispatch(8193, &[3, 8191, 8192, 8193, 33])
 }
+
+/// An unsupported parallel backend fails before writing output or submitting
+/// graph work; it must not silently execute the native reduction instead.
+#[test]
+#[ignore = "serial M40 graph dispatch compatibility"]
+fn test_graph_attention_rejects_parallel_dispatch() -> Result<()> {
+    let _lock = cuda_test_scope::lock_cuda();
+    let _kernel = EnvRestore::set("M40LLM_ATTN_HEAD128_KERNEL", "parallel");
+    let _partitions = EnvRestore::set("M40LLM_ATTN_HEAD128_PARTITIONS", "2");
+    let _threads = EnvRestore::set("M40LLM_ATTN_HEAD128_THREADS", "128");
+    let ctx = CudaContext::new_m40()?;
+    let initial = CudaContext::total_device_bytes();
+    {
+        let kv = KVCache::new_with_context(&ctx, 4, 1, 1, 128)?;
+        let query = FloatBuffer::new(&ctx, &[0.0; 128])?;
+        let output = FloatBuffer::new(&ctx, &[GUARD; 128])?;
+        let length = DeviceBuffer::new_tagged(&ctx, 4, "graph-dispatch:length")?;
+        let value = 1_u32;
+        unsafe {
+            ctx.memcpy_h2d(length.as_mut_ptr(), (&value as *const u32).cast(), 4)?;
+        }
+        let result = ctx.capture_graph(CudaStream::Decode, || unsafe {
+            kv.attention_last_token_f32_gqa_seq_len_dev_async(
+                &ctx,
+                0,
+                query.pointer(0),
+                1,
+                length.as_ptr().cast(),
+                output.pointer(0),
+            )
+        });
+        let error = match result {
+            Ok(_) => anyhow::bail!("parallel device-length capture unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        ensure!(
+            error.to_string().contains("parallel attention"),
+            "wrong rejection: {error}"
+        );
+        ctx.synchronize_stream(CudaStream::Decode)?;
+        assert_eq!(output.read(&ctx)?, vec![GUARD; 128]);
+        assert_eq!(kv.debug_sequence_length(&ctx, 0)?, 0);
+    }
+    assert_eq!(CudaContext::total_device_bytes(), initial);
+    Ok(())
+}

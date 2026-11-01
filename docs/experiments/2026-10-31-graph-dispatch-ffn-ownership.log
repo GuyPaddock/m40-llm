@@ -1,0 +1,41 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `release` profile [optimized] target(s) in 1.90s
+     Running tests/q8_ffn_runtime.rs (target/release/deps/q8_ffn_runtime-4784c489a91c6c19)
+
+running 1 test
+test hardware::test_q8_ffn_full_forward_reuses_workspace_and_keeps_native_bits ... [cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.333
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.320
+[q8-ffn] kernel=PackedF32 ownership=RetainSplit threads=Some(256) scope=single-row activation_bytes=0 numerical_track=false
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.331
+[q8-ffn] kernel=Q81 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=72 numerical_track=true
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.333
+[q8-ffn] kernel=Q81 ownership=RetainSplit threads=Some(256) scope=single-row activation_bytes=72 numerical_track=true
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=93568) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.343
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.354
+[q8-ffn] kernel=PackedF32 ownership=RetainSplit threads=Some(256) scope=single-row activation_bytes=0 numerical_track=false
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.334
+[q8-ffn] kernel=Q81 ownership=RetainSplit threads=Some(128) scope=single-row activation_bytes=72 numerical_track=true
+[q8-ffn-runtime] full-layer forward enabled layers=2
+[cuda] upload_weights: 93568 bytes (total=216332) tag=weights
+[q8-execution] mode=Split families=[Down, Vocabulary] tensors=3 layouts=3 prepared_bytes=23936 source_bytes=93568 total_weight_payload_bytes=117504 budget_bytes=6442450944 peak_setup_host_payload_bytes=195840 preparation_ms=0.350
+[q8-ffn] kernel=Q81 ownership=RetainSplit threads=Some(256) scope=single-row activation_bytes=72 numerical_track=true
+[q8-ffn-runtime] full-layer forward enabled layers=2
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.16s
+

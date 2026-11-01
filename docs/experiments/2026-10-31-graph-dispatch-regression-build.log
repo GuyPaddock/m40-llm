@@ -1,0 +1,17 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.09s
+  Executable tests/attention_batched_varlen.rs (target/debug/deps/attention_batched_varlen-c884566752768922)
+  Executable tests/attention_last_token.rs (target/debug/deps/attention_last_token-d2a92ec49abf1b77)
+  Executable tests/attention_parity_cuda_grid.rs (target/debug/deps/attention_parity_cuda_grid-ede5ab533724ab3e)
+  Executable tests/attention_prefill_varlen.rs (target/debug/deps/attention_prefill_varlen-0ec2dae81cd627f9)
+  Executable tests/cuda_transfer_order.rs (target/debug/deps/cuda_transfer_order-ac0d7275a0f01234)
+  Executable tests/forward_minimal.rs (target/debug/deps/forward_minimal-769c57e3e4a8a13e)
+  Executable tests/forward_parity_toy.rs (target/debug/deps/forward_parity_toy-22e8f8775f4a3519)
+  Executable tests/forward_with_layer_smoke.rs (target/debug/deps/forward_with_layer_smoke-deaec1b4e12eb6ff)
+  Executable tests/head128_attention_parallel.rs (target/debug/deps/head128_attention_parallel-ded8e64fc2a5e0ef)
+  Executable tests/mlp_wrappers.rs (target/debug/deps/mlp_wrappers-06192ee172de6e90)
+  Executable tests/q8_attention_projection_runtime.rs (target/debug/deps/q8_attention_projection_runtime-f9fcb9d706a6ed4a)
+  Executable tests/q8_ffn_runtime.rs (target/debug/deps/q8_ffn_runtime-366b63e515b5fa3f)
+  Executable tests/q8_native_mlp_cache.rs (target/debug/deps/q8_native_mlp_cache-093d00b1002fffa1)

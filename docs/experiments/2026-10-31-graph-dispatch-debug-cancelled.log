@@ -1,0 +1,11 @@
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+warning: m40-llm@0.1.0: nvcc warning : Support for offline compilation for architectures prior to '<compute/sm/lto>_75' will be removed in a future release (Use -Wno-deprecated-gpu-targets to suppress warning).
+   Compiling m40-llm v0.1.0 (/tmp/m40-graph-followup)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.60s
+     Running tests/attention_graph_dispatch.rs (target/debug/deps/attention_graph_dispatch-cda0e4762bfb876d)
+
+running 3 tests
+test test_graph_attention_dispatch_boundary ... error: test failed, to rerun pass `--test attention_graph_dispatch`
+
+Caused by:
+  process didn't exit successfully: `/tmp/m40-graph-followup/target/debug/deps/attention_graph_dispatch-cda0e4762bfb876d --include-ignored --nocapture --test-threads=1` (signal: 15, SIGTERM: termination signal)
