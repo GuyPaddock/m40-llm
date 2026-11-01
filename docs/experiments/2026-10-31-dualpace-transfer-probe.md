@@ -64,13 +64,17 @@ event wrapper, so this timeline includes host gaps and event submission. It
 must not be reported as active DMA time. Host-ready wall cost is the primary
 input to the scheduling model. No PCIe hardware counters are collected.
 
-Three warm observations per arm precede five alternating pairs. Reuse the
+The [bounded follow-up](2026-10-31-dualpace-transfer-warmup.md) warms each arm
+for at least one wall-clock second and three complete calls, then uses 100
+completed transfers per interval. The original twenty-operation cohort remains
+preserved with its unresolved variation errors. Five alternating pairs follow
+warmup. Reuse the
 common variation rule to extend unstable series to ten pairs. Directional
 and synchronization comparisons are cost profiles, so no adoption threshold
 or borderline speed confirmation applies. Raw observations, nanosecond
 latency distributions and paired operation-rate statistics are retained.
-The default is twenty completed operations per transfer interval and one
-thousand calls per idle synchronization interval.
+The CLI default remains twenty completed operations; select `--iterations 100`
+for the frozen follow-up. Idle synchronization uses one thousand calls per interval.
 
 The grid has thirteen transfer cases with two comparison groups each, plus
 one idle synchronization group. These costs do not measure GPU projection,

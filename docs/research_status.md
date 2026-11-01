@@ -6,6 +6,15 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+Both CPU placements now complete 36 cases and 180 stable pairs. The
+[first transfer grids](experiments/2026-10-31-dualpace-transfer-instability.md)
+pass exact behavior and cleanup but retain eight node-0 and one node-1
+timing errors. A required node-0 cost fails scenario admission. The
+[bounded follow-up](experiments/2026-10-31-dualpace-transfer-warmup.md)
+uses sustained one-second arm warmup and 100-transfer intervals, preserving
+all prior data and gates. Eight hardware/protocol tests and both Clippy lanes
+pass. Run that one follow-up before admitting sourced scheduling results.
+
 The [first pricing run](experiments/2026-10-31-dualpace-placement-stop.md)
 completes CPU 15/node 0: 36 cases, 180 pairs, all numerical checks and stable
 timing series. It then stops before node-1 execution because the environment

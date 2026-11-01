@@ -126,6 +126,7 @@ pub fn run() -> Result<()> {
         "revision":command("git",&["rev-parse","HEAD"])?,"executable_sha256":file_sha256(&std::env::current_exe()?)?,
         "placement":placement,"gpu_state":gpu_state()?,"topology":command("nvidia-smi",&["topo","-m"])?,
         "iterations":args.iterations,"is_validation_only":args.validate_only,"generated_token_count":0,
+        "warmup_minimum_wall_ms_per_arm":1000,"warmup_minimum_calls_per_arm":3,
         "allocation":"pageable first-touched host vectors and persistent device buffers; no pinned memory",
         "input_source":"deterministic byte mixing of index and recorded generation; representative sizes, not captured activation values",
         "host_process_status_after_cuda_context":fs::read_to_string("/proc/self/status")?,
@@ -221,9 +222,17 @@ fn compare(
     iterations: usize,
     report: &mut Report,
 ) -> Result<()> {
-    for _ in 0..3 {
-        probe.measure(arms[0], iterations)?;
-        probe.measure(arms[1], iterations)?;
+    for arm in arms {
+        let warmup_started = Instant::now();
+        let mut warmup_calls = 0;
+        while warmup_calls < 3 || warmup_started.elapsed().as_secs_f64() < 1.0 {
+            probe.measure(arm, iterations)?;
+            warmup_calls += 1;
+        }
+        report.record(json!({"kind":"cooperative_transfer_warmup","case":key,
+            "comparison":name,"arm":arm,"calls":warmup_calls,"iterations":iterations,
+            "wall_ms":warmup_started.elapsed().as_secs_f64()*1000.0,
+            "scope":"warmup includes fixture preparation and verification; excluded from paired timings"}))?;
     }
     let mut pairs = Vec::new();
     let mut wall = [Vec::new(), Vec::new()];
