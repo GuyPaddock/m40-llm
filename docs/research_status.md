@@ -6,6 +6,12 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
+The separate October 31 runtime objective is now investigating [real-model
+quantized-KV quality](experiments/2026-10-31-kv-quality-plan.md). The fixed
+selector study and graph dispatch follow-up remain on their own branches.
+This work does not reopen the V3 data/training work below.
+
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The
