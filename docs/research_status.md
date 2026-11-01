@@ -22,7 +22,10 @@ carried from `2705ef2` without changes; all pass with warnings denied
 CUDA/server Clippy and 223 non-CUDA tests. It remains an isolated research
 API with immutable selections, not dynamic runtime routing. The next research
 priority is causal channel-selection predictability across complete
-generations. The nine published experiment branches remain unchanged.
+generations. The [fixed diagnostic protocol](experiments/2026-10-31-selector-predictability-protocol.md)
+uses the six existing calibration prompts, causal dense-refresh histories and
+16-dimensional sketches. Capture/analyzer implementation and new observations
+are pending. The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.
 
 The authorized **bounded CPU-only V3 engineering follow-up is complete**.
