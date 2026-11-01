@@ -6,22 +6,18 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-The separate October 31 runtime objective has opened the
-[hardware-adaptive drafting study](experiments/2026-10-31-adaptive-drafting-plan.md)
-on `research/1031-adaptive-drafting`. It uses existing target costs and causal
-prompt copying; no acquisition, training or learned-drafter evaluation follows.
-The independent KV-quality experiment is running on its own branch. Wait for
-that GPU workload to finish before timing CPU replay or starting GPU work.
+The [hardware-adaptive drafting study](experiments/2026-10-31-adaptive-drafting-result.md)
+is complete on this independent branch. All 126 cases and 630 release CPU
+trials passed the independent source, causal-policy, cost and timing-accounting
+audit; seven corrupted reports are rejected. The frozen broad-workload gate
+fails. Browser loses 0.270% in the complete-request model, and no non-copy
+case reaches 3%. The known copy cases retain their previous specialized gain.
 
-The CPU adaptive replay implementation now passes 15 behavioral example tests,
-the full 220-test non-CUDA suite, and non-CUDA plus CUDA/server all-targets
-Clippy. It keeps the original prompt-copy source and finite cost model,
-adding measured-cost decisions, executed-outcome history and explicit hardware
-sensitivities. Independent Perl audit syntax is checked; its full positive and
-corruption tests require the pending study output. No new measured speed or
-acceptance result exists yet. Run the committed release `draft_feasibility
-adaptive` command after the KV-quality process terminates, then audit every
-trace/policy/scale and record the result without tuning the policy.
+No live decoder, GPU performance claim, policy retuning, acquisition, training
+or learned-drafter evaluation follows. Two/three-row verification remains
+unqualified. The fixed selector, graph-parity and real-model KV-quality
+investigations are retained on their separate branches. The V3 stop below
+remains in force.
 
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,

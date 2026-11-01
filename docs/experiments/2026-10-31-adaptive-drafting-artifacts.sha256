@@ -1,0 +1,9 @@
+68e0b415a1f55a9ffe830a4c9eec6625bca9d0af109c1ea6190a2b770dd4c0c4  docs/experiments/2026-10-31-adaptive-drafting-results.jsonl.gz
+542e448a7511c7a15a1530dfbfa10f3191116550f6e948adf42a1d9b99dfefd9  docs/experiments/2026-10-31-adaptive-drafting-summary.jq
+c5a6090de17b334090ec47b5e8686aebc12f989da3e5afc2b6ccb3c93b77e66b  docs/experiments/2026-10-31-adaptive-drafting-summary.json
+5a08b31a56b1398e101712acc9d03279fcc27f05203e8dc1b2faf2f8acebfa56  docs/experiments/2026-10-31-adaptive-drafting-audit.pl
+7310a66e61957faedc7e12cdb26c39a6dba937c703fef81cc76d8ebc58bccd86  docs/experiments/2026-10-31-adaptive-drafting-audit.json
+8996324ebc90b70ea289022b22526d8d4eb65bd9592b98d7ae6ff45aa448bfd7  docs/experiments/2026-10-31-adaptive-drafting-plan.md
+6830f1cb0485cf89647d3f03848bbf3b3d69db0e80242d43494576fb43c5bd20  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/adaptive-drafting/run-01/results.jsonl
+6f97d4622bfe6c320a1660713f2048de10f7b0445e314b4612027b1641b4a831  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/adaptive-drafting/run-01/draft_feasibility
+fd131896aa85bcf6d98ad2a4e95471ae6ac66b9a2ac63f566e68dab5c35d345c  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/adaptive-drafting/run-01/source.tar

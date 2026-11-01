@@ -2,6 +2,21 @@
 
 This file tracks measured CUDA baselines before M40-specific optimization work.
 
+## 2026-10-31: Adaptive Drafting Fails the Broad Gate
+
+The [fixed controller study](experiments/2026-10-31-adaptive-drafting-result.md)
+completes 126 retrospective cases and 630 release CPU trials. Independent
+reconstruction passes 8,660 causal rounds and rejects seven corruptions.
+At measured M40 costs, browser projected resident gain worsens from -0.124%
+to -0.270%; long-code loss improves from -1.176% to -0.765%. No non-copy case
+reaches 3%. Two known copy cases retain their earlier specialized benefit.
+
+These are historical-cost projections, not new GPU or HTTP timings. Maximum
+complete adaptive CPU cost is 2.647 ms at measured scale. Hypothetical 1.25/2
+verifier-cost scales reduce adaptive attempts from 48 to 20/0, but qualify no
+new gain. The broad gate fails; no retuning, live integration or production
+dispatch follows. The full report preserves all cases and model limitations.
+
 ## 2026-10-31: Rank Counts Improve; Review Cost Unknown
 
 The [bounded CPU-only follow-ups](experiments/2026-10-31-v3-rank-review-results.md)

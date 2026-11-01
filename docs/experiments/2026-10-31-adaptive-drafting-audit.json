@@ -1,0 +1,10 @@
+{
+   "attempted_batches" : 224,
+   "cases" : 126,
+   "causal_rounds" : 8660,
+   "is_passed" : true,
+   "rejected_corruptions" : 7,
+   "scope" : "independent source, policy, target cost and CPU accounting; no GPU performance claim",
+   "skipped_proposals" : 300,
+   "trials" : 630
+}
