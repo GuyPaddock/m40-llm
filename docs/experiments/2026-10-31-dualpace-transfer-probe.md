@@ -106,7 +106,7 @@ numactl --physcpubind=15 --membind=0 \
   --cpu 15 --numa-node 0 --validate-only --output target/transfers-node0-validation-new.jsonl
 numactl --physcpubind=15 --membind=0 \
   target/release/examples/cooperative_transfer_probe \
-  --cpu 15 --numa-node 0 --iterations 20 --output target/transfers-node0-timed-new.jsonl
+  --cpu 15 --numa-node 0 --iterations 100 --output target/transfers-node0-timed-new.jsonl
 ```
 
 Repeat validation and timing with CPU 30/node 1 and new outputs. The executable

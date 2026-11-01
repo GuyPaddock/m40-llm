@@ -1,0 +1,1193 @@
+{
+  "revision": "4b7bb61b713789e27bd204d2f945822acc1438ca",
+  "executable_sha256": "eefd9d5f1f283c40d1bc9cb3b58034a1932f98db582692295dfbcdba69b739f7",
+  "placement": {
+    "cpu": 30,
+    "numa_node": 1,
+    "threads": 1
+  },
+  "cases": 13,
+  "groups": 27,
+  "pairs": 175,
+  "warmup_records": 54,
+  "minimum_warmup_ms": 1000.0131480000001,
+  "extensions": 8,
+  "errors": [
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    }
+  ],
+  "rows": [
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.012080390313161748,
+          "max": 18286.61,
+          "median": 17579.73,
+          "min": 16843.4
+        },
+        {
+          "mad_over_median": 0.007205190807392021,
+          "max": 19583.690000000002,
+          "median": 19283.32,
+          "min": 18947.88
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.012116689911637623,
+          "max": 18375.359773635864,
+          "median": 17668.16020011902,
+          "min": 16934.080123901367
+        },
+        {
+          "mad_over_median": 0.006660576576805107,
+          "max": 19666.55969619751,
+          "median": 19361.599683761597,
+          "min": 19028.799533843994
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.023543435611897198,
+          "max": 12876.38,
+          "median": 12470.355,
+          "min": 12058.89
+        },
+        {
+          "mad_over_median": 0.12874197723232356,
+          "max": 87326.86,
+          "median": 71406.935,
+          "min": 51298.04
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.023179330414796667,
+          "max": 12955.83963394165,
+          "median": 12549.1201877594,
+          "min": 12137.919664382935
+        },
+        {
+          "mad_over_median": 0.12790810482889833,
+          "max": 87415.67611694336,
+          "median": 71538.87987136841,
+          "min": 51392.00210571289
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.011406374843626152,
+          "max": 25240.88,
+          "median": 24956.22,
+          "min": 24293.85
+        },
+        {
+          "mad_over_median": 0.00450301484943316,
+          "max": 35199.85,
+          "median": 34139.35,
+          "min": 33985.62
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.011502042203799513,
+          "max": 25327.041149139404,
+          "median": 25039.04104232788,
+          "min": 24375.360012054443
+        },
+        {
+          "mad_over_median": 0.004422835163786326,
+          "max": 35289.599895477295,
+          "median": 34222.400188446045,
+          "min": 34071.04015350342
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.02091187520944495,
+          "max": 13171.55,
+          "median": 12413.76,
+          "min": 12051.14
+        },
+        {
+          "mad_over_median": 0.1341106555484231,
+          "max": 80465.73,
+          "median": 67446.505,
+          "min": 52366.63
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.020607878327954087,
+          "max": 13252.160549163818,
+          "median": 12492.319941520691,
+          "min": 12131.839990615845
+        },
+        {
+          "mad_over_median": 0.13393039656852807,
+          "max": 80678.08151245117,
+          "median": 67531.19945526123,
+          "min": 52456.0022354126
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.007082175901752251,
+          "max": 42120.17,
+          "median": 38303.2,
+          "min": 37990.74
+        },
+        {
+          "mad_over_median": 0.003954406665682874,
+          "max": 50685.09,
+          "median": 50485.45,
+          "min": 49920.66
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.006943553406603453,
+          "max": 42212.162017822266,
+          "median": 38389.43958282471,
+          "min": 38082.88097381592
+        },
+        {
+          "mad_over_median": 0.003967319724691884,
+          "max": 50774.7220993042,
+          "median": 50574.07855987549,
+          "min": 50008.64028930664
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.013637357915867369,
+          "max": 12703.21,
+          "median": 12137.615000000002,
+          "min": 11927.1
+        },
+        {
+          "mad_over_median": 0.10279165455328676,
+          "max": 80342.73,
+          "median": 69688.78,
+          "min": 50986.17
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.013591368167128621,
+          "max": 12783.9994430542,
+          "median": 12219.520211219788,
+          "min": 12010.879516601562
+        },
+        {
+          "mad_over_median": 0.10261608039713377,
+          "max": 80470.72410583496,
+          "median": 69777.76050567627,
+          "min": 51075.83999633789
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.004598407586113957,
+          "max": 70703.77,
+          "median": 70322.17,
+          "min": 69546.07
+        },
+        {
+          "mad_over_median": 0.003956930322990394,
+          "max": 93874.29,
+          "median": 93504.3,
+          "min": 91794.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0054677121411966295,
+          "max": 70887.04109191895,
+          "median": 70406.07929229736,
+          "min": 69627.19917297363
+        },
+        {
+          "mad_over_median": 0.004007242097094153,
+          "max": 93966.08352661133,
+          "median": 93591.0415649414,
+          "min": 91885.44273376465
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.011323309196086198,
+          "max": 14297.29,
+          "median": 14137.21,
+          "min": 13085.85
+        },
+        {
+          "mad_over_median": 0.021108206813157344,
+          "max": 67288.7,
+          "median": 65496.8,
+          "min": 61096.11
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.010475682984533313,
+          "max": 14384.000301361084,
+          "median": 14234.880208969116,
+          "min": 13169.599771499634
+        },
+        {
+          "mad_over_median": 0.020913263423474517,
+          "max": 67381.43920898438,
+          "median": 65581.44092559814,
+          "min": 61189.4416809082
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.019439503634165262,
+          "max": 10194.31,
+          "median": 9833.070000000002,
+          "min": 9641.92
+        },
+        {
+          "mad_over_median": 0.031176428301852785,
+          "max": 11475.55,
+          "median": 11128.6,
+          "min": 10652.44
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.019227662980996537,
+          "max": 10279.99997138977,
+          "median": 9919.040203094482,
+          "min": 9728.320240974426
+        },
+        {
+          "mad_over_median": 0.0309207066787833,
+          "max": 11554.559469223022,
+          "median": 11208.000183105469,
+          "min": 10730.24034500122
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.007278089279804532,
+          "max": 12946.83,
+          "median": 12569.92,
+          "min": 12205.61
+        },
+        {
+          "mad_over_median": 0.17585144375608852,
+          "max": 84853.13,
+          "median": 71816.84,
+          "min": 52271.12
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.006944265777399553,
+          "max": 13024.319410324097,
+          "median": 12649.279832839966,
+          "min": 12441.600561141968
+        },
+        {
+          "mad_over_median": 0.17535352432995213,
+          "max": 84935.99891662598,
+          "median": 71918.71881484985,
+          "min": 52354.87937927246
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01637659928061808,
+          "max": 11870.74,
+          "median": 11679.47,
+          "min": 10602.05
+        },
+        {
+          "mad_over_median": 0.02945804084201463,
+          "max": 13707.45,
+          "median": 13315.21,
+          "min": 12094.47
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.015821191742465848,
+          "max": 11957.759857177734,
+          "median": 11771.520376205444,
+          "min": 10694.400072097778
+        },
+        {
+          "mad_over_median": 0.029602239927030413,
+          "max": 13790.080547332764,
+          "median": 13393.59998703003,
+          "min": 12177.9203414917
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.020287736437701723,
+          "max": 12590.82,
+          "median": 12340.46,
+          "min": 12044.74
+        },
+        {
+          "mad_over_median": 0.030720337565455117,
+          "max": 79001.18,
+          "median": 52308.67,
+          "min": 50701.73
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.02030612544646174,
+          "max": 12670.079469680786,
+          "median": 12417.919635772705,
+          "min": 12124.160528182983
+        },
+        {
+          "mad_over_median": 0.030723320550949503,
+          "max": 79083.5189819336,
+          "median": 52390.079498291016,
+          "min": 50780.48229217529
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.020760191785929645,
+          "max": 15134.28,
+          "median": 14643.41,
+          "min": 14266.2
+        },
+        {
+          "mad_over_median": 0.047540174753804065,
+          "max": 20006.1,
+          "median": 16862.58,
+          "min": 15848.27
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.02050086860339916,
+          "max": 15224.319696426392,
+          "median": 14735.039472579956,
+          "min": 14363.52014541626
+        },
+        {
+          "mad_over_median": 0.047293511158843456,
+          "max": 20098.2403755188,
+          "median": 16942.720413208008,
+          "min": 15930.880308151245
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.016985264689240113,
+          "max": 12620.99,
+          "median": 12318.029999999999,
+          "min": 11363.86
+        },
+        {
+          "mad_over_median": 0.1416985197212258,
+          "max": 84641.51,
+          "median": 66984.68,
+          "min": 51457.04
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.01858591867367778,
+          "max": 12728.960514068604,
+          "median": 12396.479845046997,
+          "min": 11444.480419158936
+        },
+        {
+          "mad_over_median": 0.14160411581416335,
+          "max": 84727.36358642578,
+          "median": 67074.8782157898,
+          "min": 51543.04027557373
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.00633761883035303,
+          "max": 22565.99,
+          "median": 22399.58,
+          "min": 22140.17
+        },
+        {
+          "mad_over_median": 0.011463762913948551,
+          "max": 26138.35,
+          "median": 25631.2,
+          "min": 24506.5
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.00641725879197955,
+          "max": 22663.35964202881,
+          "median": 22489.280700683594,
+          "min": 22235.83936691284
+        },
+        {
+          "mad_over_median": 0.011549035183508785,
+          "max": 26222.7201461792,
+          "median": 25712.95976638794,
+          "min": 24591.04061126709
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.003956928510719967,
+          "max": 12521.81,
+          "median": 12095.24,
+          "min": 12047.38
+        },
+        {
+          "mad_over_median": 0.046898530809173625,
+          "max": 89622.64,
+          "median": 65930.85,
+          "min": 62838.79
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.00849401114461629,
+          "max": 12600.32057762146,
+          "median": 12281.6002368927,
+          "min": 12151.360511779785
+        },
+        {
+          "mad_over_median": 0.04690540660301363,
+          "max": 89708.48083496094,
+          "median": 66018.88179779053,
+          "min": 62922.23930358887
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0008015722116829612,
+          "max": 180443.45,
+          "median": 177675.82,
+          "min": 177379.89
+        },
+        {
+          "mad_over_median": 0.009733247739785443,
+          "max": 274754.23,
+          "median": 251794.68,
+          "min": 247217.81
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0008151663851124876,
+          "max": 180576.00021362305,
+          "median": 177826.8814086914,
+          "min": 177536.64016723633
+        },
+        {
+          "mad_over_median": 0.009648049831904837,
+          "max": 275066.2422180176,
+          "median": 251939.52560424805,
+          "min": 247375.3547668457
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.015167109089962084,
+          "max": 25038.51,
+          "median": 21983.095,
+          "min": 21439.73
+        },
+        {
+          "mad_over_median": 0.16282251254140773,
+          "max": 98158.33,
+          "median": 79533.535,
+          "min": 61118.06
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.014820115465964193,
+          "max": 25127.999782562256,
+          "median": 22078.08017730713,
+          "min": 21527.35948562622
+        },
+        {
+          "mad_over_median": 0.16368884272554762,
+          "max": 98261.44218444824,
+          "median": 79630.08165359497,
+          "min": 61341.75777435303
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.009899537616873729,
+          "max": 950809.64,
+          "median": 911447.62,
+          "min": 900166.12
+        },
+        {
+          "mad_over_median": 0.01734596064143802,
+          "max": 1706273.22,
+          "median": 1609697.53,
+          "min": 1572938.18
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.009866768250533666,
+          "max": 951021.728515625,
+          "median": 911667.1752929688,
+          "min": 900356.4453125
+        },
+        {
+          "mad_over_median": 0.017341725289738028,
+          "max": 1706501.46484375,
+          "median": 1609914.8559570312,
+          "min": 1573136.2915039062
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0020266162502627573,
+          "max": 171523.92,
+          "median": 170145.68,
+          "min": 169340.03
+        },
+        {
+          "mad_over_median": 0.015619351483325772,
+          "max": 245935.92,
+          "median": 221214.05,
+          "min": 215811.99
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.002070466643402661,
+          "max": 171721.28677368164,
+          "median": 170314.55993652344,
+          "min": 169516.79229736328
+        },
+        {
+          "mad_over_median": 0.015613595583309459,
+          "max": 246074.5620727539,
+          "median": 221366.40548706055,
+          "min": 215967.36907958984
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0038195494990750315,
+          "max": 15934.62,
+          "median": 15831.71,
+          "min": 15752.17
+        },
+        {
+          "mad_over_median": 0.013569240151592016,
+          "max": 18567.6,
+          "median": 17905.94,
+          "min": 17599.67
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.003703958949684006,
+          "max": 16053.119897842407,
+          "median": 15983.04033279419,
+          "min": 15846.719741821289
+        },
+        {
+          "mad_over_median": 0.013324546529479776,
+          "max": 18649.280071258545,
+          "median": 17987.840175628662,
+          "min": 17685.12010574341
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.009710028872528455,
+          "max": 12116.43,
+          "median": 11919.634999999998,
+          "min": 11795.97
+        },
+        {
+          "mad_over_median": 0.21055266574456719,
+          "max": 83384.57,
+          "median": 65994.32,
+          "min": 50164.99
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.00962554149910045,
+          "max": 12191.359996795654,
+          "median": 12001.439929008484,
+          "min": 11875.840425491333
+        },
+        {
+          "mad_over_median": 0.21027955472382837,
+          "max": 83476.47666931152,
+          "median": 66075.83999633789,
+          "min": 50245.11814117432
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.002413092410890323,
+          "max": 7721.98,
+          "median": 7583.63,
+          "min": 7536.11
+        },
+        {
+          "mad_over_median": 0.005197495486785005,
+          "max": 8625.29,
+          "median": 8563.74,
+          "min": 8507.36
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0018339197834387774,
+          "max": 7814.080119132996,
+          "median": 7677.440047264099,
+          "min": 7624.959945678711
+        },
+        {
+          "mad_over_median": 0.005441621134230493,
+          "max": 8707.200288772583,
+          "median": 8644.480109214783,
+          "min": 8596.799969673157
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0037557948337134765,
+          "max": 12079.39,
+          "median": 11783.125,
+          "min": 11730.13
+        },
+        {
+          "mad_over_median": 0.2015808859079539,
+          "max": 82501.22,
+          "median": 67892.945,
+          "min": 48974.06
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0038169365726404727,
+          "max": 12161.279916763306,
+          "median": 11862.879991531372,
+          "min": 11809.920072555542
+        },
+        {
+          "mad_over_median": 0.20134862565088568,
+          "max": 82583.36067199707,
+          "median": 67980.0009727478,
+          "min": 49059.51976776123
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 0,
+        "name": "idle_synchronization"
+      },
+      "comparison": "decode_vs_prefill_idle_sync",
+      "arms": [
+        "idle_decode",
+        "idle_prefill"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.007932371241489312,
+          "max": 770.587,
+          "median": 736.728,
+          "min": 730.884
+        },
+        {
+          "mad_over_median": 0.012317531111025659,
+          "max": 789.881,
+          "median": 780.27,
+          "min": 736.755
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.008162175436400926,
+          "max": 778.5599827766418,
+          "median": 744.8959946632385,
+          "min": 738.8160228729248
+        },
+        {
+          "mad_over_median": 0.01282257776207014,
+          "max": 798.7200021743774,
+          "median": 788.6080145835876,
+          "min": 744.7999715805054
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.00661489742837074,
+          "max": 2689477.62,
+          "median": 2643833.89,
+          "min": 2622128.32
+        },
+        {
+          "mad_over_median": 0.007241254787786104,
+          "max": 4527715.42,
+          "median": 4461537.53,
+          "min": 4429230.4
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.006611139664725803,
+          "max": 2689702.4536132812,
+          "median": 2644046.9360351562,
+          "min": 2622333.3740234375
+        },
+        {
+          "mad_over_median": 0.007247612428687831,
+          "max": 4527952.880859375,
+          "median": 4461792.297363281,
+          "min": 4429454.9560546875
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0004281622977986782,
+          "max": 456623.33,
+          "median": 455785.11,
+          "min": 455289.34
+        },
+        {
+          "mad_over_median": 0.01165293140860759,
+          "max": 551789.43,
+          "median": 540885.36,
+          "min": 532942.43
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0004392911876481123,
+          "max": 456817.58880615234,
+          "median": 455984.00115966797,
+          "min": 455492.17224121094
+        },
+        {
+          "mad_over_median": 0.011655642922778986,
+          "max": 551948.4710693359,
+          "median": 541045.1126098633,
+          "min": 533096.9619750977
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    }
+  ],
+  "tracked_final": 0,
+  "is_complete_decode_measured": false,
+  "generated_token_count": 0
+}

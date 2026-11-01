@@ -1,0 +1,135 @@
+{
+  "scenarios": 108,
+  "modes": 324,
+  "admitted": 324,
+  "rejected": [],
+  "by_mode": [
+    {
+      "mode": "assisted",
+      "cases": 108,
+      "ratio_to_gpu_only": {
+        "min": 0.009997585434018465,
+        "max": 1.0007158276707495
+      },
+      "above_gpu_only": 1,
+      "simulated_tokens_per_second": {
+        "min": 0.7115001285339101,
+        "max": 9.97783077540011
+      },
+      "first_decode_p50_ms": {
+        "min": 14.032164,
+        "max": 216.15135
+      },
+      "inter_token_p50_ms": {
+        "min": 14.190757,
+        "max": 324.231645
+      },
+      "inter_token_p95_ms": {
+        "min": 400.578744,
+        "max": 5617.3296
+      },
+      "inter_token_p99_ms": {
+        "min": 400.578744,
+        "max": 5617.3296
+      },
+      "host_reserved_bytes": {
+        "min": 4391305216,
+        "max": 4429348864
+      },
+      "gpu_reserved_bytes": {
+        "min": 4391305216,
+        "max": 7054360576
+      }
+    },
+    {
+      "mode": "gpu_only",
+      "cases": 108,
+      "ratio_to_gpu_only": {
+        "min": 1,
+        "max": 1
+      },
+      "above_gpu_only": 0,
+      "simulated_tokens_per_second": {
+        "min": 9.414509755409153,
+        "max": 71.2648455362979
+      },
+      "first_decode_p50_ms": {
+        "min": 14.032164,
+        "max": 212.43804
+      },
+      "inter_token_p50_ms": {
+        "min": 28.064328,
+        "max": 424.87608
+      },
+      "inter_token_p95_ms": {
+        "min": 28.064328,
+        "max": 424.87608
+      },
+      "inter_token_p99_ms": {
+        "min": 28.064328,
+        "max": 424.87608
+      },
+      "host_reserved_bytes": {
+        "min": 4353261568,
+        "max": 4353261568
+      },
+      "gpu_reserved_bytes": {
+        "min": 4429348864,
+        "max": 7092404224
+      }
+    },
+    {
+      "mode": "independent",
+      "cases": 108,
+      "ratio_to_gpu_only": {
+        "min": 0.009347218960414884,
+        "max": 0.7212052367316244
+      },
+      "above_gpu_only": 0,
+      "simulated_tokens_per_second": {
+        "min": 0.6661281154079217,
+        "max": 6.7897937368620465
+      },
+      "first_decode_p50_ms": {
+        "min": 14.032164,
+        "max": 212.43804
+      },
+      "inter_token_p50_ms": {
+        "min": 14.032164,
+        "max": 318.65706
+      },
+      "inter_token_p95_ms": {
+        "min": 589.119516,
+        "max": 6004.85088
+      },
+      "inter_token_p99_ms": {
+        "min": 589.119516,
+        "max": 6004.85088
+      },
+      "host_reserved_bytes": {
+        "min": 4391305216,
+        "max": 4429348864
+      },
+      "gpu_reserved_bytes": {
+        "min": 4391305216,
+        "max": 7054360576
+      }
+    }
+  ],
+  "local_assistance_saving_ms": {
+    "min": 5.181423,
+    "max": 5.448089
+  },
+  "assisted_vs_independent_ratio": {
+    "min": 1.0662280834883955,
+    "max": 1.4816985377270013
+  },
+  "winning_assisted": [
+    {
+      "node": 0,
+      "description": "Projected cooperative decode; q8; gpu_loaded; missing CPU/GPU cost multipliers 0/4; zero is a projection-only lower bound, not complete decoding",
+      "ratio": 1.0007158276707495
+    }
+  ],
+  "is_measured_serving_result": false
+}

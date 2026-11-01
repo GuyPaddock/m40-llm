@@ -1,0 +1,236 @@
+[
+  {
+    "node": 0,
+    "cpu": 15,
+    "prices": [
+      {
+        "name": "activation_11008_batch_1",
+        "bytes": 44032,
+        "h2d_us": 15.96861,
+        "d2h_us": 15.016110000000001,
+        "h2d_variation": 0.016597562342620983,
+        "d2h_variation": 0.03631899340108728
+      },
+      {
+        "name": "activation_11008_batch_2",
+        "bytes": 88064,
+        "h2d_us": 21.98586,
+        "d2h_us": 21.00698,
+        "h2d_variation": 0.008518656991357211,
+        "d2h_variation": 0.020090465169196013
+      },
+      {
+        "name": "activation_11008_batch_4",
+        "bytes": 176128,
+        "h2d_us": 37.187239999999996,
+        "d2h_us": 37.3196,
+        "h2d_variation": 0.009218215710550062,
+        "d2h_variation": 0.00858235350861212
+      },
+      {
+        "name": "activation_11008_batch_8",
+        "bytes": 352256,
+        "h2d_us": 65.67582,
+        "d2h_us": 65.85233,
+        "h2d_variation": 0.01163106909057252,
+        "d2h_variation": 0.012941683308700014
+      },
+      {
+        "name": "activation_2048_batch_1",
+        "bytes": 8192,
+        "h2d_us": 7.9501,
+        "d2h_us": 8.31275,
+        "h2d_variation": 0.0035131633564358046,
+        "d2h_variation": 0.01768969354305136
+      },
+      {
+        "name": "activation_2048_batch_2",
+        "bytes": 16384,
+        "h2d_us": 9.952530000000001,
+        "d2h_us": 9.57911,
+        "h2d_variation": 0.02034959954905945,
+        "d2h_variation": 0.03290180402981071
+      },
+      {
+        "name": "activation_2048_batch_4",
+        "bytes": 32768,
+        "h2d_us": 12.99718,
+        "d2h_us": 12.24357,
+        "h2d_variation": 0.007683205126035077,
+        "d2h_variation": 0.04182113550214513
+      },
+      {
+        "name": "activation_2048_batch_8",
+        "bytes": 65536,
+        "h2d_us": 19.668340000000004,
+        "d2h_us": 17.00646,
+        "h2d_variation": 0.0035290217679781926,
+        "d2h_variation": 0.008246278178997743
+      },
+      {
+        "name": "fp16_kv_1k_one_layer",
+        "bytes": 1048576,
+        "h2d_us": 171.82106,
+        "d2h_us": 172.91301,
+        "h2d_variation": 0.0060999507278095355,
+        "d2h_variation": 0.003163209061018554
+      },
+      {
+        "name": "fp16_kv_8k_one_layer",
+        "bytes": 8388608,
+        "h2d_us": 832.1427199999999,
+        "d2h_us": 769.53278,
+        "h2d_variation": 0.0012200190851876724,
+        "d2h_variation": 0.006213861351039547
+      },
+      {
+        "name": "fp16_kv_token_36_layers",
+        "bytes": 36864,
+        "h2d_us": 13.80386,
+        "d2h_us": 12.63605,
+        "h2d_variation": 0.003835883586185366,
+        "d2h_variation": 0.006001875586120675
+      },
+      {
+        "name": "fp16_kv_token_one_layer",
+        "bytes": 1024,
+        "h2d_us": 6.842689999999999,
+        "d2h_us": 7.29239,
+        "h2d_variation": 0.009589795825910687,
+        "d2h_variation": 0.02656330777701138
+      },
+      {
+        "name": "one_original_q8_projection",
+        "bytes": 23953408,
+        "h2d_us": 2221.44121,
+        "d2h_us": 2024.9666200000001,
+        "h2d_variation": 0.0008346788524734104,
+        "d2h_variation": 0.003545920179168128
+      }
+    ],
+    "idle": [
+      {
+        "decode_ns": 765.351,
+        "prefill_ns": 775.336,
+        "timing_error": null
+      }
+    ]
+  },
+  {
+    "node": 1,
+    "cpu": 30,
+    "prices": [
+      {
+        "name": "activation_11008_batch_1",
+        "bytes": 44032,
+        "h2d_us": 17.579729999999998,
+        "d2h_us": 19.28332,
+        "h2d_variation": 0.012080390313161748,
+        "d2h_variation": 0.007205190807392021
+      },
+      {
+        "name": "activation_11008_batch_2",
+        "bytes": 88064,
+        "h2d_us": 24.956220000000002,
+        "d2h_us": 34.13935,
+        "h2d_variation": 0.011406374843626152,
+        "d2h_variation": 0.00450301484943316
+      },
+      {
+        "name": "activation_11008_batch_4",
+        "bytes": 176128,
+        "h2d_us": 38.3032,
+        "d2h_us": 50.48545,
+        "h2d_variation": 0.007082175901752251,
+        "d2h_variation": 0.003954406665682874
+      },
+      {
+        "name": "activation_11008_batch_8",
+        "bytes": 352256,
+        "h2d_us": 70.32217,
+        "d2h_us": 93.5043,
+        "h2d_variation": 0.004598407586113957,
+        "d2h_variation": 0.003956930322990394
+      },
+      {
+        "name": "activation_2048_batch_1",
+        "bytes": 8192,
+        "h2d_us": 9.833070000000001,
+        "d2h_us": 11.1286,
+        "h2d_variation": 0.019439503634165262,
+        "d2h_variation": 0.031176428301852785
+      },
+      {
+        "name": "activation_2048_batch_2",
+        "bytes": 16384,
+        "h2d_us": 11.679469999999998,
+        "d2h_us": 13.315209999999999,
+        "h2d_variation": 0.01637659928061808,
+        "d2h_variation": 0.02945804084201463
+      },
+      {
+        "name": "activation_2048_batch_4",
+        "bytes": 32768,
+        "h2d_us": 14.64341,
+        "d2h_us": 16.86258,
+        "h2d_variation": 0.020760191785929645,
+        "d2h_variation": 0.047540174753804065
+      },
+      {
+        "name": "activation_2048_batch_8",
+        "bytes": 65536,
+        "h2d_us": 22.39958,
+        "d2h_us": 25.6312,
+        "h2d_variation": 0.00633761883035303,
+        "d2h_variation": 0.011463762913948551
+      },
+      {
+        "name": "fp16_kv_1k_one_layer",
+        "bytes": 1048576,
+        "h2d_us": 177.67582000000002,
+        "d2h_us": 251.79468,
+        "h2d_variation": 0.0008015722116829612,
+        "d2h_variation": 0.009733247739785443
+      },
+      {
+        "name": "fp16_kv_8k_one_layer",
+        "bytes": 8388608,
+        "h2d_us": 911.44762,
+        "d2h_us": 1609.69753,
+        "h2d_variation": 0.009899537616873729,
+        "d2h_variation": 0.01734596064143802
+      },
+      {
+        "name": "fp16_kv_token_36_layers",
+        "bytes": 36864,
+        "h2d_us": 15.83171,
+        "d2h_us": 17.905939999999998,
+        "h2d_variation": 0.0038195494990750315,
+        "d2h_variation": 0.013569240151592016
+      },
+      {
+        "name": "fp16_kv_token_one_layer",
+        "bytes": 1024,
+        "h2d_us": 7.58363,
+        "d2h_us": 8.56374,
+        "h2d_variation": 0.002413092410890323,
+        "d2h_variation": 0.005197495486785005
+      },
+      {
+        "name": "one_original_q8_projection",
+        "bytes": 23953408,
+        "h2d_us": 2643.8338900000003,
+        "d2h_us": 4461.5375300000005,
+        "h2d_variation": 0.00661489742837074,
+        "d2h_variation": 0.007241254787786104
+      }
+    ],
+    "idle": [
+      {
+        "decode_ns": 736.728,
+        "prefill_ns": 780.27,
+        "timing_error": null
+      }
+    ]
+  }
+]

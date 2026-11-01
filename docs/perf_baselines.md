@@ -8617,3 +8617,20 @@ Notes:
 
 - The two GEMM benchmark paths currently have nearly identical latency, especially at larger shapes.
 - Treat these as pre-optimization baselines only; they do not yet represent end-to-end token latency.
+
+## 2026-10-31: Cooperative scheduling closes without integration
+
+The [DualPace study](experiments/2026-10-31-dualpace-decision.md) completes
+72 retained-input CPU cases and 360 stable pairs. Batch-one AVX2 projections
+cost 5.370 to 5.655 ms across both NUMA placements. All final completed-copy
+and idle-sync groups pass stability; eighteen stream-handoff diagnostics
+remain unresolved. Original placement and timing failures are preserved.
+
+All 108 sourced inputs and 324 simulated modes complete. Assistance saves
+5.181 to 5.448 ms per down projection before queueing and improves independent
+CPU/GPU scheduling by 6.62% to 48.17%. It exceeds GPU-only throughput in only
+one optimistic scenario, by 0.0716%. The complete CPU decoder remains missing.
+No scheduler change, measured serving gain or model-quality claim follows.
+The final report includes per-owner first-decode/ITL percentiles, resource
+queues, storage budgets and priced initial movement. Real generated tokens
+remain zero; all final transfer processes release device storage completely.

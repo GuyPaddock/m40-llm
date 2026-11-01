@@ -6,79 +6,34 @@ against the current code, worktree, Git history, and linked raw results.
 
 ## Active Plan
 
-Both CPU placements now complete 36 cases and 180 stable pairs. The
-[first transfer grids](experiments/2026-10-31-dualpace-transfer-instability.md)
-pass exact behavior and cleanup but retain eight node-0 and one node-1
-timing errors. A required node-0 cost fails scenario admission. The
-[bounded follow-up](experiments/2026-10-31-dualpace-transfer-warmup.md)
-uses sustained one-second arm warmup and 100-transfer intervals, preserving
-all prior data and gates. Eight hardware/protocol tests and both Clippy lanes
-pass. Run that one follow-up before admitting sourced scheduling results.
+The October 30 DualPace topic and the nine-topic bounded research plan are
+complete. The [cooperative decision](experiments/2026-10-31-dualpace-decision.md)
+retains 72 CPU cases, 360 stable projection pairs, both final transfer grids
+and 108 sourced simulations covering all 324 scheduling modes. CPU 15/node 0
+and CPU 30/node 1 have matching retained model/input identities. The failed
+CPU 31 launch and first unstable transfer cohort remain preserved.
 
-The [first pricing run](experiments/2026-10-31-dualpace-placement-stop.md)
-completes CPU 15/node 0: 36 cases, 180 pairs, all numerical checks and stable
-timing series. It then stops before node-1 execution because the environment
-excludes CPUs 31 and 63. No transfer phase ran. The
-[placement amendment](experiments/2026-10-31-dualpace-placement-amendment.md)
-now requires allowed CPU 30/node 1. Scenario tests pass the changed placement
-and reject obsolete CPU 31 evidence. Resume the remaining CPU and transfer
-measurements, preserving node 0 without repetition.
+All 26 final directional-copy groups and both idle-sync groups pass stability
+admission. Eighteen stream-handoff diagnostics remain unresolved and are not
+inputs to the fixed serialized-copy model. Every transfer has exact payloads
+and guards, retired allocations and zero external M40 residency after exit.
+The single fixed follow-up uses one-second arm warmup and 100-operation
+intervals, with raw warmup records. No later retry or gate relaxation occurred.
 
-The user has authorized execution of the October 30 nine-topic research plan
-in independent worktrees based on `0eee578`. This branch owns
-[`dualpace`](experiments/2026-10-30-dualpace-protocol.md).
-The [source audit and simulation contract](experiments/2026-10-31-dualpace-audit.md)
-finds no usable complete CPU decode path. A scalar single-layer reference exists,
-but full-layer execution requires CUDA buffers. The host exposes AVX2 and no
-AMX. The [cooperative simulator](experiments/2026-10-31-dualpace-simulator.md)
-now implements explicit ownership, stage-boundary assistance, transfer queues
-and finish-peak memory admission. Nine behavioral tests, 220 non-CUDA regressions,
-Clippy and CLI integrity checks pass. Its retained example is synthetic, not a
-hardware feasibility result. The [single-core Q8 probe](experiments/2026-10-31-dualpace-projection-probe.md)
-now implements scalar/AVX2 projection and pinned retained-input admission.
-Five new correctness tests, including AVX2 execution, and seven shared protocol
-tests pass. [Actual Qwen validation](experiments/2026-10-31-dualpace-cpu-validation.md)
-passes all 36 cases and 1,082,880 outputs per implementation, with no timing
-pairs or generated model tokens. The [serialized-copy extension](experiments/2026-10-31-dualpace-copy-policy.md)
-adds schema-2 resource exclusion and explicit included-synchronization costs;
-eleven simulator tests and non-CUDA all-target Clippy pass. Legacy traces retain
-their original overlap behavior. CPU timings, serial transfer costs and the
-priced prerequisite report remain pending; the branch is incomplete.
-The [transfer probe](experiments/2026-10-31-dualpace-transfer-probe.md) now exists
-in the worktree. It measures thirteen representative sizes, completed host
-copies, two-copy stream handoffs and idle synchronization, with guarded byte
-checks. Its isolated M40 test and seven protocol tests now pass with zero
-ignored cases. Source hashes remain unchanged; tracked allocations retire
-and external residency returns to zero MiB. Full-grid timing is next.
-Both probes share the original CPU/NUMA admission checks. Twelve CPU/protocol
-tests and non-CUDA/CUDA-server all-target Clippy pass. No new timing result
-or scheduler change follows from these implementation checks.
-The [cost scenario contract](experiments/2026-10-31-dualpace-cost-scenarios.md)
-now fixes three arrival traces, down-only assistance, both NUMA placements and
-native/prepared GPU paths, with explicit missing-work sensitivity. The retained
-ShiftAdd control audit extracts 72 Q8 GPU cost series and confirms all 36 CPU
-input cases and nine tensor identities match. Ten data admission/rejection
-checks pass. These are reused isolated projection measurements; complete CPU
-decoding, transfer prices and sourced scheduling outcomes remain unmeasured.
-The [schema-3 omitted-work extension](experiments/2026-10-31-dualpace-omitted-work.md)
-now supports the frozen sensitivity grid's zero-missing-work cases. Zero CPU
-or GPU service requires assumption evidence and creates no interval; measured
-durations remain positive. Thirteen CPU simulator tests, non-CUDA all-target
-Clippy and a hand-calculated CLI fixture pass. Older trace behavior is preserved.
-The [scenario builder](experiments/2026-10-31-dualpace-scenario-builder.md)
-now generates the frozen 54 inputs per NUMA placement with copied, hashed
-source evidence. Synthetic checks run all 162 node-0 scheduling modes,
-verify node-1 placement and portable evidence, and reject ten invalid reports
-plus source tampering and output overwrite. Physical capacity inventory is
-retained separately from allocation availability. Actual CPU/transfer timing,
-the sourced 108-input simulation and final decision remain pending.
-The [result summarizer](experiments/2026-10-31-dualpace-summary.md) now derives
-per-declared-owner first-decode and inter-token latencies, resource queueing
-and local assistance savings. Four synthetic positive cases and four malformed
-report cases pass. Capacity rejections remain visible; a rejected GPU-only
-baseline yields no throughput ratio. No measured feasibility outcome follows.
-Follow the protocol's gates and serial M40 execution requirement. Keep the
-separate drafter checkpoint below intact; this work does not admit training.
+Independent CPU/GPU scheduling loses to GPU-only in all 108 modeled scenarios.
+Down-projection assistance improves independent scheduling by 6.62% to 48.17%,
+but exceeds GPU-only in only one optimistic scenario, by 0.0716%. It assumes
+zero missing CPU work and four times measured projection cost as missing GPU
+work. A usable full CPU decoder remains absent. The decision is no scheduler
+integration; simulated latency and throughput are not serving measurements.
+
+The final report prices actual operators and initial-copy estimates, separates
+calculated residency from allocation availability, and lists unimplemented
+CPU generation, ownership, contention and numerical/model-quality prerequisites.
+All results and sources are retained in the portable, checksummed bundle.
+Runtime defaults, the unrelated root and separate drafter work are unchanged.
+No teacher generation, training, model acquisition or real token generation ran
+for this cooperative study. Final cross-branch handoff audit follows.
 
 ### Separate drafter checkpoint
 

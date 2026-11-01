@@ -1,0 +1,1209 @@
+{
+  "revision": "4b7bb61b713789e27bd204d2f945822acc1438ca",
+  "executable_sha256": "eefd9d5f1f283c40d1bc9cb3b58034a1932f98db582692295dfbcdba69b739f7",
+  "placement": {
+    "cpu": 15,
+    "numa_node": 0,
+    "threads": 1
+  },
+  "cases": 13,
+  "groups": 27,
+  "pairs": 190,
+  "warmup_records": 54,
+  "minimum_warmup_ms": 1000.0354739999999,
+  "extensions": 11,
+  "errors": [
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    }
+  ],
+  "rows": [
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.016597562342620983,
+          "max": 16317.36,
+          "median": 15968.61,
+          "min": 15436.84
+        },
+        {
+          "mad_over_median": 0.03631899340108728,
+          "max": 17923.99,
+          "median": 15016.11,
+          "min": 14460.51
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.016172119290411967,
+          "max": 16394.879817962646,
+          "median": 16047.359704971313,
+          "min": 15515.199899673462
+        },
+        {
+          "mad_over_median": 0.03652905754770896,
+          "max": 18001.919984817505,
+          "median": 15093.76049041748,
+          "min": 14530.559778213501
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.03204198933434546,
+          "max": 14813.31,
+          "median": 11882.064999999999,
+          "min": 11359.05
+        },
+        {
+          "mad_over_median": 0.1701687241869802,
+          "max": 400749.78,
+          "median": 66034.99,
+          "min": 49078.93
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.03199817212842842,
+          "max": 14889.919757843018,
+          "median": 11955.679655075073,
+          "min": 11434.55982208252
+        },
+        {
+          "mad_over_median": 0.17020705312689202,
+          "max": 400911.02600097656,
+          "median": 66117.11978912354,
+          "min": 49156.479835510254
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.008518656991357211,
+          "max": 24665.92,
+          "median": 21985.86,
+          "min": 21736.24
+        },
+        {
+          "mad_over_median": 0.020090465169196013,
+          "max": 21922.79,
+          "median": 21006.98,
+          "min": 20584.940000000002
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.008400062261116203,
+          "max": 24743.359088897705,
+          "median": 22056.961059570312,
+          "min": 21807.99961090088
+        },
+        {
+          "mad_over_median": 0.020291998338184066,
+          "max": 21997.759342193604,
+          "median": 21084.160804748535,
+          "min": 20656.321048736572
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.028323221756875905,
+          "max": 13203.51,
+          "median": 11720.065,
+          "min": 11172.04
+        },
+        {
+          "mad_over_median": 0.03138254421950196,
+          "max": 71350.09,
+          "median": 66718.29999999999,
+          "min": 49982.02
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.03265499287716998,
+          "max": 13277.440071105957,
+          "median": 11793.599724769592,
+          "min": 11245.759725570679
+        },
+        {
+          "mad_over_median": 0.031381661834273454,
+          "max": 71426.87797546387,
+          "median": 66795.6805229187,
+          "min": 50062.71839141846
+        }
+      ],
+      "pairs": 10,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.009218215710550062,
+          "max": 37674.14,
+          "median": 37187.24,
+          "min": 36688.4
+        },
+        {
+          "mad_over_median": 0.00858235350861212,
+          "max": 37913.5,
+          "median": 37319.6,
+          "min": 36912.41
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.009181671188559842,
+          "max": 37757.12013244629,
+          "median": 37256.63900375366,
+          "min": 36760.640144348145
+        },
+        {
+          "mad_over_median": 0.008531206338651565,
+          "max": 37988.479137420654,
+          "median": 37396.80051803589,
+          "min": 36986.238956451416
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.017173294346811543,
+          "max": 12280.29,
+          "median": 11668.99,
+          "min": 11327.93
+        },
+        {
+          "mad_over_median": 0.17166141879761956,
+          "max": 77231.09,
+          "median": 56594.4,
+          "min": 46525.91
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.01124191371474995,
+          "max": 12352.960109710693,
+          "median": 11741.759777069092,
+          "min": 11404.160261154175
+        },
+        {
+          "mad_over_median": 0.16990861276096217,
+          "max": 77306.24198913574,
+          "median": 56673.27880859375,
+          "min": 46780.16185760498
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01163106909057252,
+          "max": 68261.45,
+          "median": 65675.82,
+          "min": 64019.0
+        },
+        {
+          "mad_over_median": 0.012941683308700014,
+          "max": 72320.86,
+          "median": 65852.33,
+          "min": 65000.09
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.011674919547016544,
+          "max": 68344.00177001953,
+          "median": 65754.56142425537,
+          "min": 64096.32205963135
+        },
+        {
+          "mad_over_median": 0.01292474464713822,
+          "max": 72397.12238311768,
+          "median": 65932.47890472412,
+          "min": 65080.318450927734
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01816981938977414,
+          "max": 13756.95,
+          "median": 13281.64,
+          "min": 12403.03
+        },
+        {
+          "mad_over_median": 0.18418926138831232,
+          "max": 86481.45,
+          "median": 61213.965000000004,
+          "min": 49284.24
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.014347274945736798,
+          "max": 13835.840225219727,
+          "median": 13360.000252723694,
+          "min": 12472.959756851196
+        },
+        {
+          "mad_over_median": 0.18397612272769215,
+          "max": 86560.64033508301,
+          "median": 61290.55976867676,
+          "min": 49372.15805053711
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0035131633564358046,
+          "max": 8418.81,
+          "median": 7950.1,
+          "min": 7922.17
+        },
+        {
+          "mad_over_median": 0.01768969354305136,
+          "max": 11246.53,
+          "median": 8312.75,
+          "min": 8165.7
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.003470438746585231,
+          "max": 8496.639728546143,
+          "median": 8022.080063819885,
+          "min": 7994.239926338196
+        },
+        {
+          "mad_over_median": 0.017342187093553608,
+          "max": 11315.5198097229,
+          "median": 8377.280235290527,
+          "min": 8231.99987411499
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.018902981149479026,
+          "max": 11581.46,
+          "median": 10960.705,
+          "min": 10573.77
+        },
+        {
+          "mad_over_median": 0.1531534499957123,
+          "max": 79265.56,
+          "median": 66465.29999999999,
+          "min": 45798.88
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.018957682725946674,
+          "max": 11652.480363845825,
+          "median": 11030.879616737366,
+          "min": 10643.839836120605
+        },
+        {
+          "mad_over_median": 0.15293265012131005,
+          "max": 79342.39864349365,
+          "median": 66544.3205833435,
+          "min": 45870.71895599365
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.02034959954905945,
+          "max": 10183.26,
+          "median": 9952.53,
+          "min": 9545.61
+        },
+        {
+          "mad_over_median": 0.03290180402981071,
+          "max": 9894.28,
+          "median": 9579.11,
+          "min": 9087.29
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.020423712562976322,
+          "max": 10262.720584869385,
+          "median": 10027.519464492798,
+          "min": 9622.079730033875
+        },
+        {
+          "mad_over_median": 0.03297391604806088,
+          "max": 9964.479804039001,
+          "median": 9646.400213241577,
+          "min": 9152.32002735138
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.033910656182212624,
+          "max": 12180.04,
+          "median": 11211.52,
+          "min": 10527.82
+        },
+        {
+          "mad_over_median": 0.1602000315646017,
+          "max": 81823.04,
+          "median": 60447.46,
+          "min": 46437.33
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.02609515432764719,
+          "max": 12252.479791641235,
+          "median": 11281.75973892212,
+          "min": 10596.799850463867
+        },
+        {
+          "mad_over_median": 0.15997047468351439,
+          "max": 81899.84321594238,
+          "median": 60524.1584777832,
+          "min": 46513.919830322266
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.007683205126035077,
+          "max": 15332.19,
+          "median": 12997.18,
+          "min": 12530.03
+        },
+        {
+          "mad_over_median": 0.04182113550214513,
+          "max": 13039.24,
+          "median": 12243.57,
+          "min": 11731.53
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0076115945982514225,
+          "max": 15416.640043258667,
+          "median": 13074.87964630127,
+          "min": 12605.760097503662
+        },
+        {
+          "mad_over_median": 0.04140559633065721,
+          "max": 13253.439664840698,
+          "median": 12311.359643936157,
+          "min": 11801.600456237793
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.018041949598202756,
+          "max": 11521.79,
+          "median": 11014.885,
+          "min": 10543.55
+        },
+        {
+          "mad_over_median": 0.2333988765745819,
+          "max": 79473.29,
+          "median": 61931.125,
+          "min": 45759.52
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.017953545106605996,
+          "max": 11593.600511550903,
+          "median": 11086.399555206299,
+          "min": 10613.44027519226
+        },
+        {
+          "mad_over_median": 0.23309378531977157,
+          "max": 79547.51968383789,
+          "median": 62005.600929260254,
+          "min": 45839.03789520264
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0035290217679781926,
+          "max": 22580.31,
+          "median": 19668.340000000004,
+          "min": 19487.19
+        },
+        {
+          "mad_over_median": 0.008246278178997743,
+          "max": 17569.69,
+          "median": 17006.46,
+          "min": 16544.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0034027718840208437,
+          "max": 22664.639949798584,
+          "median": 19748.799800872803,
+          "min": 19570.560455322266
+        },
+        {
+          "mad_over_median": 0.00805875567148885,
+          "max": 17639.67990875244,
+          "median": 17074.559926986694,
+          "min": 16613.44051361084
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0072830472388857054,
+          "max": 11695.81,
+          "median": 11072.974999999999,
+          "min": 10852.99
+        },
+        {
+          "mad_over_median": 0.15903186046584958,
+          "max": 75493.92,
+          "median": 63445.399999999994,
+          "min": 47073.53
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.007392879188605239,
+          "max": 11769.599914550781,
+          "median": 11145.920157432556,
+          "min": 10922.880172729492
+        },
+        {
+          "mad_over_median": 0.15887099419670897,
+          "max": 75570.24002075195,
+          "median": 63522.23873138428,
+          "min": 47309.12208557129
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0060999507278095355,
+          "max": 176466.37,
+          "median": 171821.06,
+          "min": 170246.04
+        },
+        {
+          "mad_over_median": 0.003163209061018554,
+          "max": 173459.97,
+          "median": 172913.01,
+          "min": 170002.83
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0061705999984023475,
+          "max": 176559.67712402344,
+          "median": 171913.60473632812,
+          "min": 170332.1647644043
+        },
+        {
+          "mad_over_median": 0.0031796141311136597,
+          "max": 173551.99813842773,
+          "median": 173001.9187927246,
+          "min": 170097.27478027344
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.010263318200103433,
+          "max": 22411.39,
+          "median": 21751.25,
+          "min": 21005.1
+        },
+        {
+          "mad_over_median": 0.07561858945103826,
+          "max": 636449.9,
+          "median": 535956.44,
+          "min": 245804.04
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.010227107107168213,
+          "max": 22488.63935470581,
+          "median": 21871.35934829712,
+          "min": 21080.639362335205
+        },
+        {
+          "mad_over_median": 0.07560242783664685,
+          "max": 636541.1376953125,
+          "median": 536048.1643676758,
+          "min": 245889.91165161133
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0012200190851876724,
+          "max": 839126.49,
+          "median": 832142.72,
+          "min": 827412.43
+        },
+        {
+          "mad_over_median": 0.006213861351039547,
+          "max": 774314.55,
+          "median": 769532.78,
+          "min": 761570.89
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0012230989506485715,
+          "max": 839244.7662353516,
+          "median": 832241.5924072266,
+          "min": 827518.0816650391
+        },
+        {
+          "mad_over_median": 0.006215514728106298,
+          "max": 774423.3703613281,
+          "median": 769639.6636962891,
+          "min": 761688.6138916016
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.004979307082331602,
+          "max": 171865.82,
+          "median": 169449.28,
+          "min": 168605.54
+        },
+        {
+          "mad_over_median": 0.004876553571282918,
+          "max": 957314.45,
+          "median": 952668.71,
+          "min": 937298.0
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.004973437984632608,
+          "max": 171963.8442993164,
+          "median": 169540.8058166504,
+          "min": 168697.60513305664
+        },
+        {
+          "mad_over_median": 0.0048831303026498196,
+          "max": 957418.5943603516,
+          "median": 952766.11328125,
+          "min": 937396.1639404297
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.003835883586185366,
+          "max": 14074.51,
+          "median": 13803.86,
+          "min": 13702.44
+        },
+        {
+          "mad_over_median": 0.006001875586120675,
+          "max": 12881.33,
+          "median": 12636.05,
+          "min": 12216.83
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0036648408149975373,
+          "max": 14151.040315628052,
+          "median": 13883.199691772461,
+          "min": 13780.159950256348
+        },
+        {
+          "mad_over_median": 0.005766160887435902,
+          "max": 12952.640056610107,
+          "median": 12708.48035812378,
+          "min": 12298.56014251709
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.00542643734910832,
+          "max": 11382.8,
+          "median": 11038.55,
+          "min": 10946.95
+        },
+        {
+          "mad_over_median": 0.18374516449400827,
+          "max": 86275.61,
+          "median": 60912.705,
+          "min": 46041.06
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.005328564784410703,
+          "max": 11452.800035476685,
+          "median": 11109.920144081116,
+          "min": 11016.960144042969
+        },
+        {
+          "mad_over_median": 0.1832038079033909,
+          "max": 86354.56085205078,
+          "median": 60989.12000656128,
+          "min": 46114.23969268799
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.009589795825910687,
+          "max": 6908.31,
+          "median": 6842.69,
+          "min": 6656.93
+        },
+        {
+          "mad_over_median": 0.02656330777701138,
+          "max": 7556.11,
+          "median": 7292.39,
+          "min": 7086.93
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0029836522430872867,
+          "max": 6991.9997453689575,
+          "median": 6971.200108528137,
+          "min": 6732.159852981567
+        },
+        {
+          "mad_over_median": 0.02652402531247173,
+          "max": 7621.75977230072,
+          "median": 7359.359860420227,
+          "min": 7152.000069618225
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.014925919763290439,
+          "max": 13141.21,
+          "median": 11058.279999999999,
+          "min": 10687.88
+        },
+        {
+          "mad_over_median": 0.2084388735382543,
+          "max": 77364.34,
+          "median": 60482.479999999996,
+          "min": 46287.79
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.011884738869112458,
+          "max": 13218.239545822144,
+          "median": 11133.599877357483,
+          "min": 10759.35959815979
+        },
+        {
+          "mad_over_median": 0.2081430134171432,
+          "max": 77440.3190612793,
+          "median": 60561.439990997314,
+          "min": 46365.44227600098
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 0,
+        "name": "idle_synchronization"
+      },
+      "comparison": "decode_vs_prefill_idle_sync",
+      "arms": [
+        "idle_decode",
+        "idle_prefill"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.031473141081673595,
+          "max": 860.721,
+          "median": 765.351,
+          "min": 741.263
+        },
+        {
+          "mad_over_median": 0.038770287978373175,
+          "max": 833.087,
+          "median": 775.336,
+          "min": 718.492
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.03072526459492933,
+          "max": 868.4800267219543,
+          "median": 771.7440128326416,
+          "min": 748.0319738388062
+        },
+        {
+          "mad_over_median": 0.036799567157892045,
+          "max": 840.1920199394226,
+          "median": 783.4879755973816,
+          "min": 739.7440075874329
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0008346788524734104,
+          "max": 2227412.42,
+          "median": 2221441.21,
+          "min": 2219236.82
+        },
+        {
+          "mad_over_median": 0.003545920179168128,
+          "max": 2033104.33,
+          "median": 2024966.62,
+          "min": 2009151.0
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.000913628866139395,
+          "max": 2227566.375732422,
+          "median": 2221773.8342285156,
+          "min": 2219387.8173828125
+        },
+        {
+          "mad_over_median": 0.0035494827262601216,
+          "max": 2033261.1083984375,
+          "median": 2025114.8986816406,
+          "min": 2009295.3491210938
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0008229298574440649,
+          "max": 456035.32,
+          "median": 455202.83,
+          "min": 454828.23
+        },
+        {
+          "mad_over_median": 0.00016979858019455928,
+          "max": 1004259.38,
+          "median": 1003895.32,
+          "min": 998100.6
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0008271377590271995,
+          "max": 456165.4281616211,
+          "median": 455335.3500366211,
+          "min": 454958.72497558594
+        },
+        {
+          "mad_over_median": 0.00017051711899929248,
+          "max": 1004379.8065185547,
+          "median": 1004025.9552001953,
+          "min": 998218.5363769531
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    }
+  ],
+  "tracked_final": 0,
+  "is_complete_decode_measured": false,
+  "generated_token_count": 0
+}

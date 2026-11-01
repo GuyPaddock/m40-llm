@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "path": "/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/research-1030-dualpace/simulations-2026-10-31.tar.gz",
+  "sha256": "2ac7c0c7754b0897456f1c1661d387189ea0423c66f19b1151bb98c10a73b1d4",
+  "bytes": 20982245,
+  "source_revision": "4b7bb61",
+  "scenarios": 108,
+  "scheduling_modes": 324,
+  "verified_file_count": 344,
+  "contents": "Complete inputs, raw per-interval results, summaries, copied cost sources and artifacts-full.sha256",
+  "is_in_git": false,
+  "reason": "Large text-result archive retained outside Cargo cleanup; compact replay inputs and summaries are committed"
+}
