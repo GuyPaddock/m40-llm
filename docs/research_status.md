@@ -15,6 +15,11 @@ quality is running, and tested adaptive CPU replay awaits its completion.
 No runtime default, acquisition, training or learned-drafter evaluation is
 authorized by this carry-forward work. The V3 stop below remains in force.
 
+The exact Q4 host-packing component from `1e3a6d3` now passes all three CPU
+behavioral tests in this feature worktree; implementation/test blob identities
+match the research source. The CUDA synchronization and device components await
+serial hardware validation after the live KV grid and adaptive CPU timing.
+
 The authorized **CPU-only rank-count and review-cost follow-ups are complete**.
 Stop for review; no further implementation search, source sampling, acquisition,
 teacher generation, training, learned evaluation or GPU switch follows. The

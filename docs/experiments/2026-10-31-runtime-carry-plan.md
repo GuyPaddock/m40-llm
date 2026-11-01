@@ -41,11 +41,12 @@ preserve intervening feature documentation and the complete V3 history.
 
 ## Atomic integration and checks
 
-1. `fix(cuda): retain Q8 scale synchronization`: the barriers, regression and
+1. `feat(infer): retain Q4 channel packing`: the exact host component/tests from
+   `1e3a6d3`; run its three CPU behavioral tests with warnings denied. This
+   independent component can precede the CUDA fix while the GPU is occupied.
+2. `fix(cuda): retain Q8 scale synchronization`: the barriers, regression and
    original evidence from `6aa52d8`. Run the Q8 regression and affected cache/
    forward checks with cuBLAS enabled and disabled, serially on the idle M40.
-2. `feat(infer): retain Q4 channel packing`: the exact host component/tests from
-   `1e3a6d3`; run its three CPU behavioral tests with warnings denied.
 3. `feat(cuda): retain selected Q4 execution`: kernels, build dependency, C ABI,
    stub, owner and hardware tests from `22ee0d3`. Run selected-FFN numerical,
    guard, ownership and stream checks with cuBLAS on/off, affected projection/
@@ -58,6 +59,18 @@ Wait for the independent KV-quality run and its following adaptive CPU timing
 to finish before starting GPU checks. Never overlap hardware workloads.
 The original experiments retain their measured scope and failures; importing
 source does not create a new performance or model-quality result.
+
+## Host component checkpoint
+
+The host implementation and tests have been applied without modification from
+`1e3a6d3`. Git blob IDs match `0d32fd9d00f9ebbb3bf487e24ad0aee245a8d937`
+for `src/infer/q4_channels.rs` and `7c3bf976483b2446fd964362a9fe7043d859ea6d`
+for `tests/q4_channels.rs`. Its module export is the same one-line addition.
+All three warning-free CPU tests pass on the actual feature worktree: every
+FP16 scale bit pattern/payload is preserved, selected values and odd-output
+padding are correct, and invalid sources are rejected. Formatting and source
+whitespace checks pass. See [the raw test log](2026-10-31-feature-q4-host.log).
+The Q8 synchronization and selected-Q4 CUDA components are still pending.
 
 ## Independent follow-ups
 

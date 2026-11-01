@@ -1,0 +1,11 @@
+   Compiling m40-llm v0.1.0 (/mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.79s
+     Running tests/q4_channels.rs (target/debug/deps/q4_channels-8f158c5a22e1507c)
+
+running 3 tests
+test test_rejects_invalid_sources ... ok
+test test_selected_channels_preserve_numerical_values ... ok
+test test_preserves_all_scale_bits_and_payloads ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
