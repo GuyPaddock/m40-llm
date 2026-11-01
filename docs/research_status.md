@@ -26,7 +26,10 @@ generations. The [fixed diagnostic protocol](experiments/2026-10-31-selector-pre
 uses the six existing calibration prompts, causal dense-refresh histories and
 16-dimensional sketches. The [explicit complete-generation observer](experiments/2026-10-31-selector-capture-implementation.md)
 is implemented and passes collector, CLI, CUDA-enabled argument and M40
-observer parity checks. New collection and causal analysis remain pending.
+observer parity checks. The [clean release capture](experiments/2026-10-31-selector-capture-result.md)
+contains 128 generated IDs and 122 consumed-token rows at each of five layers;
+all six observer pairs match. Causal analysis remains pending. These are
+dense trajectories, not sparse-generation quality or speed measurements.
 The nine published experiment branches remain unchanged.
 This follow-up does not reopen the separate V3 data work below.
 

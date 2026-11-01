@@ -1,0 +1,6 @@
+ec2faa3ae4391079e473502e9650a1af251bcaaa1061b57c5021d56945caec79  docs/experiments/2026-10-31-selector-capture-audit.log.gz
+038618ad741517c295d7f282e410e9ba32df62e3ba2ab1df3e560f61a064a9f4  docs/experiments/2026-10-31-selector-capture-build.log.gz
+857035ca4433d56cc6b8f1b6108cc01bdca83d3f9e69a5aaec91158ca06ec5f8  docs/experiments/2026-10-31-selector-capture-run.log.gz
+cd8046c0ec63e02fcc99572d64f94ba97e00fc5e8714b40a5e4e6bb3cbb3d854  docs/experiments/2026-10-31-selector-capture.jsonl.gz
+d7ca0aeadcb97c973700ec2444d478b7f63e3523e040c4ad44e5c14b2bd30d48  docs/experiments/2026-10-31-selector-capture.sh
+3c8bc4f9f82db217c0dc38e690e0fafc4a46926ff7574b162946da7c435dd4cc  /mnt/array-fastest/home/guyep/playground/2025-12-20-m40-llm/m40-llm/local-artifacts/qualified-references/selector-followup/ffn-inputs-01.json
