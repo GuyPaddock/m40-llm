@@ -1,0 +1,1135 @@
+{
+  "revision": "93ded8402e79143fdba24911b50a5f5a23f66aae",
+  "executable_sha256": "32320efe85905ae3bff47b2f0da3aa78c762b08233736ce6f78e7fee486a6cf4",
+  "placement": {
+    "cpu": 30,
+    "numa_node": 1,
+    "threads": 1
+  },
+  "cases": 13,
+  "groups": 27,
+  "pairs": 160,
+  "extensions": 5,
+  "errors": [
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    }
+  ],
+  "rows": [
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.003735750123547668,
+          "max": 18990.15,
+          "median": 17908.05,
+          "min": 17636.3
+        },
+        {
+          "mad_over_median": 0.02772193028594466,
+          "max": 20907.05,
+          "median": 20343.1,
+          "min": 19736.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0038343708280703798,
+          "max": 19449.60057735443,
+          "median": 18359.999358654022,
+          "min": 18081.599473953247
+        },
+        {
+          "mad_over_median": 0.026877100854951947,
+          "max": 21334.39928293228,
+          "median": 20776.00061893463,
+          "min": 20136.000216007233
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 44032,
+        "name": "activation_11008_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.034223629517531017,
+          "max": 13403.0,
+          "median": 12522.05,
+          "min": 12093.5
+        },
+        {
+          "mad_over_median": 0.02898506901970489,
+          "max": 56406.05,
+          "median": 54567.75,
+          "min": 52747.85
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.03426521656532985,
+          "max": 13822.400569915771,
+          "median": 12934.400141239166,
+          "min": 12491.200119256973
+        },
+        {
+          "mad_over_median": 0.02804529176111843,
+          "max": 56848.00148010254,
+          "median": 54996.80042266846,
+          "min": 53192.00158119202
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.03592638254325109,
+          "max": 25974.25,
+          "median": 24820.2,
+          "min": 23883.45
+        },
+        {
+          "mad_over_median": 0.01564498797523412,
+          "max": 33564.65,
+          "median": 31268.8,
+          "min": 30779.6
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.034815070830484164,
+          "max": 26406.40139579773,
+          "median": 25230.398774147034,
+          "min": 24284.79939699173
+        },
+        {
+          "mad_over_median": 0.028558688647702456,
+          "max": 33998.39997291565,
+          "median": 32382.39884376526,
+          "min": 31193.599104881287
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 88064,
+        "name": "activation_11008_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.03879409662692292,
+          "max": 14295.85,
+          "median": 12802.85,
+          "min": 12081.8
+        },
+        {
+          "mad_over_median": 0.0297312194316467,
+          "max": 136222.8,
+          "median": 53747.375,
+          "min": 51337.3
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.04633923172820355,
+          "max": 14726.400375366211,
+          "median": 13276.000320911407,
+          "min": 12473.60035777092
+        },
+        {
+          "mad_over_median": 0.024055979094759424,
+          "max": 136678.39765548706,
+          "median": 54173.5976934433,
+          "min": 51903.99885177612
+        }
+      ],
+      "pairs": 10,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.029875508273342944,
+          "max": 43345.05,
+          "median": 39902.25,
+          "min": 38710.15
+        },
+        {
+          "mad_over_median": 0.017356212696690153,
+          "max": 59999.6,
+          "median": 58976.0,
+          "min": 55180.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.02992296094203513,
+          "max": 43792.00041294098,
+          "median": 40316.79928302765,
+          "min": 39110.40127277374
+        },
+        {
+          "mad_over_median": 0.013601603456067504,
+          "max": 60419.20185089111,
+          "median": 59404.802322387695,
+          "min": 55603.20019721985
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 176128,
+        "name": "activation_11008_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.013932355624166674,
+          "max": 14586.05,
+          "median": 14251.0,
+          "min": 14043.6
+        },
+        {
+          "mad_over_median": 0.0243837304662654,
+          "max": 58931.7,
+          "median": 55420.15,
+          "min": 52285.9
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.01222840109936538,
+          "max": 14988.799393177032,
+          "median": 14654.399454593658,
+          "min": 14420.799911022186
+        },
+        {
+          "mad_over_median": 0.024408410323662477,
+          "max": 59363.19828033447,
+          "median": 55849.599838256836,
+          "min": 52697.598934173584
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.019868916866067437,
+          "max": 72372.55,
+          "median": 70962.6,
+          "min": 68804.4
+        },
+        {
+          "mad_over_median": 0.0022080025990231823,
+          "max": 105670.65,
+          "median": 102807.84999999999,
+          "min": 102580.85
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.021760580765256537,
+          "max": 73478.40070724487,
+          "median": 71395.20049095154,
+          "min": 69248.00276756287
+        },
+        {
+          "mad_over_median": 0.0021077876947183487,
+          "max": 106718.39714050293,
+          "median": 103238.40379714966,
+          "min": 103020.79916000366
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 352256,
+        "name": "activation_11008_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0440995270082276,
+          "max": 16618.95,
+          "median": 15095.4,
+          "min": 14429.7
+        },
+        {
+          "mad_over_median": 0.0074409114518241976,
+          "max": 57193.05,
+          "median": 56411.1,
+          "min": 55906.7
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.04449475532709529,
+          "max": 17038.40047121048,
+          "median": 15534.399449825287,
+          "min": 14843.200147151947
+        },
+        {
+          "mad_over_median": 0.006811681098274394,
+          "max": 57630.401849746704,
+          "median": 56843.19734573364,
+          "min": 56356.799602508545
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01745417873301071,
+          "max": 11905.15,
+          "median": 10808.3,
+          "min": 9788.65
+        },
+        {
+          "mad_over_median": 0.04382877983236292,
+          "max": 12576.95,
+          "median": 10940.3,
+          "min": 10226.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.06297547326977605,
+          "max": 12329.600006341934,
+          "median": 11356.80004954338,
+          "min": 10199.999809265137
+        },
+        {
+          "mad_over_median": 0.04237886014880769,
+          "max": 12940.800189971924,
+          "median": 11326.400190591812,
+          "min": 10601.600259542465
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8192,
+        "name": "activation_2048_batch_1"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.044927279763374815,
+          "max": 14050.95,
+          "median": 12855.775,
+          "min": 11996.3
+        },
+        {
+          "mad_over_median": 0.027893812346325812,
+          "max": 217574.1,
+          "median": 53827.35,
+          "min": 52122.40000000001
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.04351763380201885,
+          "max": 14460.800588130951,
+          "median": 13254.399597644806,
+          "min": 12393.59974861145
+        },
+        {
+          "mad_over_median": 0.027243738835579883,
+          "max": 218001.6040802002,
+          "median": 54265.60044288635,
+          "min": 52545.60112953186
+        }
+      ],
+      "pairs": 10,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01185749053047618,
+          "max": 11719.0,
+          "median": 10929.8,
+          "min": 10800.2
+        },
+        {
+          "mad_over_median": 0.0312913065582105,
+          "max": 15990.5,
+          "median": 13769.0,
+          "min": 11827.1
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.01014657305842343,
+          "max": 12135.999649763107,
+          "median": 11353.600025177002,
+          "min": 11238.399893045425
+        },
+        {
+          "mad_over_median": 0.030776218079966448,
+          "max": 16403.19973230362,
+          "median": 14140.799641609192,
+          "min": 12203.200161457062
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 16384,
+        "name": "activation_2048_batch_2"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.04911511050495152,
+          "max": 13315.85,
+          "median": 12354.65,
+          "min": 11747.85
+        },
+        {
+          "mad_over_median": 0.023315392546513946,
+          "max": 57633.15,
+          "median": 52422.45,
+          "min": 51200.2
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.026582155287728244,
+          "max": 13710.400462150574,
+          "median": 13121.600449085236,
+          "min": 12134.400010108948
+        },
+        {
+          "mad_over_median": 0.022883411052081897,
+          "max": 58065.59920310974,
+          "median": 52859.19904708862,
+          "min": 51649.60026741028
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.011331777459911253,
+          "max": 16791.9,
+          "median": 16603.75,
+          "min": 14318.15
+        },
+        {
+          "mad_over_median": 0.027407278792375075,
+          "max": 19597.9,
+          "median": 19005.9,
+          "min": 16615.3
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.012003004615653467,
+          "max": 17267.200350761414,
+          "median": 17062.40028142929,
+          "min": 14761.599898338318
+        },
+        {
+          "mad_over_median": 0.026378669880040492,
+          "max": 20641.599595546722,
+          "median": 19409.599900245667,
+          "min": 17011.19989156723
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 32768,
+        "name": "activation_2048_batch_4"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.024934325481713322,
+          "max": 15704.1,
+          "median": 12504.850000000002,
+          "min": 12124.25
+        },
+        {
+          "mad_over_median": 0.02080578155486904,
+          "max": 160996.6,
+          "median": 52968.45,
+          "min": 51866.399999999994
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.025656967390665697,
+          "max": 16089.600324630737,
+          "median": 12908.799946308136,
+          "min": 12510.399520397186
+        },
+        {
+          "mad_over_median": 0.01974236349010354,
+          "max": 161415.99416732788,
+          "median": 53408.002853393555,
+          "min": 52353.60264778137
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.014589789506417811,
+          "max": 23844.35,
+          "median": 23314.25,
+          "min": 21601.65
+        },
+        {
+          "mad_over_median": 0.026861036606380242,
+          "max": 27411.85,
+          "median": 26694.8,
+          "min": 25848.899999999998
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.014075966891633835,
+          "max": 24305.59992790222,
+          "median": 23756.80059194565,
+          "min": 22044.800221920013
+        },
+        {
+          "mad_over_median": 0.026867404854140093,
+          "max": 27823.999524116516,
+          "median": 27096.00031375885,
+          "min": 26278.400421142578
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 65536,
+        "name": "activation_2048_batch_8"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0038946078129932313,
+          "max": 14310.35,
+          "median": 12196.35,
+          "min": 11959.9
+        },
+        {
+          "mad_over_median": 0.013522326367088257,
+          "max": 57839.1,
+          "median": 53515.2,
+          "min": 52327.45
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.005581673727098981,
+          "max": 14702.4005651474,
+          "median": 12612.800300121307,
+          "min": 12353.599816560745
+        },
+        {
+          "mad_over_median": 0.013753033050938694,
+          "max": 58286.3986492157,
+          "median": 53980.79752922058,
+          "min": 52758.40163230896
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.025844552946438493,
+          "max": 201473.39999999997,
+          "median": 184338.65,
+          "min": 178609.35
+        },
+        {
+          "mad_over_median": 0.00911367792359324,
+          "max": 265844.85,
+          "median": 262599.8,
+          "min": 260206.55
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.024686564084844285,
+          "max": 201929.59308624268,
+          "median": 184780.8003425598,
+          "min": 179151.99995040894
+        },
+        {
+          "mad_over_median": 0.008947326727235659,
+          "max": 266307.2109222412,
+          "median": 263945.6033706665,
+          "min": 260745.59688568115
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1048576,
+        "name": "fp16_kv_1k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01387464256258024,
+          "max": 26496.15,
+          "median": 23885.3,
+          "min": 23553.9
+        },
+        {
+          "mad_over_median": 0.007823021260140041,
+          "max": 191942.75,
+          "median": 66457.7,
+          "min": 61529.4
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.013164801058539557,
+          "max": 26926.401257514954,
+          "median": 24307.20031261444,
+          "min": 23968.00071001053
+        },
+        {
+          "mad_over_median": 0.004120980537620287,
+          "max": 192371.20151519775,
+          "median": 67167.99736022949,
+          "min": 61972.80287742615
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.002212926147966859,
+          "max": 902995.45,
+          "median": 901001.6,
+          "min": 894124.8
+        },
+        {
+          "mad_over_median": 0.007658423836401472,
+          "max": 1613248.6,
+          "median": 1587878.95,
+          "min": 1570035.1500000001
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.002173429110011871,
+          "max": 903756.8092346191,
+          "median": 901796.817779541,
+          "min": 894851.2077331543
+        },
+        {
+          "mad_over_median": 0.007605677936138526,
+          "max": 1614052.7725219727,
+          "median": 1588713.6459350586,
+          "min": 1570803.165435791
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 8388608,
+        "name": "fp16_kv_8k_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.002348273291151868,
+          "max": 174524.95,
+          "median": 173425.3,
+          "min": 171927.35
+        },
+        {
+          "mad_over_median": 0.017451538193085852,
+          "max": 222522.7,
+          "median": 212757.75,
+          "min": 209044.8
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.006463352983807881,
+          "max": 175257.59935379028,
+          "median": 174027.2045135498,
+          "min": 172555.1962852478
+        },
+        {
+          "mad_over_median": 0.017484549996117597,
+          "max": 223112.01095581055,
+          "median": 213400.0062942505,
+          "min": 209668.80321502686
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.008442296512889077,
+          "max": 18545.7,
+          "median": 17287.95,
+          "min": 16190.2
+        },
+        {
+          "mad_over_median": 0.03235591761110457,
+          "max": 20504.55,
+          "median": 19861.9,
+          "min": 18804.5
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.009999971473001629,
+          "max": 18971.20028734207,
+          "median": 17759.99963283539,
+          "min": 16635.20038127899
+        },
+        {
+          "mad_over_median": 0.03067335311518658,
+          "max": 20913.59943151474,
+          "median": 20291.200280189514,
+          "min": 19190.39934873581
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 36864,
+        "name": "fp16_kv_token_36_layers"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.037758965688872465,
+          "max": 13934.85,
+          "median": 12406.325,
+          "min": 11781.85
+        },
+        {
+          "mad_over_median": 0.022031994790354156,
+          "max": 162339.5,
+          "median": 53669.675,
+          "min": 51859.3
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.037524149485314094,
+          "max": 14443.199336528778,
+          "median": 12834.399938583374,
+          "min": 12207.9998254776
+        },
+        {
+          "mad_over_median": 0.022446986803880922,
+          "max": 162788.79642486572,
+          "median": 54100.799560546875,
+          "min": 52283.19764137268
+        }
+      ],
+      "pairs": 10,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01849262208032931,
+          "max": 9370.0,
+          "median": 7580.05,
+          "min": 7400.95
+        },
+        {
+          "mad_over_median": 0.034646344701224616,
+          "max": 11566.85,
+          "median": 8568.725,
+          "min": 8186.85
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.017676992336748694,
+          "max": 9787.199646234512,
+          "median": 8010.399714112282,
+          "min": 7831.999659538269
+        },
+        {
+          "mad_over_median": 0.034821444051399524,
+          "max": 12033.600360155106,
+          "median": 8960.000053048134,
+          "min": 8560.000360012054
+        }
+      ],
+      "pairs": 10,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 1024,
+        "name": "fp16_kv_token_one_layer"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.046444910151092214,
+          "max": 13856.65,
+          "median": 12060.525000000001,
+          "min": 11327.7
+        },
+        {
+          "mad_over_median": 0.04884681561586433,
+          "max": 150720.7,
+          "median": 55038.899999999994,
+          "min": 51338.299999999996
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.04515090177387942,
+          "max": 14235.199987888336,
+          "median": 12455.999851226807,
+          "min": 11708.799749612808
+        },
+        {
+          "mad_over_median": 0.048388519286576316,
+          "max": 151155.19762039185,
+          "median": 55451.199412345886,
+          "min": 51759.99999046326
+        }
+      ],
+      "pairs": 10,
+      "timing_error": "timing remains unstable after ten pairs; investigate before making claims"
+    },
+    {
+      "case": {
+        "bytes": 0,
+        "name": "idle_synchronization"
+      },
+      "comparison": "decode_vs_prefill_idle_sync",
+      "arms": [
+        "idle_decode",
+        "idle_prefill"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.005471110856585706,
+          "max": 790.202,
+          "median": 750.853,
+          "min": 746.745
+        },
+        {
+          "mad_over_median": 0.0017745521779440336,
+          "max": 797.095,
+          "median": 752.866,
+          "min": 751.53
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.006201221464618189,
+          "max": 797.760009765625,
+          "median": 758.5600018501282,
+          "min": 753.8560032844543
+        },
+        {
+          "mad_over_median": 0.0022713866317485335,
+          "max": 804.7999739646912,
+          "median": 760.7679963111877,
+          "min": 759.0399980545044
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "pageable_h2d_vs_d2h",
+      "arms": [
+        "h2d",
+        "d2h"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.01386427030855411,
+          "max": 2748377.75,
+          "median": 2646093.1,
+          "min": 2550707.05
+        },
+        {
+          "mad_over_median": 0.004834935299549049,
+          "max": 4551253.35,
+          "median": 4397028.85,
+          "min": 4352157.9
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.01375982064643886,
+          "max": 2749278.450012207,
+          "median": 2647243.118286133,
+          "min": 2551495.933532715
+        },
+        {
+          "mad_over_median": 0.004653348194076308,
+          "max": 4552220.916748047,
+          "median": 4398747.253417969,
+          "min": 4353140.640258789
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    },
+    {
+      "case": {
+        "bytes": 23953408,
+        "name": "one_original_q8_projection"
+      },
+      "comparison": "same_stream_vs_handoff",
+      "arms": [
+        "same_stream",
+        "handoff"
+      ],
+      "wall_ns": [
+        {
+          "mad_over_median": 0.0015932349599646995,
+          "max": 473064.55,
+          "median": 457434.1,
+          "min": 456293.9
+        },
+        {
+          "mad_over_median": 0.00477882272676597,
+          "max": 572695.25,
+          "median": 535581.7,
+          "min": 533022.25
+        }
+      ],
+      "cuda_timeline_ns": [
+        {
+          "mad_over_median": 0.0015507545798160828,
+          "max": 473860.7883453369,
+          "median": 458094.4061279297,
+          "min": 457024.0020751953
+        },
+        {
+          "mad_over_median": 0.004889584043498849,
+          "max": 573420.8106994629,
+          "median": 536316.7762756348,
+          "min": 533694.4103240967
+        }
+      ],
+      "pairs": 5,
+      "timing_error": null
+    }
+  ],
+  "tracked_final": 0,
+  "is_complete_decode_measured": false,
+  "generated_token_count": 0
+}
